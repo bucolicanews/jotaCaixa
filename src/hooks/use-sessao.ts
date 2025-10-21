@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { Session, User } from '@supabase/supabase-js';
+import { Session, User, AuthChangeEvent } from '@supabase/supabase-js';
 
 interface EstadoSessao {
   sessao: Session | null;
@@ -33,7 +33,7 @@ export function useSessao(): EstadoSessao {
     buscarSessaoInicial();
 
     // Monitorar mudanças no estado de autenticação
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((evento, sessaoAtual) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_evento: AuthChangeEvent, sessaoAtual: Session | null) => {
       setEstado({
         sessao: sessaoAtual,
         usuario: sessaoAtual?.user ?? null,

@@ -44,7 +44,7 @@ const Login = () => {
                 button_label: 'Entrar',
                 link_text: 'Já tem uma conta? Entrar',
                 social_provider_text: 'Entrar com {{provider}}',
-                forgotten_password_text: 'Esqueceu sua senha?',
+                // forgotten_password_text: 'Esqueceu sua senha?', // Removido: não suportado na tipagem
               },
               sign_up: {
                 email_label: 'Email',
