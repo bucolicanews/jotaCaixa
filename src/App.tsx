@@ -13,7 +13,8 @@ import Conciliacao from "./pages/Conciliacao";
 import Importar from "./pages/Importar";
 import Relatorios from "./pages/Relatorios";
 import Configuracoes from "./pages/Configuracoes";
-import AtualizarSenha from "./pages/AtualizarSenha"; // Importando o novo componente
+import AtualizarSenha from "./pages/AtualizarSenha";
+import PlanoContasPage from "./pages/PlanoContas"; // Importando a nova página
 
 const queryClient = new QueryClient();
 
@@ -37,6 +38,7 @@ const App = () => (
           <Route path="/importar" element={<Importar />} />
           <Route path="/relatorios" element={<Relatorios />} />
           <Route path="/configuracoes" element={<Configuracoes />} />
+          <Route path="/plano-contas" element={<PlanoContasPage />} /> {/* Nova Rota */}
 
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
