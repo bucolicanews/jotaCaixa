@@ -22,11 +22,12 @@ type FormValues = z.infer<typeof formSchema>;
 
 interface FormUsuarioProps {
   perfilLogado: PerfilUsuario;
+  clienteId?: string | null; // ID do cliente para o qual o usuário será criado
   usuarioInicial?: PerfilUsuario | null;
   onSaveComplete: () => void;
 }
 
-const FormUsuario: React.FC<FormUsuarioProps> = ({ perfilLogado, usuarioInicial, onSaveComplete }) => {
+const FormUsuario: React.FC<FormUsuarioProps> = ({ perfilLogado, clienteId, usuarioInicial, onSaveComplete }) => {
   const [perfis, setPerfis] = useState<Perfil[]>([]);
   const isEditing = !!usuarioInicial;
   const isAdmin = perfilLogado.tbl_perfil?.nome === 'Admin';
@@ -37,12 +38,11 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ perfilLogado, usuarioInicial,
       if (error) {
         showError('Falha ao carregar perfis.');
       } else {
-        setPerfis(data);
+        const perfisDisponiveis = isAdmin ? data.filter(p => p.nome !== 'Usuario') : data.filter(p => p.nome === 'Usuario');
+        setPerfis(perfisDisponiveis);
       }
     };
-    if (isAdmin) {
-      fetchPerfis();
-    }
+    fetchPerfis();
   }, [isAdmin]);
 
   const form = useForm<FormValues>({
@@ -72,6 +72,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ perfilLogado, usuarioInicial,
             data: {
               nome: values.nome,
               perfil_nome: perfilSelecionado?.nome,
+              cliente_id: clienteId,
             }
           }
         });
@@ -131,7 +132,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ perfilLogado, usuarioInicial,
           render={({ field }) => (
             <FormItem>
               <FormLabel>Perfil</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value}>
+              <Select onValueChange={field.onChange} defaultValue={field.value} disabled={!isAdmin && isEditing}>
                 <FormControl>
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione o perfil" />
@@ -162,7 +163,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ perfilLogado, usuarioInicial,
         )}
         <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
           {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          {isEditing ? 'Atualizar Usuário' : 'Cadastrar Usuário'}
+          {isEditing ? 'Atualizar' : 'Cadastrar'}
         </Button>
       </form>
     </Form>

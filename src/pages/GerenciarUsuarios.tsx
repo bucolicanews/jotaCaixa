@@ -14,69 +14,80 @@ import { Badge } from '@/components/ui/badge';
 
 const GerenciarUsuarios = () => {
   const { perfil, carregando } = useSessao();
-  const [usuarios, setUsuarios] = useState<PerfilUsuario[]>([]);
+  const [itens, setItens] = useState<any[]>([]); // Pode ser Clientes ou Usuários
+  const [cliente, setCliente] = useState<any>(null); // Dados do cliente logado
   const [carregandoDados, setCarregandoDados] = useState(true);
-  const [usuarioSelecionado, setUsuarioSelecionado] = useState<PerfilUsuario | null>(null);
+  const [itemSelecionado, setItemSelecionado] = useState<any | null>(null);
   const [dialogAberto, setDialogAberto] = useState(false);
 
   const isAdmin = perfil?.tbl_perfil?.nome === 'Admin';
+  const isCliente = perfil?.tbl_perfil?.nome === 'Cliente';
+  const limiteAtingido = isCliente && cliente && itens.length >= cliente.limite_usuarios;
 
   useEffect(() => {
-    if (!carregando && isAdmin) {
+    if (!carregando && perfil) {
       buscarDados();
-    } else if (!carregando && !isAdmin) {
-      setCarregandoDados(false);
     }
-  }, [carregando, perfil, isAdmin]);
+  }, [carregando, perfil]);
 
   const buscarDados = async () => {
     setCarregandoDados(true);
-    
-    const { data, error } = await supabase.from('usuarios').select('*, tbl_perfil(nome)').neq('id', perfil!.id).order('nome');
-    if (error) {
-      showError('Erro ao carregar usuários: ' + error.message);
-    } else {
-      setUsuarios(data as PerfilUsuario[]);
-    }
+    if (isAdmin) {
+      const { data, error } = await supabase.from('clientes').select('*, usuario:usuarios(*, tbl_perfil(nome))');
+      if (error) showError('Erro ao carregar clientes: ' + error.message);
+      else setItens(data || []);
+    } else if (isCliente) {
+      const { data: clienteData, error: clienteError } = await supabase.from('clientes').select('*').eq('usuario_id', perfil!.id).single();
+      if (clienteError) {
+        showError('Erro ao carregar dados do cliente: ' + clienteError.message);
+        setCarregandoDados(false);
+        return;
+      }
+      setCliente(clienteData);
 
+      const { data: usuariosData, error: usuariosError } = await supabase.from('usuarios').select('*, tbl_perfil(nome)').eq('cliente_id', clienteData.id);
+      if (usuariosError) showError('Erro ao carregar usuários: ' + usuariosError.message);
+      else setItens(usuariosData || []);
+    }
     setCarregandoDados(false);
   };
 
   const handleSaveComplete = () => {
     setDialogAberto(false);
-    setUsuarioSelecionado(null);
+    setItemSelecionado(null);
     buscarDados();
   };
 
-  const handleEdit = (usuario: PerfilUsuario) => {
-    setUsuarioSelecionado(usuario);
+  const handleEdit = (item: any) => {
+    const userToEdit = isAdmin ? item.usuario : item;
+    setItemSelecionado(userToEdit);
     setDialogAberto(true);
   };
 
-  const handleDelete = async (id: string) => {
-    if (!window.confirm('Tem certeza que deseja excluir este usuário? Esta ação é irreversível.')) return;
-    
-    const { error } = await supabase.from('usuarios').delete().eq('id', id);
+  const handleDelete = async (user: PerfilUsuario) => {
+    if (!window.confirm(`Tem certeza que deseja excluir o usuário ${user.nome}? Esta ação não pode ser desfeita.`)) return;
+
+    // Deleta o registro da tabela 'usuarios'.
+    // NOTA: Isso não remove o usuário do sistema de autenticação do Supabase (auth.users).
+    // Para uma exclusão completa e segura, uma Edge Function com a service_role_key seria necessária.
+    const { error } = await supabase
+      .from('usuarios')
+      .delete()
+      .eq('id', user.id);
 
     if (error) {
       showError('Erro ao excluir usuário: ' + error.message);
     } else {
       showSuccess('Usuário excluído com sucesso.');
-      buscarDados();
+      buscarDados(); // Atualiza a lista de usuários.
     }
   };
 
   if (carregando || carregandoDados) {
-    return (
-      <LayoutPrincipal>
-        <div className="flex justify-center items-center h-64">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      </LayoutPrincipal>
-    );
+    return <LayoutPrincipal><div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin" /></div></LayoutPrincipal>;
   }
 
-  if (!isAdmin) {
+  if (!isAdmin && !isCliente) {
     return (
       <LayoutPrincipal>
         <Card className="w-full max-w-lg mx-auto">
@@ -93,69 +104,73 @@ const GerenciarUsuarios = () => {
   return (
     <LayoutPrincipal>
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">Gerenciar Usuários</h1>
+        <h1 className="text-3xl font-bold">{isAdmin ? 'Gerenciar Clientes' : 'Gerenciar Usuários'}</h1>
         <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
           <DialogTrigger asChild>
-            <Button onClick={() => setUsuarioSelecionado(null)}>
+            <Button onClick={() => setItemSelecionado(null)} disabled={limiteAtingido}>
               <PlusCircle className="w-4 h-4 mr-2" />
-              Novo Usuário
+              {isAdmin ? 'Novo Cliente' : 'Novo Usuário'}
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-[425px]">
             <DialogHeader>
-              <DialogTitle>{usuarioSelecionado ? 'Editar Usuário' : 'Novo Usuário'}</DialogTitle>
+              <DialogTitle>{itemSelecionado ? 'Editar' : 'Novo'} {isAdmin ? 'Cliente' : 'Usuário'}</DialogTitle>
             </DialogHeader>
             {perfil && (
-              <FormUsuario 
+              <FormUsuario
                 perfilLogado={perfil}
-                usuarioInicial={usuarioSelecionado}
+                clienteId={isCliente ? cliente.id : null}
+                usuarioInicial={itemSelecionado}
                 onSaveComplete={handleSaveComplete}
               />
             )}
           </DialogContent>
         </Dialog>
       </div>
-
       <Card>
         <CardHeader>
-          <CardTitle className="text-xl">Usuários Cadastrados ({usuarios.length})</CardTitle>
+          <CardTitle>{isAdmin ? `Clientes (${itens.length})` : `Usuários (${itens.length})`}</CardTitle>
+          {isCliente && cliente && (
+            <CardDescription>
+              Limite de usuários: {itens.length} / {cliente.limite_usuarios}
+            </CardDescription>
+          )}
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nome</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead className="w-[150px] text-center">Perfil</TableHead>
-                  <TableHead className="w-[100px] text-right">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {usuarios.map((user) => (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>{isAdmin ? 'Cliente' : 'Usuário'}</TableHead>
+                <TableHead>Email</TableHead>
+                <TableHead className="text-center">Perfil</TableHead>
+                <TableHead className="text-right">Ações</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {itens.map((item) => {
+                const user = isAdmin ? item.usuario : item;
+                return (
                   <TableRow key={user.id}>
                     <TableCell className="font-medium">{user.nome}</TableCell>
                     <TableCell>{user.email}</TableCell>
                     <TableCell className="text-center">
-                      <Badge variant={user.tbl_perfil?.nome === 'Admin' ? 'destructive' : user.tbl_perfil?.nome === 'Empresa' ? 'default' : 'secondary'}>
-                        {user.tbl_perfil?.nome}
+                      <Badge variant={user.tbl_perfil.nome === 'Admin' ? 'destructive' : user.tbl_perfil.nome === 'Cliente' ? 'default' : 'secondary'}>
+                        {user.tbl_perfil.nome}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
-                      <div className="flex justify-end space-x-2">
-                        <Button variant="ghost" size="sm" onClick={() => handleEdit(user)}>
-                          <Edit className="w-4 h-4" />
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => handleDelete(user.id)}>
-                          <Trash2 className="w-4 h-4 text-red-500" />
-                        </Button>
-                      </div>
+                      <Button variant="ghost" size="sm" onClick={() => handleEdit(user)}>
+                        <Edit className="w-4 h-4" />
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => handleDelete(user)}>
+                        <Trash2 className="w-4 h-4 text-red-500" />
+                      </Button>
                     </TableCell>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+                );
+              })}
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
     </LayoutPrincipal>

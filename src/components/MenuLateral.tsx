@@ -3,49 +3,35 @@ import { cn } from '@/lib/utils';
 import { LayoutDashboard, DollarSign, ArrowUpCircle, ArrowDownCircle, Banknote, FileText, Upload, Settings, LogOut, BookOpen, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
-import { showError } from '@/utils/toast';
+import { useSessao } from '@/hooks/use-sessao';
 
 interface ItemMenu {
   nome: string;
   caminho: string;
   icone: React.ElementType;
+  perfis: ('Admin' | 'Cliente' | 'Usuario')[]; // Quem pode ver este item
 }
 
 const itensMenu: ItemMenu[] = [
-  { nome: 'Painel', caminho: '/painel', icone: LayoutDashboard },
-  { nome: 'Contas a Pagar', caminho: '/contas-pagar', icone: ArrowDownCircle },
-  { nome: 'Contas a Receber', caminho: '/contas-receber', icone: ArrowUpCircle },
-  { nome: 'Bancos / Caixas', caminho: '/bancos', icone: Banknote },
-  { nome: 'Plano de Contas', caminho: '/plano-contas', icone: BookOpen },
-  { nome: 'Conciliação', caminho: '/conciliacao', icone: DollarSign },
-  { nome: 'Importar', caminho: '/importar', icone: Upload },
-  { nome: 'Relatórios', caminho: '/relatorios', icone: FileText },
-  { nome: 'Gerenciar Usuários', caminho: '/gerenciar-usuarios', icone: Users }, // Novo item
-  { nome: 'Configurações', caminho: '/configuracoes', icone: Settings },
+  { nome: 'Painel', caminho: '/painel', icone: LayoutDashboard, perfis: ['Admin', 'Cliente', 'Usuario'] },
+  { nome: 'Contas a Pagar', caminho: '/contas-pagar', icone: ArrowDownCircle, perfis: ['Admin', 'Cliente', 'Usuario'] },
+  { nome: 'Contas a Receber', caminho: '/contas-receber', icone: ArrowUpCircle, perfis: ['Admin', 'Cliente', 'Usuario'] },
+  { nome: 'Bancos / Caixas', caminho: '/bancos', icone: Banknote, perfis: ['Admin', 'Cliente', 'Usuario'] },
+  { nome: 'Plano de Contas', caminho: '/plano-contas', icone: BookOpen, perfis: ['Admin', 'Cliente'] },
+  { nome: 'Conciliação', caminho: '/conciliacao', icone: DollarSign, perfis: ['Admin', 'Cliente', 'Usuario'] },
+  { nome: 'Importar', caminho: '/importar', icone: Upload, perfis: ['Admin', 'Cliente'] },
+  { nome: 'Relatórios', caminho: '/relatorios', icone: FileText, perfis: ['Admin', 'Cliente'] },
+  { nome: 'Gerenciar Usuários', caminho: '/gerenciar-usuarios', icone: Users, perfis: ['Admin', 'Cliente'] },
+  { nome: 'Configurações', caminho: '/configuracoes', icone: Settings, perfis: ['Admin', 'Cliente'] },
 ];
 
-/**
- * Menu lateral de navegação.
- */
 const MenuLateral = () => {
   const localizacao = useLocation();
+  const { perfil } = useSessao();
+  const perfilUsuario = perfil?.tbl_perfil?.nome;
 
   const lidarComSair = async () => {
-    try {
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
-    } catch (error) {
-      const errorMessage = (error as Error).message;
-      
-      // Se a sessão já estiver faltando (o que pode acontecer se ela expirou ou foi limpa),
-      // tratamos como um logout local bem-sucedido para evitar mostrar um erro confuso.
-      if (errorMessage.includes('Auth session missing')) {
-        console.warn('Sign out falhou porque a sessão já estava ausente. Redirecionamento esperado.');
-        // O LayoutPrincipal deve detectar a sessão nula e redirecionar.
-      } else {
-        showError('Erro ao sair: ' + errorMessage);
-      }
-    }
+    await supabase.auth.signOut();
   };
 
   return (
@@ -55,6 +41,9 @@ const MenuLateral = () => {
       </div>
       <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
         {itensMenu.map((item) => {
+          if (!perfilUsuario || !item.perfis.includes(perfilUsuario)) {
+            return null; // Não renderiza o item se o perfil não tiver permissão
+          }
           const estaAtivo = localizacao.pathname === item.caminho;
           const Icone = item.icone;
           return (

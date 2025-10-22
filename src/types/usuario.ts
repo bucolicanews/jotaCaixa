@@ -2,7 +2,7 @@ import { User } from '@supabase/supabase-js';
 
 export interface Perfil {
   id: string;
-  nome: 'Admin' | 'Empresa' | 'Usuario';
+  nome: 'Admin' | 'Cliente' | 'Usuario';
 }
 
 export interface PerfilUsuario {
@@ -11,6 +11,7 @@ export interface PerfilUsuario {
   email: string;
   perfil_id: string;
   tbl_perfil: Perfil | null;
+  cliente_id: string | null; // A qual cliente este usuário pertence
   criado_em: string;
   atualizado_em: string;
 }
