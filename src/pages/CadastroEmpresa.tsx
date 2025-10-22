@@ -46,7 +46,6 @@ const CadastroEmpresa = () => {
         <CardContent>
           {usuario && (
             <FormEmpresa 
-              userId={usuario.id}
               onSaveComplete={handleSaveComplete}
             />
           )}

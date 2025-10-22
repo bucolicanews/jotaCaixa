@@ -18,11 +18,11 @@ const formSchema = z.object({
 type FormValues = z.infer<typeof formSchema>;
 
 interface FormEmpresaProps {
-  userId: string;
+  // Removendo userId daqui, vamos buscar internamente
   onSaveComplete: (empresaId: string) => void;
 }
 
-const FormEmpresa: React.FC<FormEmpresaProps> = ({ userId, onSaveComplete }) => {
+const FormEmpresa: React.FC<FormEmpresaProps> = ({ onSaveComplete }) => {
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -33,8 +33,15 @@ const FormEmpresa: React.FC<FormEmpresaProps> = ({ userId, onSaveComplete }) => 
   });
 
   const onSubmit = async (values: FormValues) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+      showError('Sessão de usuário não encontrada. Por favor, faça login novamente.');
+      return;
+    }
+
     const dataToSave = {
-      usuario_id: userId,
+      usuario_id: user.id, // Usando o ID do usuário autenticado
       nome_fantasia: values.nome_fantasia,
       razao_social: values.razao_social,
       cnpj: values.cnpj || null,
