@@ -3,7 +3,7 @@ import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Edit, CheckCircle2, ArrowUpCircle, Key, ArrowDownCircle, PlusCircle } from 'lucide-react';
+import { Loader2, Edit, CheckCircle2, ArrowUpCircle, Key, ArrowDownCircle, PlusCircle, Users } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
@@ -17,9 +17,11 @@ const GerenciarUsuarios = () => {
   const [admins, setAdmins] = useState<AdminProfile[]>([]);
   const [clientes, setClientes] = useState<ClienteProfile[]>([]);
   const [usuarios, setUsuarios] = useState<UsuarioProfile[]>([]);
+  const [clientTeams, setClientTeams] = useState<Record<string, UsuarioProfile[]>>({});
   const [carregandoDados, setCarregandoDados] = useState(true);
   const [itemSelecionado, setItemSelecionado] = useState<AnyProfile | null>(null);
   const [dialogAberto, setDialogAberto] = useState(false);
+  const [viewingClient, setViewingClient] = useState<ClienteProfile | null>(null);
 
   const isAdmin = role === 'Admin';
   const isClienteAprovado = role === 'Cliente' && (perfil as ClienteProfile)?.aprovado;
@@ -28,21 +30,35 @@ const GerenciarUsuarios = () => {
   const buscarDados = async () => {
     setCarregandoDados(true);
     if (isAdmin) {
-      const [adminRes, clientesRes, usuariosRes] = await Promise.all([
+      const [adminRes, clientesRes, allUsersRes] = await Promise.all([
         supabase.from('tbl_admins').select('*'),
         supabase.from('tbl_clientes').select('*').order('aprovado', { ascending: false }).order('nome'),
-        supabase.from('tbl_usuarios').select('*').is('cliente_id', null)
+        supabase.from('tbl_usuarios').select('*')
       ]);
 
-      if (adminRes.error || clientesRes.error || usuariosRes.error) {
+      if (adminRes.error || clientesRes.error || allUsersRes.error) {
         showError('Erro ao carregar dados.');
       } else {
         const adminData = adminRes.data || [];
+        const allUsersData = allUsersRes.data || [];
         const adminIds = adminData.map(a => a.id);
-        const independentUsers = (usuariosRes.data || []).filter(u => !adminIds.includes(u.id));
+        
+        const independentUsers = allUsersData.filter(u => !u.cliente_id && !adminIds.includes(u.id));
+        
+        const teams = allUsersData.reduce((acc, user) => {
+          if (user.cliente_id) {
+            if (!acc[user.cliente_id]) {
+              acc[user.cliente_id] = [];
+            }
+            acc[user.cliente_id].push(user);
+          }
+          return acc;
+        }, {} as Record<string, UsuarioProfile[]>);
+
         setAdmins(adminData);
         setClientes(clientesRes.data || []);
         setUsuarios(independentUsers);
+        setClientTeams(teams);
       }
     } else if (isClienteAprovado) {
       const { data, error } = await supabase.from('tbl_usuarios').select('*').eq('cliente_id', usuario!.id);
@@ -116,6 +132,7 @@ const GerenciarUsuarios = () => {
               if (!item) return null;
               const isClient = type === 'cliente';
               const clientProfile = item as ClienteProfile;
+              const teamSize = isClient ? (clientTeams[clientProfile.id]?.length || 0) : 0;
               return (
                 <TableRow key={item.id}>
                   <TableCell>{item.nome}</TableCell><TableCell>{item.email}</TableCell>
@@ -125,6 +142,7 @@ const GerenciarUsuarios = () => {
                     {type === 'usuario' && <Badge variant="secondary">Usuário</Badge>}
                   </TableCell>
                   <TableCell className="text-right space-x-1">
+                    {isClient && <Button variant="outline" size="sm" onClick={() => setViewingClient(clientProfile)}><Users className="w-4 h-4 mr-2" />{teamSize} / {clientProfile.limite_usuarios}</Button>}
                     {isAdmin && type === 'cliente' && !clientProfile.aprovado && <Button variant="outline" size="sm" onClick={() => handleApprove(clientProfile)}><CheckCircle2 className="w-4 h-4 mr-2" />Aprovar</Button>}
                     {isAdmin && type === 'cliente' && <Button variant="outline" size="sm" onClick={() => handleDemote(clientProfile)}><ArrowDownCircle className="w-4 h-4 mr-2" />{clientProfile.aprovado ? 'Rebaixar' : 'Reprovar'}</Button>}
                     {isAdmin && type === 'usuario' && <Button variant="outline" size="sm" onClick={() => handlePromote(item as UsuarioProfile)}><ArrowUpCircle className="w-4 h-4 mr-2" />Promover</Button>}
@@ -156,12 +174,7 @@ const GerenciarUsuarios = () => {
             </DialogTrigger>
             <DialogContent>
               <DialogHeader><DialogTitle>{itemSelecionado ? 'Editar Usuário' : 'Novo Usuário da Equipe'}</DialogTitle></DialogHeader>
-              <FormUsuario 
-                criadorRole={role!} 
-                clienteId={usuario?.id}
-                usuarioInicial={itemSelecionado}
-                onSaveComplete={() => handleAction()} 
-              />
+              <FormUsuario criadorRole={role!} clienteId={usuario?.id} usuarioInicial={itemSelecionado} onSaveComplete={() => handleAction()} />
             </DialogContent>
           </Dialog>
         )}
@@ -178,6 +191,31 @@ const GerenciarUsuarios = () => {
           </DialogContent>
         </Dialog>
       )}
+
+      <Dialog open={!!viewingClient} onOpenChange={() => setViewingClient(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Equipe de {viewingClient?.nome}</DialogTitle>
+            <CardDescription>
+              Usuários vinculados a esta empresa.
+            </CardDescription>
+          </DialogHeader>
+          <Table>
+            <TableHeader><TableRow><TableHead>Nome</TableHead><TableHead>Email</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader>
+            <TableBody>
+              {(clientTeams[viewingClient?.id || ''] || []).map(teamMember => (
+                <TableRow key={teamMember.id}>
+                  <TableCell>{teamMember.nome}</TableCell>
+                  <TableCell>{teamMember.email}</TableCell>
+                  <TableCell className="text-right">
+                    <Button variant="ghost" size="icon" onClick={() => handlePasswordReset(teamMember.email)} title="Enviar reset de senha"><Key className="w-4 h-4" /></Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </DialogContent>
+      </Dialog>
     </LayoutPrincipal>
   );
 };
