@@ -6,35 +6,27 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { showSuccess, showError } from '@/utils/toast';
 import { Loader2 } from 'lucide-react';
-import { Input } from '@/components/ui/input'; // Usando Input simples, pois não temos PasswordInput no seu codebase atual
+import { Input } from '@/components/ui/input';
 
 const AtualizarSenha = () => {
   const navigate = useNavigate();
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [sessionValid, setSessionValid] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [checkingSession, setCheckingSession] = useState(true);
 
   useEffect(() => {
-    // Monitora o estado de autenticação para verificar se o evento é de recuperação de senha
-    const { data: { subscription: authListener } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'PASSWORD_RECOVERY') {
-        // Se o evento for PASSWORD_RECOVERY, a sessão está temporariamente válida para atualização
-        setSessionValid(true);
-      } else if (session) {
-        // Se já houver uma sessão válida (usuário logado), redireciona para o painel
-        navigate('/painel');
-      } else {
-        // Se não houver sessão e não for um evento de recuperação, a página não deve ser acessada diretamente
-        setSessionValid(false);
+    // Verifica se existe uma sessão temporária de recuperação ao carregar a página.
+    const checkUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setError('Este link de redefinição de senha é inválido ou expirou.');
       }
-      setLoading(false);
-    });
-
-    return () => {
-      authListener.unsubscribe();
+      setCheckingSession(false);
     };
-  }, [navigate]);
+    checkUser();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,23 +44,23 @@ const AtualizarSenha = () => {
       return;
     }
 
-    // Atualiza a senha do usuário logado temporariamente
-    const { error } = await supabase.auth.updateUser({ password });
+    const { error: updateError } = await supabase.auth.updateUser({ password });
 
-    if (error) {
+    if (updateError) {
       showError('Não foi possível atualizar sua senha. Por favor, tente novamente.');
-      console.error('Password update error:', error);
+      console.error('Password update error:', updateError);
+      setLoading(false);
     } else {
-      showSuccess('Senha atualizada com sucesso! Redirecionando para o login...');
-      // Após a atualização, a sessão temporária é encerrada, e o usuário deve ser redirecionado para o login
+      showSuccess('Senha atualizada com sucesso! Você será redirecionado para o login.');
+      // Força o logout para destruir a sessão temporária de recuperação.
+      await supabase.auth.signOut();
       setTimeout(() => {
         navigate('/login');
       }, 2000);
     }
-    setLoading(false);
   };
   
-  if (loading) {
+  if (checkingSession) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-4">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -76,13 +68,13 @@ const AtualizarSenha = () => {
     );
   }
 
-  if (!sessionValid) {
+  if (error) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-4 text-center">
         <Card className="w-full max-w-md">
           <CardHeader>
             <CardTitle className="text-2xl">Acesso Negado</CardTitle>
-            <CardDescription>Este link de redefinição de senha é inválido ou expirou.</CardDescription>
+            <CardDescription>{error}</CardDescription>
           </CardHeader>
           <CardContent>
             <Link to="/login">
