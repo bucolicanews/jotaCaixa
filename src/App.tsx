@@ -13,6 +13,7 @@ import Conciliacao from "./pages/Conciliacao";
 import Importar from "./pages/Importar";
 import Relatorios from "./pages/Relatorios";
 import Configuracoes from "./pages/Configuracoes";
+import AtualizarSenha from "./pages/AtualizarSenha"; // Importando o novo componente
 
 const queryClient = new QueryClient();
 
@@ -25,6 +26,7 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Login />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/atualizar-senha" element={<AtualizarSenha />} />
           
           {/* Rotas Autenticadas */}
           <Route path="/painel" element={<Painel />} />

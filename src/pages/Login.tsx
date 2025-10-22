@@ -36,21 +36,23 @@ const Login = () => {
           theme="light"
           providers={[]}
           redirectTo={window.location.origin + '/painel'}
+          view="sign_in" // Garante que a tela inicial seja o login
           localization={{
             variables: {
               sign_in: {
                 email_label: 'Email',
                 password_label: 'Senha',
                 button_label: 'Entrar',
-                link_text: 'Já tem uma conta? Entrar',
+                link_text: 'Não tem uma conta? Cadastrar',
                 social_provider_text: 'Entrar com {{provider}}',
-                // forgotten_password_text: 'Esqueceu sua senha?', // Removido: não suportado na tipagem
+                // Propriedade correta para o link de recuperação de senha
+                forgotten_password_text: 'Esqueceu sua senha?', 
               },
               sign_up: {
                 email_label: 'Email',
                 password_label: 'Criar Senha',
                 button_label: 'Cadastrar',
-                link_text: 'Não tem uma conta? Cadastrar',
+                link_text: 'Já tem uma conta? Entrar',
               },
               forgotten_password: {
                 email_label: 'Email',
