@@ -25,26 +25,24 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       return;
     }
 
-    // 1. Buscar Perfil
-    const { data: perfilData, error: perfilError } = await supabase
-      .from('usuarios')
-      .select('*')
-      .eq('id', user.id)
-      .single();
-    if (perfilError && perfilError.code !== 'PGRST116') console.error('Erro ao buscar perfil:', perfilError);
-    const perfil = perfilData as PerfilUsuario | null;
+    // Busca o perfil e a empresa em paralelo para mais eficiência e robustez.
+    // Isso evita que a falha em buscar um (ex: perfil) impeça a busca do outro (ex: empresa).
+    const [perfilResult, empresaResult] = await Promise.all([
+      supabase.from('usuarios').select('*').eq('id', user.id).single(),
+      supabase.from('empresas').select('id').eq('usuario_id', user.id).single(),
+    ]);
 
-    // 2. Buscar Empresa ID
-    let empresaId: string | null = null;
-    if (perfil) {
-      const { data: empresaData, error: empresaError } = await supabase
-        .from('empresas')
-        .select('id')
-        .eq('usuario_id', user.id)
-        .single();
-      if (empresaData) empresaId = empresaData.id;
-      else if (empresaError && empresaError.code !== 'PGRST116') console.error('Erro ao buscar empresa:', empresaError);
+    const { data: perfilData, error: perfilError } = perfilResult;
+    if (perfilError && perfilError.code !== 'PGRST116') {
+      console.error('Erro ao buscar perfil:', perfilError);
     }
+    const perfil = (perfilData as PerfilUsuario) || null;
+
+    const { data: empresaData, error: empresaError } = empresaResult;
+    if (empresaError && empresaError.code !== 'PGRST116') {
+      console.error('Erro ao buscar empresa:', empresaError);
+    }
+    const empresaId = empresaData?.id || null;
 
     setEstado({ usuario: user, perfil, empresaId, carregando: false });
   }, []);
