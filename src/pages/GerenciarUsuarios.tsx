@@ -30,7 +30,7 @@ const GerenciarUsuarios = () => {
     } else if (!carregando) {
       setCarregandoDados(false);
     }
-  }, [carregando, role]);
+  }, [carregando, role, isAdmin, isCliente]);
 
   const buscarDados = async () => {
     setCarregandoDados(true);
@@ -140,25 +140,28 @@ const GerenciarUsuarios = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {itens.filter(Boolean).map((item) => (
-                <TableRow key={item.id}>
-                  <TableCell className="font-medium">{item.nome}</TableCell>
-                  <TableCell>{item.email}</TableCell>
-                  <TableCell className="text-center">
-                    <Badge variant={isAdmin ? 'default' : 'secondary'}>
-                      {isAdmin ? 'Cliente' : 'Usuário'}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button variant="ghost" size="sm" onClick={() => handleEdit(item)}>
-                      <Edit className="w-4 h-4" />
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={() => handleDelete(item)}>
-                      <Trash2 className="w-4 h-4 text-red-500" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {itens.map((item) => {
+                if (!item) return null;
+                return (
+                  <TableRow key={item.id}>
+                    <TableCell className="font-medium">{item.nome}</TableCell>
+                    <TableCell>{item.email}</TableCell>
+                    <TableCell className="text-center">
+                      <Badge variant={isAdmin ? 'default' : 'secondary'}>
+                        {isAdmin ? 'Cliente' : 'Usuário'}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="ghost" size="sm" onClick={() => handleEdit(item)}>
+                        <Edit className="w-4 h-4" />
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => handleDelete(item)}>
+                        <Trash2 className="w-4 h-4 text-red-500" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </CardContent>
