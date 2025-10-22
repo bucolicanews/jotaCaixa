@@ -13,13 +13,14 @@ export interface ClienteProfile {
   nome: string;
   email: string;
   limite_usuarios: number;
+  aprovado: boolean;
 }
 
 export interface UsuarioProfile {
   id: string;
   nome: string;
   email: string;
-  cliente_id: string;
+  cliente_id: string | null; // Pode ser nulo para usuários independentes
 }
 
 export type AnyProfile = AdminProfile | ClienteProfile | UsuarioProfile | null;

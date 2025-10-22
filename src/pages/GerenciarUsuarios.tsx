@@ -3,7 +3,7 @@ import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Edit, Trash2, PlusCircle, ShieldAlert, ArrowUpCircle } from 'lucide-react';
+import { Loader2, Edit, Trash2, PlusCircle, ShieldAlert, CheckCircle2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
@@ -13,7 +13,7 @@ import FormUsuario from '@/components/FormUsuario';
 import { Badge } from '@/components/ui/badge';
 
 const GerenciarUsuarios = () => {
-  const { usuario, role, carregando } = useSessao();
+  const { usuario, role, carregando, perfil } = useSessao();
   const [itens, setItens] = useState<AnyProfile[]>([]);
   const [cliente, setCliente] = useState<ClienteProfile | null>(null);
   const [carregandoDados, setCarregandoDados] = useState(true);
@@ -21,19 +21,18 @@ const GerenciarUsuarios = () => {
   const [dialogAberto, setDialogAberto] = useState(false);
 
   const isAdmin = role === 'Admin';
-  const isCliente = role === 'Cliente';
-  const limiteAtingido = isCliente && cliente && itens.length >= cliente.limite_usuarios;
+  const isCliente = role === 'Cliente' && (perfil as ClienteProfile)?.aprovado;
 
   const buscarDados = async () => {
     setCarregandoDados(true);
     if (isAdmin) {
-      const { data: clientes, error: errClientes } = await supabase.from('tbl_clientes').select('*');
+      const { data: clientes, error: errClientes } = await supabase.from('tbl_clientes').select('*').order('aprovado', { ascending: true }).order('nome');
       const { data: usuarios, error: errUsuarios } = await supabase.from('tbl_usuarios').select('*').is('cliente_id', null);
       
       if (errClientes || errUsuarios) {
         showError('Erro ao carregar dados.');
       } else {
-        const todos = [...(clientes || []), ...(usuarios || [])].sort((a, b) => a.nome.localeCompare(b.nome));
+        const todos = [...(clientes || []), ...(usuarios || [])];
         setItens(todos);
       }
     } else if (isCliente) {
@@ -54,13 +53,17 @@ const GerenciarUsuarios = () => {
     }
   }, [carregando, role, isAdmin, isCliente, usuario]);
 
-  const handlePromote = async (user: UsuarioProfile) => {
-    if (!window.confirm(`Tem certeza que deseja promover ${user.nome} a Cliente?`)) return;
-    const { error } = await supabase.rpc('promote_user_to_cliente', { p_user_id: user.id });
+  const handleApprove = async (cliente: ClienteProfile) => {
+    if (!window.confirm(`Tem certeza que deseja aprovar a empresa ${cliente.nome}?`)) return;
+    const { error } = await supabase
+      .from('tbl_clientes')
+      .update({ aprovado: true })
+      .eq('id', cliente.id);
+    
     if (error) {
-      showError(`Falha na promoção: ${error.message}`);
+      showError(`Falha ao aprovar: ${error.message}`);
     } else {
-      showSuccess(`${user.nome} foi promovido a Cliente.`);
+      showSuccess(`${cliente.nome} aprovada com sucesso.`);
       buscarDados();
     }
   };
@@ -80,15 +83,15 @@ const GerenciarUsuarios = () => {
     if (!item) return;
     if (!window.confirm(`Tem certeza que deseja excluir ${item.nome}? Esta ação é irreversível.`)) return;
 
-    const isUser = 'cliente_id' in item;
-    const tableName = isUser ? 'tbl_usuarios' : 'tbl_clientes';
+    const isClient = 'aprovado' in item;
+    const tableName = isClient ? 'tbl_clientes' : 'tbl_usuarios';
     
     const { error } = await supabase.from(tableName).delete().eq('id', item.id);
 
     if (error) {
       showError(`Falha ao excluir: ${error.message}`);
     } else {
-      showSuccess(`${isUser ? 'Usuário' : 'Cliente'} excluído com sucesso.`);
+      showSuccess(`${isClient ? 'Cliente' : 'Usuário'} excluído com sucesso.`);
       buscarDados();
     }
   };
@@ -117,13 +120,13 @@ const GerenciarUsuarios = () => {
         <h1 className="text-3xl font-bold">{isAdmin ? 'Gerenciar Contas' : 'Gerenciar Equipe'}</h1>
         <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
           <DialogTrigger asChild>
-            <Button onClick={() => setItemSelecionado(null)} disabled={!!limiteAtingido}>
+            <Button onClick={() => setItemSelecionado(null)} disabled={!!(cliente && itens.length >= cliente.limite_usuarios)}>
               <PlusCircle className="w-4 h-4 mr-2" />
-              {isCliente ? 'Novo Usuário' : 'Nova Conta'}
+              {isCliente ? 'Novo Usuário' : 'Novo Cliente'}
             </Button>
           </DialogTrigger>
           <DialogContent>
-            <DialogHeader><DialogTitle>{itemSelecionado ? 'Editar' : 'Nova'} {isCliente ? 'Usuário da Equipe' : 'Conta'}</DialogTitle></DialogHeader>
+            <DialogHeader><DialogTitle>{itemSelecionado ? 'Editar' : 'Novo'} {isCliente ? 'Usuário' : 'Cliente'}</DialogTitle></DialogHeader>
             <FormUsuario 
               criadorRole={role!} 
               clienteId={isCliente ? usuario?.id : undefined} 
@@ -140,20 +143,28 @@ const GerenciarUsuarios = () => {
         </CardHeader>
         <CardContent>
           <Table>
-            <TableHeader><TableRow><TableHead>Nome</TableHead><TableHead>Email</TableHead><TableHead>Perfil</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader>
+            <TableHeader><TableRow><TableHead>Nome</TableHead><TableHead>Email</TableHead><TableHead>Perfil / Status</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader>
             <TableBody>
               {itens.map((item) => {
                 if (!item) return null;
-                const isUser = 'cliente_id' in item;
+                const isClient = 'aprovado' in item;
                 return (
                   <TableRow key={item.id}>
                     <TableCell>{item.nome}</TableCell>
                     <TableCell>{item.email}</TableCell>
-                    <TableCell><Badge variant={isUser ? 'secondary' : 'default'}>{isUser ? 'Usuário' : 'Cliente'}</Badge></TableCell>
+                    <TableCell>
+                      {isClient ? (
+                        <Badge variant={item.aprovado ? 'default' : 'destructive'}>
+                          {item.aprovado ? 'Cliente' : 'Pendente'}
+                        </Badge>
+                      ) : (
+                        <Badge variant="secondary">Usuário</Badge>
+                      )}
+                    </TableCell>
                     <TableCell className="text-right">
-                      {isAdmin && isUser && (
-                        <Button variant="outline" size="sm" onClick={() => handlePromote(item as UsuarioProfile)} className="mr-2">
-                          <ArrowUpCircle className="w-4 h-4 mr-2" /> Promover
+                      {isAdmin && isClient && !item.aprovado && (
+                        <Button variant="outline" size="sm" onClick={() => handleApprove(item as ClienteProfile)} className="mr-2">
+                          <CheckCircle2 className="w-4 h-4 mr-2" /> Aprovar
                         </Button>
                       )}
                       <Button variant="ghost" size="icon" onClick={() => handleEdit(item)}>

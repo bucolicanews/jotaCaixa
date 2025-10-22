@@ -17,6 +17,7 @@ import Configuracoes from "./pages/Configuracoes";
 import AtualizarSenha from "./pages/AtualizarSenha";
 import PlanoContasPage from "./pages/PlanoContas";
 import GerenciarUsuarios from "./pages/GerenciarUsuarios";
+import CadastrarEmpresa from "./pages/CadastrarEmpresa";
 
 const queryClient = new QueryClient();
 
@@ -44,6 +45,7 @@ const App = () => (
             <Route path="/configuracoes" element={<Configuracoes />} />
             <Route path="/plano-contas" element={<PlanoContasPage />} />
             <Route path="/gerenciar-usuarios" element={<GerenciarUsuarios />} />
+            <Route path="/cadastrar-empresa" element={<CadastrarEmpresa />} />
 
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />

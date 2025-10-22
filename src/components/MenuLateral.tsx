@@ -1,9 +1,10 @@
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
-import { LayoutDashboard, DollarSign, ArrowUpCircle, ArrowDownCircle, Banknote, FileText, Upload, Settings, LogOut, BookOpen, Users } from 'lucide-react';
+import { LayoutDashboard, DollarSign, ArrowUpCircle, ArrowDownCircle, Banknote, FileText, Upload, Settings, LogOut, BookOpen, Users, Building2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
+import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 
 interface ItemMenu {
   nome: string;
@@ -14,21 +15,23 @@ interface ItemMenu {
 
 const itensMenu: ItemMenu[] = [
   { nome: 'Painel', caminho: '/painel', icone: LayoutDashboard, perfis: ['Admin', 'Cliente', 'Usuario'] },
-  { nome: 'Contas a Pagar', caminho: '/contas-pagar', icone: ArrowDownCircle, perfis: ['Admin', 'Cliente', 'Usuario'] },
-  { nome: 'Contas a Receber', caminho: '/contas-receber', icone: ArrowUpCircle, perfis: ['Admin', 'Cliente', 'Usuario'] },
-  { nome: 'Bancos / Caixas', caminho: '/bancos', icone: Banknote, perfis: ['Admin', 'Cliente', 'Usuario'] },
+  { nome: 'Contas a Pagar', caminho: '/contas-pagar', icone: ArrowDownCircle, perfis: ['Admin', 'Cliente'] },
+  { nome: 'Contas a Receber', caminho: '/contas-receber', icone: ArrowUpCircle, perfis: ['Admin', 'Cliente'] },
+  { nome: 'Bancos / Caixas', caminho: '/bancos', icone: Banknote, perfis: ['Admin', 'Cliente'] },
   { nome: 'Plano de Contas', caminho: '/plano-contas', icone: BookOpen, perfis: ['Admin', 'Cliente'] },
-  { nome: 'Conciliação', caminho: '/conciliacao', icone: DollarSign, perfis: ['Admin', 'Cliente', 'Usuario'] },
+  { nome: 'Conciliação', caminho: '/conciliacao', icone: DollarSign, perfis: ['Admin', 'Cliente'] },
   { nome: 'Importar', caminho: '/importar', icone: Upload, perfis: ['Admin', 'Cliente'] },
   { nome: 'Relatórios', caminho: '/relatorios', icone: FileText, perfis: ['Admin', 'Cliente'] },
-  // Apenas Admins e Clientes podem gerenciar.
   { nome: 'Gerenciar', caminho: '/gerenciar-usuarios', icone: Users, perfis: ['Admin', 'Cliente'] },
   { nome: 'Configurações', caminho: '/configuracoes', icone: Settings, perfis: ['Admin', 'Cliente'] },
 ];
 
 const MenuLateral = () => {
   const localizacao = useLocation();
-  const { role } = useSessao();
+  const { role, perfil } = useSessao();
+
+  const isUnassignedUser = role === 'Usuario' && !(perfil as UsuarioProfile)?.cliente_id;
+  const isPendingClient = role === 'Cliente' && !(perfil as ClienteProfile)?.aprovado;
 
   const lidarComSair = async () => {
     await supabase.auth.signOut();
@@ -40,8 +43,20 @@ const MenuLateral = () => {
         <h1 className="text-xl font-bold text-sidebar-primary">Fluxo de Caixa</h1>
       </div>
       <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
+        {isUnassignedUser && (
+          <Link
+            to="/cadastrar-empresa"
+            className={cn(
+              "flex items-center p-3 rounded-lg transition-colors font-semibold text-primary bg-primary/10",
+              "hover:bg-primary/20"
+            )}
+          >
+            <Building2 className="w-5 h-5 mr-3" />
+            Cadastrar Empresa
+          </Link>
+        )}
         {itensMenu.map((item) => {
-          if (!role || !item.perfis.includes(role)) {
+          if (!role || !item.perfis.includes(role) || (isPendingClient && item.caminho !== '/painel')) {
             return null;
           }
           const estaAtivo = localizacao.pathname === item.caminho;
