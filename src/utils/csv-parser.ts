@@ -1,4 +1,4 @@
-import Papa, { ParseResult, ParseError } from 'papaparse';
+import Papa, { ParseResult } from 'papaparse';
 import { ContaCSV } from '@/types/plano-contas';
 
 /**
@@ -24,7 +24,7 @@ export const parseCSV = (file: File): Promise<ContaCSV[]> => {
         
         resolve(data as ContaCSV[]);
       },
-      error: (error: ParseError) => {
+      error: (error: Error) => {
         reject(error);
       },
     });
