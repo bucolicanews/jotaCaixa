@@ -9,35 +9,35 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
-import { TipoUsuario, PerfilUsuario } from '@/types/usuario';
+import { PerfilUsuario } from '@/types/usuario';
 
 const formSchema = z.object({
   nome: z.string().min(1, 'O nome é obrigatório.'),
   email: z.string().email('Email inválido.'),
-  tipo_usuario: z.enum(['Cliente', 'Funcionario'], {
-    required_error: 'O tipo de usuário é obrigatório.',
-  }),
+  tipo_usuario: z.enum(['Cliente', 'Funcionario', 'Admin']), // Adicionado Admin para flexibilidade
   senha: z.string().min(6, 'A senha deve ter pelo menos 6 caracteres.').optional().or(z.literal('')),
 });
 
 type FormValues = z.infer<typeof formSchema>;
 
 interface FormUsuarioProps {
-  empresaId: string;
-  perfilLogado: TipoUsuario;
+  empresaId: string | null; // Pode ser nulo para o Admin
+  perfilLogado: PerfilUsuario;
   usuarioInicial?: PerfilUsuario | null;
   onSaveComplete: () => void;
 }
 
-const FormUsuario: React.FC<FormUsuarioProps> = ({ perfilLogado, usuarioInicial, onSaveComplete }) => {
+const FormUsuario: React.FC<FormUsuarioProps> = ({ empresaId, perfilLogado, usuarioInicial, onSaveComplete }) => {
   const isEditing = !!usuarioInicial;
+  const isAdmin = perfilLogado.tipo_usuario === 'Admin';
+  const isCliente = perfilLogado.tipo_usuario === 'Cliente';
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       nome: usuarioInicial?.nome || '',
       email: usuarioInicial?.email || '',
-      tipo_usuario: usuarioInicial?.tipo_usuario === 'Admin' ? 'Cliente' : (usuarioInicial?.tipo_usuario as 'Cliente' | 'Funcionario') || 'Funcionario',
+      tipo_usuario: usuarioInicial?.tipo_usuario || (isCliente ? 'Funcionario' : 'Cliente'),
       senha: '',
     },
   });
@@ -48,47 +48,40 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ perfilLogado, usuarioInicial,
       return;
     }
 
-    form.setValue('tipo_usuario', values.tipo_usuario); // Garante que o tipo seja 'Cliente' ou 'Funcionario'
-
     try {
-      // 1. Cadastro/Atualização de Auth (apenas para novos usuários ou redefinição de senha)
       if (!isEditing) {
+        // Lógica de Criação
+        const tipoNovoUsuario = isCliente ? 'Funcionario' : values.tipo_usuario;
+        
         const { error: authError } = await supabase.auth.signUp({
           email: values.email,
           password: values.senha!,
           options: {
             data: {
-              // Usamos raw_user_meta_data para passar o nome, que será usado no trigger handle_new_user
-              nome: values.nome, 
+              nome: values.nome,
+              tipo_usuario: tipoNovoUsuario,
+              empresa_id: empresaId, // Vincula o novo funcionário à empresa do Cliente
             }
           }
         });
 
-        if (authError) {
-          throw new Error(authError.message);
-        }
-
-        // O perfil será criado automaticamente pelo trigger do Supabase (handle_new_user)
+        if (authError) throw new Error(authError.message);
         showSuccess(`Usuário ${values.nome} cadastrado! Um email de confirmação foi enviado.`);
-        onSaveComplete();
-        return;
-      } 
-      
-      // 2. Atualização de Perfil (apenas nome e tipo)
-      const { error: updateError } = await supabase
-        .from('usuarios')
-        .update({
-          nome: values.nome,
-          tipo_usuario: values.tipo_usuario,
-          atualizado_em: new Date().toISOString(),
-        })
-        .eq('id', usuarioInicial.id);
 
-      if (updateError) {
-        throw new Error(updateError.message);
+      } else {
+        // Lógica de Atualização
+        const { error: updateError } = await supabase
+          .from('usuarios')
+          .update({
+            nome: values.nome,
+            tipo_usuario: values.tipo_usuario,
+          })
+          .eq('id', usuarioInicial.id);
+
+        if (updateError) throw new Error(updateError.message);
+        showSuccess(`Usuário ${values.nome} atualizado com sucesso.`);
       }
-
-      showSuccess(`Usuário ${values.nome} atualizado com sucesso.`);
+      
       onSaveComplete();
 
     } catch (error) {
@@ -96,17 +89,6 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ perfilLogado, usuarioInicial,
       showError('Falha ao salvar usuário: ' + (error as Error).message);
     }
   };
-
-  // Tipos permitidos para cadastro por Cliente/Admin
-  const tiposPermitidos: TipoUsuario[] = ['Cliente', 'Funcionario'];
-  if (perfilLogado === 'Admin') {
-    // O Admin pode cadastrar Clientes (que gerenciam empresas) e Funcionários
-    // Nota: O Admin principal não deve ser cadastrado por este formulário, apenas os usuários da empresa.
-  } else if (perfilLogado === 'Cliente') {
-    // O Cliente só pode cadastrar Funcionários
-    tiposPermitidos.splice(tiposPermitidos.indexOf('Cliente'), 1);
-  }
-
 
   return (
     <Form {...form}>
@@ -117,9 +99,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ perfilLogado, usuarioInicial,
           render={({ field }) => (
             <FormItem>
               <FormLabel>Nome</FormLabel>
-              <FormControl>
-                <Input placeholder="Nome completo" {...field} />
-              </FormControl>
+              <FormControl><Input placeholder="Nome completo" {...field} /></FormControl>
               <FormMessage />
             </FormItem>
           )}
@@ -130,9 +110,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ perfilLogado, usuarioInicial,
           render={({ field }) => (
             <FormItem>
               <FormLabel>Email</FormLabel>
-              <FormControl>
-                <Input placeholder="email@empresa.com" {...field} disabled={isEditing} />
-              </FormControl>
+              <FormControl><Input placeholder="email@empresa.com" {...field} disabled={isEditing} /></FormControl>
               <FormMessage />
             </FormItem>
           )}
@@ -143,18 +121,16 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ perfilLogado, usuarioInicial,
           render={({ field }) => (
             <FormItem>
               <FormLabel>Tipo de Usuário</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value}>
+              <Select onValueChange={field.onChange} defaultValue={field.value} disabled={!isAdmin}>
                 <FormControl>
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione o tipo" />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  {tiposPermitidos.map(tipo => (
-                    <SelectItem key={tipo} value={tipo}>
-                      {tipo}
-                    </SelectItem>
-                  ))}
+                  {isAdmin && <SelectItem value="Admin">Admin</SelectItem>}
+                  {isAdmin && <SelectItem value="Cliente">Cliente (Empresa)</SelectItem>}
+                  <SelectItem value="Funcionario">Funcionário</SelectItem>
                 </SelectContent>
               </Select>
               <FormMessage />
@@ -168,9 +144,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ perfilLogado, usuarioInicial,
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Senha (mínimo 6 caracteres)</FormLabel>
-                <FormControl>
-                  <Input type="password" placeholder="••••••••" {...field} />
-                </FormControl>
+                <FormControl><Input type="password" placeholder="••••••••" {...field} /></FormControl>
                 <FormMessage />
               </FormItem>
             )}

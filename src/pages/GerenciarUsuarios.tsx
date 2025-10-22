@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Loader2, Edit, Trash2, PlusCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
@@ -12,71 +12,54 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import FormUsuario from '@/components/FormUsuario';
 import { Badge } from '@/components/ui/badge';
 
-// Limite de usuários para o perfil Cliente (exemplo)
-const LIMITE_USUARIOS_CLIENTE = 5;
-
 const GerenciarUsuarios = () => {
   const { perfil, empresaId, carregando } = useSessao();
   const [usuarios, setUsuarios] = useState<PerfilUsuario[]>([]);
-  const [carregandoUsuarios, setCarregandoUsuarios] = useState(true);
+  const [limiteUsuarios, setLimiteUsuarios] = useState(0);
+  const [carregandoDados, setCarregandoDados] = useState(true);
   const [usuarioSelecionado, setUsuarioSelecionado] = useState<PerfilUsuario | null>(null);
   const [dialogAberto, setDialogAberto] = useState(false);
 
   const isCliente = perfil?.tipo_usuario === 'Cliente';
   const isAdmin = perfil?.tipo_usuario === 'Admin';
-  const podeCadastrar = isAdmin || isCliente;
-  const limiteAtingido = isCliente && usuarios.length >= LIMITE_USUARIOS_CLIENTE;
+  const limiteAtingido = isCliente && usuarios.length >= limiteUsuarios;
 
   useEffect(() => {
     if (!carregando && perfil) {
-      buscarUsuarios();
+      buscarDados();
     }
   }, [carregando, perfil, empresaId]);
 
-  const buscarUsuarios = async () => {
-    setCarregandoUsuarios(true);
+  const buscarDados = async () => {
+    setCarregandoDados(true);
     
-    let query = supabase
-      .from('usuarios')
-      .select('*')
-      .order('nome', { ascending: true });
-
-    // Se for Cliente, só pode ver usuários da sua empresa (Funcionários)
     if (isCliente && empresaId) {
-      // Nota: Assumindo que a tabela 'usuarios' não tem 'empresa_id' diretamente.
-      // Para um Cliente gerenciar seus funcionários, precisamos de uma tabela de vínculo ou RLS mais complexo.
-      // Por simplicidade, vamos assumir que o Cliente só pode ver usuários que ele mesmo cadastrou (se o RLS permitir).
-      // Para este MVP, vamos listar todos os usuários que não são Admin, se o usuário logado for Cliente.
-      // **AVISO:** A lógica de RLS no Supabase deve garantir que o Cliente só veja seus próprios funcionários.
-      // Como não temos uma tabela de vínculo Empresa-Usuário para Funcionários, vamos listar todos os usuários que não são Admin.
-      // Em um sistema real, precisaríamos de uma coluna 'empresa_id' na tabela 'usuarios' ou uma tabela de relacionamento.
-      
-      // Para fins de demonstração, vamos buscar todos os usuários que não são Admin.
-      query = query.neq('tipo_usuario', 'Admin');
+      // Cliente busca seus funcionários e o limite da sua empresa
+      const [usuariosResult, empresaResult] = await Promise.all([
+        supabase.from('usuarios').select('*').eq('empresa_id', empresaId).order('nome'),
+        supabase.from('empresas').select('limite_usuarios').eq('id', empresaId).single()
+      ]);
+
+      if (usuariosResult.error) showError('Erro ao carregar usuários: ' + usuariosResult.error.message);
+      else setUsuarios(usuariosResult.data as PerfilUsuario[]);
+
+      if (empresaResult.error) showError('Erro ao carregar limite da empresa: ' + empresaResult.error.message);
+      else setLimiteUsuarios(empresaResult.data?.limite_usuarios || 0);
+
     } else if (isAdmin) {
-      // Admin vê todos
-    } else {
-      // Outros perfis não devem estar aqui, mas se estiverem, não veem nada.
-      setUsuarios([]);
-      setCarregandoUsuarios(false);
-      return;
+      // Admin busca todos os usuários (exceto ele mesmo, opcionalmente)
+      const { data, error } = await supabase.from('usuarios').select('*').neq('id', perfil!.id).order('nome');
+      if (error) showError('Erro ao carregar usuários: ' + error.message);
+      else setUsuarios(data as PerfilUsuario[]);
     }
 
-    const { data, error } = await query;
-
-    if (error) {
-      showError('Erro ao carregar usuários: ' + error.message);
-      setUsuarios([]);
-    } else {
-      setUsuarios(data as PerfilUsuario[]);
-    }
-    setCarregandoUsuarios(false);
+    setCarregandoDados(false);
   };
 
   const handleSaveComplete = () => {
     setDialogAberto(false);
     setUsuarioSelecionado(null);
-    buscarUsuarios();
+    buscarDados();
   };
 
   const handleEdit = (usuario: PerfilUsuario) => {
@@ -86,25 +69,20 @@ const GerenciarUsuarios = () => {
 
   const handleDelete = async (id: string) => {
     if (!window.confirm('Tem certeza que deseja excluir este usuário? Esta ação é irreversível.')) return;
-
-    // Nota: Excluir um usuário da tabela 'usuarios' não exclui o registro em 'auth.users'.
-    // Para exclusão completa, seria necessário usar a Service Role Key (apenas em Edge Functions ou Backend).
-    // Aqui, vamos apenas remover o perfil, o que o impede de usar o sistema devido à falta de perfil.
     
-    const { error } = await supabase
-      .from('usuarios')
-      .delete()
-      .eq('id', id);
+    // Idealmente, isso seria uma chamada para uma Edge Function com a Service Role Key
+    // para deletar o usuário do `auth.users` também.
+    const { error } = await supabase.from('usuarios').delete().eq('id', id);
 
     if (error) {
       showError('Erro ao excluir usuário: ' + error.message);
     } else {
       showSuccess('Usuário excluído com sucesso.');
-      buscarUsuarios(); // Rebusca a lista
+      buscarDados();
     }
   };
 
-  if (carregando || carregandoUsuarios) {
+  if (carregando || carregandoDados) {
     return (
       <LayoutPrincipal>
         <div className="flex justify-center items-center h-64">
@@ -114,58 +92,41 @@ const GerenciarUsuarios = () => {
     );
   }
 
-  if (!podeCadastrar) {
-    return (
-      <LayoutPrincipal>
-        <Card>
-          <CardHeader><CardTitle>Acesso Negado</CardTitle></CardHeader>
-          <CardContent><p className="text-red-500">Você não tem permissão para gerenciar usuários.</p></CardContent>
-        </Card>
-      </LayoutPrincipal>
-    );
-  }
-
   return (
     <LayoutPrincipal>
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold">Gerenciar Usuários</h1>
-        <div className="space-x-2">
-          <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
-            <DialogTrigger asChild>
-              <Button 
-                onClick={() => setUsuarioSelecionado(null)}
-                disabled={limiteAtingido}
-              >
-                <PlusCircle className="w-4 h-4 mr-2" />
-                Novo Usuário
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px]">
-              <DialogHeader>
-                <DialogTitle>{usuarioSelecionado ? 'Editar Usuário' : 'Novo Usuário'}</DialogTitle>
-              </DialogHeader>
-              {perfil && empresaId && (
-                <FormUsuario 
-                  empresaId={empresaId}
-                  perfilLogado={perfil.tipo_usuario}
-                  usuarioInicial={usuarioSelecionado}
-                  onSaveComplete={handleSaveComplete}
-                />
-              )}
-            </DialogContent>
-          </Dialog>
-        </div>
+        <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
+          <DialogTrigger asChild>
+            <Button onClick={() => setUsuarioSelecionado(null)} disabled={limiteAtingido}>
+              <PlusCircle className="w-4 h-4 mr-2" />
+              Novo Usuário
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>{usuarioSelecionado ? 'Editar Usuário' : 'Novo Usuário'}</DialogTitle>
+            </DialogHeader>
+            {perfil && (
+              <FormUsuario 
+                empresaId={empresaId}
+                perfilLogado={perfil}
+                usuarioInicial={usuarioSelecionado}
+                onSaveComplete={handleSaveComplete}
+              />
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
-
-      {limiteAtingido && (
-        <div className="mb-4 p-3 bg-yellow-100 border border-yellow-400 text-yellow-700 rounded-md">
-          <p className="text-sm font-medium">Limite de usuários atingido ({usuarios.length}/{LIMITE_USUARIOS_CLIENTE}). Exclua um usuário existente para cadastrar um novo.</p>
-        </div>
-      )}
 
       <Card>
         <CardHeader>
           <CardTitle className="text-xl">Usuários Cadastrados ({usuarios.length})</CardTitle>
+          {isCliente && (
+            <CardDescription>
+              Você pode cadastrar até {limiteUsuarios} usuários. ({usuarios.length} / {limiteUsuarios})
+            </CardDescription>
+          )}
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -179,38 +140,27 @@ const GerenciarUsuarios = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {usuarios.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={4} className="text-center py-4 text-muted-foreground">
-                      Nenhum usuário encontrado.
+                {usuarios.map((user) => (
+                  <TableRow key={user.id}>
+                    <TableCell className="font-medium">{user.nome}</TableCell>
+                    <TableCell>{user.email}</TableCell>
+                    <TableCell className="text-center">
+                      <Badge variant={user.tipo_usuario === 'Admin' ? 'destructive' : user.tipo_usuario === 'Cliente' ? 'default' : 'secondary'}>
+                        {user.tipo_usuario}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end space-x-2">
+                        <Button variant="ghost" size="sm" onClick={() => handleEdit(user)}>
+                          <Edit className="w-4 h-4" />
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => handleDelete(user.id)}>
+                          <Trash2 className="w-4 h-4 text-red-500" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
-                ) : (
-                  usuarios.map((user) => (
-                    <TableRow key={user.id}>
-                      <TableCell className="font-medium">{user.nome}</TableCell>
-                      <TableCell>{user.email}</TableCell>
-                      <TableCell className="text-center">
-                        <Badge variant={user.tipo_usuario === 'Admin' ? 'destructive' : user.tipo_usuario === 'Cliente' ? 'default' : 'secondary'}>
-                          {user.tipo_usuario}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end space-x-2">
-                          <Button variant="ghost" size="sm" onClick={() => handleEdit(user)}>
-                            <Edit className="w-4 h-4" />
-                          </Button>
-                          {/* Admin não pode ser excluído por Cliente/Funcionário */}
-                          {user.tipo_usuario !== 'Admin' && (
-                            <Button variant="ghost" size="sm" onClick={() => handleDelete(user.id)}>
-                              <Trash2 className="w-4 h-4 text-red-500" />
-                            </Button>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
+                ))}
               </TableBody>
             </Table>
           </div>
