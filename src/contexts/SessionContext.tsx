@@ -1,4 +1,5 @@
 import React, { createContext, useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { User } from '@supabase/supabase-js';
 import { DadosSessao, AnyProfile, UserRole } from '@/types/usuario';
@@ -16,6 +17,7 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     role: null,
     carregando: true,
   });
+  const navigate = useNavigate();
 
   const buscarDadosAdicionais = useCallback(async (user: User | null) => {
     if (!user) {
@@ -58,11 +60,15 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   useEffect(() => {
     refetch();
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      // Lógica de redirecionamento para recuperação de senha
+      if (event === 'PASSWORD_RECOVERY') {
+        navigate('/atualizar-senha');
+      }
       buscarDadosAdicionais(session?.user ?? null);
     });
     return () => subscription.unsubscribe();
-  }, [buscarDadosAdicionais, refetch]);
+  }, [buscarDadosAdicionais, refetch, navigate]);
 
   return (
     <SessionContext.Provider value={{ ...estado, refetch }}>
