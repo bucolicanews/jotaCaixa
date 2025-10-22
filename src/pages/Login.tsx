@@ -10,15 +10,15 @@ import { useSessao } from '@/hooks/use-sessao';
  * Redireciona para o painel principal se o usuário já estiver autenticado.
  */
 const Login = () => {
-  const { sessao, carregando } = useSessao();
+  const { usuario, carregando } = useSessao();
   const navegar = useNavigate();
 
   useEffect(() => {
-    if (!carregando && sessao) {
+    if (!carregando && usuario) {
       // Redirecionar usuários autenticados para o painel principal
       navegar('/painel');
     }
-  }, [sessao, carregando, navegar]);
+  }, [usuario, carregando, navegar]);
 
   if (carregando) {
     return <div className="flex justify-center items-center min-h-screen">Carregando...</div>;
@@ -45,7 +45,6 @@ const Login = () => {
                 button_label: 'Entrar',
                 link_text: 'Não tem uma conta? Cadastrar',
                 social_provider_text: 'Entrar com {{provider}}',
-                // A propriedade 'forgotten_password_text' não é suportada na view 'sign_in' e foi removida para corrigir o erro TS2353.
               },
               sign_up: {
                 email_label: 'Email',

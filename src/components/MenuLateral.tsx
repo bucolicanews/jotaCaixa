@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
-import { LayoutDashboard, DollarSign, ArrowUpCircle, ArrowDownCircle, Banknote, FileText, Upload, Settings, LogOut, BookOpen } from 'lucide-react';
+import { LayoutDashboard, DollarSign, ArrowUpCircle, ArrowDownCircle, Banknote, FileText, Upload, Settings, LogOut, BookOpen, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { showError } from '@/utils/toast';
@@ -16,10 +16,11 @@ const itensMenu: ItemMenu[] = [
   { nome: 'Contas a Pagar', caminho: '/contas-pagar', icone: ArrowDownCircle },
   { nome: 'Contas a Receber', caminho: '/contas-receber', icone: ArrowUpCircle },
   { nome: 'Bancos / Caixas', caminho: '/bancos', icone: Banknote },
-  { nome: 'Plano de Contas', caminho: '/plano-contas', icone: BookOpen }, // Novo item
+  { nome: 'Plano de Contas', caminho: '/plano-contas', icone: BookOpen },
   { nome: 'Conciliação', caminho: '/conciliacao', icone: DollarSign },
   { nome: 'Importar', caminho: '/importar', icone: Upload },
   { nome: 'Relatórios', caminho: '/relatorios', icone: FileText },
+  { nome: 'Gerenciar Usuários', caminho: '/gerenciar-usuarios', icone: Users }, // Novo item
   { nome: 'Configurações', caminho: '/configuracoes', icone: Settings },
 ];
 

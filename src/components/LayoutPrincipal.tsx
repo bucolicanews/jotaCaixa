@@ -12,14 +12,14 @@ interface LayoutPrincipalProps {
  * Inclui verificação de autenticação e menu lateral.
  */
 const LayoutPrincipal: React.FC<LayoutPrincipalProps> = ({ children }) => {
-  const { sessao, carregando } = useSessao();
+  const { usuario, carregando } = useSessao();
   const navegar = useNavigate();
 
   if (carregando) {
     return <div className="flex justify-center items-center min-h-screen">Carregando autenticação...</div>;
   }
 
-  if (!sessao) {
+  if (!usuario) {
     // Redirecionar usuários não autenticados para a página de login
     navegar('/login');
     return null;
