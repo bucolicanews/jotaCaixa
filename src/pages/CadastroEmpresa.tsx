@@ -17,21 +17,19 @@ const CadastroEmpresa = () => {
   }
 
   if (!usuario) {
-    navegar('/login');
+    navegar('/login', { replace: true });
     return null;
   }
 
   if (empresaId) {
-    navegar('/painel');
+    navegar('/painel', { replace: true });
     return null;
   }
 
   const handleSaveComplete = () => {
-    // Usamos window.location.replace para navegar para o painel e
-    // substituir a página de cadastro no histórico do navegador.
-    // Isso também força um recarregamento completo da aplicação,
-    // garantindo que o hook useSessao busque os dados da nova empresa.
-    window.location.replace('/painel');
+    // A sessão já foi atualizada pelo refetch no FormEmpresa.
+    // Agora, apenas navegamos para o painel.
+    navegar('/painel', { replace: true });
   };
 
   return (
