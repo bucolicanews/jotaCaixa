@@ -8,7 +8,6 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
-import { useSessao } from '@/hooks/use-sessao'; // Importando o hook atualizado
 
 const formSchema = z.object({
   nome_fantasia: z.string().min(1, 'O Nome Fantasia é obrigatório.'),
@@ -23,7 +22,6 @@ interface FormEmpresaProps {
 }
 
 const FormEmpresa: React.FC<FormEmpresaProps> = ({ onSaveComplete }) => {
-  const { refetch } = useSessao(); // Obtendo a função refetch
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: { nome_fantasia: '', razao_social: '', cnpj: '' },
@@ -49,8 +47,7 @@ const FormEmpresa: React.FC<FormEmpresaProps> = ({ onSaveComplete }) => {
       showError(`Falha ao cadastrar empresa: ${error.message}`);
     } else if (data?.id) {
       showSuccess(`Empresa "${values.nome_fantasia}" cadastrada com sucesso!`);
-      await refetch(); // Recarrega os dados da sessão
-      onSaveComplete(); // Navega para o painel
+      onSaveComplete();
     } else {
       showError('Falha desconhecida ao cadastrar empresa.');
     }

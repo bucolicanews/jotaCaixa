@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSessao } from '@/hooks/use-sessao';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -5,8 +6,16 @@ import { Loader2 } from 'lucide-react';
 import FormEmpresa from '@/components/FormEmpresa';
 
 const CadastroEmpresa = () => {
-  const { usuario, empresaId, carregando } = useSessao();
+  const { usuario, empresaId, carregando, refetch } = useSessao();
   const navegar = useNavigate();
+
+  // Este efeito monitora o 'empresaId'. Assim que ele for preenchido,
+  // a navegação para o painel é acionada.
+  useEffect(() => {
+    if (empresaId) {
+      navegar('/painel', { replace: true });
+    }
+  }, [empresaId, navegar]);
 
   if (carregando) {
     return (
@@ -21,15 +30,17 @@ const CadastroEmpresa = () => {
     return null;
   }
 
+  // Se o empresaId já existe, o useEffect acima cuidará do redirecionamento.
+  // Retornamos null para evitar que o formulário apareça rapidamente.
   if (empresaId) {
-    navegar('/painel', { replace: true });
     return null;
   }
 
-  const handleSaveComplete = () => {
-    // A sessão já foi atualizada pelo refetch no FormEmpresa.
-    // Agora, apenas navegamos para o painel.
-    navegar('/painel', { replace: true });
+  const handleSaveComplete = async () => {
+    // Após o formulário ser salvo com sucesso, chamamos o refetch aqui.
+    // Isso atualizará o estado da sessão, preenchendo o 'empresaId'
+    // e acionando o useEffect para navegar.
+    await refetch();
   };
 
   return (
@@ -42,11 +53,9 @@ const CadastroEmpresa = () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {usuario && (
-            <FormEmpresa 
-              onSaveComplete={handleSaveComplete}
-            />
-          )}
+          <FormEmpresa 
+            onSaveComplete={handleSaveComplete}
+          />
         </CardContent>
       </Card>
     </div>
