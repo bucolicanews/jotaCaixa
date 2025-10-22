@@ -21,6 +21,7 @@ const itensMenu: ItemMenu[] = [
   { nome: 'Conciliação', caminho: '/conciliacao', icone: DollarSign, perfis: ['Admin', 'Cliente', 'Usuario'] },
   { nome: 'Importar', caminho: '/importar', icone: Upload, perfis: ['Admin', 'Cliente'] },
   { nome: 'Relatórios', caminho: '/relatorios', icone: FileText, perfis: ['Admin', 'Cliente'] },
+  // Apenas Admins e Clientes podem gerenciar.
   { nome: 'Gerenciar', caminho: '/gerenciar-usuarios', icone: Users, perfis: ['Admin', 'Cliente'] },
   { nome: 'Configurações', caminho: '/configuracoes', icone: Settings, perfis: ['Admin', 'Cliente'] },
 ];

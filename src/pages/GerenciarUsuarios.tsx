@@ -3,7 +3,7 @@ import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Edit, Trash2, PlusCircle, ShieldAlert } from 'lucide-react';
+import { Loader2, Edit, Trash2, PlusCircle, ShieldAlert, ArrowUpCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
@@ -24,30 +24,45 @@ const GerenciarUsuarios = () => {
   const isCliente = role === 'Cliente';
   const limiteAtingido = isCliente && cliente && itens.length >= cliente.limite_usuarios;
 
-  useEffect(() => {
-    if (!carregando && (isAdmin || isCliente)) {
-      buscarDados();
-    } else if (!carregando) {
-      setCarregandoDados(false);
-    }
-  }, [carregando, role, isAdmin, isCliente]);
-
   const buscarDados = async () => {
     setCarregandoDados(true);
     if (isAdmin) {
-      const { data, error } = await supabase.from('tbl_clientes').select('*').order('nome');
-      if (error) showError('Erro ao carregar clientes: ' + error.message);
-      else setItens((data as ClienteProfile[]) || []);
+      const { data: clientes, error: errClientes } = await supabase.from('tbl_clientes').select('*');
+      const { data: usuarios, error: errUsuarios } = await supabase.from('tbl_usuarios').select('*').is('cliente_id', null);
+      
+      if (errClientes || errUsuarios) {
+        showError('Erro ao carregar dados.');
+      } else {
+        const todos = [...(clientes || []), ...(usuarios || [])].sort((a, b) => a.nome.localeCompare(b.nome));
+        setItens(todos);
+      }
     } else if (isCliente) {
-      const { data: clienteData, error: clienteError } = await supabase.from('tbl_clientes').select('*').eq('id', usuario!.id).single();
-      if (clienteError) showError('Erro ao carregar dados do cliente: ' + clienteError.message);
+      const { data: clienteData, error: errCliente } = await supabase.from('tbl_clientes').select('*').eq('id', usuario!.id).single();
+      if (errCliente) showError('Erro ao carregar dados do cliente.');
       else setCliente(clienteData as ClienteProfile);
 
-      const { data: usuariosData, error: usuariosError } = await supabase.from('tbl_usuarios').select('*').eq('cliente_id', usuario!.id).order('nome');
-      if (usuariosError) showError('Erro ao carregar usuários: ' + usuariosError.message);
+      const { data: usuariosData, error: errUsuarios } = await supabase.from('tbl_usuarios').select('*').eq('cliente_id', usuario!.id);
+      if (errUsuarios) showError('Erro ao carregar usuários.');
       else setItens((usuariosData as UsuarioProfile[]) || []);
     }
     setCarregandoDados(false);
+  };
+
+  useEffect(() => {
+    if (!carregando && (isAdmin || isCliente)) {
+      buscarDados();
+    }
+  }, [carregando, role, isAdmin, isCliente, usuario]);
+
+  const handlePromote = async (user: UsuarioProfile) => {
+    if (!window.confirm(`Tem certeza que deseja promover ${user.nome} a Cliente?`)) return;
+    const { error } = await supabase.rpc('promote_user_to_cliente', { p_user_id: user.id });
+    if (error) {
+      showError(`Falha na promoção: ${error.message}`);
+    } else {
+      showSuccess(`${user.nome} foi promovido a Cliente.`);
+      buscarDados();
+    }
   };
 
   const handleSaveComplete = () => {
@@ -65,13 +80,15 @@ const GerenciarUsuarios = () => {
     if (!item) return;
     if (!window.confirm(`Tem certeza que deseja excluir ${item.nome}? Esta ação é irreversível.`)) return;
 
-    const tableName = isAdmin ? 'tbl_clientes' : 'tbl_usuarios';
+    const isUser = 'cliente_id' in item;
+    const tableName = isUser ? 'tbl_usuarios' : 'tbl_clientes';
+    
     const { error } = await supabase.from(tableName).delete().eq('id', item.id);
 
     if (error) {
       showError(`Falha ao excluir: ${error.message}`);
     } else {
-      showSuccess(`${isAdmin ? 'Cliente' : 'Usuário'} excluído com sucesso.`);
+      showSuccess(`${isUser ? 'Usuário' : 'Cliente'} excluído com sucesso.`);
       buscarDados();
     }
   };
@@ -97,66 +114,53 @@ const GerenciarUsuarios = () => {
   return (
     <LayoutPrincipal>
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">{isAdmin ? 'Gerenciar Clientes' : 'Gerenciar Usuários'}</h1>
+        <h1 className="text-3xl font-bold">{isAdmin ? 'Gerenciar Contas' : 'Gerenciar Equipe'}</h1>
         <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
           <DialogTrigger asChild>
             <Button onClick={() => setItemSelecionado(null)} disabled={!!limiteAtingido}>
               <PlusCircle className="w-4 h-4 mr-2" />
-              {isAdmin ? 'Novo Cliente' : 'Novo Usuário'}
+              {isCliente ? 'Novo Usuário' : 'Nova Conta'}
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px]">
-            <DialogHeader>
-              <DialogTitle>{itemSelecionado ? 'Editar' : 'Novo'} {isAdmin ? 'Cliente' : 'Usuário'}</DialogTitle>
-            </DialogHeader>
-            {role && (
-              <FormUsuario
-                criadorRole={role}
-                clienteId={isCliente ? usuario?.id : undefined}
-                usuarioInicial={itemSelecionado}
-                onSaveComplete={handleSaveComplete}
-              />
-            )}
+          <DialogContent>
+            <DialogHeader><DialogTitle>{itemSelecionado ? 'Editar' : 'Nova'} {isCliente ? 'Usuário da Equipe' : 'Conta'}</DialogTitle></DialogHeader>
+            <FormUsuario 
+              criadorRole={role!} 
+              clienteId={isCliente ? usuario?.id : undefined} 
+              usuarioInicial={itemSelecionado}
+              onSaveComplete={handleSaveComplete} 
+            />
           </DialogContent>
         </Dialog>
       </div>
       <Card>
         <CardHeader>
-          <CardTitle>{isAdmin ? `Clientes (${itens.length})` : `Usuários (${itens.length})`}</CardTitle>
-          {isCliente && cliente && (
-            <CardDescription>
-              Limite de usuários: {itens.length} / {cliente.limite_usuarios}
-            </CardDescription>
-          )}
+          <CardTitle>{isAdmin ? `Contas (${itens.length})` : `Sua Equipe (${itens.length})`}</CardTitle>
+          {isCliente && cliente && <CardDescription>Limite: {itens.length} / {cliente.limite_usuarios}</CardDescription>}
         </CardHeader>
         <CardContent>
           <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{isAdmin ? 'Cliente' : 'Usuário'}</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead className="text-center">Perfil</TableHead>
-                <TableHead className="text-right">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
+            <TableHeader><TableRow><TableHead>Nome</TableHead><TableHead>Email</TableHead><TableHead>Perfil</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader>
             <TableBody>
               {itens.map((item) => {
                 if (!item) return null;
+                const isUser = 'cliente_id' in item;
                 return (
                   <TableRow key={item.id}>
-                    <TableCell className="font-medium">{item.nome}</TableCell>
+                    <TableCell>{item.nome}</TableCell>
                     <TableCell>{item.email}</TableCell>
-                    <TableCell className="text-center">
-                      <Badge variant={isAdmin ? 'default' : 'secondary'}>
-                        {isAdmin ? 'Cliente' : 'Usuário'}
-                      </Badge>
-                    </TableCell>
+                    <TableCell><Badge variant={isUser ? 'secondary' : 'default'}>{isUser ? 'Usuário' : 'Cliente'}</Badge></TableCell>
                     <TableCell className="text-right">
-                      <Button variant="ghost" size="sm" onClick={() => handleEdit(item)}>
+                      {isAdmin && isUser && (
+                        <Button variant="outline" size="sm" onClick={() => handlePromote(item as UsuarioProfile)} className="mr-2">
+                          <ArrowUpCircle className="w-4 h-4 mr-2" /> Promover
+                        </Button>
+                      )}
+                      <Button variant="ghost" size="icon" onClick={() => handleEdit(item)}>
                         <Edit className="w-4 h-4" />
                       </Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleDelete(item)}>
-                        <Trash2 className="w-4 h-4 text-red-500" />
+                      <Button variant="ghost" size="icon" onClick={() => handleDelete(item)}>
+                        <Trash2 className="w-4 h-4 text-destructive" />
                       </Button>
                     </TableCell>
                   </TableRow>
