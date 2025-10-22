@@ -3,7 +3,7 @@ import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Edit, Trash2, PlusCircle } from 'lucide-react';
+import { Loader2, Edit, Trash2, PlusCircle, ShieldAlert } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
@@ -13,42 +13,30 @@ import FormUsuario from '@/components/FormUsuario';
 import { Badge } from '@/components/ui/badge';
 
 const GerenciarUsuarios = () => {
-  const { perfil, empresaId, carregando } = useSessao();
+  const { perfil, carregando } = useSessao();
   const [usuarios, setUsuarios] = useState<PerfilUsuario[]>([]);
-  const [limiteUsuarios, setLimiteUsuarios] = useState(0);
   const [carregandoDados, setCarregandoDados] = useState(true);
   const [usuarioSelecionado, setUsuarioSelecionado] = useState<PerfilUsuario | null>(null);
   const [dialogAberto, setDialogAberto] = useState(false);
 
-  const isEmpresa = perfil?.tbl_perfil?.nome === 'Empresa';
   const isAdmin = perfil?.tbl_perfil?.nome === 'Admin';
-  const limiteAtingido = isEmpresa && usuarios.length >= limiteUsuarios;
 
   useEffect(() => {
-    if (!carregando && perfil) {
+    if (!carregando && isAdmin) {
       buscarDados();
+    } else if (!carregando && !isAdmin) {
+      setCarregandoDados(false);
     }
-  }, [carregando, perfil, empresaId]);
+  }, [carregando, perfil, isAdmin]);
 
   const buscarDados = async () => {
     setCarregandoDados(true);
     
-    if (isEmpresa && empresaId) {
-      const [usuariosResult, empresaResult] = await Promise.all([
-        supabase.from('usuarios').select('*, tbl_perfil(nome)').eq('empresa_id', empresaId).order('nome'),
-        supabase.from('empresas').select('limite_usuarios').eq('id', empresaId).single()
-      ]);
-
-      if (usuariosResult.error) showError('Erro ao carregar usuários: ' + usuariosResult.error.message);
-      else setUsuarios(usuariosResult.data as PerfilUsuario[]);
-
-      if (empresaResult.error) showError('Erro ao carregar limite da empresa: ' + empresaResult.error.message);
-      else setLimiteUsuarios(empresaResult.data?.limite_usuarios || 0);
-
-    } else if (isAdmin) {
-      const { data, error } = await supabase.from('usuarios').select('*, tbl_perfil(nome)').neq('id', perfil!.id).order('nome');
-      if (error) showError('Erro ao carregar usuários: ' + error.message);
-      else setUsuarios(data as PerfilUsuario[]);
+    const { data, error } = await supabase.from('usuarios').select('*, tbl_perfil(nome)').neq('id', perfil!.id).order('nome');
+    if (error) {
+      showError('Erro ao carregar usuários: ' + error.message);
+    } else {
+      setUsuarios(data as PerfilUsuario[]);
     }
 
     setCarregandoDados(false);
@@ -88,13 +76,27 @@ const GerenciarUsuarios = () => {
     );
   }
 
+  if (!isAdmin) {
+    return (
+      <LayoutPrincipal>
+        <Card className="w-full max-w-lg mx-auto">
+          <CardHeader className="text-center">
+            <ShieldAlert className="w-12 h-12 mx-auto text-destructive" />
+            <CardTitle className="mt-4 text-2xl">Acesso Negado</CardTitle>
+            <CardDescription>Você não tem permissão para acessar esta página.</CardDescription>
+          </CardHeader>
+        </Card>
+      </LayoutPrincipal>
+    );
+  }
+
   return (
     <LayoutPrincipal>
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold">Gerenciar Usuários</h1>
         <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
           <DialogTrigger asChild>
-            <Button onClick={() => setUsuarioSelecionado(null)} disabled={limiteAtingido}>
+            <Button onClick={() => setUsuarioSelecionado(null)}>
               <PlusCircle className="w-4 h-4 mr-2" />
               Novo Usuário
             </Button>
@@ -105,7 +107,6 @@ const GerenciarUsuarios = () => {
             </DialogHeader>
             {perfil && (
               <FormUsuario 
-                empresaId={empresaId}
                 perfilLogado={perfil}
                 usuarioInicial={usuarioSelecionado}
                 onSaveComplete={handleSaveComplete}
@@ -118,11 +119,6 @@ const GerenciarUsuarios = () => {
       <Card>
         <CardHeader>
           <CardTitle className="text-xl">Usuários Cadastrados ({usuarios.length})</CardTitle>
-          {isEmpresa && (
-            <CardDescription>
-              Você pode cadastrar até {limiteUsuarios} usuários. ({usuarios.length} / {limiteUsuarios})
-            </CardDescription>
-          )}
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">

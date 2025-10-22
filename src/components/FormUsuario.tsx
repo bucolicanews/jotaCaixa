@@ -21,13 +21,12 @@ const formSchema = z.object({
 type FormValues = z.infer<typeof formSchema>;
 
 interface FormUsuarioProps {
-  empresaId: string | null;
   perfilLogado: PerfilUsuario;
   usuarioInicial?: PerfilUsuario | null;
   onSaveComplete: () => void;
 }
 
-const FormUsuario: React.FC<FormUsuarioProps> = ({ empresaId, perfilLogado, usuarioInicial, onSaveComplete }) => {
+const FormUsuario: React.FC<FormUsuarioProps> = ({ perfilLogado, usuarioInicial, onSaveComplete }) => {
   const [perfis, setPerfis] = useState<Perfil[]>([]);
   const isEditing = !!usuarioInicial;
   const isAdmin = perfilLogado.tbl_perfil?.nome === 'Admin';
@@ -38,12 +37,12 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ empresaId, perfilLogado, usua
       if (error) {
         showError('Falha ao carregar perfis.');
       } else {
-        // Filtra os perfis que o usuário logado pode atribuir
-        const perfisDisponiveis = isAdmin ? data : data.filter(p => p.nome === 'Usuario');
-        setPerfis(perfisDisponiveis);
+        setPerfis(data);
       }
     };
-    fetchPerfis();
+    if (isAdmin) {
+      fetchPerfis();
+    }
   }, [isAdmin]);
 
   const form = useForm<FormValues>({
@@ -72,8 +71,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ empresaId, perfilLogado, usua
           options: {
             data: {
               nome: values.nome,
-              perfil_nome: perfilSelecionado?.nome, // Passa o NOME do perfil para o trigger
-              empresa_id: empresaId,
+              perfil_nome: perfilSelecionado?.nome,
             }
           }
         });
@@ -133,7 +131,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ empresaId, perfilLogado, usua
           render={({ field }) => (
             <FormItem>
               <FormLabel>Perfil</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value} disabled={!isAdmin}>
+              <Select onValueChange={field.onChange} defaultValue={field.value}>
                 <FormControl>
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione o perfil" />

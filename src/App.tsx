@@ -3,7 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { SessionProvider } from "@/contexts/SessionContext"; // Corrigindo a importação
+import { SessionProvider } from "@/contexts/SessionContext";
 import NotFound from "./pages/NotFound";
 import Login from "./pages/Login";
 import Painel from "./pages/Painel";
@@ -17,14 +17,13 @@ import Configuracoes from "./pages/Configuracoes";
 import AtualizarSenha from "./pages/AtualizarSenha";
 import PlanoContasPage from "./pages/PlanoContas";
 import GerenciarUsuarios from "./pages/GerenciarUsuarios";
-import CadastroEmpresa from "./pages/CadastroEmpresa";
 
 const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
-      <SessionProvider> {/* Envolvendo a aplicação */}
+      <SessionProvider>
         <Toaster />
         <Sonner />
         <BrowserRouter>
@@ -33,7 +32,6 @@ const App = () => (
             <Route path="/" element={<Login />} />
             <Route path="/login" element={<Login />} />
             <Route path="/atualizar-senha" element={<AtualizarSenha />} />
-            <Route path="/cadastro-empresa" element={<CadastroEmpresa />} />
             
             {/* Rotas Autenticadas (Protegidas pelo LayoutPrincipal) */}
             <Route path="/painel" element={<Painel />} />
