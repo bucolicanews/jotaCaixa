@@ -15,7 +15,8 @@ import Relatorios from "./pages/Relatorios";
 import Configuracoes from "./pages/Configuracoes";
 import AtualizarSenha from "./pages/AtualizarSenha";
 import PlanoContasPage from "./pages/PlanoContas";
-import GerenciarUsuarios from "./pages/GerenciarUsuarios"; // Importando a nova página
+import GerenciarUsuarios from "./pages/GerenciarUsuarios";
+import CadastroEmpresa from "./pages/CadastroEmpresa"; // Importando a nova página
 
 const queryClient = new QueryClient();
 
@@ -26,11 +27,13 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
+          {/* Rotas Públicas/Auth */}
           <Route path="/" element={<Login />} />
           <Route path="/login" element={<Login />} />
           <Route path="/atualizar-senha" element={<AtualizarSenha />} />
+          <Route path="/cadastro-empresa" element={<CadastroEmpresa />} /> {/* Nova Rota */}
           
-          {/* Rotas Autenticadas */}
+          {/* Rotas Autenticadas (Protegidas pelo LayoutPrincipal) */}
           <Route path="/painel" element={<Painel />} />
           <Route path="/contas-pagar" element={<ContasPagar />} />
           <Route path="/contas-receber" element={<ContasReceber />} />
@@ -40,7 +43,7 @@ const App = () => (
           <Route path="/relatorios" element={<Relatorios />} />
           <Route path="/configuracoes" element={<Configuracoes />} />
           <Route path="/plano-contas" element={<PlanoContasPage />} />
-          <Route path="/gerenciar-usuarios" element={<GerenciarUsuarios />} /> {/* Nova Rota */}
+          <Route path="/gerenciar-usuarios" element={<GerenciarUsuarios />} />
 
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />

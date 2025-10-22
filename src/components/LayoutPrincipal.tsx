@@ -1,7 +1,8 @@
 import React from 'react';
 import MenuLateral from './MenuLateral';
 import { useSessao } from '@/hooks/use-sessao';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { Loader2 } from 'lucide-react';
 
 interface LayoutPrincipalProps {
   children: React.ReactNode;
@@ -9,20 +10,39 @@ interface LayoutPrincipalProps {
 
 /**
  * Layout principal que envolve todas as páginas autenticadas.
- * Inclui verificação de autenticação e menu lateral.
+ * Inclui verificação de autenticação, menu lateral e verificação de empresa vinculada.
  */
 const LayoutPrincipal: React.FC<LayoutPrincipalProps> = ({ children }) => {
-  const { usuario, carregando } = useSessao();
+  const { usuario, empresaId, carregando } = useSessao();
   const navegar = useNavigate();
+  const localizacao = useLocation();
 
   if (carregando) {
-    return <div className="flex justify-center items-center min-h-screen">Carregando autenticação...</div>;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
   }
 
   if (!usuario) {
     // Redirecionar usuários não autenticados para a página de login
     navegar('/login');
     return null;
+  }
+
+  // Se o usuário estiver logado, mas não tiver empresa vinculada,
+  // ele deve ser forçado a cadastrar uma.
+  if (!empresaId) {
+    // Evita loop de redirecionamento se já estiver na página de cadastro
+    if (localizacao.pathname !== '/cadastro-empresa') {
+      navegar('/cadastro-empresa');
+      return null;
+    }
+    // Se estiver na página de cadastro, o LayoutPrincipal não deve renderizar o menu lateral,
+    // mas como CadastroEmpresa não usa LayoutPrincipal, este bloco só serve para garantir
+    // que o fluxo de navegação está correto.
+    return null; 
   }
 
   return (
