@@ -1,14 +1,14 @@
 import { useState, useEffect } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Edit, CheckCircle2, ArrowUpCircle, Key, ArrowDownCircle } from 'lucide-react';
+import { Loader2, Edit, CheckCircle2, ArrowUpCircle, Key, ArrowDownCircle, PlusCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
 import { AnyProfile, ClienteProfile, UsuarioProfile, AdminProfile } from '@/types/usuario';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import FormUsuario from '@/components/FormUsuario';
 import { Badge } from '@/components/ui/badge';
 
@@ -23,6 +23,7 @@ const GerenciarUsuarios = () => {
 
   const isAdmin = role === 'Admin';
   const isClienteAprovado = role === 'Cliente' && (perfil as ClienteProfile)?.aprovado;
+  const clienteProfile = perfil as ClienteProfile;
 
   const buscarDados = async () => {
     setCarregandoDados(true);
@@ -38,17 +39,14 @@ const GerenciarUsuarios = () => {
       } else {
         const adminData = adminRes.data || [];
         const adminIds = adminData.map(a => a.id);
-        
-        // Filtra a lista de usuários para garantir que nenhum admin apareça nela.
         const independentUsers = (usuariosRes.data || []).filter(u => !adminIds.includes(u.id));
-
         setAdmins(adminData);
         setClientes(clientesRes.data || []);
         setUsuarios(independentUsers);
       }
     } else if (isClienteAprovado) {
       const { data, error } = await supabase.from('tbl_usuarios').select('*').eq('cliente_id', usuario!.id);
-      if (error) showError('Erro ao carregar usuários.');
+      if (error) showError('Erro ao carregar usuários da equipe.');
       else setUsuarios(data || []);
     }
     setCarregandoDados(false);
@@ -60,10 +58,10 @@ const GerenciarUsuarios = () => {
     }
   }, [carregando, role, isAdmin, isClienteAprovado, usuario]);
 
-  const handleAction = (action: () => void) => {
+  const handleAction = (action?: () => void) => {
     setDialogAberto(false);
     setItemSelecionado(null);
-    action();
+    if (action) action();
     buscarDados();
   };
 
@@ -104,7 +102,12 @@ const GerenciarUsuarios = () => {
 
   const renderTable = (title: string, data: AnyProfile[], type: 'admin' | 'cliente' | 'usuario') => (
     <Card className="mb-6">
-      <CardHeader><CardTitle>{title} ({data.length})</CardTitle></CardHeader>
+      <CardHeader>
+        <CardTitle>{title} ({data.length})</CardTitle>
+        {isClienteAprovado && type === 'usuario' && (
+          <CardDescription>Limite de usuários: {data.length} / {clienteProfile.limite_usuarios}</CardDescription>
+        )}
+      </CardHeader>
       <CardContent>
         <Table>
           <TableHeader><TableRow><TableHead>Nome</TableHead><TableHead>Email</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader>
@@ -125,11 +128,7 @@ const GerenciarUsuarios = () => {
                     {isAdmin && type === 'cliente' && !clientProfile.aprovado && <Button variant="outline" size="sm" onClick={() => handleApprove(clientProfile)}><CheckCircle2 className="w-4 h-4 mr-2" />Aprovar</Button>}
                     {isAdmin && type === 'cliente' && <Button variant="outline" size="sm" onClick={() => handleDemote(clientProfile)}><ArrowDownCircle className="w-4 h-4 mr-2" />{clientProfile.aprovado ? 'Rebaixar' : 'Reprovar'}</Button>}
                     {isAdmin && type === 'usuario' && <Button variant="outline" size="sm" onClick={() => handlePromote(item as UsuarioProfile)}><ArrowUpCircle className="w-4 h-4 mr-2" />Promover</Button>}
-                    
-                    {/* Ação de reset de senha permitida para todos, exceto para si mesmo */}
                     {item.id !== usuario?.id && <Button variant="ghost" size="icon" onClick={() => handlePasswordReset(item.email)} title="Enviar reset de senha"><Key className="w-4 h-4" /></Button>}
-                    
-                    {/* Ação de edição NÃO é permitida para Admins */}
                     {type !== 'admin' && (
                       <Button variant="ghost" size="icon" onClick={() => { setItemSelecionado(item); setDialogAberto(true); }} title="Editar"><Edit className="w-4 h-4" /></Button>
                     )}
@@ -147,16 +146,38 @@ const GerenciarUsuarios = () => {
     <LayoutPrincipal>
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold">{isAdmin ? 'Gerenciar Contas' : 'Gerenciar Equipe'}</h1>
+        {isClienteAprovado && (
+          <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
+            <DialogTrigger asChild>
+              <Button onClick={() => setItemSelecionado(null)} disabled={usuarios.length >= clienteProfile.limite_usuarios}>
+                <PlusCircle className="w-4 h-4 mr-2" />
+                Novo Usuário
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader><DialogTitle>{itemSelecionado ? 'Editar Usuário' : 'Novo Usuário da Equipe'}</DialogTitle></DialogHeader>
+              <FormUsuario 
+                criadorRole={role!} 
+                clienteId={usuario?.id}
+                usuarioInicial={itemSelecionado}
+                onSaveComplete={() => handleAction()} 
+              />
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
       {isAdmin && renderTable('Administradores', admins, 'admin')}
       {isAdmin && renderTable('Clientes (Empresas)', clientes, 'cliente')}
       {isAdmin ? renderTable('Usuários Independentes', usuarios, 'usuario') : renderTable('Sua Equipe', usuarios, 'usuario')}
-      <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Editar Conta</DialogTitle></DialogHeader>
-          <FormUsuario criadorRole={role!} usuarioInicial={itemSelecionado} onSaveComplete={() => handleAction(() => {})} />
-        </DialogContent>
-      </Dialog>
+      
+      {isAdmin && (
+        <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
+          <DialogContent>
+            <DialogHeader><DialogTitle>Editar Conta</DialogTitle></DialogHeader>
+            <FormUsuario criadorRole={role!} usuarioInicial={itemSelecionado} onSaveComplete={() => handleAction()} />
+          </DialogContent>
+        </Dialog>
+      )}
     </LayoutPrincipal>
   );
 };
