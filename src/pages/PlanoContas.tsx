@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -119,8 +119,8 @@ const PlanoContasPage = () => {
           </CardHeader>
           <CardContent>
             <p className="text-red-500">Não foi possível carregar o ID da empresa. Verifique se o usuário está vinculado a uma empresa.</p>
-          </p>
-        </CardContent>
+          </CardContent>
+        </Card>
       </LayoutPrincipal>
     );
   }
