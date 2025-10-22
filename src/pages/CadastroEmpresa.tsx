@@ -17,21 +17,21 @@ const CadastroEmpresa = () => {
   }
 
   if (!usuario) {
-    // Se não estiver logado, redireciona para o login
     navegar('/login');
     return null;
   }
 
   if (empresaId) {
-    // Se já tiver uma empresa, redireciona para o painel
     navegar('/painel');
     return null;
   }
 
   const handleSaveComplete = () => {
-    // Força um refresh para que o useSessao recarregue os dados, incluindo o novo empresaId
-    // e o LayoutPrincipal possa redirecionar corretamente.
-    window.location.href = '/painel';
+    // Usamos window.location.replace para navegar para o painel e
+    // substituir a página de cadastro no histórico do navegador.
+    // Isso também força um recarregamento completo da aplicação,
+    // garantindo que o hook useSessao busque os dados da nova empresa.
+    window.location.replace('/painel');
   };
 
   return (

@@ -18,7 +18,6 @@ const formSchema = z.object({
 type FormValues = z.infer<typeof formSchema>;
 
 interface FormEmpresaProps {
-  // Removendo userId daqui, vamos buscar internamente
   onSaveComplete: (empresaId: string) => void;
 }
 
@@ -41,7 +40,7 @@ const FormEmpresa: React.FC<FormEmpresaProps> = ({ onSaveComplete }) => {
     }
 
     const dataToSave = {
-      usuario_id: user.id, // Usando o ID do usuário autenticado
+      usuario_id: user.id,
       nome_fantasia: values.nome_fantasia,
       razao_social: values.razao_social,
       cnpj: values.cnpj || null,
@@ -58,7 +57,10 @@ const FormEmpresa: React.FC<FormEmpresaProps> = ({ onSaveComplete }) => {
       console.error('Erro ao cadastrar empresa:', error);
     } else if (data?.id) {
       showSuccess(`Empresa "${values.nome_fantasia}" cadastrada com sucesso!`);
-      onSaveComplete(data.id);
+      // Adiciona um pequeno delay para garantir que o toast seja exibido antes do redirecionamento
+      setTimeout(() => {
+        onSaveComplete(data.id);
+      }, 500); // 0.5 segundo de delay
     } else {
       showError('Falha desconhecida ao cadastrar empresa.');
     }
