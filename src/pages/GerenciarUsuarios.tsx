@@ -119,8 +119,14 @@ const GerenciarUsuarios = () => {
                     {isAdmin && type === 'cliente' && !clientProfile.aprovado && <Button variant="outline" size="sm" onClick={() => handleApprove(clientProfile)}><CheckCircle2 className="w-4 h-4 mr-2" />Aprovar</Button>}
                     {isAdmin && type === 'cliente' && <Button variant="outline" size="sm" onClick={() => handleDemote(clientProfile)}><ArrowDownCircle className="w-4 h-4 mr-2" />{clientProfile.aprovado ? 'Rebaixar' : 'Reprovar'}</Button>}
                     {isAdmin && type === 'usuario' && <Button variant="outline" size="sm" onClick={() => handlePromote(item as UsuarioProfile)}><ArrowUpCircle className="w-4 h-4 mr-2" />Promover</Button>}
+                    
+                    {/* Ação de reset de senha permitida para todos, exceto para si mesmo */}
                     {item.id !== usuario?.id && <Button variant="ghost" size="icon" onClick={() => handlePasswordReset(item.email)} title="Enviar reset de senha"><Key className="w-4 h-4" /></Button>}
-                    <Button variant="ghost" size="icon" onClick={() => { setItemSelecionado(item); setDialogAberto(true); }} title="Editar"><Edit className="w-4 h-4" /></Button>
+                    
+                    {/* Ação de edição NÃO é permitida para Admins */}
+                    {type !== 'admin' && (
+                      <Button variant="ghost" size="icon" onClick={() => { setItemSelecionado(item); setDialogAberto(true); }} title="Editar"><Edit className="w-4 h-4" /></Button>
+                    )}
                   </TableCell>
                 </TableRow>
               );
