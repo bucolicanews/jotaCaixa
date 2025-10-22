@@ -3,7 +3,7 @@ import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Edit, CheckCircle2, ArrowUpCircle, Key } from 'lucide-react';
+import { Loader2, Edit, CheckCircle2, ArrowUpCircle, Key, ArrowDownCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
@@ -29,7 +29,7 @@ const GerenciarUsuarios = () => {
     if (isAdmin) {
       const [adminRes, clientesRes, usuariosRes] = await Promise.all([
         supabase.from('tbl_admins').select('*'),
-        supabase.from('tbl_clientes').select('*').order('aprovado', { ascending: true }).order('nome'),
+        supabase.from('tbl_clientes').select('*').order('aprovado', { ascending: false }).order('nome'),
         supabase.from('tbl_usuarios').select('*').is('cliente_id', null)
       ]);
 
@@ -58,6 +58,7 @@ const GerenciarUsuarios = () => {
     setDialogAberto(false);
     setItemSelecionado(null);
     action();
+    buscarDados();
   };
 
   const handleApprove = async (cliente: ClienteProfile) => {
@@ -70,6 +71,14 @@ const GerenciarUsuarios = () => {
     const { error } = await supabase.rpc('request_client_promotion', { p_company_name: user.nome });
     if (error) showError(`Falha na promoção: ${error.message}`);
     else handleAction(() => showSuccess(`${user.nome} promovido a Cliente.`));
+  };
+
+  const handleDemote = async (cliente: ClienteProfile) => {
+    const actionText = cliente.aprovado ? 'rebaixar' : 'reprovar';
+    if (!window.confirm(`Tem certeza que deseja ${actionText} ${cliente.nome}?`)) return;
+    const { error } = await supabase.rpc('demote_cliente_to_user', { p_cliente_id: cliente.id });
+    if (error) showError(`Falha ao ${actionText}: ${error.message}`);
+    else handleAction(() => showSuccess(`${cliente.nome} foi movido para usuários.`));
   };
 
   const handlePasswordReset = async (email: string) => {
@@ -106,11 +115,12 @@ const GerenciarUsuarios = () => {
                     {isClient && <Badge variant={clientProfile.aprovado ? 'default' : 'destructive'}>{clientProfile.aprovado ? 'Cliente' : 'Pendente'}</Badge>}
                     {type === 'usuario' && <Badge variant="secondary">Usuário</Badge>}
                   </TableCell>
-                  <TableCell className="flex justify-end space-x-1">
+                  <TableCell className="text-right space-x-1">
                     {isAdmin && type === 'cliente' && !clientProfile.aprovado && <Button variant="outline" size="sm" onClick={() => handleApprove(clientProfile)}><CheckCircle2 className="w-4 h-4 mr-2" />Aprovar</Button>}
+                    {isAdmin && type === 'cliente' && <Button variant="outline" size="sm" onClick={() => handleDemote(clientProfile)}><ArrowDownCircle className="w-4 h-4 mr-2" />{clientProfile.aprovado ? 'Rebaixar' : 'Reprovar'}</Button>}
                     {isAdmin && type === 'usuario' && <Button variant="outline" size="sm" onClick={() => handlePromote(item as UsuarioProfile)}><ArrowUpCircle className="w-4 h-4 mr-2" />Promover</Button>}
-                    {item.id !== usuario?.id && <Button variant="ghost" size="icon" onClick={() => handlePasswordReset(item.email)}><Key className="w-4 h-4" /></Button>}
-                    <Button variant="ghost" size="icon" onClick={() => { setItemSelecionado(item); setDialogAberto(true); }}><Edit className="w-4 h-4" /></Button>
+                    {item.id !== usuario?.id && <Button variant="ghost" size="icon" onClick={() => handlePasswordReset(item.email)} title="Enviar reset de senha"><Key className="w-4 h-4" /></Button>}
+                    <Button variant="ghost" size="icon" onClick={() => { setItemSelecionado(item); setDialogAberto(true); }} title="Editar"><Edit className="w-4 h-4" /></Button>
                   </TableCell>
                 </TableRow>
               );
@@ -132,7 +142,7 @@ const GerenciarUsuarios = () => {
       <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
         <DialogContent>
           <DialogHeader><DialogTitle>Editar Conta</DialogTitle></DialogHeader>
-          <FormUsuario criadorRole={role!} usuarioInicial={itemSelecionado} onSaveComplete={() => handleAction(buscarDados)} />
+          <FormUsuario criadorRole={role!} usuarioInicial={itemSelecionado} onSaveComplete={() => handleAction(() => {})} />
         </DialogContent>
       </Dialog>
     </LayoutPrincipal>
