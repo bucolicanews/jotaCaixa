@@ -20,9 +20,9 @@ const GerenciarUsuarios = () => {
   const [usuarioSelecionado, setUsuarioSelecionado] = useState<PerfilUsuario | null>(null);
   const [dialogAberto, setDialogAberto] = useState(false);
 
-  const isCliente = perfil?.tipo_usuario === 'Cliente';
-  const isAdmin = perfil?.tipo_usuario === 'Admin';
-  const limiteAtingido = isCliente && usuarios.length >= limiteUsuarios;
+  const isEmpresa = perfil?.tbl_perfil?.nome === 'Empresa';
+  const isAdmin = perfil?.tbl_perfil?.nome === 'Admin';
+  const limiteAtingido = isEmpresa && usuarios.length >= limiteUsuarios;
 
   useEffect(() => {
     if (!carregando && perfil) {
@@ -33,10 +33,9 @@ const GerenciarUsuarios = () => {
   const buscarDados = async () => {
     setCarregandoDados(true);
     
-    if (isCliente && empresaId) {
-      // Cliente busca seus funcionários e o limite da sua empresa
+    if (isEmpresa && empresaId) {
       const [usuariosResult, empresaResult] = await Promise.all([
-        supabase.from('usuarios').select('*').eq('empresa_id', empresaId).order('nome'),
+        supabase.from('usuarios').select('*, tbl_perfil(nome)').eq('empresa_id', empresaId).order('nome'),
         supabase.from('empresas').select('limite_usuarios').eq('id', empresaId).single()
       ]);
 
@@ -47,8 +46,7 @@ const GerenciarUsuarios = () => {
       else setLimiteUsuarios(empresaResult.data?.limite_usuarios || 0);
 
     } else if (isAdmin) {
-      // Admin busca todos os usuários (exceto ele mesmo, opcionalmente)
-      const { data, error } = await supabase.from('usuarios').select('*').neq('id', perfil!.id).order('nome');
+      const { data, error } = await supabase.from('usuarios').select('*, tbl_perfil(nome)').neq('id', perfil!.id).order('nome');
       if (error) showError('Erro ao carregar usuários: ' + error.message);
       else setUsuarios(data as PerfilUsuario[]);
     }
@@ -70,8 +68,6 @@ const GerenciarUsuarios = () => {
   const handleDelete = async (id: string) => {
     if (!window.confirm('Tem certeza que deseja excluir este usuário? Esta ação é irreversível.')) return;
     
-    // Idealmente, isso seria uma chamada para uma Edge Function com a Service Role Key
-    // para deletar o usuário do `auth.users` também.
     const { error } = await supabase.from('usuarios').delete().eq('id', id);
 
     if (error) {
@@ -122,7 +118,7 @@ const GerenciarUsuarios = () => {
       <Card>
         <CardHeader>
           <CardTitle className="text-xl">Usuários Cadastrados ({usuarios.length})</CardTitle>
-          {isCliente && (
+          {isEmpresa && (
             <CardDescription>
               Você pode cadastrar até {limiteUsuarios} usuários. ({usuarios.length} / {limiteUsuarios})
             </CardDescription>
@@ -135,7 +131,7 @@ const GerenciarUsuarios = () => {
                 <TableRow>
                   <TableHead>Nome</TableHead>
                   <TableHead>Email</TableHead>
-                  <TableHead className="w-[150px] text-center">Tipo</TableHead>
+                  <TableHead className="w-[150px] text-center">Perfil</TableHead>
                   <TableHead className="w-[100px] text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
@@ -145,8 +141,8 @@ const GerenciarUsuarios = () => {
                     <TableCell className="font-medium">{user.nome}</TableCell>
                     <TableCell>{user.email}</TableCell>
                     <TableCell className="text-center">
-                      <Badge variant={user.tipo_usuario === 'Admin' ? 'destructive' : user.tipo_usuario === 'Cliente' ? 'default' : 'secondary'}>
-                        {user.tipo_usuario}
+                      <Badge variant={user.tbl_perfil?.nome === 'Admin' ? 'destructive' : user.tbl_perfil?.nome === 'Empresa' ? 'default' : 'secondary'}>
+                        {user.tbl_perfil?.nome}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">

@@ -1,12 +1,17 @@
 import { User } from '@supabase/supabase-js';
 
-export type TipoUsuario = 'Admin' | 'Cliente' | 'Funcionario';
+// O tipo de perfil agora é um objeto, não mais um texto simples.
+export interface Perfil {
+  id: string;
+  nome: 'Admin' | 'Empresa' | 'Usuario';
+}
 
 export interface PerfilUsuario {
   id: string; // auth.users id
   nome: string;
   email: string;
-  tipo_usuario: TipoUsuario;
+  perfil_id: string; // Foreign key para tbl_perfil
+  tbl_perfil: Perfil | null; // Objeto do perfil (quando fazemos join)
   criado_em: string;
   atualizado_em: string;
 }

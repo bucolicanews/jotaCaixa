@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -9,35 +9,49 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
-import { PerfilUsuario } from '@/types/usuario';
+import { PerfilUsuario, Perfil } from '@/types/usuario';
 
 const formSchema = z.object({
   nome: z.string().min(1, 'O nome é obrigatório.'),
   email: z.string().email('Email inválido.'),
-  tipo_usuario: z.enum(['Cliente', 'Funcionario', 'Admin']), // Adicionado Admin para flexibilidade
+  perfil_id: z.string().uuid('Perfil inválido.'),
   senha: z.string().min(6, 'A senha deve ter pelo menos 6 caracteres.').optional().or(z.literal('')),
 });
 
 type FormValues = z.infer<typeof formSchema>;
 
 interface FormUsuarioProps {
-  empresaId: string | null; // Pode ser nulo para o Admin
+  empresaId: string | null;
   perfilLogado: PerfilUsuario;
   usuarioInicial?: PerfilUsuario | null;
   onSaveComplete: () => void;
 }
 
 const FormUsuario: React.FC<FormUsuarioProps> = ({ empresaId, perfilLogado, usuarioInicial, onSaveComplete }) => {
+  const [perfis, setPerfis] = useState<Perfil[]>([]);
   const isEditing = !!usuarioInicial;
-  const isAdmin = perfilLogado.tipo_usuario === 'Admin';
-  const isCliente = perfilLogado.tipo_usuario === 'Cliente';
+  const isAdmin = perfilLogado.tbl_perfil?.nome === 'Admin';
+
+  useEffect(() => {
+    const fetchPerfis = async () => {
+      const { data, error } = await supabase.from('tbl_perfil').select('*');
+      if (error) {
+        showError('Falha ao carregar perfis.');
+      } else {
+        // Filtra os perfis que o usuário logado pode atribuir
+        const perfisDisponiveis = isAdmin ? data : data.filter(p => p.nome === 'Usuario');
+        setPerfis(perfisDisponiveis);
+      }
+    };
+    fetchPerfis();
+  }, [isAdmin]);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       nome: usuarioInicial?.nome || '',
       email: usuarioInicial?.email || '',
-      tipo_usuario: usuarioInicial?.tipo_usuario || (isCliente ? 'Funcionario' : 'Cliente'),
+      perfil_id: usuarioInicial?.perfil_id || '',
       senha: '',
     },
   });
@@ -50,8 +64,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ empresaId, perfilLogado, usua
 
     try {
       if (!isEditing) {
-        // Lógica de Criação
-        const tipoNovoUsuario = isCliente ? 'Funcionario' : values.tipo_usuario;
+        const perfilSelecionado = perfis.find(p => p.id === values.perfil_id);
         
         const { error: authError } = await supabase.auth.signUp({
           email: values.email,
@@ -59,8 +72,8 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ empresaId, perfilLogado, usua
           options: {
             data: {
               nome: values.nome,
-              tipo_usuario: tipoNovoUsuario,
-              empresa_id: empresaId, // Vincula o novo funcionário à empresa do Cliente
+              perfil_nome: perfilSelecionado?.nome, // Passa o NOME do perfil para o trigger
+              empresa_id: empresaId,
             }
           }
         });
@@ -69,14 +82,13 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ empresaId, perfilLogado, usua
         showSuccess(`Usuário ${values.nome} cadastrado! Um email de confirmação foi enviado.`);
 
       } else {
-        // Lógica de Atualização
         const { error: updateError } = await supabase
           .from('usuarios')
           .update({
             nome: values.nome,
-            tipo_usuario: values.tipo_usuario,
+            perfil_id: values.perfil_id,
           })
-          .eq('id', usuarioInicial.id);
+          .eq('id', usuarioInicial!.id);
 
         if (updateError) throw new Error(updateError.message);
         showSuccess(`Usuário ${values.nome} atualizado com sucesso.`);
@@ -117,20 +129,20 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ empresaId, perfilLogado, usua
         />
         <FormField
           control={form.control}
-          name="tipo_usuario"
+          name="perfil_id"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Tipo de Usuário</FormLabel>
+              <FormLabel>Perfil</FormLabel>
               <Select onValueChange={field.onChange} defaultValue={field.value} disabled={!isAdmin}>
                 <FormControl>
                   <SelectTrigger>
-                    <SelectValue placeholder="Selecione o tipo" />
+                    <SelectValue placeholder="Selecione o perfil" />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  {isAdmin && <SelectItem value="Admin">Admin</SelectItem>}
-                  {isAdmin && <SelectItem value="Cliente">Cliente (Empresa)</SelectItem>}
-                  <SelectItem value="Funcionario">Funcionário</SelectItem>
+                  {perfis.map(perfil => (
+                    <SelectItem key={perfil.id} value={perfil.id}>{perfil.nome}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
               <FormMessage />

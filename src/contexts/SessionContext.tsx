@@ -3,12 +3,10 @@ import { supabase } from '@/integrations/supabase/client';
 import { Session, User, AuthChangeEvent } from '@supabase/supabase-js';
 import { PerfilUsuario, DadosSessao } from '@/types/usuario';
 
-// Estendendo o tipo para incluir a função de recarregar
 interface SessionContextType extends DadosSessao {
   refetch: () => Promise<void>;
 }
 
-// Criando o contexto com 'undefined' como valor padrão para uma verificação de tipo mais segura
 export const SessionContext = createContext<SessionContextType | undefined>(undefined);
 
 export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -25,10 +23,9 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       return;
     }
 
-    // Busca o perfil e a empresa em paralelo para mais eficiência e robustez.
-    // Isso evita que a falha em buscar um (ex: perfil) impeça a busca do outro (ex: empresa).
+    // Agora, buscamos o usuário e fazemos um "join" para trazer os dados do perfil junto.
     const [perfilResult, empresaResult] = await Promise.all([
-      supabase.from('usuarios').select('*').eq('id', user.id).single(),
+      supabase.from('usuarios').select('*, tbl_perfil(*)').eq('id', user.id).single(),
       supabase.from('empresas').select('id').eq('usuario_id', user.id).single(),
     ]);
 
@@ -54,7 +51,7 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, [buscarDadosAdicionais]);
 
   useEffect(() => {
-    refetch(); // Busca a sessão inicial
+    refetch();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_evento: AuthChangeEvent, sessaoAtual: Session | null) => {
