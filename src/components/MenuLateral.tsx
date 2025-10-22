@@ -33,7 +33,16 @@ const MenuLateral = () => {
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
     } catch (error) {
-      showError('Erro ao sair: ' + (error as Error).message);
+      const errorMessage = (error as Error).message;
+      
+      // Se a sessão já estiver faltando (o que pode acontecer se ela expirou ou foi limpa),
+      // tratamos como um logout local bem-sucedido para evitar mostrar um erro confuso.
+      if (errorMessage.includes('Auth session missing')) {
+        console.warn('Sign out falhou porque a sessão já estava ausente. Redirecionamento esperado.');
+        // O LayoutPrincipal deve detectar a sessão nula e redirecionar.
+      } else {
+        showError('Erro ao sair: ' + errorMessage);
+      }
     }
   };
 

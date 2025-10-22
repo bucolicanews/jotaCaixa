@@ -45,8 +45,7 @@ const Login = () => {
                 button_label: 'Entrar',
                 link_text: 'Não tem uma conta? Cadastrar',
                 social_provider_text: 'Entrar com {{provider}}',
-                // Propriedade correta para o link de recuperação de senha
-                forgotten_password_text: 'Esqueceu sua senha?', 
+                // A propriedade 'forgotten_password_text' não é suportada na view 'sign_in' e foi removida para corrigir o erro TS2353.
               },
               sign_up: {
                 email_label: 'Email',
