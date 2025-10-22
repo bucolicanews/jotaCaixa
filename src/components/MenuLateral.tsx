@@ -11,19 +11,20 @@ interface ItemMenu {
   caminho: string;
   icone: React.ElementType;
   perfis: ('Admin' | 'Cliente' | 'Usuario')[];
+  permissionKey?: string;
 }
 
 const itensMenu: ItemMenu[] = [
   { nome: 'Painel', caminho: '/painel', icone: LayoutDashboard, perfis: ['Admin', 'Cliente', 'Usuario'] },
-  { nome: 'Contas a Pagar', caminho: '/contas-pagar', icone: ArrowDownCircle, perfis: ['Admin', 'Cliente'] },
-  { nome: 'Contas a Receber', caminho: '/contas-receber', icone: ArrowUpCircle, perfis: ['Admin', 'Cliente'] },
-  { nome: 'Bancos / Caixas', caminho: '/bancos', icone: Banknote, perfis: ['Admin', 'Cliente'] },
-  { nome: 'Plano de Contas', caminho: '/plano-contas', icone: BookOpen, perfis: ['Admin', 'Cliente'] },
-  { nome: 'Conciliação', caminho: '/conciliacao', icone: DollarSign, perfis: ['Admin', 'Cliente'] },
-  { nome: 'Importar', caminho: '/importar', icone: Upload, perfis: ['Admin', 'Cliente'] },
-  { nome: 'Relatórios', caminho: '/relatorios', icone: FileText, perfis: ['Admin', 'Cliente'] },
+  { nome: 'Contas a Pagar', caminho: '/contas-pagar', icone: ArrowDownCircle, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'contas_pagar' },
+  { nome: 'Contas a Receber', caminho: '/contas-receber', icone: ArrowUpCircle, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'contas_receber' },
+  { nome: 'Bancos / Caixas', caminho: '/bancos', icone: Banknote, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'bancos' },
+  { nome: 'Plano de Contas', caminho: '/plano-contas', icone: BookOpen, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'plano_contas' },
+  { nome: 'Conciliação', caminho: '/conciliacao', icone: DollarSign, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'conciliacao' },
+  { nome: 'Importar', caminho: '/importar', icone: Upload, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'importar' },
+  { nome: 'Relatórios', caminho: '/relatorios', icone: FileText, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'relatorios' },
   { nome: 'Gerenciar', caminho: '/gerenciar-usuarios', icone: Users, perfis: ['Admin', 'Cliente'] },
-  { nome: 'Configurações', caminho: '/configuracoes', icone: Settings, perfis: ['Admin', 'Cliente'] },
+  { nome: 'Configurações', caminho: '/configuracoes', icone: Settings, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'configuracoes' },
 ];
 
 const MenuLateral = () => {
@@ -32,6 +33,7 @@ const MenuLateral = () => {
 
   const isUnassignedUser = role === 'Usuario' && !(perfil as UsuarioProfile)?.cliente_id;
   const isPendingClient = role === 'Cliente' && !(perfil as ClienteProfile)?.aprovado;
+  const userProfile = perfil as UsuarioProfile;
 
   const lidarComSair = async () => {
     await supabase.auth.signOut();
@@ -59,6 +61,12 @@ const MenuLateral = () => {
           if (!role || !item.perfis.includes(role) || (isPendingClient && item.caminho !== '/painel')) {
             return null;
           }
+
+          // Lógica de permissão para o perfil 'Usuario'
+          if (role === 'Usuario' && item.permissionKey && !userProfile.permissoes?.[item.permissionKey]) {
+            return null;
+          }
+
           const estaAtivo = localizacao.pathname === item.caminho;
           const Icone = item.icone;
           return (

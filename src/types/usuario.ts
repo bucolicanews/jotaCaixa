@@ -20,7 +20,8 @@ export interface UsuarioProfile {
   id: string;
   nome: string;
   email: string;
-  cliente_id: string | null; // Pode ser nulo para usuários independentes
+  cliente_id: string | null;
+  permissoes: Record<string, boolean>; // Ex: { "contas_pagar": true, "relatorios": false }
 }
 
 export type AnyProfile = AdminProfile | ClienteProfile | UsuarioProfile | null;
