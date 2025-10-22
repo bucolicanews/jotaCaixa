@@ -1,23 +1,32 @@
 import { User } from '@supabase/supabase-js';
 
-export interface Perfil {
-  id: string;
-  nome: 'Admin' | 'Cliente' | 'Usuario';
-}
+export type UserRole = 'Admin' | 'Cliente' | 'Usuario' | null;
 
-export interface PerfilUsuario {
+export interface AdminProfile {
   id: string;
   nome: string;
   email: string;
-  perfil_id: string;
-  tbl_perfil: Perfil | null;
-  cliente_id: string | null; // A qual cliente este usuário pertence
-  criado_em: string;
-  atualizado_em: string;
 }
+
+export interface ClienteProfile {
+  id: string;
+  nome: string;
+  email: string;
+  limite_usuarios: number;
+}
+
+export interface UsuarioProfile {
+  id: string;
+  nome: string;
+  email: string;
+  cliente_id: string;
+}
+
+export type AnyProfile = AdminProfile | ClienteProfile | UsuarioProfile | null;
 
 export interface DadosSessao {
   usuario: User | null;
-  perfil: PerfilUsuario | null;
+  perfil: AnyProfile;
+  role: UserRole;
   carregando: boolean;
 }

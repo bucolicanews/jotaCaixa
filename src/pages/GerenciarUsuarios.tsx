@@ -7,47 +7,45 @@ import { Loader2, Edit, Trash2, PlusCircle, ShieldAlert } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
-import { PerfilUsuario } from '@/types/usuario';
+import { AnyProfile, ClienteProfile, UsuarioProfile } from '@/types/usuario';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import FormUsuario from '@/components/FormUsuario';
 import { Badge } from '@/components/ui/badge';
 
 const GerenciarUsuarios = () => {
-  const { perfil, carregando } = useSessao();
-  const [itens, setItens] = useState<any[]>([]); // Pode ser Clientes ou Usuários
-  const [cliente, setCliente] = useState<any>(null); // Dados do cliente logado
+  const { usuario, role, carregando } = useSessao();
+  const [itens, setItens] = useState<AnyProfile[]>([]);
+  const [cliente, setCliente] = useState<ClienteProfile | null>(null);
   const [carregandoDados, setCarregandoDados] = useState(true);
-  const [itemSelecionado, setItemSelecionado] = useState<any | null>(null);
+  const [itemSelecionado, setItemSelecionado] = useState<AnyProfile | null>(null);
   const [dialogAberto, setDialogAberto] = useState(false);
 
-  const isAdmin = perfil?.tbl_perfil?.nome === 'Admin';
-  const isCliente = perfil?.tbl_perfil?.nome === 'Cliente';
+  const isAdmin = role === 'Admin';
+  const isCliente = role === 'Cliente';
   const limiteAtingido = isCliente && cliente && itens.length >= cliente.limite_usuarios;
 
   useEffect(() => {
-    if (!carregando && perfil) {
+    if (!carregando && (isAdmin || isCliente)) {
       buscarDados();
+    } else if (!carregando) {
+      setCarregandoDados(false);
     }
-  }, [carregando, perfil]);
+  }, [carregando, role]);
 
   const buscarDados = async () => {
     setCarregandoDados(true);
     if (isAdmin) {
-      const { data, error } = await supabase.from('clientes').select('*, usuario:usuarios(*, tbl_perfil(nome))');
+      const { data, error } = await supabase.from('tbl_clientes').select('*').order('nome');
       if (error) showError('Erro ao carregar clientes: ' + error.message);
-      else setItens(data || []);
+      else setItens((data as ClienteProfile[]) || []);
     } else if (isCliente) {
-      const { data: clienteData, error: clienteError } = await supabase.from('clientes').select('*').eq('usuario_id', perfil!.id).single();
-      if (clienteError) {
-        showError('Erro ao carregar dados do cliente: ' + clienteError.message);
-        setCarregandoDados(false);
-        return;
-      }
-      setCliente(clienteData);
+      const { data: clienteData, error: clienteError } = await supabase.from('tbl_clientes').select('*').eq('id', usuario!.id).single();
+      if (clienteError) showError('Erro ao carregar dados do cliente: ' + clienteError.message);
+      else setCliente(clienteData as ClienteProfile);
 
-      const { data: usuariosData, error: usuariosError } = await supabase.from('usuarios').select('*, tbl_perfil(nome)').eq('cliente_id', clienteData.id);
+      const { data: usuariosData, error: usuariosError } = await supabase.from('tbl_usuarios').select('*').eq('cliente_id', usuario!.id).order('nome');
       if (usuariosError) showError('Erro ao carregar usuários: ' + usuariosError.message);
-      else setItens(usuariosData || []);
+      else setItens((usuariosData as UsuarioProfile[]) || []);
     }
     setCarregandoDados(false);
   };
@@ -58,33 +56,28 @@ const GerenciarUsuarios = () => {
     buscarDados();
   };
 
-  const handleEdit = (item: any) => {
-    const userToEdit = isAdmin ? item.usuario : item;
-    setItemSelecionado(userToEdit);
+  const handleEdit = (item: AnyProfile) => {
+    setItemSelecionado(item);
     setDialogAberto(true);
   };
 
-  const handleDelete = async (user: PerfilUsuario) => {
-    if (!window.confirm(`Tem certeza que deseja excluir o usuário ${user.nome}? Esta ação não pode ser desfeita.`)) return;
+  const handleDelete = async (item: AnyProfile) => {
+    if (!item) return;
+    if (!window.confirm(`Tem certeza que deseja excluir ${item.nome}? Esta ação é irreversível.`)) return;
 
-    // Deleta o registro da tabela 'usuarios'.
-    // NOTA: Isso não remove o usuário do sistema de autenticação do Supabase (auth.users).
-    // Para uma exclusão completa e segura, uma Edge Function com a service_role_key seria necessária.
-    const { error } = await supabase
-      .from('usuarios')
-      .delete()
-      .eq('id', user.id);
+    const tableName = isAdmin ? 'tbl_clientes' : 'tbl_usuarios';
+    const { error } = await supabase.from(tableName).delete().eq('id', item.id);
 
     if (error) {
-      showError('Erro ao excluir usuário: ' + error.message);
+      showError(`Falha ao excluir: ${error.message}`);
     } else {
-      showSuccess('Usuário excluído com sucesso.');
-      buscarDados(); // Atualiza a lista de usuários.
+      showSuccess(`${isAdmin ? 'Cliente' : 'Usuário'} excluído com sucesso.`);
+      buscarDados();
     }
   };
 
   if (carregando || carregandoDados) {
-    return <LayoutPrincipal><div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin" /></div></LayoutPrincipal>;
+    return <LayoutPrincipal><div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div></LayoutPrincipal>;
   }
 
   if (!isAdmin && !isCliente) {
@@ -107,7 +100,7 @@ const GerenciarUsuarios = () => {
         <h1 className="text-3xl font-bold">{isAdmin ? 'Gerenciar Clientes' : 'Gerenciar Usuários'}</h1>
         <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
           <DialogTrigger asChild>
-            <Button onClick={() => setItemSelecionado(null)} disabled={limiteAtingido}>
+            <Button onClick={() => setItemSelecionado(null)} disabled={!!limiteAtingido}>
               <PlusCircle className="w-4 h-4 mr-2" />
               {isAdmin ? 'Novo Cliente' : 'Novo Usuário'}
             </Button>
@@ -116,10 +109,10 @@ const GerenciarUsuarios = () => {
             <DialogHeader>
               <DialogTitle>{itemSelecionado ? 'Editar' : 'Novo'} {isAdmin ? 'Cliente' : 'Usuário'}</DialogTitle>
             </DialogHeader>
-            {perfil && (
+            {role && (
               <FormUsuario
-                perfilLogado={perfil}
-                clienteId={isCliente ? cliente.id : null}
+                criadorRole={role}
+                clienteId={isCliente ? usuario?.id : undefined}
                 usuarioInicial={itemSelecionado}
                 onSaveComplete={handleSaveComplete}
               />
@@ -147,28 +140,25 @@ const GerenciarUsuarios = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {itens.map((item) => {
-                const user = isAdmin ? item.usuario : item;
-                return (
-                  <TableRow key={user.id}>
-                    <TableCell className="font-medium">{user.nome}</TableCell>
-                    <TableCell>{user.email}</TableCell>
-                    <TableCell className="text-center">
-                      <Badge variant={user.tbl_perfil.nome === 'Admin' ? 'destructive' : user.tbl_perfil.nome === 'Cliente' ? 'default' : 'secondary'}>
-                        {user.tbl_perfil.nome}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button variant="ghost" size="sm" onClick={() => handleEdit(user)}>
-                        <Edit className="w-4 h-4" />
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleDelete(user)}>
-                        <Trash2 className="w-4 h-4 text-red-500" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
+              {itens.filter(Boolean).map((item) => (
+                <TableRow key={item.id}>
+                  <TableCell className="font-medium">{item.nome}</TableCell>
+                  <TableCell>{item.email}</TableCell>
+                  <TableCell className="text-center">
+                    <Badge variant={isAdmin ? 'default' : 'secondary'}>
+                      {isAdmin ? 'Cliente' : 'Usuário'}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button variant="ghost" size="sm" onClick={() => handleEdit(item)}>
+                      <Edit className="w-4 h-4" />
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => handleDelete(item)}>
+                      <Trash2 className="w-4 h-4 text-red-500" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
             </TableBody>
           </Table>
         </CardContent>

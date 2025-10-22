@@ -1,7 +1,7 @@
 import React, { createContext, useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { Session, User, AuthChangeEvent } from '@supabase/supabase-js';
-import { PerfilUsuario, DadosSessao } from '@/types/usuario';
+import { User } from '@supabase/supabase-js';
+import { DadosSessao, AnyProfile, UserRole } from '@/types/usuario';
 
 interface SessionContextType extends DadosSessao {
   refetch: () => Promise<void>;
@@ -13,27 +13,41 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [estado, setEstado] = useState<DadosSessao>({
     usuario: null,
     perfil: null,
+    role: null,
     carregando: true,
   });
 
   const buscarDadosAdicionais = useCallback(async (user: User | null) => {
     if (!user) {
-      setEstado({ usuario: null, perfil: null, carregando: false });
+      setEstado({ usuario: null, perfil: null, role: null, carregando: false });
       return;
     }
 
-    const { data: perfilData, error: perfilError } = await supabase
-      .from('usuarios')
-      .select('*, tbl_perfil(*)')
-      .eq('id', user.id)
-      .single();
+    let perfil: AnyProfile = null;
+    let role: UserRole = null;
 
-    if (perfilError && perfilError.code !== 'PGRST116') {
-      console.error('Erro ao buscar perfil:', perfilError);
+    // 1. Verifica se é Admin
+    const { data: adminData } = await supabase.from('tbl_admins').select('*').eq('id', user.id).single();
+    if (adminData) {
+      perfil = adminData;
+      role = 'Admin';
+    } else {
+      // 2. Se não, verifica se é Cliente
+      const { data: clienteData } = await supabase.from('tbl_clientes').select('*').eq('id', user.id).single();
+      if (clienteData) {
+        perfil = clienteData;
+        role = 'Cliente';
+      } else {
+        // 3. Se não, verifica se é Usuario
+        const { data: usuarioData } = await supabase.from('tbl_usuarios').select('*').eq('id', user.id).single();
+        if (usuarioData) {
+          perfil = usuarioData;
+          role = 'Usuario';
+        }
+      }
     }
-    const perfil = (perfilData as PerfilUsuario) || null;
-
-    setEstado({ usuario: user, perfil, carregando: false });
+    
+    setEstado({ usuario: user, perfil, role, carregando: false });
   }, []);
 
   const refetch = useCallback(async () => {
@@ -44,13 +58,9 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   useEffect(() => {
     refetch();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_evento: AuthChangeEvent, sessaoAtual: Session | null) => {
-        buscarDadosAdicionais(sessaoAtual?.user ?? null);
-      }
-    );
-
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
+      buscarDadosAdicionais(session?.user ?? null);
+    });
     return () => subscription.unsubscribe();
   }, [buscarDadosAdicionais, refetch]);
 

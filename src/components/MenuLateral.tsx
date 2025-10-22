@@ -9,7 +9,7 @@ interface ItemMenu {
   nome: string;
   caminho: string;
   icone: React.ElementType;
-  perfis: ('Admin' | 'Cliente' | 'Usuario')[]; // Quem pode ver este item
+  perfis: ('Admin' | 'Cliente' | 'Usuario')[];
 }
 
 const itensMenu: ItemMenu[] = [
@@ -21,14 +21,13 @@ const itensMenu: ItemMenu[] = [
   { nome: 'Conciliação', caminho: '/conciliacao', icone: DollarSign, perfis: ['Admin', 'Cliente', 'Usuario'] },
   { nome: 'Importar', caminho: '/importar', icone: Upload, perfis: ['Admin', 'Cliente'] },
   { nome: 'Relatórios', caminho: '/relatorios', icone: FileText, perfis: ['Admin', 'Cliente'] },
-  { nome: 'Gerenciar Usuários', caminho: '/gerenciar-usuarios', icone: Users, perfis: ['Admin', 'Cliente'] },
+  { nome: 'Gerenciar', caminho: '/gerenciar-usuarios', icone: Users, perfis: ['Admin', 'Cliente'] },
   { nome: 'Configurações', caminho: '/configuracoes', icone: Settings, perfis: ['Admin', 'Cliente'] },
 ];
 
 const MenuLateral = () => {
   const localizacao = useLocation();
-  const { perfil } = useSessao();
-  const perfilUsuario = perfil?.tbl_perfil?.nome;
+  const { role } = useSessao();
 
   const lidarComSair = async () => {
     await supabase.auth.signOut();
@@ -41,8 +40,8 @@ const MenuLateral = () => {
       </div>
       <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
         {itensMenu.map((item) => {
-          if (!perfilUsuario || !item.perfis.includes(perfilUsuario)) {
-            return null; // Não renderiza o item se o perfil não tiver permissão
+          if (!role || !item.perfis.includes(role)) {
+            return null;
           }
           const estaAtivo = localizacao.pathname === item.caminho;
           const Icone = item.icone;
