@@ -10,7 +10,7 @@ interface LayoutPrincipalProps {
 
 /**
  * Layout principal que envolve todas as páginas autenticadas.
- * Inclui verificação de autenticação, menu lateral e verificação de empresa vinculada.
+ * Inclui verificação de autenticação e de empresa vinculada.
  */
 const LayoutPrincipal: React.FC<LayoutPrincipalProps> = ({ children }) => {
   const { usuario, empresaId, carregando } = useSessao();
@@ -25,24 +25,30 @@ const LayoutPrincipal: React.FC<LayoutPrincipalProps> = ({ children }) => {
     );
   }
 
+  // Se não houver usuário, redireciona para o login.
   if (!usuario) {
-    // Redirecionar usuários não autenticados para a página de login
-    navegar('/login');
+    // Usamos replace para que o usuário não possa voltar para a página anterior.
+    navegar('/login', { replace: true });
     return null;
   }
 
-  // Se o usuário estiver logado, mas não tiver empresa vinculada,
+  // Se o usuário estiver logado, mas não tiver uma empresa vinculada,
   // ele deve ser forçado a cadastrar uma.
   if (!empresaId) {
-    // Evita loop de redirecionamento se já estiver na página de cadastro
+    // Evita um loop de redirecionamento se já estiver na página de cadastro.
     if (localizacao.pathname !== '/cadastro-empresa') {
-      navegar('/cadastro-empresa');
-      return null;
+      navegar('/cadastro-empresa', { replace: true });
     }
-    // Se estiver na página de cadastro, o LayoutPrincipal não deve renderizar o menu lateral,
-    // mas como CadastroEmpresa não usa LayoutPrincipal, este bloco só serve para garantir
-    // que o fluxo de navegação está correto.
-    return null; 
+    // Retorna null para não renderizar o layout principal enquanto estiver na página de cadastro.
+    // A página CadastroEmpresa será renderizada pela rota em App.tsx.
+    return null;
+  }
+
+  // Se o usuário está logado, tem uma empresa, mas está tentando acessar a página de cadastro,
+  // redirecionamos ele para o painel.
+  if (empresaId && localizacao.pathname === '/cadastro-empresa') {
+    navegar('/painel', { replace: true });
+    return null;
   }
 
   return (
