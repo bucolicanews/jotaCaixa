@@ -36,9 +36,15 @@ const GerenciarUsuarios = () => {
       if (adminRes.error || clientesRes.error || usuariosRes.error) {
         showError('Erro ao carregar dados.');
       } else {
-        setAdmins(adminRes.data || []);
+        const adminData = adminRes.data || [];
+        const adminIds = adminData.map(a => a.id);
+        
+        // Filtra a lista de usuários para garantir que nenhum admin apareça nela.
+        const independentUsers = (usuariosRes.data || []).filter(u => !adminIds.includes(u.id));
+
+        setAdmins(adminData);
         setClientes(clientesRes.data || []);
-        setUsuarios(usuariosRes.data || []);
+        setUsuarios(independentUsers);
       }
     } else if (isClienteAprovado) {
       const { data, error } = await supabase.from('tbl_usuarios').select('*').eq('cliente_id', usuario!.id);
