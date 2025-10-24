@@ -8,7 +8,10 @@ Este é um sistema de gestão financeira multi-inquilino (multi-tenant) constru�
     1.  **Admin:** Gerencia clientes, aprova novas empresas e tem visão geral do sistema.
     2.  **Cliente (Empresa):** Gerencia sua própria equipe de usuários, define suas permissões e utiliza os módulos financeiros.
     3.  **Usuário:** Membro da equipe de um cliente, com acesso apenas aos módulos permitidos por seu gestor (Cliente).
--   **Controle de Acesso Baseado em Funções (RBAC):** Clientes podem definir permissões granulares para cada usuário de sua equipe, controlando o acesso a módulos como "Contas a Pagar", "Relatórios", etc.
+-   **Sistema de Permissões em Cascata (Admin -> Cliente -> Usuário):** O controle de acesso foi aprimorado para um modelo de dois níveis:
+    1.  **Admin para Cliente:** O Administrador define quais módulos (Contas a Pagar, Relatórios, etc.) cada empresa Cliente pode acessar. Isso é feito através de uma coluna `permissoes` na tabela `tbl_clientes`.
+    2.  **Cliente para Usuário:** A empresa Cliente pode, então, gerenciar as permissões de sua própria equipe, mas apenas dentro dos limites que o Administrador permitiu. Se um módulo está desativado para a empresa, ela não pode ativá-lo para seus usuários.
+    3.  **Permissão para Cadastrar:** O Admin também controla se uma empresa pode ou não adicionar novos usuários à sua equipe através da permissão "Cadastrar Usuários".
 -   **Módulos Financeiros:** Inclui funcionalidades para Contas a Pagar, Contas a Receber, Gestão de Contas Bancárias, Plano de Contas, Conciliação e Relatórios.
 -   **Autenticação Segura:** Utiliza o sistema de autenticação do Supabase, incluindo um fluxo corrigido e seguro para recuperação de senha.
 -   **Importação de Dados:** Funcionalidade para importar dados via arquivos CSV, como o Plano de Contas.
@@ -50,11 +53,12 @@ O banco de dados é o coração do sistema multi-inquilino.
     -   `nome (text)`: Nome da empresa.
     -   `aprovado (boolean)`: Controla se o cliente foi aprovado pelo Admin.
     -   `limite_usuarios (integer)`: Número máximo de usuários que o cliente pode cadastrar.
+    -   `permissoes (jsonb)`: Controlado pelo Admin, define quais módulos a empresa pode acessar e, consequentemente, conceder aos seus usuários.
 
 -   `public.tbl_usuarios`: Armazena os usuários finais, que pertencem a um cliente.
     -   `id (uuid)`: Chave primária, vinculada a `auth.users.id`.
     -   `cliente_id (uuid)`: Chave estrangeira para `public.tbl_clientes.id`, vinculando o usuário à sua empresa.
-    -   `permissoes (jsonb)`: Armazena as permissões de acesso do usuário (ex: `{"contas_pagar": true, "relatorios": false}`).
+    -   `permissoes (jsonb)`: Armazena as permissões de acesso do usuário (ex: `{"contas_pagar": true, "relatorios": false}`), definidas pelo gestor do Cliente.
 
 ### Lógica de Roteamento de Usuários
 
