@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, MapPin, Clock, CheckCircle2, ArrowUpCircle, ArrowDownCircle } from 'lucide-react';
+import { Loader2, MapPin, Clock, ArrowUpCircle, ArrowDownCircle, Camera } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { useSessao } from '@/hooks/use-sessao';
-import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import CameraCapture from './CameraCapture';
 
 type RegistroTipo = 'Entrada' | 'Saida';
 
@@ -19,7 +20,14 @@ const RegistroPonto: React.FC = () => {
   const { usuario, perfil, role } = useSessao();
   const [loading, setLoading] = useState(false);
   const [location, setLocation] = useState<GeoLocation | null>(null);
-  const [selfieFile, setSelfieFile] = useState<File | null>(null);
+  
+  // State for camera capture
+  const [selfieFile, setSelfieFile] = useState<File | null>(null); 
+  
+  // State for confirmation dialog
+  const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
+  const [pendingRegistroType, setPendingRegistroType] = useState<RegistroTipo | null>(null);
+
   const [lastRegistro, setLastRegistro] = useState<{ tipo: RegistroTipo, horario: string } | null>(null);
 
   const isUsuario = role === 'Usuario' && perfil && 'cliente_id' in perfil;
@@ -47,14 +55,6 @@ const RegistroPonto: React.FC = () => {
     });
   };
 
-  const handleSelfieChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (event.target.files && event.target.files[0]) {
-      setSelfieFile(event.target.files[0]);
-    } else {
-      setSelfieFile(null);
-    }
-  };
-
   const uploadSelfie = async (file: File): Promise<string> => {
     const fileExt = file.name.split('.').pop();
     const fileName = `${funcionarioId}/${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
@@ -76,13 +76,27 @@ const RegistroPonto: React.FC = () => {
     return publicUrlData.publicUrl;
   };
 
-  const registrarPonto = async (tipo: RegistroTipo) => {
-    if (!funcionarioId || !empresaId) {
-      showError('Dados de usuário ou empresa ausentes.');
+  const handleCapture = useCallback((file: File) => {
+    setSelfieFile(file);
+  }, []);
+
+  const handleResetSelfie = useCallback(() => {
+    setSelfieFile(null);
+  }, []);
+
+  const handlePreRegister = (tipo: RegistroTipo) => {
+    if (!selfieFile) {
+      showError('Por favor, capture uma selfie antes de registrar o ponto.');
       return;
     }
-    if (!selfieFile) {
-      showError('Por favor, capture ou selecione uma selfie.');
+    setPendingRegistroType(tipo);
+    setIsConfirmDialogOpen(true);
+  };
+
+  const registrarPonto = async (tipo: RegistroTipo) => {
+    // Esta função é chamada apenas após a confirmação do AlertDialog
+    if (!funcionarioId || !empresaId || !selfieFile) {
+      showError('Dados incompletos para registro.');
       return;
     }
 
@@ -97,7 +111,7 @@ const RegistroPonto: React.FC = () => {
 
       // 3. Registrar no Banco de Dados
       const { error } = await supabase
-        .from('registros_ponto') // Assumindo que a tabela 'registros_ponto' existe
+        .from('registros_ponto')
         .insert({
           funcionario_id: funcionarioId,
           empresa_id: empresaId,
@@ -114,13 +128,15 @@ const RegistroPonto: React.FC = () => {
 
       showSuccess(`Ponto de ${tipo} registrado com sucesso!`);
       setLastRegistro({ tipo, horario: new Date().toLocaleTimeString() });
-      setSelfieFile(null);
+      setSelfieFile(null); // Reset selfie after successful registration
 
     } catch (error: any) {
       console.error('Erro no registro de ponto:', error);
       showError(error.message || 'Falha ao registrar o ponto.');
     } finally {
       setLoading(false);
+      setPendingRegistroType(null);
+      setIsConfirmDialogOpen(false); // Fecha o dialog
     }
   };
 
@@ -143,24 +159,17 @@ const RegistroPonto: React.FC = () => {
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="space-y-4">
-          <h3 className="text-lg font-semibold">1. Captura de Selfie (Simulação)</h3>
+          <h3 className="text-lg font-semibold flex items-center">
+            <Camera className="w-5 h-5 mr-2" /> 1. Captura de Selfie
+          </h3>
           <p className="text-sm text-muted-foreground">
-            Para fins de segurança e comprovação, é necessário registrar uma foto no momento do ponto.
+            Capture sua foto em tempo real para comprovação do registro.
           </p>
-          <Input 
-            id="selfie-file" 
-            type="file" 
-            accept="image/*" 
-            onChange={handleSelfieChange} 
-            className="flex-1"
-            disabled={loading}
+          <CameraCapture 
+            onCapture={handleCapture} 
+            onReset={handleResetSelfie} 
+            capturedFile={selfieFile}
           />
-          {selfieFile && (
-            <div className="flex items-center space-x-2 text-sm text-green-600">
-              <CheckCircle2 className="w-4 h-4" />
-              <span>Selfie selecionada: {selfieFile.name}</span>
-            </div>
-          )}
         </div>
 
         <Separator />
@@ -168,23 +177,23 @@ const RegistroPonto: React.FC = () => {
         <div className="space-y-4">
           <h3 className="text-lg font-semibold">2. Registrar Horário</h3>
           <p className="text-sm text-muted-foreground">
-            Seu horário atual e localização serão registrados.
+            Confirme o registro de ponto (Entrada ou Saída).
           </p>
           <div className="flex space-x-4">
             <Button 
-              onClick={() => registrarPonto('Entrada')} 
+              onClick={() => handlePreRegister('Entrada')} 
               disabled={loading || !selfieFile}
               className="flex-1 bg-green-600 hover:bg-green-700"
             >
-              {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ArrowUpCircle className="mr-2 h-4 w-4" />}
+              {loading && pendingRegistroType === 'Entrada' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ArrowUpCircle className="mr-2 h-4 w-4" />}
               Bater Ponto (Entrada)
             </Button>
             <Button 
-              onClick={() => registrarPonto('Saida')} 
+              onClick={() => handlePreRegister('Saida')} 
               disabled={loading || !selfieFile}
               className="flex-1 bg-red-600 hover:bg-red-700"
             >
-              {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ArrowDownCircle className="mr-2 h-4 w-4" />}
+              {loading && pendingRegistroType === 'Saida' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ArrowDownCircle className="mr-2 h-4 w-4" />}
               Bater Ponto (Saída)
             </Button>
           </div>
@@ -205,6 +214,27 @@ const RegistroPonto: React.FC = () => {
           </div>
         )}
       </CardContent>
+      
+      {/* Confirmation Dialog */}
+      <AlertDialog open={isConfirmDialogOpen} onOpenChange={setIsConfirmDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar Registro de Ponto</AlertDialogTitle>
+            <AlertDialogDescription>
+              Você está prestes a registrar um ponto de <span className="font-bold text-primary">{pendingRegistroType}</span>. Confirme se a selfie capturada está correta e se você está pronto para registrar sua localização atual.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={loading}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={() => registrarPonto(pendingRegistroType!)} 
+              disabled={loading}
+            >
+              {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Confirmar Registro'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 };
