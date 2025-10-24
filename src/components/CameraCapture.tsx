@@ -28,7 +28,7 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ onCapture, onReset, captu
     setError(null);
   }, [stream]);
 
-  // Garante que a câmera pare ao desmontar o componente
+  // Efeito de limpeza: Garante que a câmera pare ao desmontar o componente
   useEffect(() => {
     return () => {
       stopCamera();
@@ -102,7 +102,7 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ onCapture, onReset, captu
 
   const handleReset = () => {
     onReset();
-    // Não inicia a câmera automaticamente, o usuário deve clicar em 'Tirar Selfie' novamente
+    // A câmera não é iniciada automaticamente, o usuário deve clicar no botão.
   };
 
   const renderCameraView = () => {
@@ -147,20 +147,12 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ onCapture, onReset, captu
         {!capturedFile ? (
           <>
             <div className="relative w-full aspect-video bg-gray-900 rounded-md overflow-hidden">
-              {isCameraActive ? renderCameraView() : (
-                <div className="flex flex-col items-center justify-center h-full text-white/50 p-4">
-                  {isStarting ? (
-                    <Loader2 className="w-6 h-6 animate-spin mb-2" />
-                  ) : (
-                    error ? renderCameraView() : "Câmera Desativada. Clique em 'Tirar Selfie' para ativar."
-                  )}
-                </div>
-              )}
+              {renderCameraView()}
             </div>
             <Button 
               onClick={isCameraActive ? handleCapture : startCamera} 
               className="w-full" 
-              disabled={isStarting || !!error}
+              disabled={isStarting}
             >
               {isStarting ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
