@@ -124,7 +124,7 @@ const ContasReceber = () => {
               ) : (
                 contas.map((conta) => (
                   <TableRow key={conta.id}>
-                    <TableCell>{conta.clientes?.nome || 'N/A'}</TableCell>
+                    <TableCell>{conta.clientes?.nome || conta.nome_cliente_avulso || 'N/A'}</TableCell>
                     <TableCell>{conta.descricao}</TableCell>
                     <TableCell>{formatDate(conta.data_vencimento)}</TableCell>
                     <TableCell>{formatCurrency(conta.valor_total)}</TableCell>

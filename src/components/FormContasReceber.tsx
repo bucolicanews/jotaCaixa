@@ -101,7 +101,10 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      tipo_cliente: 'cadastrado',
+      tipo_cliente: contaInicial?.cliente_id ? 'cadastrado' : 'avulso',
+      cliente_id: contaInicial?.cliente_id || undefined,
+      nome_cliente_avulso: contaInicial?.nome_cliente_avulso || '',
+      empresa_id_avulso: contaInicial?.empresa_id || undefined,
       descricao: contaInicial?.descricao || '',
       tipo_lancamento: 'unico',
       valor: contaInicial?.valor_total || undefined,
@@ -116,32 +119,24 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
 
   const onSubmit = async (values: FormValues) => {
     let empresaId: string | null | undefined = null;
-    let clienteId: string | null | undefined = null;
+    let clienteData: Partial<ContaReceber> = {};
 
     if (values.tipo_cliente === 'cadastrado') {
       const selectedClient = clientes.find(c => c.id === values.cliente_id);
       if (!selectedClient) { showError('Cliente selecionado não encontrado.'); return; }
       empresaId = selectedClient.empresa_id;
-      clienteId = selectedClient.id;
-    } else { // Avulso (Cadastro Rápido)
+      clienteData = { cliente_id: values.cliente_id, nome_cliente_avulso: null };
+    } else { // Avulso
       if (isAdmin) {
         empresaId = values.empresa_id_avulso;
-        if (!empresaId) { form.setError('empresa_id_avulso', { message: 'Selecione uma empresa para este novo cliente.' }); return; }
+        if (!empresaId) { form.setError('empresa_id_avulso', { message: 'Selecione uma empresa para este lançamento.' }); return; }
       } else {
         empresaId = getEmpresaIdForUser();
       }
-      if (!empresaId) { showError('ID da empresa não pôde ser determinado.'); return; }
-
-      const { data: newClient, error: newClientError } = await supabase
-        .from('clientes')
-        .insert({ nome: values.nome_cliente_avulso, empresa_id: empresaId })
-        .select('id')
-        .single();
-      if (newClientError) { showError(`Falha ao criar novo cliente: ${newClientError.message}`); return; }
-      clienteId = newClient.id;
+      clienteData = { cliente_id: null, nome_cliente_avulso: values.nome_cliente_avulso };
     }
 
-    if (!empresaId || !clienteId) { showError('Não foi possível determinar o cliente ou a empresa.'); return; }
+    if (!empresaId) { showError('ID da empresa não pôde ser determinado.'); return; }
 
     try {
       let valorTotal: number;
@@ -159,15 +154,28 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
         }
       }
 
-      const contaData = { cliente_id: clienteId, empresa_id: empresaId, descricao: values.descricao, valor_total: valorTotal, data_emissao: format(new Date(), 'yyyy-MM-dd'), data_vencimento: parcelasParaInserir[0].data_vencimento, tipo_receita: 'única', status: 'aberta', origem: 'manual' };
-      const { data: contaResult, error: contaError } = await supabase.from('contas_receber').insert(contaData).select('id').single();
-      if (contaError) throw contaError;
+      const contaData: Omit<ContaReceber, 'id' | 'created_at' | 'updated_at' | 'clientes'> = { ...clienteData, empresa_id: empresaId, descricao: values.descricao, valor_total: valorTotal, data_emissao: isEditing ? contaInicial.data_emissao : format(new Date(), 'yyyy-MM-dd'), data_vencimento: parcelasParaInserir[0].data_vencimento, tipo_receita: 'única', status: 'aberta', origem: 'manual' };
+      
+      let contaReceberId: string;
 
-      const parcelasComId = parcelasParaInserir.map(p => ({ ...p, conta_receber_id: contaResult.id, empresa_id: empresaId }));
+      if (isEditing) {
+        const { data, error } = await supabase.from('contas_receber').update(contaData).eq('id', contaInicial.id).select('id').single();
+        if (error) throw error;
+        contaReceberId = data.id;
+        
+        const { error: deleteError } = await supabase.from('parcelas_contas_receber').delete().eq('conta_receber_id', contaReceberId);
+        if (deleteError) throw deleteError;
+      } else {
+        const { data, error } = await supabase.from('contas_receber').insert(contaData).select('id').single();
+        if (error) throw error;
+        contaReceberId = data.id;
+      }
+
+      const parcelasComId = parcelasParaInserir.map(p => ({ ...p, conta_receber_id: contaReceberId, empresa_id: empresaId }));
       const { error: parcelError } = await supabase.from('parcelas_contas_receber').insert(parcelasComId);
       if (parcelError) throw parcelError;
 
-      showSuccess('Conta a receber e parcelas geradas com sucesso!');
+      showSuccess(`Conta ${isEditing ? 'atualizada' : 'salva'} com sucesso!`);
       onSaveComplete();
     } catch (error: any) {
       showError(`Falha ao salvar: ${error.message}`);
