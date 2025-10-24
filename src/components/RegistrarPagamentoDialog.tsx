@@ -43,7 +43,7 @@ interface RegistrarPagamentoDialogProps {
 }
 
 const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ parcela, open, onOpenChange, onSaveComplete }) => {
-  const saldoDevedor = parcela ? parcela.valor_parcela - parcela.valor_pago : 0;
+  const saldoDevedor = parcela ? parcela.valor_parcela - (parcela.valor_pago || 0) : 0;
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -65,38 +65,73 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
   const onSubmit = async (values: FormValues) => {
     if (!parcela) return;
 
+    const valorRecebido = values.valor_recebido;
+    const valorPagoAnterior = parcela.valor_pago || 0;
+    const novoValorPagoTotal = valorPagoAnterior + valorRecebido;
+    const saldoRestanteCalculado = parcela.valor_parcela - novoValorPagoTotal;
+    const quitouComPagamentoAtual = novoValorPagoTotal >= parcela.valor_parcela;
+
     try {
       // 1. Registrar o recebimento
       await supabase.from('recebimentos').insert({
         parcela_id: parcela.id,
         empresa_id: parcela.empresa_id,
-        valor_recebido: values.valor_recebido,
+        valor_recebido: valorRecebido,
         data_recebimento: values.data_pagamento.toISOString(),
         forma_pagamento: values.forma_pagamento,
-        tipo_recebimento: isPagamentoParcial ? 'parcial' : 'total',
+        tipo_recebimento: quitouComPagamentoAtual ? 'total' : 'parcial',
       });
 
-      // 2. Lidar com a parcela original e o saldo restante
-      if (!isPagamentoParcial) { // Pagamento Total
-        await supabase.from('parcelas_contas_receber').update({ status: 'paga', valor_pago: parcela.valor_parcela, data_pagamento: values.data_pagamento.toISOString() }).eq('id', parcela.id);
-      } else { // Pagamento Parcial
+      // 2. Lidar com a parcela original
+      if (quitouComPagamentoAtual) {
+        await supabase.from('parcelas_contas_receber').update({
+          status: 'paga',
+          valor_pago: novoValorPagoTotal,
+          data_pagamento: values.data_pagamento.toISOString()
+        }).eq('id', parcela.id);
+      } else { // Pagamento parcial
         if (values.acao_saldo_restante === 'desconto') {
-          await supabase.from('parcelas_contas_receber').update({ status: 'paga', valor_pago: parcela.valor_parcela, observacao: `Recebido R$ ${values.valor_recebido.toFixed(2)} com R$ ${saldoRestante.toFixed(2)} de desconto.` }).eq('id', parcela.id);
-        } else if (values.acao_saldo_restante === 'reprogramar') {
-          await supabase.from('parcelas_contas_receber').update({ status: 'paga', valor_pago: parcela.valor_parcela, observacao: `Recebido R$ ${values.valor_recebido.toFixed(2)}. Saldo de R$ ${saldoRestante.toFixed(2)} reprogramado.` }).eq('id', parcela.id);
-          await supabase.from('parcelas_contas_receber').insert({ conta_receber_id: parcela.conta_receber_id, empresa_id: parcela.empresa_id, numero_parcela: 99, valor_parcela: saldoRestante, data_vencimento: format(values.nova_data_vencimento!, 'yyyy-MM-dd'), status: 'reprogramada' });
-        } else if (values.acao_saldo_restante === 'parcelar') {
-          await supabase.from('parcelas_contas_receber').update({ status: 'paga', valor_pago: parcela.valor_parcela, observacao: `Recebido R$ ${values.valor_recebido.toFixed(2)}. Saldo de R$ ${saldoRestante.toFixed(2)} parcelado.` }).eq('id', parcela.id);
-          const valorNovaParcela = saldoRestante / values.numero_novas_parcelas!;
-          const novasParcelas = Array.from({ length: values.numero_novas_parcelas! }).map((_, i) => ({
-            conta_receber_id: parcela.conta_receber_id,
-            empresa_id: parcela.empresa_id,
-            numero_parcela: 100 + i, // Usar números altos para indicar que são subparcelas
-            valor_parcela: valorNovaParcela,
-            data_vencimento: format(addDays(values.nova_data_vencimento!, i * values.intervalo_dias_novas_parcelas!), 'yyyy-MM-dd'),
-            status: 'reprogramada',
-          }));
-          await supabase.from('parcelas_contas_receber').insert(novasParcelas);
+          await supabase.from('parcelas_contas_receber').update({
+            status: 'paga',
+            valor_pago: novoValorPagoTotal,
+            data_pagamento: values.data_pagamento.toISOString(),
+            observacao: `Recebido R$ ${valorRecebido.toFixed(2)} com R$ ${saldoRestanteCalculado.toFixed(2)} de desconto.`
+          }).eq('id', parcela.id);
+        } else if (values.acao_saldo_restante === 'reprogramar' || values.acao_saldo_restante === 'parcelar') {
+          await supabase.from('parcelas_contas_receber').update({
+            status: 'paga',
+            valor_pago: novoValorPagoTotal,
+            data_pagamento: values.data_pagamento.toISOString(),
+            observacao: `Recebido R$ ${valorRecebido.toFixed(2)}. Saldo de R$ ${saldoRestanteCalculado.toFixed(2)} ${values.acao_saldo_restante === 'reprogramar' ? 'reprogramado' : 'parcelado'}.`
+          }).eq('id', parcela.id);
+
+          if (values.acao_saldo_restante === 'reprogramar') {
+            await supabase.from('parcelas_contas_receber').insert({
+              conta_receber_id: parcela.conta_receber_id,
+              empresa_id: parcela.empresa_id,
+              numero_parcela: 99,
+              valor_parcela: saldoRestanteCalculado,
+              data_vencimento: format(values.nova_data_vencimento!, 'yyyy-MM-dd'),
+              status: 'reprogramada'
+            });
+          } else { // Parcelar
+            const valorNovaParcela = saldoRestanteCalculado / values.numero_novas_parcelas!;
+            const novasParcelas = Array.from({ length: values.numero_novas_parcelas! }).map((_, i) => ({
+              conta_receber_id: parcela.conta_receber_id,
+              empresa_id: parcela.empresa_id,
+              numero_parcela: 100 + i,
+              valor_parcela: valorNovaParcela,
+              data_vencimento: format(addDays(values.nova_data_vencimento!, i * values.intervalo_dias_novas_parcelas!), 'yyyy-MM-dd'),
+              status: 'reprogramada',
+            }));
+            await supabase.from('parcelas_contas_receber').insert(novasParcelas);
+          }
+        } else {
+            // Caso de pagamento parcial sem ação definida (apenas atualiza)
+            await supabase.from('parcelas_contas_receber').update({
+                status: 'parcial',
+                valor_pago: novoValorPagoTotal,
+            }).eq('id', parcela.id);
         }
       }
       showSuccess('Pagamento registrado com sucesso!');

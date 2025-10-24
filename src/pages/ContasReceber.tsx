@@ -14,6 +14,25 @@ import FormContasReceber from '@/components/FormContasReceber';
 import DetalhesParcelasDialog from '@/components/DetalhesParcelasDialog';
 import { Badge } from '@/components/ui/badge';
 
+type ParcelaStatus = 'aberta' | 'parcial' | 'paga' | 'reprogramada' | 'cancelada';
+
+const getBadgeVariant = (status: ParcelaStatus): 'success' | 'warning' | 'secondary' | 'destructive' | 'default' => {
+  switch (status) {
+    case 'paga':
+      return 'success';
+    case 'parcial':
+      return 'warning';
+    case 'aberta':
+      return 'secondary';
+    case 'reprogramada':
+      return 'default';
+    case 'cancelada':
+      return 'destructive';
+    default:
+      return 'secondary';
+  }
+};
+
 const ContasReceber = () => {
   const { usuario, carregando: carregandoSessao } = useSessao();
   const [contas, setContas] = useState<ContaReceber[]>([]);
@@ -113,11 +132,17 @@ const ContasReceber = () => {
           <Card><CardHeader><CardTitle>Detalhamento de Todas as Parcelas</CardTitle></CardHeader>
             <CardContent>
               <Table>
-                <TableHeader><TableRow><TableHead>Cliente</TableHead><TableHead>Descrição</TableHead><TableHead className="text-center">Nº Parcela</TableHead><TableHead>Vencimento</TableHead><TableHead>Valor da Parcela</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+                <TableHeader><TableRow><TableHead>Cliente</TableHead><TableHead>Descrição</TableHead><TableHead className="text-center">Nº Parcela</TableHead><TableHead>Vencimento</TableHead><TableHead>Valor da Parcela</TableHead><TableHead>Valor Pago</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
                 <TableBody>
                   {parcelas.map((p) => (
                     <TableRow key={p.id}>
-                      <TableCell>{p.contas_receber?.clientes?.nome || 'N/A'}</TableCell><TableCell>{p.contas_receber?.descricao || 'N/A'}</TableCell><TableCell className="text-center">{p.numero_parcela}</TableCell><TableCell>{formatDate(p.data_vencimento)}</TableCell><TableCell>{formatCurrency(p.valor_parcela)}</TableCell><TableCell><Badge variant={p.status === 'paga' ? 'default' : 'secondary'}>{p.status}</Badge></TableCell>
+                      <TableCell>{p.contas_receber?.clientes?.nome || 'N/A'}</TableCell>
+                      <TableCell>{p.contas_receber?.descricao || 'N/A'}</TableCell>
+                      <TableCell className="text-center">{p.numero_parcela}</TableCell>
+                      <TableCell>{formatDate(p.data_vencimento)}</TableCell>
+                      <TableCell>{formatCurrency(p.valor_parcela)}</TableCell>
+                      <TableCell className="font-medium">{formatCurrency(p.valor_pago || 0)}</TableCell>
+                      <TableCell><Badge variant={getBadgeVariant(p.status)}>{p.status}</Badge></TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

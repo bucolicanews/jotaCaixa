@@ -23,6 +23,7 @@ export interface Parcela {
   id: string;
   numero_parcela: number;
   valor_parcela: number;
+  valor_pago: number;
   data_vencimento: string;
   status: 'aberta' | 'parcial' | 'paga' | 'reprogramada' | 'cancelada';
 }
