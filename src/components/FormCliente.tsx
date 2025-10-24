@@ -13,15 +13,29 @@ import { Cliente } from '@/types/cliente';
 import { useSessao } from '@/hooks/use-sessao';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 
-const formSchema = z.object({
-  nome: z.string().min(1, 'O nome é obrigatório.'),
-  documento: z.string().optional(),
-  email: z.string().email('Email inválido.').optional().or(z.literal('')),
-  telefone: z.string().optional(),
-  empresa_id: z.string().uuid('Selecione uma empresa.').optional(),
-});
+// Schema factory based on user role
+const getFormSchema = (isAdmin: boolean) => {
+  const baseSchema = {
+    nome: z.string().min(1, 'O nome é obrigatório.'),
+    documento: z.string().optional(),
+    email: z.string().email('Email inválido.').optional().or(z.literal('')),
+    telefone: z.string().optional(),
+  };
 
-type FormValues = z.infer<typeof formSchema>;
+  if (isAdmin) {
+    return z.object({
+      ...baseSchema,
+      empresa_id: z.string({ required_error: 'É obrigatório selecionar uma empresa.' }).uuid('Selecione uma empresa válida.'),
+    });
+  }
+
+  return z.object({
+    ...baseSchema,
+    empresa_id: z.string().uuid().optional(), // Not rendered, but keeps type consistency
+  });
+};
+
+type FormValues = z.infer<ReturnType<typeof getFormSchema>>;
 
 interface FormClienteProps {
   clienteInicial?: Cliente | null;
@@ -34,6 +48,7 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
   const [loadingEmpresas, setLoadingEmpresas] = useState(false);
 
   const isAdmin = role === 'Admin';
+  const formSchema = getFormSchema(isAdmin);
 
   useEffect(() => {
     if (isAdmin) {
@@ -72,10 +87,8 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
     let empresaId: string | null | undefined;
 
     if (isAdmin) {
-      // Para Admins, o campo é opcional. Se não for selecionado, será um cliente "avulso".
       empresaId = values.empresa_id;
     } else {
-      // Para outros perfis, o ID da empresa é pego da sessão e é obrigatório.
       empresaId = getEmpresaIdForUser();
       if (!empresaId) {
         showError('ID da empresa não encontrado. Não é possível salvar.');
@@ -88,7 +101,7 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
       documento: values.documento,
       email: values.email,
       telefone: values.telefone,
-      empresa_id: empresaId, // Pode ser nulo se o Admin não selecionar
+      empresa_id: empresaId,
     };
 
     let error = null;
@@ -122,7 +135,7 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
                 <Select onValueChange={field.onChange} defaultValue={field.value} disabled={loadingEmpresas}>
                   <FormControl>
                     <SelectTrigger>
-                      <SelectValue placeholder={loadingEmpresas ? "Carregando..." : "Selecione (opcional)"} />
+                      <SelectValue placeholder={loadingEmpresas ? "Carregando..." : "Selecione a empresa"} />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
