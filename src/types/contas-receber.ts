@@ -3,8 +3,7 @@ import { Cliente } from './cliente';
 export interface ContaReceber {
   id: string;
   empresa_id: string;
-  cliente_id?: string | null;
-  nome_cliente_avulso?: string | null;
+  cliente_id: string;
   origem: 'manual' | 'contrato';
   descricao: string;
   valor_total: number;
@@ -17,5 +16,5 @@ export interface ContaReceber {
   observacoes?: string | null;
   created_at: string;
   updated_at: string;
-  clientes?: Cliente | null;
+  clientes: Cliente;
 }

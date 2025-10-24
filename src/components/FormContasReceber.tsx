@@ -16,16 +16,11 @@ import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { ContaReceber } from '@/types/contas-receber';
 import { Cliente } from '@/types/cliente';
-import { useSessao } from '@/hooks/use-sessao';
-import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Separator } from './ui/separator';
 
 const formSchema = z.object({
-  tipo_cliente: z.enum(['cadastrado', 'avulso'], { required_error: 'Selecione o tipo de cliente.' }),
-  cliente_id: z.string().uuid('Cliente inválido.').optional(),
-  nome_cliente_avulso: z.string().optional(),
-  empresa_id_avulso: z.string().uuid().optional(),
+  cliente_id: z.string({ required_error: 'Selecione um cliente.' }).uuid('Cliente inválido.'),
   descricao: z.string().min(1, 'A descrição é obrigatória.'),
   
   tipo_lancamento: z.enum(['unico', 'repetir', 'parcelar'], { required_error: 'Selecione o tipo de lançamento.' }),
@@ -37,12 +32,6 @@ const formSchema = z.object({
   intervalo_dias: z.coerce.number().int().min(1).optional(),
 
 }).superRefine((data, ctx) => {
-  if (data.tipo_cliente === 'cadastrado' && !data.cliente_id) {
-    ctx.addIssue({ code: 'custom', message: 'Selecione um cliente.', path: ['cliente_id'] });
-  }
-  if (data.tipo_cliente === 'avulso' && (!data.nome_cliente_avulso || data.nome_cliente_avulso.trim() === '')) {
-    ctx.addIssue({ code: 'custom', message: 'O nome do novo cliente é obrigatório.', path: ['nome_cliente_avulso'] });
-  }
   if (data.tipo_lancamento === 'unico' && !data.data_vencimento) {
     ctx.addIssue({ code: 'custom', message: 'A data de vencimento é obrigatória.', path: ['data_vencimento'] });
   }
@@ -61,20 +50,9 @@ interface FormContasReceberProps {
 }
 
 const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onSaveComplete }) => {
-  const { perfil, role } = useSessao();
   const [clientes, setClientes] = useState<Cliente[]>([]);
-  const [empresas, setEmpresas] = useState<ClienteProfile[]>([]);
   const [loadingClientes, setLoadingClientes] = useState(true);
-  const [loadingEmpresas, setLoadingEmpresas] = useState(true);
-
   const isEditing = !!contaInicial;
-  const isAdmin = role === 'Admin';
-
-  const getEmpresaIdForUser = () => {
-    if (role === 'Cliente') return (perfil as ClienteProfile)?.id;
-    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id;
-    return null;
-  };
 
   useEffect(() => {
     const fetchClientes = async () => {
@@ -85,26 +63,12 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
       setLoadingClientes(false);
     };
     fetchClientes();
-
-    if (isAdmin) {
-      const fetchEmpresas = async () => {
-        setLoadingEmpresas(true);
-        const { data, error } = await supabase.from('tbl_clientes').select('id, nome').order('nome');
-        if (error) showError('Erro ao carregar empresas.');
-        else setEmpresas(data as ClienteProfile[]);
-        setLoadingEmpresas(false);
-      };
-      fetchEmpresas();
-    }
-  }, [isAdmin]);
+  }, []);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      tipo_cliente: contaInicial?.cliente_id ? 'cadastrado' : 'avulso',
       cliente_id: contaInicial?.cliente_id || undefined,
-      nome_cliente_avulso: contaInicial?.nome_cliente_avulso || '',
-      empresa_id_avulso: contaInicial?.empresa_id || undefined,
       descricao: contaInicial?.descricao || '',
       tipo_lancamento: 'unico',
       valor: contaInicial?.valor_total || undefined,
@@ -114,27 +78,14 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
     },
   });
 
-  const tipoCliente = form.watch('tipo_cliente');
   const tipoLancamento = form.watch('tipo_lancamento');
 
   const onSubmit = async (values: FormValues) => {
-    let empresaId: string | null | undefined = null;
-    let clienteData: Partial<ContaReceber> = {};
-
-    if (values.tipo_cliente === 'cadastrado') {
-      const selectedClient = clientes.find(c => c.id === values.cliente_id);
-      if (!selectedClient) { showError('Cliente selecionado não encontrado.'); return; }
-      empresaId = selectedClient.empresa_id;
-      clienteData = { cliente_id: values.cliente_id, nome_cliente_avulso: null };
-    } else { // Avulso
-      if (isAdmin) {
-        empresaId = values.empresa_id_avulso;
-        if (!empresaId) { form.setError('empresa_id_avulso', { message: 'Selecione uma empresa para este lançamento.' }); return; }
-      } else {
-        empresaId = getEmpresaIdForUser();
-      }
-      clienteData = { cliente_id: null, nome_cliente_avulso: values.nome_cliente_avulso };
-    }
+    const selectedClient = clientes.find(c => c.id === values.cliente_id);
+    if (!selectedClient) { showError('Cliente selecionado não encontrado.'); return; }
+    
+    const empresaId = selectedClient.empresa_id;
+    const clienteId = selectedClient.id;
 
     if (!empresaId) { showError('ID da empresa não pôde ser determinado.'); return; }
 
@@ -154,7 +105,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
         }
       }
 
-      const contaData: Omit<ContaReceber, 'id' | 'created_at' | 'updated_at' | 'clientes'> = { ...clienteData, empresa_id: empresaId, descricao: values.descricao, valor_total: valorTotal, data_emissao: isEditing ? contaInicial.data_emissao : format(new Date(), 'yyyy-MM-dd'), data_vencimento: parcelasParaInserir[0].data_vencimento, tipo_receita: 'única', status: 'aberta', origem: 'manual' };
+      const contaData = { cliente_id: clienteId, empresa_id: empresaId, descricao: values.descricao, valor_total: valorTotal, data_emissao: isEditing ? contaInicial.data_emissao : format(new Date(), 'yyyy-MM-dd'), data_vencimento: parcelasParaInserir[0].data_vencimento, tipo_receita: 'única', status: 'aberta', origem: 'manual' };
       
       let contaReceberId: string;
 
@@ -185,32 +136,13 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-        <div className="space-y-4">
-          <FormField control={form.control} name="tipo_cliente" render={({ field }) => (
-            <FormItem><FormLabel>1. Cliente</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex space-x-4 pt-2" disabled={isEditing}><FormItem className="flex items-center space-x-2 space-y-0"><FormControl><RadioGroupItem value="cadastrado" /></FormControl><FormLabel className="font-normal">Cadastrado</FormLabel></FormItem><FormItem className="flex items-center space-x-2 space-y-0"><FormControl><RadioGroupItem value="avulso" /></FormControl><FormLabel className="font-normal">Novo (Avulso)</FormLabel></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>
-          )} />
-          {tipoCliente === 'cadastrado' && <FormField control={form.control} name="cliente_id" render={({ field }) => (
-            <FormItem><Select onValueChange={field.onChange} defaultValue={field.value} disabled={loadingClientes || isEditing}><FormControl><SelectTrigger><SelectValue placeholder={loadingClientes ? "Carregando..." : "Selecione"} /></SelectTrigger></FormControl><SelectContent>{clientes.map((c) => (<SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>
-          )} />}
-          {tipoCliente === 'avulso' && (
-            <>
-              {isAdmin && (
-                <FormField control={form.control} name="empresa_id_avulso" render={({ field }) => (
-                  <FormItem><FormLabel>Vincular à Empresa</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value} disabled={loadingEmpresas || isEditing}><FormControl><SelectTrigger><SelectValue placeholder={loadingEmpresas ? "Carregando..." : "Selecione a empresa"} /></SelectTrigger></FormControl><SelectContent>{empresas.map((e) => (<SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>
-                )} />
-              )}
-              <FormField control={form.control} name="nome_cliente_avulso" render={({ field }) => (
-                <FormItem><FormControl><Input placeholder="Digite o nome do novo cliente" {...field} disabled={isEditing} /></FormControl><FormMessage /></FormItem>
-              )} />
-            </>
-          )}
-        </div>
+        <FormField control={form.control} name="cliente_id" render={({ field }) => (
+          <FormItem><FormLabel>1. Cliente</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value} disabled={loadingClientes || isEditing}><FormControl><SelectTrigger><SelectValue placeholder={loadingClientes ? "Carregando..." : "Selecione um cliente"} /></SelectTrigger></FormControl><SelectContent>{clientes.map((c) => (<SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>
+        )} />
         <Separator />
-        <div className="space-y-4">
-          <FormField control={form.control} name="descricao" render={({ field }) => (
-            <FormItem><FormLabel>2. Descrição do Lançamento</FormLabel><FormControl><Input placeholder="Ex: Venda de produto X" {...field} /></FormControl><FormMessage /></FormItem>
-          )} />
-        </div>
+        <FormField control={form.control} name="descricao" render={({ field }) => (
+          <FormItem><FormLabel>2. Descrição do Lançamento</FormLabel><FormControl><Input placeholder="Ex: Venda de produto X" {...field} /></FormControl><FormMessage /></FormItem>
+        )} />
         <Separator />
         <div className="space-y-4">
           <FormField control={form.control} name="tipo_lancamento" render={({ field }) => (

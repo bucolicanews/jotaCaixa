@@ -124,16 +124,15 @@ const ContasReceber = () => {
               ) : (
                 contas.map((conta) => (
                   <TableRow key={conta.id}>
-                    <TableCell>{conta.clientes?.nome || conta.nome_cliente_avulso || 'N/A'}</TableCell>
+                    <TableCell>{conta.clientes?.nome || 'N/A'}</TableCell>
                     <TableCell>{conta.descricao}</TableCell>
                     <TableCell>{formatDate(conta.data_vencimento)}</TableCell>
                     <TableCell>{formatCurrency(conta.valor_total)}</TableCell>
                     <TableCell>{conta.status}</TableCell>
                     <TableCell className="text-right">
                       <Button variant="ghost" size="icon" onClick={() => {
-                        showError("A edição de contas com parcelas será implementada em breve.");
-                        // setContaSelecionada(conta);
-                        // setDialogAberto(true);
+                        setContaSelecionada(conta);
+                        setDialogAberto(true);
                       }}>
                         <Edit className="h-4 w-4" />
                       </Button>
