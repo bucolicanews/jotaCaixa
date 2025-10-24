@@ -59,8 +59,16 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ onCapture, onReset, captu
       setStream(mediaStream);
     } catch (err: any) {
       console.error("Erro ao acessar a câmera:", err);
-      setError("Câmera Desativada ou Permissão Negada.");
-      showError("Não foi possível acessar a câmera. Verifique as permissões.");
+      
+      let errorMessage = "Câmera Desativada ou Permissão Negada.";
+      if (err.name === 'NotAllowedError') {
+        errorMessage = "Acesso à câmera negado. Por favor, permita o acesso nas configurações do seu navegador.";
+      } else if (err.name === 'NotFoundError') {
+        errorMessage = "Nenhuma câmera encontrada no dispositivo.";
+      }
+      
+      setError(errorMessage);
+      showError(errorMessage);
       setIsCameraActive(false);
       setIsStarting(false);
     }
@@ -108,7 +116,7 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ onCapture, onReset, captu
     }
     if (error) {
       return (
-        <div className="flex flex-col items-center justify-center h-full text-white/50 p-4">
+        <div className="flex flex-col items-center justify-center h-full text-white/50 p-4 text-center">
           {error}
           <Button onClick={startCamera} variant="secondary" className="mt-4">Tentar Novamente</Button>
         </div>
@@ -144,7 +152,7 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ onCapture, onReset, captu
                   {isStarting ? (
                     <Loader2 className="w-6 h-6 animate-spin mb-2" />
                   ) : (
-                    error || "Câmera Desativada. Clique em 'Tirar Selfie' para ativar."
+                    error ? renderCameraView() : "Câmera Desativada. Clique em 'Tirar Selfie' para ativar."
                   )}
                 </div>
               )}
@@ -152,7 +160,7 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ onCapture, onReset, captu
             <Button 
               onClick={isCameraActive ? handleCapture : startCamera} 
               className="w-full" 
-              disabled={isStarting}
+              disabled={isStarting || !!error}
             >
               {isStarting ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
