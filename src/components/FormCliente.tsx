@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
@@ -17,6 +18,7 @@ const formSchema = z.object({
   documento: z.string().optional(),
   email: z.string().email('Email inválido.').optional().or(z.literal('')),
   telefone: z.string().optional(),
+  empresa_id: z.string().uuid('Selecione uma empresa.').optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -28,8 +30,28 @@ interface FormClienteProps {
 
 const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplete }) => {
   const { perfil, role } = useSessao();
+  const [empresas, setEmpresas] = useState<ClienteProfile[]>([]);
+  const [loadingEmpresas, setLoadingEmpresas] = useState(false);
 
-  const getEmpresaId = () => {
+  const isAdmin = role === 'Admin';
+
+  useEffect(() => {
+    if (isAdmin) {
+      const fetchEmpresas = async () => {
+        setLoadingEmpresas(true);
+        const { data, error } = await supabase.from('tbl_clientes').select('id, nome').order('nome');
+        if (error) {
+          showError('Erro ao carregar empresas.');
+        } else {
+          setEmpresas(data as ClienteProfile[]);
+        }
+        setLoadingEmpresas(false);
+      };
+      fetchEmpresas();
+    }
+  }, [isAdmin]);
+
+  const getEmpresaIdForUser = () => {
     if (role === 'Cliente') return (perfil as ClienteProfile)?.id;
     if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id;
     return null;
@@ -42,33 +64,43 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
       documento: clienteInicial?.documento || '',
       email: clienteInicial?.email || '',
       telefone: clienteInicial?.telefone || '',
+      empresa_id: clienteInicial?.empresa_id || undefined,
     },
   });
 
   const onSubmit = async (values: FormValues) => {
-    const empresaId = getEmpresaId();
+    let empresaId: string | null | undefined;
+
+    if (isAdmin) {
+      empresaId = values.empresa_id;
+      if (!empresaId) {
+        form.setError('empresa_id', { message: 'É obrigatório selecionar uma empresa.' });
+        return;
+      }
+    } else {
+      empresaId = getEmpresaIdForUser();
+    }
+
     if (!empresaId) {
       showError('ID da empresa não encontrado. Não é possível salvar.');
       return;
     }
 
     const dataToSave = {
-      ...values,
+      nome: values.nome,
+      documento: values.documento,
+      email: values.email,
+      telefone: values.telefone,
       empresa_id: empresaId,
     };
 
     let error = null;
 
     if (clienteInicial) {
-      const result = await supabase
-        .from('clientes')
-        .update(dataToSave)
-        .eq('id', clienteInicial.id);
+      const result = await supabase.from('clientes').update(dataToSave).eq('id', clienteInicial.id);
       error = result.error;
     } else {
-      const result = await supabase
-        .from('clientes')
-        .insert(dataToSave);
+      const result = await supabase.from('clientes').insert(dataToSave);
       error = result.error;
     }
 
@@ -83,8 +115,32 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        {isAdmin && (
+          <FormField
+            control={form.control}
+            name="empresa_id"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Empresa (Cliente do Sistema)</FormLabel>
+                <Select onValueChange={field.onChange} defaultValue={field.value} disabled={loadingEmpresas}>
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder={loadingEmpresas ? "Carregando..." : "Selecione a empresa"} />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {empresas.map((empresa) => (
+                      <SelectItem key={empresa.id} value={empresa.id}>{empresa.nome}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
         <FormField control={form.control} name="nome" render={({ field }) => (
-          <FormItem><FormLabel>Nome</FormLabel><FormControl><Input placeholder="Nome do cliente" {...field} /></FormControl><FormMessage /></FormItem>
+          <FormItem><FormLabel>Nome do Cliente</FormLabel><FormControl><Input placeholder="Nome do cliente" {...field} /></FormControl><FormMessage /></FormItem>
         )} />
         <FormField control={form.control} name="documento" render={({ field }) => (
           <FormItem><FormLabel>Documento (CPF/CNPJ)</FormLabel><FormControl><Input placeholder="00.000.000/0000-00" {...field} /></FormControl><FormMessage /></FormItem>

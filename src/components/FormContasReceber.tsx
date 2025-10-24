@@ -16,8 +16,6 @@ import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { ContaReceber } from '@/types/contas-receber';
 import { Cliente } from '@/types/cliente';
-import { useSessao } from '@/hooks/use-sessao';
-import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 
 const formSchema = z.object({
   cliente_id: z.string({ required_error: 'Selecione um cliente.' }).uuid('Cliente inválido.'),
@@ -34,15 +32,8 @@ interface FormContasReceberProps {
 }
 
 const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onSaveComplete }) => {
-  const { perfil, role } = useSessao();
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [loadingClientes, setLoadingClientes] = useState(true);
-
-  const getEmpresaId = () => {
-    if (role === 'Cliente') return (perfil as ClienteProfile)?.id;
-    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id;
-    return null;
-  };
 
   useEffect(() => {
     const fetchClientes = async () => {
@@ -51,7 +42,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
       if (error) {
         showError('Erro ao carregar clientes.');
       } else {
-        setClientes(data);
+        setClientes(data as Cliente[]);
       }
       setLoadingClientes(false);
     };
@@ -69,9 +60,15 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
   });
 
   const onSubmit = async (values: FormValues) => {
-    const empresaId = getEmpresaId();
+    const selectedClient = clientes.find(c => c.id === values.cliente_id);
+    if (!selectedClient) {
+      showError('Cliente selecionado não encontrado. Não é possível salvar.');
+      return;
+    }
+    const empresaId = selectedClient.empresa_id;
+
     if (!empresaId) {
-      showError('ID da empresa não encontrado.');
+      showError('ID da empresa não encontrado para o cliente selecionado. Não é possível salvar.');
       return;
     }
 
