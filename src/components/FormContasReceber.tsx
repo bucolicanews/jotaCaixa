@@ -25,7 +25,7 @@ const formSchema = z.object({
   tipo_cliente: z.enum(['cadastrado', 'avulso'], { required_error: 'Selecione o tipo de cliente.' }),
   cliente_id: z.string().uuid('Cliente inválido.').optional(),
   nome_cliente_avulso: z.string().optional(),
-  empresa_id_avulso: z.string().uuid().optional(), // Campo para Admin em modo avulso
+  empresa_id_avulso: z.string().uuid().optional(),
   descricao: z.string().min(1, 'A descrição é obrigatória.'),
   
   tipo_lancamento: z.enum(['unico', 'repetir', 'parcelar'], { required_error: 'Selecione o tipo de lançamento.' }),
@@ -67,6 +67,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
   const [loadingClientes, setLoadingClientes] = useState(true);
   const [loadingEmpresas, setLoadingEmpresas] = useState(true);
 
+  const isEditing = !!contaInicial;
   const isAdmin = role === 'Admin';
 
   const getEmpresaIdForUser = () => {
@@ -103,6 +104,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
       tipo_cliente: contaInicial?.cliente_id ? 'cadastrado' : 'avulso',
       cliente_id: contaInicial?.cliente_id || undefined,
       nome_cliente_avulso: contaInicial?.nome_cliente_avulso || '',
+      empresa_id_avulso: contaInicial?.empresa_id || undefined,
       descricao: contaInicial?.descricao || '',
       tipo_lancamento: 'unico',
       valor: contaInicial?.valor_total || undefined,
@@ -114,7 +116,6 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
 
   const tipoCliente = form.watch('tipo_cliente');
   const tipoLancamento = form.watch('tipo_lancamento');
-  const isEditing = !!contaInicial;
 
   const onSubmit = async (values: FormValues) => {
     let empresaId: string | null | undefined = null;
@@ -125,13 +126,10 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
       if (!selectedClient) { showError('Cliente selecionado não encontrado.'); return; }
       empresaId = selectedClient.empresa_id;
       clienteData = { cliente_id: values.cliente_id, nome_cliente_avulso: null };
-    } else { // Avulso
+    } else {
       if (isAdmin) {
         empresaId = values.empresa_id_avulso;
-        if (!empresaId) {
-          form.setError('empresa_id_avulso', { message: 'Selecione uma empresa para este lançamento.' });
-          return;
-        }
+        if (!empresaId) { form.setError('empresa_id_avulso', { message: 'Selecione uma empresa.' }); return; }
       } else {
         empresaId = getEmpresaIdForUser();
       }
@@ -156,15 +154,28 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
         }
       }
 
-      const contaData: Omit<ContaReceber, 'id' | 'created_at' | 'updated_at' | 'clientes'> = { ...clienteData, empresa_id: empresaId, descricao: values.descricao, valor_total: valorTotal, data_emissao: format(new Date(), 'yyyy-MM-dd'), data_vencimento: parcelasParaInserir[0].data_vencimento, tipo_receita: 'única', status: 'aberta', origem: 'manual' };
-      const { data: contaResult, error: contaError } = await supabase.from('contas_receber').insert(contaData).select('id').single();
-      if (contaError) throw contaError;
+      const contaData: Omit<ContaReceber, 'id' | 'created_at' | 'updated_at' | 'clientes'> = { ...clienteData, empresa_id: empresaId, descricao: values.descricao, valor_total: valorTotal, data_emissao: isEditing ? contaInicial.data_emissao : format(new Date(), 'yyyy-MM-dd'), data_vencimento: parcelasParaInserir[0].data_vencimento, tipo_receita: 'única', status: 'aberta', origem: 'manual' };
+      
+      let contaReceberId: string;
 
-      const parcelasComId = parcelasParaInserir.map(p => ({ ...p, conta_receber_id: contaResult.id, empresa_id: empresaId }));
+      if (isEditing) {
+        const { data, error } = await supabase.from('contas_receber').update(contaData).eq('id', contaInicial.id).select('id').single();
+        if (error) throw error;
+        contaReceberId = data.id;
+        
+        const { error: deleteError } = await supabase.from('parcelas_contas_receber').delete().eq('conta_receber_id', contaReceberId);
+        if (deleteError) throw deleteError;
+      } else {
+        const { data, error } = await supabase.from('contas_receber').insert(contaData).select('id').single();
+        if (error) throw error;
+        contaReceberId = data.id;
+      }
+
+      const parcelasComId = parcelasParaInserir.map(p => ({ ...p, conta_receber_id: contaReceberId, empresa_id: empresaId }));
       const { error: parcelError } = await supabase.from('parcelas_contas_receber').insert(parcelasComId);
       if (parcelError) throw parcelError;
 
-      showSuccess('Conta a receber e parcelas geradas com sucesso!');
+      showSuccess(`Conta ${isEditing ? 'atualizada' : 'salva'} com sucesso!`);
       onSaveComplete();
     } catch (error: any) {
       showError(`Falha ao salvar: ${error.message}`);
@@ -203,7 +214,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
         <Separator />
         <div className="space-y-4">
           <FormField control={form.control} name="tipo_lancamento" render={({ field }) => (
-            <FormItem><FormLabel>3. Forma de Pagamento</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex space-x-4 pt-2" disabled={isEditing}><FormItem className="flex items-center space-x-2 space-y-0"><FormControl><RadioGroupItem value="unico" /></FormControl><FormLabel className="font-normal">Único</FormLabel></FormItem><FormItem className="flex items-center space-x-2 space-y-0"><FormControl><RadioGroupItem value="repetir" /></FormControl><FormLabel className="font-normal">Repetir Valor</FormLabel></FormItem><FormItem className="flex items-center space-x-2 space-y-0"><FormControl><RadioGroupItem value="parcelar" /></FormControl><FormLabel className="font-normal">Parcelar Valor</FormLabel></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>
+            <FormItem><FormLabel>3. Forma de Pagamento</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex space-x-4 pt-2"><FormItem className="flex items-center space-x-2 space-y-0"><FormControl><RadioGroupItem value="unico" /></FormControl><FormLabel className="font-normal">Único</FormLabel></FormItem><FormItem className="flex items-center space-x-2 space-y-0"><FormControl><RadioGroupItem value="repetir" /></FormControl><FormLabel className="font-normal">Repetir Valor</FormLabel></FormItem><FormItem className="flex items-center space-x-2 space-y-0"><FormControl><RadioGroupItem value="parcelar" /></FormControl><FormLabel className="font-normal">Parcelar Valor</FormLabel></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>
           )} />
           <FormField control={form.control} name="valor" render={({ field }) => (
             <FormItem><FormLabel>{tipoLancamento === 'parcelar' ? 'Valor Total a Parcelar' : 'Valor da Parcela'}</FormLabel><FormControl><Input type="number" step="0.01" placeholder="0,00" {...field} /></FormControl><FormMessage /></FormItem>
@@ -225,9 +236,9 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
             </div>
           )}
         </div>
-        <Button type="submit" className="w-full" disabled={form.formState.isSubmitting || isEditing}>
+        <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
           {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          {isEditing ? 'Edição desabilitada' : 'Salvar Lançamento'}
+          {isEditing ? 'Salvar Alterações' : 'Salvar Lançamento'}
         </Button>
       </form>
     </Form>
