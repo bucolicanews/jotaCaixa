@@ -36,7 +36,6 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
   const isAdmin = role === 'Admin';
 
   useEffect(() => {
-    // Se o usuário for um Admin, busca a lista de empresas para o seletor.
     if (isAdmin) {
       const fetchEmpresas = async () => {
         setLoadingEmpresas(true);
@@ -72,22 +71,16 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
   const onSubmit = async (values: FormValues) => {
     let empresaId: string | null | undefined;
 
-    // Lógica para definir a qual empresa o cliente pertence
     if (isAdmin) {
-      // Se for Admin, pega o valor do seletor
+      // Para Admins, o campo é opcional. Se não for selecionado, será um cliente "avulso".
       empresaId = values.empresa_id;
+    } else {
+      // Para outros perfis, o ID da empresa é pego da sessão e é obrigatório.
+      empresaId = getEmpresaIdForUser();
       if (!empresaId) {
-        form.setError('empresa_id', { message: 'É obrigatório selecionar uma empresa.' });
+        showError('ID da empresa não encontrado. Não é possível salvar.');
         return;
       }
-    } else {
-      // Se for Empresa ou Usuário, pega o ID da sessão
-      empresaId = getEmpresaIdForUser();
-    }
-
-    if (!empresaId) {
-      showError('ID da empresa não encontrado. Não é possível salvar.');
-      return;
     }
 
     const dataToSave = {
@@ -95,7 +88,7 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
       documento: values.documento,
       email: values.email,
       telefone: values.telefone,
-      empresa_id: empresaId,
+      empresa_id: empresaId, // Pode ser nulo se o Admin não selecionar
     };
 
     let error = null;
@@ -119,7 +112,6 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-        {/* O seletor de empresa só aparece para o Administrador */}
         {isAdmin && (
           <FormField
             control={form.control}
@@ -130,7 +122,7 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
                 <Select onValueChange={field.onChange} defaultValue={field.value} disabled={loadingEmpresas}>
                   <FormControl>
                     <SelectTrigger>
-                      <SelectValue placeholder={loadingEmpresas ? "Carregando..." : "Selecione a empresa"} />
+                      <SelectValue placeholder={loadingEmpresas ? "Carregando..." : "Selecione (opcional)"} />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
