@@ -28,6 +28,13 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ onCapture, onReset, captu
     setError(null);
   }, [stream]);
 
+  // Garante que a câmera pare ao desmontar o componente
+  useEffect(() => {
+    return () => {
+      stopCamera();
+    };
+  }, [stopCamera]);
+
   const startCamera = useCallback(async () => {
     if (stream || isStarting) return;
     
@@ -35,6 +42,7 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ onCapture, onReset, captu
     setError(null);
     
     try {
+      // Preferir a câmera frontal (user)
       const mediaStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
       
       if (videoRef.current) {
@@ -57,18 +65,6 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ onCapture, onReset, captu
       setIsStarting(false);
     }
   }, [stream, isStarting]);
-
-  useEffect(() => {
-    if (!capturedFile) {
-      startCamera();
-    } else {
-      stopCamera();
-    }
-    
-    return () => {
-      stopCamera();
-    };
-  }, [capturedFile, startCamera, stopCamera]);
 
   const handleCapture = () => {
     if (!videoRef.current || !canvasRef.current || !isCameraActive) return;
@@ -98,7 +94,7 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ onCapture, onReset, captu
 
   const handleReset = () => {
     onReset();
-    // startCamera é chamado via useEffect após onReset limpar capturedFile
+    // Não inicia a câmera automaticamente, o usuário deve clicar em 'Tirar Selfie' novamente
   };
 
   const renderCameraView = () => {
@@ -121,7 +117,7 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ onCapture, onReset, captu
     if (!isCameraActive) {
       return (
         <div className="flex flex-col items-center justify-center h-full text-white/50 p-4">
-          Aguardando ativação da câmera...
+          Câmera Desativada. Clique em 'Tirar Selfie' para ativar.
         </div>
       );
     }
@@ -143,15 +139,34 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ onCapture, onReset, captu
         {!capturedFile ? (
           <>
             <div className="relative w-full aspect-video bg-gray-900 rounded-md overflow-hidden">
-              {renderCameraView()}
+              {isCameraActive ? renderCameraView() : (
+                <div className="flex flex-col items-center justify-center h-full text-white/50 p-4">
+                  {isStarting ? (
+                    <Loader2 className="w-6 h-6 animate-spin mb-2" />
+                  ) : (
+                    error || "Câmera Desativada. Clique em 'Tirar Selfie' para ativar."
+                  )}
+                </div>
+              )}
             </div>
             <Button 
-              onClick={handleCapture} 
+              onClick={isCameraActive ? handleCapture : startCamera} 
               className="w-full" 
-              disabled={!isCameraActive || isStarting}
+              disabled={isStarting}
             >
-              <Camera className="w-4 h-4 mr-2" />
-              Tirar Selfie
+              {isStarting ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : isCameraActive ? (
+                <>
+                  <Camera className="w-4 h-4 mr-2" />
+                  Capturar Selfie
+                </>
+              ) : (
+                <>
+                  <Camera className="w-4 h-4 mr-2" />
+                  Tirar Selfie (Ativar Câmera)
+                </>
+              )}
             </Button>
           </>
         ) : (
