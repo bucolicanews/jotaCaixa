@@ -164,7 +164,7 @@ const GerenciarUsuarios = () => {
     <LayoutPrincipal>
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold">{isAdmin ? 'Gerenciar Contas' : 'Gerenciar Equipe'}</h1>
-        {isClienteAprovado && (
+        {isClienteAprovado && clienteProfile.permissoes?.cadastrar_usuarios && (
           <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
             <DialogTrigger asChild>
               <Button onClick={() => setItemSelecionado(null)} disabled={usuarios.length >= clienteProfile.limite_usuarios}>
