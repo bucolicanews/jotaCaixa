@@ -174,7 +174,7 @@ const GerenciarUsuarios = () => {
             </DialogTrigger>
             <DialogContent>
               <DialogHeader><DialogTitle>{itemSelecionado ? 'Editar Usuário' : 'Novo Usuário da Equipe'}</DialogTitle></DialogHeader>
-              <FormUsuario criadorRole={role!} clienteId={usuario?.id} usuarioInicial={itemSelecionado} onSaveComplete={() => handleAction()} />
+              <FormUsuario criadorRole={role!} criadorPerfil={perfil} clienteId={usuario?.id} usuarioInicial={itemSelecionado} onSaveComplete={() => handleAction()} />
             </DialogContent>
           </Dialog>
         )}
@@ -187,7 +187,7 @@ const GerenciarUsuarios = () => {
         <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
           <DialogContent>
             <DialogHeader><DialogTitle>Editar Conta</DialogTitle></DialogHeader>
-            <FormUsuario criadorRole={role!} usuarioInicial={itemSelecionado} onSaveComplete={() => handleAction()} />
+            <FormUsuario criadorRole={role!} criadorPerfil={perfil} usuarioInicial={itemSelecionado} onSaveComplete={() => handleAction()} />
           </DialogContent>
         </Dialog>
       )}

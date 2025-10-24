@@ -14,6 +14,7 @@ export interface ClienteProfile {
   email: string;
   limite_usuarios: number;
   aprovado: boolean;
+  permissoes: Record<string, boolean>;
 }
 
 export interface UsuarioProfile {

@@ -35,6 +35,7 @@ const MenuLateral = () => {
   const isUnassignedUser = role === 'Usuario' && !(perfil as UsuarioProfile)?.cliente_id;
   const isPendingClient = role === 'Cliente' && !(perfil as ClienteProfile)?.aprovado;
   const userProfile = perfil as UsuarioProfile;
+  const clientProfile = perfil as ClienteProfile;
 
   const lidarComSair = async () => {
     await supabase.auth.signOut();
@@ -60,6 +61,11 @@ const MenuLateral = () => {
         )}
         {itensMenu.map((item) => {
           if (!role || !item.perfis.includes(role) || (isPendingClient && item.caminho !== '/painel')) {
+            return null;
+          }
+
+          // Lógica de permissão para o perfil 'Cliente'
+          if (role === 'Cliente' && item.permissionKey && !clientProfile.permissoes?.[item.permissionKey]) {
             return null;
           }
 

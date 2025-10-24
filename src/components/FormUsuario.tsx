@@ -9,7 +9,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
-import { AnyProfile, ClienteProfile, UserRole, UsuarioProfile } from '@/types/usuario';
+import { AnyProfile, ClienteProfile, UserRole } from '@/types/usuario';
 import { PERMISSOES_DISPONIVEIS, Permissao } from '../config/permissoes';
 
 const formSchema = z.object({
@@ -24,18 +24,38 @@ type FormValues = z.infer<typeof formSchema>;
 
 interface FormUsuarioProps {
   criadorRole: UserRole;
+  criadorPerfil: AnyProfile;
   clienteId?: string;
   usuarioInicial?: AnyProfile | null;
   onSaveComplete: () => void;
 }
 
-const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, clienteId, usuarioInicial, onSaveComplete }) => {
+const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, clienteId, usuarioInicial, onSaveComplete }) => {
   const isEditing = !!usuarioInicial;
-  const isClientEditing = isEditing && 'limite_usuarios' in usuarioInicial;
-  const isUserBeingManaged = (isEditing && 'permissoes' in usuarioInicial) || (!isEditing && criadorRole === 'Cliente');
+  const isClient = isEditing && usuarioInicial && 'limite_usuarios' in usuarioInicial;
+  const isUser = isEditing && usuarioInicial && 'cliente_id' in usuarioInicial;
+
+  const isClientBeingManagedByAdmin = criadorRole === 'Admin' && isClient;
+  const isUserBeingManagedByClient = criadorRole === 'Cliente' && (isUser || !isEditing);
+
+  const permissoesDoCriador = (criadorPerfil && 'permissoes' in criadorPerfil)
+    ? (criadorPerfil as ClienteProfile).permissoes
+    : null;
+
+  const permissoesVisiveis = PERMISSOES_DISPONIVEIS.filter(p => {
+    if (criadorRole === 'Admin') return true;
+    if (criadorRole === 'Cliente' && permissoesDoCriador) {
+      return permissoesDoCriador[p.key] === true;
+    }
+    return false;
+  });
 
   const defaultPermissoes = PERMISSOES_DISPONIVEIS.reduce((acc: Record<string, boolean>, p: Permissao) => {
-    acc[p.key] = isEditing ? !!(usuarioInicial as UsuarioProfile)?.permissoes?.[p.key] : true;
+    if (isEditing && usuarioInicial && 'permissoes' in usuarioInicial && (usuarioInicial as any).permissoes) {
+      acc[p.key] = (usuarioInicial as any).permissoes[p.key] !== false;
+    } else {
+      acc[p.key] = true;
+    }
     return acc;
   }, {} as Record<string, boolean>);
 
@@ -45,7 +65,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, clienteId, usuar
       nome: usuarioInicial?.nome || '',
       email: usuarioInicial?.email || '',
       senha: '',
-      limite_usuarios: isClientEditing ? (usuarioInicial as ClienteProfile).limite_usuarios : 5,
+      limite_usuarios: isClient ? (usuarioInicial as ClienteProfile).limite_usuarios : 5,
       permissoes: defaultPermissoes,
     },
   });
@@ -53,18 +73,17 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, clienteId, usuar
   const onSubmit = async (values: FormValues) => {
     try {
       if (isEditing && usuarioInicial) {
-        const isClientBeingEdited = 'limite_usuarios' in usuarioInicial;
-        const isUserBeingEdited = 'permissoes' in usuarioInicial;
-        
         const dataToUpdate: any = { nome: values.nome };
 
-        if (isClientBeingEdited) {
+        if (isClient) {
           dataToUpdate.limite_usuarios = values.limite_usuarios;
-          await supabase.from('tbl_clientes').update(dataToUpdate).eq('id', usuarioInicial.id);
-        }
-        if (isUserBeingEdited) {
           dataToUpdate.permissoes = values.permissoes;
-          await supabase.from('tbl_usuarios').update(dataToUpdate).eq('id', usuarioInicial.id);
+          const { error } = await supabase.from('tbl_clientes').update(dataToUpdate).eq('id', usuarioInicial.id);
+          if (error) throw error;
+        } else if (isUser) {
+          dataToUpdate.permissoes = values.permissoes;
+          const { error } = await supabase.from('tbl_usuarios').update(dataToUpdate).eq('id', usuarioInicial.id);
+          if (error) throw error;
         }
         showSuccess('Conta atualizada com sucesso!');
 
@@ -82,17 +101,11 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, clienteId, usuar
               nome: values.nome,
               role: roleToCreate,
               cliente_id: clienteId,
-              // Permissões são salvas no DB via trigger/função, mas podemos setá-las aqui também
             },
           },
         });
         if (error) throw error;
-        // Após o signUp, o trigger `route_new_user` cria o usuário em `tbl_usuarios`.
-        // Precisamos então atualizar esse novo registro com as permissões.
-        // Uma abordagem mais simples é deixar o trigger definir permissões padrão e o cliente edita depois.
-        // Para fazer na criação, precisaríamos de uma função RPC. Vamos manter simples por agora:
-        // O usuário é criado, e o cliente pode editar as permissões em seguida.
-        // Ou, vamos tentar atualizar logo após.
+        
         const { error: userError } = await supabase.from('tbl_usuarios').update({ permissoes: values.permissoes }).eq('email', values.email);
         if (userError) throw new Error('Usuário criado, mas falha ao definir permissões.');
 
@@ -118,16 +131,16 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, clienteId, usuar
             <FormItem><FormLabel>Senha Provisória</FormLabel><FormControl><Input type="password" placeholder="••••••••" {...field} /></FormControl><FormMessage /></FormItem>
           )} />
         )}
-        {isClientEditing && (
+        {isClient && (
           <FormField control={form.control} name="limite_usuarios" render={({ field }) => (
             <FormItem><FormLabel>Limite de Usuários da Equipe</FormLabel><FormControl><Input type="number" placeholder="5" {...field} /></FormControl><FormMessage /></FormItem>
           )} />
         )}
-        {isUserBeingManaged && (
+        {(isClientBeingManagedByAdmin || isUserBeingManagedByClient) && (
           <div className="space-y-2">
             <FormLabel>Permissões de Acesso</FormLabel>
             <div className="grid grid-cols-2 gap-4 rounded-lg border p-4">
-              {PERMISSOES_DISPONIVEIS.map((p: Permissao) => (
+              {permissoesVisiveis.map((p: Permissao) => (
                 <FormField key={p.key} control={form.control} name={`permissoes.${p.key}`} render={({ field }) => (
                   <FormItem className="flex flex-row items-start space-x-3 space-y-0">
                     <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl>
