@@ -1,3 +1,5 @@
+# VERSÃO TESTE 1.0.0.000
+
 # Fluxo de Caixa - Sistema de Gestão Financeira
 
 Este é um sistema de gestão financeira multi-inquilino (multi-tenant) construído com React, TypeScript e Supabase. Ele foi projetado para permitir que múltiplos clientes (empresas) gerenciem suas finanças, enquanto um Administrador central supervisiona e gerencia os clientes.
