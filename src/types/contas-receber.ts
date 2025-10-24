@@ -18,3 +18,20 @@ export interface ContaReceber {
   updated_at: string;
   clientes: Cliente;
 }
+
+export interface Parcela {
+  id: string;
+  numero_parcela: number;
+  valor_parcela: number;
+  data_vencimento: string;
+  status: 'aberta' | 'parcial' | 'paga' | 'reprogramada' | 'cancelada';
+}
+
+export interface ParcelaDetalhada extends Parcela {
+  contas_receber: {
+    descricao: string;
+    clientes: {
+      nome: string;
+    } | null;
+  } | null;
+}
