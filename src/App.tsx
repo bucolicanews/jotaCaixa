@@ -18,6 +18,7 @@ import AtualizarSenha from "./pages/AtualizarSenha";
 import PlanoContasPage from "./pages/PlanoContas";
 import GerenciarUsuarios from "./pages/GerenciarUsuarios";
 import CadastrarEmpresa from "./pages/CadastrarEmpresa";
+import PontoEletronico from "./pages/PontoEletronico";
 
 const queryClient = new QueryClient();
 
@@ -46,6 +47,7 @@ const App = () => (
             <Route path="/plano-contas" element={<PlanoContasPage />} />
             <Route path="/gerenciar-usuarios" element={<GerenciarUsuarios />} />
             <Route path="/cadastrar-empresa" element={<CadastrarEmpresa />} />
+            <Route path="/ponto-eletronico" element={<PontoEletronico />} />
 
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />

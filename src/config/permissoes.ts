@@ -13,4 +13,5 @@ export const PERMISSOES_DISPONIVEIS: Permissao[] = [
   { key: 'importar', label: 'Importar', path: '/importar' },
   { key: 'relatorios', label: 'Relatórios', path: '/relatorios' },
   { key: 'configuracoes', label: 'Configurações', path: '/configuracoes' },
+  { key: 'ponto_eletronico', label: 'Ponto Eletrônico', path: '/ponto-eletronico' },
 ];
