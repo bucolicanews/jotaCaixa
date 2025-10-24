@@ -1,0 +1,113 @@
+import React, { useState, useEffect } from 'react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Loader2, BadgeDollarSign } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { ContaReceber } from '@/types/contas-receber';
+import { showError } from '@/utils/toast';
+import { Button } from './ui/button';
+import { Badge } from './ui/badge';
+
+interface Parcela {
+  id: string;
+  numero_parcela: number;
+  valor_parcela: number;
+  valor_pago: number;
+  data_vencimento: string;
+  status: 'aberta' | 'parcial' | 'paga' | 'reprogramada' | 'cancelada';
+}
+
+interface DetalhesParcelasDialogProps {
+  conta: ContaReceber | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}
+
+const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, open, onOpenChange }) => {
+  const [parcelas, setParcelas] = useState<Parcela[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchParcelas = async () => {
+      if (!conta) return;
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('parcelas_contas_receber')
+        .select('*')
+        .eq('conta_receber_id', conta.id)
+        .order('numero_parcela', { ascending: true });
+
+      if (error) {
+        showError('Erro ao carregar parcelas: ' + error.message);
+        setParcelas([]);
+      } else {
+        setParcelas(data as Parcela[]);
+      }
+      setLoading(false);
+    };
+
+    if (open) {
+      fetchParcelas();
+    }
+  }, [conta, open]);
+
+  const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+  const formatDate = (dateString: string) => new Date(dateString + 'T00:00:00').toLocaleDateString('pt-BR');
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Detalhes do Lançamento</DialogTitle>
+          <DialogDescription>
+            <strong>{conta?.descricao}</strong> para o cliente <strong>{conta?.clientes?.nome}</strong>
+          </DialogDescription>
+        </DialogHeader>
+        {loading ? (
+          <div className="flex justify-center items-center h-40">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
+        ) : (
+          <div className="mt-4">
+            <h3 className="font-semibold mb-2">Parcelas</h3>
+            <div className="border rounded-md">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[80px]">Parcela</TableHead>
+                    <TableHead>Vencimento</TableHead>
+                    <TableHead>Valor</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Ações</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {parcelas.length === 0 ? (
+                    <TableRow><TableCell colSpan={5} className="text-center">Nenhuma parcela encontrada.</TableCell></TableRow>
+                  ) : (
+                    parcelas.map((p) => (
+                      <TableRow key={p.id}>
+                        <TableCell className="font-medium">{p.numero_parcela}</TableCell>
+                        <TableCell>{formatDate(p.data_vencimento)}</TableCell>
+                        <TableCell>{formatCurrency(p.valor_parcela)}</TableCell>
+                        <TableCell><Badge variant={p.status === 'paga' ? 'default' : 'secondary'}>{p.status}</Badge></TableCell>
+                        <TableCell className="text-right">
+                          <Button variant="outline" size="sm" disabled={p.status === 'paga'}>
+                            <BadgeDollarSign className="w-4 h-4 mr-2" />
+                            Registrar Pagamento
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+export default DetalhesParcelasDialog;
