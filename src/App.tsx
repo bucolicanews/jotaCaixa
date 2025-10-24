@@ -19,6 +19,7 @@ import PlanoContasPage from "./pages/PlanoContas";
 import GerenciarUsuarios from "./pages/GerenciarUsuarios";
 import CadastrarEmpresa from "./pages/CadastrarEmpresa";
 import PontoEletronico from "./pages/PontoEletronico";
+import ClientesPage from "./pages/Clientes";
 
 const queryClient = new QueryClient();
 
@@ -39,6 +40,7 @@ const App = () => (
             <Route path="/painel" element={<Painel />} />
             <Route path="/contas-pagar" element={<ContasPagar />} />
             <Route path="/contas-receber" element={<ContasReceber />} />
+            <Route path="/clientes" element={<ClientesPage />} />
             <Route path="/bancos" element={<Bancos />} />
             <Route path="/conciliacao" element={<Conciliacao />} />
             <Route path="/importar" element={<Importar />} />
