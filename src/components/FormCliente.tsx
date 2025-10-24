@@ -36,6 +36,7 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
   const isAdmin = role === 'Admin';
 
   useEffect(() => {
+    // Se o usuário for um Admin, busca a lista de empresas para o seletor.
     if (isAdmin) {
       const fetchEmpresas = async () => {
         setLoadingEmpresas(true);
@@ -71,13 +72,16 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
   const onSubmit = async (values: FormValues) => {
     let empresaId: string | null | undefined;
 
+    // Lógica para definir a qual empresa o cliente pertence
     if (isAdmin) {
+      // Se for Admin, pega o valor do seletor
       empresaId = values.empresa_id;
       if (!empresaId) {
         form.setError('empresa_id', { message: 'É obrigatório selecionar uma empresa.' });
         return;
       }
     } else {
+      // Se for Empresa ou Usuário, pega o ID da sessão
       empresaId = getEmpresaIdForUser();
     }
 
@@ -115,6 +119,7 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        {/* O seletor de empresa só aparece para o Administrador */}
         {isAdmin && (
           <FormField
             control={form.control}
