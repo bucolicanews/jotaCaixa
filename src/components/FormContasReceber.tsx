@@ -57,7 +57,12 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
   useEffect(() => {
     const fetchClientes = async () => {
       setLoadingClientes(true);
-      const { data, error } = await supabase.from('clientes').select('*').order('nome');
+      const { data, error } = await supabase
+        .from('clientes')
+        .select('*')
+        .not('empresa_id', 'is', null) // Apenas clientes que pertencem a uma empresa
+        .order('nome');
+        
       if (error) showError('Erro ao carregar clientes.');
       else setClientes(data as Cliente[]);
       setLoadingClientes(false);
