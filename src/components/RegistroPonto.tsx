@@ -106,6 +106,9 @@ const RegistroPonto: React.FC = () => {
       setLocation(geo);
 
       const selfieUrl = await uploadSelfie(selfieFile);
+      
+      // Constrói a URL do Google Maps
+      const mapsUrl = `https://www.google.com/maps?q=${geo.latitude},${geo.longitude}`;
 
       const { error } = await supabase
         .from('registros_ponto')
@@ -117,6 +120,7 @@ const RegistroPonto: React.FC = () => {
           tipo: tipo,
           latitude: geo.latitude,
           longitude: geo.longitude,
+          maps_url: mapsUrl, // Salva a URL no banco de dados
         });
 
       if (error) {
