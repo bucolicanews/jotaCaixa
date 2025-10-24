@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
-import { Camera, RotateCcw, CheckCircle2 } from 'lucide-react';
+import { Camera, RotateCcw, CheckCircle2, Loader2 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { showError } from '@/utils/toast';
 
@@ -16,6 +16,7 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ onCapture, onReset, captu
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const stopCamera = useCallback(() => {
     if (stream) {
@@ -23,30 +24,34 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ onCapture, onReset, captu
       setStream(null);
     }
     setIsCameraActive(false);
+    setIsStarting(false);
+    setError(null);
   }, [stream]);
 
   const startCamera = useCallback(async () => {
     if (stream || isStarting) return;
     
     setIsStarting(true);
+    setError(null);
+    
     try {
       const mediaStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+      
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
-        // Adiciona um listener para garantir que o vídeo está pronto para ser reproduzido
         videoRef.current.onloadedmetadata = () => {
           videoRef.current?.play();
           setIsCameraActive(true);
           setIsStarting(false);
         };
       } else {
-        // Se a ref não estiver pronta, pare o stream
         mediaStream.getTracks().forEach(track => track.stop());
         setIsStarting(false);
       }
       setStream(mediaStream);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Erro ao acessar a câmera:", err);
+      setError("Câmera Desativada ou Permissão Negada.");
       showError("Não foi possível acessar a câmera. Verifique as permissões.");
       setIsCameraActive(false);
       setIsStarting(false);
@@ -99,16 +104,24 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ onCapture, onReset, captu
   const renderCameraView = () => {
     if (isStarting) {
       return (
-        <div className="flex items-center justify-center h-full text-white/50">
+        <div className="flex flex-col items-center justify-center h-full text-white/50">
+          <Loader2 className="w-6 h-6 animate-spin mb-2" />
           Iniciando Câmera...
         </div>
       );
     }
-    if (!isCameraActive && !isStarting) {
+    if (error) {
       return (
         <div className="flex flex-col items-center justify-center h-full text-white/50 p-4">
-          Câmera Desativada ou Permissão Negada.
-          <Button onClick={startCamera} variant="secondary" className="mt-2">Tentar Novamente</Button>
+          {error}
+          <Button onClick={startCamera} variant="secondary" className="mt-4">Tentar Novamente</Button>
+        </div>
+      );
+    }
+    if (!isCameraActive) {
+      return (
+        <div className="flex flex-col items-center justify-center h-full text-white/50 p-4">
+          Aguardando ativação da câmera...
         </div>
       );
     }
