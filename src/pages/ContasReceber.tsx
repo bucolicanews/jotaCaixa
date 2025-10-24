@@ -42,7 +42,7 @@ const ContasReceber = () => {
   const [contaSelecionada, setContaSelecionada] = useState<ContaReceber | null>(null);
   const [dialogFormAberto, setDialogFormAberto] = useState(false);
   const [dialogParcelasAberto, setDialogParcelasAberto] = useState(false);
-  const [filtroCliente, setFiltroCliente] = useState('');
+  const [filtroGeral, setFiltroGeral] = useState('');
 
   const buscarDados = async () => {
     setCarregandoDados(true);
@@ -90,11 +90,18 @@ const ContasReceber = () => {
   const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
   const formatDate = (dateString: string) => new Date(dateString + 'T00:00:00').toLocaleDateString('pt-BR');
 
-  const parcelasFiltradas = parcelas.filter(p =>
-    p.contas_receber?.clientes?.nome
-      .toLowerCase()
-      .includes(filtroCliente.toLowerCase())
-  );
+  const parcelasFiltradas = parcelas.filter(p => {
+    const termoBusca = filtroGeral.toLowerCase();
+    return (
+      (p.contas_receber?.clientes?.nome?.toLowerCase() || '').includes(termoBusca) ||
+      (p.contas_receber?.descricao?.toLowerCase() || '').includes(termoBusca) ||
+      String(p.numero_parcela).includes(termoBusca) ||
+      formatDate(p.data_vencimento).includes(termoBusca) ||
+      formatCurrency(p.valor_parcela).includes(termoBusca) ||
+      formatCurrency(p.valor_pago || 0).includes(termoBusca) ||
+      p.status.toLowerCase().includes(termoBusca)
+    );
+  });
 
   if (carregandoSessao || carregandoDados) {
     return <LayoutPrincipal><div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div></LayoutPrincipal>;
@@ -142,9 +149,9 @@ const ContasReceber = () => {
               <CardTitle>Detalhamento de Todas as Parcelas</CardTitle>
               <div className="mt-4">
                 <Input
-                  placeholder="Filtrar por cliente..."
-                  value={filtroCliente}
-                  onChange={(e) => setFiltroCliente(e.target.value)}
+                  placeholder="Filtrar em todos os campos..."
+                  value={filtroGeral}
+                  onChange={(e) => setFiltroGeral(e.target.value)}
                   className="max-w-sm"
                 />
               </div>
