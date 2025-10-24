@@ -1,41 +1,25 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { Cliente } from '@/types/cliente';
 import { useSessao } from '@/hooks/use-sessao';
-import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
+import { UsuarioProfile } from '@/types/usuario';
 
-// Schema factory based on user role
-const getFormSchema = (isAdmin: boolean) => {
-  const baseSchema = {
-    nome: z.string().min(1, 'O nome é obrigatório.'),
-    documento: z.string().optional(),
-    email: z.string().email('Email inválido.').optional().or(z.literal('')),
-    telefone: z.string().optional(),
-  };
+const formSchema = z.object({
+  nome: z.string().min(1, 'O nome é obrigatório.'),
+  documento: z.string().optional(),
+  email: z.string().email('Email inválido.').optional().or(z.literal('')),
+  telefone: z.string().optional(),
+});
 
-  if (isAdmin) {
-    return z.object({
-      ...baseSchema,
-      empresa_id: z.string({ required_error: 'É obrigatório selecionar uma empresa.' }).uuid('Selecione uma empresa válida.'),
-    });
-  }
-
-  return z.object({
-    ...baseSchema,
-    empresa_id: z.string().uuid().optional(), // Not rendered, but keeps type consistency
-  });
-};
-
-type FormValues = z.infer<ReturnType<typeof getFormSchema>>;
+type FormValues = z.infer<typeof formSchema>;
 
 interface FormClienteProps {
   clienteInicial?: Cliente | null;
@@ -44,33 +28,6 @@ interface FormClienteProps {
 
 const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplete }) => {
   const { perfil, role } = useSessao();
-  const [empresas, setEmpresas] = useState<ClienteProfile[]>([]);
-  const [loadingEmpresas, setLoadingEmpresas] = useState(false);
-
-  const isAdmin = role === 'Admin';
-  const formSchema = getFormSchema(isAdmin);
-
-  useEffect(() => {
-    if (isAdmin) {
-      const fetchEmpresas = async () => {
-        setLoadingEmpresas(true);
-        const { data, error } = await supabase.from('tbl_clientes').select('id, nome').order('nome');
-        if (error) {
-          showError('Erro ao carregar empresas.');
-        } else {
-          setEmpresas(data as ClienteProfile[]);
-        }
-        setLoadingEmpresas(false);
-      };
-      fetchEmpresas();
-    }
-  }, [isAdmin]);
-
-  const getEmpresaIdForUser = () => {
-    if (role === 'Cliente') return (perfil as ClienteProfile)?.id;
-    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id;
-    return null;
-  };
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -79,21 +36,20 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
       documento: clienteInicial?.documento || '',
       email: clienteInicial?.email || '',
       telefone: clienteInicial?.telefone || '',
-      empresa_id: clienteInicial?.empresa_id || undefined,
     },
   });
 
-  const onSubmit = async (values: FormValues) => {
-    let empresaId: string | null | undefined;
+  const getOwnerId = () => {
+    if (role === 'Admin' || role === 'Cliente') return (perfil as any)?.id;
+    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id;
+    return null;
+  };
 
-    if (isAdmin) {
-      empresaId = values.empresa_id;
-    } else {
-      empresaId = getEmpresaIdForUser();
-      if (!empresaId) {
-        showError('ID da empresa não encontrado. Não é possível salvar.');
-        return;
-      }
+  const onSubmit = async (values: FormValues) => {
+    const ownerId = getOwnerId();
+    if (!ownerId) {
+      showError('Não foi possível identificar o proprietário (empresa/admin). Não é possível salvar.');
+      return;
     }
 
     const dataToSave = {
@@ -101,7 +57,7 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
       documento: values.documento,
       email: values.email,
       telefone: values.telefone,
-      empresa_id: empresaId,
+      empresa_id: ownerId,
     };
 
     let error = null;
@@ -125,30 +81,6 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-        {isAdmin && (
-          <FormField
-            control={form.control}
-            name="empresa_id"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Empresa (Cliente do Sistema)</FormLabel>
-                <Select onValueChange={field.onChange} defaultValue={field.value} disabled={loadingEmpresas}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder={loadingEmpresas ? "Carregando..." : "Selecione a empresa"} />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {empresas.map((empresa) => (
-                      <SelectItem key={empresa.id} value={empresa.id}>{empresa.nome}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        )}
         <FormField control={form.control} name="nome" render={({ field }) => (
           <FormItem><FormLabel>Nome do Cliente</FormLabel><FormControl><Input placeholder="Nome do cliente" {...field} /></FormControl><FormMessage /></FormItem>
         )} />

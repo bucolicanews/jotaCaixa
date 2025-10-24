@@ -18,6 +18,8 @@ import { ContaReceber } from '@/types/contas-receber';
 import { Cliente } from '@/types/cliente';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Separator } from './ui/separator';
+import { useSessao } from '@/hooks/use-sessao';
+import { UsuarioProfile } from '@/types/usuario';
 
 const formSchema = z.object({
   cliente_id: z.string({ required_error: 'Selecione um cliente.' }).uuid('Cliente inválido.'),
@@ -50,17 +52,29 @@ interface FormContasReceberProps {
 }
 
 const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onSaveComplete }) => {
+  const { perfil, role } = useSessao();
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [loadingClientes, setLoadingClientes] = useState(true);
   const isEditing = !!contaInicial;
 
+  const getOwnerId = () => {
+    if (role === 'Admin' || role === 'Cliente') return (perfil as any)?.id;
+    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id;
+    return null;
+  };
+
   useEffect(() => {
     const fetchClientes = async () => {
+      const ownerId = getOwnerId();
+      if (!ownerId) {
+        setLoadingClientes(false);
+        return;
+      }
       setLoadingClientes(true);
       const { data, error } = await supabase
         .from('clientes')
         .select('*')
-        .not('empresa_id', 'is', null) // Apenas clientes que pertencem a uma empresa
+        .eq('empresa_id', ownerId)
         .order('nome');
         
       if (error) showError('Erro ao carregar clientes.');
@@ -68,7 +82,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
       setLoadingClientes(false);
     };
     fetchClientes();
-  }, []);
+  }, [perfil, role]);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -86,14 +100,9 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
   const tipoLancamento = form.watch('tipo_lancamento');
 
   const onSubmit = async (values: FormValues) => {
-    const selectedClient = clientes.find(c => c.id === values.cliente_id);
-    if (!selectedClient) { showError('Cliente selecionado não encontrado.'); return; }
+    const ownerId = getOwnerId();
+    if (!ownerId) { showError('ID da empresa/admin não pôde ser determinado.'); return; }
     
-    const empresaId = selectedClient.empresa_id;
-    const clienteId = selectedClient.id;
-
-    if (!empresaId) { showError('ID da empresa não pôde ser determinado.'); return; }
-
     try {
       let valorTotal: number;
       let parcelasParaInserir = [];
@@ -110,7 +119,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
         }
       }
 
-      const contaData = { cliente_id: clienteId, empresa_id: empresaId, descricao: values.descricao, valor_total: valorTotal, data_emissao: isEditing ? contaInicial.data_emissao : format(new Date(), 'yyyy-MM-dd'), data_vencimento: parcelasParaInserir[0].data_vencimento, tipo_receita: 'única', status: 'aberta', origem: 'manual' };
+      const contaData = { cliente_id: values.cliente_id, empresa_id: ownerId, descricao: values.descricao, valor_total: valorTotal, data_emissao: isEditing ? contaInicial.data_emissao : format(new Date(), 'yyyy-MM-dd'), data_vencimento: parcelasParaInserir[0].data_vencimento, tipo_receita: 'única', status: 'aberta', origem: 'manual' };
       
       let contaReceberId: string;
 
@@ -127,7 +136,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
         contaReceberId = data.id;
       }
 
-      const parcelasComId = parcelasParaInserir.map(p => ({ ...p, conta_receber_id: contaReceberId, empresa_id: empresaId }));
+      const parcelasComId = parcelasParaInserir.map(p => ({ ...p, conta_receber_id: contaReceberId, empresa_id: ownerId }));
       const { error: parcelError } = await supabase.from('parcelas_contas_receber').insert(parcelasComId);
       if (parcelError) throw parcelError;
 

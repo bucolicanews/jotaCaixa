@@ -10,19 +10,33 @@ import { showError } from '@/utils/toast';
 import { Cliente } from '@/types/cliente';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import FormCliente from '@/components/FormCliente';
+import { UsuarioProfile } from '@/types/usuario';
 
 const ClientesPage = () => {
-  const { usuario, carregando: carregandoSessao } = useSessao();
+  const { usuario, perfil, role, carregando: carregandoSessao } = useSessao();
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [carregandoClientes, setCarregandoClientes] = useState(true);
   const [clienteSelecionado, setClienteSelecionado] = useState<Cliente | null>(null);
   const [dialogAberto, setDialogAberto] = useState(false);
 
+  const getOwnerId = () => {
+    if (role === 'Admin' || role === 'Cliente') return (perfil as any)?.id;
+    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id;
+    return null;
+  };
+
   const buscarClientes = async () => {
+    const ownerId = getOwnerId();
+    if (!ownerId) {
+      setCarregandoClientes(false);
+      return;
+    }
+
     setCarregandoClientes(true);
     const { data, error } = await supabase
       .from('clientes')
       .select('*')
+      .eq('empresa_id', ownerId)
       .order('nome', { ascending: true });
 
     if (error) {
@@ -38,7 +52,7 @@ const ClientesPage = () => {
     if (!carregandoSessao && usuario) {
       buscarClientes();
     }
-  }, [carregandoSessao, usuario]);
+  }, [carregandoSessao, usuario, role]);
 
   const handleSaveComplete = () => {
     setDialogAberto(false);
