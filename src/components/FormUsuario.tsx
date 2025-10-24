@@ -70,6 +70,12 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, c
     },
   });
 
+  const handleSelectAll = (select: boolean) => {
+    permissoesVisiveis.forEach(p => {
+      form.setValue(`permissoes.${p.key}`, select, { shouldDirty: true });
+    });
+  };
+
   const onSubmit = async (values: FormValues) => {
     try {
       if (isEditing && usuarioInicial) {
@@ -138,7 +144,13 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, c
         )}
         {(isClientBeingManagedByAdmin || isUserBeingManagedByClient) && (
           <div className="space-y-2">
-            <FormLabel>Permissões de Acesso</FormLabel>
+            <div className="flex justify-between items-center mb-1">
+              <FormLabel>Permissões de Acesso</FormLabel>
+              <div className="space-x-2">
+                <Button type="button" variant="link" size="sm" onClick={() => handleSelectAll(true)} className="p-0 h-auto">Selecionar Todos</Button>
+                <Button type="button" variant="link" size="sm" onClick={() => handleSelectAll(false)} className="p-0 h-auto text-destructive">Desmarcar Todos</Button>
+              </div>
+            </div>
             <div className="grid grid-cols-2 gap-4 rounded-lg border p-4">
               {permissoesVisiveis.map((p: Permissao) => (
                 <FormField key={p.key} control={form.control} name={`permissoes.${p.key}`} render={({ field }) => (
