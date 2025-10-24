@@ -15,6 +15,7 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ onCapture, onReset, captu
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [isCameraActive, setIsCameraActive] = useState(false);
+  const [isStarting, setIsStarting] = useState(false);
 
   const stopCamera = useCallback(() => {
     if (stream) {
@@ -25,21 +26,32 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ onCapture, onReset, captu
   }, [stream]);
 
   const startCamera = useCallback(async () => {
-    if (stream) return;
+    if (stream || isStarting) return;
+    
+    setIsStarting(true);
     try {
       const mediaStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
-        videoRef.current.play();
+        // Adiciona um listener para garantir que o vídeo está pronto para ser reproduzido
+        videoRef.current.onloadedmetadata = () => {
+          videoRef.current?.play();
+          setIsCameraActive(true);
+          setIsStarting(false);
+        };
+      } else {
+        // Se a ref não estiver pronta, pare o stream
+        mediaStream.getTracks().forEach(track => track.stop());
+        setIsStarting(false);
       }
       setStream(mediaStream);
-      setIsCameraActive(true);
     } catch (err) {
       console.error("Erro ao acessar a câmera:", err);
       showError("Não foi possível acessar a câmera. Verifique as permissões.");
       setIsCameraActive(false);
+      setIsStarting(false);
     }
-  }, [stream]);
+  }, [stream, isStarting]);
 
   useEffect(() => {
     if (!capturedFile) {
@@ -54,7 +66,7 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ onCapture, onReset, captu
   }, [capturedFile, startCamera, stopCamera]);
 
   const handleCapture = () => {
-    if (!videoRef.current || !canvasRef.current) return;
+    if (!videoRef.current || !canvasRef.current || !isCameraActive) return;
 
     const video = videoRef.current;
     const canvas = canvasRef.current;
@@ -71,7 +83,7 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ onCapture, onReset, captu
         if (blob) {
           const file = new File([blob], `selfie-${Date.now()}.jpeg`, { type: 'image/jpeg' });
           onCapture(file);
-          stopCamera();
+          stopCamera(); // Para a câmera após a captura
         } else {
           showError("Falha ao capturar imagem.");
         }
@@ -81,7 +93,35 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ onCapture, onReset, captu
 
   const handleReset = () => {
     onReset();
-    startCamera();
+    // startCamera é chamado via useEffect após onReset limpar capturedFile
+  };
+
+  const renderCameraView = () => {
+    if (isStarting) {
+      return (
+        <div className="flex items-center justify-center h-full text-white/50">
+          Iniciando Câmera...
+        </div>
+      );
+    }
+    if (!isCameraActive && !isStarting) {
+      return (
+        <div className="flex flex-col items-center justify-center h-full text-white/50 p-4">
+          Câmera Desativada ou Permissão Negada.
+          <Button onClick={startCamera} variant="secondary" className="mt-2">Tentar Novamente</Button>
+        </div>
+      );
+    }
+    return (
+      <video 
+        ref={videoRef} 
+        className="w-full h-full object-cover" 
+        autoPlay 
+        playsInline 
+        muted 
+        style={{ transform: 'scaleX(-1)' }} // Espelha a imagem para selfies
+      />
+    );
   };
 
   return (
@@ -90,18 +130,12 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ onCapture, onReset, captu
         {!capturedFile ? (
           <>
             <div className="relative w-full aspect-video bg-gray-900 rounded-md overflow-hidden">
-              {isCameraActive ? (
-                <video ref={videoRef} className="w-full h-full object-cover" autoPlay playsInline muted />
-              ) : (
-                <div className="flex items-center justify-center h-full text-white/50">
-                  Câmera Desativada ou Aguardando Permissão
-                </div>
-              )}
+              {renderCameraView()}
             </div>
             <Button 
               onClick={handleCapture} 
               className="w-full" 
-              disabled={!isCameraActive}
+              disabled={!isCameraActive || isStarting}
             >
               <Camera className="w-4 h-4 mr-2" />
               Tirar Selfie
