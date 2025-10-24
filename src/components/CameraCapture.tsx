@@ -117,6 +117,15 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ onCapture, onReset, captu
     // A câmera não é iniciada automaticamente, o usuário deve clicar no botão.
   };
 
+  const handleButtonClick = () => {
+    console.log(`LOG: Botão clicado. isCameraActive: ${isCameraActive}, isStarting: ${isStarting}`);
+    if (isCameraActive) {
+      handleCapture();
+    } else {
+      startCamera();
+    }
+  };
+
   const renderCameraView = () => {
     if (isStarting) {
       return (
@@ -170,7 +179,7 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ onCapture, onReset, captu
               )}
             </div>
             <Button 
-              onClick={isCameraActive ? handleCapture : startCamera} 
+              onClick={handleButtonClick} 
               className="w-full" 
               disabled={isStarting || !!error}
             >
