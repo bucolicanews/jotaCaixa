@@ -19,6 +19,7 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ onCapture, onReset, captu
   const [error, setError] = useState<string | null>(null);
 
   const stopCamera = useCallback(() => {
+    console.log("LOG: stopCamera chamado.");
     if (stream) {
       stream.getTracks().forEach(track => track.stop());
       setStream(null);
@@ -38,27 +39,34 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ onCapture, onReset, captu
   const startCamera = useCallback(async () => {
     if (stream || isStarting) return;
     
+    console.log("LOG: startCamera iniciado.");
     setIsStarting(true);
     setError(null);
     
     try {
+      console.log("LOG: Solicitando acesso à mídia...");
       // Preferir a câmera frontal (user)
       const mediaStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+      
+      console.log("LOG: Acesso à mídia concedido.");
       
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
         videoRef.current.onloadedmetadata = () => {
+          console.log("LOG: Metadados do vídeo carregados. Tentando play.");
           videoRef.current?.play();
           setIsCameraActive(true);
           setIsStarting(false);
+          console.log("LOG: Câmera ativa.");
         };
       } else {
+        console.log("LOG: videoRef não disponível. Parando stream.");
         mediaStream.getTracks().forEach(track => track.stop());
         setIsStarting(false);
       }
       setStream(mediaStream);
     } catch (err: any) {
-      console.error("Erro ao acessar a câmera:", err);
+      console.error("LOG: Erro ao acessar a câmera:", err);
       
       let errorMessage = "Câmera Desativada ou Permissão Negada.";
       if (err.name === 'NotAllowedError') {
@@ -71,12 +79,14 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ onCapture, onReset, captu
       showError(errorMessage);
       setIsCameraActive(false);
       setIsStarting(false);
+      console.log("LOG: Falha na inicialização da câmera. Estado de erro definido.");
     }
   }, [stream, isStarting]);
 
   const handleCapture = () => {
     if (!videoRef.current || !canvasRef.current || !isCameraActive) return;
 
+    console.log("LOG: Capturando selfie...");
     const video = videoRef.current;
     const canvas = canvasRef.current;
     
@@ -93,6 +103,7 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ onCapture, onReset, captu
           const file = new File([blob], `selfie-${Date.now()}.jpeg`, { type: 'image/jpeg' });
           onCapture(file);
           stopCamera(); // Para a câmera após a captura
+          console.log("LOG: Selfie capturada e câmera parada.");
         } else {
           showError("Falha ao capturar imagem.");
         }
@@ -101,6 +112,7 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ onCapture, onReset, captu
   };
 
   const handleReset = () => {
+    console.log("LOG: Resetando selfie.");
     onReset();
     // A câmera não é iniciada automaticamente, o usuário deve clicar no botão.
   };
@@ -147,12 +159,20 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ onCapture, onReset, captu
         {!capturedFile ? (
           <>
             <div className="relative w-full aspect-video bg-gray-900 rounded-md overflow-hidden">
-              {renderCameraView()}
+              {isCameraActive ? renderCameraView() : (
+                <div className="flex flex-col items-center justify-center h-full text-white/50 p-4">
+                  {isStarting ? (
+                    <Loader2 className="w-6 h-6 animate-spin mb-2" />
+                  ) : (
+                    error ? renderCameraView() : "Câmera Desativada. Clique em 'Tirar Selfie' para ativar."
+                  )}
+                </div>
+              )}
             </div>
             <Button 
               onClick={isCameraActive ? handleCapture : startCamera} 
               className="w-full" 
-              disabled={isStarting}
+              disabled={isStarting || !!error}
             >
               {isStarting ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
