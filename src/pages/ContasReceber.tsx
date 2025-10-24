@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import FormContasReceber from '@/components/FormContasReceber';
 import DetalhesParcelasDialog from '@/components/DetalhesParcelasDialog';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 
 type ParcelaStatus = 'aberta' | 'parcial' | 'paga' | 'reprogramada' | 'cancelada';
 
@@ -41,6 +42,7 @@ const ContasReceber = () => {
   const [contaSelecionada, setContaSelecionada] = useState<ContaReceber | null>(null);
   const [dialogFormAberto, setDialogFormAberto] = useState(false);
   const [dialogParcelasAberto, setDialogParcelasAberto] = useState(false);
+  const [filtroCliente, setFiltroCliente] = useState('');
 
   const buscarDados = async () => {
     setCarregandoDados(true);
@@ -88,6 +90,12 @@ const ContasReceber = () => {
   const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
   const formatDate = (dateString: string) => new Date(dateString + 'T00:00:00').toLocaleDateString('pt-BR');
 
+  const parcelasFiltradas = parcelas.filter(p =>
+    p.contas_receber?.clientes?.nome
+      .toLowerCase()
+      .includes(filtroCliente.toLowerCase())
+  );
+
   if (carregandoSessao || carregandoDados) {
     return <LayoutPrincipal><div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div></LayoutPrincipal>;
   }
@@ -129,22 +137,41 @@ const ContasReceber = () => {
           </Card>
         </TabsContent>
         <TabsContent value="parcelas">
-          <Card><CardHeader><CardTitle>Detalhamento de Todas as Parcelas</CardTitle></CardHeader>
+          <Card>
+            <CardHeader>
+              <CardTitle>Detalhamento de Todas as Parcelas</CardTitle>
+              <div className="mt-4">
+                <Input
+                  placeholder="Filtrar por cliente..."
+                  value={filtroCliente}
+                  onChange={(e) => setFiltroCliente(e.target.value)}
+                  className="max-w-sm"
+                />
+              </div>
+            </CardHeader>
             <CardContent>
               <Table>
                 <TableHeader><TableRow><TableHead>Cliente</TableHead><TableHead>Descrição</TableHead><TableHead className="text-center">Nº Parcela</TableHead><TableHead>Vencimento</TableHead><TableHead>Valor da Parcela</TableHead><TableHead>Valor Pago</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
                 <TableBody>
-                  {parcelas.map((p) => (
-                    <TableRow key={p.id}>
-                      <TableCell>{p.contas_receber?.clientes?.nome || 'N/A'}</TableCell>
-                      <TableCell>{p.contas_receber?.descricao || 'N/A'}</TableCell>
-                      <TableCell className="text-center">{p.numero_parcela}</TableCell>
-                      <TableCell>{formatDate(p.data_vencimento)}</TableCell>
-                      <TableCell>{formatCurrency(p.valor_parcela)}</TableCell>
-                      <TableCell className="font-medium">{formatCurrency(p.valor_pago || 0)}</TableCell>
-                      <TableCell><Badge variant={getBadgeVariant(p.status)}>{p.status}</Badge></TableCell>
+                  {parcelasFiltradas.length > 0 ? (
+                    parcelasFiltradas.map((p) => (
+                      <TableRow key={p.id}>
+                        <TableCell>{p.contas_receber?.clientes?.nome || 'N/A'}</TableCell>
+                        <TableCell>{p.contas_receber?.descricao || 'N/A'}</TableCell>
+                        <TableCell className="text-center">{p.numero_parcela}</TableCell>
+                        <TableCell>{formatDate(p.data_vencimento)}</TableCell>
+                        <TableCell>{formatCurrency(p.valor_parcela)}</TableCell>
+                        <TableCell className="font-medium">{formatCurrency(p.valor_pago || 0)}</TableCell>
+                        <TableCell><Badge variant={getBadgeVariant(p.status)}>{p.status}</Badge></TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center h-24">
+                        Nenhum resultado encontrado.
+                      </TableCell>
                     </TableRow>
-                  ))}
+                  )}
                 </TableBody>
               </Table>
             </CardContent>
