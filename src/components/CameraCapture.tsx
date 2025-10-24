@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect, useCallback } from 'react';
+import React, { useRef, useState, useCallback, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Camera, RotateCcw, CheckCircle2, Loader2 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
@@ -14,211 +14,157 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ onCapture, onReset, captu
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
-  const [isCameraActive, setIsCameraActive] = useState(false);
-  const [isStarting, setIsStarting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [isCameraOn, setIsCameraOn] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  console.log("LOG: CameraCapture renderizou. Câmera ligada:", isCameraOn, "Carregando:", isLoading);
 
   const stopCamera = useCallback(() => {
-    console.log("LOG: stopCamera chamado.");
     if (stream) {
+      console.log("LOG: Parando todos os tracks da câmera.");
       stream.getTracks().forEach(track => track.stop());
       setStream(null);
+      setIsCameraOn(false);
     }
-    setIsCameraActive(false);
-    setIsStarting(false);
-    setError(null);
   }, [stream]);
 
-  // Efeito de limpeza: Garante que a câmera pare ao desmontar o componente
   useEffect(() => {
+    // Efeito de limpeza para garantir que a câmera pare ao desmontar.
     return () => {
       stopCamera();
     };
   }, [stopCamera]);
 
-  const startCamera = useCallback(async () => {
-    if (stream || isStarting) return;
-    
-    console.log("LOG: startCamera iniciado.");
-    setIsStarting(true);
-    setError(null);
-    
+  const handleStartCamera = async () => {
+    console.log("LOG: handleStartCamera foi chamado.");
+    if (isCameraOn || isLoading) {
+      console.log("LOG: Câmera já está ligada ou carregando. Retornando.");
+      return;
+    }
+
+    setIsLoading(true);
+    setErrorMessage(null);
+
     try {
-      console.log("LOG: Solicitando acesso à mídia...");
-      // Preferir a câmera frontal (user)
+      console.log("LOG: Solicitando permissão e stream de mídia...");
       const mediaStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
-      
-      console.log("LOG: Acesso à mídia concedido.");
-      
+      console.log("LOG: Permissão concedida. Stream obtido.");
+
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
         videoRef.current.onloadedmetadata = () => {
-          console.log("LOG: Metadados do vídeo carregados. Tentando play.");
+          console.log("LOG: Metadados carregados. Reproduzindo vídeo.");
           videoRef.current?.play();
-          setIsCameraActive(true);
-          setIsStarting(false);
-          console.log("LOG: Câmera ativa.");
+          setIsLoading(false);
+          setIsCameraOn(true);
         };
-      } else {
-        console.log("LOG: videoRef não disponível. Parando stream.");
-        mediaStream.getTracks().forEach(track => track.stop());
-        setIsStarting(false);
       }
       setStream(mediaStream);
     } catch (err: any) {
-      console.error("LOG: Erro ao acessar a câmera:", err);
-      
-      let errorMessage = "Câmera Desativada ou Permissão Negada.";
+      console.error("LOG: ERRO ao iniciar a câmera:", err);
+      let message = "Não foi possível acessar a câmera. Verifique as permissões do navegador.";
       if (err.name === 'NotAllowedError') {
-        errorMessage = "Acesso à câmera negado. Por favor, permita o acesso nas configurações do seu navegador.";
+        message = "Acesso à câmera foi negado.";
       } else if (err.name === 'NotFoundError') {
-        errorMessage = "Nenhuma câmera encontrada no dispositivo.";
+        message = "Nenhuma câmera foi encontrada.";
       }
-      
-      setError(errorMessage);
-      showError(errorMessage);
-      setIsCameraActive(false);
-      setIsStarting(false);
-      console.log("LOG: Falha na inicialização da câmera. Estado de erro definido.");
+      setErrorMessage(message);
+      showError(message);
+      setIsLoading(false);
     }
-  }, [stream, isStarting]);
+  };
 
   const handleCapture = () => {
-    if (!videoRef.current || !canvasRef.current || !isCameraActive) return;
+    console.log("LOG: handleCapture foi chamado.");
+    if (!videoRef.current || !canvasRef.current || !isCameraOn) {
+      console.log("LOG: Captura abortada. Refs ou câmera não estão prontos.");
+      return;
+    }
 
-    console.log("LOG: Capturando selfie...");
     const video = videoRef.current;
     const canvas = canvasRef.current;
-    
-    // Set canvas dimensions to match video stream
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
-
     const context = canvas.getContext('2d');
     if (context) {
+      // Espelha a imagem horizontalmente para que a selfie não fique invertida
+      context.translate(canvas.width, 0);
+      context.scale(-1, 1);
       context.drawImage(video, 0, 0, canvas.width, canvas.height);
       
       canvas.toBlob((blob) => {
         if (blob) {
           const file = new File([blob], `selfie-${Date.now()}.jpeg`, { type: 'image/jpeg' });
           onCapture(file);
-          stopCamera(); // Para a câmera após a captura
-          console.log("LOG: Selfie capturada e câmera parada.");
+          stopCamera();
+          console.log("LOG: Selfie capturada com sucesso.");
         } else {
-          showError("Falha ao capturar imagem.");
+          showError("Falha ao criar o arquivo de imagem.");
         }
       }, 'image/jpeg', 0.9);
     }
   };
 
   const handleReset = () => {
-    console.log("LOG: Resetando selfie.");
+    console.log("LOG: handleReset foi chamado.");
     onReset();
-    // A câmera não é iniciada automaticamente, o usuário deve clicar no botão.
+    stopCamera(); // Garante que a câmera pare
+    setErrorMessage(null);
   };
 
-  const handleButtonClick = () => {
-    console.log(`LOG: Botão clicado. isCameraActive: ${isCameraActive}, isStarting: ${isStarting}`);
-    if (isCameraActive) {
-      handleCapture();
-    } else {
-      startCamera();
-    }
-  };
-
-  const renderCameraView = () => {
-    if (isStarting) {
-      return (
-        <div className="flex flex-col items-center justify-center h-full text-white/50">
-          <Loader2 className="w-6 h-6 animate-spin mb-2" />
-          Iniciando Câmera...
-        </div>
-      );
-    }
-    if (error) {
-      return (
-        <div className="flex flex-col items-center justify-center h-full text-white/50 p-4 text-center">
-          {error}
-          <Button onClick={startCamera} variant="secondary" className="mt-4">Tentar Novamente</Button>
-        </div>
-      );
-    }
-    if (!isCameraActive) {
-      return (
-        <div className="flex flex-col items-center justify-center h-full text-white/50 p-4">
-          Câmera Desativada. Clique em 'Tirar Selfie' para ativar.
-        </div>
-      );
-    }
+  // Renderiza a imagem capturada se ela existir
+  if (capturedFile) {
     return (
-      <video 
-        ref={videoRef} 
-        className="w-full h-full object-cover" 
-        autoPlay 
-        playsInline 
-        muted 
-        style={{ transform: 'scaleX(-1)' }} // Espelha a imagem para selfies
-      />
+      <div className="space-y-3">
+        <div className="relative w-full aspect-video rounded-md overflow-hidden border-2 border-green-500">
+          <img src={URL.createObjectURL(capturedFile)} alt="Selfie Capturada" className="w-full h-full object-cover" />
+        </div>
+        <div className="flex justify-between items-center">
+          <span className="text-sm text-green-600 flex items-center"><CheckCircle2 className="w-4 h-4 mr-1" /> Selfie Capturada</span>
+          <Button variant="outline" size="sm" onClick={handleReset}><RotateCcw className="w-4 h-4 mr-2" />Refazer</Button>
+        </div>
+      </div>
     );
-  };
+  }
 
+  // Renderiza a interface da câmera se não houver imagem
   return (
     <Card className="p-2">
       <CardContent className="p-0 space-y-3">
-        {!capturedFile ? (
-          <>
-            <div className="relative w-full aspect-video bg-gray-900 rounded-md overflow-hidden">
-              {isCameraActive ? renderCameraView() : (
-                <div className="flex flex-col items-center justify-center h-full text-white/50 p-4">
-                  {isStarting ? (
-                    <Loader2 className="w-6 h-6 animate-spin mb-2" />
-                  ) : (
-                    error ? renderCameraView() : "Câmera Desativada. Clique em 'Tirar Selfie' para ativar."
-                  )}
-                </div>
-              )}
-            </div>
-            <Button 
-              onClick={handleButtonClick} 
-              className="w-full" 
-              disabled={isStarting || !!error}
-            >
-              {isStarting ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : isCameraActive ? (
+        <div className="relative w-full aspect-video bg-gray-900 rounded-md overflow-hidden">
+          <video ref={videoRef} className="w-full h-full object-cover" autoPlay playsInline muted style={{ display: isCameraOn ? 'block' : 'none' }} />
+          {!isCameraOn && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center text-white/50 p-4 text-center">
+              {isLoading ? (
                 <>
-                  <Camera className="w-4 h-4 mr-2" />
-                  Capturar Selfie
+                  <Loader2 className="w-6 h-6 animate-spin mb-2" />
+                  <span>Iniciando Câmera...</span>
+                </>
+              ) : errorMessage ? (
+                <>
+                  <span>{errorMessage}</span>
+                  <Button onClick={handleStartCamera} variant="secondary" className="mt-4">Tentar Novamente</Button>
                 </>
               ) : (
-                <>
-                  <Camera className="w-4 h-4 mr-2" />
-                  Tirar Selfie (Ativar Câmera)
-                </>
+                <span>Clique em "Ativar Câmera"</span>
               )}
-            </Button>
-          </>
+            </div>
+          )}
+        </div>
+        
+        {isCameraOn ? (
+          <Button onClick={handleCapture} className="w-full" disabled={isLoading}>
+            <Camera className="w-4 h-4 mr-2" />
+            Capturar Selfie
+          </Button>
         ) : (
-          <div className="space-y-3">
-            <div className="relative w-full aspect-video rounded-md overflow-hidden border-2 border-green-500">
-              <img 
-                src={URL.createObjectURL(capturedFile)} 
-                alt="Selfie Capturada" 
-                className="w-full h-full object-cover"
-              />
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-green-600 flex items-center">
-                <CheckCircle2 className="w-4 h-4 mr-1" /> Selfie Capturada
-              </span>
-              <Button variant="outline" size="sm" onClick={handleReset}>
-                <RotateCcw className="w-4 h-4 mr-2" />
-                Refazer
-              </Button>
-            </div>
-          </div>
+          <Button onClick={handleStartCamera} className="w-full" disabled={isLoading}>
+            {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Camera className="w-4 h-4 mr-2" />}
+            Ativar Câmera
+          </Button>
         )}
-        {/* Hidden canvas for image processing */}
+        
         <canvas ref={canvasRef} style={{ display: 'none' }} />
       </CardContent>
     </Card>
