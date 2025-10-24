@@ -30,17 +30,12 @@ const ContasReceber = () => {
       supabase.from('parcelas_contas_receber').select('*, contas_receber(descricao, clientes(nome))').order('data_vencimento', { ascending: true })
     ]);
 
-    if (contasRes.error) {
-      showError('Erro ao carregar contas: ' + contasRes.error.message);
-    } else {
-      setContas(contasRes.data as any[]);
-    }
+    if (contasRes.error) showError('Erro ao carregar contas: ' + contasRes.error.message);
+    else setContas(contasRes.data as any[]);
 
-    if (parcelasRes.error) {
-      showError('Erro ao carregar parcelas: ' + parcelasRes.error.message);
-    } else {
-      setParcelas(parcelasRes.data as any[]);
-    }
+    if (parcelasRes.error) showError('Erro ao carregar parcelas: ' + parcelasRes.error.message);
+    else setParcelas(parcelasRes.data as any[]);
+    
     setCarregandoDados(false);
   };
 
@@ -59,9 +54,8 @@ const ContasReceber = () => {
   const handleDelete = async (contaId: string) => {
     if (!window.confirm('Tem certeza que deseja excluir este conta e todas as suas parcelas? A ação não pode ser desfeita.')) return;
     const { error } = await supabase.from('contas_receber').delete().eq('id', contaId);
-    if (error) {
-      showError('Erro ao excluir conta: ' + error.message);
-    } else {
+    if (error) showError('Erro ao excluir conta: ' + error.message);
+    else {
       showSuccess('Conta excluída com sucesso.');
       buscarDados();
     }
@@ -133,7 +127,12 @@ const ContasReceber = () => {
         </TabsContent>
       </Tabs>
 
-      <DetalhesParcelasDialog conta={contaSelecionada} open={dialogParcelasAberto} onOpenChange={setDialogParcelasAberto} />
+      <DetalhesParcelasDialog
+        conta={contaSelecionada}
+        open={dialogParcelasAberto}
+        onOpenChange={setDialogParcelasAberto}
+        onDataChange={buscarDados}
+      />
     </LayoutPrincipal>
   );
 };
