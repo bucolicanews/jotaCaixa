@@ -203,10 +203,15 @@ const RegistroPonto: React.FC = () => {
               {lastRegistro.tipo} às {lastRegistro.horario}
             </p>
             {location && (
-              <p className="text-xs text-muted-foreground flex items-center mt-1">
+              <a
+                href={`https://www.google.com/maps?q=${location.latitude},${location.longitude}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-blue-600 hover:underline flex items-center mt-1"
+              >
                 <MapPin className="w-3 h-3 mr-1" />
-                Localização: {location.latitude.toFixed(4)}, {location.longitude.toFixed(4)}
-              </p>
+                Ver no Google Maps ({location.latitude.toFixed(4)}, {location.longitude.toFixed(4)})
+              </a>
             )}
           </div>
         )}
