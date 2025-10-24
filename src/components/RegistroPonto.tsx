@@ -60,18 +60,19 @@ const RegistroPonto: React.FC = () => {
     const fileName = `${funcionarioId}/${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
     const filePath = `${funcionarioId}/${fileName}`;
 
+    console.log(`LOG: Tentando fazer upload para o bucket 'ponto-selfies' no caminho: ${filePath}`);
     const { error } = await supabase.storage
-      .from('ponto-selfies') // Assumindo que o bucket 'ponto-selfies' existe
+      .from('ponto-selfies')
       .upload(filePath, file, {
         cacheControl: '3600',
         upsert: false,
       });
 
     if (error) {
+      console.error("LOG: Erro detalhado do Supabase Storage:", error);
       throw new Error('Falha ao fazer upload da selfie: ' + error.message);
     }
 
-    // Retorna o caminho completo para o arquivo
     const { data: publicUrlData } = supabase.storage.from('ponto-selfies').getPublicUrl(filePath);
     return publicUrlData.publicUrl;
   };
@@ -94,7 +95,6 @@ const RegistroPonto: React.FC = () => {
   };
 
   const registrarPonto = async (tipo: RegistroTipo) => {
-    // Esta função é chamada apenas após a confirmação do AlertDialog
     if (!funcionarioId || !empresaId || !selfieFile) {
       showError('Dados incompletos para registro.');
       return;
@@ -102,14 +102,11 @@ const RegistroPonto: React.FC = () => {
 
     setLoading(true);
     try {
-      // 1. Obter Geolocalização
       const geo = await getGeoLocation();
       setLocation(geo);
 
-      // 2. Upload da Selfie
       const selfieUrl = await uploadSelfie(selfieFile);
 
-      // 3. Registrar no Banco de Dados
       const { error } = await supabase
         .from('registros_ponto')
         .insert({
@@ -128,7 +125,7 @@ const RegistroPonto: React.FC = () => {
 
       showSuccess(`Ponto de ${tipo} registrado com sucesso!`);
       setLastRegistro({ tipo, horario: new Date().toLocaleTimeString() });
-      setSelfieFile(null); // Reset selfie after successful registration
+      setSelfieFile(null);
 
     } catch (error: any) {
       console.error('Erro no registro de ponto:', error);
@@ -136,7 +133,7 @@ const RegistroPonto: React.FC = () => {
     } finally {
       setLoading(false);
       setPendingRegistroType(null);
-      setIsConfirmDialogOpen(false); // Fecha o dialog
+      setIsConfirmDialogOpen(false);
     }
   };
 
@@ -215,7 +212,6 @@ const RegistroPonto: React.FC = () => {
         )}
       </CardContent>
       
-      {/* Confirmation Dialog */}
       <AlertDialog open={isConfirmDialogOpen} onOpenChange={setIsConfirmDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
