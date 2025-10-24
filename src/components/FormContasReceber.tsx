@@ -25,15 +25,13 @@ const formSchema = z.object({
   tipo_cliente: z.enum(['cadastrado', 'avulso'], { required_error: 'Selecione o tipo de cliente.' }),
   cliente_id: z.string().uuid('Cliente inválido.').optional(),
   nome_cliente_avulso: z.string().optional(),
+  empresa_id_avulso: z.string().uuid().optional(), // Campo para Admin em modo avulso
   descricao: z.string().min(1, 'A descrição é obrigatória.'),
   
   tipo_lancamento: z.enum(['unico', 'repetir', 'parcelar'], { required_error: 'Selecione o tipo de lançamento.' }),
   valor: z.coerce.number().positive('O valor deve ser maior que zero.'),
   
-  // Campos para lançamento único
   data_vencimento: z.date().optional(),
-
-  // Campos para parcelamento/repetição
   numero_parcelas: z.coerce.number().int().min(1).optional(),
   data_primeiro_vencimento: z.date().optional(),
   intervalo_dias: z.coerce.number().int().min(1).optional(),
@@ -49,15 +47,9 @@ const formSchema = z.object({
     ctx.addIssue({ code: 'custom', message: 'A data de vencimento é obrigatória.', path: ['data_vencimento'] });
   }
   if (data.tipo_lancamento !== 'unico') {
-    if (!data.numero_parcelas || data.numero_parcelas < 1) {
-      ctx.addIssue({ code: 'custom', message: 'Informe um número de parcelas válido.', path: ['numero_parcelas'] });
-    }
-    if (!data.data_primeiro_vencimento) {
-      ctx.addIssue({ code: 'custom', message: 'A data do primeiro vencimento é obrigatória.', path: ['data_primeiro_vencimento'] });
-    }
-    if (!data.intervalo_dias || data.intervalo_dias < 1) {
-      ctx.addIssue({ code: 'custom', message: 'Informe um intervalo de dias válido.', path: ['intervalo_dias'] });
-    }
+    if (!data.numero_parcelas || data.numero_parcelas < 1) ctx.addIssue({ code: 'custom', message: 'Informe um número de parcelas válido.', path: ['numero_parcelas'] });
+    if (!data.data_primeiro_vencimento) ctx.addIssue({ code: 'custom', message: 'A data do primeiro vencimento é obrigatória.', path: ['data_primeiro_vencimento'] });
+    if (!data.intervalo_dias || data.intervalo_dias < 1) ctx.addIssue({ code: 'custom', message: 'Informe um intervalo de dias válido.', path: ['intervalo_dias'] });
   }
 });
 
@@ -71,9 +63,13 @@ interface FormContasReceberProps {
 const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onSaveComplete }) => {
   const { perfil, role } = useSessao();
   const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [empresas, setEmpresas] = useState<ClienteProfile[]>([]);
   const [loadingClientes, setLoadingClientes] = useState(true);
+  const [loadingEmpresas, setLoadingEmpresas] = useState(true);
 
-  const getEmpresaId = () => {
+  const isAdmin = role === 'Admin';
+
+  const getEmpresaIdForUser = () => {
     if (role === 'Cliente') return (perfil as ClienteProfile)?.id;
     if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id;
     return null;
@@ -88,7 +84,18 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
       setLoadingClientes(false);
     };
     fetchClientes();
-  }, []);
+
+    if (isAdmin) {
+      const fetchEmpresas = async () => {
+        setLoadingEmpresas(true);
+        const { data, error } = await supabase.from('tbl_clientes').select('id, nome').order('nome');
+        if (error) showError('Erro ao carregar empresas.');
+        else setEmpresas(data as ClienteProfile[]);
+        setLoadingEmpresas(false);
+      };
+      fetchEmpresas();
+    }
+  }, [isAdmin]);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -118,8 +125,16 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
       if (!selectedClient) { showError('Cliente selecionado não encontrado.'); return; }
       empresaId = selectedClient.empresa_id;
       clienteData = { cliente_id: values.cliente_id, nome_cliente_avulso: null };
-    } else {
-      empresaId = getEmpresaId();
+    } else { // Avulso
+      if (isAdmin) {
+        empresaId = values.empresa_id_avulso;
+        if (!empresaId) {
+          form.setError('empresa_id_avulso', { message: 'Selecione uma empresa para este lançamento.' });
+          return;
+        }
+      } else {
+        empresaId = getEmpresaIdForUser();
+      }
       clienteData = { cliente_id: null, nome_cliente_avulso: values.nome_cliente_avulso };
     }
 
@@ -131,59 +146,26 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
 
       if (values.tipo_lancamento === 'unico') {
         valorTotal = values.valor;
-        parcelasParaInserir.push({
-          numero_parcela: 1,
-          valor_parcela: values.valor,
-          data_vencimento: format(values.data_vencimento!, 'yyyy-MM-dd'),
-          status: 'aberta',
-        });
-      } else { // Repetir ou Parcelar
+        parcelasParaInserir.push({ numero_parcela: 1, valor_parcela: values.valor, data_vencimento: format(values.data_vencimento!, 'yyyy-MM-dd'), status: 'aberta' });
+      } else {
         const { numero_parcelas, data_primeiro_vencimento, intervalo_dias, valor } = values;
         const valorParcela = values.tipo_lancamento === 'parcelar' ? (valor / numero_parcelas!) : valor;
         valorTotal = values.tipo_lancamento === 'parcelar' ? valor : (valor * numero_parcelas!);
-
         for (let i = 0; i < numero_parcelas!; i++) {
-          parcelasParaInserir.push({
-            numero_parcela: i + 1,
-            valor_parcela: valorParcela,
-            data_vencimento: format(addDays(data_primeiro_vencimento!, i * intervalo_dias!), 'yyyy-MM-dd'),
-            status: 'aberta',
-          });
+          parcelasParaInserir.push({ numero_parcela: i + 1, valor_parcela: valorParcela, data_vencimento: format(addDays(data_primeiro_vencimento!, i * intervalo_dias!), 'yyyy-MM-dd'), status: 'aberta' });
         }
       }
 
-      const contaData: Omit<ContaReceber, 'id' | 'created_at' | 'updated_at' | 'clientes'> = {
-        ...clienteData,
-        empresa_id: empresaId,
-        descricao: values.descricao,
-        valor_total: valorTotal,
-        data_emissao: format(new Date(), 'yyyy-MM-dd'),
-        data_vencimento: parcelasParaInserir[0].data_vencimento,
-        tipo_receita: 'única',
-        status: 'aberta',
-        origem: 'manual',
-      };
-
-      const { data: contaResult, error: contaError } = await supabase
-        .from('contas_receber')
-        .insert(contaData)
-        .select('id')
-        .single();
-
+      const contaData: Omit<ContaReceber, 'id' | 'created_at' | 'updated_at' | 'clientes'> = { ...clienteData, empresa_id: empresaId, descricao: values.descricao, valor_total: valorTotal, data_emissao: format(new Date(), 'yyyy-MM-dd'), data_vencimento: parcelasParaInserir[0].data_vencimento, tipo_receita: 'única', status: 'aberta', origem: 'manual' };
+      const { data: contaResult, error: contaError } = await supabase.from('contas_receber').insert(contaData).select('id').single();
       if (contaError) throw contaError;
 
-      const parcelasComId = parcelasParaInserir.map(p => ({
-        ...p,
-        conta_receber_id: contaResult.id,
-        empresa_id: empresaId,
-      }));
-
+      const parcelasComId = parcelasParaInserir.map(p => ({ ...p, conta_receber_id: contaResult.id, empresa_id: empresaId }));
       const { error: parcelError } = await supabase.from('parcelas_contas_receber').insert(parcelasComId);
       if (parcelError) throw parcelError;
 
       showSuccess('Conta a receber e parcelas geradas com sucesso!');
       onSaveComplete();
-
     } catch (error: any) {
       showError(`Falha ao salvar: ${error.message}`);
     }
@@ -194,19 +176,23 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
         <div className="space-y-4">
           <FormField control={form.control} name="tipo_cliente" render={({ field }) => (
-            <FormItem><FormLabel>1. Cliente</FormLabel><FormControl>
-              <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex space-x-4 pt-2">
-                <FormItem className="flex items-center space-x-2 space-y-0"><FormControl><RadioGroupItem value="cadastrado" /></FormControl><FormLabel className="font-normal">Cadastrado</FormLabel></FormItem>
-                <FormItem className="flex items-center space-x-2 space-y-0"><FormControl><RadioGroupItem value="avulso" /></FormControl><FormLabel className="font-normal">Avulso</FormLabel></FormItem>
-              </RadioGroup></FormControl><FormMessage />
-            </FormItem>
+            <FormItem><FormLabel>1. Cliente</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex space-x-4 pt-2"><FormItem className="flex items-center space-x-2 space-y-0"><FormControl><RadioGroupItem value="cadastrado" /></FormControl><FormLabel className="font-normal">Cadastrado</FormLabel></FormItem><FormItem className="flex items-center space-x-2 space-y-0"><FormControl><RadioGroupItem value="avulso" /></FormControl><FormLabel className="font-normal">Avulso</FormLabel></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>
           )} />
           {tipoCliente === 'cadastrado' && <FormField control={form.control} name="cliente_id" render={({ field }) => (
             <FormItem><Select onValueChange={field.onChange} defaultValue={field.value} disabled={loadingClientes}><FormControl><SelectTrigger><SelectValue placeholder={loadingClientes ? "Carregando..." : "Selecione"} /></SelectTrigger></FormControl><SelectContent>{clientes.map((c) => (<SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>
           )} />}
-          {tipoCliente === 'avulso' && <FormField control={form.control} name="nome_cliente_avulso" render={({ field }) => (
-            <FormItem><FormControl><Input placeholder="Digite o nome do cliente" {...field} /></FormControl><FormMessage /></FormItem>
-          )} />}
+          {tipoCliente === 'avulso' && (
+            <>
+              {isAdmin && (
+                <FormField control={form.control} name="empresa_id_avulso" render={({ field }) => (
+                  <FormItem><FormLabel>Vincular à Empresa</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value} disabled={loadingEmpresas}><FormControl><SelectTrigger><SelectValue placeholder={loadingEmpresas ? "Carregando..." : "Selecione a empresa"} /></SelectTrigger></FormControl><SelectContent>{empresas.map((e) => (<SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>
+                )} />
+              )}
+              <FormField control={form.control} name="nome_cliente_avulso" render={({ field }) => (
+                <FormItem><FormControl><Input placeholder="Digite o nome do cliente" {...field} /></FormControl><FormMessage /></FormItem>
+              )} />
+            </>
+          )}
         </div>
         <Separator />
         <div className="space-y-4">
@@ -217,27 +203,14 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
         <Separator />
         <div className="space-y-4">
           <FormField control={form.control} name="tipo_lancamento" render={({ field }) => (
-            <FormItem><FormLabel>3. Forma de Pagamento</FormLabel><FormControl>
-              <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex space-x-4 pt-2" disabled={isEditing}>
-                <FormItem className="flex items-center space-x-2 space-y-0"><FormControl><RadioGroupItem value="unico" /></FormControl><FormLabel className="font-normal">Único</FormLabel></FormItem>
-                <FormItem className="flex items-center space-x-2 space-y-0"><FormControl><RadioGroupItem value="repetir" /></FormControl><FormLabel className="font-normal">Repetir Valor</FormLabel></FormItem>
-                <FormItem className="flex items-center space-x-2 space-y-0"><FormControl><RadioGroupItem value="parcelar" /></FormControl><FormLabel className="font-normal">Parcelar Valor</FormLabel></FormItem>
-              </RadioGroup></FormControl><FormMessage />
-            </FormItem>
+            <FormItem><FormLabel>3. Forma de Pagamento</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex space-x-4 pt-2" disabled={isEditing}><FormItem className="flex items-center space-x-2 space-y-0"><FormControl><RadioGroupItem value="unico" /></FormControl><FormLabel className="font-normal">Único</FormLabel></FormItem><FormItem className="flex items-center space-x-2 space-y-0"><FormControl><RadioGroupItem value="repetir" /></FormControl><FormLabel className="font-normal">Repetir Valor</FormLabel></FormItem><FormItem className="flex items-center space-x-2 space-y-0"><FormControl><RadioGroupItem value="parcelar" /></FormControl><FormLabel className="font-normal">Parcelar Valor</FormLabel></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>
           )} />
-          
           <FormField control={form.control} name="valor" render={({ field }) => (
             <FormItem><FormLabel>{tipoLancamento === 'parcelar' ? 'Valor Total a Parcelar' : 'Valor da Parcela'}</FormLabel><FormControl><Input type="number" step="0.01" placeholder="0,00" {...field} /></FormControl><FormMessage /></FormItem>
           )} />
-
           {tipoLancamento === 'unico' && <FormField control={form.control} name="data_vencimento" render={({ field }) => (
-            <FormItem className="flex flex-col"><FormLabel>Data de Vencimento</FormLabel><Popover><PopoverTrigger asChild><FormControl>
-              <Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
-                {field.value ? format(field.value, "PPP", { locale: ptBR }) : <span>Escolha uma data</span>}<CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-              </Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus /></PopoverContent></Popover><FormMessage />
-            </FormItem>
+            <FormItem className="flex flex-col"><FormLabel>Data de Vencimento</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "PPP", { locale: ptBR }) : <span>Escolha uma data</span>}<CalendarIcon className="ml-auto h-4 w-4 opacity-50" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus /></PopoverContent></Popover><FormMessage /></FormItem>
           )} />}
-
           {tipoLancamento !== 'unico' && (
             <div className="grid grid-cols-3 gap-4">
               <FormField control={form.control} name="numero_parcelas" render={({ field }) => (
@@ -247,11 +220,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
                 <FormItem><FormLabel>Intervalo (dias)</FormLabel><FormControl><Input type="number" placeholder="30" {...field} /></FormControl><FormMessage /></FormItem>
               )} />
               <FormField control={form.control} name="data_primeiro_vencimento" render={({ field }) => (
-                <FormItem className="flex flex-col"><FormLabel>1º Vencimento</FormLabel><Popover><PopoverTrigger asChild><FormControl>
-                  <Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
-                    {field.value ? format(field.value, "dd/MM/yy") : <span>Data</span>}<CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                  </Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus /></PopoverContent></Popover><FormMessage />
-                </FormItem>
+                <FormItem className="flex flex-col"><FormLabel>1º Vencimento</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "dd/MM/yy") : <span>Data</span>}<CalendarIcon className="ml-auto h-4 w-4 opacity-50" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus /></PopoverContent></Popover><FormMessage /></FormItem>
               )} />
             </div>
           )}
