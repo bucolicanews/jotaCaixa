@@ -21,8 +21,9 @@ import { isToday, isPast, parseISO } from 'date-fns';
 
 
 type ParcelaStatus = 'aberta' | 'parcial' | 'paga' | 'reprogramada' | 'cancelada';
+type BadgeVariant = 'success' | 'warning' | 'secondary' | 'destructive' | 'default' | 'info';
 
-const getBadgeVariant = (status: ParcelaStatus, dataVencimento: string): 'success' | 'warning' | 'secondary' | 'destructive' | 'default' => {
+const getBadgeVariant = (status: ParcelaStatus, dataVencimento: string): BadgeVariant => {
   const vencimento = parseISO(dataVencimento + 'T00:00:00');
 
   if (status === 'paga') {
@@ -45,9 +46,9 @@ const getBadgeVariant = (status: ParcelaStatus, dataVencimento: string): 'succes
     return 'warning';
   }
 
-  // 3. Status Aberta (Azul/Primário)
+  // 3. Status Aberta (Azul/Info)
   if (status === 'aberta') {
-    return 'default';
+    return 'info';
   }
 
   return 'secondary'; // Fallback
