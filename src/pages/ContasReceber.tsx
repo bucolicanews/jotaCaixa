@@ -17,25 +17,36 @@ import { Input } from '@/components/ui/input';
 import { DateRange } from 'react-day-picker';
 import { DateRangePicker } from '@/components/DateRangePicker';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { isToday, isPast, parseISO } from 'date-fns';
 
 
 type ParcelaStatus = 'aberta' | 'parcial' | 'paga' | 'reprogramada' | 'cancelada';
 
-const getBadgeVariant = (status: ParcelaStatus): 'success' | 'warning' | 'secondary' | 'destructive' | 'default' => {
-  switch (status) {
-    case 'paga':
-      return 'default'; // Usando default para pago (verde escuro)
-    case 'parcial':
-      return 'warning';
-    case 'aberta':
-      return 'secondary';
-    case 'reprogramada':
-      return 'default';
-    case 'cancelada':
-      return 'destructive';
-    default:
-      return 'secondary';
+const getBadgeVariant = (status: ParcelaStatus, dataVencimento: string): 'success' | 'warning' | 'secondary' | 'destructive' | 'default' => {
+  const vencimento = parseISO(dataVencimento + 'T00:00:00');
+
+  if (status === 'paga') {
+    return 'success'; // Verde para pago
   }
+  
+  if (status === 'cancelada') {
+    return 'destructive';
+  }
+
+  // Lógica para status não pagos (aberta, parcial, reprogramada)
+  if (isPast(vencimento) && !isToday(vencimento)) {
+    return 'destructive'; // Vermelho para vencido
+  }
+  
+  if (isToday(vencimento)) {
+    return 'warning'; // Amarelo para vencendo hoje
+  }
+
+  if (status === 'parcial') {
+    return 'warning';
+  }
+
+  return 'secondary'; // Padrão para aberta/reprogramada futura
 };
 
 const ContasReceber = () => {
@@ -169,7 +180,7 @@ const ContasReceber = () => {
                 <TableBody>
                   {contas.map((conta) => (
                     <TableRow key={conta.id}>
-                      <TableCell>{conta.clientes?.nome || 'N/A'}</TableCell><TableCell>{conta.descricao}</TableCell><TableCell>{formatDate(conta.data_vencimento)}</TableCell><TableCell>{formatCurrency(conta.valor_total)}</TableCell><TableCell><Badge variant={getBadgeVariant(conta.status as ParcelaStatus)}>{conta.status}</Badge></TableCell>
+                      <TableCell>{conta.clientes?.nome || 'N/A'}</TableCell><TableCell>{conta.descricao}</TableCell><TableCell>{formatDate(conta.data_vencimento)}</TableCell><TableCell>{formatCurrency(conta.valor_total)}</TableCell><TableCell><Badge variant={getBadgeVariant(conta.status as ParcelaStatus, conta.data_vencimento)}>{conta.status}</Badge></TableCell>
                       <TableCell className="text-right">
                         <Button variant="ghost" size="icon" onClick={() => handleOpenParcelas(conta)} title="Ver Parcelas"><ListChecks className="h-4 w-4" /></Button>
                         <Button variant="ghost" size="icon" onClick={() => { setContaSelecionada(conta); setDialogFormAberto(true); }}><Edit className="h-4 w-4" /></Button>
@@ -224,7 +235,7 @@ const ContasReceber = () => {
                         <TableCell>{formatDate(p.data_vencimento)}</TableCell>
                         <TableCell>{formatCurrency(p.valor_parcela)}</TableCell>
                         <TableCell className="font-medium">{formatCurrency(p.valor_pago || 0)}</TableCell>
-                        <TableCell><Badge variant={getBadgeVariant(p.status)}>{p.status}</Badge></TableCell>
+                        <TableCell><Badge variant={getBadgeVariant(p.status, p.data_vencimento)}>{p.status}</Badge></TableCell>
                       </TableRow>
                     ))
                   ) : (
