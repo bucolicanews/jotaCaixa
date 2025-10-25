@@ -25,9 +25,9 @@ const Login = () => {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 p-4">
-      <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-lg shadow-md dark:bg-gray-800">
-        <h2 className="text-2xl font-bold text-center text-gray-900 dark:text-white">
+    <div className="min-h-screen flex items-center justify-center bg-background p-4">
+      <div className="w-full max-w-md p-8 space-y-6 bg-card rounded-lg shadow-md">
+        <h2 className="text-2xl font-bold text-center text-foreground">
           Acesso ao Fluxo de Caixa
         </h2>
         <Auth
@@ -64,7 +64,7 @@ const Login = () => {
             },
           }}
         />
-        <p className="text-sm text-center text-gray-500 dark:text-gray-400">
+        <p className="text-sm text-center text-muted-foreground">
           Se você recebeu um Código de Acesso, use a opção de login por email/senha e entre em contato com o administrador para vincular sua conta.
         </p>
       </div>
