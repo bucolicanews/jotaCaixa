@@ -210,15 +210,15 @@ const ContasReceber = () => {
                   placeholder="Filtrar por cliente, descrição, valor..."
                   value={filtroGeral}
                   onChange={(e) => setFiltroGeral(e.target.value)}
-                  className="max-w-sm md:max-w-xs"
+                  className="w-full md:max-w-xs" // Adicionado w-full
                 />
                 <DateRangePicker
                   date={filtroPeriodo}
                   setDate={setFiltroPeriodo}
-                  className="md:w-auto"
+                  className="w-full md:w-auto" // Adicionado w-full
                 />
                 <Select value={filtroStatus} onValueChange={setFiltroStatus}>
-                  <SelectTrigger className="w-[180px]">
+                  <SelectTrigger className="w-full md:w-[180px]"> {/* Adicionado w-full */}
                     <SelectValue placeholder="Filtrar por Status" />
                   </SelectTrigger>
                   <SelectContent>
