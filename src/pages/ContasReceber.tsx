@@ -164,10 +164,15 @@ const ContasReceber = () => {
 
   return (
     <LayoutPrincipal>
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">Contas a Receber</h1>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+        <h1 className="text-2xl md:text-3xl font-bold">Contas a Receber</h1>
         <Dialog open={dialogFormAberto} onOpenChange={setDialogFormAberto}>
-          <DialogTrigger asChild><Button onClick={() => setContaSelecionada(null)}><PlusCircle className="w-4 h-4 mr-2" />Nova Conta</Button></DialogTrigger>
+          <DialogTrigger asChild>
+            <Button onClick={() => setContaSelecionada(null)} className="w-full sm:w-auto">
+              <PlusCircle className="w-4 h-4 mr-2" />
+              Nova Conta
+            </Button>
+          </DialogTrigger>
           <DialogContent><DialogHeader><DialogTitle>{contaSelecionada ? 'Editar Conta' : 'Nova Conta a Receber'}</DialogTitle></DialogHeader><FormContasReceber contaInicial={contaSelecionada} onSaveComplete={handleSaveComplete} /></DialogContent>
         </Dialog>
       </div>
@@ -210,15 +215,15 @@ const ContasReceber = () => {
                   placeholder="Filtrar por cliente, descrição, valor..."
                   value={filtroGeral}
                   onChange={(e) => setFiltroGeral(e.target.value)}
-                  className="w-full md:max-w-xs" // Adicionado w-full
+                  className="w-full md:max-w-xs"
                 />
                 <DateRangePicker
                   date={filtroPeriodo}
                   setDate={setFiltroPeriodo}
-                  className="w-full md:w-auto" // Adicionado w-full
+                  className="w-full md:w-auto"
                 />
                 <Select value={filtroStatus} onValueChange={setFiltroStatus}>
-                  <SelectTrigger className="w-full md:w-[180px]"> {/* Adicionado w-full */}
+                  <SelectTrigger className="w-full md:w-[180px]">
                     <SelectValue placeholder="Filtrar por Status" />
                   </SelectTrigger>
                   <SelectContent>

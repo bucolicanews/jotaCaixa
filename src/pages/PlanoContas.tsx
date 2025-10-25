@@ -36,15 +36,30 @@ const PlanoContasPage = () => {
 
   const buscarEmpresaId = async (userId: string) => {
     const { data, error } = await supabase
-      .from('empresas')
+      .from('tbl_clientes') // Assumindo que a empresa é o cliente logado
       .select('id')
-      .eq('usuario_id', userId)
+      .eq('id', userId)
       .single();
 
     if (error) {
-      showError('Erro ao buscar empresa: ' + error.message);
-      setCarregandoContas(false);
-      return;
+      // Se não for cliente, pode ser usuário vinculado a um cliente
+      const { data: userData } = await supabase
+        .from('tbl_usuarios')
+        .select('cliente_id')
+        .eq('id', userId)
+        .single();
+      
+      if (userData?.cliente_id) {
+        setEmpresaId(userData.cliente_id);
+        return;
+      }
+
+      // Se o erro persistir e não for encontrado cliente_id, mostra erro.
+      if (!userData?.cliente_id) {
+        showError('Erro ao buscar empresa: ' + error.message);
+        setCarregandoContas(false);
+        return;
+      }
     }
     setEmpresaId(data?.id || null);
   };
@@ -127,12 +142,12 @@ const PlanoContasPage = () => {
 
   return (
     <LayoutPrincipal>
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">Plano de Contas</h1>
-        <div className="space-x-2">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+        <h1 className="text-2xl md:text-3xl font-bold">Plano de Contas</h1>
+        <div className="space-x-2 w-full sm:w-auto">
           <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
             <DialogTrigger asChild>
-              <Button onClick={() => setContaSelecionada(null)}>
+              <Button onClick={() => setContaSelecionada(null)} className="w-full sm:w-auto">
                 <PlusCircle className="w-4 h-4 mr-2" />
                 Nova Conta
               </Button>

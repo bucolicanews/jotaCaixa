@@ -125,49 +125,51 @@ const GerenciarUsuarios = () => {
         )}
       </CardHeader>
       <CardContent>
-        <Table>
-          <TableHeader><TableRow><TableHead>Nome</TableHead><TableHead>Email</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader>
-          <TableBody>
-            {data.map((item) => {
-              if (!item) return null;
-              const isClient = type === 'cliente';
-              const clientProfile = item as ClienteProfile;
-              const teamSize = isClient ? (clientTeams[clientProfile.id]?.length || 0) : 0;
-              return (
-                <TableRow key={item.id}>
-                  <TableCell>{item.nome}</TableCell><TableCell>{item.email}</TableCell>
-                  <TableCell>
-                    {type === 'admin' && <Badge variant="default">Admin</Badge>}
-                    {isClient && <Badge variant={clientProfile.aprovado ? 'default' : 'destructive'}>{clientProfile.aprovado ? 'Cliente' : 'Pendente'}</Badge>}
-                    {type === 'usuario' && <Badge variant="secondary">Usuário</Badge>}
-                  </TableCell>
-                  <TableCell className="text-right space-x-1">
-                    {isClient && <Button variant="outline" size="sm" onClick={() => setViewingClient(clientProfile)}><Users className="w-4 h-4 mr-2" />{teamSize} / {clientProfile.limite_usuarios}</Button>}
-                    {isAdmin && type === 'cliente' && !clientProfile.aprovado && <Button variant="outline" size="sm" onClick={() => handleApprove(clientProfile)}><CheckCircle2 className="w-4 h-4 mr-2" />Aprovar</Button>}
-                    {isAdmin && type === 'cliente' && <Button variant="outline" size="sm" onClick={() => handleDemote(clientProfile)}><ArrowDownCircle className="w-4 h-4 mr-2" />{clientProfile.aprovado ? 'Rebaixar' : 'Reprovar'}</Button>}
-                    {isAdmin && type === 'usuario' && <Button variant="outline" size="sm" onClick={() => handlePromote(item as UsuarioProfile)}><ArrowUpCircle className="w-4 h-4 mr-2" />Promover</Button>}
-                    {item.id !== usuario?.id && <Button variant="ghost" size="icon" onClick={() => handlePasswordReset(item.email)} title="Enviar reset de senha"><Key className="w-4 h-4" /></Button>}
-                    {type !== 'admin' && (
-                      <Button variant="ghost" size="icon" onClick={() => { setItemSelecionado(item); setDialogAberto(true); }} title="Editar"><Edit className="w-4 h-4" /></Button>
-                    )}
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader><TableRow><TableHead>Nome</TableHead><TableHead>Email</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader>
+            <TableBody>
+              {data.map((item) => {
+                if (!item) return null;
+                const isClient = type === 'cliente';
+                const clientProfile = item as ClienteProfile;
+                const teamSize = isClient ? (clientTeams[clientProfile.id]?.length || 0) : 0;
+                return (
+                  <TableRow key={item.id}>
+                    <TableCell>{item.nome}</TableCell><TableCell>{item.email}</TableCell>
+                    <TableCell>
+                      {type === 'admin' && <Badge variant="default">Admin</Badge>}
+                      {isClient && <Badge variant={clientProfile.aprovado ? 'default' : 'destructive'}>{clientProfile.aprovado ? 'Cliente' : 'Pendente'}</Badge>}
+                      {type === 'usuario' && <Badge variant="secondary">Usuário</Badge>}
+                    </TableCell>
+                    <TableCell className="text-right space-x-1 min-w-[200px]">
+                      {isClient && <Button variant="outline" size="sm" onClick={() => setViewingClient(clientProfile)}><Users className="w-4 h-4 mr-2" />{teamSize} / {clientProfile.limite_usuarios}</Button>}
+                      {isAdmin && type === 'cliente' && !clientProfile.aprovado && <Button variant="outline" size="sm" onClick={() => handleApprove(clientProfile)}><CheckCircle2 className="w-4 h-4 mr-2" />Aprovar</Button>}
+                      {isAdmin && type === 'cliente' && <Button variant="outline" size="sm" onClick={() => handleDemote(clientProfile)}><ArrowDownCircle className="w-4 h-4 mr-2" />{clientProfile.aprovado ? 'Rebaixar' : 'Reprovar'}</Button>}
+                      {isAdmin && type === 'usuario' && <Button variant="outline" size="sm" onClick={() => handlePromote(item as UsuarioProfile)}><ArrowUpCircle className="w-4 h-4 mr-2" />Promover</Button>}
+                      {item.id !== usuario?.id && <Button variant="ghost" size="icon" onClick={() => handlePasswordReset(item.email)} title="Enviar reset de senha"><Key className="w-4 h-4" /></Button>}
+                      {type !== 'admin' && (
+                        <Button variant="ghost" size="icon" onClick={() => { setItemSelecionado(item); setDialogAberto(true); }} title="Editar"><Edit className="w-4 h-4" /></Button>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </div>
       </CardContent>
     </Card>
   );
 
   return (
     <LayoutPrincipal>
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">{isAdmin ? 'Gerenciar Contas' : 'Gerenciar Equipe'}</h1>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+        <h1 className="text-2xl md:text-3xl font-bold">{isAdmin ? 'Gerenciar Contas' : 'Gerenciar Equipe'}</h1>
         {isClienteAprovado && clienteProfile.permissoes?.cadastrar_usuarios && (
           <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
             <DialogTrigger asChild>
-              <Button onClick={() => setItemSelecionado(null)} disabled={usuarios.length >= clienteProfile.limite_usuarios}>
+              <Button onClick={() => setItemSelecionado(null)} disabled={usuarios.length >= clienteProfile.limite_usuarios} className="w-full sm:w-auto">
                 <PlusCircle className="w-4 h-4 mr-2" />
                 Novo Usuário
               </Button>
@@ -200,20 +202,22 @@ const GerenciarUsuarios = () => {
               Usuários vinculados a esta empresa.
             </CardDescription>
           </DialogHeader>
-          <Table>
-            <TableHeader><TableRow><TableHead>Nome</TableHead><TableHead>Email</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader>
-            <TableBody>
-              {(clientTeams[viewingClient?.id || ''] || []).map(teamMember => (
-                <TableRow key={teamMember.id}>
-                  <TableCell>{teamMember.nome}</TableCell>
-                  <TableCell>{teamMember.email}</TableCell>
-                  <TableCell className="text-right">
-                    <Button variant="ghost" size="icon" onClick={() => handlePasswordReset(teamMember.email)} title="Enviar reset de senha"><Key className="w-4 h-4" /></Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader><TableRow><TableHead>Nome</TableHead><TableHead>Email</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader>
+              <TableBody>
+                {(clientTeams[viewingClient?.id || ''] || []).map(teamMember => (
+                  <TableRow key={teamMember.id}>
+                    <TableCell>{teamMember.nome}</TableCell>
+                    <TableCell>{teamMember.email}</TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="ghost" size="icon" onClick={() => handlePasswordReset(teamMember.email)} title="Enviar reset de senha"><Key className="w-4 h-4" /></Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         </DialogContent>
       </Dialog>
     </LayoutPrincipal>

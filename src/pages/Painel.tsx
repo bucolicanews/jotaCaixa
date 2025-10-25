@@ -3,7 +3,7 @@ import LayoutPrincipal from '@/components/LayoutPrincipal';
 const Painel = () => {
   return (
     <LayoutPrincipal>
-      <h1 className="text-3xl font-bold mb-6">Painel de Controle</h1>
+      <h1 className="text-2xl md:text-3xl font-bold mb-6">Painel de Controle</h1>
       <p className="text-lg text-gray-600 dark:text-gray-400">
         Bem-vindo ao Fluxo de Caixa. Aqui você verá gráficos e resumos financeiros.
       </p>
