@@ -4,6 +4,7 @@
 
 @layer base {
   :root {
+    /* CLARO: AZUL E BRANCO */
     --background: 0 0% 100%; /* Branco */
     --foreground: 222.2 84% 4.9%; /* Azul escuro/Preto */
 
@@ -36,8 +37,9 @@
   }
 
   .dark {
-    --background: 222.2 84% 4.9%; /* Fundo Escuro */
-    --foreground: 210 40% 98%;
+    /* ESCURO: PRETO E LARANJA */
+    --background: 222.2 84% 4.9%; /* Fundo Escuro (Quase Preto) */
+    --foreground: 210 40% 98%; /* Texto Branco */
 
     --card: 222.2 84% 4.9%;
     --card-foreground: 210 40% 98%;
@@ -45,16 +47,16 @@
     --popover: 222.2 84% 4.9%;
     --popover-foreground: 210 40% 98%;
 
-    --primary: 38 92% 50%; /* Laranja/Amarelo para detalhes principais no Dark */
+    --primary: 38 92% 50%; /* Laranja/Amarelo para detalhes principais */
     --primary-foreground: 222.2 47.4% 11.2%;
 
-    --secondary: 217.2 32.6% 17.5%;
+    --secondary: 222.2 47.4% 11.2%; /* Fundo Secundário mais escuro */
     --secondary-foreground: 210 40% 98%;
 
-    --muted: 217.2 32.6% 17.5%;
+    --muted: 222.2 47.4% 11.2%; /* Muted mais escuro */
     --muted-foreground: 215 20.2% 65.1%;
 
-    --accent: 217.2 32.6% 17.5%;
+    --accent: 222.2 47.4% 11.2%; /* Accent mais escuro */
     --accent-foreground: 210 40% 98%;
 
     --destructive: 0 62.8% 30.6%;
