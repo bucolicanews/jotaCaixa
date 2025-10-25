@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 import { useEffect } from 'react';
 import { useSessao } from '@/hooks/use-sessao';
+import { useTheme } from 'next-themes'; // Importando useTheme
 
 /**
  * Componente de Login.
@@ -11,6 +12,7 @@ import { useSessao } from '@/hooks/use-sessao';
  */
 const Login = () => {
   const { usuario, carregando } = useSessao();
+  const { theme } = useTheme(); // Obtendo o tema atual
   const navegar = useNavigate();
 
   useEffect(() => {
@@ -24,6 +26,9 @@ const Login = () => {
     return <div className="flex justify-center items-center min-h-screen">Carregando...</div>;
   }
 
+  // O tema do Supabase Auth UI deve ser 'dark' ou 'light'
+  const authTheme = theme === 'dark' ? 'dark' : 'light';
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <div className="w-full max-w-md p-8 space-y-6 bg-card rounded-lg shadow-md">
@@ -33,7 +38,7 @@ const Login = () => {
         <Auth
           supabaseClient={supabase}
           appearance={{ theme: ThemeSupa }}
-          theme="light"
+          theme={authTheme} // Usando o tema dinâmico
           providers={[]}
           redirectTo={window.location.origin + '/painel'}
           view="sign_in" // Garante que a tela inicial seja o login
