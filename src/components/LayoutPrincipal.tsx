@@ -34,7 +34,7 @@ const LayoutPrincipal: React.FC<LayoutPrincipalProps> = ({ children }) => {
     return (
       <div className="flex flex-col min-h-screen bg-background">
         <Header />
-        <main className="flex-1 p-8 overflow-y-auto flex items-center justify-center">
+        <main className="flex-1 p-4 md:p-8 overflow-y-auto flex items-center justify-center">
           <Card className="w-full max-w-lg text-center">
             <CardHeader>
               <CardTitle className="text-2xl">Aguardando Aprovação</CardTitle>
@@ -49,7 +49,7 @@ const LayoutPrincipal: React.FC<LayoutPrincipalProps> = ({ children }) => {
   }
 
   return (
-    <div className="flex flex-col min-h-screen w-full">
+    <div className="flex flex-col min-h-screen w-full bg-background">
       {/* Header Fixo no Topo */}
       <Header />
       
