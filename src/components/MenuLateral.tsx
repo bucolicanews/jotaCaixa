@@ -40,7 +40,6 @@ const ThemeToggle = () => {
   return (
     <Button
       variant="ghost"
-      size="icon"
       onClick={() => setTheme(isDark ? 'light' : 'dark')}
       className="w-full justify-start"
     >
