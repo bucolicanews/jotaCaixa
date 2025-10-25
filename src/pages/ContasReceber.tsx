@@ -14,13 +14,17 @@ import FormContasReceber from '@/components/FormContasReceber';
 import DetalhesParcelasDialog from '@/components/DetalhesParcelasDialog';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { DateRange } from 'react-day-picker';
+import { DateRangePicker } from '@/components/DateRangePicker';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
 
 type ParcelaStatus = 'aberta' | 'parcial' | 'paga' | 'reprogramada' | 'cancelada';
 
 const getBadgeVariant = (status: ParcelaStatus): 'success' | 'warning' | 'secondary' | 'destructive' | 'default' => {
   switch (status) {
     case 'paga':
-      return 'success';
+      return 'default'; // Usando default para pago (verde escuro)
     case 'parcial':
       return 'warning';
     case 'aberta':
@@ -42,7 +46,11 @@ const ContasReceber = () => {
   const [contaSelecionada, setContaSelecionada] = useState<ContaReceber | null>(null);
   const [dialogFormAberto, setDialogFormAberto] = useState(false);
   const [dialogParcelasAberto, setDialogParcelasAberto] = useState(false);
+  
+  // Filtros
   const [filtroGeral, setFiltroGeral] = useState('');
+  const [filtroPeriodo, setFiltroPeriodo] = useState<DateRange | undefined>(undefined);
+  const [filtroStatus, setFiltroStatus] = useState<string>('todos'); // 'todos', 'aberta', 'paga', 'pendente'
 
   const buscarDados = async () => {
     setCarregandoDados(true);
@@ -92,6 +100,37 @@ const ContasReceber = () => {
 
   const parcelasFiltradas = parcelas.filter(p => {
     const termoBusca = filtroGeral.toLowerCase();
+    const dataVencimento = new Date(p.data_vencimento + 'T00:00:00');
+
+    // 1. Filtro de Período (Data de Vencimento)
+    if (filtroPeriodo?.from) {
+      const from = filtroPeriodo.from;
+      const to = filtroPeriodo.to || from;
+      
+      // Ajusta 'to' para incluir o final do dia
+      const adjustedTo = new Date(to);
+      adjustedTo.setHours(23, 59, 59, 999);
+
+      if (dataVencimento < from || dataVencimento > adjustedTo) {
+        return false;
+      }
+    }
+
+    // 2. Filtro de Status
+    if (filtroStatus !== 'todos') {
+      const status = p.status;
+      if (filtroStatus === 'pendente' && (status === 'paga' || status === 'cancelada')) {
+        return false;
+      }
+      if (filtroStatus === 'paga' && status !== 'paga') {
+        return false;
+      }
+      if (filtroStatus === 'aberta' && status !== 'aberta' && status !== 'parcial' && status !== 'reprogramada') {
+        return false;
+      }
+    }
+
+    // 3. Filtro Geral (Texto)
     return (
       (p.contas_receber?.clientes?.nome?.toLowerCase() || '').includes(termoBusca) ||
       (p.contas_receber?.descricao?.toLowerCase() || '').includes(termoBusca) ||
@@ -130,7 +169,7 @@ const ContasReceber = () => {
                 <TableBody>
                   {contas.map((conta) => (
                     <TableRow key={conta.id}>
-                      <TableCell>{conta.clientes?.nome || 'N/A'}</TableCell><TableCell>{conta.descricao}</TableCell><TableCell>{formatDate(conta.data_vencimento)}</TableCell><TableCell>{formatCurrency(conta.valor_total)}</TableCell><TableCell>{conta.status}</TableCell>
+                      <TableCell>{conta.clientes?.nome || 'N/A'}</TableCell><TableCell>{conta.descricao}</TableCell><TableCell>{formatDate(conta.data_vencimento)}</TableCell><TableCell>{formatCurrency(conta.valor_total)}</TableCell><TableCell><Badge variant={getBadgeVariant(conta.status as ParcelaStatus)}>{conta.status}</Badge></TableCell>
                       <TableCell className="text-right">
                         <Button variant="ghost" size="icon" onClick={() => handleOpenParcelas(conta)} title="Ver Parcelas"><ListChecks className="h-4 w-4" /></Button>
                         <Button variant="ghost" size="icon" onClick={() => { setContaSelecionada(conta); setDialogFormAberto(true); }}><Edit className="h-4 w-4" /></Button>
@@ -147,13 +186,29 @@ const ContasReceber = () => {
           <Card>
             <CardHeader>
               <CardTitle>Detalhamento de Todas as Parcelas</CardTitle>
-              <div className="mt-4">
+              <div className="flex flex-col md:flex-row gap-4 mt-4">
                 <Input
-                  placeholder="Filtrar em todos os campos..."
+                  placeholder="Filtrar por cliente, descrição, valor..."
                   value={filtroGeral}
                   onChange={(e) => setFiltroGeral(e.target.value)}
-                  className="max-w-sm"
+                  className="max-w-sm md:max-w-xs"
                 />
+                <DateRangePicker
+                  date={filtroPeriodo}
+                  setDate={setFiltroPeriodo}
+                  className="md:w-auto"
+                />
+                <Select value={filtroStatus} onValueChange={setFiltroStatus}>
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Filtrar por Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos os Status</SelectItem>
+                    <SelectItem value="pendente">Em Aberto / Parcial</SelectItem>
+                    <SelectItem value="paga">Quitadas</SelectItem>
+                    <SelectItem value="aberta">Abertas / Reprogramadas</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </CardHeader>
             <CardContent>
