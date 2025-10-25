@@ -1,10 +1,14 @@
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
-import { LayoutDashboard, DollarSign, ArrowUpCircle, ArrowDownCircle, Banknote, FileText, Upload, Settings, LogOut, BookOpen, Users, Building2, Clock, Contact } from 'lucide-react';
+import { LayoutDashboard, DollarSign, ArrowUpCircle, ArrowDownCircle, Banknote, FileText, Upload, Settings, LogOut, BookOpen, Users, Building2, Clock, Contact, Menu, Sun, Moon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
+import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { useIsMobile } from '@/hooks/use-mobile';
+import { useTheme } from 'next-themes';
+import React, { useState } from 'react';
 
 interface ItemMenu {
   nome: string;
@@ -29,7 +33,32 @@ const itensMenu: ItemMenu[] = [
   { nome: 'Configurações', caminho: '/configuracoes', icone: Settings, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'configuracoes' },
 ];
 
-const MenuLateral = () => {
+const ThemeToggle = () => {
+  const { theme, setTheme } = useTheme();
+  const isDark = theme === 'dark';
+
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      onClick={() => setTheme(isDark ? 'light' : 'dark')}
+      className="w-full justify-start"
+    >
+      {isDark ? (
+        <Sun className="w-5 h-5 mr-3 text-yellow-400" />
+      ) : (
+        <Moon className="w-5 h-5 mr-3" />
+      )}
+      {isDark ? 'Modo Claro' : 'Modo Escuro'}
+    </Button>
+  );
+};
+
+interface NavContentProps {
+  onLinkClick?: () => void;
+}
+
+const NavContent: React.FC<NavContentProps> = ({ onLinkClick }) => {
   const localizacao = useLocation();
   const { role, perfil } = useSessao();
 
@@ -43,14 +72,15 @@ const MenuLateral = () => {
   };
 
   return (
-    <div className="flex flex-col h-full border-r bg-sidebar dark:bg-sidebar-background text-sidebar-foreground">
+    <div className="flex flex-col h-full">
       <div className="p-4 border-b">
-        <h1 className="text-xl font-bold text-sidebar-primary">Fluxo de Caixa</h1>
+        <h1 className="text-xl font-bold text-primary dark:text-sidebar-primary">Fluxo de Caixa</h1>
       </div>
       <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
         {isUnassignedUser && (
           <Link
             to="/cadastrar-empresa"
+            onClick={onLinkClick}
             className={cn(
               "flex items-center p-3 rounded-lg transition-colors font-semibold text-primary bg-primary/10",
               "hover:bg-primary/20"
@@ -81,11 +111,12 @@ const MenuLateral = () => {
             <Link
               key={item.nome}
               to={item.caminho}
+              onClick={onLinkClick}
               className={cn(
                 "flex items-center p-3 rounded-lg transition-colors",
                 estaAtivo
-                  ? "bg-sidebar-accent text-sidebar-accent-foreground font-semibold"
-                  : "hover:bg-sidebar-accent/50 hover:text-sidebar-foreground",
+                  ? "bg-accent text-accent-foreground font-semibold dark:bg-sidebar-accent dark:text-sidebar-accent-foreground"
+                  : "hover:bg-accent/50 hover:text-foreground dark:hover:bg-sidebar-accent/50 dark:hover:text-sidebar-foreground",
               )}
             >
               <Icone className="w-5 h-5 mr-3" />
@@ -94,7 +125,8 @@ const MenuLateral = () => {
           );
         })}
       </nav>
-      <div className="p-4 border-t">
+      <div className="p-4 border-t space-y-2">
+        <ThemeToggle />
         <Button 
           onClick={lidarComSair}
           variant="ghost" 
@@ -104,6 +136,37 @@ const MenuLateral = () => {
           Sair
         </Button>
       </div>
+    </div>
+  );
+};
+
+const MenuLateral = () => {
+  const isMobile = useIsMobile();
+  const [sheetOpen, setSheetOpen] = useState(false);
+
+  if (isMobile) {
+    return (
+      <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background px-4 md:px-6 justify-between">
+        <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
+          <SheetTrigger asChild>
+            <Button variant="outline" size="icon">
+              <Menu className="h-5 w-5" />
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="left" className="p-0 w-64">
+            <NavContent onLinkClick={() => setSheetOpen(false)} />
+          </SheetContent>
+        </Sheet>
+        <h1 className="text-xl font-bold text-primary dark:text-white">Fluxo de Caixa</h1>
+        <div className="w-10"></div> {/* Placeholder para centralizar o título */}
+      </header>
+    );
+  }
+
+  // Desktop View
+  return (
+    <div className="flex flex-col h-full border-r bg-sidebar dark:bg-sidebar-background text-sidebar-foreground">
+      <NavContent />
     </div>
   );
 };
