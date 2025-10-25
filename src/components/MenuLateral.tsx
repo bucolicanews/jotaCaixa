@@ -1,13 +1,11 @@
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
-import { LayoutDashboard, DollarSign, ArrowUpCircle, ArrowDownCircle, Banknote, FileText, Upload, Settings, LogOut, BookOpen, Users, Building2, Clock, Contact, Menu, Sun, Moon } from 'lucide-react';
+import { LayoutDashboard, DollarSign, ArrowUpCircle, ArrowDownCircle, Banknote, FileText, Upload, Settings, BookOpen, Users, Building2, Clock, Contact, Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { useTheme } from 'next-themes';
 import React, { useState } from 'react';
 
 interface ItemMenu {
@@ -33,26 +31,6 @@ const itensMenu: ItemMenu[] = [
   { nome: 'Configurações', caminho: '/configuracoes', icone: Settings, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'configuracoes' },
 ];
 
-const ThemeToggle = () => {
-  const { theme, setTheme } = useTheme();
-  const isDark = theme === 'dark';
-
-  return (
-    <Button
-      variant="ghost"
-      onClick={() => setTheme(isDark ? 'light' : 'dark')}
-      className="w-full justify-start"
-    >
-      {isDark ? (
-        <Sun className="w-5 h-5 mr-3 text-yellow-400" />
-      ) : (
-        <Moon className="w-5 h-5 mr-3" />
-      )}
-      {isDark ? 'Modo Claro' : 'Modo Escuro'}
-    </Button>
-  );
-};
-
 interface NavContentProps {
   onLinkClick?: () => void;
 }
@@ -66,14 +44,10 @@ const NavContent: React.FC<NavContentProps> = ({ onLinkClick }) => {
   const userProfile = perfil as UsuarioProfile;
   const clientProfile = perfil as ClienteProfile;
 
-  const lidarComSair = async () => {
-    await supabase.auth.signOut();
-  };
-
   return (
     <div className="flex flex-col h-full">
       <div className="p-4 border-b">
-        <h1 className="text-xl font-bold text-primary dark:text-sidebar-primary">Fluxo de Caixa</h1>
+        <h1 className="text-xl font-bold text-primary dark:text-sidebar-primary">Menu</h1>
       </div>
       <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
         {isUnassignedUser && (
@@ -124,17 +98,6 @@ const NavContent: React.FC<NavContentProps> = ({ onLinkClick }) => {
           );
         })}
       </nav>
-      <div className="p-4 border-t space-y-2">
-        <ThemeToggle />
-        <Button 
-          onClick={lidarComSair}
-          variant="ghost" 
-          className="w-full justify-start text-red-500 hover:bg-red-100 dark:hover:bg-red-900/50"
-        >
-          <LogOut className="w-5 h-5 mr-3" />
-          Sair
-        </Button>
-      </div>
     </div>
   );
 };
@@ -144,21 +107,18 @@ const MenuLateral = () => {
   const [sheetOpen, setSheetOpen] = useState(false);
 
   if (isMobile) {
+    // O botão de menu sanduíche precisa ser fixo para não ser coberto pelo Header
     return (
-      <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background px-4 md:px-6 justify-between">
-        <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-          <SheetTrigger asChild>
-            <Button variant="outline" size="icon">
-              <Menu className="h-5 w-5" />
-            </Button>
-          </SheetTrigger>
-          <SheetContent side="left" className="p-0 w-64">
-            <NavContent onLinkClick={() => setSheetOpen(false)} />
-          </SheetContent>
-        </Sheet>
-        <h1 className="text-xl font-bold text-primary dark:text-white">Fluxo de Caixa</h1>
-        <div className="w-10"></div> {/* Placeholder para centralizar o título */}
-      </header>
+      <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
+        <SheetTrigger asChild>
+          <Button variant="outline" size="icon" className="fixed top-4 left-4 z-30">
+            <Menu className="h-5 w-5" />
+          </Button>
+        </SheetTrigger>
+        <SheetContent side="left" className="p-0 w-64">
+          <NavContent onLinkClick={() => setSheetOpen(false)} />
+        </SheetContent>
+      </Sheet>
     );
   }
 

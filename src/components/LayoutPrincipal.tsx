@@ -7,6 +7,7 @@ import { ClienteProfile } from '@/types/usuario';
 import { Card, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
+import Header from './Header'; // Importando o novo Header
 
 interface LayoutPrincipalProps {
   children: React.ReactNode;
@@ -35,7 +36,7 @@ const LayoutPrincipal: React.FC<LayoutPrincipalProps> = ({ children }) => {
   if (isPendingClient) {
     return (
       <div className="flex flex-col min-h-screen bg-background">
-        <MenuLateral /> {/* Menu superior em mobile */}
+        <Header />
         <main className="flex-1 p-8 overflow-y-auto flex items-center justify-center">
           <Card className="w-full max-w-lg text-center">
             <CardHeader>
@@ -60,8 +61,8 @@ const LayoutPrincipal: React.FC<LayoutPrincipalProps> = ({ children }) => {
       )}
       
       <div className="flex-1 flex flex-col">
-        {/* Header/Menu Sanduíche para Mobile */}
-        {isMobile && <MenuLateral />}
+        {/* Header Fixo para Mobile e Desktop */}
+        <Header />
         
         <main className={cn("flex-1 overflow-y-auto", isMobile ? "p-4" : "p-8")}>
           {children}
