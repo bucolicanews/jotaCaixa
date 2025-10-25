@@ -40,21 +40,17 @@ const getBadgeVariant = (status: ParcelaStatus, dataVencimento: string): 'succes
     return 'destructive';
   }
   
-  // 2. Vencendo Hoje ou Parcial (Amarelo)
-  if (isToday(vencimento) || status === 'parcial') {
+  // 2. Vencendo Hoje, Parcial ou Reprogramada (Laranja/Amarelo)
+  if (isToday(vencimento) || status === 'parcial' || status === 'reprogramada') {
     return 'warning';
   }
 
-  // 3. Status específicos futuros
+  // 3. Status Aberta (Azul/Primário)
   if (status === 'aberta') {
-    return 'default'; // Azul/Primário para Aberta
-  }
-  
-  if (status === 'reprogramada') {
-    return 'secondary'; // Cinza/Secundário para Reprogramada (simulando roxo/diferente)
+    return 'default';
   }
 
-  return 'secondary';
+  return 'secondary'; // Fallback
 };
 
 const ContasReceber = () => {
