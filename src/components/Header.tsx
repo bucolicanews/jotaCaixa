@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useTheme } from 'next-themes';
+import { useTheme } from '@/contexts/ThemeProvider';
 import { Button } from '@/components/ui/button';
 import { Sun, Moon, LogOut, Menu } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';

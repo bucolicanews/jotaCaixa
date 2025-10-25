@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 import { useEffect } from 'react';
 import { useSessao } from '@/hooks/use-sessao';
-import { useTheme } from 'next-themes'; // Importando useTheme
+import { useTheme } from '@/contexts/ThemeProvider'; // Importando useTheme
 
 /**
  * Componente de Login.
