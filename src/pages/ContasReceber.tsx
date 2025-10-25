@@ -250,13 +250,14 @@ const ContasReceber = () => {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      {/* AÇÕES MOVIDAS PARA O INÍCIO */}
+                      <TableHead className="text-left">Ações</TableHead> 
                       <TableHead>Cliente</TableHead>
                       <TableHead>Descrição</TableHead>
                       <TableHead>Vencimento</TableHead>
                       <TableHead>Valor Total</TableHead>
                       {/* Ocultar Status em telas pequenas */}
                       <TableHead className="hidden sm:table-cell">Status</TableHead>
-                      <TableHead className="text-right">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -275,6 +276,15 @@ const ContasReceber = () => {
 
                       return (
                         <TableRow key={conta.id}>
+                          {/* CÉLULA DE AÇÕES (PRIMEIRA) */}
+                          <TableCell className="text-left min-w-[120px]">
+                            <div className="flex justify-start space-x-1">
+                              <Button variant="ghost" size="icon" onClick={() => handleOpenParcelas(conta)} title="Ver Parcelas"><ListChecks className="h-4 w-4" /></Button>
+                              <Button variant="ghost" size="icon" onClick={() => { setContaSelecionada(conta); setDialogFormAberto(true); }}><Edit className="h-4 w-4" /></Button>
+                              <Button variant="ghost" size="icon" onClick={() => handleDelete(conta.id)}><Trash2 className="w-4 h-4 text-red-500" /></Button>
+                            </div>
+                          </TableCell>
+                          
                           <TableCell className="font-medium">
                             {conta.clientes?.nome || 'N/A'}
                             {/* Exibir Status abaixo do nome do cliente em telas pequenas */}
@@ -288,11 +298,6 @@ const ContasReceber = () => {
                           {/* Ocultar Badge em telas pequenas */}
                           <TableCell className="hidden sm:table-cell">
                             <Badge variant={statusVariant}>{conta.status}</Badge>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <Button variant="ghost" size="icon" onClick={() => handleOpenParcelas(conta)} title="Ver Parcelas"><ListChecks className="h-4 w-4" /></Button>
-                            <Button variant="ghost" size="icon" onClick={() => { setContaSelecionada(conta); setDialogFormAberto(true); }}><Edit className="h-4 w-4" /></Button>
-                            <Button variant="ghost" size="icon" onClick={() => handleDelete(conta.id)}><Trash2 className="w-4 h-4 text-red-500" /></Button>
                           </TableCell>
                         </TableRow>
                       );
