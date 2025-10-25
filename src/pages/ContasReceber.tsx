@@ -34,19 +34,27 @@ const getBadgeVariant = (status: ParcelaStatus, dataVencimento: string): 'succes
   }
 
   // Lógica para status não pagos (aberta, parcial, reprogramada)
+  
+  // 1. Vencido (Vermelho)
   if (isPast(vencimento) && !isToday(vencimento)) {
-    return 'destructive'; // Vermelho para vencido
+    return 'destructive';
   }
   
-  if (isToday(vencimento)) {
-    return 'warning'; // Amarelo para vencendo hoje
-  }
-
-  if (status === 'parcial') {
+  // 2. Vencendo Hoje ou Parcial (Amarelo)
+  if (isToday(vencimento) || status === 'parcial') {
     return 'warning';
   }
 
-  return 'secondary'; // Padrão para aberta/reprogramada futura
+  // 3. Status específicos futuros
+  if (status === 'aberta') {
+    return 'default'; // Azul/Primário para Aberta
+  }
+  
+  if (status === 'reprogramada') {
+    return 'secondary'; // Cinza/Secundário para Reprogramada (simulando roxo/diferente)
+  }
+
+  return 'secondary';
 };
 
 const ContasReceber = () => {
