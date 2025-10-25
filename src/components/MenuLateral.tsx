@@ -1,12 +1,9 @@
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
-import { LayoutDashboard, DollarSign, ArrowUpCircle, ArrowDownCircle, Banknote, FileText, Upload, Settings, BookOpen, Users, Building2, Clock, Contact, Menu } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { LayoutDashboard, DollarSign, ArrowUpCircle, ArrowDownCircle, Banknote, FileText, Upload, Settings, BookOpen, Users, Building2, Clock, Contact } from 'lucide-react';
+import React from 'react';
 import { useSessao } from '@/hooks/use-sessao';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
-import { useIsMobile } from '@/hooks/use-mobile';
-import React, { useState } from 'react';
 
 interface ItemMenu {
   nome: string;
@@ -31,11 +28,11 @@ const itensMenu: ItemMenu[] = [
   { nome: 'Configurações', caminho: '/configuracoes', icone: Settings, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'configuracoes' },
 ];
 
-interface NavContentProps {
+interface MenuLateralProps {
   onLinkClick?: () => void;
 }
 
-const NavContent: React.FC<NavContentProps> = ({ onLinkClick }) => {
+const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick }) => {
   const localizacao = useLocation();
   const { role, perfil } = useSessao();
 
@@ -45,9 +42,9 @@ const NavContent: React.FC<NavContentProps> = ({ onLinkClick }) => {
   const clientProfile = perfil as ClienteProfile;
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full bg-sidebar dark:bg-sidebar-background text-sidebar-foreground">
       <div className="p-4 border-b">
-        <h1 className="text-xl font-bold text-primary dark:text-sidebar-primary">Menu</h1>
+        <h1 className="text-xl font-bold text-primary dark:text-sidebar-primary">Navegação</h1>
       </div>
       <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
         {isUnassignedUser && (
@@ -98,34 +95,6 @@ const NavContent: React.FC<NavContentProps> = ({ onLinkClick }) => {
           );
         })}
       </nav>
-    </div>
-  );
-};
-
-const MenuLateral = () => {
-  const isMobile = useIsMobile();
-  const [sheetOpen, setSheetOpen] = useState(false);
-
-  if (isMobile) {
-    // O botão de menu sanduíche precisa ser fixo para não ser coberto pelo Header
-    return (
-      <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-        <SheetTrigger asChild>
-          <Button variant="outline" size="icon" className="fixed top-4 left-4 z-30">
-            <Menu className="h-5 w-5" />
-          </Button>
-        </SheetTrigger>
-        <SheetContent side="left" className="p-0 w-64">
-          <NavContent onLinkClick={() => setSheetOpen(false)} />
-        </SheetContent>
-      </Sheet>
-    );
-  }
-
-  // Desktop View
-  return (
-    <div className="flex flex-col h-full border-r bg-sidebar dark:bg-sidebar-background text-sidebar-foreground">
-      <NavContent />
     </div>
   );
 };

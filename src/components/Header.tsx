@@ -1,9 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useTheme } from 'next-themes';
 import { Button } from '@/components/ui/button';
-import { Sun, Moon, LogOut } from 'lucide-react';
+import { Sun, Moon, LogOut, Menu } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
+import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import MenuLateral from './MenuLateral';
 
 const ThemeToggle = () => {
   const { theme, setTheme } = useTheme();
@@ -26,6 +28,8 @@ const ThemeToggle = () => {
 };
 
 const Header: React.FC = () => {
+  const [sheetOpen, setSheetOpen] = useState(false);
+
   const lidarComSair = async () => {
     await supabase.auth.signOut();
   };
@@ -35,7 +39,22 @@ const Header: React.FC = () => {
       "sticky top-0 z-20 flex h-16 items-center justify-between border-b px-4 md:px-8",
       "bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60"
     )}>
-      <h1 className="text-xl font-bold text-primary dark:text-primary">Fluxo de Caixa</h1>
+      <div className="flex items-center space-x-4">
+        {/* Menu Sanduíche */}
+        <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
+          <SheetTrigger asChild>
+            <Button variant="ghost" size="icon" aria-label="Abrir Menu">
+              <Menu className="h-6 w-6" />
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="left" className="p-0 w-64">
+            <MenuLateral onLinkClick={() => setSheetOpen(false)} />
+          </SheetContent>
+        </Sheet>
+        
+        <h1 className="text-xl font-bold text-primary dark:text-primary">Fluxo de Caixa</h1>
+      </div>
+      
       <div className="flex items-center space-x-2">
         <ThemeToggle />
         <Button 

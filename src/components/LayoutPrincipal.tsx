@@ -1,13 +1,11 @@
 import React from 'react';
-import MenuLateral from './MenuLateral';
 import { useSessao } from '@/hooks/use-sessao';
 import { useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { ClienteProfile } from '@/types/usuario';
 import { Card, CardDescription, CardHeader, CardTitle } from './ui/card';
-import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
-import Header from './Header'; // Importando o novo Header
+import Header from './Header'; // Importando o Header
 
 interface LayoutPrincipalProps {
   children: React.ReactNode;
@@ -16,7 +14,6 @@ interface LayoutPrincipalProps {
 const LayoutPrincipal: React.FC<LayoutPrincipalProps> = ({ children }) => {
   const { usuario, carregando, role, perfil } = useSessao();
   const navegar = useNavigate();
-  const isMobile = useIsMobile();
 
   if (carregando) {
     return (
@@ -52,22 +49,16 @@ const LayoutPrincipal: React.FC<LayoutPrincipalProps> = ({ children }) => {
   }
 
   return (
-    <div className="flex min-h-screen bg-background">
-      {/* Sidebar Fixo para Desktop */}
-      {!isMobile && (
-        <aside className="w-64 flex-shrink-0 sticky top-0 h-screen">
-          <MenuLateral />
-        </aside>
-      )}
+    <div className="flex flex-col min-h-screen w-full bg-background">
+      {/* Header Fixo no Topo */}
+      <Header />
       
-      <div className="flex-1 flex flex-col">
-        {/* Header Fixo para Mobile e Desktop */}
-        <Header />
-        
-        <main className={cn("flex-1 overflow-y-auto", isMobile ? "p-4" : "p-8")}>
-          {children}
-        </main>
-      </div>
+      {/* Conteúdo Principal (Rolável) */}
+      <main className={cn("flex-1 p-4 md:p-8 w-full")}>
+        {children}
+      </main>
+      
+      {/* TODO: Adicionar Footer aqui se necessário */}
     </div>
   );
 };
