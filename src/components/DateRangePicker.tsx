@@ -28,7 +28,7 @@ export function DateRangePicker({
             id="date"
             variant={"outline"}
             className={cn(
-              "w-full md:w-[300px] justify-start text-left font-normal",
+              "w-full justify-start text-left font-normal md:w-[300px]", // Ajustado para w-full em mobile
               !date && "text-muted-foreground"
             )}
             disabled={disabled}

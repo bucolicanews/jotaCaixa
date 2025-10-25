@@ -182,30 +182,6 @@ const ContasReceber = () => {
           <TabsTrigger value="lancamentos">Lançamentos (Sintético)</TabsTrigger>
           <TabsTrigger value="parcelas">Todas as Parcelas (Analítico)</TabsTrigger>
         </TabsList>
-        <TabsContent value="lancamentos">
-          <Card>
-            <CardHeader><CardTitle>Resumo dos Lançamentos</CardTitle></CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader><TableRow><TableHead>Cliente</TableHead><TableHead>Descrição</TableHead><TableHead>Vencimento</TableHead><TableHead>Valor Total</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader>
-                  <TableBody>
-                    {contas.map((conta) => (
-                      <TableRow key={conta.id}>
-                        <TableCell>{conta.clientes?.nome || 'N/A'}</TableCell><TableCell>{conta.descricao}</TableCell><TableCell>{formatDate(conta.data_vencimento)}</TableCell><TableCell>{formatCurrency(conta.valor_total)}</TableCell><TableCell><Badge variant={getBadgeVariant(conta.status as ParcelaStatus, conta.data_vencimento)}>{conta.status}</Badge></TableCell>
-                        <TableCell className="text-right">
-                          <Button variant="ghost" size="icon" onClick={() => handleOpenParcelas(conta)} title="Ver Parcelas"><ListChecks className="h-4 w-4" /></Button>
-                          <Button variant="ghost" size="icon" onClick={() => { setContaSelecionada(conta); setDialogFormAberto(true); }}><Edit className="h-4 w-4" /></Button>
-                          <Button variant="ghost" size="icon" onClick={() => handleDelete(conta.id)}><Trash2 className="w-4 h-4 text-red-500" /></Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
         <TabsContent value="parcelas">
           <Card>
             <CardHeader>
@@ -259,6 +235,30 @@ const ContasReceber = () => {
                         </TableCell>
                       </TableRow>
                     )}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+        <TabsContent value="lancamentos">
+          <Card>
+            <CardHeader><CardTitle>Resumo dos Lançamentos</CardTitle></CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader><TableRow><TableHead>Cliente</TableHead><TableHead>Descrição</TableHead><TableHead>Vencimento</TableHead><TableHead>Valor Total</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader>
+                  <TableBody>
+                    {contas.map((conta) => (
+                      <TableRow key={conta.id}>
+                        <TableCell>{conta.clientes?.nome || 'N/A'}</TableCell><TableCell>{conta.descricao}</TableCell><TableCell>{formatDate(conta.data_vencimento)}</TableCell><TableCell>{formatCurrency(conta.valor_total)}</TableCell><TableCell><Badge variant={getBadgeVariant(conta.status as ParcelaStatus, conta.data_vencimento)}>{conta.status}</Badge></TableCell>
+                        <TableCell className="text-right">
+                          <Button variant="ghost" size="icon" onClick={() => handleOpenParcelas(conta)} title="Ver Parcelas"><ListChecks className="h-4 w-4" /></Button>
+                          <Button variant="ghost" size="icon" onClick={() => { setContaSelecionada(conta); setDialogFormAberto(true); }}><Edit className="h-4 w-4" /></Button>
+                          <Button variant="ghost" size="icon" onClick={() => handleDelete(conta.id)}><Trash2 className="w-4 h-4 text-red-500" /></Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
                   </TableBody>
                 </Table>
               </div>
