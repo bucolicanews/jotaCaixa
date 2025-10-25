@@ -18,6 +18,7 @@ import { DateRange } from 'react-day-picker';
 import { DateRangePicker } from '@/components/DateRangePicker';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { isToday, isPast, parseISO } from 'date-fns';
+import { cn } from '@/lib/utils';
 
 
 type ParcelaStatus = 'aberta' | 'parcial' | 'paga' | 'reprogramada' | 'cancelada';
@@ -247,18 +248,55 @@ const ContasReceber = () => {
             <CardContent>
               <div className="overflow-x-auto">
                 <Table>
-                  <TableHeader><TableRow><TableHead>Cliente</TableHead><TableHead>Descrição</TableHead><TableHead>Vencimento</TableHead><TableHead>Valor Total</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Cliente</TableHead>
+                      <TableHead>Descrição</TableHead>
+                      <TableHead>Vencimento</TableHead>
+                      <TableHead>Valor Total</TableHead>
+                      {/* Ocultar Status em telas pequenas */}
+                      <TableHead className="hidden sm:table-cell">Status</TableHead>
+                      <TableHead className="text-right">Ações</TableHead>
+                    </TableRow>
+                  </TableHeader>
                   <TableBody>
-                    {contas.map((conta) => (
-                      <TableRow key={conta.id}>
-                        <TableCell>{conta.clientes?.nome || 'N/A'}</TableCell><TableCell>{conta.descricao}</TableCell><TableCell>{formatDate(conta.data_vencimento)}</TableCell><TableCell>{formatCurrency(conta.valor_total)}</TableCell><TableCell><Badge variant={getBadgeVariant(conta.status as ParcelaStatus, conta.data_vencimento)}>{conta.status}</Badge></TableCell>
-                        <TableCell className="text-right">
-                          <Button variant="ghost" size="icon" onClick={() => handleOpenParcelas(conta)} title="Ver Parcelas"><ListChecks className="h-4 w-4" /></Button>
-                          <Button variant="ghost" size="icon" onClick={() => { setContaSelecionada(conta); setDialogFormAberto(true); }}><Edit className="h-4 w-4" /></Button>
-                          <Button variant="ghost" size="icon" onClick={() => handleDelete(conta.id)}><Trash2 className="w-4 h-4 text-red-500" /></Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {contas.map((conta) => {
+                      const statusVariant = getBadgeVariant(conta.status as ParcelaStatus, conta.data_vencimento);
+                      
+                      // Mapeamento de variantes para classes de texto do Tailwind
+                      const statusColorClass = {
+                        success: 'text-green-500',
+                        warning: 'text-yellow-500',
+                        destructive: 'text-red-500',
+                        info: 'text-blue-500',
+                        secondary: 'text-muted-foreground',
+                        default: 'text-primary',
+                      }[statusVariant];
+
+                      return (
+                        <TableRow key={conta.id}>
+                          <TableCell className="font-medium">
+                            {conta.clientes?.nome || 'N/A'}
+                            {/* Exibir Status abaixo do nome do cliente em telas pequenas */}
+                            <span className={cn("block text-xs font-normal sm:hidden", statusColorClass)}>
+                              ({conta.status})
+                            </span>
+                          </TableCell>
+                          <TableCell>{conta.descricao}</TableCell>
+                          <TableCell>{formatDate(conta.data_vencimento)}</TableCell>
+                          <TableCell>{formatCurrency(conta.valor_total)}</TableCell>
+                          {/* Ocultar Badge em telas pequenas */}
+                          <TableCell className="hidden sm:table-cell">
+                            <Badge variant={statusVariant}>{conta.status}</Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button variant="ghost" size="icon" onClick={() => handleOpenParcelas(conta)} title="Ver Parcelas"><ListChecks className="h-4 w-4" /></Button>
+                            <Button variant="ghost" size="icon" onClick={() => { setContaSelecionada(conta); setDialogFormAberto(true); }}><Edit className="h-4 w-4" /></Button>
+                            <Button variant="ghost" size="icon" onClick={() => handleDelete(conta.id)}><Trash2 className="w-4 h-4 text-red-500" /></Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </div>
