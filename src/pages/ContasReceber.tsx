@@ -250,7 +250,7 @@ const ContasReceber = () => {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      {/* AÇÕES MOVIDAS PARA O INÍCIO */}
+                      {/* AÇÕES (PRIMEIRA COLUNA) */}
                       <TableHead className="text-left">Ações</TableHead> 
                       <TableHead>Cliente</TableHead>
                       <TableHead>Descrição</TableHead>
@@ -278,7 +278,7 @@ const ContasReceber = () => {
                         <TableRow key={conta.id}>
                           {/* CÉLULA DE AÇÕES (PRIMEIRA) */}
                           <TableCell className="text-left min-w-[120px]">
-                            <div className="flex justify-start space-x-1">
+                            <div className="flex flex-col space-y-1 sm:flex-row sm:space-x-1 sm:space-y-0">
                               <Button variant="ghost" size="icon" onClick={() => handleOpenParcelas(conta)} title="Ver Parcelas"><ListChecks className="h-4 w-4" /></Button>
                               <Button variant="ghost" size="icon" onClick={() => { setContaSelecionada(conta); setDialogFormAberto(true); }}><Edit className="h-4 w-4" /></Button>
                               <Button variant="ghost" size="icon" onClick={() => handleDelete(conta.id)}><Trash2 className="w-4 h-4 text-red-500" /></Button>
