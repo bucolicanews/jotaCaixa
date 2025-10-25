@@ -42,9 +42,9 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick }) => {
   const clientProfile = perfil as ClienteProfile;
 
   return (
-    <div className="flex flex-col h-full bg-sidebar dark:bg-sidebar-background text-sidebar-foreground">
+    <div className="flex flex-col h-full bg-background text-foreground">
       <div className="p-4 border-b">
-        <h1 className="text-xl font-bold text-primary dark:text-sidebar-primary">Navegação</h1>
+        <h1 className="text-xl font-bold text-primary">Navegação</h1>
       </div>
       <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
         {isUnassignedUser && (
@@ -85,8 +85,8 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick }) => {
               className={cn(
                 "flex items-center p-3 rounded-lg transition-colors",
                 estaAtivo
-                  ? "bg-accent text-accent-foreground font-semibold dark:bg-sidebar-accent dark:text-sidebar-accent-foreground"
-                  : "hover:bg-accent/50 hover:text-foreground dark:hover:bg-sidebar-accent/50 dark:hover:text-sidebar-foreground",
+                  ? "bg-accent text-accent-foreground font-semibold"
+                  : "hover:bg-accent/50 hover:text-foreground",
               )}
             >
               <Icone className="w-5 h-5 mr-3" />

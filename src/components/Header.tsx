@@ -52,7 +52,7 @@ const Header: React.FC = () => {
           </SheetContent>
         </Sheet>
         
-        <h1 className="text-xl font-bold text-primary dark:text-primary">Fluxo de Caixa</h1>
+        <h1 className="text-xl font-bold text-primary">Fluxo de Caixa</h1>
       </div>
       
       <div className="flex items-center space-x-2">

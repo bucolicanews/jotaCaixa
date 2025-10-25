@@ -5,7 +5,7 @@ import { Loader2 } from 'lucide-react';
 import { ClienteProfile } from '@/types/usuario';
 import { Card, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { cn } from '@/lib/utils';
-import Header from './Header'; // Importando o Header
+import Header from './Header';
 
 interface LayoutPrincipalProps {
   children: React.ReactNode;
@@ -49,7 +49,7 @@ const LayoutPrincipal: React.FC<LayoutPrincipalProps> = ({ children }) => {
   }
 
   return (
-    <div className="flex flex-col min-h-screen w-full bg-background">
+    <div className="flex flex-col min-h-screen w-full">
       {/* Header Fixo no Topo */}
       <Header />
       
