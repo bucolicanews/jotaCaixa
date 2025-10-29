@@ -141,7 +141,6 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, c
       data_inicio_contrato: parseDate((profileToEdit as UsuarioProfile)?.data_inicio_contrato),
       data_fim_contrato: parseDate((profileToEdit as UsuarioProfile)?.data_fim_contrato),
       data_inicio_aviso: parseDate((profileToEdit as UsuarioProfile)?.data_inicio_aviso),
-      // Correção 3: Garantir que o valor inicial seja um dos valores do enum ou null
       tipo_aviso: (profileToEdit as UsuarioProfile)?.tipo_aviso as FormValues['tipo_aviso'] || 'Nenhum',
 
       // Documentos
@@ -485,15 +484,16 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, c
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
         
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          {/* Ajuste 2: Usando flex-wrap e garantindo que cada aba ocupe 1/4 em telas maiores que mobile */}
           <TabsList className="flex flex-wrap justify-start w-full h-auto p-1">
-            <TabsTrigger value="pessoal" className="flex-1 md:flex-none">Geral</TabsTrigger>
-            {isUserBeingManagedByClient && <TabsTrigger value="cadastrais" className="flex-1 md:flex-none">Dados Cadastrais</TabsTrigger>}
-            {isUserBeingManagedByClient && <TabsTrigger value="documentos" className="flex-1 md:flex-none">Documentos</TabsTrigger>}
-            {isUserBeingManagedByClient && <TabsTrigger value="contrato" className="flex-1 md:flex-none">Contrato (RH)</TabsTrigger>}
+            <TabsTrigger value="pessoal" className="flex-1 md:flex-none md:w-1/4">Geral</TabsTrigger>
+            {isUserBeingManagedByClient && <TabsTrigger value="cadastrais" className="flex-1 md:flex-none md:w-1/4">Dados Cadastrais</TabsTrigger>}
+            {isUserBeingManagedByClient && <TabsTrigger value="documentos" className="flex-1 md:flex-none md:w-1/4">Documentos</TabsTrigger>}
+            {isUserBeingManagedByClient && <TabsTrigger value="contrato" className="flex-1 md:flex-none md:w-1/4">Contrato (RH)</TabsTrigger>}
           </TabsList>
 
           {/* TAB 1: GERAL (Nome, Email, Senha, Permissões) */}
-          <TabsContent value="pessoal" className="mt-4 space-y-4 p-2 md:p-4">
+          <TabsContent value="pessoal" className="mt-4 space-y-4 p-4"> {/* Ajuste 3: Adicionando padding p-4 */}
             <FormField control={form.control as unknown as Control<FormValues>} name="nome" render={({ field }) => (
               <FormItem><FormLabel>Nome Completo</FormLabel><FormControl><Input placeholder="Nome completo" {...field} /></FormControl><FormMessage /></FormItem>
             )} />
@@ -530,7 +530,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, c
 
           {/* TAB 2: DADOS CADASTRAIS (Apenas para Usuário/Funcionário) */}
           {isUserBeingManagedByClient && (
-            <TabsContent value="cadastrais" className="mt-4 space-y-6 p-2 md:p-4">
+            <TabsContent value="cadastrais" className="mt-4 space-y-6 p-4"> {/* Ajuste 3: Adicionando padding p-4 */}
               <p className="text-sm text-muted-foreground">Dados pessoais e de contato do funcionário.</p>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -559,7 +559,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, c
 
           {/* TAB 3: DOCUMENTOS DE ADMISSÃO (Apenas para Usuário/Funcionário) */}
           {isUserBeingManagedByClient && (
-            <TabsContent value="documentos" className="mt-4 space-y-6 p-2 md:p-4">
+            <TabsContent value="documentos" className="mt-4 space-y-6 p-4"> {/* Ajuste 3: Adicionando padding p-4 */}
               <p className="text-sm text-muted-foreground">Anexos de documentos do funcionário.</p>
               
               <Accordion type="multiple" className="w-full">
@@ -625,7 +625,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, c
 
           {/* TAB 4: DADOS CONTRATUAIS (RH) - Apenas para Usuário/Funcionário */}
           {isUserBeingManagedByClient && (
-            <TabsContent value="contrato" className="mt-4 space-y-6 p-2 md:p-4">
+            <TabsContent value="contrato" className="mt-4 space-y-6 p-4"> {/* Ajuste 3: Adicionando padding p-4 */}
                 <p className="text-sm text-muted-foreground">Estes campos são usados para gestão de RH.</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {renderDateField('data_inicio_contrato', 'Início do Contrato', !isContractEditable)}
