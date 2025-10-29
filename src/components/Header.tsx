@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTheme } from '@/contexts/ThemeProvider';
 import { Button } from '@/components/ui/button';
 import { Sun, Moon, LogOut, Menu, User, Settings, Key } from 'lucide-react';
@@ -9,7 +9,8 @@ import MenuLateral from './MenuLateral';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useSessao } from '@/hooks/use-sessao';
 import UserAvatar from './UserAvatar';
-import { Link } from 'react-router-dom'; // Importando Link
+import { Link } from 'react-router-dom';
+import { UsuarioProfile, ClienteProfile } from '@/types/usuario';
 
 const ThemeToggle = () => {
   const { theme, setTheme } = useTheme();
@@ -34,6 +35,41 @@ const ThemeToggle = () => {
 const Header: React.FC = () => {
   const [sheetOpen, setSheetOpen] = useState(false);
   const { perfil, role } = useSessao();
+  const [tituloApp, setTituloApp] = useState('Fluxo de Caixa');
+
+  useEffect(() => {
+    const updateTitle = async () => {
+      if (!perfil || !role) {
+        setTituloApp('Fluxo de Caixa');
+        return;
+      }
+
+      if (role === 'Admin') {
+        setTituloApp('Admin Dashboard');
+      } else if (role === 'Cliente') {
+        setTituloApp((perfil as ClienteProfile).nome);
+      } else if (role === 'Usuario') {
+        const usuarioProfile = perfil as UsuarioProfile;
+        if (usuarioProfile.cliente_id) {
+          // Buscar o nome da empresa (Cliente)
+          const { data } = await supabase
+            .from('tbl_clientes')
+            .select('nome')
+            .eq('id', usuarioProfile.cliente_id)
+            .single();
+          
+          if (data) {
+            setTituloApp(data.nome);
+          } else {
+            setTituloApp('Usuário - Sem Empresa');
+          }
+        } else {
+          setTituloApp('Usuário Não Vinculado');
+        }
+      }
+    };
+    updateTitle();
+  }, [perfil, role]);
 
   const lidarComSair = async () => {
     await supabase.auth.signOut();
@@ -64,7 +100,9 @@ const Header: React.FC = () => {
           </SheetContent>
         </Sheet>
         
-        <h1 className="text-xl font-bold text-primary">Fluxo de Caixa</h1>
+        <h1 className="text-xl font-bold text-primary truncate max-w-[200px] sm:max-w-none" title={tituloApp}>
+          {tituloApp}
+        </h1>
       </div>
       
       <div className="flex items-center space-x-2">
