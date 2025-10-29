@@ -48,7 +48,7 @@ export function MonthPicker({
       <PopoverContent className="w-auto p-0" align="start">
         <Calendar
           mode="single"
-          // Usamos 'dropdown-buttons' para forçar os seletores de mês e ano
+          // Usamos 'dropdown-buttons' para ativar o CaptionComponent personalizado
           captionLayout="dropdown-buttons" 
           selected={date}
           onSelect={handleSelect}
@@ -57,18 +57,13 @@ export function MonthPicker({
           // Configurações para mostrar apenas o seletor de mês/ano
           numberOfMonths={1}
           defaultMonth={date}
-          // Oculta a tabela de dias e a navegação de setas, mantendo apenas os dropdowns
+          // Oculta a tabela de dias e a navegação de setas
           classNames={{
-            months: "flex flex-col sm:flex-row space-y-4 sm:space-x-4 sm:space-y-0",
-            month: "space-y-4",
-            caption: "flex justify-center pt-1 relative items-center",
-            caption_label: "hidden", // Oculta o rótulo de texto do mês/ano
-            nav: "hidden", // Oculta as setas de navegação
-            table: "hidden", // Oculta a tabela de dias
-            head_row: "hidden", // Oculta o cabeçalho dos dias
-            row: "hidden", // Oculta as linhas dos dias
-            // Garante que os dropdowns fiquem visíveis e centralizados
-            caption_dropdowns: "flex gap-2 justify-center p-2", 
+            nav: "hidden", 
+            table: "hidden", 
+            head_row: "hidden", 
+            row: "hidden", 
+            caption_dropdowns: "hidden", // Oculta o dropdown nativo
           }}
         />
       </PopoverContent>

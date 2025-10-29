@@ -2,13 +2,84 @@
 
 import * as React from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { DayPicker } from "react-day-picker";
+import { DayPicker, useDayPicker, useNavigation } from "react-day-picker";
 import { ptBR } from "date-fns/locale";
+import { format } from "date-fns";
 
 import { cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export type CalendarProps = React.ComponentProps<typeof DayPicker>;
+
+// Componente de Cabeçalho Personalizado com Selects do shadcn/ui
+function CaptionComponent(props: { displayMonth: Date }) {
+  const { goToMonth } = useNavigation();
+  const { displayMonth } = props;
+
+  const months = Array.from({ length: 12 }, (_, i) => {
+    const month = new Date(displayMonth.getFullYear(), i, 1);
+    return {
+      value: i,
+      label: format(month, "MMMM", { locale: ptBR }),
+    };
+  });
+
+  const years = Array.from({ length: 10 }, (_, i) => {
+    const year = displayMonth.getFullYear() - 5 + i;
+    return {
+      value: year,
+      label: String(year),
+    };
+  });
+
+  const handleMonthChange = (value: string) => {
+    const newMonth = new Date(displayMonth.getFullYear(), Number(value));
+    goToMonth(newMonth);
+  };
+
+  const handleYearChange = (value: string) => {
+    const newYear = new Date(Number(value), displayMonth.getMonth());
+    goToMonth(newYear);
+  };
+
+  return (
+    <div className="flex justify-center gap-2 p-2">
+      <Select
+        value={String(displayMonth.getMonth())}
+        onValueChange={handleMonthChange}
+      >
+        <SelectTrigger className="w-[120px] h-8">
+          <SelectValue placeholder="Mês" />
+        </SelectTrigger>
+        <SelectContent>
+          {months.map((month) => (
+            <SelectItem key={month.value} value={String(month.value)}>
+              {month.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      <Select
+        value={String(displayMonth.getFullYear())}
+        onValueChange={handleYearChange}
+      >
+        <SelectTrigger className="w-[100px] h-8">
+          <SelectValue placeholder="Ano" />
+        </SelectTrigger>
+        <SelectContent>
+          {years.map((year) => (
+            <SelectItem key={year.value} value={String(year.value)}>
+              {year.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
 
 function Calendar({
   className,
@@ -25,8 +96,8 @@ function Calendar({
         month: "space-y-4",
         caption: "flex justify-center pt-1 relative items-center",
         caption_label: "text-sm font-medium",
-        // Ajuste de layout para os dropdowns
-        caption_dropdowns: "flex gap-1 justify-center", 
+        // Ocultamos o caption_dropdowns padrão, pois estamos usando o CaptionComponent
+        caption_dropdowns: "hidden", 
         nav: "space-x-1 flex items-center",
         nav_button: cn(
           buttonVariants({ variant: "outline" }),
@@ -59,6 +130,7 @@ function Calendar({
       components={{
         IconLeft: () => <ChevronLeft className="h-4 w-4" />,
         IconRight: () => <ChevronRight className="h-4 w-4" />,
+        Caption: CaptionComponent, // Usando o componente de cabeçalho personalizado
       }}
       locale={ptBR} // Define o locale para ptBR
       labels={{
