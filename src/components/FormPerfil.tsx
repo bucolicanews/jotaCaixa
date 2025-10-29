@@ -23,10 +23,25 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from './
 
 // Esquema de validação para os campos de URL (opcional)
 const urlSchema = z.string().url('URL inválida.').optional().or(z.literal(''));
+const textOptional = z.string().optional().or(z.literal(''));
 
 const formSchema = z.object({
   nome: z.string().min(1, 'O nome é obrigatório.'),
   
+  // Novos Dados Cadastrais
+  cpf: textOptional,
+  rg: textOptional,
+  nome_mae: z.string().min(1, 'O nome da mãe é obrigatório.'),
+  nome_pai: textOptional,
+  telefone: textOptional,
+  cep: textOptional,
+  endereco: textOptional,
+  numero: textOptional,
+  complemento: textOptional,
+  bairro: textOptional,
+  cidade: textOptional,
+  estado: textOptional,
+
   // Dados Contratuais (Admin/Cliente only)
   data_inicio_contrato: z.date().optional().nullable(),
   data_fim_contrato: z.date().optional().nullable(),
@@ -48,7 +63,7 @@ const formSchema = z.object({
   cnh_url: urlSchema,
   cartao_pis_url: urlSchema,
   ja_admitido_anteriormente: z.boolean().optional(),
-  // certidoes_filhos_urls: z.any().optional(), // Manteremos simples por enquanto
+  // certidoes_filhos_urls: z.any().optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -72,11 +87,24 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfil, role, onSaveComplete })
     defaultValues: {
       nome: perfil?.nome || '',
       
+      // Novos Dados Cadastrais
+      cpf: usuarioProfile?.cpf || '',
+      rg: usuarioProfile?.rg || '',
+      nome_mae: usuarioProfile?.nome_mae || '',
+      nome_pai: usuarioProfile?.nome_pai || '',
+      telefone: usuarioProfile?.telefone || '',
+      cep: usuarioProfile?.cep || '',
+      endereco: usuarioProfile?.endereco || '',
+      numero: usuarioProfile?.numero || '',
+      complemento: usuarioProfile?.complemento || '',
+      bairro: usuarioProfile?.bairro || '',
+      cidade: usuarioProfile?.cidade || '',
+      estado: usuarioProfile?.estado || '',
+
       // Contratuais
       data_inicio_contrato: parseDate(usuarioProfile?.data_inicio_contrato),
       data_fim_contrato: parseDate(usuarioProfile?.data_fim_contrato),
       data_inicio_aviso: parseDate(usuarioProfile?.data_inicio_aviso),
-      // Correção 2: Garantir que o valor padrão seja compatível com o enum ou null
       tipo_aviso: (usuarioProfile?.tipo_aviso as FormValues['tipo_aviso']) || 'Nenhum',
 
       // Documentos
@@ -97,7 +125,7 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfil, role, onSaveComplete })
     },
   });
 
-  const [activeTab, setActiveTab] = useState('pessoal');
+  const [activeTab, setActiveTab] = useState('cadastrais');
   const [uploading, setUploading] = useState(false);
 
   const getTableName = (currentRole: UserRole) => {
@@ -107,7 +135,6 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfil, role, onSaveComplete })
     throw new Error('Role inválida.');
   };
   
-  // Correção 9: Definir tableName no escopo do componente
   const tableName = role ? getTableName(role) : null;
 
   const onSubmit: SubmitHandler<FormValues> = async (values) => {
@@ -116,49 +143,48 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfil, role, onSaveComplete })
     try {
       
       // 1. Preparar dados para atualização
-      const dataToUpdate: any = { nome: values.nome };
+      const dataToUpdate: any = { 
+        nome: values.nome,
+        // Dados Cadastrais
+        cpf: values.cpf || null,
+        rg: values.rg || null,
+        nome_mae: values.nome_mae || null,
+        nome_pai: values.nome_pai || null,
+        telefone: values.telefone || null,
+        cep: values.cep || null,
+        endereco: values.endereco || null,
+        numero: values.numero || null,
+        complemento: values.complemento || null,
+        bairro: values.bairro || null,
+        cidade: values.cidade || null,
+        estado: values.estado || null,
+      };
 
       // Se for Usuário, ele só pode atualizar o nome e os campos de documentos
-      if (isUsuario) {
-        dataToUpdate.rg_url = values.rg_url;
-        dataToUpdate.cpf_url = values.cpf_url;
-        dataToUpdate.titulo_eleitor_url = values.titulo_eleitor_url;
-        dataToUpdate.reservista_url = values.reservista_url;
-        dataToUpdate.ctps_url = values.ctps_url;
-        dataToUpdate.certidao_nascimento_url = values.certidao_nascimento_url;
-        dataToUpdate.certidao_casamento_url = values.certidao_casamento_url;
-        dataToUpdate.comprovante_residencia_url = values.comprovante_residencia_url;
-        dataToUpdate.comprovante_escolaridade_url = values.comprovante_escolaridade_url;
-        dataToUpdate.exame_admissional_url = values.exame_admissional_url;
-        dataToUpdate.foto_3x4_url = values.foto_3x4_url;
-        dataToUpdate.cnh_url = values.cnh_url;
-        dataToUpdate.cartao_pis_url = values.cartao_pis_url;
+      if (isUsuario || tableName === 'tbl_usuarios') {
+        // Campos de Documentos (URLs)
+        dataToUpdate.rg_url = values.rg_url || null;
+        dataToUpdate.cpf_url = values.cpf_url || null;
+        dataToUpdate.titulo_eleitor_url = values.titulo_eleitor_url || null;
+        dataToUpdate.reservista_url = values.reservista_url || null;
+        dataToUpdate.ctps_url = values.ctps_url || null;
+        dataToUpdate.certidao_nascimento_url = values.certidao_nascimento_url || null;
+        dataToUpdate.certidao_casamento_url = values.certidao_casamento_url || null;
+        dataToUpdate.comprovante_residencia_url = values.comprovante_residencia_url || null;
+        dataToUpdate.comprovante_escolaridade_url = values.comprovante_escolaridade_url || null;
+        dataToUpdate.exame_admissional_url = values.exame_admissional_url || null;
+        dataToUpdate.foto_3x4_url = values.foto_3x4_url || null;
+        dataToUpdate.cnh_url = values.cnh_url || null;
+        dataToUpdate.cartao_pis_url = values.cartao_pis_url || null;
         dataToUpdate.ja_admitido_anteriormente = values.ja_admitido_anteriormente;
-        // Não atualiza campos contratuais
       }
       
-      // Se for Admin/Cliente, ele pode atualizar todos os campos do Usuário
+      // Se for Admin/Cliente E estiver editando um Usuário, ele pode atualizar campos contratuais
       if (isManager && tableName === 'tbl_usuarios') {
         dataToUpdate.data_inicio_contrato = values.data_inicio_contrato ? format(values.data_inicio_contrato, 'yyyy-MM-dd') : null;
         dataToUpdate.data_fim_contrato = values.data_fim_contrato ? format(values.data_fim_contrato, 'yyyy-MM-dd') : null;
         dataToUpdate.data_inicio_aviso = values.data_inicio_aviso ? format(values.data_inicio_aviso, 'yyyy-MM-dd') : null;
         dataToUpdate.tipo_aviso = values.tipo_aviso === 'Nenhum' ? null : values.tipo_aviso;
-        
-        // Permite que o manager edite os campos de documentos também, se necessário
-        dataToUpdate.rg_url = values.rg_url;
-        dataToUpdate.cpf_url = values.cpf_url;
-        dataToUpdate.titulo_eleitor_url = values.titulo_eleitor_url;
-        dataToUpdate.reservista_url = values.reservista_url;
-        dataToUpdate.ctps_url = values.ctps_url;
-        dataToUpdate.certidao_nascimento_url = values.certidao_nascimento_url;
-        dataToUpdate.certidao_casamento_url = values.certidao_casamento_url;
-        dataToUpdate.comprovante_residencia_url = values.comprovante_residencia_url;
-        dataToUpdate.comprovante_escolaridade_url = values.comprovante_escolaridade_url;
-        dataToUpdate.exame_admissional_url = values.exame_admissional_url;
-        dataToUpdate.foto_3x4_url = values.foto_3x4_url;
-        dataToUpdate.cnh_url = values.cnh_url;
-        dataToUpdate.cartao_pis_url = values.cartao_pis_url;
-        dataToUpdate.ja_admitido_anteriormente = values.ja_admitido_anteriormente;
       }
 
       // 2. Atualizar a tabela de perfil
@@ -187,6 +213,7 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfil, role, onSaveComplete })
 
     try {
       const fileExt = file.name.split('.').pop();
+      // O path de upload deve ser 'usuario_id/nome_do_campo-timestamp.ext'
       const filePath = `${perfil.id}/${fieldName}-${Date.now()}.${fileExt}`;
       
       const { error: uploadError } = await supabase.storage
@@ -212,7 +239,6 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfil, role, onSaveComplete })
     }
   };
 
-  // Correção 3, 5, 7, 8, 10: Tipagem correta do control e field.value
   const renderDocumentField = (fieldName: keyof FormValues, label: string, required: boolean = false) => {
     const url = form.watch(fieldName) as string | undefined;
     const isUploaded = !!url;
@@ -229,7 +255,6 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfil, role, onSaveComplete })
               <Input 
                 type="text" 
                 placeholder="URL do documento (preenchido automaticamente após upload)" 
-                // Correção 4: Garantir que o valor seja string para o input
                 value={(field.value as string) || ''}
                 onChange={field.onChange}
                 disabled={isSubmitting || isUploaded}
@@ -318,6 +343,23 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfil, role, onSaveComplete })
     />
   );
 
+  const renderInputField = (fieldName: keyof FormValues, label: string, placeholder: string, required: boolean = false) => (
+    <FormField
+      control={form.control as unknown as Control<FormValues>}
+      name={fieldName}
+      render={({ field }) => (
+        <FormItem>
+          <FormLabel>{label} {required && <span className="text-red-500">*</span>}</FormLabel>
+          <FormControl>
+            {/* Correção TS2322: Garantir que o valor seja string para o Input */}
+            <Input placeholder={placeholder} {...field} value={(field.value as string) || ''} />
+          </FormControl>
+          <FormMessage />
+        </FormItem>
+      )}
+    />
+  );
+
   return (
     <Card>
       <CardHeader>
@@ -328,14 +370,15 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfil, role, onSaveComplete })
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <TabsList className="grid w-full grid-cols-2 md:grid-cols-3 h-auto">
-                <TabsTrigger value="pessoal">Dados Pessoais</TabsTrigger>
+              <TabsList className="grid w-full grid-cols-3 md:grid-cols-4 h-auto">
+                <TabsTrigger value="foto">Foto</TabsTrigger>
+                <TabsTrigger value="cadastrais">Dados Cadastrais</TabsTrigger>
                 <TabsTrigger value="documentos">Documentos</TabsTrigger>
                 {isManager && <TabsTrigger value="contrato">Contrato (RH)</TabsTrigger>}
               </TabsList>
 
-              {/* TAB 1: DADOS PESSOAIS */}
-              <TabsContent value="pessoal" className="mt-4 space-y-4">
+              {/* TAB 1: FOTO */}
+              <TabsContent value="foto" className="mt-4 space-y-4">
                 <div className="flex flex-col items-center space-y-4">
                   <UserAvatar profile={perfil} className="h-20 w-20" />
                   <Button variant="outline" size="sm" disabled>
@@ -343,28 +386,42 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfil, role, onSaveComplete })
                     Alterar Foto (Em Breve)
                   </Button>
                 </div>
+              </TabsContent>
 
-                <FormField
-                  control={form.control as unknown as Control<FormValues>}
-                  name="nome"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Nome Completo</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Seu nome" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+              {/* TAB 2: DADOS CADASTRAIS */}
+              <TabsContent value="cadastrais" className="mt-4 space-y-4">
+                <p className="text-sm text-muted-foreground">Preencha seus dados pessoais e de contato para o cadastro de admissão.</p>
                 
+                {renderInputField('nome', 'Nome Completo', 'Seu nome completo', true)}
                 <FormItem>
                   <FormLabel>Email</FormLabel>
                   <Input value={perfil?.email || ''} disabled className="bg-muted/50" />
                 </FormItem>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {renderInputField('cpf', 'CPF', '000.000.000-00')}
+                    {renderInputField('rg', 'RG', '00.000.000-0')}
+                </div>
+
+                {renderInputField('nome_mae', 'Nome da Mãe', 'Nome completo da mãe', true)}
+                {renderInputField('nome_pai', 'Nome do Pai', 'Nome completo do pai')}
+                {renderInputField('telefone', 'Telefone de Contato', '(00) 90000-0000')}
+
+                <h4 className="font-semibold mt-6">Endereço</h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {renderInputField('cep', 'CEP', '00000-000')}
+                    {renderInputField('cidade', 'Cidade', 'São Paulo')}
+                    {renderInputField('estado', 'Estado (UF)', 'SP')}
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {renderInputField('endereco', 'Logradouro/Rua', 'Rua Exemplo')}
+                    {renderInputField('numero', 'Número', '123')}
+                    {renderInputField('complemento', 'Complemento', 'Apto 101')}
+                </div>
+                {renderInputField('bairro', 'Bairro', 'Centro')}
               </TabsContent>
 
-              {/* TAB 2: DOCUMENTOS DE ADMISSÃO */}
+              {/* TAB 3: DOCUMENTOS DE ADMISSÃO */}
               <TabsContent value="documentos" className="mt-4 space-y-4">
                 <p className="text-sm text-muted-foreground">Anexe os documentos obrigatórios. O link será gerado automaticamente após o upload.</p>
                 
@@ -429,7 +486,7 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfil, role, onSaveComplete })
                 </Accordion>
               </TabsContent>
 
-              {/* TAB 3: DADOS CONTRATUAIS (APENAS ADMIN/CLIENTE) */}
+              {/* TAB 4: DADOS CONTRATUAIS (APENAS ADMIN/CLIENTE) */}
               {isManager && tableName === 'tbl_usuarios' && (
                 <TabsContent value="contrato" className="mt-4 space-y-4">
                     <p className="text-sm text-muted-foreground">Estes campos são usados para gestão de RH e só podem ser editados por administradores ou gestores da empresa.</p>

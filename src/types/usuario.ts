@@ -27,7 +27,21 @@ export interface UsuarioProfile {
   cliente_id: string | null;
   permissoes: Record<string, boolean>; // Ex: { "contas_pagar": true, "relatorios": false }
   
-  // Campos de admissão (adicionados na etapa anterior)
+  // Novos campos cadastrais
+  cpf?: string | null;
+  rg?: string | null;
+  nome_mae?: string | null;
+  nome_pai?: string | null;
+  telefone?: string | null;
+  cep?: string | null;
+  endereco?: string | null;
+  numero?: string | null;
+  complemento?: string | null;
+  bairro?: string | null;
+  cidade?: string | null;
+  estado?: string | null;
+  
+  // Campos de admissão
   data_inicio_contrato?: string | null;
   data_fim_contrato?: string | null;
   data_inicio_aviso?: string | null;
