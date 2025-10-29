@@ -9,6 +9,7 @@ import MenuLateral from './MenuLateral';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useSessao } from '@/hooks/use-sessao';
 import UserAvatar from './UserAvatar';
+import { Link } from 'react-router-dom'; // Importando Link
 
 const ThemeToggle = () => {
   const { theme, setTheme } = useTheme();
@@ -89,9 +90,11 @@ const Header: React.FC = () => {
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => alert('TODO: Implementar edição de perfil')}>
-                <User className="mr-2 h-4 w-4" />
-                Editar Perfil
+              <DropdownMenuItem asChild>
+                <Link to="/perfil">
+                  <User className="mr-2 h-4 w-4" />
+                  Editar Perfil
+                </Link>
               </DropdownMenuItem>
               <DropdownMenuItem onClick={handlePasswordReset}>
                 <Key className="mr-2 h-4 w-4" />

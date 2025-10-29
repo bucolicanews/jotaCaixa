@@ -20,6 +20,7 @@ import GerenciarUsuarios from "./pages/GerenciarUsuarios";
 import CadastrarEmpresa from "./pages/CadastrarEmpresa";
 import PontoEletronico from "./pages/PontoEletronico";
 import ClientesPage from "./pages/Clientes";
+import Perfil from "./pages/Perfil"; // Importando a nova página
 
 const queryClient = new QueryClient();
 
@@ -50,6 +51,7 @@ const App = () => (
             <Route path="/gerenciar-usuarios" element={<GerenciarUsuarios />} />
             <Route path="/cadastrar-empresa" element={<CadastrarEmpresa />} />
             <Route path="/ponto-eletronico" element={<PontoEletronico />} />
+            <Route path="/perfil" element={<Perfil />} /> {/* Nova Rota */}
 
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
