@@ -1,19 +1,15 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { useSessao } from '@/hooks/use-sessao';
-import { Loader2, Calendar, Filter, Clock, Users, Building2 } from 'lucide-react';
+import { Loader2, Filter, Clock, Users, Building2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
-import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { showError } from '@/utils/toast';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import DetalheFolhaPonto from '@/components/DetalheFolhaPonto';
+import { MonthPicker } from '@/components/MonthPicker'; // Importando o novo componente
 
 interface RegistroPonto {
   id: string;
@@ -217,39 +213,12 @@ const FolhaPonto: React.FC = () => {
                 </SelectContent>
             </Select>
             
-            {/* Seletor de Mês */}
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant={"outline"}
-                  className={cn(
-                    "w-full sm:w-[200px] justify-start text-left font-normal",
-                    !dataSelecionada && "text-muted-foreground"
-                  )}
-                  disabled={carregandoDados}
-                >
-                  <Calendar className="mr-2 h-4 w-4" />
-                  {dataSelecionada ? (
-                    format(dataSelecionada, "MMMM yyyy", { locale: ptBR })
-                  ) : (
-                    <span>Selecione o mês</span>
-                  )}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <CalendarComponent
-                  mode="single"
-                  captionLayout="dropdown-buttons"
-                  selected={dataSelecionada}
-                  onSelect={(date) => {
-                    if (date) setDataSelecionada(startOfMonth(date));
-                  }}
-                  fromYear={2020}
-                  toYear={new Date().getFullYear()}
-                  locale={ptBR}
-                />
-              </PopoverContent>
-            </Popover>
+            {/* Seletor de Mês (MonthPicker) */}
+            <MonthPicker
+              date={dataSelecionada}
+              setDate={setDataSelecionada}
+              disabled={carregandoDados}
+            />
           </div>
         </CardHeader>
       </Card>
