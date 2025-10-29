@@ -534,7 +534,8 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, c
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
         
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="flex flex-wrap justify-start w-full h-auto p-1">
+          {/* APLICANDO GRID DE 2 COLUNAS EM TELAS PEQUENAS */}
+          <TabsList className="grid w-full grid-cols-2 md:flex md:flex-wrap md:justify-start h-auto p-1">
             <TabsTrigger value="pessoal" className="flex-1 md:flex-none md:w-1/4">Geral</TabsTrigger>
             {isUserBeingManagedByClient && <TabsTrigger value="cadastrais" className="flex-1 md:flex-none md:w-1/4">Dados Cadastrais</TabsTrigger>}
             {isUserBeingManagedByClient && <TabsTrigger value="documentos" className="flex-1 md:flex-none md:w-1/4">Documentos</TabsTrigger>}
@@ -680,7 +681,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, c
             </TabsContent>
           )}
 
-          {/* TAB 4: DADOS CONTRATUAIS (RH) - Apenas para Usuário/Funcionário */}
+          {/* TAB 4: DADOS CONTRATUAIS (RH) - Apenas para Usuário/Funcionário) */}
           {isUserBeingManagedByClient && (
             <TabsContent value="contrato" className="mt-4 space-y-6 p-4">
                 <p className="text-sm text-muted-foreground">Estes campos são usados para gestão de RH.</p>
