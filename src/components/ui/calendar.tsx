@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { DayPicker, useDayPicker, useNavigation } from "react-day-picker";
+import { DayPicker, useNavigation } from "react-day-picker";
 import { ptBR } from "date-fns/locale";
 import { format } from "date-fns";
 

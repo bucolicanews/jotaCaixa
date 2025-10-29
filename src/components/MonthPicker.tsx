@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { format } from "date-fns";
 import { Calendar as CalendarIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -19,15 +20,35 @@ export function MonthPicker({
   disabled = false,
 }: MonthPickerProps) {
   
+  const [tempDate, setTempDate] = useState(date);
+  const [open, setOpen] = useState(false);
+
+  // Sincroniza tempDate quando o popover abre ou a data externa muda
+  useEffect(() => {
+    if (!open) {
+        setTempDate(date);
+    }
+  }, [date, open]);
+
   // Função para garantir que a data selecionada seja sempre o início do mês
   const handleSelect = (newDate: Date | undefined) => {
     if (newDate) {
-      setDate(startOfMonth(newDate));
+      setTempDate(startOfMonth(newDate));
     }
   };
 
+  // Função chamada quando o mês/ano muda via dropdowns (onMonthChange)
+  const handleMonthChange = (newMonth: Date) => {
+    setTempDate(startOfMonth(newMonth));
+  };
+
+  const handleConfirm = () => {
+    setDate(tempDate);
+    setOpen(false);
+  };
+
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
           variant={"outline"}
@@ -48,24 +69,27 @@ export function MonthPicker({
       <PopoverContent className="w-auto p-0" align="start">
         <Calendar
           mode="single"
-          // Usamos 'dropdown-buttons' para ativar o CaptionComponent personalizado
           captionLayout="dropdown-buttons" 
-          selected={date}
+          selected={tempDate}
           onSelect={handleSelect}
+          onMonthChange={handleMonthChange} // Captura mudanças de mês/ano via dropdowns
           initialFocus
           locale={ptBR}
-          // Configurações para mostrar apenas o seletor de mês/ano
           numberOfMonths={1}
-          defaultMonth={date}
-          // Oculta a tabela de dias e a navegação de setas
+          defaultMonth={tempDate}
           classNames={{
             nav: "hidden", 
             table: "hidden", 
             head_row: "hidden", 
             row: "hidden", 
-            caption_dropdowns: "hidden", // Oculta o dropdown nativo
+            caption_dropdowns: "hidden",
           }}
         />
+        <div className="p-2 border-t flex justify-end">
+            <Button size="sm" onClick={handleConfirm}>
+                Confirmar
+            </Button>
+        </div>
       </PopoverContent>
     </Popover>
   );
