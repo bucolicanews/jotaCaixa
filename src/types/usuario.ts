@@ -6,12 +6,14 @@ export interface AdminProfile {
   id: string;
   nome: string;
   email: string;
+  avatar_url?: string | null;
 }
 
 export interface ClienteProfile {
   id: string;
   nome: string;
   email: string;
+  avatar_url?: string | null;
   limite_usuarios: number;
   aprovado: boolean;
   permissoes: Record<string, boolean>;
@@ -21,8 +23,30 @@ export interface UsuarioProfile {
   id: string;
   nome: string;
   email: string;
+  avatar_url?: string | null;
   cliente_id: string | null;
   permissoes: Record<string, boolean>; // Ex: { "contas_pagar": true, "relatorios": false }
+  
+  // Campos de admissão (adicionados na etapa anterior)
+  data_inicio_contrato?: string | null;
+  data_fim_contrato?: string | null;
+  data_inicio_aviso?: string | null;
+  tipo_aviso?: string | null;
+  rg_url?: string | null;
+  cpf_url?: string | null;
+  titulo_eleitor_url?: string | null;
+  reservista_url?: string | null;
+  ctps_url?: string | null;
+  certidao_nascimento_url?: string | null;
+  certidao_casamento_url?: string | null;
+  comprovante_residencia_url?: string | null;
+  comprovante_escolaridade_url?: string | null;
+  exame_admissional_url?: string | null;
+  foto_3x4_url?: string | null;
+  cnh_url?: string | null;
+  cartao_pis_url?: string | null;
+  ja_admitido_anteriormente?: boolean | null;
+  certidoes_filhos_urls?: any;
 }
 
 export type AnyProfile = AdminProfile | ClienteProfile | UsuarioProfile | null;

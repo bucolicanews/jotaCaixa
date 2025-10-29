@@ -1,7 +1,7 @@
 # VERSÃO TESTE 1.0.0.000
--Contas a Receber 1.0 - Inico ( cadastro do cliente , contas parceladas, repeditas, baixa das contas reparcelamento, filtro)
+-Contas a Receber 1.0 - modo dark impplantado
 
-- Proxima ação(Melhorar o filtro, colocar botões na lista de contas a receber)
+- Proxima ação(Criar o Nivel Dev)
 
 # Fluxo de Caixa - Sistema de Gestão Financeira
 
