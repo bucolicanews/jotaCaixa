@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
-import { LayoutDashboard, DollarSign, ArrowUpCircle, ArrowDownCircle, Banknote, FileText, Upload, Settings, BookOpen, Users, Building2, Clock, Contact, CalendarCheck } from 'lucide-react';
+import { LayoutDashboard, DollarSign, ArrowUpCircle, ArrowDownCircle, Banknote, FileText, Upload, Settings, BookOpen, Users, Building2, Clock, Contact, CalendarCheck, User } from 'lucide-react';
 import React from 'react';
 import { useSessao } from '@/hooks/use-sessao';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
@@ -17,6 +17,8 @@ const itensMenu: ItemMenu[] = [
   { nome: 'Painel', caminho: '/painel', icone: LayoutDashboard, perfis: ['Admin', 'Cliente', 'Usuario'] },
   // Ponto Eletrônico: Apenas para Usuário, controlado por 'ponto_eletronico'
   { nome: 'Ponto Eletrônico', caminho: '/ponto-eletronico', icone: Clock, perfis: ['Usuario'], permissionKey: 'ponto_eletronico' },
+  // Meu Ponto (Visualização): Apenas para Usuário, controlado por 'visualizar_proprio_ponto'
+  { nome: 'Meu Ponto', caminho: '/perfil', icone: User, perfis: ['Usuario'], permissionKey: 'visualizar_proprio_ponto' },
   // Acompanhar Ponto: Para Admin e Cliente, controlado por 'folha_ponto'
   { nome: 'Acompanhar Ponto', caminho: '/folha-ponto', icone: CalendarCheck, perfis: ['Admin', 'Cliente'], permissionKey: 'folha_ponto' },
   { nome: 'Contas a Pagar', caminho: '/contas-pagar', icone: ArrowDownCircle, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'contas_pagar' },
@@ -70,6 +72,10 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick }) => {
 
           // Lógica de permissão para o perfil 'Cliente'
           if (role === 'Cliente' && item.permissionKey) {
+            // Se for 'Meu Ponto', oculta para Cliente (que usa Acompanhar Ponto)
+            if (item.caminho === '/perfil' && item.permissionKey === 'visualizar_proprio_ponto') {
+                return null;
+            }
             // Se a permissão não estiver ativada para o Cliente, oculta o item.
             if (!clientProfile.permissoes?.[item.permissionKey]) {
                 return null;
@@ -82,8 +88,14 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick }) => {
             if (item.caminho === '/folha-ponto') {
                 return null;
             }
+            // Se for 'Meu Ponto', verifica a permissão específica
+            if (item.caminho === '/perfil' && item.permissionKey === 'visualizar_proprio_ponto') {
+                if (!userProfile.permissoes?.[item.permissionKey]) {
+                    return null;
+                }
+            }
             // Para Ponto Eletrônico e outros módulos, verifica a permissão.
-            if (!userProfile.permissoes?.[item.permissionKey]) {
+            if (item.caminho !== '/perfil' && !userProfile.permissoes?.[item.permissionKey]) {
                 return null;
             }
           }
