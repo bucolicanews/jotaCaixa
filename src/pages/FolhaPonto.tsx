@@ -9,7 +9,7 @@ import { showError } from '@/utils/toast';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import DetalheFolhaPonto from '@/components/DetalheFolhaPonto';
-import { MonthPicker } from '@/components/MonthPicker'; // Importando o novo componente
+import { MonthPicker } from '@/components/MonthPicker';
 
 interface RegistroPonto {
   id: string;
@@ -51,6 +51,9 @@ const FolhaPonto: React.FC = () => {
   const isAdmin = role === 'Admin';
   const isCliente = role === 'Cliente' && (perfil as ClienteProfile)?.aprovado;
   
+  // Determina o ID da empresa a ser usada para filtrar funcionários
+  const empresaIdParaFiltro = isAdmin ? clienteSelecionadoId : (isCliente ? perfil?.id : null);
+
   const fetchClientes = useCallback(async () => {
     if (!isAdmin) return;
     
@@ -133,17 +136,14 @@ const FolhaPonto: React.FC = () => {
 
   // Efeito 2: Carregar Funcionários (depende do Cliente selecionado ou do próprio Cliente logado)
   useEffect(() => {
-    if (!carregando) {
-        if (isCliente && perfil?.id) {
-            fetchFuncionarios(perfil.id);
-        } else if (isAdmin && clienteSelecionadoId) {
-            fetchFuncionarios(clienteSelecionadoId);
-        } else if (isAdmin && clientes.length === 0) {
-            setFuncionarios([]);
-            setFuncionarioSelecionadoId(null);
-        }
+    if (!carregando && empresaIdParaFiltro) {
+        fetchFuncionarios(empresaIdParaFiltro);
+    } else if (!carregando && isAdmin && !clienteSelecionadoId) {
+        // Se for Admin e não houver cliente selecionado (ou clientes), limpa a lista
+        setFuncionarios([]);
+        setFuncionarioSelecionadoId(null);
     }
-  }, [carregando, isCliente, isAdmin, perfil, clienteSelecionadoId, fetchFuncionarios, clientes.length]);
+  }, [carregando, empresaIdParaFiltro, isAdmin, clienteSelecionadoId, fetchFuncionarios]);
 
   // Efeito 3: Carregar Registros (depende do Funcionário e da Data)
   useEffect(() => {
