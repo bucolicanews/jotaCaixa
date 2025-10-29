@@ -26,7 +26,8 @@ const Perfil = () => {
   return (
     <LayoutPrincipal>
       <h1 className="text-2xl md:text-3xl font-bold mb-6">Meu Perfil</h1>
-      <div className="max-w-3xl mx-auto">
+      {/* Aumentando a largura máxima para 3xl e garantindo margem automática */}
+      <div className="max-w-4xl mx-auto"> 
         <FormPerfil 
           perfil={perfil} 
           role={role} 

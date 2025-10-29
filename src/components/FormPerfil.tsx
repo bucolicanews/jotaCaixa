@@ -351,7 +351,6 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfil, role, onSaveComplete })
         <FormItem>
           <FormLabel>{label} {required && <span className="text-red-500">*</span>}</FormLabel>
           <FormControl>
-            {/* Correção TS2322: Garantir que o valor seja string para o Input */}
             <Input placeholder={placeholder} {...field} value={(field.value as string) || ''} />
           </FormControl>
           <FormMessage />
@@ -370,15 +369,16 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfil, role, onSaveComplete })
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <TabsList className="grid w-full grid-cols-3 md:grid-cols-4 h-auto">
-                <TabsTrigger value="foto">Foto</TabsTrigger>
-                <TabsTrigger value="cadastrais">Dados Cadastrais</TabsTrigger>
-                <TabsTrigger value="documentos">Documentos</TabsTrigger>
-                {isManager && <TabsTrigger value="contrato">Contrato (RH)</TabsTrigger>}
+              {/* Ajuste 1: Usando flex-wrap para melhor responsividade das abas */}
+              <TabsList className="flex flex-wrap justify-start w-full h-auto p-1">
+                <TabsTrigger value="foto" className="flex-1 md:flex-none">Foto</TabsTrigger>
+                <TabsTrigger value="cadastrais" className="flex-1 md:flex-none">Dados Cadastrais</TabsTrigger>
+                <TabsTrigger value="documentos" className="flex-1 md:flex-none">Documentos</TabsTrigger>
+                {isManager && <TabsTrigger value="contrato" className="flex-1 md:flex-none">Contrato (RH)</TabsTrigger>}
               </TabsList>
 
               {/* TAB 1: FOTO */}
-              <TabsContent value="foto" className="mt-4 space-y-4">
+              <TabsContent value="foto" className="mt-4 space-y-6 p-2 md:p-4">
                 <div className="flex flex-col items-center space-y-4">
                   <UserAvatar profile={perfil} className="h-20 w-20" />
                   <Button variant="outline" size="sm" disabled>
@@ -389,7 +389,7 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfil, role, onSaveComplete })
               </TabsContent>
 
               {/* TAB 2: DADOS CADASTRAIS */}
-              <TabsContent value="cadastrais" className="mt-4 space-y-4">
+              <TabsContent value="cadastrais" className="mt-4 space-y-6 p-2 md:p-4">
                 <p className="text-sm text-muted-foreground">Preencha seus dados pessoais e de contato para o cadastro de admissão.</p>
                 
                 {renderInputField('nome', 'Nome Completo', 'Seu nome completo', true)}
@@ -407,7 +407,7 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfil, role, onSaveComplete })
                 {renderInputField('nome_pai', 'Nome do Pai', 'Nome completo do pai')}
                 {renderInputField('telefone', 'Telefone de Contato', '(00) 90000-0000')}
 
-                <h4 className="font-semibold mt-6">Endereço</h4>
+                <h4 className="font-semibold mt-6 border-t pt-4">Endereço</h4>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {renderInputField('cep', 'CEP', '00000-000')}
                     {renderInputField('cidade', 'Cidade', 'São Paulo')}
@@ -422,7 +422,7 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfil, role, onSaveComplete })
               </TabsContent>
 
               {/* TAB 3: DOCUMENTOS DE ADMISSÃO */}
-              <TabsContent value="documentos" className="mt-4 space-y-4">
+              <TabsContent value="documentos" className="mt-4 space-y-6 p-2 md:p-4">
                 <p className="text-sm text-muted-foreground">Anexe os documentos obrigatórios. O link será gerado automaticamente após o upload.</p>
                 
                 <Accordion type="multiple" className="w-full">
@@ -488,7 +488,7 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfil, role, onSaveComplete })
 
               {/* TAB 4: DADOS CONTRATUAIS (APENAS ADMIN/CLIENTE) */}
               {isManager && tableName === 'tbl_usuarios' && (
-                <TabsContent value="contrato" className="mt-4 space-y-4">
+                <TabsContent value="contrato" className="mt-4 space-y-6 p-2 md:p-4">
                     <p className="text-sm text-muted-foreground">Estes campos são usados para gestão de RH e só podem ser editados por administradores ou gestores da empresa.</p>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {renderDateField('data_inicio_contrato', 'Início do Contrato', !isManager)}
