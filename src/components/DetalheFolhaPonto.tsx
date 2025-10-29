@@ -142,9 +142,17 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes 
                                         {registros.map(r => (
                                             <span key={r.id} className="text-sm bg-muted px-2 py-1 rounded-full flex items-center">
                                                 {r.tipo}: {format(parseISO(r.horario_registro), 'HH:mm')}
-                                                <a href={r.maps_url} target="_blank" rel="noopener noreferrer" className="ml-1 text-blue-500 hover:text-blue-700 inline-flex items-center">
-                                                    <MapPin className="w-3 h-3" />
-                                                </a>
+                                                {r.maps_url && (
+                                                    <a 
+                                                        href={r.maps_url} 
+                                                        target="_blank" 
+                                                        rel="noopener noreferrer" 
+                                                        className="ml-1 text-blue-500 hover:text-blue-700 inline-flex items-center"
+                                                        title="Ver Localização"
+                                                    >
+                                                        <MapPin className="w-3 h-3" />
+                                                    </a>
+                                                )}
                                                 {r.selfie_url && (
                                                     <button 
                                                         onClick={() => handleViewSelfie(r.selfie_url)} 
