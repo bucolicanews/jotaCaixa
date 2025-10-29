@@ -376,8 +376,7 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfil, role, onSaveComplete })
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              {/* APLICANDO GRID DE 2 COLUNAS EM TELAS PEQUENAS */}
-              <TabsList className="grid w-full grid-cols-2 md:flex md:flex-wrap md:justify-start h-auto p-1">
+              <TabsList className="flex flex-wrap justify-start w-full h-auto p-1">
                 <TabsTrigger value="foto" className="flex-1 md:flex-none">Foto</TabsTrigger>
                 <TabsTrigger value="cadastrais" className="flex-1 md:flex-none">Dados Cadastrais</TabsTrigger>
                 <TabsTrigger value="documentos" className="flex-1 md:flex-none">Documentos</TabsTrigger>
