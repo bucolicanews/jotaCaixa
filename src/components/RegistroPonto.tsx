@@ -158,7 +158,8 @@ const RegistroPonto: React.FC = () => {
           Registro de Ponto Eletrônico
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-6">
+      {/* Garantindo padding adequado no CardContent */}
+      <CardContent className="p-4 sm:p-6 space-y-6"> 
         <div className="space-y-4">
           <h3 className="text-lg font-semibold flex items-center">
             <Camera className="w-5 h-5 mr-2" /> 1. Captura de Selfie
@@ -180,7 +181,8 @@ const RegistroPonto: React.FC = () => {
           <p className="text-sm text-muted-foreground">
             Confirme o registro de ponto (Entrada ou Saída).
           </p>
-          <div className="flex space-x-4">
+          {/* Usando flex-col em mobile e flex-row em telas maiores para os botões */}
+          <div className="flex flex-col space-y-4 sm:flex-row sm:space-x-4 sm:space-y-0"> 
             <Button 
               onClick={() => handlePreRegister('Entrada')} 
               disabled={loading || !selfieFile}
