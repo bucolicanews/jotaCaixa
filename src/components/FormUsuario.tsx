@@ -31,6 +31,11 @@ const formSchema = z.object({
   limite_usuarios: z.coerce.number().int().min(1, 'O limite deve ser pelo menos 1.').optional(),
   permissoes: z.record(z.boolean()).optional(),
   
+  // Novos Campos de Salário/Jornada
+  salario: z.coerce.number().min(0).optional(),
+  horas_semanais: z.coerce.number().int().min(1).optional(),
+  horas_mensais: z.coerce.number().int().min(1).optional(),
+  
   // Novos Dados Cadastrais
   cpf: textOptional,
   rg: textOptional,
@@ -123,6 +128,11 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, c
       limite_usuarios: isClient ? (profileToEdit as ClienteProfile).limite_usuarios : 5,
       permissoes: defaultPermissoes,
       
+      // Dados de Salário/Jornada
+      salario: (profileToEdit as UsuarioProfile)?.salario || 0,
+      horas_semanais: (profileToEdit as UsuarioProfile)?.horas_semanais || 44,
+      horas_mensais: (profileToEdit as UsuarioProfile)?.horas_mensais || 220,
+
       // Dados Cadastrais
       cpf: (profileToEdit as UsuarioProfile)?.cpf || '',
       rg: (profileToEdit as UsuarioProfile)?.rg || '',
@@ -192,6 +202,11 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, c
           // Edição de Usuário (Funcionário)
           dataToUpdate.permissoes = values.permissoes;
           
+          // Dados de Salário/Jornada
+          dataToUpdate.salario = values.salario;
+          dataToUpdate.horas_semanais = values.horas_semanais;
+          dataToUpdate.horas_mensais = values.horas_mensais;
+
           // Dados Cadastrais
           dataToUpdate.cpf = values.cpf || null;
           dataToUpdate.rg = values.rg || null;
@@ -269,6 +284,10 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, c
             bairro: values.bairro || null,
             cidade: values.cidade || null,
             estado: values.estado || null,
+            // Adiciona dados de salário/jornada na criação
+            salario: values.salario,
+            horas_semanais: values.horas_semanais,
+            horas_mensais: values.horas_mensais,
         }).eq('email', values.email);
         
         if (userUpdateError) throw new Error('Usuário criado, mas falha ao definir dados iniciais.');
@@ -289,7 +308,6 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, c
 
     try {
       const fileExt = file.name.split('.').pop();
-      // Correção 3: Garantir que fieldName seja string
       const filePath = `${usuarioInicial.id}/${String(fieldName)}-${Date.now()}.${fileExt}`;
       
       const { error: uploadError } = await supabase.storage
@@ -344,7 +362,6 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, c
                     form.setValue(fieldName, '' as any, { shouldDirty: true });
                     showSuccess('Link do documento removido. Salve para confirmar.');
                   } else {
-                    // Correção 3: Garantir que fieldName seja string
                     document.getElementById(`file-upload-${String(fieldName)}`)?.click();
                   }
                 }}
@@ -353,7 +370,6 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, c
                 {isUploaded ? <XCircle className="w-4 h-4" /> : <Upload className="w-4 h-4" />}
               </Button>
               <input
-                // Correção 3: Garantir que fieldName seja string
                 id={`file-upload-${String(fieldName)}`}
                 type="file"
                 accept="image/*, application/pdf"
@@ -426,8 +442,30 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, c
         <FormItem>
           <FormLabel>{label} {required && <span className="text-red-500">*</span>}</FormLabel>
           <FormControl>
-            {/* Correção 4: Forçar o tipo name para string */}
             <Input placeholder={placeholder} {...field} name={String(field.name)} value={(field.value as string) || ''} disabled={disabled} />
+          </FormControl>
+          <FormMessage />
+        </FormItem>
+      )}
+    />
+  );
+  
+  const renderNumberField = (fieldName: keyof FormValues, label: string, placeholder: string, disabled: boolean = false) => (
+    <FormField
+      control={form.control as unknown as Control<FormValues>}
+      name={fieldName}
+      render={({ field }) => (
+        <FormItem>
+          <FormLabel>{label}</FormLabel>
+          <FormControl>
+            <Input 
+              type="number" 
+              placeholder={placeholder} 
+              {...field} 
+              value={field.value === undefined || field.value === null ? '' : String(field.value)}
+              onChange={(e) => field.onChange(e.target.value === '' ? undefined : Number(e.target.value))}
+              disabled={disabled} 
+            />
           </FormControl>
           <FormMessage />
         </FormItem>
@@ -495,7 +533,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, c
             {isUserBeingManagedByClient && <TabsTrigger value="contrato" className="flex-1 md:flex-none md:w-1/4">Contrato (RH)</TabsTrigger>}
           </TabsList>
 
-          {/* TAB 1: GERAL (Nome, Email, Senha, Permissões) */}
+          {/* TAB 1: GERAL (Nome, Email, Senha, Permissões, Salário) */}
           <TabsContent value="pessoal" className="mt-4 space-y-4 p-4">
             <FormField control={form.control as unknown as Control<FormValues>} name="nome" render={({ field }) => (
               <FormItem><FormLabel>Nome Completo</FormLabel><FormControl><Input placeholder="Nome completo" {...field} /></FormControl><FormMessage /></FormItem>
@@ -508,6 +546,14 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, c
                 <FormItem><FormLabel>Senha Provisória</FormLabel><FormControl><Input type="password" placeholder="••••••••" {...field} /></FormControl><FormMessage /></FormItem>
               )} />
             )}
+            
+            <h4 className="font-semibold mt-6 border-t pt-4">Remuneração e Jornada</h4>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {renderNumberField('salario', 'Salário Mensal (R$)', '3000.00', isNewUser)}
+                {renderNumberField('horas_semanais', 'Horas Semanais', '44', isNewUser)}
+                {renderNumberField('horas_mensais', 'Horas Mensais', '220', isNewUser)}
+            </div>
+
             {(isClientBeingManagedByAdmin || isUserBeingManagedByClient) && (
               <div className="space-y-2 pt-4 border-t">
                 <div className="flex justify-between items-center mb-1">

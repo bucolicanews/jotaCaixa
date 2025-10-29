@@ -1,18 +1,19 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { useSessao } from '@/hooks/use-sessao';
-import { Loader2, Calendar, Filter, Clock } from 'lucide-react';
+import { Loader2, Calendar, Filter, Clock, Users } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
-import { format, startOfMonth, endOfMonth, parseISO, differenceInMinutes } from 'date-fns';
+import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { showError } from '@/utils/toast';
-import { ClienteProfile } from '@/types/usuario';
+import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import DetalheFolhaPonto from '@/components/DetalheFolhaPonto';
 
 interface RegistroPonto {
   id: string;
@@ -21,113 +22,92 @@ interface RegistroPonto {
   horario_registro: string; // ISO string
   tipo: 'Entrada' | 'Saida';
   maps_url: string;
-  tbl_usuarios: {
-    nome: string;
-    email: string;
-  } | null;
 }
 
-interface FuncionarioResumo {
-  nome: string;
-  email: string;
-  totalMinutos: number;
-  registros: RegistroPonto[];
+interface FuncionarioComDados extends UsuarioProfile {
+    id: string;
+    nome: string;
+    email: string;
+    salario: number;
+    horas_mensais: number;
 }
 
 const FolhaPonto: React.FC = () => {
   const { role, perfil, carregando } = useSessao();
   const [dataSelecionada, setDataSelecionada] = useState<Date>(startOfMonth(new Date()));
   const [carregandoDados, setCarregandoDados] = useState(false);
-  const [resumoFuncionarios, setResumoFuncionarios] = useState<FuncionarioResumo[]>([]);
+  const [funcionarios, setFuncionarios] = useState<FuncionarioComDados[]>([]);
+  const [funcionarioSelecionadoId, setFuncionarioSelecionadoId] = useState<string | null>(null);
+  const [registrosDoFuncionario, setRegistrosDoFuncionario] = useState<RegistroPonto[]>([]);
 
   const isAdmin = role === 'Admin';
   const isCliente = role === 'Cliente' && (perfil as ClienteProfile)?.aprovado;
-  const empresaId = isCliente ? perfil?.id : null;
+  const ownerId = isAdmin ? perfil?.id : (isCliente ? perfil?.id : null);
 
-  const calcularHorasTrabalhadas = (registros: RegistroPonto[]): number => {
-    let totalMinutos = 0;
-    let entrada: Date | null = null;
+  const fetchFuncionarios = useCallback(async () => {
+    if (!ownerId) return;
 
-    // Ordena os registros por horário
-    registros.sort((a, b) => parseISO(a.horario_registro).getTime() - parseISO(b.horario_registro).getTime());
+    setCarregandoDados(true);
+    
+    let query = supabase
+        .from('tbl_usuarios')
+        .select('id, nome, email, salario, horas_mensais');
 
-    for (const registro of registros) {
-      const horario = parseISO(registro.horario_registro);
-      if (registro.tipo === 'Entrada') {
-        entrada = horario;
-      } else if (registro.tipo === 'Saida' && entrada) {
-        totalMinutos += differenceInMinutes(horario, entrada);
-        entrada = null; // Reseta a entrada após uma saída
-      }
+    if (isCliente) {
+        query = query.eq('cliente_id', ownerId);
     }
-    return totalMinutos;
-  };
+    // Se for Admin, ele vê todos os usuários (incluindo clientes que não são admins)
 
-  const buscarRegistros = useCallback(async (data: Date) => {
-    if (!isAdmin && !isCliente) return;
+    const { data, error } = await query;
 
+    if (error) {
+        showError('Erro ao carregar lista de funcionários: ' + error.message);
+        setFuncionarios([]);
+    } else {
+        const funcs = data as FuncionarioComDados[];
+        setFuncionarios(funcs);
+        if (funcs.length > 0 && !funcionarioSelecionadoId) {
+            setFuncionarioSelecionadoId(funcs[0].id);
+        }
+    }
+    setCarregandoDados(false);
+  }, [ownerId, isCliente, funcionarioSelecionadoId]);
+
+  const fetchRegistros = useCallback(async (funcionarioId: string, data: Date) => {
     setCarregandoDados(true);
     const inicioMes = format(startOfMonth(data), 'yyyy-MM-dd');
     const fimMes = format(endOfMonth(data), 'yyyy-MM-dd');
 
-    let query = supabase
+    const { data: registros, error } = await supabase
       .from('registros_ponto')
-      .select(`
-        *,
-        tbl_usuarios (
-          nome,
-          email
-        )
-      `)
+      .select('*')
+      .eq('funcionario_id', funcionarioId)
       .gte('horario_registro', inicioMes)
       .lte('horario_registro', fimMes)
       .order('horario_registro', { ascending: true });
-      
-    // Se for Cliente, filtra apenas pelos registros da sua empresa
-    if (isCliente && empresaId) {
-      query = query.eq('empresa_id', empresaId);
-    }
-    // Se for Admin, a política RLS já garante que ele veja todos os registros.
-
-    const { data: registros, error } = await query;
 
     if (error) {
       showError('Erro ao carregar registros de ponto: ' + error.message);
-      setResumoFuncionarios([]);
-      setCarregandoDados(false);
-      return;
+      setRegistrosDoFuncionario([]);
+    } else {
+      setRegistrosDoFuncionario(registros as RegistroPonto[]);
     }
-
-    // Agrupar por funcionário
-    const agrupado = (registros as RegistroPonto[]).reduce((acc, registro) => {
-      const id = registro.funcionario_id;
-      if (!acc[id]) {
-        acc[id] = {
-          nome: registro.tbl_usuarios?.nome || 'Desconhecido',
-          email: registro.tbl_usuarios?.email || 'N/A',
-          totalMinutos: 0,
-          registros: [],
-        };
-      }
-      acc[id].registros.push(registro);
-      return acc;
-    }, {} as Record<string, FuncionarioResumo>);
-
-    // Calcular total de horas
-    const resumoFinal = Object.values(agrupado).map(func => ({
-      ...func,
-      totalMinutos: calcularHorasTrabalhadas(func.registros),
-    }));
-
-    setResumoFuncionarios(resumoFinal);
     setCarregandoDados(false);
-  }, [isAdmin, isCliente, empresaId]);
+  }, []);
 
   useEffect(() => {
     if (!carregando && (isAdmin || isCliente)) {
-      buscarRegistros(dataSelecionada);
+      fetchFuncionarios();
     }
-  }, [carregando, isAdmin, isCliente, dataSelecionada, buscarRegistros]);
+  }, [carregando, isAdmin, isCliente, fetchFuncionarios]);
+
+  useEffect(() => {
+    if (funcionarioSelecionadoId) {
+      fetchRegistros(funcionarioSelecionadoId, dataSelecionada);
+    } else {
+        setRegistrosDoFuncionario([]);
+    }
+  }, [funcionarioSelecionadoId, dataSelecionada, fetchRegistros]);
 
   if (carregando) {
     return <LayoutPrincipal><div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div></LayoutPrincipal>;
@@ -136,12 +116,8 @@ const FolhaPonto: React.FC = () => {
   if (!isAdmin && !isCliente) {
     return <LayoutPrincipal><Card><CardHeader><CardTitle>Acesso Negado</CardTitle></CardHeader><CardContent><p>Você não tem permissão para acessar a folha de ponto.</p></CardContent></Card></LayoutPrincipal>;
   }
-
-  const formatarHoras = (minutos: number): string => {
-    const horas = Math.floor(minutos / 60);
-    const mins = minutos % 60;
-    return `${horas}h ${mins}m`;
-  };
+  
+  const funcionarioDetalhe = funcionarios.find(f => f.id === funcionarioSelecionadoId);
 
   return (
     <LayoutPrincipal>
@@ -150,83 +126,82 @@ const FolhaPonto: React.FC = () => {
       </h1>
 
       <Card className="mb-6">
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardHeader className="flex flex-col md:flex-row items-start md:items-center justify-between space-y-4 md:space-y-0 pb-2">
           <CardTitle className="text-lg font-medium flex items-center">
-            <Filter className="w-4 h-4 mr-2" /> Filtrar por Mês
+            <Filter className="w-4 h-4 mr-2" /> Filtros
           </CardTitle>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant={"outline"}
-                className={cn(
-                  "w-[240px] justify-start text-left font-normal",
-                  !dataSelecionada && "text-muted-foreground"
-                )}
-              >
-                <Calendar className="mr-2 h-4 w-4" />
-                {dataSelecionada ? (
-                  format(dataSelecionada, "MMMM yyyy", { locale: ptBR })
-                ) : (
-                  <span>Selecione o mês</span>
-                )}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
-              <CalendarComponent
-                mode="single"
-                captionLayout="dropdown-buttons"
-                selected={dataSelecionada}
-                onSelect={(date) => {
-                  if (date) setDataSelecionada(startOfMonth(date));
-                }}
-                fromYear={2020}
-                toYear={new Date().getFullYear()}
-                locale={ptBR}
-              />
-            </PopoverContent>
-          </Popover>
+          <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto">
+            <Select 
+                value={funcionarioSelecionadoId || ''} 
+                onValueChange={setFuncionarioSelecionadoId}
+                disabled={carregandoDados || funcionarios.length === 0}
+            >
+                <SelectTrigger className="w-full sm:w-[200px]">
+                    <SelectValue placeholder={carregandoDados ? "Carregando..." : "Selecione o Funcionário"} />
+                </SelectTrigger>
+                <SelectContent>
+                    {funcionarios.map(f => (
+                        <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>
+                    ))}
+                </SelectContent>
+            </Select>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant={"outline"}
+                  className={cn(
+                    "w-full sm:w-[200px] justify-start text-left font-normal",
+                    !dataSelecionada && "text-muted-foreground"
+                  )}
+                  disabled={carregandoDados}
+                >
+                  <Calendar className="mr-2 h-4 w-4" />
+                  {dataSelecionada ? (
+                    format(dataSelecionada, "MMMM yyyy", { locale: ptBR })
+                  ) : (
+                    <span>Selecione o mês</span>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <CalendarComponent
+                  mode="single"
+                  captionLayout="dropdown-buttons"
+                  selected={dataSelecionada}
+                  onSelect={(date) => {
+                    if (date) setDataSelecionada(startOfMonth(date));
+                  }}
+                  fromYear={2020}
+                  toYear={new Date().getFullYear()}
+                  locale={ptBR}
+                />
+              </PopoverContent>
+            </Popover>
+          </div>
         </CardHeader>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-xl">Resumo de Horas Trabalhadas</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {carregandoDados ? (
-            <div className="flex justify-center items-center h-40"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
-          ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Funcionário</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead className="text-right">Total de Horas</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {resumoFuncionarios.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={3} className="text-center py-4 text-muted-foreground">
-                        Nenhum registro de ponto encontrado para este mês.
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    resumoFuncionarios.map((func) => (
-                      <TableRow key={func.email}>
-                        <TableCell className="font-medium">{func.nome}</TableCell>
-                        <TableCell>{func.email}</TableCell>
-                        <TableCell className="text-right font-bold">{formatarHoras(func.totalMinutos)}</TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      {funcionarioDetalhe && (
+        <DetalheFolhaPonto 
+            funcionario={{
+                id: funcionarioDetalhe.id,
+                nome: funcionarioDetalhe.nome,
+                salario: funcionarioDetalhe.salario || 0,
+                horas_mensais: funcionarioDetalhe.horas_mensais || 220,
+                registros: registrosDoFuncionario,
+            }}
+            mes={dataSelecionada}
+        />
+      )}
+
+      {!funcionarioDetalhe && !carregandoDados && (
+        <Card>
+            <CardContent className="text-center py-8 text-muted-foreground">
+                <Users className="w-8 h-8 mx-auto mb-2" />
+                Selecione um funcionário para visualizar a folha de ponto.
+            </CardContent>
+        </Card>
+      )}
     </LayoutPrincipal>
   );
 };

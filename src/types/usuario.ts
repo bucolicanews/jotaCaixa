@@ -27,6 +27,11 @@ export interface UsuarioProfile {
   cliente_id: string | null;
   permissoes: Record<string, boolean>; // Ex: { "contas_pagar": true, "relatorios": false }
   
+  // Novos campos de Salário/Jornada
+  salario?: number | null;
+  horas_semanais?: number | null;
+  horas_mensais?: number | null;
+  
   // Novos campos cadastrais
   cpf?: string | null;
   rg?: string | null;
