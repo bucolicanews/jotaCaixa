@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useSessao } from '@/hooks/use-sessao';
 import { Loader2, Users } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
-import { format, startOfMonth } from 'date-fns';
+import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { showError } from '@/utils/toast';
 import { UsuarioProfile } from '@/types/usuario';
@@ -31,7 +31,8 @@ const DetalheProprioPonto: React.FC = () => {
   const fetchRegistros = useCallback(async (id: string, data: Date) => {
     setCarregandoDados(true);
     const inicioMes = format(startOfMonth(data), 'yyyy-MM-dd');
-    const fimMes = format(data, 'yyyy-MM-dd'); // Usamos a data atual para o fim do mês para evitar carregar dados futuros
+    // Usar endOfMonth para garantir que todos os registros até o final do último dia do mês sejam incluídos.
+    const fimMes = format(endOfMonth(data), 'yyyy-MM-dd'); 
 
     const { data: registros, error } = await supabase
       .from('registros_ponto')
