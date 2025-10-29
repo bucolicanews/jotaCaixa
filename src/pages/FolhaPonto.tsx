@@ -22,6 +22,7 @@ interface RegistroPonto {
   horario_registro: string; // ISO string
   tipo: 'Entrada' | 'Saida';
   maps_url: string;
+  selfie_url: string; // Adicionado
 }
 
 interface FuncionarioComDados extends UsuarioProfile {
@@ -80,7 +81,7 @@ const FolhaPonto: React.FC = () => {
 
     const { data: registros, error } = await supabase
       .from('registros_ponto')
-      .select('*')
+      .select('*, selfie_url') // Incluindo selfie_url
       .eq('funcionario_id', funcionarioId)
       .gte('horario_registro', inicioMes)
       .lte('horario_registro', fimMes)

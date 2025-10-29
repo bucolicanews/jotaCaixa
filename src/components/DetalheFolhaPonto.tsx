@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Clock, DollarSign, MapPin } from 'lucide-react';
+import { Clock, DollarSign, MapPin, Camera } from 'lucide-react';
 import { format, parseISO, differenceInMinutes, isWeekend, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 interface RegistroPonto {
   id: string;
@@ -12,6 +13,7 @@ interface RegistroPonto {
   horario_registro: string; // ISO string
   tipo: 'Entrada' | 'Saida';
   maps_url: string;
+  selfie_url: string; // Adicionando a URL da selfie
 }
 
 interface FuncionarioDetalhe {
@@ -34,6 +36,8 @@ const PERCENTUAL_EXTRA_FERIADO_FIMSEMANA = 1.0; // 100% de adicional
 
 const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes }) => {
   const { salario, horas_mensais, registros } = funcionario;
+  const [selfieModalOpen, setSelfieModalOpen] = useState(false);
+  const [selfieUrl, setSelfieUrl] = useState<string | null>(null);
   
   const valorHoraNormal = salario / (horas_mensais || JORNADA_MENSAL_PADRAO);
   const valorHoraExtra = valorHoraNormal * (1 + PERCENTUAL_EXTRA_NORMAL);
@@ -97,6 +101,11 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes 
   
   const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
+  const handleViewSelfie = (url: string) => {
+    setSelfieUrl(url);
+    setSelfieModalOpen(true);
+  };
+
   return (
     <div className="space-y-6">
       <Card>
@@ -131,11 +140,20 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes 
                                 <TableCell>
                                     <div className="flex flex-wrap gap-2">
                                         {registros.map(r => (
-                                            <span key={r.id} className="text-sm bg-muted px-2 py-1 rounded-full">
+                                            <span key={r.id} className="text-sm bg-muted px-2 py-1 rounded-full flex items-center">
                                                 {r.tipo}: {format(parseISO(r.horario_registro), 'HH:mm')}
                                                 <a href={r.maps_url} target="_blank" rel="noopener noreferrer" className="ml-1 text-blue-500 hover:text-blue-700 inline-flex items-center">
                                                     <MapPin className="w-3 h-3" />
                                                 </a>
+                                                {r.selfie_url && (
+                                                    <button 
+                                                        onClick={() => handleViewSelfie(r.selfie_url)} 
+                                                        className="ml-1 text-primary hover:text-primary/80 inline-flex items-center"
+                                                        title="Ver Selfie"
+                                                    >
+                                                        <Camera className="w-3 h-3" />
+                                                    </button>
+                                                )}
                                             </span>
                                         ))}
                                     </div>
@@ -150,6 +168,20 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes 
           </div>
         </CardContent>
       </Card>
+
+      {/* Modal de Visualização da Selfie */}
+      <Dialog open={selfieModalOpen} onOpenChange={setSelfieModalOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Selfie do Registro de Ponto</DialogTitle>
+          </DialogHeader>
+          {selfieUrl ? (
+            <img src={selfieUrl} alt="Selfie do Registro" className="w-full h-auto rounded-md" />
+          ) : (
+            <p className="text-center text-muted-foreground">Nenhuma selfie disponível.</p>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
