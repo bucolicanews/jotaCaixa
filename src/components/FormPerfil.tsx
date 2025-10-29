@@ -136,6 +136,14 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfil, role, onSaveComplete })
   };
   
   const tableName = role ? getTableName(role) : null;
+  
+  // Determina se o perfil sendo editado é um Usuário (Funcionário)
+  const isEditingUsuario = tableName === 'tbl_usuarios';
+  // Determina se o formulário deve ser somente leitura (true se for Usuário logado)
+  const isReadOnly = isUsuario; 
+  // Determina se os campos contratuais são editáveis (true se for Manager logado)
+  const isContractEditable = isManager && isEditingUsuario;
+
 
   const onSubmit: SubmitHandler<FormValues> = async (values) => {
     if (!perfil || !role || !tableName) return;
@@ -160,9 +168,8 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfil, role, onSaveComplete })
         estado: values.estado || null,
       };
 
-      // Se for Usuário, ele só pode atualizar o nome e os campos de documentos
-      if (isUsuario || tableName === 'tbl_usuarios') {
-        // Campos de Documentos (URLs)
+      // Campos de Documentos (URLs) e Dados Cadastrais são editáveis pelo próprio usuário
+      if (isEditingUsuario) {
         dataToUpdate.rg_url = values.rg_url || null;
         dataToUpdate.cpf_url = values.cpf_url || null;
         dataToUpdate.titulo_eleitor_url = values.titulo_eleitor_url || null;
@@ -179,8 +186,8 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfil, role, onSaveComplete })
         dataToUpdate.ja_admitido_anteriormente = values.ja_admitido_anteriormente;
       }
       
-      // Se for Admin/Cliente E estiver editando um Usuário, ele pode atualizar campos contratuais
-      if (isManager && tableName === 'tbl_usuarios') {
+      // Campos Contratuais são editáveis APENAS se o usuário logado for um Manager
+      if (isContractEditable) {
         dataToUpdate.data_inicio_contrato = values.data_inicio_contrato ? format(values.data_inicio_contrato, 'yyyy-MM-dd') : null;
         dataToUpdate.data_fim_contrato = values.data_fim_contrato ? format(values.data_fim_contrato, 'yyyy-MM-dd') : null;
         dataToUpdate.data_inicio_aviso = values.data_inicio_aviso ? format(values.data_inicio_aviso, 'yyyy-MM-dd') : null;
@@ -257,7 +264,7 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfil, role, onSaveComplete })
                 placeholder="URL do documento (preenchido automaticamente após upload)" 
                 value={(field.value as string) || ''}
                 onChange={field.onChange}
-                disabled={isSubmitting || isUploaded}
+                disabled={isSubmitting || isUploaded || isReadOnly} // Usuário não pode editar a URL diretamente
                 className="flex-1"
               />
               <Button 
@@ -274,7 +281,7 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfil, role, onSaveComplete })
                     document.getElementById(`file-upload-${fieldName}`)?.click();
                   }
                 }}
-                disabled={isSubmitting}
+                disabled={isSubmitting || isReadOnly} // Usuário não pode fazer upload/remover se for somente leitura
               >
                 {isUploaded ? <XCircle className="w-4 h-4" /> : <Upload className="w-4 h-4" />}
               </Button>
@@ -351,7 +358,7 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfil, role, onSaveComplete })
         <FormItem>
           <FormLabel>{label} {required && <span className="text-red-500">*</span>}</FormLabel>
           <FormControl>
-            <Input placeholder={placeholder} {...field} value={(field.value as string) || ''} />
+            <Input placeholder={placeholder} {...field} value={(field.value as string) || ''} disabled={isReadOnly} />
           </FormControl>
           <FormMessage />
         </FormItem>
@@ -369,12 +376,11 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfil, role, onSaveComplete })
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              {/* Ajuste 1: Usando flex-wrap para melhor responsividade das abas */}
               <TabsList className="flex flex-wrap justify-start w-full h-auto p-1">
                 <TabsTrigger value="foto" className="flex-1 md:flex-none">Foto</TabsTrigger>
                 <TabsTrigger value="cadastrais" className="flex-1 md:flex-none">Dados Cadastrais</TabsTrigger>
                 <TabsTrigger value="documentos" className="flex-1 md:flex-none">Documentos</TabsTrigger>
-                {isManager && <TabsTrigger value="contrato" className="flex-1 md:flex-none">Contrato (RH)</TabsTrigger>}
+                {isEditingUsuario && <TabsTrigger value="contrato" className="flex-1 md:flex-none">Contrato (RH)</TabsTrigger>}
               </TabsList>
 
               {/* TAB 1: FOTO */}
@@ -471,6 +477,7 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfil, role, onSaveComplete })
                                             <Checkbox
                                                 checked={field.value}
                                                 onCheckedChange={field.onChange}
+                                                disabled={isReadOnly}
                                             />
                                         </FormControl>
                                         <div className="space-y-1 leading-none">
@@ -486,23 +493,28 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfil, role, onSaveComplete })
                 </Accordion>
               </TabsContent>
 
-              {/* TAB 4: DADOS CONTRATUAIS (APENAS ADMIN/CLIENTE) */}
-              {isManager && tableName === 'tbl_usuarios' && (
+              {/* TAB 4: DADOS CONTRATUAIS (RH) */}
+              {isEditingUsuario && (
                 <TabsContent value="contrato" className="mt-4 space-y-6 p-2 md:p-4">
-                    <p className="text-sm text-muted-foreground">Estes campos são usados para gestão de RH e só podem ser editados por administradores ou gestores da empresa.</p>
+                    <p className="text-sm text-muted-foreground">
+                        {isContractEditable 
+                            ? 'Estes campos são usados para gestão de RH e podem ser editados por você.'
+                            : 'Estes campos são gerenciados pelo RH da sua empresa e são somente leitura.'
+                        }
+                    </p>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {renderDateField('data_inicio_contrato', 'Início do Contrato', !isManager)}
-                        {renderDateField('data_fim_contrato', 'Fim do Contrato', !isManager)}
+                        {renderDateField('data_inicio_contrato', 'Início do Contrato', !isContractEditable)}
+                        {renderDateField('data_fim_contrato', 'Fim do Contrato', !isContractEditable)}
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {renderDateField('data_inicio_aviso', 'Início do Aviso Prévio', !isManager)}
+                        {renderDateField('data_inicio_aviso', 'Início do Aviso Prévio', !isContractEditable)}
                         <FormField
                             control={form.control as unknown as Control<FormValues>}
                             name="tipo_aviso"
                             render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Tipo de Aviso</FormLabel>
-                                    <Select onValueChange={field.onChange} defaultValue={field.value || 'Nenhum'} disabled={!isManager}>
+                                    <Select onValueChange={field.onChange} defaultValue={field.value || 'Nenhum'} disabled={!isContractEditable}>
                                         <FormControl>
                                             <SelectTrigger>
                                                 <SelectValue placeholder="Selecione o tipo de aviso" />
@@ -523,9 +535,9 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfil, role, onSaveComplete })
               )}
             </Tabs>
 
-            <Button type="submit" className="w-full" disabled={form.formState.isSubmitting || uploading}>
+            <Button type="submit" className="w-full" disabled={form.formState.isSubmitting || uploading || isReadOnly}>
               {(form.formState.isSubmitting || uploading) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Salvar Alterações
+              {isReadOnly ? 'Visualizando Dados' : 'Salvar Alterações'}
             </Button>
           </form>
         </Form>
