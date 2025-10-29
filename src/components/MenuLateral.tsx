@@ -15,8 +15,10 @@ interface ItemMenu {
 
 const itensMenu: ItemMenu[] = [
   { nome: 'Painel', caminho: '/painel', icone: LayoutDashboard, perfis: ['Admin', 'Cliente', 'Usuario'] },
+  // Ponto Eletrônico: Apenas para Usuário, controlado por 'ponto_eletronico'
   { nome: 'Ponto Eletrônico', caminho: '/ponto-eletronico', icone: Clock, perfis: ['Usuario'], permissionKey: 'ponto_eletronico' },
-  { nome: 'Acompanhar Ponto', caminho: '/folha-ponto', icone: CalendarCheck, perfis: ['Admin', 'Cliente'], permissionKey: 'folha_ponto' }, // Adicionando permissionKey
+  // Acompanhar Ponto: Para Admin e Cliente, controlado por 'folha_ponto'
+  { nome: 'Acompanhar Ponto', caminho: '/folha-ponto', icone: CalendarCheck, perfis: ['Admin', 'Cliente'], permissionKey: 'folha_ponto' },
   { nome: 'Contas a Pagar', caminho: '/contas-pagar', icone: ArrowDownCircle, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'contas_pagar' },
   { nome: 'Contas a Receber', caminho: '/contas-receber', icone: ArrowUpCircle, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'contas_receber' },
   { nome: 'Clientes', caminho: '/clientes', icone: Contact, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'contas_receber' },
@@ -67,13 +69,31 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick }) => {
           }
 
           // Lógica de permissão para o perfil 'Cliente'
-          if (role === 'Cliente' && item.permissionKey && !clientProfile.permissoes?.[item.permissionKey]) {
-            return null;
+          if (role === 'Cliente' && item.permissionKey) {
+            // Se for 'Acompanhar Ponto', verifica a permissão 'folha_ponto'
+            if (item.caminho === '/folha-ponto' && !clientProfile.permissoes?.['folha_ponto']) {
+                return null;
+            }
+            // Para outras permissões, verifica a chave padrão
+            if (item.caminho !== '/folha-ponto' && !clientProfile.permissoes?.[item.permissionKey]) {
+                return null;
+            }
           }
 
           // Lógica de permissão para o perfil 'Usuario'
-          if (role === 'Usuario' && item.permissionKey && !userProfile.permissoes?.[item.permissionKey]) {
-            return null;
+          if (role === 'Usuario' && item.permissionKey) {
+            // Se for 'Ponto Eletrônico', verifica a permissão 'ponto_eletronico'
+            if (item.caminho === '/ponto-eletronico' && !userProfile.permissoes?.['ponto_eletronico']) {
+                return null;
+            }
+            // Se for 'Acompanhar Ponto' (que não deveria aparecer para Usuário, mas por segurança)
+            if (item.caminho === '/folha-ponto') {
+                return null;
+            }
+            // Para outras permissões, verifica a chave padrão
+            if (item.caminho !== '/ponto-eletronico' && !userProfile.permissoes?.[item.permissionKey]) {
+                return null;
+            }
           }
 
           const estaAtivo = localizacao.pathname === item.caminho;
