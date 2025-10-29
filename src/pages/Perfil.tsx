@@ -8,11 +8,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import DetalheProprioPonto from '@/components/DetalheProprioPonto';
 import { UsuarioProfile } from '@/types/usuario';
 import { useState, useEffect } from 'react';
-// import { useLocation } from 'react-router-dom'; // Removendo importação não utilizada
+import { cn } from '@/lib/utils'; // Importando cn
 
 const Perfil = () => {
   const { perfil, role, carregando, refetch } = useSessao();
-  // const location = useLocation(); // Removendo declaração não utilizada
   
   const isUsuario = role === 'Usuario';
   const podeVerPonto = isUsuario && (perfil as UsuarioProfile)?.permissoes?.visualizar_proprio_ponto;
@@ -49,7 +48,7 @@ const Perfil = () => {
       <h1 className="text-2xl md:text-3xl font-bold mb-6">Meu Perfil</h1>
       <div className="max-w-4xl mx-auto"> 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-2 md:grid-cols-3">
+            <TabsList className={cn("grid w-full", podeVerPonto ? "grid-cols-3" : "grid-cols-2")}>
                 <TabsTrigger value="dados">Dados Pessoais</TabsTrigger>
                 {podeVerPonto && <TabsTrigger value="ponto">Meu Ponto</TabsTrigger>}
                 <TabsTrigger value="config">Configurações</TabsTrigger>
