@@ -289,7 +289,8 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, c
 
     try {
       const fileExt = file.name.split('.').pop();
-      const filePath = `${usuarioInicial.id}/${fieldName}-${Date.now()}.${fileExt}`;
+      // Correção 3: Garantir que fieldName seja string
+      const filePath = `${usuarioInicial.id}/${String(fieldName)}-${Date.now()}.${fileExt}`;
       
       const { error: uploadError } = await supabase.storage
         .from('documentos-admissao')
@@ -343,7 +344,8 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, c
                     form.setValue(fieldName, '' as any, { shouldDirty: true });
                     showSuccess('Link do documento removido. Salve para confirmar.');
                   } else {
-                    document.getElementById(`file-upload-${fieldName}`)?.click();
+                    // Correção 3: Garantir que fieldName seja string
+                    document.getElementById(`file-upload-${String(fieldName)}`)?.click();
                   }
                 }}
                 disabled={isSubmitting}
@@ -351,7 +353,8 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, c
                 {isUploaded ? <XCircle className="w-4 h-4" /> : <Upload className="w-4 h-4" />}
               </Button>
               <input
-                id={`file-upload-${fieldName}`}
+                // Correção 3: Garantir que fieldName seja string
+                id={`file-upload-${String(fieldName)}`}
                 type="file"
                 accept="image/*, application/pdf"
                 className="hidden"
@@ -423,7 +426,8 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, c
         <FormItem>
           <FormLabel>{label} {required && <span className="text-red-500">*</span>}</FormLabel>
           <FormControl>
-            <Input placeholder={placeholder} {...field} value={(field.value as string) || ''} disabled={disabled} />
+            {/* Correção 4: Forçar o tipo name para string */}
+            <Input placeholder={placeholder} {...field} name={String(field.name)} value={(field.value as string) || ''} disabled={disabled} />
           </FormControl>
           <FormMessage />
         </FormItem>
@@ -484,7 +488,6 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, c
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
         
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          {/* Ajuste 2: Usando flex-wrap e garantindo que cada aba ocupe 1/4 em telas maiores que mobile */}
           <TabsList className="flex flex-wrap justify-start w-full h-auto p-1">
             <TabsTrigger value="pessoal" className="flex-1 md:flex-none md:w-1/4">Geral</TabsTrigger>
             {isUserBeingManagedByClient && <TabsTrigger value="cadastrais" className="flex-1 md:flex-none md:w-1/4">Dados Cadastrais</TabsTrigger>}
@@ -493,7 +496,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, c
           </TabsList>
 
           {/* TAB 1: GERAL (Nome, Email, Senha, Permissões) */}
-          <TabsContent value="pessoal" className="mt-4 space-y-4 p-4"> {/* Ajuste 3: Adicionando padding p-4 */}
+          <TabsContent value="pessoal" className="mt-4 space-y-4 p-4">
             <FormField control={form.control as unknown as Control<FormValues>} name="nome" render={({ field }) => (
               <FormItem><FormLabel>Nome Completo</FormLabel><FormControl><Input placeholder="Nome completo" {...field} /></FormControl><FormMessage /></FormItem>
             )} />
@@ -530,7 +533,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, c
 
           {/* TAB 2: DADOS CADASTRAIS (Apenas para Usuário/Funcionário) */}
           {isUserBeingManagedByClient && (
-            <TabsContent value="cadastrais" className="mt-4 space-y-6 p-4"> {/* Ajuste 3: Adicionando padding p-4 */}
+            <TabsContent value="cadastrais" className="mt-4 space-y-6 p-4">
               <p className="text-sm text-muted-foreground">Dados pessoais e de contato do funcionário.</p>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -559,7 +562,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, c
 
           {/* TAB 3: DOCUMENTOS DE ADMISSÃO (Apenas para Usuário/Funcionário) */}
           {isUserBeingManagedByClient && (
-            <TabsContent value="documentos" className="mt-4 space-y-6 p-4"> {/* Ajuste 3: Adicionando padding p-4 */}
+            <TabsContent value="documentos" className="mt-4 space-y-6 p-4">
               <p className="text-sm text-muted-foreground">Anexos de documentos do funcionário.</p>
               
               <Accordion type="multiple" className="w-full">
@@ -625,7 +628,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, c
 
           {/* TAB 4: DADOS CONTRATUAIS (RH) - Apenas para Usuário/Funcionário */}
           {isUserBeingManagedByClient && (
-            <TabsContent value="contrato" className="mt-4 space-y-6 p-4"> {/* Ajuste 3: Adicionando padding p-4 */}
+            <TabsContent value="contrato" className="mt-4 space-y-6 p-4">
                 <p className="text-sm text-muted-foreground">Estes campos são usados para gestão de RH.</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {renderDateField('data_inicio_contrato', 'Início do Contrato', !isContractEditable)}

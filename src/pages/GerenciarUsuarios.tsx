@@ -174,7 +174,8 @@ const GerenciarUsuarios = () => {
                 Novo Usuário
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-4xl"> {/* Aumentando a largura máxima */}
+            {/* Adicionando max-h-[90vh] e overflow-y-auto para rolagem */}
+            <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto"> 
               <DialogHeader><DialogTitle>{itemSelecionado ? 'Editar Usuário' : 'Novo Usuário da Equipe'}</DialogTitle></DialogHeader>
               <FormUsuario criadorRole={role!} criadorPerfil={perfil} clienteId={usuario?.id} usuarioInicial={itemSelecionado} onSaveComplete={() => handleAction()} />
             </DialogContent>
@@ -187,7 +188,8 @@ const GerenciarUsuarios = () => {
       
       {isAdmin && (
         <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
-          <DialogContent className="sm:max-w-4xl"> {/* Aumentando a largura máxima */}
+          {/* Adicionando max-h-[90vh] e overflow-y-auto para rolagem */}
+          <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto"> 
             <DialogHeader><DialogTitle>Editar Conta</DialogTitle></DialogHeader>
             <FormUsuario criadorRole={role!} criadorPerfil={perfil} usuarioInicial={itemSelecionado} onSaveComplete={() => handleAction()} />
           </DialogContent>
