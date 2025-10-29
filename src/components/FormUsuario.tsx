@@ -512,8 +512,8 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, c
                     <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl>
                     <FormLabel className="font-normal">{p.label}</FormLabel>
                   </FormItem>
-                ))}
-              )}
+                )} />
+              ))}
             </div>
           </div>
           <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
@@ -578,8 +578,8 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, c
                         <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl>
                         <FormLabel className="font-normal">{p.label}</FormLabel>
                       </FormItem>
-                    ))} />
-                  )}
+                    )} />
+                  ))}
                 </div>
               </div>
             )}
