@@ -8,6 +8,7 @@ import { useSessao } from '@/hooks/use-sessao';
 import { Separator } from '@/components/ui/separator';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import CameraCapture from './CameraCapture';
+import { UsuarioProfile } from '@/types/usuario';
 
 type RegistroTipo = 'Entrada' | 'Saida';
 
@@ -31,8 +32,11 @@ const RegistroPonto: React.FC = () => {
   const [lastRegistro, setLastRegistro] = useState<{ tipo: RegistroTipo, horario: string } | null>(null);
 
   const isUsuario = role === 'Usuario' && perfil && 'cliente_id' in perfil;
-  const empresaId = isUsuario ? perfil.cliente_id : null;
+  const empresaId = isUsuario ? (perfil as UsuarioProfile).cliente_id : null;
   const funcionarioId = usuario?.id;
+  
+  // Nova verificação de permissão
+  const podeVisualizarProprioPonto = isUsuario && (perfil as UsuarioProfile)?.permissoes?.visualizar_proprio_ponto;
 
   const getGeoLocation = (): Promise<GeoLocation> => {
     return new Promise((resolve, reject) => {
@@ -128,7 +132,14 @@ const RegistroPonto: React.FC = () => {
       }
 
       showSuccess(`Ponto de ${tipo} registrado com sucesso!`);
-      setLastRegistro({ tipo, horario: new Date().toLocaleTimeString() });
+      
+      // Atualiza o último registro APENAS se o usuário tiver permissão para visualizar
+      if (podeVisualizarProprioPonto) {
+        setLastRegistro({ tipo, horario: new Date().toLocaleTimeString() });
+      } else {
+        setLastRegistro(null);
+      }
+      
       setSelfieFile(null);
 
     } catch (error: any) {
@@ -202,7 +213,7 @@ const RegistroPonto: React.FC = () => {
           </div>
         </div>
 
-        {lastRegistro && (
+        {podeVisualizarProprioPonto && lastRegistro && (
           <div className="mt-6 p-4 border rounded-lg bg-secondary/50">
             <p className="font-medium">Último Registro:</p>
             <p className={lastRegistro.tipo === 'Entrada' ? 'text-green-600' : 'text-red-600'}>
@@ -220,6 +231,12 @@ const RegistroPonto: React.FC = () => {
               </a>
             )}
           </div>
+        )}
+        
+        {!podeVisualizarProprioPonto && (
+            <div className="mt-6 p-4 border rounded-lg bg-secondary/50 text-center text-sm text-muted-foreground">
+                O registro de ponto foi concluído. A visualização do histórico é controlada pelo seu gestor.
+            </div>
         )}
       </CardContent>
       

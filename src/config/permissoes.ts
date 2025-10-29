@@ -13,6 +13,8 @@ export const PERMISSOES_DISPONIVEIS: Permissao[] = [
   { key: 'importar', label: 'Importar', path: '/importar' },
   { key: 'relatorios', label: 'Relatórios', path: '/relatorios' },
   { key: 'configuracoes', label: 'Configurações', path: '/configuracoes' },
-  { key: 'ponto_eletronico', label: 'Ponto Eletrônico', path: '/ponto-eletronico' },
+  { key: 'ponto_eletronico', label: 'Ponto Eletrônico (Bater Ponto)', path: '/ponto-eletronico' },
+  { key: 'folha_ponto', label: 'Acompanhar Ponto (Gestor)', path: '/folha-ponto' },
+  { key: 'visualizar_proprio_ponto', label: 'Usuário pode ver seu Ponto', path: '/perfil' },
   { key: 'cadastrar_usuarios', label: 'Cadastrar Usuários', path: '/gerenciar-usuarios' },
 ];

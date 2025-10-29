@@ -102,6 +102,9 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, c
   const permissoesVisiveis = PERMISSOES_DISPONIVEIS.filter(p => {
     if (criadorRole === 'Admin') return true;
     if (criadorRole === 'Cliente' && permissoesDoCriador) {
+      // O Cliente só pode conceder permissões que ele mesmo possui, exceto a permissão de 'visualizar_proprio_ponto'
+      // que é uma permissão de controle sobre o usuário, não sobre o módulo.
+      if (p.key === 'visualizar_proprio_ponto') return true;
       return permissoesDoCriador[p.key] === true;
     }
     return false;
@@ -111,7 +114,12 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, c
     if (isEditing && profileToEdit && 'permissoes' in profileToEdit && (profileToEdit as any).permissoes) {
       acc[p.key] = (profileToEdit as any).permissoes[p.key] !== false;
     } else {
-      acc[p.key] = true;
+      // Define 'visualizar_proprio_ponto' como true por padrão para novos usuários
+      if (p.key === 'visualizar_proprio_ponto') {
+          acc[p.key] = true;
+      } else {
+          acc[p.key] = true;
+      }
     }
     return acc;
   }, {} as Record<string, boolean>);
@@ -504,8 +512,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, c
                     <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl>
                     <FormLabel className="font-normal">{p.label}</FormLabel>
                   </FormItem>
-                )} />
-              ))}
+                ))}
             </div>
           </div>
           <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
