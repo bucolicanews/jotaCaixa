@@ -14,5 +14,6 @@ export const PERMISSOES_DISPONIVEIS: Permissao[] = [
   { key: 'relatorios', label: 'Relatórios', path: '/relatorios' },
   { key: 'configuracoes', label: 'Configurações', path: '/configuracoes' },
   { key: 'ponto_eletronico', label: 'Ponto Eletrônico', path: '/ponto-eletronico' },
+  { key: 'folha_ponto', label: 'Acompanhar Ponto', path: '/folha-ponto' }, // NOVA PERMISSÃO
   { key: 'cadastrar_usuarios', label: 'Cadastrar Usuários', path: '/gerenciar-usuarios' },
 ];
