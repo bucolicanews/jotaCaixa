@@ -12,6 +12,7 @@ import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { showError } from '@/utils/toast';
+import { ClienteProfile } from '@/types/usuario';
 
 interface RegistroPonto {
   id: string;
@@ -34,12 +35,14 @@ interface FuncionarioResumo {
 }
 
 const FolhaPonto: React.FC = () => {
-  const { role, carregando } = useSessao();
+  const { role, perfil, carregando } = useSessao();
   const [dataSelecionada, setDataSelecionada] = useState<Date>(startOfMonth(new Date()));
   const [carregandoDados, setCarregandoDados] = useState(false);
   const [resumoFuncionarios, setResumoFuncionarios] = useState<FuncionarioResumo[]>([]);
 
   const isAdmin = role === 'Admin';
+  const isCliente = role === 'Cliente' && (perfil as ClienteProfile)?.aprovado;
+  const empresaId = isCliente ? perfil?.id : null;
 
   const calcularHorasTrabalhadas = (registros: RegistroPonto[]): number => {
     let totalMinutos = 0;
@@ -61,13 +64,13 @@ const FolhaPonto: React.FC = () => {
   };
 
   const buscarRegistros = useCallback(async (data: Date) => {
-    if (!isAdmin) return;
+    if (!isAdmin && !isCliente) return;
 
     setCarregandoDados(true);
     const inicioMes = format(startOfMonth(data), 'yyyy-MM-dd');
     const fimMes = format(endOfMonth(data), 'yyyy-MM-dd');
 
-    const { data: registros, error } = await supabase
+    let query = supabase
       .from('registros_ponto')
       .select(`
         *,
@@ -79,6 +82,14 @@ const FolhaPonto: React.FC = () => {
       .gte('horario_registro', inicioMes)
       .lte('horario_registro', fimMes)
       .order('horario_registro', { ascending: true });
+      
+    // Se for Cliente, filtra apenas pelos registros da sua empresa
+    if (isCliente && empresaId) {
+      query = query.eq('empresa_id', empresaId);
+    }
+    // Se for Admin, a política RLS já garante que ele veja todos os registros.
+
+    const { data: registros, error } = await query;
 
     if (error) {
       showError('Erro ao carregar registros de ponto: ' + error.message);
@@ -110,20 +121,20 @@ const FolhaPonto: React.FC = () => {
 
     setResumoFuncionarios(resumoFinal);
     setCarregandoDados(false);
-  }, [isAdmin]);
+  }, [isAdmin, isCliente, empresaId]);
 
   useEffect(() => {
-    if (!carregando && isAdmin) {
+    if (!carregando && (isAdmin || isCliente)) {
       buscarRegistros(dataSelecionada);
     }
-  }, [carregando, isAdmin, dataSelecionada, buscarRegistros]);
+  }, [carregando, isAdmin, isCliente, dataSelecionada, buscarRegistros]);
 
   if (carregando) {
     return <LayoutPrincipal><div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div></LayoutPrincipal>;
   }
 
-  if (!isAdmin) {
-    return <LayoutPrincipal><Card><CardHeader><CardTitle>Acesso Negado</CardTitle></CardHeader><CardContent><p>Apenas administradores podem acessar a folha de ponto.</p></CardContent></Card></LayoutPrincipal>;
+  if (!isAdmin && !isCliente) {
+    return <LayoutPrincipal><Card><CardHeader><CardTitle>Acesso Negado</CardTitle></CardHeader><CardContent><p>Você não tem permissão para acessar a folha de ponto.</p></CardContent></Card></LayoutPrincipal>;
   }
 
   const formatarHoras = (minutos: number): string => {
