@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from "react";
+import { useState, useEffect } from 'react';
 import { format } from "date-fns";
 import { Calendar as CalendarIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -19,21 +19,29 @@ export function MonthPicker({
   setDate,
   disabled = false,
 }: MonthPickerProps) {
-  const [open, setOpen] = useState(false);
+  
   const [tempDate, setTempDate] = useState(date);
+  const [open, setOpen] = useState(false);
 
-  // Sincroniza o estado interno quando a data externa muda (e.g., inicialização)
+  // Sincroniza tempDate quando o popover abre ou a data externa muda
   useEffect(() => {
-    setTempDate(date);
-  }, [date]);
+    if (!open) {
+        setTempDate(date);
+    }
+  }, [date, open]);
 
   // Função para garantir que a data selecionada seja sempre o início do mês
-  const handleSelect = useCallback((newDate: Date | undefined) => {
+  const handleSelect = (newDate: Date | undefined) => {
     if (newDate) {
-      // Apenas atualiza o estado temporário
       setTempDate(startOfMonth(newDate));
     }
-  }, []);
+  };
+
+  // Função chamada quando o mês/ano muda via dropdowns (onMonthChange)
+  const handleMonthChange = (newMonth: Date) => {
+    // Garante que a data temporária seja o início do novo mês selecionado
+    setTempDate(startOfMonth(newMonth));
+  };
 
   const handleConfirm = () => {
     setDate(tempDate);
@@ -62,31 +70,25 @@ export function MonthPicker({
       <PopoverContent className="w-auto p-0" align="start">
         <Calendar
           mode="single"
-          // Usamos 'dropdown-buttons' para ativar o CaptionComponent personalizado
           captionLayout="dropdown-buttons" 
-          selected={tempDate} // Usa o estado temporário
-          onSelect={handleSelect} // Atualiza o estado temporário
+          selected={tempDate}
+          onSelect={handleSelect}
+          onMonthChange={handleMonthChange} // Agora este callback funciona
           initialFocus
           locale={ptBR}
-          // Configurações para mostrar apenas o seletor de mês/ano
           numberOfMonths={1}
           defaultMonth={tempDate}
-          // Oculta a tabela de dias e a navegação de setas
           classNames={{
             nav: "hidden", 
             table: "hidden", 
             head_row: "hidden", 
             row: "hidden", 
-            caption_dropdowns: "hidden", // Oculta o dropdown nativo
+            caption_dropdowns: "hidden",
           }}
         />
-        <div className="p-2 border-t">
-            <Button 
-                onClick={handleConfirm} 
-                className="w-full"
-                disabled={!tempDate}
-            >
-                Confirmar Seleção
+        <div className="p-2 border-t flex justify-end">
+            <Button size="sm" onClick={handleConfirm}>
+                Confirmar
             </Button>
         </div>
       </PopoverContent>

@@ -13,9 +13,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 export type CalendarProps = React.ComponentProps<typeof DayPicker>;
 
 // Componente de Cabeçalho Personalizado com Selects do shadcn/ui
-function CaptionComponent(props: { displayMonth: Date }) {
+function CaptionComponent(props: { displayMonth: Date, onMonthChange?: (month: Date) => void }) {
   const { goToMonth } = useNavigation();
-  const { displayMonth } = props;
+  const { displayMonth, onMonthChange } = props;
 
   const months = Array.from({ length: 12 }, (_, i) => {
     const month = new Date(displayMonth.getFullYear(), i, 1);
@@ -25,8 +25,10 @@ function CaptionComponent(props: { displayMonth: Date }) {
     };
   });
 
-  const years = Array.from({ length: 10 }, (_, i) => {
-    const year = displayMonth.getFullYear() - 5 + i;
+  // Gera anos de 5 anos atrás até 5 anos à frente
+  const currentYear = new Date().getFullYear();
+  const years = Array.from({ length: 11 }, (_, i) => {
+    const year = currentYear - 5 + i;
     return {
       value: year,
       label: String(year),
@@ -36,11 +38,17 @@ function CaptionComponent(props: { displayMonth: Date }) {
   const handleMonthChange = (value: string) => {
     const newMonth = new Date(displayMonth.getFullYear(), Number(value));
     goToMonth(newMonth);
+    if (onMonthChange) {
+        onMonthChange(newMonth);
+    }
   };
 
   const handleYearChange = (value: string) => {
     const newYear = new Date(Number(value), displayMonth.getMonth());
     goToMonth(newYear);
+    if (onMonthChange) {
+        onMonthChange(newYear);
+    }
   };
 
   return (
@@ -85,6 +93,7 @@ function Calendar({
   className,
   classNames,
   showOutsideDays = true,
+  onMonthChange, // Capturando onMonthChange aqui
   ...props
 }: CalendarProps) {
   return (
@@ -96,7 +105,6 @@ function Calendar({
         month: "space-y-4",
         caption: "flex justify-center pt-1 relative items-center",
         caption_label: "text-sm font-medium",
-        // Ocultamos o caption_dropdowns padrão, pois estamos usando o CaptionComponent
         caption_dropdowns: "hidden", 
         nav: "space-x-1 flex items-center",
         nav_button: cn(
@@ -130,9 +138,10 @@ function Calendar({
       components={{
         IconLeft: () => <ChevronLeft className="h-4 w-4" />,
         IconRight: () => <ChevronRight className="h-4 w-4" />,
-        Caption: CaptionComponent, // Usando o componente de cabeçalho personalizado
+        // Passando onMonthChange para o CaptionComponent
+        Caption: (props) => <CaptionComponent {...props} onMonthChange={onMonthChange} />, 
       }}
-      locale={ptBR} // Define o locale para ptBR
+      locale={ptBR}
       labels={{
         labelMonthDropdown: () => "Mês:",
         labelYearDropdown: () => "Ano:",
