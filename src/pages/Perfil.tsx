@@ -26,7 +26,7 @@ const Perfil = () => {
   return (
     <LayoutPrincipal>
       <h1 className="text-2xl md:text-3xl font-bold mb-6">Meu Perfil</h1>
-      <div className="max-w-lg mx-auto">
+      <div className="max-w-3xl mx-auto">
         <FormPerfil 
           perfil={perfil} 
           role={role} 
