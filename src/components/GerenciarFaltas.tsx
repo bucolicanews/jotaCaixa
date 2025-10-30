@@ -140,11 +140,20 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
         observacao = null;
       }
 
+      // --- CORREÇÃO DE FUSO HORÁRIO ---
+      // Para registros de dia inteiro (Falta/Abono), salvamos o registro no meio do dia (12:00 UTC)
+      // para evitar que o fuso horário local empurre a data para o dia anterior.
+      const year = dataFalta.getFullYear();
+      const month = dataFalta.getMonth();
+      const day = dataFalta.getDate();
+      const dataNoonUTC = new Date(Date.UTC(year, month, day, 12, 0, 0));
+      const horarioRegistroISO = dataNoonUTC.toISOString();
+      // ---------------------------------
+
       const dataToSave = {
         funcionario_id: funcionario.id,
         empresa_id: funcionario.empresa_id,
-        // CORREÇÃO: Usar apenas a data para registros de dia inteiro
-        horario_registro: format(dataFalta, 'yyyy-MM-dd'), 
+        horario_registro: horarioRegistroISO, 
         tipo: tipoRegistro,
         selfie_url: 'N/A',
         maps_url: 'N/A',
