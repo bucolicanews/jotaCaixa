@@ -45,9 +45,7 @@ const DAY_MAP: Record<number, string> = {
 
 // Constantes CLT (Simplificadas)
 const JORNADA_MENSAL_PADRAO = 220; // Horas mensais padrão CLT
-const PERCENTUAL_EXTRA_NORMAL = 0.5; // 50% de adicional
-const PERCENTUAL_EXTRA_70 = 0.7; // 70% de adicional (Adicionado conforme solicitação)
-const PERCENTUAL_EXTRA_FERIADO_FIMSEMANA = 1.0; // 100% de adicional
+// Removidas: PERCENTUAL_EXTRA_NORMAL, PERCENTUAL_EXTRA_70, PERCENTUAL_EXTRA_FERIADO_FIMSEMANA
 
 const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes, onEditRegistro, onEditFaltaAbono, onDeleteRegistro, onManageWorkedDayOff }) => {
   const { salario, horas_mensais, registros, dias_folga_fixos, folga_domingo_obrigatoria, ferias } = funcionario;
@@ -55,12 +53,12 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
   const [selfieModalOpen, setSelfieModalOpen] = useState(false);
   const [selfieUrl, setSelfieUrl] = useState<string | null>(null);
   
-  const valorHoraNormal = salario / (horas_mensais || JORNADA_MENSAL_PADRAO);
+  // Removido: const valorHoraNormal = salario / (horas_mensais || JORNADA_MENSAL_PADRAO);
   
-  // Valores das horas extras
-  const valorHoraExtra50 = valorHoraNormal * (1 + PERCENTUAL_EXTRA_NORMAL);
-  const valorHoraExtra70 = valorHoraNormal * (1 + PERCENTUAL_EXTRA_70);
-  const valorHoraExtra100 = valorHoraNormal * (1 + PERCENTUAL_EXTRA_FERIADO_FIMSEMANA);
+  // Valores das horas extras (Removidos pois não são mais usados na exibição)
+  // const valorHoraExtra50 = valorHoraNormal * (1 + PERCENTUAL_EXTRA_NORMAL);
+  // const valorHoraExtra70 = valorHoraNormal * (1 + PERCENTUAL_EXTRA_70);
+  // const valorHoraExtra100 = valorHoraNormal * (1 + PERCENTUAL_EXTRA_FERIADO_FIMSEMANA);
 
   let totalMinutosTrabalhados = 0; // Horas normais (até o limite da jornada)
   let totalMinutosExtras50 = 0; // Horas extras 50% (Excedente da jornada, não 100%)
@@ -274,11 +272,11 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
   
   // 4. Calcular valor total (mantido para referência interna, mas não exibido)
   // const valorTotalNormal = (totalMinutosTrabalhados / 60) * valorHoraNormal;
-  const valorTotalExtra50 = (totalMinutosExtras50 / 60) * valorHoraExtra50;
-  const valorTotalExtra70 = (totalMinutosExtras70 / 60) * valorHoraExtra70; 
-  const valorTotalExtra100 = (totalMinutosExtras100 / 60) * valorHoraExtra100;
+  // const valorTotalExtra50 = (totalMinutosExtras50 / 60) * valorHoraExtra50;
+  // const valorTotalExtra70 = (totalMinutosExtras70 / 60) * valorHoraExtra70; 
+  // const valorTotalExtra100 = (totalMinutosExtras100 / 60) * valorHoraExtra100;
   
-  // const valorTotalExtras = valorTotalExtra50 + valorTotalExtra70 + valorTotalExtra100;
+  // const valorTotalExtras = totalMinutosExtras50 + totalMinutosExtras70 + totalMinutosExtras100;
 
   const formatarHoras = (minutos: number): string => {
     const sign = minutos < 0 ? '-' : '';
@@ -339,7 +337,9 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
             <div className="col-span-1"><p className="text-sm text-muted-foreground">Horas Extras (100%)</p><p className="font-bold text-lg text-red-500">{formatarHoras(totalMinutosExtras100)}</p></div>
             <div>
                 <p className="text-sm text-muted-foreground">Horas Extras a Pagar</p>
-                <p className="font-bold text-lg text-primary">{formatarHoras(totalMinutosExtrasPagar)}</p>
+                <p className={cn("font-bold text-lg", totalMinutosExtrasPagar > 0 ? "text-primary" : "text-muted-foreground")}>
+                    {formatarHoras(totalMinutosExtrasPagar)}
+                </p>
             </div>
           </div>
           
