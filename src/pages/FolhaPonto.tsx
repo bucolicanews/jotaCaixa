@@ -167,7 +167,7 @@ const FolhaPonto: React.FC = () => {
   };
   
   const handleFaltaRegistrada = () => {
-    // Re-busca os registros após registrar/editar a falta
+    // Re-busca os registros após registrar/editar/deletar a falta
     if (funcionarioSelecionadoId) {
         fetchRegistros(funcionarioSelecionadoId, dataSelecionada);
     }
@@ -310,6 +310,7 @@ const FolhaPonto: React.FC = () => {
             }}
             mes={dataSelecionada}
             onEditRegistro={handleEditRegistro}
+            onDeleteRegistro={handleFaltaRegistrada}
         />
       )}
 

@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Clock, DollarSign, MapPin, Camera, FileText, AlertTriangle, Edit } from 'lucide-react';
+import { Clock, DollarSign, MapPin, Camera, FileText, AlertTriangle, Edit, Trash2 } from 'lucide-react';
 import { format, parseISO, differenceInMinutes, isWeekend, isSameDay, startOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from './ui/button';
 import { useSessao } from '@/hooks/use-sessao';
-import { RegistroPonto } from '@/types/ponto'; // Importando a interface centralizada
+import { RegistroPonto } from '@/types/ponto';
+import { supabase } from '@/integrations/supabase/client';
+import { showError, showSuccess } from '@/utils/toast';
 
 interface FuncionarioDetalhe {
   id: string;
@@ -21,7 +23,8 @@ interface FuncionarioDetalhe {
 interface DetalheFolhaPontoProps {
   funcionario: FuncionarioDetalhe;
   mes: Date;
-  onEditRegistro: (registro: RegistroPonto) => void; // Nova prop para edição
+  onEditRegistro: (registro: RegistroPonto) => void; // Prop para edição
+  onDeleteRegistro: () => void; // Nova prop para exclusão
 }
 
 // Constantes CLT (Simplificadas)
@@ -29,7 +32,7 @@ const JORNADA_MENSAL_PADRAO = 220; // Horas mensais padrão CLT
 const PERCENTUAL_EXTRA_NORMAL = 0.5; // 50% de adicional
 const PERCENTUAL_EXTRA_FERIADO_FIMSEMANA = 1.0; // 100% de adicional
 
-const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes, onEditRegistro }) => {
+const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes, onEditRegistro, onDeleteRegistro }) => {
   const { salario, horas_mensais, registros } = funcionario;
   const { role } = useSessao();
   const [selfieModalOpen, setSelfieModalOpen] = useState(false);
@@ -122,6 +125,22 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
     setSelfieModalOpen(true);
   };
   
+  const handleDelete = async (registroId: string) => {
+    if (!window.confirm('Tem certeza que deseja excluir este registro de Falta/Abono? O dia voltará a ser listado como ' + '"Dia Sem Registro".')) return;
+
+    const { error } = await supabase
+      .from('registros_ponto')
+      .delete()
+      .eq('id', registroId);
+
+    if (error) {
+      showError('Erro ao excluir registro: ' + error.message);
+    } else {
+      showSuccess('Registro excluído com sucesso.');
+      onDeleteRegistro(); // Chama a função para recarregar os dados na página pai
+    }
+  };
+
   const canEdit = role === 'Admin' || role === 'Cliente';
 
   return (
@@ -166,7 +185,7 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
                             statusDisplay = formatarHoras(minutos);
                         }
 
-                        // Encontra o registro de Falta/Abono para edição
+                        // Encontra o registro de Falta/Abono para edição/exclusão
                         const registroFaltaAbono = registros.find(r => r.tipo === 'Falta' || r.tipo === 'Abono');
 
                         return (
@@ -223,17 +242,28 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
                                             </span>
                                         ))}
                                         
-                                        {/* Botão de Edição para Falta/Abono */}
+                                        {/* Ações de Edição e Exclusão */}
                                         {canEdit && registroFaltaAbono && (
-                                            <Button 
-                                                variant="ghost" 
-                                                size="icon" 
-                                                onClick={() => onEditRegistro(registroFaltaAbono)}
-                                                title="Editar Falta/Abono"
-                                                className="ml-2 h-6 w-6"
-                                            >
-                                                <Edit className="w-4 h-4" />
-                                            </Button>
+                                            <div className="flex space-x-1 ml-2">
+                                                <Button 
+                                                    variant="ghost" 
+                                                    size="icon" 
+                                                    onClick={() => onEditRegistro(registroFaltaAbono)}
+                                                    title="Editar Falta/Abono"
+                                                    className="h-6 w-6"
+                                                >
+                                                    <Edit className="w-4 h-4" />
+                                                </Button>
+                                                <Button 
+                                                    variant="ghost" 
+                                                    size="icon" 
+                                                    onClick={() => handleDelete(registroFaltaAbono.id)}
+                                                    title="Excluir Falta/Abono"
+                                                    className="h-6 w-6 text-red-500 hover:text-red-700"
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                </Button>
+                                            </div>
                                         )}
                                     </div>
                                 </TableCell>

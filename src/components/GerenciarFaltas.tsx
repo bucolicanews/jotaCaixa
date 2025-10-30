@@ -8,7 +8,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { RegistroPonto } from '@/types/ponto'; // Importando a interface centralizada
+import { RegistroPonto } from '@/types/ponto';
 
 type TipoAcao = 'falta_injustificada' | 'falta_justificada' | 'abono_8h' | 'abono_6h' | 'abono_4h';
 
@@ -45,7 +45,14 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
         }
       } else if (tipo === 'Abono' && observacao) {
         const horas = observacao.replace('h', '');
-        setAcaoSelecionada(`abono_${horas}h` as TipoAcao);
+        // Garante que a ação selecionada corresponda ao abono existente
+        const acaoExistente = `abono_${horas}h` as TipoAcao;
+        if (['abono_8h', 'abono_6h', 'abono_4h'].includes(acaoExistente)) {
+            setAcaoSelecionada(acaoExistente);
+        } else {
+            // Fallback se o observacao for inválido
+            setAcaoSelecionada('abono_8h');
+        }
         setUrlAtestadoExistente(null);
       }
     } else {
