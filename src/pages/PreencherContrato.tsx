@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, FileSignature, ChevronLeft, Save, CalendarIcon } from 'lucide-react';
+import { Loader2, FileSignature, ChevronLeft, Save, CalendarIcon, Eye } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
@@ -20,6 +20,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { ptBR } from 'date-fns/locale';
 import { TAGS_PADRAO } from '@/config/contrato-tags-padrao';
+import ContratoPreviewDialog from '@/components/ContratoPreviewDialog'; // Importando o novo componente
 
 type TipoLancamento = 'unico' | 'repetir' | 'parcelar';
 
@@ -43,6 +44,10 @@ const PreencherContrato: React.FC = () => {
   const [valoresTags, setValoresTags] = useState<Record<string, string>>({});
   const [carregandoDados, setCarregandoDados] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Estados para a prévia
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [conteudoPreview, setConteudoPreview] = useState('');
   
   // Campos obrigatórios para o contrato
   const [clienteSelecionadoId, setClienteSelecionadoId] = useState<string>('');
@@ -125,7 +130,6 @@ const PreencherContrato: React.FC = () => {
     // 4. Buscar Dados da Empresa Logada (Cliente/Admin)
     if (role === 'Cliente' || role === 'Admin') {
         const profile = perfil as ClienteProfile;
-        // Nota: Assumindo que os campos documento e endereço_completo seriam preenchidos no perfil do Cliente
         setEmpresaLogada({
             nome: profile.nome,
             email: profile.email,
@@ -254,6 +258,13 @@ const PreencherContrato: React.FC = () => {
         conteudoRenderizado = conteudoRenderizado.replace(regex, tags[tag]);
     }
     return conteudoRenderizado;
+  };
+  
+  const handlePreview = () => {
+      if (!modelo) return;
+      const conteudoRenderizado = renderizarConteudo(modelo.conteudo_template, valoresTags);
+      setConteudoPreview(conteudoRenderizado);
+      setPreviewOpen(true);
   };
 
   const gerarParcelas = (
@@ -601,19 +612,35 @@ const PreencherContrato: React.FC = () => {
             </CardContent>
         </Card>
         
-        {/* Botão de Salvar */}
-        <div className="lg:col-span-3">
+        {/* Botões de Ação */}
+        <div className="lg:col-span-3 flex flex-col sm:flex-row gap-4">
+            <Button 
+                onClick={handlePreview} 
+                variant="outline"
+                className="flex-1 h-12"
+                disabled={!modelo || !clienteSelecionadoId || valorTotal === ''}
+            >
+                <Eye className="mr-2 h-4 w-4" />
+                Visualizar Contrato
+            </Button>
             <Button 
                 onClick={handleSalvarContrato} 
-                className="w-full h-12"
+                className="flex-1 h-12"
                 disabled={isSubmitting || !clienteSelecionadoId || valorTotal === ''}
             >
                 {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                Salvar Contrato e Gerar Contas a Receber
+                Salvar e Gerar Contas a Receber
             </Button>
         </div>
         
       </div>
+      
+      <ContratoPreviewDialog
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+        conteudoHtml={conteudoPreview}
+        titulo={modelo?.titulo || 'Prévia'}
+      />
     </LayoutPrincipal>
   );
 };
