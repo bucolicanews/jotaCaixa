@@ -46,6 +46,7 @@ const DAY_MAP: Record<number, string> = {
 // Constantes CLT (Simplificadas)
 const JORNADA_MENSAL_PADRAO = 220; // Horas mensais padrão CLT
 const PERCENTUAL_EXTRA_NORMAL = 0.5; // 50% de adicional
+const PERCENTUAL_EXTRA_70 = 0.7; // 70% de adicional (Adicionado conforme solicitação)
 const PERCENTUAL_EXTRA_FERIADO_FIMSEMANA = 1.0; // 100% de adicional
 
 const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes, onEditRegistro, onEditFaltaAbono, onDeleteRegistro, onManageWorkedDayOff }) => {
@@ -55,12 +56,16 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
   const [selfieUrl, setSelfieUrl] = useState<string | null>(null);
   
   const valorHoraNormal = salario / (horas_mensais || JORNADA_MENSAL_PADRAO);
-  const valorHoraExtra = valorHoraNormal * (1 + PERCENTUAL_EXTRA_NORMAL);
+  
+  // Valores das horas extras
+  const valorHoraExtra50 = valorHoraNormal * (1 + PERCENTUAL_EXTRA_NORMAL);
+  const valorHoraExtra70 = valorHoraNormal * (1 + PERCENTUAL_EXTRA_70);
   const valorHoraExtra100 = valorHoraNormal * (1 + PERCENTUAL_EXTRA_FERIADO_FIMSEMANA);
 
-  let totalMinutosTrabalhados = 0;
-  let totalMinutosExtras = 0;
-  let totalMinutosExtras100 = 0;
+  let totalMinutosTrabalhados = 0; // Horas normais (até o limite da jornada)
+  let totalMinutosExtras50 = 0; // Horas extras 50% (Excedente da jornada, não 100%)
+  let totalMinutosExtras70 = 0; // Horas extras 70% (Novo campo, 0 por padrão)
+  let totalMinutosExtras100 = 0; // Horas extras 100% (Folgas trabalhadas)
   
   // 1. Agrupamento de registros por dia (YYYY-MM-DD)
   const registrosPorDia: Record<string, RegistroPonto[]> = {};
@@ -129,7 +134,8 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
         }
         if (registro.tipo === 'Abono') {
             isAbono = true;
-            const horasAbonadas = parseInt(registro.observacao?.replace('h', '') || '0');
+            // Assumindo 8h de abono se não especificado
+            const horasAbonadas = parseInt(registro.observacao?.match(/(\d+)h/)?.[1] || '8'); 
             minutosDia += horasAbonadas * 60;
             break; 
         }
@@ -223,24 +229,35 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
     };
   }
   
-  // 3. Calcular horas extras (Simplificado: tudo acima da jornada mensal é extra)
+  // 3. Calcular horas extras (Simplificado: tudo acima da jornada mensal é extra 50%)
   const jornadaMensalMinutos = (horas_mensais || JORNADA_MENSAL_PADRAO) * 60;
   
+  let minutosExcedentes = 0;
   if (totalMinutosTrabalhados > jornadaMensalMinutos) {
-    totalMinutosExtras = totalMinutosTrabalhados - jornadaMensalMinutos;
+    minutosExcedentes = totalMinutosTrabalhados - jornadaMensalMinutos;
     totalMinutosTrabalhados = jornadaMensalMinutos;
+    
+    // Por padrão, o excedente é 50%. Se o cliente quiser 70%, a lógica de diferenciação deve ser implementada aqui.
+    totalMinutosExtras50 = minutosExcedentes; 
   }
+  
+  const minutosDiferenca = jornadaMensalMinutos - totalMinutosTrabalhados; // Saldo de horas (positivo = falta, negativo = extra)
   
   // 4. Calcular valor total
   const valorTotalNormal = (totalMinutosTrabalhados / 60) * valorHoraNormal;
-  const valorTotalExtra = (totalMinutosExtras / 60) * valorHoraExtra;
+  const valorTotalExtra50 = (totalMinutosExtras50 / 60) * valorHoraExtra50;
+  const valorTotalExtra70 = (totalMinutosExtras70 / 60) * valorHoraExtra70; // Atualmente 0
   const valorTotalExtra100 = (totalMinutosExtras100 / 60) * valorHoraExtra100;
-  const valorTotalPagar = valorTotalNormal + valorTotalExtra + valorTotalExtra100;
+  
+  const valorTotalExtras = valorTotalExtra50 + valorTotalExtra70 + valorTotalExtra100;
+  const valorTotalPagar = valorTotalNormal + valorTotalExtras;
 
   const formatarHoras = (minutos: number): string => {
-    const horas = Math.floor(minutos / 60);
-    const mins = Math.round(minutos % 60);
-    return `${horas}h ${mins}m`;
+    const sign = minutos < 0 ? '-' : '';
+    const absMinutos = Math.abs(minutos);
+    const horas = Math.floor(absMinutos / 60);
+    const mins = Math.round(absMinutos % 60);
+    return `${sign}${horas}h ${mins}m`;
   };
   
   const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -273,12 +290,35 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
       <Card>
         <CardHeader><CardTitle className="text-xl flex items-center"><DollarSign className="w-5 h-5 mr-2" /> Resumo Financeiro ({format(mes, 'MMMM/yyyy', { locale: ptBR })})</CardTitle></CardHeader>
         <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div><p className="text-sm text-muted-foreground">Salário Base</p><p className="font-bold text-lg">{formatCurrency(salario)}</p></div>
-          <div><p className="text-sm text-muted-foreground">Jornada Mensal</p><p className="font-bold text-lg">{horas_mensais}h</p></div>
-          <div><p className="text-sm text-muted-foreground">Horas Normais</p><p className="font-bold text-lg">{formatarHoras(totalMinutosTrabalhados)}</p></div>
-          <div><p className="text-sm text-muted-foreground">Horas Extras (50%)</p><p className="font-bold text-lg text-orange-500">{formatarHoras(totalMinutosExtras)}</p></div>
-          <div><p className="text-sm text-muted-foreground">Horas Extras (100%)</p><p className="font-bold text-lg text-red-500">{formatarHoras(totalMinutosExtras100)}</p></div>
-          <div className="col-span-2 md:col-span-4 border-t pt-2"><p className="text-sm text-muted-foreground">Valor Total a Pagar (Estimado)</p><p className="font-extrabold text-2xl text-primary">{formatCurrency(valorTotalPagar)}</p></div>
+          
+          {/* LINHA 1: JORNADA E SALDO */}
+          <div className="col-span-2 md:col-span-4 grid grid-cols-4 gap-4 border-b pb-3">
+            <div><p className="text-sm text-muted-foreground">Salário Base</p><p className="font-bold text-lg">{formatCurrency(salario)}</p></div>
+            <div><p className="text-sm text-muted-foreground">Jornada Mensal</p><p className="font-bold text-lg">{horas_mensais}h</p></div>
+            <div><p className="text-sm text-muted-foreground">Horas Trabalhadas</p><p className="font-bold text-lg">{formatarHoras(totalMinutosTrabalhados)}</p></div>
+            <div>
+                <p className="text-sm text-muted-foreground">Diferença (Saldo)</p>
+                <p className={cn("font-bold text-lg", minutosDiferenca > 0 ? "text-red-500" : "text-green-600")}>
+                    {minutosDiferenca > 0 ? `-${formatarHoras(minutosDiferenca)}` : formatarHoras(minutosDiferenca)}
+                </p>
+            </div>
+          </div>
+          
+          {/* LINHA 2: HORAS EXTRAS */}
+          <div className="col-span-2 md:col-span-4 grid grid-cols-4 gap-4 border-b pb-3">
+            <div className="col-span-1"><p className="text-sm text-muted-foreground">Horas Extras (50%)</p><p className="font-bold text-lg text-orange-500">{formatarHoras(totalMinutosExtras50)}</p></div>
+            <div className="col-span-1"><p className="text-sm text-muted-foreground">Horas Extras (70%)</p><p className="font-bold text-lg text-yellow-600">{formatarHoras(totalMinutosExtras70)}</p></div>
+            <div className="col-span-1"><p className="text-sm text-muted-foreground">Horas Extras (100%)</p><p className="font-bold text-lg text-red-500">{formatarHoras(totalMinutosExtras100)}</p></div>
+            <div className="col-span-1"><p className="text-sm text-muted-foreground">Total Horas Extras</p><p className="font-bold text-lg text-primary">{formatarHoras(totalMinutosExtras50 + totalMinutosExtras70 + totalMinutosExtras100)}</p></div>
+          </div>
+          
+          {/* LINHA 3: VALORES A PAGAR */}
+          <div className="col-span-2 md:col-span-4 grid grid-cols-4 gap-4 pt-2">
+            <div className="col-span-1"><p className="text-sm text-muted-foreground">Valor Salário Normal</p><p className="font-bold text-lg">{formatCurrency(valorTotalNormal)}</p></div>
+            <div className="col-span-1"><p className="text-sm text-muted-foreground">Valor Extras (50%)</p><p className="font-bold text-lg text-orange-500">{formatCurrency(valorTotalExtra50)}</p></div>
+            <div className="col-span-1"><p className="text-sm text-muted-foreground">Valor Extras (100%)</p><p className="font-bold text-lg text-red-500">{formatCurrency(valorTotalExtra100)}</p></div>
+            <div className="col-span-1"><p className="text-sm text-muted-foreground">Valor Total a Pagar (Estimado)</p><p className="font-extrabold text-2xl text-primary">{formatCurrency(valorTotalPagar)}</p></div>
+          </div>
         </CardContent>
       </Card>
 
