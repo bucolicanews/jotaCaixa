@@ -19,8 +19,15 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { ptBR } from 'date-fns/locale';
+import { TAGS_PADRAO } from '@/config/contrato-tags-padrao';
 
 type TipoLancamento = 'unico' | 'repetir' | 'parcelar';
+
+interface EmpresaLogada {
+    nome: string;
+    email: string;
+    // Adicione outros campos da empresa aqui (CNPJ, Endereço, etc.)
+}
 
 const PreencherContrato: React.FC = () => {
   const { modeloId } = useParams<{ modeloId: string }>();
@@ -30,6 +37,8 @@ const PreencherContrato: React.FC = () => {
   const [modelo, setModelo] = useState<ContratoModelo | null>(null);
   const [tags, setTags] = useState<ContratoTag[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [empresaLogada, setEmpresaLogada] = useState<EmpresaLogada | null>(null);
+  
   const [valoresTags, setValoresTags] = useState<Record<string, string>>({});
   const [carregandoDados, setCarregandoDados] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -54,6 +63,9 @@ const PreencherContrato: React.FC = () => {
     if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id;
     return null;
   };
+  
+  const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+  const formatDate = (date: Date) => format(date, 'dd/MM/yyyy');
 
   const buscarDados = useCallback(async () => {
     if (!modeloId || !empresaId) {
@@ -93,6 +105,7 @@ const PreencherContrato: React.FC = () => {
     
     // 3. Buscar Clientes
     const ownerId = getOwnerId();
+    let fetchedClientes: Cliente[] = [];
     if (ownerId) {
         const { data: clientesData, error: clientesError } = await supabase
             .from('clientes')
@@ -102,9 +115,23 @@ const PreencherContrato: React.FC = () => {
             
         if (clientesError) {
             showError('Erro ao carregar clientes: ' + clientesError.message);
-            setClientes([]);
         } else {
-            setClientes(clientesData as Cliente[]);
+            fetchedClientes = clientesData as Cliente[];
+            setClientes(fetchedClientes);
+        }
+    }
+    
+    // 4. Buscar Dados da Empresa Logada (Cliente/Admin)
+    if (role === 'Cliente' || role === 'Admin') {
+        const profile = perfil as ClienteProfile;
+        setEmpresaLogada({
+            nome: profile.nome,
+            email: profile.email,
+        });
+    } else if (role === 'Usuario' && empresaId) {
+        const { data: empresaData } = await supabase.from('tbl_clientes').select('nome, email').eq('id', empresaId).single();
+        if (empresaData) {
+            setEmpresaLogada(empresaData);
         }
     }
 
@@ -119,6 +146,76 @@ const PreencherContrato: React.FC = () => {
     }
   }, [carregandoSessao, isAdmin, isCliente, role, empresaId, buscarDados, navigate]);
   
+  // Efeito para preencher tags padrão automaticamente
+  useEffect(() => {
+    const updateTags = () => {
+        const newTags: Record<string, string> = {};
+        const cliente = clientes.find(c => c.id === clienteSelecionadoId);
+        
+        const valorNumerico = Number(valorTotal);
+        const numParcelas = Number(numeroParcelas);
+        
+        const valorFinalContrato = tipoLancamento === 'repetir' ? valorNumerico * numParcelas : valorNumerico;
+        
+        let primeiroVencimento: Date | undefined;
+        if (tipoLancamento === 'unico') {
+            primeiroVencimento = dataVencimentoUnico;
+        } else {
+            primeiroVencimento = dataPrimeiroVencimento;
+        }
+
+        // Preenchimento das Tags Padrão
+        TAGS_PADRAO.forEach(tag => {
+            switch (tag.nome_tag) {
+                case '{{EMPRESA_NOME}}':
+                    newTags[tag.nome_tag] = empresaLogada?.nome || 'N/A';
+                    break;
+                case '{{EMPRESA_EMAIL}}':
+                    newTags[tag.nome_tag] = empresaLogada?.email || 'N/A';
+                    break;
+                case '{{CLIENTE_NOME}}':
+                    newTags[tag.nome_tag] = cliente?.nome || 'N/A';
+                    break;
+                case '{{CLIENTE_DOCUMENTO}}':
+                    newTags[tag.nome_tag] = cliente?.documento || 'N/A';
+                    break;
+                case '{{CLIENTE_EMAIL}}':
+                    newTags[tag.nome_tag] = cliente?.email || 'N/A';
+                    break;
+                case '{{VALOR_TOTAL_CONTRATO}}':
+                    newTags[tag.nome_tag] = formatCurrency(valorFinalContrato);
+                    break;
+                case '{{NUMERO_PARCELAS}}':
+                    newTags[tag.nome_tag] = String(numParcelas);
+                    break;
+                case '{{PRIMEIRO_VENCIMENTO}}':
+                    newTags[tag.nome_tag] = primeiroVencimento ? formatDate(primeiroVencimento) : 'N/A';
+                    break;
+                case '{{DATA_EMISSAO}}':
+                    newTags[tag.nome_tag] = formatDate(new Date());
+                    break;
+                default:
+                    // Mantém o valor preenchido manualmente pelo usuário para tags customizadas
+                    newTags[tag.nome_tag] = valoresTags[tag.nome_tag] || '';
+                    break;
+            }
+        });
+        
+        // Atualiza o estado de valoresTags, mantendo as tags customizadas
+        setValoresTags(prev => {
+            const customTags = Object.keys(prev).filter(key => !TAGS_PADRAO.some(t => t.nome_tag === key));
+            const updatedTags = { ...newTags };
+            customTags.forEach(key => {
+                updatedTags[key] = prev[key];
+            });
+            return updatedTags;
+        });
+    };
+    
+    updateTags();
+  }, [clienteSelecionadoId, valorTotal, tipoLancamento, numeroParcelas, dataVencimentoUnico, dataPrimeiroVencimento, clientes, empresaLogada]);
+
+
   const handleTagChange = (tag: string, value: string) => {
     setValoresTags(prev => ({ ...prev, [tag]: value }));
   };
@@ -225,7 +322,7 @@ const PreencherContrato: React.FC = () => {
             modelo_id: modelo.id,
             cliente_id: clienteSelecionadoId,
             empresa_id: empresaId,
-            status: 'pendente_assinatura', // ALTERADO: De rascunho para pendente_assinatura
+            status: 'pendente_assinatura',
             valor_total: valorFinalContrato,
             data_inicio: format(new Date(), 'yyyy-MM-dd'), // Data de criação do contrato
             numero_parcelas: numParcelas,
@@ -310,6 +407,9 @@ const PreencherContrato: React.FC = () => {
 
   const isRepetirOuParcelar = tipoLancamento !== 'unico';
   const valorLabel = tipoLancamento === 'parcelar' ? 'Valor Total a Parcelar' : 'Valor da Parcela';
+  
+  // Filtra tags customizadas (que não são padrão)
+  const tagsCustomizadas = tags.filter(tag => !TAGS_PADRAO.some(t => t.nome_tag === tag.nome_tag));
 
   return (
     <LayoutPrincipal>
@@ -445,10 +545,21 @@ const PreencherContrato: React.FC = () => {
         <Card className="lg:col-span-2">
             <CardHeader><CardTitle className="text-xl">2. Preenchimento das Tags Dinâmicas</CardTitle></CardHeader>
             <CardContent className="space-y-4">
-                {tags.length === 0 ? (
-                    <p className="text-muted-foreground">Nenhuma tag dinâmica cadastrada para esta empresa.</p>
+                <div className="p-3 bg-secondary rounded-md">
+                    <h3 className="font-semibold text-sm mb-1">Tags Padrão (Preenchimento Automático)</h3>
+                    <div className="flex flex-wrap gap-2">
+                        {TAGS_PADRAO.map(tag => (
+                            <span key={tag.id} className="text-xs font-mono bg-primary/10 text-primary px-2 py-1 rounded">
+                                {tag.nome_tag}
+                            </span>
+                        ))}
+                    </div>
+                </div>
+                
+                {tagsCustomizadas.length === 0 ? (
+                    <p className="text-muted-foreground">Nenhuma tag customizada cadastrada para esta empresa.</p>
                 ) : (
-                    tags.map(tag => (
+                    tagsCustomizadas.map(tag => (
                         <div key={tag.id} className="space-y-1">
                             <Label htmlFor={tag.nome_tag} className="font-semibold">{tag.descricao} ({tag.nome_tag})</Label>
                             <Input 
