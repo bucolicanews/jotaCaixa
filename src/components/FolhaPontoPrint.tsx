@@ -59,6 +59,7 @@ const FolhaPontoPrint: React.FC<FolhaPontoPrintProps> = ({
     const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
     const isExtraHours = minutosDiferenca < 0;
+    const displayDifference = formatarHoras(minutosDiferenca);
     const displayExtraHours = formatarHoras(Math.abs(minutosDiferenca));
     
     const diasOrdenados = Object.keys(diasProcessados).sort();
@@ -79,22 +80,12 @@ const FolhaPontoPrint: React.FC<FolhaPontoPrintProps> = ({
                         <tr><th>Salário Base</th><td>{formatCurrency(funcionario.salario)}</td></tr>
                         <tr><th>Jornada Mensal</th><td>{funcionario.horas_mensais}h</td></tr>
                         <tr><th>Horas Trabalhadas</th><td>{formatarHoras(totalMinutosTrabalhados)}</td></tr>
-                        {isExtraHours && (
-                            <tr>
-                                <th>Horas Extras</th>
-                                <td style={{ color: 'green' }}>
-                                    {displayExtraHours}
-                                </td>
-                            </tr>
-                        )}
-                        {!isExtraHours && minutosDiferenca > 0 && (
-                            <tr>
-                                <th>Falta de Horas</th>
-                                <td style={{ color: 'red' }}>
-                                    {formatarHoras(minutosDiferenca)}
-                                </td>
-                            </tr>
-                        )}
+                        <tr>
+                            <th>{isExtraHours ? 'Horas Extras' : 'Diferença (Saldo)'}</th>
+                            <td style={{ color: isExtraHours ? 'green' : 'red' }}>
+                                {isExtraHours ? displayExtraHours : displayDifference}
+                            </td>
+                        </tr>
                     </tbody>
                 </table>
             </div>
@@ -104,14 +95,12 @@ const FolhaPontoPrint: React.FC<FolhaPontoPrintProps> = ({
                 <table className="print-table">
                     <thead>
                         <tr>
-                            <th style={{ width: '5%' }}>Data</th>
-                            <th style={{ width: '5%' }}>Dia</th>
-                            <th style={{ width: '15%' }}>1ª Entrada</th>
-                            <th style={{ width: '15%' }}>1ª Saída</th>
-                            <th style={{ width: '15%' }}>2ª Entrada</th>
-                            <th style={{ width: '15%' }}>2ª Saída</th>
+                            <th style={{ width: '10%' }}>Data</th>
+                            <th style={{ width: '10%' }}>Dia</th>
+                            <th style={{ width: '30%' }}>Entradas</th>
+                            <th style={{ width: '30%' }}>Saídas</th>
                             <th style={{ width: '10%' }}>Total Dia</th>
-                            <th style={{ width: '25%' }}>Observações</th>
+                            <th style={{ width: '10%' }}>Observações</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -120,52 +109,29 @@ const FolhaPontoPrint: React.FC<FolhaPontoPrintProps> = ({
                             const data = parseISO(diaString);
                             const diaSemana = format(data, 'EEE', { locale: ptBR });
                             
-                            const batidas = diaData.registros
-                                .filter(r => r.tipo === 'Entrada' || r.tipo === 'Saida')
-                                .sort((a, b) => parseISO(a.horario_registro).getTime() - parseISO(b.horario_registro).getTime());
+                            const batidas = diaData.registros.filter(r => r.tipo === 'Entrada' || r.tipo === 'Saida');
+                            const entradas = batidas.filter(r => r.tipo === 'Entrada');
+                            const saidas = batidas.filter(r => r.tipo === 'Saida');
                             
-                            // Extrai as 4 batidas principais
-                            const entrada1 = batidas.find(r => r.tipo === 'Entrada');
-                            const saida1 = batidas.find(r => r.tipo === 'Saida' && parseISO(r.horario_registro).getTime() > (entrada1 ? parseISO(entrada1.horario_registro).getTime() : 0));
-                            const entrada2 = batidas.find(r => r.tipo === 'Entrada' && parseISO(r.horario_registro).getTime() > (saida1 ? parseISO(saida1.horario_registro).getTime() : 0));
-                            const saida2 = batidas.find(r => r.tipo === 'Saida' && parseISO(r.horario_registro).getTime() > (entrada2 ? parseISO(entrada2.horario_registro).getTime() : 0));
-                            
-                            // Variável local para corrigir o erro TS2339
+                            const observacoes = diaData.registros
+                                .filter(r => r.tipo !== 'Entrada' && r.tipo !== 'Saida')
+                                .map(r => {
+                                    if (r.tipo === 'Falta') return r.atestado_url ? 'Falta Justificada' : 'Falta Injustificada';
+                                    if (r.tipo === 'Abono') return `Abono (${r.observacao})`;
+                                    if (r.tipo === 'Compensacao') return 'Folga Compensada';
+                                    if (r.tipo === 'Extra100') return 'Folga Paga Extra 100%';
+                                    return r.observacao || '';
+                                })
+                                .filter(obs => obs)
+                                .join('; ');
+                                
+                            const isFolga = diaData.isFolgaFixa && !diaData.hasPontoRecords && !diaData.isFerias;
                             const isFaltaOuAbono = diaData.isFalta || diaData.isAbono;
-
-                            // Lógica de Observações (Concisa)
-                            let observacoes = '';
-                            if (diaData.isFerias) {
-                                observacoes = 'FÉRIAS';
-                            } else if (diaData.isFalta) {
-                                const atestado = diaData.registros.find(r => r.tipo === 'Falta')?.atestado_url;
-                                observacoes = atestado ? 'Falta Justificada (Atestado)' : 'Falta Injustificada';
-                            } else if (diaData.isAbono) {
-                                const obs = diaData.registros.find(r => r.tipo === 'Abono')?.observacao;
-                                // Simplifica a observação de compensação
-                                if (obs?.includes('Compensação de folga trabalhada')) {
-                                    observacoes = 'Abono (Compensação)';
-                                } else {
-                                    observacoes = obs || 'Abono';
-                                }
-                            } else if (diaData.needsManagement) {
-                                observacoes = 'Folga Trabalhada (Aguardando Gestão)';
-                            } else if (diaData.decisionRecord === 'Extra100') {
-                                observacoes = 'Folga Paga Extra 100%';
-                            } else if (diaData.decisionRecord === 'Compensacao') {
-                                observacoes = 'Folga Compensada';
-                            } else if (diaData.isFolgaFixa && !diaData.hasPontoRecords) {
-                                observacoes = 'FOLGA FIXA';
-                            } else if (batidas.length > 4) {
-                                observacoes = `Mais de 4 batidas (${batidas.length} registros)`;
-                            } else if (diaData.hasPontoRecords && diaData.minutos === 0) {
-                                observacoes = 'Turno Aberto ou Batidas Inválidas';
-                            }
                             
                             let totalDiaDisplay = '';
                             if (diaData.isFerias) {
                                 totalDiaDisplay = 'FÉRIAS';
-                            } else if (diaData.isFolgaFixa && !diaData.hasPontoRecords && !diaData.isFerias) {
+                            } else if (isFolga) {
                                 totalDiaDisplay = 'FOLGA';
                             } else if (isFaltaOuAbono) {
                                 totalDiaDisplay = diaData.isFalta ? 'FALTA' : formatarHoras(diaData.minutosAbonados);
@@ -179,10 +145,8 @@ const FolhaPontoPrint: React.FC<FolhaPontoPrintProps> = ({
                                 <tr key={diaString}>
                                     <td>{format(data, 'dd/MM')}</td>
                                     <td>{diaSemana}</td>
-                                    <td>{entrada1 ? format(parseISO(entrada1.horario_registro), 'HH:mm') : ''}</td>
-                                    <td>{saida1 ? format(parseISO(saida1.horario_registro), 'HH:mm') : ''}</td>
-                                    <td>{entrada2 ? format(parseISO(entrada2.horario_registro), 'HH:mm') : ''}</td>
-                                    <td>{saida2 ? format(parseISO(saida2.horario_registro), 'HH:mm') : ''}</td>
+                                    <td>{entradas.map(r => format(parseISO(r.horario_registro), 'HH:mm')).join(' | ')}</td>
+                                    <td>{saidas.map(r => format(parseISO(r.horario_registro), 'HH:mm')).join(' | ')}</td>
                                     <td>{totalDiaDisplay}</td>
                                     <td>{observacoes}</td>
                                 </tr>
