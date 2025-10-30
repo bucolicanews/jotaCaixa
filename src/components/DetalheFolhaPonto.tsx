@@ -45,7 +45,6 @@ const DAY_MAP: Record<number, string> = {
 
 // Constantes CLT (Simplificadas)
 const JORNADA_MENSAL_PADRAO = 220; // Horas mensais padrão CLT
-// Removidas: PERCENTUAL_EXTRA_NORMAL, PERCENTUAL_EXTRA_70, PERCENTUAL_EXTRA_FERIADO_FIMSEMANA
 
 const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes, onEditRegistro, onEditFaltaAbono, onDeleteRegistro, onManageWorkedDayOff }) => {
   const { salario, horas_mensais, registros, dias_folga_fixos, folga_domingo_obrigatoria, ferias } = funcionario;
@@ -53,16 +52,7 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
   const [selfieModalOpen, setSelfieModalOpen] = useState(false);
   const [selfieUrl, setSelfieUrl] = useState<string | null>(null);
   
-  // Removido: const valorHoraNormal = salario / (horas_mensais || JORNADA_MENSAL_PADRAO);
-  
-  // Valores das horas extras (Removidos pois não são mais usados na exibição)
-  // const valorHoraExtra50 = valorHoraNormal * (1 + PERCENTUAL_EXTRA_NORMAL);
-  // const valorHoraExtra70 = valorHoraNormal * (1 + PERCENTUAL_EXTRA_70);
-  // const valorHoraExtra100 = valorHoraNormal * (1 + PERCENTUAL_EXTRA_FERIADO_FIMSEMANA);
-
-  let totalMinutosTrabalhados = 0; // Horas normais (até o limite da jornada)
-  let totalMinutosExtras50 = 0; // Horas extras 50% (Excedente da jornada, não 100%)
-  let totalMinutosExtras70 = 0; // Horas extras 70% (Novo campo, 0 por padrão)
+  let totalMinutosTrabalhados = 0; // Horas normais (inclui abonos, até o limite da jornada)
   let totalMinutosExtras100 = 0; // Horas extras 100% (Folgas trabalhadas)
   
   // 1. Agrupamento de registros por dia (YYYY-MM-DD)
@@ -255,29 +245,12 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
   // 3. Calcular horas extras (Simplificado: tudo acima da jornada mensal é extra 50%)
   const jornadaMensalMinutos = (horas_mensais || JORNADA_MENSAL_PADRAO) * 60;
   
-  let minutosExcedentes = 0;
-  if (totalMinutosTrabalhados > jornadaMensalMinutos) {
-    minutosExcedentes = totalMinutosTrabalhados - jornadaMensalMinutos;
-    totalMinutosTrabalhados = jornadaMensalMinutos;
-    
-    // Por padrão, o excedente é 50%. Se o cliente quiser 70%, a lógica de diferenciação deve ser implementada aqui.
-    totalMinutosExtras50 = minutosExcedentes; 
-  }
+  // A diferença é o quanto falta para atingir a jornada (positivo = falta, negativo = extra)
+  const minutosDiferenca = jornadaMensalMinutos - totalMinutosTrabalhados; 
   
-  // Saldo de horas (positivo = extra, negativo = falta)
-  const minutosDiferenca = totalMinutosTrabalhados - jornadaMensalMinutos; 
+  // 4. Ajustar totalMinutosTrabalhados para o limite da jornada (para exibição)
+  const totalMinutosTrabalhadosDisplay = Math.min(totalMinutosTrabalhados, jornadaMensalMinutos);
   
-  // Horas Extras a Pagar (Total de todas as categorias de extra)
-  const totalMinutosExtrasPagar = totalMinutosExtras50 + totalMinutosExtras70 + totalMinutosExtras100;
-  
-  // 4. Calcular valor total (mantido para referência interna, mas não exibido)
-  // const valorTotalNormal = (totalMinutosTrabalhados / 60) * valorHoraNormal;
-  // const valorTotalExtra50 = (totalMinutosExtras50 / 60) * valorHoraExtra50;
-  // const valorTotalExtra70 = (totalMinutosExtras70 / 60) * valorHoraExtra70; 
-  // const valorTotalExtra100 = (totalMinutosExtras100 / 60) * valorHoraExtra100;
-  
-  // const valorTotalExtras = totalMinutosExtras50 + totalMinutosExtras70 + totalMinutosExtras100;
-
   const formatarHoras = (minutos: number): string => {
     const sign = minutos < 0 ? '-' : '';
     const absMinutos = Math.abs(minutos);
@@ -311,6 +284,12 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
 
   const canEdit = role === 'Admin' || role === 'Cliente';
 
+  // Lógica de exibição da diferença
+  // minutosDiferenca < 0 significa Horas Extras (saldo positivo)
+  const isExtraHours = minutosDiferenca < 0;
+  const displayDifference = formatarHoras(minutosDiferenca);
+  const displayExtraHours = formatarHoras(Math.abs(minutosDiferenca));
+
   return (
     <div className="space-y-6">
       <Card>
@@ -318,20 +297,17 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
         <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4">
           
           {/* LINHA 1: JORNADA E SALDO */}
-          <div className="col-span-2 md:col-span-4 grid grid-cols-4 gap-4 border-b pb-3">
+          <div className="col-span-2 md:col-span-4 grid grid-cols-4 gap-4">
             <div><p className="text-sm text-muted-foreground">Salário Base</p><p className="font-bold text-lg">{formatCurrency(salario)}</p></div>
             <div><p className="text-sm text-muted-foreground">Jornada Mensal</p><p className="font-bold text-lg">{horas_mensais}h</p></div>
-            <div><p className="text-sm text-muted-foreground">Horas Trabalhadas</p><p className="font-bold text-lg">{formatarHoras(totalMinutosTrabalhados)}</p></div>
+            <div><p className="text-sm text-muted-foreground">Horas Trabalhadas</p><p className="font-bold text-lg">{formatarHoras(totalMinutosTrabalhadosDisplay)}</p></div>
             <div>
-                <p className="text-sm text-muted-foreground">Diferença (Saldo)</p>
-                <p className={cn("font-bold text-lg", minutosDiferenca < 0 ? "text-red-500" : "text-green-600")}>
-                    {formatarHoras(minutosDiferenca)}
+                <p className="text-sm text-muted-foreground">{isExtraHours ? 'Horas Extras' : 'Diferença (Saldo)'}</p>
+                <p className={cn("font-bold text-lg", isExtraHours ? "text-green-600" : "text-red-500")}>
+                    {isExtraHours ? displayExtraHours : displayDifference}
                 </p>
             </div>
           </div>
-          
-          {/* LINHA 2: HORAS EXTRAS */}
-          {/* REMOVIDA CONFORME SOLICITAÇÃO */}
           
         </CardContent>
       </Card>
