@@ -266,16 +266,19 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
     totalMinutosExtras50 = minutosExcedentes; 
   }
   
-  const minutosDiferenca = totalMinutosTrabalhados - jornadaMensalMinutos; // Saldo de horas (positivo = extra, negativo = falta)
+  // Saldo de horas (positivo = extra, negativo = falta)
+  const minutosDiferenca = totalMinutosTrabalhados - jornadaMensalMinutos; 
   
-  // 4. Calcular valor total
-  const valorTotalNormal = (totalMinutosTrabalhados / 60) * valorHoraNormal;
+  // Horas Extras a Pagar (Total de todas as categorias de extra)
+  const totalMinutosExtrasPagar = totalMinutosExtras50 + totalMinutosExtras70 + totalMinutosExtras100;
+  
+  // 4. Calcular valor total (mantido para referência interna, mas não exibido)
+  // const valorTotalNormal = (totalMinutosTrabalhados / 60) * valorHoraNormal;
   const valorTotalExtra50 = (totalMinutosExtras50 / 60) * valorHoraExtra50;
-  const valorTotalExtra70 = (totalMinutosExtras70 / 60) * valorHoraExtra70; // Atualmente 0
+  const valorTotalExtra70 = (totalMinutosExtras70 / 60) * valorHoraExtra70; 
   const valorTotalExtra100 = (totalMinutosExtras100 / 60) * valorHoraExtra100;
   
-  const valorTotalExtras = valorTotalExtra50 + valorTotalExtra70 + valorTotalExtra100;
-  const valorTotalPagar = valorTotalNormal + valorTotalExtras;
+  // const valorTotalExtras = valorTotalExtra50 + valorTotalExtra70 + valorTotalExtra100;
 
   const formatarHoras = (minutos: number): string => {
     const sign = minutos < 0 ? '-' : '';
@@ -330,20 +333,16 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
           </div>
           
           {/* LINHA 2: HORAS EXTRAS */}
-          <div className="col-span-2 md:col-span-4 grid grid-cols-4 gap-4 border-b pb-3">
+          <div className="col-span-2 md:col-span-4 grid grid-cols-4 gap-4 pb-3">
             <div className="col-span-1"><p className="text-sm text-muted-foreground">Horas Extras (50%)</p><p className="font-bold text-lg text-orange-500">{formatarHoras(totalMinutosExtras50)}</p></div>
             <div className="col-span-1"><p className="text-sm text-muted-foreground">Horas Extras (70%)</p><p className="font-bold text-lg text-yellow-600">{formatarHoras(totalMinutosExtras70)}</p></div>
             <div className="col-span-1"><p className="text-sm text-muted-foreground">Horas Extras (100%)</p><p className="font-bold text-lg text-red-500">{formatarHoras(totalMinutosExtras100)}</p></div>
-            <div className="col-span-1"><p className="text-sm text-muted-foreground">Total Horas Extras</p><p className="font-bold text-lg text-primary">{formatarHoras(totalMinutosExtras50 + totalMinutosExtras70 + totalMinutosExtras100)}</p></div>
+            <div>
+                <p className="text-sm text-muted-foreground">Horas Extras a Pagar</p>
+                <p className="font-bold text-lg text-primary">{formatarHoras(totalMinutosExtrasPagar)}</p>
+            </div>
           </div>
           
-          {/* LINHA 3: VALORES A PAGAR */}
-          <div className="col-span-2 md:col-span-4 grid grid-cols-4 gap-4 pt-2">
-            <div className="col-span-1"><p className="text-sm text-muted-foreground">Valor Salário Normal</p><p className="font-bold text-lg">{formatCurrency(valorTotalNormal)}</p></div>
-            <div className="col-span-1"><p className="text-sm text-muted-foreground">Valor Extras (50%)</p><p className="font-bold text-lg text-orange-500">{formatCurrency(valorTotalExtra50)}</p></div>
-            <div className="col-span-1"><p className="text-sm text-muted-foreground">Valor Extras (100%)</p><p className="font-bold text-lg text-red-500">{formatCurrency(valorTotalExtra100)}</p></div>
-            <div className="col-span-1"><p className="text-sm text-muted-foreground">Valor Total a Pagar (Estimado)</p><p className="font-extrabold text-2xl text-primary">{formatCurrency(valorTotalPagar)}</p></div>
-          </div>
         </CardContent>
       </Card>
 
