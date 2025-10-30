@@ -10,13 +10,14 @@ import { ptBR } from 'date-fns/locale';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Calendar } from './ui/calendar';
 import { cn } from '@/lib/utils';
-import { Input } from './ui/input';
-import { Label } from './ui/label';
+// Input e Label removidos
+// import { Input } from './ui/input'; 
+// import { Label } from './ui/label'; 
 
 interface GerenciarFeriasProps {
   funcionarioId: string;
   empresaId: string;
-  readOnly?: boolean; // Adicionando a prop readOnly
+  readOnly?: boolean;
 }
 
 const GerenciarFerias: React.FC<GerenciarFeriasProps> = ({ funcionarioId, empresaId, readOnly = false }) => {
