@@ -8,16 +8,7 @@ import { showError } from '@/utils/toast';
 import { UsuarioProfile } from '@/types/usuario';
 import DetalheFolhaPonto from './DetalheFolhaPonto';
 import { MonthPicker } from './MonthPicker';
-
-interface RegistroPonto {
-  id: string;
-  funcionario_id: string;
-  empresa_id: string;
-  horario_registro: string; // ISO string
-  tipo: 'Entrada' | 'Saida';
-  maps_url: string;
-  selfie_url: string;
-}
+import { RegistroPonto } from '@/types/ponto'; // Importando a interface centralizada
 
 const DetalheProprioPonto: React.FC = () => {
   const { usuario, perfil, carregando } = useSessao();
@@ -94,6 +85,7 @@ const DetalheProprioPonto: React.FC = () => {
                 registros: registrosDoFuncionario,
             }}
             mes={dataSelecionada}
+            onEditRegistro={() => { /* Usuário não pode editar seu próprio ponto */ }}
         />
     </div>
   );

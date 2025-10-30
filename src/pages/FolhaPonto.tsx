@@ -13,17 +13,7 @@ import { MonthPicker } from '@/components/MonthPicker';
 import GerenciarFaltas from '@/components/GerenciarFaltas';
 import { Button } from '@/components/ui/button';
 import { ptBR } from 'date-fns/locale';
-
-interface RegistroPonto {
-  id: string;
-  funcionario_id: string;
-  empresa_id: string;
-  horario_registro: string; // ISO string
-  tipo: 'Entrada' | 'Saida' | 'Falta' | 'Abono'; // Tipos corrigidos
-  maps_url: string;
-  selfie_url: string; // Adicionado
-  atestado_url?: string | null; // Adicionado
-}
+import { RegistroPonto } from '@/types/ponto'; // Importando a interface centralizada
 
 interface FuncionarioComDados extends UsuarioProfile {
     id: string;
@@ -52,9 +42,10 @@ const FolhaPonto: React.FC = () => {
   const [funcionarioSelecionadoId, setFuncionarioSelecionadoId] = useState<string | null>(null);
   const [registrosDoFuncionario, setRegistrosDoFuncionario] = useState<RegistroPonto[]>([]);
   
-  // Estado para Gerenciar Faltas
+  // Estado para Gerenciar Faltas/Abonos
   const [faltaDialogOpen, setFaltaDialogOpen] = useState(false);
   const [diaFaltaSelecionado, setDiaFaltaSelecionado] = useState<Date | null>(null);
+  const [registroParaEdicao, setRegistroParaEdicao] = useState<RegistroPonto | null>(null); // Novo estado
 
   const isAdmin = role === 'Admin';
   const isCliente = role === 'Cliente' && (perfil as ClienteProfile)?.aprovado;
@@ -117,7 +108,7 @@ const FolhaPonto: React.FC = () => {
 
     const { data: registros, error } = await supabase
       .from('registros_ponto')
-      .select('id, funcionario_id, empresa_id, horario_registro, tipo, maps_url, selfie_url, atestado_url')
+      .select('id, funcionario_id, empresa_id, horario_registro, tipo, maps_url, selfie_url, atestado_url, observacao')
       .eq('funcionario_id', funcionarioId)
       .gte('horario_registro', inicioMes)
       .lte('horario_registro', fimMes)
@@ -164,15 +155,23 @@ const FolhaPonto: React.FC = () => {
   
   const handleFaltaClick = (dia: Date) => {
     if (!funcionarioDetalhe) return;
+    setRegistroParaEdicao(null); // Garante que é uma criação
     setDiaFaltaSelecionado(dia);
     setFaltaDialogOpen(true);
   };
   
+  const handleEditRegistro = (registro: RegistroPonto) => {
+    setRegistroParaEdicao(registro); // Define o registro para edição
+    setDiaFaltaSelecionado(parseISO(registro.horario_registro)); // Define a data do registro
+    setFaltaDialogOpen(true);
+  };
+  
   const handleFaltaRegistrada = () => {
-    // Re-busca os registros após registrar a falta
+    // Re-busca os registros após registrar/editar a falta
     if (funcionarioSelecionadoId) {
         fetchRegistros(funcionarioSelecionadoId, dataSelecionada);
     }
+    setRegistroParaEdicao(null);
   };
 
   const getDiasSemRegistro = () => {
@@ -310,6 +309,7 @@ const FolhaPonto: React.FC = () => {
                 registros: registrosDoFuncionario,
             }}
             mes={dataSelecionada}
+            onEditRegistro={handleEditRegistro}
         />
       )}
 
@@ -322,7 +322,7 @@ const FolhaPonto: React.FC = () => {
         </Card>
       )}
       
-      {/* Modal de Gerenciamento de Faltas */}
+      {/* Modal de Gerenciamento de Faltas/Abonos */}
       {funcionarioDetalhe && diaFaltaSelecionado && (
         <GerenciarFaltas
             open={faltaDialogOpen}
@@ -333,6 +333,7 @@ const FolhaPonto: React.FC = () => {
                 empresa_id: empresaIdParaFiltro! 
             }}
             dataFalta={diaFaltaSelecionado}
+            registroInicial={registroParaEdicao} // Passa o registro para edição
             onFaltaRegistrada={handleFaltaRegistrada}
         />
       )}

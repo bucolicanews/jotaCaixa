@@ -1,22 +1,14 @@
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Clock, DollarSign, MapPin, Camera, FileText, AlertTriangle } from 'lucide-react';
+import { Clock, DollarSign, MapPin, Camera, FileText, AlertTriangle, Edit } from 'lucide-react';
 import { format, parseISO, differenceInMinutes, isWeekend, isSameDay, startOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-
-interface RegistroPonto {
-  id: string;
-  funcionario_id: string;
-  horario_registro: string; // ISO string
-  tipo: 'Entrada' | 'Saida' | 'Falta' | 'Abono'; // Adicionado 'Abono'
-  maps_url: string;
-  selfie_url: string;
-  atestado_url?: string | null; 
-  observacao?: string | null; // Adicionado para armazenar a duração do abono
-}
+import { Button } from './ui/button';
+import { useSessao } from '@/hooks/use-sessao';
+import { RegistroPonto } from '@/types/ponto'; // Importando a interface centralizada
 
 interface FuncionarioDetalhe {
   id: string;
@@ -29,6 +21,7 @@ interface FuncionarioDetalhe {
 interface DetalheFolhaPontoProps {
   funcionario: FuncionarioDetalhe;
   mes: Date;
+  onEditRegistro: (registro: RegistroPonto) => void; // Nova prop para edição
 }
 
 // Constantes CLT (Simplificadas)
@@ -36,8 +29,9 @@ const JORNADA_MENSAL_PADRAO = 220; // Horas mensais padrão CLT
 const PERCENTUAL_EXTRA_NORMAL = 0.5; // 50% de adicional
 const PERCENTUAL_EXTRA_FERIADO_FIMSEMANA = 1.0; // 100% de adicional
 
-const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes }) => {
+const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes, onEditRegistro }) => {
   const { salario, horas_mensais, registros } = funcionario;
+  const { role } = useSessao();
   const [selfieModalOpen, setSelfieModalOpen] = useState(false);
   const [selfieUrl, setSelfieUrl] = useState<string | null>(null);
   
@@ -127,6 +121,8 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes 
     setSelfieUrl(url);
     setSelfieModalOpen(true);
   };
+  
+  const canEdit = role === 'Admin' || role === 'Cliente';
 
   return (
     <div className="space-y-6">
@@ -170,11 +166,14 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes 
                             statusDisplay = formatarHoras(minutos);
                         }
 
+                        // Encontra o registro de Falta/Abono para edição
+                        const registroFaltaAbono = registros.find(r => r.tipo === 'Falta' || r.tipo === 'Abono');
+
                         return (
                             <TableRow key={dia} className={cn(isFimDeSemana && 'bg-secondary/30', (isFalta || isAbono) && 'bg-blue-100/50 dark:bg-blue-900/20')}>
                                 <TableCell className="font-medium">{format(data, 'dd/MM (EEE)', { locale: ptBR })}</TableCell>
                                 <TableCell>
-                                    <div className="flex flex-wrap gap-2">
+                                    <div className="flex flex-wrap gap-2 items-center">
                                         {registros.map(r => (
                                             <span key={r.id} className="text-sm bg-muted px-2 py-1 rounded-full flex items-center">
                                                 {r.tipo === 'Falta' ? (
@@ -223,6 +222,19 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes 
                                                 )}
                                             </span>
                                         ))}
+                                        
+                                        {/* Botão de Edição para Falta/Abono */}
+                                        {canEdit && registroFaltaAbono && (
+                                            <Button 
+                                                variant="ghost" 
+                                                size="icon" 
+                                                onClick={() => onEditRegistro(registroFaltaAbono)}
+                                                title="Editar Falta/Abono"
+                                                className="ml-2 h-6 w-6"
+                                            >
+                                                <Edit className="w-4 h-4" />
+                                            </Button>
+                                        )}
                                     </div>
                                 </TableCell>
                                 <TableCell className="text-right font-semibold">

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -8,6 +8,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { RegistroPonto } from '@/types/ponto'; // Importando a interface centralizada
 
 type TipoAcao = 'falta_injustificada' | 'falta_justificada' | 'abono_8h' | 'abono_6h' | 'abono_4h';
 
@@ -16,24 +17,61 @@ interface GerenciarFaltasProps {
   onOpenChange: (open: boolean) => void;
   funcionario: { id: string, nome: string, empresa_id: string };
   dataFalta: Date;
+  registroInicial: RegistroPonto | null; // Novo: Registro a ser editado
   onFaltaRegistrada: () => void;
 }
 
-const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, funcionario, dataFalta, onFaltaRegistrada }) => {
+const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, funcionario, dataFalta, registroInicial, onFaltaRegistrada }) => {
   const [loading, setLoading] = useState(false);
   const [atestadoFile, setAtestadoFile] = useState<File | null>(null);
   const [acaoSelecionada, setAcaoSelecionada] = useState<TipoAcao>('falta_injustificada');
+  const [urlAtestadoExistente, setUrlAtestadoExistente] = useState<string | null>(null);
 
+  const isEditing = !!registroInicial;
   const dataFormatada = format(dataFalta, 'dd/MM/yyyy');
+
+  // Efeito para preencher o formulário se estiver em modo de edição
+  useEffect(() => {
+    if (registroInicial) {
+      const { tipo, atestado_url, observacao } = registroInicial;
+      
+      if (tipo === 'Falta') {
+        if (atestado_url) {
+          setAcaoSelecionada('falta_justificada');
+          setUrlAtestadoExistente(atestado_url);
+        } else {
+          setAcaoSelecionada('falta_injustificada');
+          setUrlAtestadoExistente(null);
+        }
+      } else if (tipo === 'Abono' && observacao) {
+        const horas = observacao.replace('h', '');
+        setAcaoSelecionada(`abono_${horas}h` as TipoAcao);
+        setUrlAtestadoExistente(null);
+      }
+    } else {
+      // Resetar para criação
+      setAcaoSelecionada('falta_injustificada');
+      setUrlAtestadoExistente(null);
+    }
+    setAtestadoFile(null); // Sempre limpa o arquivo de upload
+  }, [registroInicial, open]);
+
   const isFaltaJustificada = acaoSelecionada === 'falta_justificada';
   const isAbono = acaoSelecionada.startsWith('abono');
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files[0]) {
       setAtestadoFile(event.target.files[0]);
+      setUrlAtestadoExistente(null); // Se um novo arquivo é selecionado, remove o link existente
     } else {
       setAtestadoFile(null);
     }
+  };
+  
+  const handleRemoveAtestado = () => {
+    setAtestadoFile(null);
+    setUrlAtestadoExistente(null);
+    showSuccess('Link do atestado removido. Salve para confirmar.');
   };
 
   const uploadAtestado = async (file: File): Promise<string> => {
@@ -68,68 +106,94 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
 
   const handleRegister = async () => {
     setLoading(true);
-    let finalAtestadoUrl: string | null = null;
+    let finalAtestadoUrl: string | null = urlAtestadoExistente;
     let tipoRegistro: 'Falta' | 'Abono' = 'Falta';
     let observacao: string | null = null;
 
     try {
+      // 1. Lidar com o upload do atestado (se for justificada e houver novo arquivo)
       if (isFaltaJustificada) {
-        if (!atestadoFile) {
+        if (atestadoFile) {
+          finalAtestadoUrl = await uploadAtestado(atestadoFile);
+        } else if (!finalAtestadoUrl) {
           showError('Selecione o atestado para justificar a falta.');
           setLoading(false);
           return;
         }
-        finalAtestadoUrl = await uploadAtestado(atestadoFile);
-      } else if (isAbono) {
+      } else {
+        finalAtestadoUrl = null; // Garante que não haja atestado se não for falta justificada
+      }
+      
+      // 2. Definir tipo e observação
+      if (isAbono) {
         tipoRegistro = 'Abono';
         observacao = acaoSelecionada.split('_')[1]; // Ex: '8h', '6h', '4h'
+      } else {
+        tipoRegistro = 'Falta';
+        observacao = null;
       }
 
-      // Se for Abono, o registro de ponto deve ser do tipo 'Abono'
-      // Se for Falta (justificada ou injustificada), o tipo é 'Falta'
-      
-      const { error } = await supabase
-        .from('registros_ponto')
-        .insert({
-          funcionario_id: funcionario.id,
-          empresa_id: funcionario.empresa_id,
-          horario_registro: format(dataFalta, 'yyyy-MM-dd') + 'T00:00:00Z', // Marca o início do dia
-          tipo: tipoRegistro,
-          selfie_url: 'N/A', // Não aplicável
-          maps_url: 'N/A', // Não aplicável
-          atestado_url: finalAtestadoUrl,
-          observacao: observacao,
-        });
+      const dataToSave = {
+        funcionario_id: funcionario.id,
+        empresa_id: funcionario.empresa_id,
+        horario_registro: format(dataFalta, 'yyyy-MM-dd') + 'T00:00:00Z',
+        tipo: tipoRegistro,
+        selfie_url: 'N/A',
+        maps_url: 'N/A',
+        atestado_url: finalAtestadoUrl,
+        observacao: observacao,
+      };
+
+      let error = null;
+      let successMessage = '';
+
+      if (isEditing) {
+        // EDICAO
+        const result = await supabase
+          .from('registros_ponto')
+          .update(dataToSave)
+          .eq('id', registroInicial!.id);
+        error = result.error;
+        successMessage = 'Registro atualizado com sucesso!';
+      } else {
+        // CRIACAO
+        const result = await supabase
+          .from('registros_ponto')
+          .insert(dataToSave);
+        error = result.error;
+        successMessage = 'Registro criado com sucesso!';
+      }
 
       if (error) {
-        throw new Error('Erro ao registrar ação: ' + error.message);
+        throw new Error('Erro ao salvar registro: ' + error.message);
       }
 
-      showSuccess(`Ação '${getAcaoLabel(acaoSelecionada)}' registrada para ${funcionario.nome} em ${dataFormatada}.`);
+      showSuccess(successMessage);
       onFaltaRegistrada();
       onOpenChange(false);
 
     } catch (error: any) {
-      console.error('Erro ao gerenciar falta:', error);
-      showError(error.message || 'Falha ao registrar a ação.');
+      console.error('Erro ao gerenciar registro:', error);
+      showError(error.message || 'Falha ao salvar o registro.');
     } finally {
       setLoading(false);
     }
   };
 
+  const atestadoPronto = atestadoFile || urlAtestadoExistente;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
-          <DialogTitle>Gerenciar Dia Sem Registro</DialogTitle>
+          <DialogTitle>{isEditing ? 'Editar Registro' : 'Gerenciar Dia Sem Registro'}</DialogTitle>
           <DialogDescription>
-            Selecione a ação para <strong>{funcionario.nome}</strong> em <strong>{dataFormatada}</strong>.
+            Ação para <strong>{funcionario.nome}</strong> em <strong>{dataFormatada}</strong>.
           </DialogDescription>
         </DialogHeader>
         
         <div className="space-y-4 py-4">
           <Label className="font-semibold">1. Selecione a Ação</Label>
-          {/* Novo layout: flex-wrap para quebrar em telas pequenas, justify-center para centralizar em telas grandes */}
           <div className="flex flex-wrap justify-center gap-2">
             <Button 
               variant={acaoSelecionada === 'falta_injustificada' ? 'destructive' : 'outline'} 
@@ -178,13 +242,26 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
                 type="file" 
                 accept="image/*, application/pdf" 
                 onChange={handleFileChange} 
-                disabled={loading}
+                disabled={loading || !!urlAtestadoExistente}
               />
-              {atestadoFile && (
-                <p className={cn("text-sm flex items-center", atestadoFile ? "text-green-600" : "text-red-500")}>
-                    {atestadoFile ? <CheckCircle2 className="w-4 h-4 mr-1" /> : <XCircle className="w-4 h-4 mr-1" />}
-                    {atestadoFile ? `Arquivo pronto: ${atestadoFile.name}` : 'Nenhum arquivo selecionado.'}
-                </p>
+              
+              {atestadoPronto && (
+                <div className="flex justify-between items-center text-sm">
+                    <p className={cn("flex items-center", atestadoPronto ? "text-green-600" : "text-red-500")}>
+                        <CheckCircle2 className="w-4 h-4 mr-1" />
+                        {atestadoFile ? `Novo arquivo: ${atestadoFile.name}` : 'Atestado já anexado.'}
+                    </p>
+                    <div className="flex space-x-2">
+                        {urlAtestadoExistente && (
+                            <a href={urlAtestadoExistente} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                                Visualizar
+                            </a>
+                        )}
+                        <Button variant="ghost" size="sm" onClick={handleRemoveAtestado} className="h-auto p-0 text-red-500 hover:text-red-700">
+                            <XCircle className="w-4 h-4 mr-1" /> Remover
+                        </Button>
+                    </div>
+                </div>
               )}
             </div>
           )}
@@ -198,10 +275,10 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
 
         <Button 
           onClick={handleRegister} 
-          disabled={loading || (isFaltaJustificada && !atestadoFile)}
+          disabled={loading || (isFaltaJustificada && !atestadoPronto)}
           className="w-full"
         >
-          {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : `Confirmar ${getAcaoLabel(acaoSelecionada)}`}
+          {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : (isEditing ? 'Salvar Edição' : `Confirmar ${getAcaoLabel(acaoSelecionada)}`)}
         </Button>
       </DialogContent>
     </Dialog>
