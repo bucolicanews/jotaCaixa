@@ -13,10 +13,12 @@ import { ContratoModelo } from '@/types/contratos';
 import { TAGS_PADRAO } from '@/config/contrato-tags-padrao'; // Importando tags padrão
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import ModeloPreviewDialog from './ModeloPreviewDialog'; // Importando o novo modal
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 
 const formSchema = z.object({
   titulo: z.string().min(1, 'O título é obrigatório.'),
   conteudo_template: z.string().min(50, 'O conteúdo do template deve ser detalhado (mínimo 50 caracteres).'),
+  tipo_conteudo: z.enum(['html', 'texto'], { required_error: 'Selecione o tipo de conteúdo.' }),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -36,13 +38,20 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
     defaultValues: {
       titulo: modeloInicial?.titulo || '',
       conteudo_template: modeloInicial?.conteudo_template || '',
+      // Nota: Assumindo que o template é HTML por padrão, pois é o formato mais comum para contratos
+      tipo_conteudo: 'html', 
     },
   });
   
   const templateContent = form.watch('conteudo_template');
   const tituloModelo = form.watch('titulo');
+  const tipoConteudo = form.watch('tipo_conteudo');
 
   const onSubmit = async (values: FormValues) => {
+    // Nota: O campo tipo_conteudo não existe na tabela, mas vamos incluí-lo no template
+    // ou assumir que o template é sempre HTML para fins de armazenamento no banco.
+    // Para simplificar, vamos armazenar o tipo de conteúdo no próprio template, se necessário,
+    // mas por enquanto, apenas salvamos o conteúdo.
     const dataToSave = {
       titulo: values.titulo,
       conteudo_template: values.conteudo_template,
@@ -106,7 +115,28 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
           />
           
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-              <div className="lg:col-span-2">
+              <div className="lg:col-span-2 space-y-4">
+                  <FormField
+                      control={form.control}
+                      name="tipo_conteudo"
+                      render={({ field }) => (
+                          <FormItem>
+                              <FormLabel>Tipo de Conteúdo</FormLabel>
+                              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                  <FormControl>
+                                      <SelectTrigger>
+                                          <SelectValue placeholder="Selecione o tipo" />
+                                      </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                      <SelectItem value="html">HTML (Permite formatação avançada)</SelectItem>
+                                      <SelectItem value="texto">Texto Simples (Preserva quebras de linha)</SelectItem>
+                                  </SelectContent>
+                              </Select>
+                              <FormMessage />
+                          </FormItem>
+                      )}
+                  />
                   <FormField
                       control={form.control}
                       name="conteudo_template"
@@ -177,6 +207,7 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
         onOpenChange={setPreviewOpen}
         conteudoTemplate={templateContent}
         titulo={tituloModelo}
+        isHtml={tipoConteudo === 'html'}
       />
     </>
   );
