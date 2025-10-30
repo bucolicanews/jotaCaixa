@@ -45,7 +45,7 @@ const FolhaPonto: React.FC = () => {
   // Estado para Gerenciar Faltas/Abonos
   const [faltaDialogOpen, setFaltaDialogOpen] = useState(false);
   const [diaFaltaSelecionado, setDiaFaltaSelecionado] = useState<Date | null>(null);
-  const [registroParaEdicao, setRegistroParaEdicao] = useState<RegistroPonto | null>(null); // Novo estado
+  const [registroParaEdicao, setRegistroParaEdicao] = useState<RegistroPonto | null>(null); // Mantido, mas será sempre null na criação
 
   const isAdmin = role === 'Admin';
   const isCliente = role === 'Cliente' && (perfil as ClienteProfile)?.aprovado;
@@ -160,14 +160,9 @@ const FolhaPonto: React.FC = () => {
     setFaltaDialogOpen(true);
   };
   
-  const handleEditRegistro = (registro: RegistroPonto) => {
-    setRegistroParaEdicao(registro); // Define o registro para edição
-    setDiaFaltaSelecionado(parseISO(registro.horario_registro)); // Define a data do registro
-    setFaltaDialogOpen(true);
-  };
-  
+  // Função de edição removida, mas mantemos o esqueleto para o onDeleteRegistro
   const handleFaltaRegistrada = () => {
-    // Re-busca os registros após registrar/editar/deletar a falta
+    // Re-busca os registros após registrar/deletar a falta
     if (funcionarioSelecionadoId) {
         fetchRegistros(funcionarioSelecionadoId, dataSelecionada);
     }
@@ -309,7 +304,7 @@ const FolhaPonto: React.FC = () => {
                 registros: registrosDoFuncionario,
             }}
             mes={dataSelecionada}
-            onEditRegistro={handleEditRegistro}
+            onEditRegistro={() => { /* Edição removida */ }}
             onDeleteRegistro={handleFaltaRegistrada}
         />
       )}

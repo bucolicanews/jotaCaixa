@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Clock, DollarSign, MapPin, Camera, FileText, AlertTriangle, Edit, Trash2 } from 'lucide-react';
+import { Clock, DollarSign, MapPin, Camera, FileText, AlertTriangle, Trash2 } from 'lucide-react';
 import { format, parseISO, differenceInMinutes, isWeekend, isSameDay, startOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -23,8 +23,8 @@ interface FuncionarioDetalhe {
 interface DetalheFolhaPontoProps {
   funcionario: FuncionarioDetalhe;
   mes: Date;
-  onEditRegistro: (registro: RegistroPonto) => void; // Prop para edição
-  onDeleteRegistro: () => void; // Nova prop para exclusão
+  onEditRegistro: (registro: RegistroPonto) => void; // Mantido para compatibilidade, mas não usado visualmente
+  onDeleteRegistro: () => void; 
 }
 
 // Constantes CLT (Simplificadas)
@@ -32,7 +32,7 @@ const JORNADA_MENSAL_PADRAO = 220; // Horas mensais padrão CLT
 const PERCENTUAL_EXTRA_NORMAL = 0.5; // 50% de adicional
 const PERCENTUAL_EXTRA_FERIADO_FIMSEMANA = 1.0; // 100% de adicional
 
-const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes, onEditRegistro, onDeleteRegistro }) => {
+const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes, onDeleteRegistro }) => {
   const { salario, horas_mensais, registros } = funcionario;
   const { role } = useSessao();
   const [selfieModalOpen, setSelfieModalOpen] = useState(false);
@@ -137,7 +137,7 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
       showError('Erro ao excluir registro: ' + error.message);
     } else {
       showSuccess('Registro excluído com sucesso.');
-      onDeleteRegistro(); // Chama a função para recarregar os dados na página pai
+      onDeleteRegistro(); // CHAMA A FUNÇÃO DE RECARREGAMENTO
     }
   };
 
@@ -185,7 +185,7 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
                             statusDisplay = formatarHoras(minutos);
                         }
 
-                        // Encontra o registro de Falta/Abono para edição/exclusão
+                        // Encontra o registro de Falta/Abono para exclusão
                         const registroFaltaAbono = registros.find(r => r.tipo === 'Falta' || r.tipo === 'Abono');
 
                         return (
@@ -242,18 +242,10 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
                                             </span>
                                         ))}
                                         
-                                        {/* Ações de Edição e Exclusão */}
+                                        {/* Ações de Exclusão */}
                                         {canEdit && registroFaltaAbono && (
                                             <div className="flex space-x-1 ml-2">
-                                                <Button 
-                                                    variant="ghost" 
-                                                    size="icon" 
-                                                    onClick={() => onEditRegistro(registroFaltaAbono)}
-                                                    title="Editar Falta/Abono"
-                                                    className="h-6 w-6"
-                                                >
-                                                    <Edit className="w-4 h-4" />
-                                                </Button>
+                                                {/* Botão de Edição removido conforme solicitado */}
                                                 <Button 
                                                     variant="ghost" 
                                                     size="icon" 
