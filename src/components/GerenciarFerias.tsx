@@ -10,13 +10,12 @@ import { ptBR } from 'date-fns/locale';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Calendar } from './ui/calendar';
 import { cn } from '@/lib/utils';
-import { Input } from './ui/input';
-import { Label } from './ui/label';
+// Imports de Input e Label removidos
 
 interface GerenciarFeriasProps {
   funcionarioId: string;
   empresaId: string;
-  readOnly?: boolean; // Adicionando a prop readOnly
+  readOnly?: boolean;
 }
 
 const GerenciarFerias: React.FC<GerenciarFeriasProps> = ({ funcionarioId, empresaId, readOnly = false }) => {
@@ -65,7 +64,7 @@ const GerenciarFerias: React.FC<GerenciarFeriasProps> = ({ funcionarioId, empres
         empresa_id: empresaId,
         data_inicio: format(novaDataInicio, 'yyyy-MM-dd'),
         data_fim: format(novaDataFim, 'yyyy-MM-dd'),
-        status: 'agendada', // Padrão inicial
+        status: 'agendada',
       };
 
       const { error } = await supabase.from('ferias').insert(feriasData);
