@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, FileSignature, ChevronLeft, Save } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
@@ -10,10 +10,10 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Cliente } from '@/types/cliente';
+import { format, parseISO, setDate, addMonths } from 'date-fns';
 
 const PreencherContrato: React.FC = () => {
   const { modeloId } = useParams<{ modeloId: string }>();
@@ -122,9 +122,76 @@ const PreencherContrato: React.FC = () => {
     return conteudoRenderizado;
   };
 
+  const gerarParcelas = (
+    valorTotal: number, 
+    dataInicio: string, 
+    numParcelas: number, 
+    diaVencimento: number | ''
+  ) => {
+    const valorParcela = valorTotal / numParcelas;
+    const parcelas = [];
+    
+    // Data de início do contrato (para referência)
+    const inicioContrato = parseISO(dataInicio);
+    
+    // Determina a data do primeiro vencimento
+    let dataBase = inicioContrato;
+    
+    // Se o dia de vencimento for especificado, ajusta a data base
+    if (diaVencimento && diaVencimento >= 1 && diaVencimento <= 31) {
+        // Se o dia de vencimento for maior que o dia de início, usa o mês atual
+        if (diaVencimento > inicioContrato.getDate()) {
+            dataBase = setDate(inicioContrato, diaVencimento);
+        } else {
+            // Se o dia de vencimento for menor ou igual, usa o próximo mês
+            dataBase = setDate(addMonths(inicioContrato, 1), diaVencimento);
+        }
+    } else {
+        // Se não houver dia de vencimento, a primeira parcela vence 30 dias após o início
+        dataBase = addMonths(inicioContrato, 1);
+    }
+
+    for (let i = 0; i < numParcelas; i++) {
+        let dataVencimento;
+        
+        if (diaVencimento && diaVencimento >= 1 && diaVencimento <= 31) {
+            // Se o dia de vencimento é fixo, avança um mês a partir da data base
+            dataVencimento = addMonths(dataBase, i);
+        } else {
+            // Se não há dia fixo, usa a lógica de intervalo mensal (baseado no dia de início)
+            dataVencimento = addMonths(inicioContrato, i + 1);
+        }
+        
+        parcelas.push({
+            numero_parcela: i + 1,
+            valor_parcela: valorParcela,
+            data_vencimento: format(dataVencimento, 'yyyy-MM-dd'),
+            status: 'aberta',
+        });
+    }
+    return parcelas;
+  };
+
   const handleSalvarContrato = async () => {
     if (!modelo || !clienteSelecionadoId || valorTotal === '' || !dataInicio || !empresaId) {
         showError('Preencha todos os campos obrigatórios (Cliente, Valor Total e Data de Início).');
+        return;
+    }
+    
+    const valorNumerico = Number(valorTotal);
+    const numParcelas = Number(numeroParcelas);
+    const diaVencimento = Number(diaVencimentoParcela);
+
+    if (isNaN(valorNumerico) || valorNumerico <= 0) {
+        showError('Valor Total inválido.');
+        return;
+    }
+    if (isNaN(numParcelas) || numParcelas < 1) {
+        showError('Número de Parcelas inválido.');
+        return;
+    }
+    if (diaVencimentoParcela !== '' && (isNaN(diaVencimento) || diaVencimento < 1 || diaVencimento > 31)) {
+        showError('Dia de Vencimento inválido.');
         return;
     }
     
@@ -134,32 +201,76 @@ const PreencherContrato: React.FC = () => {
         // 1. Renderizar o conteúdo final
         const conteudoRenderizado = renderizarConteudo(modelo.conteudo_template, valoresTags);
         
-        // 2. Inserir o Contrato Gerado
+        // 2. Gerar Parcelas
+        const parcelasParaInserir = gerarParcelas(valorNumerico, dataInicio, numParcelas, diaVencimentoParcela);
+        
+        // 3. Inserir o Contrato Gerado
         const contratoData = {
             modelo_id: modelo.id,
             cliente_id: clienteSelecionadoId,
             empresa_id: empresaId,
             status: 'rascunho',
-            valor_total: valorTotal,
+            valor_total: valorNumerico,
             data_inicio: dataInicio,
-            numero_parcelas: numeroParcelas,
+            numero_parcelas: numParcelas,
             dia_vencimento_parcela: diaVencimentoParcela || null,
             valores_tags_preenchidos: valoresTags,
             conteudo_renderizado: conteudoRenderizado,
         };
         
-        const { error } = await supabase
+        const { data: contratoGerado, error: contratoError } = await supabase
             .from('contratos_gerados')
-            .insert(contratoData);
+            .insert(contratoData)
+            .select('id')
+            .single();
             
-        if (error) throw error;
+        if (contratoError) throw contratoError;
         
-        showSuccess('Contrato salvo como rascunho com sucesso!');
+        const contratoGeradoId = contratoGerado.id;
+        
+        // 4. Inserir a Conta a Receber (Sintético)
+        const contaReceberData = {
+            cliente_id: clienteSelecionadoId,
+            empresa_id: empresaId,
+            descricao: `Contrato: ${modelo.titulo} - ${clienteSelecionadoId}`, // Usar o ID do cliente temporariamente
+            valor_total: valorNumerico,
+            data_emissao: format(new Date(), 'yyyy-MM-dd'),
+            data_vencimento: parcelasParaInserir[0].data_vencimento, // Primeiro vencimento
+            tipo_receita: numParcelas > 1 ? 'recorrente' : 'única',
+            status: 'aberta',
+            origem: 'contrato',
+            contrato_gerado_id: contratoGeradoId,
+        };
+        
+        const { data: contaReceber, error: contaReceberError } = await supabase
+            .from('contas_receber')
+            .insert(contaReceberData)
+            .select('id')
+            .single();
+            
+        if (contaReceberError) throw contaReceberError;
+        
+        const contaReceberId = contaReceber.id;
+        
+        // 5. Inserir as Parcelas (Analítico)
+        const parcelasComId = parcelasParaInserir.map(p => ({ 
+            ...p, 
+            conta_receber_id: contaReceberId, 
+            empresa_id: empresaId 
+        }));
+        
+        const { error: parcelError } = await supabase
+            .from('parcelas_contas_receber')
+            .insert(parcelasComId);
+            
+        if (parcelError) throw parcelError;
+
+        showSuccess('Contrato e Contas a Receber gerados com sucesso!');
         navigate('/contratos');
         
     } catch (error: any) {
         console.error('Erro ao salvar contrato:', error);
-        showError('Falha ao salvar contrato: ' + error.message);
+        showError('Falha ao salvar contrato e gerar contas: ' + error.message);
     } finally {
         setIsSubmitting(false);
     }
@@ -193,7 +304,7 @@ const PreencherContrato: React.FC = () => {
       
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* Coluna 1: Dados Principais */}
+        {/* Coluna 1: Dados Principais (Financeiro) */}
         <Card className="lg:col-span-1 h-fit">
             <CardHeader><CardTitle className="text-xl">Dados do Contrato</CardTitle></CardHeader>
             <CardContent className="space-y-4">
@@ -242,7 +353,7 @@ const PreencherContrato: React.FC = () => {
                         />
                     </div>
                     <div className="space-y-2">
-                        <Label htmlFor="dia-vencimento">Dia Vencimento</Label>
+                        <Label htmlFor="dia-vencimento">Dia Vencimento (Fixo)</Label>
                         <Input 
                             id="dia-vencimento"
                             type="number"
@@ -288,19 +399,9 @@ const PreencherContrato: React.FC = () => {
                 disabled={isSubmitting || !clienteSelecionadoId || valorTotal === '' || !dataInicio}
             >
                 {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                Salvar Contrato como Rascunho
+                Salvar Contrato e Gerar Contas a Receber
             </Button>
         </div>
-        
-        {/* Coluna 3: Pré-visualização (Opcional, pode ser adicionada depois) */}
-        {/* <Card className="lg:col-span-3">
-            <CardHeader><CardTitle>3. Pré-visualização</CardTitle></CardHeader>
-            <CardContent>
-                <div className="p-4 border rounded-md bg-background whitespace-pre-wrap">
-                    {renderizarConteudo(modelo.conteudo_template, valoresTags)}
-                </div>
-            </CardContent>
-        </Card> */}
         
       </div>
     </LayoutPrincipal>
