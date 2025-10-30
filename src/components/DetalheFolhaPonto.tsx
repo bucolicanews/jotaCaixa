@@ -286,8 +286,8 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
   // Lógica de exibição da diferença
   // minutosDiferenca < 0 significa Horas Extras (saldo positivo)
   const isExtraHours = minutosDiferenca < 0;
-  const displayDifference = formatarHoras(minutosDiferenca);
   const displayExtraHours = formatarHoras(Math.abs(minutosDiferenca));
+  const displayFaltaHours = formatarHoras(minutosDiferenca);
 
   return (
     <div className="space-y-6">
@@ -301,9 +301,9 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
             <div><p className="text-sm text-muted-foreground">Jornada Mensal</p><p className="font-bold text-lg">{horas_mensais}h</p></div>
             <div><p className="text-sm text-muted-foreground">Horas Trabalhadas</p><p className="font-bold text-lg">{formatarHoras(totalMinutosTrabalhados)}</p></div>
             <div>
-                <p className="text-sm text-muted-foreground">{isExtraHours ? 'Horas Extras' : 'Diferença (Saldo)'}</p>
+                <p className="text-sm text-muted-foreground">{isExtraHours ? 'Horas Extras' : 'Falta de Horas'}</p>
                 <p className={cn("font-bold text-lg", isExtraHours ? "text-green-600" : "text-red-500")}>
-                    {isExtraHours ? displayExtraHours : displayDifference}
+                    {isExtraHours ? displayExtraHours : displayFaltaHours}
                 </p>
             </div>
           </div>

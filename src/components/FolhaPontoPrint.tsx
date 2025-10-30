@@ -59,7 +59,6 @@ const FolhaPontoPrint: React.FC<FolhaPontoPrintProps> = ({
     const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
     const isExtraHours = minutosDiferenca < 0;
-    const displayDifference = formatarHoras(minutosDiferenca);
     const displayExtraHours = formatarHoras(Math.abs(minutosDiferenca));
     
     const diasOrdenados = Object.keys(diasProcessados).sort();
@@ -80,12 +79,22 @@ const FolhaPontoPrint: React.FC<FolhaPontoPrintProps> = ({
                         <tr><th>Salário Base</th><td>{formatCurrency(funcionario.salario)}</td></tr>
                         <tr><th>Jornada Mensal</th><td>{funcionario.horas_mensais}h</td></tr>
                         <tr><th>Horas Trabalhadas</th><td>{formatarHoras(totalMinutosTrabalhados)}</td></tr>
-                        <tr>
-                            <th>{isExtraHours ? 'Horas Extras' : 'Diferença (Saldo)'}</th>
-                            <td style={{ color: isExtraHours ? 'green' : 'red' }}>
-                                {isExtraHours ? displayExtraHours : displayDifference}
-                            </td>
-                        </tr>
+                        {isExtraHours && (
+                            <tr>
+                                <th>Horas Extras</th>
+                                <td style={{ color: 'green' }}>
+                                    {displayExtraHours}
+                                </td>
+                            </tr>
+                        )}
+                        {!isExtraHours && minutosDiferenca > 0 && (
+                            <tr>
+                                <th>Falta de Horas</th>
+                                <td style={{ color: 'red' }}>
+                                    {formatarHoras(minutosDiferenca)}
+                                </td>
+                            </tr>
+                        )}
                     </tbody>
                 </table>
             </div>
@@ -130,7 +139,7 @@ const FolhaPontoPrint: React.FC<FolhaPontoPrintProps> = ({
                                 observacoes = 'FÉRIAS';
                             } else if (diaData.isFalta) {
                                 const atestado = diaData.registros.find(r => r.tipo === 'Falta')?.atestado_url;
-                                observacoes = atestado ? 'Falta Justificada' : 'Falta Injustificada';
+                                observacoes = atestado ? 'Falta Justificada (Atestado)' : 'Falta Injustificada';
                             } else if (diaData.isAbono) {
                                 const obs = diaData.registros.find(r => r.tipo === 'Abono')?.observacao;
                                 // Simplifica a observação de compensação
