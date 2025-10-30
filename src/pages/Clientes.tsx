@@ -98,7 +98,7 @@ const ClientesPage = () => {
               Novo Cliente
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px]">
+          <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{clienteSelecionado ? 'Editar Cliente' : 'Novo Cliente'}</DialogTitle>
             </DialogHeader>
@@ -119,25 +119,29 @@ const ClientesPage = () => {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Nome</TableHead>
+                  <TableHead>Nome Fantasia</TableHead>
+                  <TableHead className="hidden md:table-cell">Razão Social</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Telefone</TableHead>
+                  <TableHead className="hidden lg:table-cell">Telefone Fixo</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {clientes.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center py-4 text-muted-foreground">
+                    <TableCell colSpan={6} className="text-center py-4 text-muted-foreground">
                       Nenhum cliente cadastrado.
                     </TableCell>
                   </TableRow>
                 ) : (
                   clientes.map((cliente) => (
                     <TableRow key={cliente.id}>
-                      <TableCell className="font-medium">{cliente.nome}</TableCell>
+                      <TableCell className="font-medium">{cliente.nome_fantasia || cliente.nome}</TableCell>
+                      <TableCell className="hidden md:table-cell text-sm text-muted-foreground">{cliente.razao_social || '-'}</TableCell>
                       <TableCell>{cliente.email || '-'}</TableCell>
                       <TableCell>{cliente.telefone || '-'}</TableCell>
+                      <TableCell className="hidden lg:table-cell">{cliente.telefone_fixo || '-'}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end space-x-1">
                           <Button variant="ghost" size="sm" onClick={() => handleEdit(cliente)}>
