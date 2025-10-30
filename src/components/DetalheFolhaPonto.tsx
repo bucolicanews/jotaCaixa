@@ -79,6 +79,7 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
   // 2. Processar todos os dias do mês
   const inicioMes = startOfMonth(mes);
   const fimMes = endOfMonth(mes);
+  const hoje = new Date();
   const todosOsDiasDoMes = eachDayOfInterval({ start: inicioMes, end: fimMes });
   
   const diasProcessados: Record<string, { 
@@ -148,25 +149,30 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
             if (registro.tipo === 'Entrada') {
                 entrada = horario;
                 isTurnoAberto = true;
-            } else if (registro.tipo === 'Saida' && entrada && isSameDay(horario, entrada)) {
+            } else if (registro.tipo === 'Saida' && entrada) {
+                // Verifica se a Saída é válida (após uma Entrada)
                 const minutosTrabalhados = differenceInMinutes(horario, entrada);
                 minutosDia += minutosTrabalhados;
                 entrada = null;
                 isTurnoAberto = false;
-            } else if (registro.tipo === 'Saida' && entrada && !isSameDay(horario, entrada)) {
-                // Caso de turno que virou a noite.
-                const minutosTrabalhados = differenceInMinutes(horario, entrada);
-                minutosDia += minutosTrabalhados;
-                entrada = null;
+            } else if (registro.tipo === 'Saida' && !entrada) {
+                // Saída sem Entrada anterior (ignora para cálculo, mas mantém o registro)
                 isTurnoAberto = false;
             }
         }
     }
     
     // Se o último registro do dia foi Entrada, o turno está aberto.
-    if (isTurnoAberto && entrada && isSameDay(data, new Date())) {
-        minutosDia += differenceInMinutes(new Date(), entrada);
-    } else if (!entrada) {
+    if (entrada) {
+        if (isSameDay(data, hoje)) {
+            // Se for o dia atual, soma o tempo até agora
+            minutosDia += differenceInMinutes(hoje, entrada);
+            isTurnoAberto = true;
+        } else {
+            // Se for um dia passado e o turno está aberto, não soma minutos, mas sinaliza o erro
+            isTurnoAberto = true;
+        }
+    } else {
         isTurnoAberto = false;
     }
     
@@ -290,8 +296,8 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
                         const diaString = format(data, 'yyyy-MM-dd');
                         const { minutos, registros, isFalta, isAbono, isTurnoAberto, isFolgaFixa, isFerias, hasPontoRecords, decisionRecord, needsManagement } = diasProcessados[diaString];
                         
-                        const isDiaAtual = isSameDay(data, new Date());
-                        const isDiaFuturo = data > new Date();
+                        const isDiaAtual = isSameDay(data, hoje);
+                        const isDiaFuturo = data > hoje;
                         
                         let statusDisplay;
                         let actionButton = null;
