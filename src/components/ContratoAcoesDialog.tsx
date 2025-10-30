@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Copy, ExternalLink, FileText } from 'lucide-react';
+import { Copy, ExternalLink, FileText, Eye, Printer } from 'lucide-react';
 import { ContratoGerado } from '@/types/contratos';
 import { showSuccess } from '@/utils/toast';
 import { Textarea } from './ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Input } from './ui/input';
-import { Label } from './ui/label'; // Adicionado
+import { Label } from './ui/label';
+import { usePrint } from '@/hooks/use-print'; // Importando usePrint
 
 interface ContratoAcoesDialogProps {
   contrato: ContratoGerado | null;
@@ -17,7 +18,7 @@ interface ContratoAcoesDialogProps {
 
 const ContratoAcoesDialog: React.FC<ContratoAcoesDialogProps> = ({ contrato, open, onOpenChange }) => {
   const [linkAssinatura, setLinkAssinatura] = useState('');
-  // Removido: const [loading, setLoading] = useState(false);
+  const { printContent } = usePrint();
 
   useEffect(() => {
     if (contrato) {
@@ -32,6 +33,12 @@ const ContratoAcoesDialog: React.FC<ContratoAcoesDialogProps> = ({ contrato, ope
     if (linkAssinatura) {
       navigator.clipboard.writeText(linkAssinatura);
       showSuccess('Link de assinatura copiado!');
+    }
+  };
+  
+  const handlePrint = () => {
+    if (contrato?.conteudo_renderizado) {
+        printContent(contrato.conteudo_renderizado, `Contrato: ${contrato.id}`);
     }
   };
 
@@ -49,11 +56,26 @@ const ContratoAcoesDialog: React.FC<ContratoAcoesDialogProps> = ({ contrato, ope
           </DialogDescription>
         </DialogHeader>
         
-        <Tabs defaultValue="link">
-            <TabsList className="grid w-full grid-cols-2">
+        <Tabs defaultValue="preview">
+            <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="preview" className="flex items-center"><Eye className="w-4 h-4 mr-1" /> Visualizar Contrato</TabsTrigger>
                 <TabsTrigger value="link">Link de Assinatura</TabsTrigger>
                 <TabsTrigger value="html">Visualizar HTML</TabsTrigger>
             </TabsList>
+            
+            {/* NOVA ABA: PRÉVIA RENDERIZADA */}
+            <TabsContent value="preview" className="space-y-4 pt-4">
+                <div className="border rounded-md p-4 bg-background shadow-inner overflow-y-auto max-h-[50vh]">
+                    {contrato.conteudo_renderizado ? (
+                        <div dangerouslySetInnerHTML={{ __html: contrato.conteudo_renderizado }} />
+                    ) : (
+                        <p className="text-center text-muted-foreground">Conteúdo não renderizado ou contrato em rascunho.</p>
+                    )}
+                </div>
+                <Button onClick={handlePrint} variant="outline" className="w-full">
+                    <Printer className="w-4 h-4 mr-2" /> Imprimir / Gerar PDF
+                </Button>
+            </TabsContent>
             
             <TabsContent value="link" className="space-y-4 pt-4">
                 <div className="space-y-2">
@@ -76,7 +98,7 @@ const ContratoAcoesDialog: React.FC<ContratoAcoesDialogProps> = ({ contrato, ope
             </TabsContent>
             
             <TabsContent value="html" className="space-y-4 pt-4">
-                <Label>Conteúdo Renderizado do Contrato</Label>
+                <Label>Conteúdo Renderizado do Contrato (Código Fonte)</Label>
                 <Textarea 
                     readOnly 
                     value={contrato.conteudo_renderizado || 'Conteúdo não renderizado.'} 
