@@ -3,7 +3,7 @@ import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { useSessao } from '@/hooks/use-sessao';
 import { Loader2, Filter, Clock, Users, Building2, Printer } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { format, startOfMonth, endOfMonth, parseISO, isSameDay } from 'date-fns';
+import { format, startOfMonth, endOfMonth, parseISO, isSameDay, eachDayOfInterval, isWithinInterval, getDay, differenceInMinutes } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { showError } from '@/utils/toast';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
@@ -17,7 +17,7 @@ import GerenciarFolgaTrabalhada from '@/components/GerenciarFolgaTrabalhada';
 import { Button } from '@/components/ui/button';
 import { usePrint } from '@/hooks/use-print';
 import FolhaPontoPrint from '@/components/FolhaPontoPrint';
-import ReactDOMServer from 'react-dom/server';
+import ReactDOMServer from 'react-dom/server'; // Importação corrigida
 
 interface FuncionarioComDados extends UsuarioProfile {
     id: string;
@@ -33,6 +33,9 @@ interface ClienteSimples {
     id: string;
     nome: string;
 }
+
+// Constantes CLT (Simplificadas)
+const JORNADA_MENSAL_PADRAO = 220; // Horas mensais padrão CLT
 
 const FolhaPonto: React.FC = () => {
   const { role, perfil, carregando } = useSessao();
@@ -249,22 +252,8 @@ const FolhaPonto: React.FC = () => {
         return;
     }
     
-    // Reutiliza a lógica de processamento de dados do DetalheFolhaPonto
-    // Para obter os totais e os dias processados.
-    
-    // NOTE: Para evitar duplicar toda a lógica de cálculo aqui,
-    // vamos criar uma função utilitária que extrai os dados de cálculo
-    // do DetalheFolhaPonto. Por enquanto, vamos simular a extração
-    // e assumir que o DetalheFolhaPonto já fez o trabalho.
-    
-    // Para fins de demonstração, vamos extrair os dados necessários
-    // diretamente do DetalheFolhaPonto (que precisa ser refatorado para expor esses dados).
-    // Como não podemos refatorar o DetalheFolhaPonto para expor os dados sem quebrar o componente,
-    // vamos duplicar a lógica de cálculo necessária aqui para gerar o HTML de impressão.
-    
     // --- DUPLICAÇÃO DA LÓGICA DE CÁLCULO (Necessário para SSR/Impressão) ---
     
-    const JORNADA_MENSAL_PADRAO = 220;
     const DAY_MAP: Record<number, string> = { 0: 'Sunday', 1: 'Monday', 2: 'Tuesday', 3: 'Wednesday', 4: 'Thursday', 5: 'Friday', 6: 'Saturday' };
     
     let totalMinutosTrabalhados = 0;
@@ -301,8 +290,8 @@ const FolhaPonto: React.FC = () => {
         let isCompensacaoAbono = false;
         
         const diaDaSemana = DAY_MAP[getDay(data)];
-        let isFolgaFixa = funcionarioDetalhe.dias_folga_fixos.includes(diaDaSemana);
-        if (funcionarioDetalhe.folga_domingo_obrigatoria && diaDaSemana === 'Sunday') isFolgaFixa = true;
+        let isFolgaFixa = funcionarioDetalhe.dias_folga_fixos?.includes(diaDaSemana) || false;
+        if ((funcionarioDetalhe.folga_domingo_obrigatoria ?? true) && diaDaSemana === 'Sunday') isFolgaFixa = true;
         
         const isFerias = feriasDoFuncionario.some(f => {
             const start = parseISO(f.data_inicio + 'T00:00:00');
@@ -382,10 +371,18 @@ const FolhaPonto: React.FC = () => {
     const printComponent = (
         <FolhaPontoPrint
             empresaNome={empresaNome}
-            funcionario={funcionarioDetalhe}
+            funcionario={{
+                ...funcionarioDetalhe,
+                salario: funcionarioDetalhe.salario || 0,
+                horas_mensais: funcionarioDetalhe.horas_mensais || JORNADA_MENSAL_PADRAO,
+                dias_folga_fixos: funcionarioDetalhe.dias_folga_fixos || [],
+                folga_domingo_obrigatoria: funcionarioDetalhe.folga_domingo_obrigatoria ?? true,
+                ferias: feriasDoFuncionario,
+                registros: registrosDoFuncionario,
+            }}
             mes={dataSelecionada}
             diasProcessados={diasProcessados}
-            totalMinutosTrabalhados={totalMinutosTrabalhados}
+            totalMinutosTrabalhados={totalMinutosTrabalhados} // Passa o total acumulado
             minutosDiferenca={minutosDiferenca}
         />
     );
@@ -474,7 +471,7 @@ const FolhaPonto: React.FC = () => {
                 id: funcionarioDetalhe.id,
                 nome: funcionarioDetalhe.nome,
                 salario: funcionarioDetalhe.salario || 0,
-                horas_mensais: funcionarioDetalhe.horas_mensais || 220,
+                horas_mensais: funcionarioDetalhe.horas_mensais || JORNADA_MENSAL_PADRAO,
                 registros: registrosDoFuncionario,
                 dias_folga_fixos: funcionarioDetalhe.dias_folga_fixos || [],
                 folga_domingo_obrigatoria: funcionarioDetalhe.folga_domingo_obrigatoria ?? true,

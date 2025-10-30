@@ -1,5 +1,5 @@
 import React from 'react';
-import { format, parseISO, getDay } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { RegistroPonto, Ferias } from '@/types/ponto';
 
@@ -25,6 +25,9 @@ interface DiaProcessado {
     decisionRecord: 'Compensacao' | 'Extra100' | null;
     minutosTrabalhadosFolga: number;
     isCompensacaoAbono: boolean;
+    // Adicionando campos faltantes para resolver TS2339
+    minutosAbonados: number;
+    needsManagement: boolean;
 }
 
 interface FolhaPontoPrintProps {
@@ -35,8 +38,6 @@ interface FolhaPontoPrintProps {
   totalMinutosTrabalhados: number;
   minutosDiferenca: number;
 }
-
-const DAY_MAP: Record<number, string> = { 0: 'Sunday', 1: 'Monday', 2: 'Tuesday', 3: 'Wednesday', 4: 'Thursday', 5: 'Friday', 6: 'Saturday' };
 
 const FolhaPontoPrint: React.FC<FolhaPontoPrintProps> = ({ 
     empresaNome, 
