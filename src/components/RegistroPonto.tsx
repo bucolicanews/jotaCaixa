@@ -1,14 +1,17 @@
 import React, { useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, MapPin, Clock, ArrowUpCircle, ArrowDownCircle, Camera } from 'lucide-react';
+import { Loader2, MapPin, Clock, ArrowUpCircle, ArrowDownCircle, Camera, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { useSessao } from '@/hooks/use-sessao';
 import { Separator } from '@/components/ui/separator';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import CameraCapture from './CameraCapture';
 import { UsuarioProfile } from '@/types/usuario';
+import usePontoStatus from '@/hooks/use-ponto-status';
+import { format, parseISO } from 'date-fns';
+import { cn } from '@/lib/utils';
 
 type RegistroTipo = 'Entrada' | 'Saida';
 
@@ -29,12 +32,13 @@ const RegistroPonto: React.FC = () => {
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [pendingRegistroType, setPendingRegistroType] = useState<RegistroTipo | null>(null);
 
-  const [lastRegistro, setLastRegistro] = useState<{ tipo: RegistroTipo, horario: string } | null>(null);
-
   const isUsuario = role === 'Usuario' && perfil && 'cliente_id' in perfil;
   const empresaId = isUsuario ? (perfil as UsuarioProfile).cliente_id : null;
   const funcionarioId = usuario?.id;
   
+  // Hook para status do ponto
+  const { ultimoRegistro, proximaAcao, alerta4Horas, carregando: carregandoStatus, refetch: refetchStatus } = usePontoStatus(funcionarioId);
+
   // Nova verificação de permissão
   const podeVisualizarProprioPonto = isUsuario && (perfil as UsuarioProfile)?.permissoes?.visualizar_proprio_ponto;
 
@@ -64,7 +68,6 @@ const RegistroPonto: React.FC = () => {
     const fileName = `${funcionarioId}/${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
     const filePath = `${funcionarioId}/${fileName}`;
 
-    console.log(`LOG: Tentando fazer upload para o bucket 'ponto-selfies' no caminho: ${filePath}`);
     const { error } = await supabase.storage
       .from('ponto-selfies')
       .upload(filePath, file, {
@@ -94,6 +97,13 @@ const RegistroPonto: React.FC = () => {
       showError('Por favor, capture uma selfie antes de registrar o ponto.');
       return;
     }
+    
+    // Regra 2: Verifica se a ação é a esperada
+    if (tipo !== proximaAcao) {
+        showError(`A próxima ação esperada é ${proximaAcao}, não ${tipo}.`);
+        return;
+    }
+
     setPendingRegistroType(tipo);
     setIsConfirmDialogOpen(true);
   };
@@ -133,12 +143,8 @@ const RegistroPonto: React.FC = () => {
 
       showSuccess(`Ponto de ${tipo} registrado com sucesso!`);
       
-      // Atualiza o último registro APENAS se o usuário tiver permissão para visualizar
-      if (podeVisualizarProprioPonto) {
-        setLastRegistro({ tipo, horario: new Date().toLocaleTimeString() });
-      } else {
-        setLastRegistro(null);
-      }
+      // Força a atualização do status do ponto
+      refetchStatus();
       
       setSelfieFile(null);
 
@@ -160,6 +166,9 @@ const RegistroPonto: React.FC = () => {
       </Card>
     );
   }
+  
+  const isEntrada = proximaAcao === 'Entrada';
+  const isSaida = proximaAcao === 'Saida';
 
   return (
     <Card className="w-full max-w-xl mx-auto">
@@ -169,8 +178,18 @@ const RegistroPonto: React.FC = () => {
           Registro de Ponto Eletrônico
         </CardTitle>
       </CardHeader>
-      {/* Garantindo padding adequado no CardContent */}
       <CardContent className="p-4 sm:p-6 space-y-6"> 
+        
+        {/* Alerta de 4 horas (Regra 3) */}
+        {alerta4Horas && isSaida && (
+            <div className="p-3 bg-red-100 dark:bg-red-900/50 border border-red-500 rounded-md flex items-center space-x-3 text-red-600 dark:text-red-400">
+                <AlertTriangle className="w-5 h-5 flex-shrink-0" />
+                <p className="text-sm font-medium">
+                    ALERTA: Já se passaram 4 horas desde sua última Entrada ({format(parseISO(ultimoRegistro!.horario_registro), 'HH:mm')}). Lembre-se de registrar sua Saída para o intervalo ou fim do turno.
+                </p>
+            </div>
+        )}
+
         <div className="space-y-4">
           <h3 className="text-lg font-semibold flex items-center">
             <Camera className="w-5 h-5 mr-2" /> 1. Captura de Selfie
@@ -190,13 +209,13 @@ const RegistroPonto: React.FC = () => {
         <div className="space-y-4">
           <h3 className="text-lg font-semibold">2. Registrar Horário</h3>
           <p className="text-sm text-muted-foreground">
-            Confirme o registro de ponto (Entrada ou Saída).
+            A próxima ação esperada é: <span className={cn("font-bold", isEntrada ? "text-green-600" : "text-red-600")}>{proximaAcao}</span>.
           </p>
-          {/* Usando flex-col em mobile e flex-row em telas maiores para os botões */}
+          
           <div className="flex flex-col space-y-4 sm:flex-row sm:space-x-4 sm:space-y-0"> 
             <Button 
               onClick={() => handlePreRegister('Entrada')} 
-              disabled={loading || !selfieFile}
+              disabled={loading || carregandoStatus || !selfieFile || isSaida}
               className="flex-1 bg-green-600 hover:bg-green-700"
             >
               {loading && pendingRegistroType === 'Entrada' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ArrowUpCircle className="mr-2 h-4 w-4" />}
@@ -204,7 +223,7 @@ const RegistroPonto: React.FC = () => {
             </Button>
             <Button 
               onClick={() => handlePreRegister('Saida')} 
-              disabled={loading || !selfieFile}
+              disabled={loading || carregandoStatus || !selfieFile || isEntrada}
               className="flex-1 bg-red-600 hover:bg-red-700"
             >
               {loading && pendingRegistroType === 'Saida' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ArrowDownCircle className="mr-2 h-4 w-4" />}
@@ -213,11 +232,11 @@ const RegistroPonto: React.FC = () => {
           </div>
         </div>
 
-        {podeVisualizarProprioPonto && lastRegistro && (
+        {podeVisualizarProprioPonto && ultimoRegistro && (
           <div className="mt-6 p-4 border rounded-lg bg-secondary/50">
             <p className="font-medium">Último Registro:</p>
-            <p className={lastRegistro.tipo === 'Entrada' ? 'text-green-600' : 'text-red-600'}>
-              {lastRegistro.tipo} às {lastRegistro.horario}
+            <p className={ultimoRegistro.tipo === 'Entrada' ? 'text-green-600' : 'text-red-600'}>
+              {ultimoRegistro.tipo} às {format(parseISO(ultimoRegistro.horario_registro), 'HH:mm:ss')}
             </p>
             {location && (
               <a
@@ -227,7 +246,7 @@ const RegistroPonto: React.FC = () => {
                 className="text-xs text-blue-600 hover:underline flex items-center mt-1"
               >
                 <MapPin className="w-3 h-3 mr-1" />
-                Ver no Google Maps ({location.latitude.toFixed(4)}, {location.longitude.toFixed(4)})
+                Localização Registrada
               </a>
             )}
           </div>
@@ -244,9 +263,9 @@ const RegistroPonto: React.FC = () => {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Confirmar Registro de Ponto</AlertDialogTitle>
-            <AlertDialogDescription>
-              Você está prestes a registrar um ponto de <span className="font-bold text-primary">{pendingRegistroType}</span>. Confirme se a selfie capturada está correta e se você está pronto para registrar sua localização atual.
-            </AlertDialogDescription>
+            <div className="text-sm text-muted-foreground">
+              Você está prestes a registrar um ponto de <span className="font-bold text-primary">{pendingRegistroType}</span>.
+            </div>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={loading}>Cancelar</AlertDialogCancel>

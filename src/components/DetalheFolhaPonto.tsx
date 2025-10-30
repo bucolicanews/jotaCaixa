@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Clock, DollarSign, MapPin, Camera } from 'lucide-react';
-import { format, parseISO, differenceInMinutes, isWeekend, isSameDay } from 'date-fns';
+import { Clock, DollarSign, MapPin, Camera, FileText, AlertTriangle } from 'lucide-react';
+import { format, parseISO, differenceInMinutes, isWeekend, isSameDay, startOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -11,9 +11,10 @@ interface RegistroPonto {
   id: string;
   funcionario_id: string;
   horario_registro: string; // ISO string
-  tipo: 'Entrada' | 'Saida';
+  tipo: 'Entrada' | 'Saida' | 'Falta'; // Adicionado 'Falta'
   maps_url: string;
-  selfie_url: string; // Adicionando a URL da selfie
+  selfie_url: string;
+  atestado_url?: string | null; // Adicionado
 }
 
 interface FuncionarioDetalhe {
@@ -46,20 +47,30 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes 
   let totalMinutosTrabalhados = 0;
   let totalMinutosExtras = 0;
   let totalMinutosExtras100 = 0;
-  let entrada: Date | null = null;
   
+  // Agrupamento de registros por dia
+  const diasTrabalhados: Record<string, { minutos: number, registros: RegistroPonto[], isFalta: boolean, atestadoUrl: string | null }> = {};
+
+  // 1. Processar registros e agrupar por dia
   const registrosOrdenados = [...registros].sort((a, b) => parseISO(a.horario_registro).getTime() - parseISO(b.horario_registro).getTime());
+  
+  let entrada: Date | null = null;
 
-  const diasTrabalhados: Record<string, { minutos: number, registros: RegistroPonto[] }> = {};
-
-  // 1. Calcular minutos trabalhados e agrupar por dia
   for (const registro of registrosOrdenados) {
     const horario = parseISO(registro.horario_registro);
     const dia = format(horario, 'yyyy-MM-dd');
 
     if (!diasTrabalhados[dia]) {
-      diasTrabalhados[dia] = { minutos: 0, registros: [] };
+      diasTrabalhados[dia] = { minutos: 0, registros: [], isFalta: false, atestadoUrl: null };
     }
+    
+    if (registro.tipo === 'Falta') {
+        diasTrabalhados[dia].isFalta = true;
+        diasTrabalhados[dia].atestadoUrl = registro.atestado_url || null;
+        diasTrabalhados[dia].registros.push(registro);
+        continue;
+    }
+
     diasTrabalhados[dia].registros.push(registro);
 
     if (registro.tipo === 'Entrada') {
@@ -70,15 +81,14 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes 
       totalMinutosTrabalhados += minutosDia;
       entrada = null;
     } else if (registro.tipo === 'Saida' && entrada && !isSameDay(horario, entrada)) {
-        // Lógica simplificada para virada de dia (não implementada complexamente aqui)
-        // Apenas registra o tempo até meia-noite do dia de entrada
+        // Lógica simplificada para virada de dia
         const minutosDia = differenceInMinutes(horario, entrada);
         diasTrabalhados[dia].minutos += minutosDia;
         totalMinutosTrabalhados += minutosDia;
         entrada = null;
     }
   }
-
+  
   // 2. Calcular horas extras (Simplificado: tudo acima da jornada mensal é extra)
   const jornadaMensalMinutos = (horas_mensais || JORNADA_MENSAL_PADRAO) * 60;
   
@@ -132,41 +142,74 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes 
                     Object.keys(diasTrabalhados).map(dia => {
                         const data = parseISO(dia);
                         const isFimDeSemana = isWeekend(data);
-                        const { minutos, registros } = diasTrabalhados[dia];
+                        const { minutos, registros, isFalta, atestadoUrl } = diasTrabalhados[dia];
                         
+                        let statusDisplay;
+                        if (isFalta) {
+                            statusDisplay = atestadoUrl 
+                                ? <span className="text-sm text-green-600 flex items-center"><FileText className="w-4 h-4 mr-1" /> Falta Justificada</span>
+                                : <span className="text-sm text-red-600 flex items-center"><AlertTriangle className="w-4 h-4 mr-1" /> Falta Injustificada</span>;
+                        } else if (minutos === 0 && !isFimDeSemana && startOfDay(data) < startOfDay(new Date())) {
+                            // Se não é falta registrada, mas não tem minutos e é dia útil passado, alerta
+                            statusDisplay = <span className="text-sm text-yellow-600 flex items-center"><AlertTriangle className="w-4 h-4 mr-1" /> Dia sem fechamento</span>;
+                        } else {
+                            statusDisplay = formatarHoras(minutos);
+                        }
+
                         return (
-                            <TableRow key={dia} className={cn(isFimDeSemana && 'bg-secondary/30')}>
+                            <TableRow key={dia} className={cn(isFimDeSemana && 'bg-secondary/30', isFalta && 'bg-red-100/50 dark:bg-red-900/20')}>
                                 <TableCell className="font-medium">{format(data, 'dd/MM (EEE)', { locale: ptBR })}</TableCell>
                                 <TableCell>
                                     <div className="flex flex-wrap gap-2">
                                         {registros.map(r => (
                                             <span key={r.id} className="text-sm bg-muted px-2 py-1 rounded-full flex items-center">
-                                                {r.tipo}: {format(parseISO(r.horario_registro), 'HH:mm')}
-                                                {r.maps_url && (
-                                                    <a 
-                                                        href={r.maps_url} 
-                                                        target="_blank" 
-                                                        rel="noopener noreferrer" 
-                                                        className="ml-1 text-blue-500 hover:text-blue-700 inline-flex items-center"
-                                                        title="Ver Localização"
-                                                    >
-                                                        <MapPin className="w-3 h-3" />
-                                                    </a>
-                                                )}
-                                                {r.selfie_url && (
-                                                    <button 
-                                                        onClick={() => handleViewSelfie(r.selfie_url)} 
-                                                        className="ml-1 text-primary hover:text-primary/80 inline-flex items-center"
-                                                        title="Ver Selfie"
-                                                    >
-                                                        <Camera className="w-3 h-3" />
-                                                    </button>
+                                                {r.tipo === 'Falta' ? (
+                                                    <>
+                                                        {r.tipo}
+                                                        {r.atestado_url && (
+                                                            <a 
+                                                                href={r.atestado_url} 
+                                                                target="_blank" 
+                                                                rel="noopener noreferrer" 
+                                                                className="ml-1 text-primary hover:text-primary/80 inline-flex items-center"
+                                                                title="Ver Atestado"
+                                                            >
+                                                                <FileText className="w-3 h-3" />
+                                                            </a>
+                                                        )}
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        {r.tipo}: {format(parseISO(r.horario_registro), 'HH:mm')}
+                                                        {r.maps_url && (
+                                                            <a 
+                                                                href={r.maps_url} 
+                                                                target="_blank" 
+                                                                rel="noopener noreferrer" 
+                                                                className="ml-1 text-blue-500 hover:text-blue-700 inline-flex items-center"
+                                                                title="Ver Localização"
+                                                            >
+                                                                <MapPin className="w-3 h-3" />
+                                                            </a>
+                                                        )}
+                                                        {r.selfie_url && (
+                                                            <button 
+                                                                onClick={() => handleViewSelfie(r.selfie_url)} 
+                                                                className="ml-1 text-primary hover:text-primary/80 inline-flex items-center"
+                                                                title="Ver Selfie"
+                                                            >
+                                                                <Camera className="w-3 h-3" />
+                                                            </button>
+                                                        )}
+                                                    </>
                                                 )}
                                             </span>
                                         ))}
                                     </div>
                                 </TableCell>
-                                <TableCell className="text-right font-semibold">{formatarHoras(minutos)}</TableCell>
+                                <TableCell className="text-right font-semibold">
+                                    {statusDisplay}
+                                </TableCell>
                             </TableRow>
                         );
                     })

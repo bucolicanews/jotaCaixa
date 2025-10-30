@@ -1,24 +1,28 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { useSessao } from '@/hooks/use-sessao';
-import { Loader2, Filter, Clock, Users, Building2 } from 'lucide-react';
+import { Loader2, Filter, Clock, Users, Building2, AlertTriangle, CalendarX } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { format, startOfMonth, endOfMonth } from 'date-fns';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isWeekend, parseISO } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { showError } from '@/utils/toast';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import DetalheFolhaPonto from '@/components/DetalheFolhaPonto';
 import { MonthPicker } from '@/components/MonthPicker';
+import GerenciarFaltas from '@/components/GerenciarFaltas';
+import { Button } from '@/components/ui/button';
+import { ptBR } from 'date-fns/locale';
 
 interface RegistroPonto {
   id: string;
   funcionario_id: string;
   empresa_id: string;
   horario_registro: string; // ISO string
-  tipo: 'Entrada' | 'Saida';
+  tipo: 'Entrada' | 'Saida' | 'Falta'; // Adicionado 'Falta'
   maps_url: string;
   selfie_url: string; // Adicionado
+  atestado_url?: string | null; // Adicionado
 }
 
 interface FuncionarioComDados extends UsuarioProfile {
@@ -47,11 +51,14 @@ const FolhaPonto: React.FC = () => {
   const [funcionarios, setFuncionarios] = useState<FuncionarioComDados[]>([]);
   const [funcionarioSelecionadoId, setFuncionarioSelecionadoId] = useState<string | null>(null);
   const [registrosDoFuncionario, setRegistrosDoFuncionario] = useState<RegistroPonto[]>([]);
+  
+  // Estado para Gerenciar Faltas
+  const [faltaDialogOpen, setFaltaDialogOpen] = useState(false);
+  const [diaFaltaSelecionado, setDiaFaltaSelecionado] = useState<Date | null>(null);
 
   const isAdmin = role === 'Admin';
   const isCliente = role === 'Cliente' && (perfil as ClienteProfile)?.aprovado;
   
-  // Determina o ID da empresa a ser usada para filtrar funcionários
   const empresaIdParaFiltro = isAdmin ? clienteSelecionadoId : (isCliente ? perfil?.id : null);
 
   const fetchClientes = useCallback(async () => {
@@ -70,7 +77,6 @@ const FolhaPonto: React.FC = () => {
     } else {
         const clientData = data as ClienteSimples[];
         setClientes(clientData);
-        // Se for Admin, seleciona o primeiro cliente por padrão
         if (clientData.length > 0 && !clienteSelecionadoId) {
             setClienteSelecionadoId(clientData[0].id);
         }
@@ -95,7 +101,6 @@ const FolhaPonto: React.FC = () => {
     } else {
         const funcs = data as FuncionarioComDados[];
         setFuncionarios(funcs);
-        // Mantém o funcionário selecionado se ele ainda estiver na lista, senão seleciona o primeiro
         if (!funcs.some(f => f.id === funcionarioSelecionadoId) && funcs.length > 0) {
             setFuncionarioSelecionadoId(funcs[0].id);
         } else if (funcs.length === 0) {
@@ -112,7 +117,7 @@ const FolhaPonto: React.FC = () => {
 
     const { data: registros, error } = await supabase
       .from('registros_ponto')
-      .select('*, selfie_url')
+      .select('id, funcionario_id, empresa_id, horario_registro, tipo, maps_url, selfie_url, atestado_url')
       .eq('funcionario_id', funcionarioId)
       .gte('horario_registro', inicioMes)
       .lte('horario_registro', fimMes)
@@ -139,7 +144,6 @@ const FolhaPonto: React.FC = () => {
     if (!carregando && empresaIdParaFiltro) {
         fetchFuncionarios(empresaIdParaFiltro);
     } else if (!carregando && isAdmin && !clienteSelecionadoId) {
-        // Se for Admin e não houver cliente selecionado (ou clientes), limpa a lista
         setFuncionarios([]);
         setFuncionarioSelecionadoId(null);
     }
@@ -153,6 +157,55 @@ const FolhaPonto: React.FC = () => {
         setRegistrosDoFuncionario([]);
     }
   }, [funcionarioSelecionadoId, dataSelecionada, fetchRegistros]);
+  
+  // --- Lógica de Faltas (Regra 1) ---
+  
+  const funcionarioDetalhe = funcionarios.find(f => f.id === funcionarioSelecionadoId);
+  
+  const handleFaltaClick = (dia: Date) => {
+    if (!funcionarioDetalhe) return;
+    setDiaFaltaSelecionado(dia);
+    setFaltaDialogOpen(true);
+  };
+  
+  const handleFaltaRegistrada = () => {
+    // Re-busca os registros após registrar a falta
+    if (funcionarioSelecionadoId) {
+        fetchRegistros(funcionarioSelecionadoId, dataSelecionada);
+    }
+  };
+
+  const getDiasSemRegistro = () => {
+    if (!funcionarioDetalhe) return [];
+    
+    const inicioMes = startOfMonth(dataSelecionada);
+    const fimMes = endOfMonth(dataSelecionada);
+    const todosOsDias = eachDayOfInterval({ start: inicioMes, end: fimMes });
+    
+    const diasComRegistro = new Set(
+        registrosDoFuncionario
+            .filter(r => r.tipo !== 'Falta') // Ignora registros de falta para esta checagem
+            .map(r => format(parseISO(r.horario_registro), 'yyyy-MM-dd'))
+    );
+    
+    const diasComFaltaRegistrada = new Set(
+        registrosDoFuncionario
+            .filter(r => r.tipo === 'Falta')
+            .map(r => format(parseISO(r.horario_registro), 'yyyy-MM-dd'))
+    );
+
+    return todosOsDias.filter(dia => {
+        const diaString = format(dia, 'yyyy-MM-dd');
+        // Ignora fins de semana (sábados e domingos)
+        if (isWeekend(dia)) return false; 
+        // Ignora dias futuros
+        if (dia > new Date()) return false;
+        // Se não tem registro de ponto E não tem registro de falta, é um dia sem registro
+        return !diasComRegistro.has(diaString) && !diasComFaltaRegistrada.has(diaString);
+    });
+  };
+  
+  const diasSemRegistro = getDiasSemRegistro();
 
   if (carregando) {
     return <LayoutPrincipal><div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div></LayoutPrincipal>;
@@ -162,8 +215,6 @@ const FolhaPonto: React.FC = () => {
     return <LayoutPrincipal><Card><CardHeader><CardTitle>Acesso Negado</CardTitle></CardHeader><CardContent><p>Você não tem permissão para acessar a folha de ponto.</p></CardContent></Card></LayoutPrincipal>;
   }
   
-  const funcionarioDetalhe = funcionarios.find(f => f.id === funcionarioSelecionadoId);
-
   return (
     <LayoutPrincipal>
       <h1 className="text-2xl md:text-3xl font-bold mb-6 flex items-center">
@@ -177,7 +228,6 @@ const FolhaPonto: React.FC = () => {
           </CardTitle>
           <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto">
             
-            {/* Se for Admin, mostra o seletor de Cliente */}
             {isAdmin && (
                 <Select 
                     value={clienteSelecionadoId || ''} 
@@ -196,7 +246,6 @@ const FolhaPonto: React.FC = () => {
                 </Select>
             )}
 
-            {/* Seletor de Funcionário */}
             <Select 
                 value={funcionarioSelecionadoId || ''} 
                 onValueChange={setFuncionarioSelecionadoId}
@@ -213,7 +262,6 @@ const FolhaPonto: React.FC = () => {
                 </SelectContent>
             </Select>
             
-            {/* Seletor de Mês (MonthPicker) */}
             <MonthPicker
               date={dataSelecionada}
               setDate={setDataSelecionada}
@@ -222,6 +270,34 @@ const FolhaPonto: React.FC = () => {
           </div>
         </CardHeader>
       </Card>
+      
+      {funcionarioDetalhe && diasSemRegistro.length > 0 && (
+        <Card className="mb-6 border-red-500 bg-red-50 dark:bg-red-900/20">
+            <CardHeader className="pb-2">
+                <CardTitle className="text-lg text-red-600 dark:text-red-400 flex items-center">
+                    <AlertTriangle className="w-5 h-5 mr-2" /> {diasSemRegistro.length} Dias Sem Registro (Falta Potencial)
+                </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-2">
+                <p className="text-sm text-muted-foreground mb-3">
+                    Os seguintes dias úteis não possuem registro de ponto ou falta justificada:
+                </p>
+                <div className="flex flex-wrap gap-2">
+                    {diasSemRegistro.map(dia => (
+                        <Button 
+                            key={format(dia, 'yyyy-MM-dd')} 
+                            variant="destructive" 
+                            size="sm"
+                            onClick={() => handleFaltaClick(dia)}
+                        >
+                            <CalendarX className="w-4 h-4 mr-1" />
+                            {format(dia, 'dd/MM (EEE)', { locale: ptBR })}
+                        </Button>
+                    ))}
+                </div>
+            </CardContent>
+        </Card>
+      )}
 
       {funcionarioDetalhe && (
         <DetalheFolhaPonto 
@@ -243,6 +319,21 @@ const FolhaPonto: React.FC = () => {
                 {isAdmin && !clienteSelecionadoId ? 'Selecione uma empresa para carregar os funcionários.' : 'Selecione um funcionário para visualizar a folha de ponto.'}
             </CardContent>
         </Card>
+      )}
+      
+      {/* Modal de Gerenciamento de Faltas */}
+      {funcionarioDetalhe && diaFaltaSelecionado && (
+        <GerenciarFaltas
+            open={faltaDialogOpen}
+            onOpenChange={setFaltaDialogOpen}
+            funcionario={{ 
+                id: funcionarioDetalhe.id, 
+                nome: funcionarioDetalhe.nome, 
+                empresa_id: empresaIdParaFiltro! 
+            }}
+            dataFalta={diaFaltaSelecionado}
+            onFaltaRegistrada={handleFaltaRegistrada}
+        />
       )}
     </LayoutPrincipal>
   );
