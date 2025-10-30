@@ -428,6 +428,11 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
                             needsManagement && 'bg-yellow-100/50 dark:bg-yellow-900/20 border-l-4 border-yellow-500',
                         );
 
+                        // Determina o tempo a ser exibido na coluna Total Dia
+                        const totalDiaDisplay = isFolgaFixa && hasPontoRecords && (decisionRecord || needsManagement) 
+                            ? formatarHoras(minutosTrabalhadosFolga) 
+                            : (isAbono && !isCompensacaoAbono ? formatarHoras(minutosAbonados) : statusDisplay);
+
                         return (
                             <TableRow key={diaString} className={rowClassName}>
                                 <TableCell className="font-medium">{format(data, 'dd/MM (EEE)', { locale: ptBR })}</TableCell>
@@ -440,6 +445,16 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
                                             </span>
                                         )}
                                         
+                                        {/* AVISO DE DECISÃO (Pago Extra ou Compensado) */}
+                                        {isFolgaFixa && hasPontoRecords && decisionRecord && (
+                                            <span className={cn(
+                                                "text-xs font-semibold px-2 py-1 rounded-full",
+                                                decisionRecord === 'Extra100' ? "bg-red-500 text-white" : "bg-blue-500 text-white"
+                                            )}>
+                                                {decisionRecord === 'Extra100' ? 'PAGO EXTRA' : 'COMPENSADO'}
+                                            </span>
+                                        )}
+
                                         {registros.filter(r => r.tipo !== 'Compensacao' && r.tipo !== 'Extra100').map(r => {
                                             let registroDisplay;
                                             
@@ -461,7 +476,7 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
                                                     </>
                                                 );
                                             } else if (r.tipo === 'Abono') {
-                                                // Se for abono de compensação, exibe apenas a observação
+                                                // Se for abono de compensação, exibe apenas a observação (sem a palavra Abono)
                                                 if (r.observacao?.includes('Compensação de folga trabalhada')) {
                                                     registroDisplay = r.observacao;
                                                 } else {
@@ -569,11 +584,7 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
                                     </div>
                                 </TableCell>
                                 <TableCell className="text-right font-semibold">
-                                    {/* Se for folga trabalhada com decisão, exibe o tempo trabalhado (minutosTrabalhadosFolga) */}
-                                    {isFolgaFixa && hasPontoRecords && (decisionRecord || needsManagement) 
-                                        ? formatarHoras(minutosTrabalhadosFolga) 
-                                        : (isAbono && !isCompensacaoAbono ? formatarHoras(minutosAbonados) : statusDisplay)
-                                    }
+                                    {totalDiaDisplay}
                                 </TableCell>
                             </TableRow>
                         );
