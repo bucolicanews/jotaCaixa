@@ -2,9 +2,10 @@ import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { PlusCircle, FileSignature, Settings, Loader2 } from 'lucide-react';
+import { PlusCircle, FileSignature, Settings, Loader2, Tag, FileTextIcon } from 'lucide-react';
 import { useSessao } from '@/hooks/use-sessao';
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 
 const Contratos = () => {
   const { role, carregando } = useSessao();
@@ -14,7 +15,7 @@ const Contratos = () => {
     return <LayoutPrincipal><div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div></LayoutPrincipal>;
   }
   
-  const canManageModels = role === 'Admin'; // Apenas Admin gerencia tags e modelos
+  const canManageModels = role === 'Admin' || role === 'Cliente';
 
   return (
     <LayoutPrincipal>
@@ -28,10 +29,12 @@ const Contratos = () => {
                 Novo Contrato
             </Button>
             {canManageModels && (
-                <Button variant="outline" className="w-full sm:w-auto" disabled>
-                    <Settings className="w-4 h-4 mr-2" />
-                    Modelos/Tags
-                </Button>
+                <Link to="/contratos/tags">
+                    <Button variant="outline" className="w-full sm:w-auto">
+                        <Settings className="w-4 h-4 mr-2" />
+                        Configurar
+                    </Button>
+                </Link>
             )}
         </div>
       </div>
@@ -63,12 +66,30 @@ const Contratos = () => {
         
         {canManageModels && (
             <TabsContent value="modelos" className="mt-4">
-                <Card>
-                    <CardHeader><CardTitle className="text-xl">Modelos e Tags</CardTitle></CardHeader>
-                    <CardContent>
-                        <p className="text-muted-foreground">Gerenciamento de tags dinâmicas e templates de contrato. (Em breve)</p>
-                    </CardContent>
-                </Card>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <Link to="/contratos/tags">
+                        <Card className="hover:shadow-lg transition-shadow cursor-pointer">
+                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                <CardTitle className="text-lg font-medium">Gerenciar Tags</CardTitle>
+                                <Tag className="h-5 w-5 text-muted-foreground" />
+                            </CardHeader>
+                            <CardContent>
+                                <p className="text-sm text-muted-foreground">Crie e edite tags dinâmicas para seus contratos.</p>
+                            </CardContent>
+                        </Card>
+                    </Link>
+                    <Link to="/contratos/modelos">
+                        <Card className="hover:shadow-lg transition-shadow cursor-pointer">
+                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                <CardTitle className="text-lg font-medium">Gerenciar Modelos</CardTitle>
+                                <FileTextIcon className="h-5 w-5 text-muted-foreground" />
+                            </CardHeader>
+                            <CardContent>
+                                <p className="text-sm text-muted-foreground">Crie e edite templates de contrato.</p>
+                            </CardContent>
+                        </Card>
+                    </Link>
+                </div>
             </TabsContent>
         )}
       </Tabs>
