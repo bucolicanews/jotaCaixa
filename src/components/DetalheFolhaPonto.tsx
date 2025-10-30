@@ -11,10 +11,11 @@ interface RegistroPonto {
   id: string;
   funcionario_id: string;
   horario_registro: string; // ISO string
-  tipo: 'Entrada' | 'Saida' | 'Falta'; // Adicionado 'Falta'
+  tipo: 'Entrada' | 'Saida' | 'Falta' | 'Abono'; // Adicionado 'Abono'
   maps_url: string;
   selfie_url: string;
-  atestado_url?: string | null; // Adicionado
+  atestado_url?: string | null; 
+  observacao?: string | null; // Adicionado para armazenar a duração do abono
 }
 
 interface FuncionarioDetalhe {
@@ -49,7 +50,7 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes 
   let totalMinutosExtras100 = 0;
   
   // Agrupamento de registros por dia
-  const diasTrabalhados: Record<string, { minutos: number, registros: RegistroPonto[], isFalta: boolean, atestadoUrl: string | null }> = {};
+  const diasTrabalhados: Record<string, { minutos: number, registros: RegistroPonto[], isFalta: boolean, isAbono: boolean, atestadoUrl: string | null, observacao: string | null }> = {};
 
   // 1. Processar registros e agrupar por dia
   const registrosOrdenados = [...registros].sort((a, b) => parseISO(a.horario_registro).getTime() - parseISO(b.horario_registro).getTime());
@@ -61,17 +62,28 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes 
     const dia = format(horario, 'yyyy-MM-dd');
 
     if (!diasTrabalhados[dia]) {
-      diasTrabalhados[dia] = { minutos: 0, registros: [], isFalta: false, atestadoUrl: null };
+      diasTrabalhados[dia] = { minutos: 0, registros: [], isFalta: false, isAbono: false, atestadoUrl: null, observacao: null };
     }
     
+    diasTrabalhados[dia].registros.push(registro);
+
     if (registro.tipo === 'Falta') {
         diasTrabalhados[dia].isFalta = true;
         diasTrabalhados[dia].atestadoUrl = registro.atestado_url || null;
-        diasTrabalhados[dia].registros.push(registro);
         continue;
     }
-
-    diasTrabalhados[dia].registros.push(registro);
+    
+    if (registro.tipo === 'Abono') {
+        diasTrabalhados[dia].isAbono = true;
+        diasTrabalhados[dia].observacao = registro.observacao || null;
+        
+        // Adiciona minutos do abono
+        const horasAbonadas = parseInt(registro.observacao?.replace('h', '') || '0');
+        const minutosAbonados = horasAbonadas * 60;
+        diasTrabalhados[dia].minutos += minutosAbonados;
+        totalMinutosTrabalhados += minutosAbonados;
+        continue;
+    }
 
     if (registro.tipo === 'Entrada') {
       entrada = horario;
@@ -142,13 +154,15 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes 
                     Object.keys(diasTrabalhados).map(dia => {
                         const data = parseISO(dia);
                         const isFimDeSemana = isWeekend(data);
-                        const { minutos, registros, isFalta, atestadoUrl } = diasTrabalhados[dia];
+                        const { minutos, registros, isFalta, isAbono, atestadoUrl, observacao } = diasTrabalhados[dia];
                         
                         let statusDisplay;
                         if (isFalta) {
                             statusDisplay = atestadoUrl 
                                 ? <span className="text-sm text-green-600 flex items-center"><FileText className="w-4 h-4 mr-1" /> Falta Justificada</span>
                                 : <span className="text-sm text-red-600 flex items-center"><AlertTriangle className="w-4 h-4 mr-1" /> Falta Injustificada</span>;
+                        } else if (isAbono) {
+                            statusDisplay = <span className="text-sm text-blue-600 flex items-center"><Clock className="w-4 h-4 mr-1" /> Abono ({observacao})</span>;
                         } else if (minutos === 0 && !isFimDeSemana && startOfDay(data) < startOfDay(new Date())) {
                             // Se não é falta registrada, mas não tem minutos e é dia útil passado, alerta
                             statusDisplay = <span className="text-sm text-yellow-600 flex items-center"><AlertTriangle className="w-4 h-4 mr-1" /> Dia sem fechamento</span>;
@@ -157,7 +171,7 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes 
                         }
 
                         return (
-                            <TableRow key={dia} className={cn(isFimDeSemana && 'bg-secondary/30', isFalta && 'bg-red-100/50 dark:bg-red-900/20')}>
+                            <TableRow key={dia} className={cn(isFimDeSemana && 'bg-secondary/30', (isFalta || isAbono) && 'bg-blue-100/50 dark:bg-blue-900/20')}>
                                 <TableCell className="font-medium">{format(data, 'dd/MM (EEE)', { locale: ptBR })}</TableCell>
                                 <TableCell>
                                     <div className="flex flex-wrap gap-2">
@@ -165,7 +179,7 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes 
                                             <span key={r.id} className="text-sm bg-muted px-2 py-1 rounded-full flex items-center">
                                                 {r.tipo === 'Falta' ? (
                                                     <>
-                                                        {r.tipo}
+                                                        {r.atestado_url ? 'Falta Justificada' : 'Falta Injustificada'}
                                                         {r.atestado_url && (
                                                             <a 
                                                                 href={r.atestado_url} 
@@ -177,6 +191,10 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes 
                                                                 <FileText className="w-3 h-3" />
                                                             </a>
                                                         )}
+                                                    </>
+                                                ) : r.tipo === 'Abono' ? (
+                                                    <>
+                                                        Abono ({r.observacao})
                                                     </>
                                                 ) : (
                                                     <>
