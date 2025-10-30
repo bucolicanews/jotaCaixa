@@ -160,12 +160,6 @@ const FolhaPonto: React.FC = () => {
     setFaltaDialogOpen(true);
   };
   
-  const handleEditRegistro = (registro: RegistroPonto) => {
-    setRegistroParaEdicao(registro); // Define o registro para edição
-    setDiaFaltaSelecionado(parseISO(registro.horario_registro)); // Define a data do registro
-    setFaltaDialogOpen(true);
-  };
-  
   const handleFaltaRegistrada = async () => {
     // Re-busca os registros após registrar/editar/deletar a falta
     if (funcionarioSelecionadoId) {
