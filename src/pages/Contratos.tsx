@@ -2,7 +2,7 @@ import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { PlusCircle, FileSignature, Settings, Loader2, Tag, FileTextIcon } from 'lucide-react';
+import { PlusCircle, FileSignature, Loader2, Tag, FileTextIcon } from 'lucide-react';
 import { useSessao } from '@/hooks/use-sessao';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -16,6 +16,7 @@ const Contratos = () => {
   }
   
   const canManageModels = role === 'Admin' || role === 'Cliente';
+  const canCreateContract = role === 'Admin' || role === 'Cliente';
 
   return (
     <LayoutPrincipal>
@@ -24,18 +25,12 @@ const Contratos = () => {
           <FileSignature className="w-6 h-6 mr-2" /> Gerenciamento de Contratos
         </h1>
         <div className="flex space-x-2 w-full sm:w-auto">
-            <Button className="w-full sm:w-auto" disabled>
-                <PlusCircle className="w-4 h-4 mr-2" />
-                Novo Contrato
-            </Button>
-            {canManageModels && (
-                <Link to="/contratos/tags">
-                    <Button variant="outline" className="w-full sm:w-auto">
-                        <Settings className="w-4 h-4 mr-2" />
-                        Configurar
-                    </Button>
-                </Link>
-            )}
+            <Link to="/contratos/novo">
+                <Button className="w-full sm:w-auto" disabled={!canCreateContract}>
+                    <PlusCircle className="w-4 h-4 mr-2" />
+                    Novo Contrato
+                </Button>
+            </Link>
         </div>
       </div>
 
