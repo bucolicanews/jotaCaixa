@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, FileSignature, ChevronLeft, Save } from 'lucide-react';
+import { Loader2, FileSignature, ChevronLeft, Save, CalendarIcon } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
@@ -13,7 +13,14 @@ import { Label } from '@/components/ui/label';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Cliente } from '@/types/cliente';
-import { format, parseISO, setDate, addMonths } from 'date-fns';
+import { format, parseISO, setDate, addMonths, addDays } from 'date-fns';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { cn } from '@/lib/utils';
+import { ptBR } from 'date-fns/locale';
+
+type TipoLancamento = 'unico' | 'repetir' | 'parcelar';
 
 const PreencherContrato: React.FC = () => {
   const { modeloId } = useParams<{ modeloId: string }>();
@@ -30,9 +37,13 @@ const PreencherContrato: React.FC = () => {
   // Campos obrigatórios para o contrato
   const [clienteSelecionadoId, setClienteSelecionadoId] = useState<string>('');
   const [valorTotal, setValorTotal] = useState<number | ''>('');
-  const [dataInicio, setDataInicio] = useState<string>('');
+  
+  // Campos de Forma de Pagamento
+  const [tipoLancamento, setTipoLancamento] = useState<TipoLancamento>('unico');
+  const [dataVencimentoUnico, setDataVencimentoUnico] = useState<Date | undefined>(undefined);
   const [numeroParcelas, setNumeroParcelas] = useState<number>(1);
-  const [diaVencimentoParcela, setDiaVencimentoParcela] = useState<number | ''>('');
+  const [dataPrimeiroVencimento, setDataPrimeiroVencimento] = useState<Date | undefined>(undefined);
+  const [intervaloDias, setIntervaloDias] = useState<number>(30); // Usado para Repetir/Parcelar
 
   const isCliente = role === 'Cliente';
   const isAdmin = role === 'Admin';
@@ -124,96 +135,101 @@ const PreencherContrato: React.FC = () => {
 
   const gerarParcelas = (
     valorTotal: number, 
-    dataInicio: string, 
+    tipoLancamento: TipoLancamento,
     numParcelas: number, 
-    diaVencimento: number | ''
+    dataVencimentoUnico: Date | undefined,
+    dataPrimeiroVencimento: Date | undefined,
+    intervaloDias: number,
   ) => {
-    const valorParcela = valorTotal / numParcelas;
     const parcelas = [];
     
-    // Data de início do contrato (para referência)
-    const inicioContrato = parseISO(dataInicio);
-    
-    // Determina a data do primeiro vencimento
-    let dataBase = inicioContrato;
-    
-    // Se o dia de vencimento for especificado, ajusta a data base
-    if (diaVencimento && diaVencimento >= 1 && diaVencimento <= 31) {
-        // Se o dia de vencimento for maior que o dia de início, usa o mês atual
-        if (diaVencimento > inicioContrato.getDate()) {
-            dataBase = setDate(inicioContrato, diaVencimento);
-        } else {
-            // Se o dia de vencimento for menor ou igual, usa o próximo mês
-            dataBase = setDate(addMonths(inicioContrato, 1), diaVencimento);
-        }
-    } else {
-        // Se não houver dia de vencimento, a primeira parcela vence 30 dias após o início
-        dataBase = addMonths(inicioContrato, 1);
-    }
-
-    for (let i = 0; i < numParcelas; i++) {
-        let dataVencimento;
-        
-        if (diaVencimento && diaVencimento >= 1 && diaVencimento <= 31) {
-            // Se o dia de vencimento é fixo, avança um mês a partir da data base
-            dataVencimento = addMonths(dataBase, i);
-        } else {
-            // Se não há dia fixo, usa a lógica de intervalo mensal (baseado no dia de início)
-            dataVencimento = addMonths(inicioContrato, i + 1);
-        }
-        
-        parcelas.push({
-            numero_parcela: i + 1,
-            valor_parcela: valorParcela,
-            data_vencimento: format(dataVencimento, 'yyyy-MM-dd'),
-            status: 'aberta',
+    if (tipoLancamento === 'unico' && dataVencimentoUnico) {
+        parcelas.push({ 
+            numero_parcela: 1, 
+            valor_parcela: valorTotal, 
+            data_vencimento: format(dataVencimentoUnico, 'yyyy-MM-dd'), 
+            status: 'aberta' 
         });
+    } else if (tipoLancamento !== 'unico' && dataPrimeiroVencimento && numParcelas >= 1 && intervaloDias >= 1) {
+        const valorParcela = tipoLancamento === 'parcelar' ? (valorTotal / numParcelas) : valorTotal;
+        
+        for (let i = 0; i < numParcelas; i++) {
+            const dataVencimento = addDays(dataPrimeiroVencimento, i * intervaloDias);
+            
+            parcelas.push({
+                numero_parcela: i + 1,
+                valor_parcela: valorParcela,
+                data_vencimento: format(dataVencimento, 'yyyy-MM-dd'),
+                status: 'aberta',
+            });
+        }
     }
     return parcelas;
   };
 
   const handleSalvarContrato = async () => {
-    if (!modelo || !clienteSelecionadoId || valorTotal === '' || !dataInicio || !empresaId) {
-        showError('Preencha todos os campos obrigatórios (Cliente, Valor Total e Data de Início).');
+    const valorNumerico = Number(valorTotal);
+    const numParcelas = Number(numeroParcelas);
+    
+    // 1. Validação
+    if (!modelo || !clienteSelecionadoId || valorTotal === '' || !empresaId || valorNumerico <= 0) {
+        showError('Preencha Cliente e Valor Total.');
         return;
     }
     
-    const valorNumerico = Number(valorTotal);
-    const numParcelas = Number(numeroParcelas);
-    const diaVencimento = Number(diaVencimentoParcela);
-
-    if (isNaN(valorNumerico) || valorNumerico <= 0) {
-        showError('Valor Total inválido.');
+    if (tipoLancamento === 'unico' && !dataVencimentoUnico) {
+        showError('Selecione a Data de Vencimento para o lançamento único.');
         return;
     }
-    if (isNaN(numParcelas) || numParcelas < 1) {
-        showError('Número de Parcelas inválido.');
-        return;
-    }
-    if (diaVencimentoParcela !== '' && (isNaN(diaVencimento) || diaVencimento < 1 || diaVencimento > 31)) {
-        showError('Dia de Vencimento inválido.');
-        return;
+    
+    if (tipoLancamento !== 'unico') {
+        if (numParcelas < 1) {
+            showError('O número de parcelas deve ser pelo menos 1.');
+            return;
+        }
+        if (!dataPrimeiroVencimento) {
+            showError('Selecione a Data do Primeiro Vencimento.');
+            return;
+        }
+        if (intervaloDias < 1) {
+            showError('O intervalo de dias deve ser pelo menos 1.');
+            return;
+        }
     }
     
     setIsSubmitting(true);
     
     try {
-        // 1. Renderizar o conteúdo final
+        // 2. Gerar Parcelas
+        const parcelasParaInserir = gerarParcelas(
+            valorNumerico, 
+            tipoLancamento, 
+            numParcelas, 
+            dataVencimentoUnico, 
+            dataPrimeiroVencimento, 
+            intervaloDias
+        );
+        
+        if (parcelasParaInserir.length === 0) {
+            throw new Error('Falha ao gerar parcelas. Verifique os dados de pagamento.');
+        }
+        
+        // O valor total do contrato é o valor total inserido, exceto se for 'repetir', onde é Valor * Nº Parcelas
+        const valorFinalContrato = tipoLancamento === 'repetir' ? valorNumerico * numParcelas : valorNumerico;
+        
+        // 3. Renderizar o conteúdo final
         const conteudoRenderizado = renderizarConteudo(modelo.conteudo_template, valoresTags);
         
-        // 2. Gerar Parcelas
-        const parcelasParaInserir = gerarParcelas(valorNumerico, dataInicio, numParcelas, diaVencimentoParcela);
-        
-        // 3. Inserir o Contrato Gerado
+        // 4. Inserir o Contrato Gerado
         const contratoData = {
             modelo_id: modelo.id,
             cliente_id: clienteSelecionadoId,
             empresa_id: empresaId,
             status: 'rascunho',
-            valor_total: valorNumerico,
-            data_inicio: dataInicio,
+            valor_total: valorFinalContrato,
+            data_inicio: format(new Date(), 'yyyy-MM-dd'), // Data de criação do contrato
             numero_parcelas: numParcelas,
-            dia_vencimento_parcela: diaVencimentoParcela || null,
+            dia_vencimento_parcela: tipoLancamento === 'unico' ? null : intervaloDias, // Usando intervaloDias aqui para simplificar o campo
             valores_tags_preenchidos: valoresTags,
             conteudo_renderizado: conteudoRenderizado,
         };
@@ -228,15 +244,15 @@ const PreencherContrato: React.FC = () => {
         
         const contratoGeradoId = contratoGerado.id;
         
-        // 4. Inserir a Conta a Receber (Sintético)
+        // 5. Inserir a Conta a Receber (Sintético)
         const contaReceberData = {
             cliente_id: clienteSelecionadoId,
             empresa_id: empresaId,
-            descricao: `Contrato: ${modelo.titulo} - ${clienteSelecionadoId}`, // Usar o ID do cliente temporariamente
-            valor_total: valorNumerico,
+            descricao: `Contrato: ${modelo.titulo} - ${clientes.find(c => c.id === clienteSelecionadoId)?.nome || 'Cliente Desconhecido'}`,
+            valor_total: valorFinalContrato,
             data_emissao: format(new Date(), 'yyyy-MM-dd'),
             data_vencimento: parcelasParaInserir[0].data_vencimento, // Primeiro vencimento
-            tipo_receita: numParcelas > 1 ? 'recorrente' : 'única',
+            tipo_receita: tipoLancamento === 'unico' ? 'única' : 'recorrente',
             status: 'aberta',
             origem: 'contrato',
             contrato_gerado_id: contratoGeradoId,
@@ -252,7 +268,7 @@ const PreencherContrato: React.FC = () => {
         
         const contaReceberId = contaReceber.id;
         
-        // 5. Inserir as Parcelas (Analítico)
+        // 6. Inserir as Parcelas (Analítico)
         const parcelasComId = parcelasParaInserir.map(p => ({ 
             ...p, 
             conta_receber_id: contaReceberId, 
@@ -290,6 +306,9 @@ const PreencherContrato: React.FC = () => {
       return <LayoutPrincipal><Card><CardHeader><CardTitle>Erro</CardTitle></CardHeader><CardContent><p>Modelo de contrato não encontrado.</p></CardContent></Card></LayoutPrincipal>;
   }
 
+  const isRepetirOuParcelar = tipoLancamento !== 'unico';
+  const valorLabel = tipoLancamento === 'parcelar' ? 'Valor Total a Parcelar' : 'Valor da Parcela';
+
   return (
     <LayoutPrincipal>
       <div className="flex items-center mb-6">
@@ -306,8 +325,10 @@ const PreencherContrato: React.FC = () => {
         
         {/* Coluna 1: Dados Principais (Financeiro) */}
         <Card className="lg:col-span-1 h-fit">
-            <CardHeader><CardTitle className="text-xl">Dados do Contrato</CardTitle></CardHeader>
-            <CardContent className="space-y-4">
+            <CardHeader><CardTitle className="text-xl">Dados Financeiros</CardTitle></CardHeader>
+            <CardContent className="space-y-6">
+                
+                {/* 1. Cliente */}
                 <div className="space-y-2">
                     <Label htmlFor="cliente">Cliente</Label>
                     <Select value={clienteSelecionadoId} onValueChange={setClienteSelecionadoId}>
@@ -321,8 +342,33 @@ const PreencherContrato: React.FC = () => {
                         </SelectContent>
                     </Select>
                 </div>
+                
+                {/* 2. Forma de Pagamento */}
+                <div className="space-y-4">
+                    <Label className="font-semibold">Forma de Pagamento</Label>
+                    <RadioGroup 
+                        value={tipoLancamento} 
+                        onValueChange={(value: TipoLancamento) => setTipoLancamento(value)} 
+                        className="flex space-x-4 pt-2"
+                    >
+                        <div className="flex items-center space-x-2">
+                            <RadioGroupItem value="unico" id="unico" />
+                            <Label htmlFor="unico" className="font-normal">Único</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                            <RadioGroupItem value="repetir" id="repetir" />
+                            <Label htmlFor="repetir" className="font-normal">Repetir Valor</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                            <RadioGroupItem value="parcelar" id="parcelar" />
+                            <Label htmlFor="parcelar" className="font-normal">Parcelar Valor</Label>
+                        </div>
+                    </RadioGroup>
+                </div>
+
+                {/* 3. Valor */}
                 <div className="space-y-2">
-                    <Label htmlFor="valor-total">Valor Total (R$)</Label>
+                    <Label htmlFor="valor-total">{valorLabel}</Label>
                     <Input 
                         id="valor-total"
                         type="number"
@@ -332,39 +378,64 @@ const PreencherContrato: React.FC = () => {
                         placeholder="0.00"
                     />
                 </div>
-                <div className="space-y-2">
-                    <Label htmlFor="data-inicio">Data de Início</Label>
-                    <Input 
-                        id="data-inicio"
-                        type="date"
-                        value={dataInicio}
-                        onChange={(e) => setDataInicio(e.target.value)}
-                    />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
+
+                {/* 4. Vencimento (Condicional) */}
+                {tipoLancamento === 'unico' && (
                     <div className="space-y-2">
-                        <Label htmlFor="parcelas">Nº Parcelas</Label>
-                        <Input 
-                            id="parcelas"
-                            type="number"
-                            min="1"
-                            value={numeroParcelas}
-                            onChange={(e) => setNumeroParcelas(Number(e.target.value))}
-                        />
+                        <Label htmlFor="data-vencimento">Data de Vencimento</Label>
+                        <Popover>
+                            <PopoverTrigger asChild>
+                                <Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !dataVencimentoUnico && "text-muted-foreground")}>
+                                    {dataVencimentoUnico ? format(dataVencimentoUnico, "PPP", { locale: ptBR }) : <span>Escolha uma data</span>}
+                                    <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="start">
+                                <Calendar mode="single" selected={dataVencimentoUnico} onSelect={setDataVencimentoUnico} initialFocus />
+                            </PopoverContent>
+                        </Popover>
                     </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="dia-vencimento">Dia Vencimento (Fixo)</Label>
-                        <Input 
-                            id="dia-vencimento"
-                            type="number"
-                            min="1"
-                            max="31"
-                            value={diaVencimentoParcela}
-                            onChange={(e) => setDiaVencimentoParcela(Number(e.target.value))}
-                            placeholder="Ex: 5"
-                        />
+                )}
+                
+                {isRepetirOuParcelar && (
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="parcelas">Nº de Repetições/Parcelas</Label>
+                            <Input 
+                                id="parcelas"
+                                type="number"
+                                min="1"
+                                value={numeroParcelas}
+                                onChange={(e) => setNumeroParcelas(Number(e.target.value))}
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="intervalo-dias">Intervalo (dias)</Label>
+                            <Input 
+                                id="intervalo-dias"
+                                type="number"
+                                min="1"
+                                value={intervaloDias}
+                                onChange={(e) => setIntervaloDias(Number(e.target.value))}
+                                placeholder="30"
+                            />
+                        </div>
+                        <div className="space-y-2 col-span-2">
+                            <Label htmlFor="data-primeiro-vencimento">Data do 1º Vencimento</Label>
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !dataPrimeiroVencimento && "text-muted-foreground")}>
+                                        {dataPrimeiroVencimento ? format(dataPrimeiroVencimento, "PPP", { locale: ptBR }) : <span>Escolha uma data</span>}
+                                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0" align="start">
+                                    <Calendar mode="single" selected={dataPrimeiroVencimento} onSelect={setDataPrimeiroVencimento} initialFocus />
+                                </PopoverContent>
+                            </Popover>
+                        </div>
                     </div>
-                </div>
+                )}
             </CardContent>
         </Card>
         
@@ -396,7 +467,7 @@ const PreencherContrato: React.FC = () => {
             <Button 
                 onClick={handleSalvarContrato} 
                 className="w-full h-12"
-                disabled={isSubmitting || !clienteSelecionadoId || valorTotal === '' || !dataInicio}
+                disabled={isSubmitting || !clienteSelecionadoId || valorTotal === ''}
             >
                 {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                 Salvar Contrato e Gerar Contas a Receber
