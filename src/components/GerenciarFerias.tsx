@@ -10,8 +10,8 @@ import { ptBR } from 'date-fns/locale';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Calendar } from './ui/calendar';
 import { cn } from '@/lib/utils';
-import { Input } from './ui/input';
-import { Label } from './ui/label';
+// import { Input } from './ui/input'; // Removido
+// import { Label } from './ui/label'; // Removido
 
 interface GerenciarFeriasProps {
   funcionarioId: string;
