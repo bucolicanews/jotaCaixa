@@ -100,6 +100,7 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
     needsManagement: boolean,
     minutosAbonados: number, // Novo campo para armazenar minutos de abono
     minutosTrabalhadosFolga: number, // Novo campo para armazenar minutos trabalhados na folga
+    isCompensacaoAbono: boolean, // Novo: Indica se é um abono de compensação
   }> = {};
   
   for (const data of todosOsDiasDoMes) {
@@ -114,6 +115,7 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
     let isTurnoAberto = false;
     let hasPontoRecords = false;
     let decisionRecord: 'Compensacao' | 'Extra100' | null = null;
+    let isCompensacaoAbono = false;
     
     // Lógica de Folga Fixa
     const diaDaSemana = DAY_MAP[getDay(data)];
@@ -137,10 +139,18 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
         }
         if (registro.tipo === 'Abono') {
             isAbono = true;
-            // Extrai as horas abonadas do observacao
-            const horasAbonadas = parseInt(registro.observacao?.match(/(\d+)h/)?.[1] || '8'); 
-            minutosAbonados = horasAbonadas * 60;
-            minutosDia = minutosAbonados; // Define o total do dia como o abono
+            
+            // Verifica se é um abono de compensação (folga)
+            if (registro.observacao?.includes('Compensação de folga trabalhada')) {
+                isCompensacaoAbono = true;
+                minutosAbonados = 0; // Não conta horas, é um dia de folga
+                minutosDia = 0;
+            } else {
+                // Abono normal (conta horas)
+                const horasAbonadas = parseInt(registro.observacao?.match(/(\d+)h/)?.[1] || '8'); 
+                minutosAbonados = horasAbonadas * 60;
+                minutosDia = minutosAbonados; // Define o total do dia como o abono
+            }
             break; 
         }
         
@@ -211,13 +221,13 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
         }
     }
     
-    // Acumular totais (apenas se não for folga trabalhada, nem falta/abono, nem férias)
-    if (!isFolgaFixa && !isFalta && !isFerias) {
-        // Se for abono, minutosDia já está definido como minutosAbonados
+    // Acumular totais (apenas se não for folga trabalhada, nem falta/abono de compensação, nem férias)
+    if (!isFolgaFixa && !isFalta && !isFerias && !isCompensacaoAbono) {
+        // Se for abono normal, minutosDia já está definido como minutosAbonados
         // Se for ponto batido, minutosDia é o tempo trabalhado
         totalMinutosTrabalhados += minutosParaAcumular;
-    } else if (isAbono) {
-        // Abonos sempre contam para o total de horas trabalhadas
+    } else if (isAbono && !isCompensacaoAbono) {
+        // Abonos normais sempre contam para o total de horas trabalhadas
         totalMinutosTrabalhados += minutosParaAcumular;
     }
     
@@ -228,7 +238,7 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
 
 
     diasProcessados[diaString] = {
-        minutos: minutosDia, // Mantém o tempo calculado para exibição diária
+        minutos: minutosDia, // Mantém o tempo calculado para exibição diária (ou 0 se for falta/abono compensação)
         registros: registrosDoDia,
         isFalta,
         isAbono,
@@ -240,6 +250,7 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
         decisionRecord,
         needsManagement,
         minutosTrabalhadosFolga,
+        isCompensacaoAbono,
     };
   }
   
@@ -348,7 +359,7 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
                 ) : (
                     todosOsDiasDoMes.map(data => {
                         const diaString = format(data, 'yyyy-MM-dd');
-                        const { minutos, registros, isFalta, isAbono, isTurnoAberto, isFolgaFixa, isFerias, hasPontoRecords, decisionRecord, needsManagement, minutosAbonados, minutosTrabalhadosFolga } = diasProcessados[diaString];
+                        const { minutos, registros, isFalta, isAbono, isTurnoAberto, isFolgaFixa, isFerias, hasPontoRecords, decisionRecord, needsManagement, minutosAbonados, minutosTrabalhadosFolga, isCompensacaoAbono } = diasProcessados[diaString];
                         
                         const isDiaAtual = isSameDay(data, hoje);
                         const isDiaFuturo = data > hoje;
@@ -421,8 +432,8 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
                                 <TableCell className="font-medium">{format(data, 'dd/MM (EEE)', { locale: ptBR })}</TableCell>
                                 <TableCell>
                                     <div className="flex flex-wrap gap-2 items-center">
-                                        {/* NOVO AVISO DE FOLGA TRABALHADA */}
-                                        {isFolgaFixa && hasPontoRecords && (decisionRecord || needsManagement) && (
+                                        {/* AVISO DE FOLGA TRABALHADA (Sempre visível se trabalhou na folga) */}
+                                        {isFolgaFixa && hasPontoRecords && (
                                             <span className="text-xs font-semibold text-red-600 bg-red-100 dark:bg-red-900/50 px-2 py-1 rounded-full">
                                                 TRABALHOU NA FOLGA
                                             </span>
@@ -545,7 +556,7 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
                                     {/* Se for folga trabalhada com decisão, exibe o tempo trabalhado (minutosTrabalhadosFolga) */}
                                     {isFolgaFixa && hasPontoRecords && (decisionRecord || needsManagement) 
                                         ? formatarHoras(minutosTrabalhadosFolga) 
-                                        : (isAbono ? formatarHoras(minutosAbonados) : statusDisplay)
+                                        : (isAbono && !isCompensacaoAbono ? formatarHoras(minutosAbonados) : statusDisplay)
                                     }
                                 </TableCell>
                             </TableRow>
