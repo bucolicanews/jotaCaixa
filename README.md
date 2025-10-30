@@ -1,7 +1,9 @@
 # VERSÃO TESTE 1.0.0.000
 -Contas a Receber 1.0 - modo dark impplantado
 
-- Proxima ação(Criar o Nivel Dev)
+proximo - exportar folha de ponto
+
+- ajustar contas a receber
 
 # Fluxo de Caixa - Sistema de Gestão Financeira
 
