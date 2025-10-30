@@ -13,7 +13,7 @@ import { Label } from '@/components/ui/label';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Cliente } from '@/types/cliente';
-import { format, parseISO, setDate, addMonths, addDays } from 'date-fns';
+import { format, addDays } from 'date-fns';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
