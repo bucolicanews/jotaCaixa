@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Clock, DollarSign, MapPin, Camera, FileText, AlertTriangle, Trash2, Edit, CalendarX, Plane, CalendarCheck, Info } from 'lucide-react';
+import { Clock, DollarSign, MapPin, Camera, FileText, AlertTriangle, Trash2, Edit, CalendarX, Plane, CalendarCheck } from 'lucide-react';
 import { format, parseISO, differenceInMinutes, isSameDay, startOfMonth, endOfMonth, eachDayOfInterval, isWithinInterval, getDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from './ui/button';
 import { useSessao } from '@/hooks/use-sessao';
 import { RegistroPonto, Ferias } from '@/types/ponto';
@@ -49,10 +49,8 @@ const JORNADA_MENSAL_PADRAO = 220; // Horas mensais padrão CLT
 const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes, onEditRegistro, onEditFaltaAbono, onDeleteRegistro, onManageWorkedDayOff }) => {
   const { salario, horas_mensais, registros, dias_folga_fixos, folga_domingo_obrigatoria, ferias } = funcionario;
   const { role } = useSessao();
-  
-  // Estado para detalhes da batida (substitui os estados de selfie)
-  const [batidaDetalheOpen, setBatidaDetalheOpen] = useState(false);
-  const [registroDetalhe, setRegistroDetalhe] = useState<RegistroPonto | null>(null);
+  const [selfieModalOpen, setSelfieModalOpen] = useState(false);
+  const [selfieUrl, setSelfieUrl] = useState<string | null>(null);
   
   let totalMinutosTrabalhados = 0; // Horas normais (inclui abonos, sem limite)
   let totalMinutosExtras100 = 0; // Horas extras 100% (Folgas trabalhadas)
@@ -250,6 +248,8 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
   // A diferença é o quanto falta para atingir a jornada (positivo = falta, negativo = extra)
   const minutosDiferenca = jornadaMensalMinutos - totalMinutosTrabalhados; 
   
+  // REMOVIDO: const totalMinutosTrabalhadosDisplay = Math.min(totalMinutosTrabalhados, jornadaMensalMinutos);
+  
   const formatarHoras = (minutos: number): string => {
     const sign = minutos < 0 ? '-' : '';
     const absMinutos = Math.abs(minutos);
@@ -260,9 +260,9 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
   
   const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
-  const handleOpenDetalheBatida = (registro: RegistroPonto) => {
-    setRegistroDetalhe(registro);
-    setBatidaDetalheOpen(true);
+  const handleViewSelfie = (url: string) => {
+    setSelfieUrl(url);
+    setSelfieModalOpen(true);
   };
   
   const handleDelete = async (registroId: string) => {
@@ -316,10 +316,10 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
         <CardContent>
           <div className="overflow-x-auto">
             <Table>
-              <TableHeader><TableRow><TableHead className="w-[120px]">Data</TableHead><TableHead className="min-w-[150px]">Entradas</TableHead><TableHead className="min-w-[150px]">Saídas</TableHead><TableHead className="text-right">Total Dia</TableHead></TableRow></TableHeader>
+              <TableHeader><TableRow><TableHead className="w-[120px]">Data</TableHead><TableHead>Registros</TableHead><TableHead className="text-right">Total Dia</TableHead></TableRow></TableHeader>
               <TableBody>
                 {todosOsDiasDoMes.length === 0 ? (
-                    <TableRow><TableCell colSpan={4} className="text-center py-4 text-muted-foreground">Nenhum dia encontrado para este mês.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={3} className="text-center py-4 text-muted-foreground">Nenhum dia encontrado para este mês.</TableCell></TableRow>
                 ) : (
                     todosOsDiasDoMes.map(data => {
                         const diaString = format(data, 'yyyy-MM-dd');
@@ -396,182 +396,181 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
                         const totalDiaDisplay = isFolgaFixa && hasPontoRecords && (decisionRecord || needsManagement) 
                             ? formatarHoras(minutosTrabalhadosFolga) 
                             : (isAbono && !isCompensacaoAbono ? formatarHoras(minutosAbonados) : statusDisplay);
-                            
-                        // Filtra registros de Entrada/Saída
-                        const batidas = registros.filter(r => r.tipo === 'Entrada' || r.tipo === 'Saida');
-                        const entradas = batidas.filter(r => r.tipo === 'Entrada');
-                        const saidas = batidas.filter(r => r.tipo === 'Saida');
-                        
-                        // Renderiza um item de batida clicável
-                        const renderBatidaItem = (registro: RegistroPonto) => (
-                            <Button 
-                                key={registro.id}
-                                variant="outline" 
-                                size="sm" 
-                                onClick={() => handleOpenDetalheBatida(registro)}
-                                className="w-full justify-start h-8 text-xs font-mono mb-1"
-                            >
-                                {format(parseISO(registro.horario_registro), 'HH:mm')}
-                                <Info className="w-3 h-3 ml-auto" />
-                            </Button>
-                        );
 
                         return (
                             <TableRow key={diaString} className={rowClassName}>
-                                <TableCell className="font-medium">
-                                    {format(data, 'dd/MM (EEE)', { locale: ptBR })}
-                                    
-                                    {/* Ações de Edição/Exclusão (Movidas para a coluna de Data para economizar espaço) */}
-                                    {canEdit && !isDiaFuturo && !isFerias && (
-                                        <div className="flex space-x-1 mt-1">
-                                            {/* Edição/Exclusão de Falta/Abono/Compensação/Extra100 */}
-                                            {registroFaltaAbonoCompensacao && (
-                                                <>
-                                                    <Button 
-                                                        variant="ghost" 
-                                                        size="icon" 
-                                                        onClick={() => {
-                                                            if (isFolgaFixa && hasPontoRecords) {
-                                                                onManageWorkedDayOff(data, registros.filter(r => r.tipo === 'Entrada' || r.tipo === 'Saida'));
-                                                            } else {
-                                                                onEditFaltaAbono(registroFaltaAbonoCompensacao, data);
-                                                            }
-                                                        }}
-                                                        title="Editar Decisão"
-                                                        className="h-6 w-6 text-primary hover:text-primary/80"
-                                                    >
-                                                        <Edit className="w-4 h-4" />
-                                                    </Button>
-                                                    <Button 
-                                                        variant="ghost" 
-                                                        size="icon" 
-                                                        onClick={() => handleDelete(registroFaltaAbonoCompensacao.id)}
-                                                        title="Excluir Decisão"
-                                                        className="h-6 w-6 text-red-500 hover:text-red-700"
-                                                    >
-                                                        <Trash2 className="w-4 h-4" />
+                                <TableCell className="font-medium">{format(data, 'dd/MM (EEE)', { locale: ptBR })}</TableCell>
+                                <TableCell>
+                                    <div className="flex flex-wrap gap-2 items-center">
+                                        {/* AVISO DE FOLGA TRABALHADA (Sempre visível se trabalhou na folga) */}
+                                        {isFolgaFixa && hasPontoRecords && (
+                                            <span className="text-xs font-semibold text-red-600 bg-red-100 dark:bg-red-900/50 px-2 py-1 rounded-full">
+                                                TRABALHOU NA FOLGA
+                                            </span>
+                                        )}
+                                        
+                                        {/* AVISO DE DECISÃO (Pago Extra ou Compensado) */}
+                                        {isFolgaFixa && hasPontoRecords && decisionRecord && (
+                                            <span className={cn(
+                                                "text-xs font-semibold px-2 py-1 rounded-full",
+                                                decisionRecord === 'Extra100' ? "bg-red-500 text-white" : "bg-blue-500 text-white"
+                                            )}>
+                                                {decisionRecord === 'Extra100' ? 'PAGO EXTRA' : 'COMPENSADO'}
+                                            </span>
+                                        )}
+
+                                        {registros.filter(r => r.tipo !== 'Compensacao' && r.tipo !== 'Extra100').map(r => {
+                                            let registroDisplay;
+                                            
+                                            if (r.tipo === 'Falta') {
+                                                registroDisplay = (
+                                                    <>
+                                                        {r.atestado_url ? 'Falta Justificada' : 'Falta Injustificada'}
+                                                        {r.atestado_url && (
+                                                            <a 
+                                                                href={r.atestado_url} 
+                                                                target="_blank" 
+                                                                rel="noopener noreferrer" 
+                                                                className="ml-1 text-primary hover:text-primary/80 inline-flex items-center"
+                                                                title="Ver Atestado"
+                                                            >
+                                                                <FileText className="w-3 h-3" />
+                                                            </a>
+                                                        )}
+                                                    </>
+                                                );
+                                            } else if (r.tipo === 'Abono') {
+                                                // Se for abono de compensação, exibe apenas a observação (sem a palavra Abono)
+                                                if (r.observacao?.includes('Compensação de folga trabalhada')) {
+                                                    registroDisplay = r.observacao;
+                                                } else {
+                                                    // Abono normal (4h, 6h, 8h)
+                                                    registroDisplay = `Abono (${r.observacao})`;
+                                                }
+                                            } else {
+                                                // Entrada/Saída
+                                                registroDisplay = (
+                                                    <>
+                                                        {r.tipo}: {format(parseISO(r.horario_registro), 'HH:mm')}
+                                                        {r.maps_url && (
+                                                            <a 
+                                                                href={r.maps_url} 
+                                                                target="_blank" 
+                                                                rel="noopener noreferrer" 
+                                                                className="ml-1 text-blue-500 hover:text-blue-700 inline-flex items-center"
+                                                                title="Ver Localização"
+                                                            >
+                                                                <MapPin className="w-3 h-3" />
+                                                            </a>
+                                                        )}
+                                                        {r.selfie_url && (
+                                                            <button 
+                                                                onClick={() => handleViewSelfie(r.selfie_url)} 
+                                                                className="ml-1 text-primary hover:text-primary/80 inline-flex items-center"
+                                                                title="Ver Selfie"
+                                                            >
+                                                                <Camera className="w-3 h-3" />
+                                                            </button>
+                                                        )}
+                                                    </>
+                                                );
+                                            }
+                                            
+                                            return (
+                                                <span key={r.id} className="text-sm bg-muted px-2 py-1 rounded-full flex items-center">
+                                                    {registroDisplay}
+                                                </span>
+                                            );
+                                        })}
+                                        
+                                        {/* Ações de Edição/Exclusão */}
+                                        {canEdit && !isDiaFuturo && !isFerias && !needsManagement && (
+                                            <div className="flex space-x-1 ml-2">
+                                                {/* Edição/Exclusão de Falta/Abono/Compensação/Extra100 */}
+                                                {registroFaltaAbonoCompensacao && (
+                                                    <>
+                                                        <Button 
+                                                            variant="ghost" 
+                                                            size="icon" 
+                                                            onClick={() => {
+                                                                if (isFolgaFixa && hasPontoRecords) {
+                                                                    // Se for folga fixa trabalhada e já tem decisão, reabre o dialog de gestão de folga
+                                                                    onManageWorkedDayOff(data, registros.filter(r => r.tipo === 'Entrada' || r.tipo === 'Saida'));
+                                                                } else {
+                                                                    // Se for Falta/Abono, usa o dialog de GerenciarFaltas
+                                                                    onEditFaltaAbono(registroFaltaAbonoCompensacao, data);
+                                                                }
+                                                            }}
+                                                            title="Editar Decisão"
+                                                            className="h-6 w-6 text-primary hover:text-primary/80"
+                                                        >
+                                                            <Edit className="w-4 h-4" />
+                                                        </Button>
+                                                        <Button 
+                                                            variant="ghost" 
+                                                            size="icon" 
+                                                            onClick={() => handleDelete(registroFaltaAbonoCompensacao.id)}
+                                                            title="Excluir Decisão"
+                                                            className="h-6 w-6 text-red-500 hover:text-red-700"
+                                                        >
+                                                            <Trash2 className="w-4 h-4" />
                                                         </Button>
                                                     </>
                                                 )}
-                                                {/* Botão de Ajuste de Ponto */}
+                                                {/* Botão de Ajuste de Ponto (Aparece se houver registros de Entrada/Saída E não houver decisão de Falta/Abono/Compensação) */}
                                                 {hasPontoRecordsOnly && (
                                                     <Button 
                                                         variant="outline" 
                                                         size="sm" 
-                                                        onClick={() => onEditRegistro(data)}
+                                                        onClick={() => onEditRegistro(data)} // Ajuste de Ponto (Entrada/Saída)
                                                         title="Ajustar Ponto"
                                                         className="h-6 text-xs"
                                                     >
-                                                        <Edit className="w-3 h-3 mr-1" /> Ajustar
+                                                        <Edit className="w-3 h-3 mr-1" /> Ajustar Ponto
                                                     </Button>
                                                 )}
-                                                {/* Botão de Marcar Falta */}
+                                                {/* Botão de Marcar Falta (Aparece se não houver registro e não for folga fixa/ferias/futuro) */}
                                                 {!hasPontoRecordsOnly && !registroFaltaAbonoCompensacao && !isFolgaFixa && (
                                                     <Button 
                                                         variant="destructive" 
                                                         size="sm" 
-                                                        onClick={() => onEditFaltaAbono(null, data)}
+                                                        onClick={() => onEditFaltaAbono(null, data)} // Marcar Falta (registro é null)
                                                         title="Marcar Falta"
                                                         className="h-6 text-xs"
                                                     >
-                                                        <CalendarX className="w-3 h-3 mr-1" /> Falta
+                                                        <CalendarX className="w-3 h-3 mr-1" /> Marcar Falta
                                                     </Button>
                                                 )}
-                                                {/* Botão de Gerenciar Folga Trabalhada */}
-                                                {actionButton}
                                             </div>
                                         )}
-                                    </TableCell>
-                                    
-                                    {/* COLUNA DE ENTRADAS */}
-                                    <TableCell>
-                                        <div className="flex flex-col space-y-1">
-                                            {/* AVISOS DE STATUS (Falta/Abono/Férias) */}
-                                            {(isFalta || isAbono || isFerias) && (
-                                                <div className="col-span-2 mb-2">
-                                                    {statusDisplay}
-                                                </div>
-                                            )}
-                                            
-                                            {/* AVISOS DE FOLGA TRABALHADA */}
-                                            {isFolgaFixa && hasPontoRecords && (
-                                                <div className="col-span-2 mb-2 space-y-1">
-                                                    <span className="text-xs font-semibold text-red-600 bg-red-100 dark:bg-red-900/50 px-2 py-1 rounded-full block w-fit">
-                                                        TRABALHOU NA FOLGA
-                                                    </span>
-                                                    {decisionRecord && (
-                                                        <span className={cn(
-                                                            "text-xs font-semibold px-2 py-1 rounded-full block w-fit",
-                                                            decisionRecord === 'Extra100' ? "bg-red-500 text-white" : "bg-blue-500 text-white"
-                                                        )}>
-                                                            {decisionRecord === 'Extra100' ? 'PAGO EXTRA' : 'COMPENSADO'}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            )}
-                                            
-                                            {entradas.map(renderBatidaItem)}
-                                        </div>
-                                    </TableCell>
-                                    
-                                    {/* COLUNA DE SAÍDAS */}
-                                    <TableCell>
-                                        <div className="flex flex-col space-y-1">
-                                            {saidas.map(renderBatidaItem)}
-                                        </div>
-                                    </TableCell>
-                                    
-                                    {/* COLUNA DE TOTAL DIA */}
-                                    <TableCell className="text-right font-semibold">
-                                        <div className="flex flex-col items-end space-y-1">
-                                            {totalDiaDisplay}
-                                        </div>
-                                    </TableCell>
-                                </TableRow>
-                            );
-                        })
-                    )}
+                                        {/* Renderiza o botão de Gerenciar Folga Trabalhada se necessário */}
+                                        {actionButton}
+                                    </div>
+                                </TableCell>
+                                <TableCell className="text-right font-semibold">
+                                    {totalDiaDisplay}
+                                </TableCell>
+                            </TableRow>
+                        );
+                    })
+                )}
               </TableBody>
             </Table>
           </div>
         </CardContent>
       </Card>
 
-      {/* Modal de Detalhes da Batida (Selfie e Mapa) */}
-      <Dialog open={batidaDetalheOpen} onOpenChange={setBatidaDetalheOpen}>
+      {/* Modal de Visualização da Selfie */}
+      <Dialog open={selfieModalOpen} onOpenChange={setSelfieModalOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle>Detalhes do Registro</DialogTitle>
-            <DialogDescription>
-                {registroDetalhe?.tipo} em {registroDetalhe?.horario_registro ? format(parseISO(registroDetalhe.horario_registro), 'dd/MM/yyyy HH:mm') : 'N/A'}
-            </DialogDescription>
+            <DialogTitle>Selfie do Registro de Ponto</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
-            {registroDetalhe?.selfie_url && registroDetalhe.selfie_url !== 'Ajuste Manual' ? (
-                <div className="space-y-2">
-                    <h4 className="font-semibold flex items-center"><Camera className="w-4 h-4 mr-2" /> Selfie</h4>
-                    <img src={registroDetalhe.selfie_url} alt="Selfie do Registro" className="w-full h-auto rounded-md" />
-                </div>
-            ) : (
-                <p className="text-muted-foreground">Selfie não disponível (Registro manual ou sem foto).</p>
-            )}
-            
-            {registroDetalhe?.maps_url && registroDetalhe.maps_url !== 'Ajuste Manual' ? (
-                <div className="space-y-2">
-                    <h4 className="font-semibold flex items-center"><MapPin className="w-4 h-4 mr-2" /> Localização</h4>
-                    <a 
-                        href={registroDetalhe.maps_url} 
-                        target="_blank" 
-                        rel="noopener noreferrer" 
-                        className="text-blue-600 hover:underline flex items-center text-sm"
-                    >
-                        Ver no Google Maps
-                    </a>
-                </div>
-            ) : (
-                <p className="text-muted-foreground">Localização não registrada (Registro manual ou sem GPS).</p>
-            )}
-          </div>
+          {selfieUrl ? (
+            <img src={selfieUrl} alt="Selfie do Registro" className="w-full h-auto rounded-md" />
+          ) : (
+            <p className="text-center text-muted-foreground">Nenhuma selfie disponível.</p>
+          )}
         </DialogContent>
       </Dialog>
     </div>
