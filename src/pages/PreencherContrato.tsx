@@ -26,7 +26,8 @@ type TipoLancamento = 'unico' | 'repetir' | 'parcelar';
 interface EmpresaLogada {
     nome: string;
     email: string;
-    // Adicione outros campos da empresa aqui (CNPJ, Endereço, etc.)
+    documento?: string | null;
+    endereco_completo?: string | null;
 }
 
 const PreencherContrato: React.FC = () => {
@@ -124,12 +125,16 @@ const PreencherContrato: React.FC = () => {
     // 4. Buscar Dados da Empresa Logada (Cliente/Admin)
     if (role === 'Cliente' || role === 'Admin') {
         const profile = perfil as ClienteProfile;
+        // Nota: Assumindo que os campos documento e endereço_completo seriam preenchidos no perfil do Cliente
         setEmpresaLogada({
             nome: profile.nome,
             email: profile.email,
+            documento: profile.documento,
+            endereco_completo: profile.endereco_completo,
         });
     } else if (role === 'Usuario' && empresaId) {
-        const { data: empresaData } = await supabase.from('tbl_clientes').select('nome, email').eq('id', empresaId).single();
+        // Se for usuário, busca os dados da empresa vinculada
+        const { data: empresaData } = await supabase.from('tbl_clientes').select('nome, email, documento, endereco_completo').eq('id', empresaId).single();
         if (empresaData) {
             setEmpresaLogada(empresaData);
         }
@@ -156,6 +161,7 @@ const PreencherContrato: React.FC = () => {
         const numParcelas = Number(numeroParcelas);
         
         const valorFinalContrato = tipoLancamento === 'repetir' ? valorNumerico * numParcelas : valorNumerico;
+        const valorParcela = tipoLancamento === 'parcelar' ? (valorNumerico / numParcelas) : valorNumerico;
         
         let primeiroVencimento: Date | undefined;
         if (tipoLancamento === 'unico') {
@@ -167,12 +173,21 @@ const PreencherContrato: React.FC = () => {
         // Preenchimento das Tags Padrão
         TAGS_PADRAO.forEach(tag => {
             switch (tag.nome_tag) {
+                // EMPRESA
                 case '{{EMPRESA_NOME}}':
                     newTags[tag.nome_tag] = empresaLogada?.nome || 'N/A';
                     break;
                 case '{{EMPRESA_EMAIL}}':
                     newTags[tag.nome_tag] = empresaLogada?.email || 'N/A';
                     break;
+                case '{{EMPRESA_DOCUMENTO}}':
+                    newTags[tag.nome_tag] = empresaLogada?.documento || 'N/A';
+                    break;
+                case '{{EMPRESA_ENDERECO}}':
+                    newTags[tag.nome_tag] = empresaLogada?.endereco_completo || 'N/A';
+                    break;
+                    
+                // CLIENTE
                 case '{{CLIENTE_NOME}}':
                     newTags[tag.nome_tag] = cliente?.nome || 'N/A';
                     break;
@@ -182,8 +197,19 @@ const PreencherContrato: React.FC = () => {
                 case '{{CLIENTE_EMAIL}}':
                     newTags[tag.nome_tag] = cliente?.email || 'N/A';
                     break;
+                case '{{CLIENTE_ENDERECO}}':
+                    // Nota: A interface Cliente não tem endereco_completo, mas documento e email sim.
+                    // Se o campo fosse adicionado à tabela 'clientes', ele seria buscado aqui.
+                    // Por enquanto, usamos 'N/A' ou um campo existente se houver.
+                    newTags[tag.nome_tag] = 'N/A (Endereço do Cliente)'; 
+                    break;
+                    
+                // FINANCEIRO
                 case '{{VALOR_TOTAL_CONTRATO}}':
                     newTags[tag.nome_tag] = formatCurrency(valorFinalContrato);
+                    break;
+                case '{{VALOR_PARCELA}}':
+                    newTags[tag.nome_tag] = formatCurrency(valorParcela);
                     break;
                 case '{{NUMERO_PARCELAS}}':
                     newTags[tag.nome_tag] = String(numParcelas);

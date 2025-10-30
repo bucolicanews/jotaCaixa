@@ -14,13 +14,26 @@ export const TAGS_PADRAO: ContratoTag[] = [
     criado_em: new Date().toISOString(),
   },
   {
+    id: 'sys-empresa-documento',
+    nome_tag: '{{EMPRESA_DOCUMENTO}}',
+    descricao: 'CNPJ da Empresa Contratante.',
+    origem_dado: 'tbl_clientes.documento', // Assumindo que tbl_clientes tem campo documento
+    criado_em: new Date().toISOString(),
+  },
+  {
+    id: 'sys-empresa-endereco',
+    nome_tag: '{{EMPRESA_ENDERECO}}',
+    descricao: 'Endereço completo da Empresa Contratante.',
+    origem_dado: 'tbl_clientes.endereco_completo', // Assumindo que tbl_clientes tem campo de endereço
+    criado_em: new Date().toISOString(),
+  },
+  {
     id: 'sys-empresa-email',
     nome_tag: '{{EMPRESA_EMAIL}}',
     descricao: 'Email da Empresa Contratante.',
     origem_dado: 'tbl_clientes.email',
     criado_em: new Date().toISOString(),
   },
-  // Adicione mais tags da empresa conforme necessário (CNPJ, Endereço, etc.)
 
   // --- Dados do Cliente (Cliente Selecionado) ---
   {
@@ -38,6 +51,13 @@ export const TAGS_PADRAO: ContratoTag[] = [
     criado_em: new Date().toISOString(),
   },
   {
+    id: 'sys-cliente-endereco',
+    nome_tag: '{{CLIENTE_ENDERECO}}',
+    descricao: 'Endereço completo do Cliente Contratado.',
+    origem_dado: 'clientes.endereco_completo', // Assumindo que clientes tem campo de endereço
+    criado_em: new Date().toISOString(),
+  },
+  {
     id: 'sys-cliente-email',
     nome_tag: '{{CLIENTE_EMAIL}}',
     descricao: 'Email do Cliente Contratado.',
@@ -51,6 +71,13 @@ export const TAGS_PADRAO: ContratoTag[] = [
     nome_tag: '{{VALOR_TOTAL_CONTRATO}}',
     descricao: 'Valor total do contrato (formatado em R$).',
     origem_dado: 'contas_receber.valor_total',
+    criado_em: new Date().toISOString(),
+  },
+  {
+    id: 'sys-valor-parcela',
+    nome_tag: '{{VALOR_PARCELA}}',
+    descricao: 'Valor de cada parcela (formatado em R$).',
+    origem_dado: 'contas_receber.valor_parcela',
     criado_em: new Date().toISOString(),
   },
   {
