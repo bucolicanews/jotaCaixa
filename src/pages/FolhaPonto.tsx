@@ -160,11 +160,16 @@ const FolhaPonto: React.FC = () => {
     setFaltaDialogOpen(true);
   };
   
-  // Função de edição removida, mas mantemos o esqueleto para o onDeleteRegistro
-  const handleFaltaRegistrada = () => {
-    // Re-busca os registros após registrar/deletar a falta
+  const handleEditRegistro = (registro: RegistroPonto) => {
+    setRegistroParaEdicao(registro); // Define o registro para edição
+    setDiaFaltaSelecionado(parseISO(registro.horario_registro)); // Define a data do registro
+    setFaltaDialogOpen(true);
+  };
+  
+  const handleFaltaRegistrada = async () => {
+    // Re-busca os registros após registrar/editar/deletar a falta
     if (funcionarioSelecionadoId) {
-        fetchRegistros(funcionarioSelecionadoId, dataSelecionada);
+        await fetchRegistros(funcionarioSelecionadoId, dataSelecionada); // Adicionado await
     }
     setRegistroParaEdicao(null);
   };
