@@ -25,7 +25,8 @@ import FolhaPonto from "./pages/FolhaPonto";
 import Contratos from "./pages/Contratos";
 import GerenciarTags from "./pages/GerenciarTags";
 import GerenciarModelos from "./pages/GerenciarModelos";
-import NovoContrato from "./pages/NovoContrato"; // Importando a nova página
+import NovoContrato from "./pages/NovoContrato";
+import PreencherContrato from "./pages/PreencherContrato"; // Importando a nova página
 
 const queryClient = new QueryClient();
 
@@ -61,7 +62,8 @@ const App = () => (
             <Route path="/contratos" element={<Contratos />} />
             <Route path="/contratos/tags" element={<GerenciarTags />} />
             <Route path="/contratos/modelos" element={<GerenciarModelos />} />
-            <Route path="/contratos/novo" element={<NovoContrato />} /> {/* Nova Rota */}
+            <Route path="/contratos/novo" element={<NovoContrato />} />
+            <Route path="/contratos/preencher/:modeloId" element={<PreencherContrato />} /> {/* Nova Rota */}
 
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />

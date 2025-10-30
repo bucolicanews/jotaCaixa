@@ -8,10 +8,11 @@ import { showError } from '@/utils/toast';
 import { ContratoModelo } from '@/types/contratos';
 import { ClienteProfile } from '@/types/usuario';
 import { Button } from '@/components/ui/button';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 const NovoContrato: React.FC = () => {
   const { role, perfil, carregando: carregandoSessao } = useSessao();
+  const navigate = useNavigate();
   const [modelos, setModelos] = useState<ContratoModelo[]>([]);
   const [carregandoModelos, setCarregandoModelos] = useState(true);
 
@@ -51,6 +52,10 @@ const NovoContrato: React.FC = () => {
       buscarModelos();
     }
   }, [carregandoSessao, isAdmin, isCliente, buscarModelos]);
+  
+  const handleSelectModel = (modeloId: string) => {
+      navigate(`/contratos/preencher/${modeloId}`);
+  };
 
   if (carregandoSessao || carregandoModelos) {
     return (
@@ -89,7 +94,6 @@ const NovoContrato: React.FC = () => {
                 <Card 
                   key={modelo.id} 
                   className="hover:border-primary transition-colors cursor-pointer"
-                  // TODO: Link para a próxima etapa de preenchimento de tags
                 >
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-lg font-medium">{modelo.titulo}</CardTitle>
@@ -99,7 +103,12 @@ const NovoContrato: React.FC = () => {
                     <p className="text-sm text-muted-foreground line-clamp-3">
                         {modelo.conteudo_template.substring(0, 150)}...
                     </p>
-                    <Button variant="secondary" size="sm" className="mt-3 w-full">
+                    <Button 
+                        variant="secondary" 
+                        size="sm" 
+                        className="mt-3 w-full"
+                        onClick={() => handleSelectModel(modelo.id)}
+                    >
                         Selecionar
                     </Button>
                   </CardContent>
