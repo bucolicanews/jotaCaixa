@@ -6,11 +6,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Textarea } from '@/components/ui/textarea';
-import { Loader2, Copy, Eye } from 'lucide-react';
+import { Loader2, Copy, Eye, Check, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { ContratoModelo, ContratoTag } from '@/types/contratos';
-import { TAGS_FINANCEIRAS_OBRIGATORIAS } from '@/config/contrato-tags-padrao'; // Importando apenas as obrigatórias
+import { TAGS_FINANCEIRAS_OBRIGATORIAS } from '@/config/contrato-tags-padrao';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import ModeloPreviewDialog from './ModeloPreviewDialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
@@ -141,6 +141,19 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
       }
       setPreviewOpen(true);
   };
+  
+  const handleCopyAllTags = () => {
+      const allTags = tagsAtivas.map(t => t.nome_tag).join(' ');
+      navigator.clipboard.writeText(allTags);
+      showSuccess('Todas as tags ativas copiadas!');
+  };
+  
+  const handleClearTemplate = () => {
+      if (window.confirm('Tem certeza que deseja limpar todo o conteúdo do template?')) {
+          form.setValue('conteudo_template', '');
+          showSuccess('Template limpo.');
+      }
+  };
 
   return (
     <>
@@ -206,6 +219,14 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
               <Card className="lg:col-span-1 max-h-[600px] overflow-y-auto">
                   <CardHeader className="p-3 border-b">
                       <CardTitle className="text-sm">Tags Ativas (Cópia Rápida)</CardTitle>
+                      <div className="flex space-x-2 mt-2">
+                          <Button type="button" variant="outline" size="sm" onClick={handleCopyAllTags} disabled={tagsAtivas.length === 0}>
+                              <Copy className="w-3 h-3 mr-1" /> Copiar Todas
+                          </Button>
+                          <Button type="button" variant="destructive" size="sm" onClick={handleClearTemplate}>
+                              <X className="w-3 h-3 mr-1" /> Limpar Template
+                          </Button>
+                      </div>
                   </CardHeader>
                   <CardContent className="p-3 space-y-2">
                       {carregandoTags ? (

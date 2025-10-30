@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useForm, Control } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Loader2, Upload, CalendarIcon, CheckCircle2, XCircle } from 'lucide-react';
+import { Loader2, Upload, CalendarIcon, CheckCircle2, XCircle, Tag } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { AnyProfile, ClienteProfile, UserRole, UsuarioProfile } from '@/types/usuario';
@@ -20,6 +20,9 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import GerenciarFerias from './GerenciarFerias';
+import { CAMPOS_CLIENTE_MAPA, CAMPOS_USUARIO_MAPA } from '@/config/contrato-campos-mapeaveis';
+import { useTagManager } from '@/hooks/use-tag-manager';
+import { Label } from '@/components/ui/label';
 
 // Esquema de validação para os campos de URL (opcional)
 const urlSchema = z.string().url('URL inválida.').optional().or(z.literal(''));
@@ -41,7 +44,7 @@ const formSchema = z.object({
   horas_semanais: z.coerce.number().int().min(1).optional(),
   horas_mensais: z.coerce.number().int().min(1).optional(),
   
-  // Novos Dados Cadastrais
+  // Novos Dados Cadastrais (Comum a Cliente e Usuário)
   cpf: textOptional,
   rg: textOptional,
   nome_mae: z.string().min(1, 'O nome da mãe é obrigatório.').optional().or(z.literal('')),
@@ -97,6 +100,60 @@ const DIAS_DA_SEMANA = [
     { value: 'Saturday', label: 'Sábado' },
     { value: 'Sunday', label: 'Domingo' },
 ];
+
+// Componente auxiliar para renderizar campos com a opção de Tag (para Cliente/Empresa)
+interface TaggedClientFieldProps {
+    control: Control<FormValues>;
+    fieldName: keyof FormValues;
+    label: string;
+    placeholder: string;
+    resourceId: string; // ID do Cliente/Empresa sendo editado
+    disabled?: boolean;
+    isOptional?: boolean;
+}
+
+const TaggedClientField: React.FC<TaggedClientFieldProps> = ({ control, fieldName, label, placeholder, resourceId, disabled, isOptional = true }) => {
+    const fieldMap = CAMPOS_CLIENTE_MAPA.find(m => m.field === fieldName);
+    
+    if (!fieldMap || !resourceId) {
+        return (
+            <FormField control={control} name={fieldName} render={({ field }) => (
+                <FormItem>
+                    <FormLabel>{label} {isOptional && <span className="text-muted-foreground">(Opcional)</span>}</FormLabel>
+                    <FormControl><Input placeholder={placeholder} {...field} value={(field.value as string) || ''} disabled={disabled} /></FormControl>
+                    <FormMessage />
+                </FormItem>
+            )} />
+        );
+    }
+    
+    const { isTagActive, loading, toggleTag } = useTagManager(resourceId, { label: fieldMap.label, tag: fieldMap.tag, field: fieldMap.field });
+
+    return (
+        <FormField control={control} name={fieldName} render={({ field }) => (
+            <FormItem>
+                <div className="flex justify-between items-center">
+                    <FormLabel>{label} {isOptional && <span className="text-muted-foreground">(Opcional)</span>}</FormLabel>
+                    <div className="flex items-center space-x-1">
+                        <Checkbox 
+                            id={`tag-${fieldName}`}
+                            checked={isTagActive}
+                            onCheckedChange={(checked) => toggleTag(!!checked)}
+                            disabled={loading || disabled}
+                        />
+                        <Label htmlFor={`tag-${fieldName}`} className={cn("text-xs font-normal flex items-center", isTagActive ? "text-primary" : "text-muted-foreground")}>
+                            {loading ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Tag className="w-3 h-3 mr-1" />}
+                            Usar como Tag
+                        </Label>
+                    </div>
+                </div>
+                <FormControl><Input placeholder={placeholder} {...field} value={(field.value as string) || ''} disabled={disabled} /></FormControl>
+                <FormMessage />
+            </FormItem>
+        )} />
+    );
+};
+
 
 const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, clienteId, usuarioInicial, onSaveComplete }) => {
   const isEditing = !!usuarioInicial;
@@ -223,6 +280,21 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, c
           // Edição de Cliente (Empresa)
           dataToUpdate.limite_usuarios = values.limite_usuarios;
           dataToUpdate.permissoes = values.permissoes;
+          
+          // Campos de Tags (Dados Cadastrais do Cliente)
+          dataToUpdate.cpf = values.cpf || null;
+          dataToUpdate.rg = values.rg || null;
+          dataToUpdate.nome_mae = values.nome_mae || null;
+          dataToUpdate.nome_pai = values.nome_pai || null;
+          dataToUpdate.telefone = values.telefone || null;
+          dataToUpdate.cep = values.cep || null;
+          dataToUpdate.endereco = values.endereco || null;
+          dataToUpdate.numero = values.numero || null;
+          dataToUpdate.complemento = values.complemento || null;
+          dataToUpdate.bairro = values.bairro || null;
+          dataToUpdate.cidade = values.cidade || null;
+          dataToUpdate.estado = values.estado || null;
+          
           const { error } = await supabase.from('tbl_clientes').update(dataToUpdate).eq('id', usuarioInicial.id);
           if (error) throw error;
         } else if (isUser) {
@@ -468,22 +540,6 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, c
     />
   );
 
-  const renderInputField = (fieldName: keyof FormValues, label: string, placeholder: string, required: boolean = false, disabled: boolean = false) => (
-    <FormField
-      control={form.control as unknown as Control<FormValues>}
-      name={fieldName}
-      render={({ field }) => (
-        <FormItem>
-          <FormLabel>{label} {required && <span className="text-red-500">*</span>}</FormLabel>
-          <FormControl>
-            <Input placeholder={placeholder} {...field} name={String(field.name)} value={(field.value as string) || ''} disabled={disabled} />
-          </FormControl>
-          <FormMessage />
-        </FormItem>
-      )}
-    />
-  );
-  
   const renderNumberField = (fieldName: keyof FormValues, label: string, placeholder: string, disabled: boolean = false) => (
     <FormField
       control={form.control as unknown as Control<FormValues>}
@@ -507,22 +563,99 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, c
     />
   );
 
+  const renderInputField = (fieldName: keyof FormValues, label: string, placeholder: string, required: boolean = false, disabled: boolean = false) => {
+    const map = isClient ? CAMPOS_CLIENTE_MAPA : CAMPOS_USUARIO_MAPA;
+    const fieldMap = map.find(m => m.field === fieldName);
+    const resourceId = usuarioInicial?.id;
+    
+    // Se for edição de Cliente (Empresa), usamos o TaggedClientField
+    if (isClient && resourceId && fieldMap) {
+        return (
+            <TaggedClientField 
+                control={form.control as Control<FormValues>} 
+                fieldName={fieldName} 
+                label={label} 
+                placeholder={placeholder} 
+                resourceId={resourceId} 
+                disabled={disabled} 
+                isOptional={!required}
+            />
+        );
+    }
+    
+    // Se for edição de Usuário (Funcionário), renderiza o campo simples
+    if (isUser && resourceId && fieldMap) {
+        // Renderiza o campo simples para Usuário (Funcionário)
+        return (
+            <FormField
+                control={form.control}
+                name={fieldName}
+                render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>{label} {required && <span className="text-red-500">*</span>}</FormLabel>
+                        <FormControl><Input placeholder={placeholder} {...field} value={(field.value as string) || ''} disabled={disabled} /></FormControl>
+                        <FormMessage />
+                    </FormItem>
+                )}
+            />
+        );
+    }
+    
+    // Renderiza o campo simples (para criação de novo usuário ou campos não mapeados)
+    return (
+        <FormField
+            control={form.control}
+            name={fieldName}
+            render={({ field }) => (
+                <FormItem>
+                    <FormLabel>{label} {required && <span className="text-red-500">*</span>}</FormLabel>
+                    <FormControl><Input placeholder={placeholder} {...field} value={(field.value as string) || ''} disabled={disabled} /></FormControl>
+                    <FormMessage />
+                </FormItem>
+            )}
+        />
+    );
+  };
+
   // --- Renderização Principal ---
 
   if (isClient) {
-    // Renderização simplificada para edição de Cliente (Empresa)
+    // Renderização para edição de Cliente (Empresa)
+    const clientProfile = usuarioInicial as ClienteProfile;
+    const resourceId = clientProfile?.id;
+    
     return (
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-          <FormField control={form.control as unknown as Control<FormValues>} name="nome" render={({ field }) => (
-            <FormItem><FormLabel>Nome da Empresa</FormLabel><FormControl><Input placeholder="Nome completo" {...field} /></FormControl><FormMessage /></FormItem>
-          )} />
-          <FormField control={form.control as unknown as Control<FormValues>} name="email" render={({ field }) => (
-            <FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" placeholder="email@exemplo.com" {...field} disabled /></FormControl><FormMessage /></FormItem>
-          )} />
+          <h3 className="font-semibold text-lg">Dados de Identificação</h3>
+          <TaggedClientField control={form.control as Control<FormValues>} fieldName="nome" label="Nome da Empresa" placeholder="Nome completo" resourceId={resourceId} isOptional={false} />
+          <FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" placeholder="email@exemplo.com" value={clientProfile.email} disabled /></FormControl><FormMessage /></FormItem>
           <FormField control={form.control as unknown as Control<FormValues>} name="limite_usuarios" render={({ field }) => (
             <FormItem><FormLabel>Limite de Usuários da Equipe</FormLabel><FormControl><Input type="number" placeholder="5" {...field} /></FormControl><FormMessage /></FormItem>
           )} />
+          
+          <h3 className="font-semibold text-lg mt-6">Tags de Contrato (Dados Cadastrais)</h3>
+          <p className="text-sm text-muted-foreground mb-4">Marque os campos que devem ser usados como tags dinâmicas em seus modelos de contrato.</p>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <TaggedClientField control={form.control as Control<FormValues>} fieldName="cpf" label="CPF/CNPJ" placeholder="00.000.000/0000-00" resourceId={resourceId} />
+              <TaggedClientField control={form.control as Control<FormValues>} fieldName="rg" label="RG" placeholder="00.000.000-0" resourceId={resourceId} />
+          </div>
+          <TaggedClientField control={form.control as Control<FormValues>} fieldName="nome_mae" label="Nome da Mãe" placeholder="Nome completo da mãe" resourceId={resourceId} />
+          
+          <h4 className="font-semibold mt-6 border-t pt-4">Endereço</h4>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <TaggedClientField control={form.control as Control<FormValues>} fieldName="cep" label="CEP" placeholder="00000-000" resourceId={resourceId} />
+              <TaggedClientField control={form.control as Control<FormValues>} fieldName="cidade" label="Cidade" placeholder="São Paulo" resourceId={resourceId} />
+              <TaggedClientField control={form.control as Control<FormValues>} fieldName="estado" label="Estado (UF)" placeholder="SP" resourceId={resourceId} />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <TaggedClientField control={form.control as Control<FormValues>} fieldName="endereco" label="Logradouro/Rua" placeholder="Rua Exemplo" resourceId={resourceId} />
+              <TaggedClientField control={form.control as Control<FormValues>} fieldName="numero" label="Número" placeholder="123" resourceId={resourceId} />
+              <TaggedClientField control={form.control as Control<FormValues>} fieldName="complemento" label="Complemento" placeholder="Apto 101" resourceId={resourceId} />
+          </div>
+          <TaggedClientField control={form.control as Control<FormValues>} fieldName="bairro" label="Bairro" placeholder="Centro" resourceId={resourceId} />
+
           <div className="space-y-2">
             <div className="flex justify-between items-center mb-1">
               <FormLabel>Permissões de Acesso</FormLabel>
@@ -554,6 +687,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, c
   // Renderização completa para Criação de Usuário ou Edição de Usuário (Funcionário)
   const isContractEditable = criadorRole === 'Admin' || criadorRole === 'Cliente';
   const isNewUser = !isEditing;
+  const resourceId = usuarioInicial?.id;
 
   return (
     <Form {...form}>
@@ -652,7 +786,8 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, c
                                         control={form.control as unknown as Control<FormValues>}
                                         name="dias_folga_fixos"
                                         render={({ field: arrayField }) => {
-                                            const isChecked = arrayField.value?.includes(item.value);
+                                            const current = arrayField.value || [];
+                                            const isChecked = current.includes(item.value);
                                             return (
                                                 <FormItem
                                                     key={item.value}
@@ -662,7 +797,6 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, c
                                                         <Checkbox
                                                             checked={isChecked}
                                                             onCheckedChange={(checked) => {
-                                                                const current = arrayField.value || [];
                                                                 if (checked) {
                                                                     arrayField.onChange([...current, item.value]);
                                                                 } else {
