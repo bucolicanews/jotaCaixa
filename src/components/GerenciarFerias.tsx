@@ -1,39 +1,33 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Loader2, PlusCircle, Trash2, CalendarIcon } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
-import { format } from 'date-fns';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Calendar } from '@/components/ui/calendar';
+import { Ferias } from '@/types/ferias';
+import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+import { Button } from './ui/button';
+import { Loader2, Plus, Trash2, CalendarIcon } from 'lucide-react';
+import { format, parseISO } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
+import { Calendar } from './ui/calendar';
 import { cn } from '@/lib/utils';
-import { DateRange } from 'react-day-picker';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-
-interface Ferias {
-    id: string;
-    data_inicio: string;
-    data_fim: string;
-    periodo_referencia: string;
-}
+import { Input } from './ui/input';
+import { Label } from './ui/label';
 
 interface GerenciarFeriasProps {
   funcionarioId: string;
   empresaId: string;
+  readOnly?: boolean; // Adicionando a prop readOnly
 }
 
-const GerenciarFerias: React.FC<GerenciarFeriasProps> = ({ funcionarioId, empresaId }) => {
+const GerenciarFerias: React.FC<GerenciarFeriasProps> = ({ funcionarioId, empresaId, readOnly = false }) => {
   const [ferias, setFerias] = useState<Ferias[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [carregando, setCarregando] = useState(true);
+  const [novaDataInicio, setNovaDataInicio] = useState<Date | undefined>(undefined);
+  const [novaDataFim, setNovaDataFim] = useState<Date | undefined>(undefined);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
-  const [periodoReferencia, setPeriodoReferencia] = useState('');
 
-  const fetchFerias = useCallback(async () => {
-    setLoading(true);
+  const buscarFerias = useCallback(async () => {
+    setCarregando(true);
     const { data, error } = await supabase
       .from('ferias')
       .select('*')
@@ -46,158 +40,164 @@ const GerenciarFerias: React.FC<GerenciarFeriasProps> = ({ funcionarioId, empres
     } else {
       setFerias(data as Ferias[]);
     }
-    setLoading(false);
+    setCarregando(false);
   }, [funcionarioId]);
 
   useEffect(() => {
-    fetchFerias();
-  }, [fetchFerias]);
+    buscarFerias();
+  }, [buscarFerias]);
 
-  const handleAddFerias = async (e: React.FormEvent) => {
-    e.preventDefault();
-    // Garantimos que o 'to' está definido. Se o usuário selecionar o mesmo dia duas vezes, 'from' e 'to' serão iguais.
-    if (!dateRange?.from || !dateRange.to || !periodoReferencia.trim()) {
-      showError('Preencha o período de férias (início e fim) e a referência.');
+  const handleAdicionarFerias = async () => {
+    if (!novaDataInicio || !novaDataFim) {
+      showError('Selecione as datas de início e fim.');
+      return;
+    }
+    if (novaDataInicio >= novaDataFim) {
+      showError('A data de início deve ser anterior à data de fim.');
       return;
     }
 
     setIsSubmitting(true);
-    
-    const dataToInsert = {
-      funcionario_id: funcionarioId,
-      empresa_id: empresaId,
-      data_inicio: format(dateRange.from, 'yyyy-MM-dd'),
-      data_fim: format(dateRange.to, 'yyyy-MM-dd'),
-      periodo_referencia: periodoReferencia.trim(),
-    };
 
-    const { error } = await supabase.from('ferias').insert(dataToInsert);
+    try {
+      const feriasData = {
+        funcionario_id: funcionarioId,
+        empresa_id: empresaId,
+        data_inicio: format(novaDataInicio, 'yyyy-MM-dd'),
+        data_fim: format(novaDataFim, 'yyyy-MM-dd'),
+        status: 'agendada', // Padrão inicial
+      };
 
-    if (error) {
-      showError('Falha ao registrar férias: ' + error.message);
-    } else {
-      showSuccess('Férias registradas com sucesso!');
-      setDateRange(undefined);
-      setPeriodoReferencia('');
-      fetchFerias();
-    }
-    setIsSubmitting(false);
-  };
+      const { error } = await supabase.from('ferias').insert(feriasData);
 
-  const handleDeleteFerias = async (id: string) => {
-    if (!window.confirm('Tem certeza que deseja excluir este registro de férias?')) return;
-    
-    const { error } = await supabase.from('ferias').delete().eq('id', id);
+      if (error) throw error;
 
-    if (error) {
-      showError('Falha ao excluir férias: ' + error.message);
-    } else {
-      showSuccess('Registro de férias excluído.');
-      fetchFerias();
+      showSuccess('Férias agendadas com sucesso!');
+      setNovaDataInicio(undefined);
+      setNovaDataFim(undefined);
+      buscarFerias();
+    } catch (error: any) {
+      showError('Falha ao agendar férias: ' + error.message);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const formatDate = (dateString: string) => new Date(dateString + 'T00:00:00').toLocaleDateString('pt-BR');
+  const handleRemoverFerias = async (id: string) => {
+    if (!window.confirm('Tem certeza que deseja remover este período de férias?')) return;
+
+    setIsSubmitting(true);
+    try {
+      const { error } = await supabase.from('ferias').delete().eq('id', id);
+
+      if (error) throw error;
+
+      showSuccess('Férias removidas com sucesso.');
+      buscarFerias();
+    } catch (error: any) {
+      showError('Falha ao remover férias: ' + error.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-xl">Gestão de Férias</CardTitle>
+        <CardTitle className="text-lg">Gestão de Férias</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-6">
-        <form onSubmit={handleAddFerias} className="space-y-4 border p-4 rounded-md">
-          <h3 className="font-semibold">Adicionar Novo Período</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="space-y-2 col-span-1 md:col-span-2">
-              <Label>Período de Férias</Label>
+      <CardContent className="space-y-4">
+        {!readOnly && (
+          <div className="border p-4 rounded-md space-y-3">
+            <h4 className="font-semibold text-sm">Agendar Novo Período</h4>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
-                    id="date"
                     variant={"outline"}
                     className={cn(
                       "w-full justify-start text-left font-normal",
-                      !dateRange?.from && "text-muted-foreground"
+                      !novaDataInicio && "text-muted-foreground"
                     )}
                     disabled={isSubmitting}
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
-                    {dateRange?.from ? (
-                      dateRange.to ? (
-                        <>
-                          {format(dateRange.from, "dd/MM/yyyy")} -{" "}
-                          {format(dateRange.to, "dd/MM/yyyy")}
-                        </>
-                      ) : (
-                        // Se 'from' está selecionado, mas 'to' ainda não (esperando o segundo clique)
-                        format(dateRange.from, "dd/MM/yyyy") + " (Selecione o fim)"
-                      )
-                    ) : (
-                      <span>Selecione o período</span>
-                    )}
+                    {novaDataInicio ? format(novaDataInicio, "PPP", { locale: ptBR }) : <span>Data Início</span>}
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="start">
                   <Calendar
+                    mode="single"
+                    selected={novaDataInicio}
+                    onSelect={setNovaDataInicio}
                     initialFocus
-                    mode="range"
-                    defaultMonth={dateRange?.from}
-                    selected={dateRange}
-                    onSelect={setDateRange}
-                    numberOfMonths={1}
+                    locale={ptBR}
                   />
                 </PopoverContent>
               </Popover>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="periodo-referencia">Referência (Ex: 2023/2024)</Label>
-              <Input
-                id="periodo-referencia"
-                value={periodoReferencia}
-                onChange={(e) => setPeriodoReferencia(e.target.value)}
-                placeholder="2024/2025"
-                disabled={isSubmitting}
-              />
+
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant={"outline"}
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !novaDataFim && "text-muted-foreground"
+                    )}
+                    disabled={isSubmitting}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {novaDataFim ? format(novaDataFim, "PPP", { locale: ptBR }) : <span>Data Fim</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={novaDataFim}
+                    onSelect={setNovaDataFim}
+                    initialFocus
+                    locale={ptBR}
+                  />
+                </PopoverContent>
+              </Popover>
+
+              <Button onClick={handleAdicionarFerias} disabled={isSubmitting || !novaDataInicio || !novaDataFim}>
+                {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
+                Agendar
+              </Button>
             </div>
           </div>
-          <Button type="submit" className="w-full" disabled={isSubmitting || !dateRange?.from || !dateRange.to}>
-            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            <PlusCircle className="w-4 h-4 mr-2" />
-            Registrar Férias
-          </Button>
-        </form>
+        )}
 
-        <h3 className="font-semibold mt-6">Períodos Registrados</h3>
-        {loading ? (
-          <div className="flex justify-center items-center h-20"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
+        <h4 className="font-semibold text-sm mt-4">Histórico de Férias</h4>
+        {carregando ? (
+          <div className="flex justify-center items-center h-20"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>
         ) : ferias.length === 0 ? (
-          <p className="text-muted-foreground">Nenhum período de férias registrado.</p>
+          <p className="text-sm text-muted-foreground">Nenhum período de férias registrado.</p>
         ) : (
-          <div className="overflow-x-auto border rounded-md">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Referência</TableHead>
-                  <TableHead>Início</TableHead>
-                  <TableHead>Fim</TableHead>
-                  <TableHead className="text-right">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {ferias.map((f) => (
-                  <TableRow key={f.id}>
-                    <TableCell className="font-medium">{f.periodo_referencia}</TableCell>
-                    <TableCell>{formatDate(f.data_inicio)}</TableCell>
-                    <TableCell>{formatDate(f.data_fim)}</TableCell>
-                    <TableCell className="text-right">
-                      <Button variant="ghost" size="icon" onClick={() => handleDeleteFerias(f.id)} disabled={isSubmitting}>
-                        <Trash2 className="w-4 h-4 text-red-500" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+          <div className="space-y-2">
+            {ferias.map((f) => (
+              <div key={f.id} className="flex justify-between items-center p-3 border rounded-md">
+                <div className="text-sm">
+                  <p className="font-medium">
+                    {format(parseISO(f.data_inicio), 'dd/MM/yyyy')} - {format(parseISO(f.data_fim), 'dd/MM/yyyy')}
+                  </p>
+                  <p className={cn("text-xs", f.status === 'agendada' ? 'text-blue-500' : 'text-green-500')}>
+                    {f.status.charAt(0).toUpperCase() + f.status.slice(1)}
+                  </p>
+                </div>
+                {!readOnly && (
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    onClick={() => handleRemoverFerias(f.id)} 
+                    disabled={isSubmitting}
+                  >
+                    <Trash2 className="w-4 h-4 text-destructive" />
+                  </Button>
+                )}
+              </div>
+            ))}
           </div>
         )}
       </CardContent>

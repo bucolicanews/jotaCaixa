@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState } from 'react';
 import { useForm, Control } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -166,6 +166,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, c
   
   const [activeTab, setActiveTab] = useState('pessoal');
   const [uploading, setUploading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false); // Novo estado para controle de submissão/tags
 
   const permissoesDoCriador = (criadorPerfil && 'permissoes' in criadorPerfil)
     ? (criadorPerfil as ClienteProfile).permissoes
@@ -266,6 +267,54 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, c
     if ('limite_usuarios' in profile) return 'tbl_clientes';
     if ('cliente_id' in profile) return 'tbl_usuarios';
     return null;
+  };
+  
+  // Lista de campos do Cliente que podem ser Tags
+  const TAG_FIELDS_TO_MANAGE = CAMPOS_CLIENTE_MAPA.filter(m => 
+    ['cpf', 'rg', 'nome_mae', 'nome_pai', 'telefone', 'cep', 'endereco', 'numero', 'complemento', 'bairro', 'cidade', 'estado'].includes(m.field)
+  );
+
+  const handleToggleAllTags = async (activate: boolean) => {
+    const clientProfile = usuarioInicial as ClienteProfile;
+    const resourceId = clientProfile?.id;
+    if (!resourceId) return;
+    
+    setIsSubmitting(true);
+
+    try {
+        // 1. Delete existing custom tags for this client (only the mappable ones)
+        const { error: deleteError } = await supabase
+            .from('contrato_tags')
+            .delete()
+            .eq('empresa_id', resourceId)
+            .in('nome_tag', TAG_FIELDS_TO_MANAGE.map(m => m.tag));
+        
+        if (deleteError) throw deleteError;
+
+        if (activate) {
+            // 2. Insert the selected tags
+            const tagsToInsert = TAG_FIELDS_TO_MANAGE.map(m => ({
+                empresa_id: resourceId,
+                nome_tag: m.tag,
+                descricao: m.label,
+                origem_dado: `tbl_clientes.${m.field}`,
+            }));
+            
+            const { error: insertError } = await supabase
+                .from('contrato_tags')
+                .insert(tagsToInsert);
+            
+            if (insertError) throw insertError;
+        }
+        
+        showSuccess(`Todas as tags foram ${activate ? 'ativadas' : 'desativadas'} com sucesso!`);
+        // Nota: O useTagManager deve re-renderizar automaticamente ou na próxima montagem.
+
+    } catch (error: any) {
+        showError('Erro ao gerenciar tags: ' + error.message);
+    } finally {
+        setIsSubmitting(false);
+    }
   };
 
   const onSubmit = async (values: FormValues) => {
@@ -637,6 +686,30 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, c
           <h3 className="font-semibold text-lg mt-6">Tags de Contrato (Dados Cadastrais)</h3>
           <p className="text-sm text-muted-foreground mb-4">Marque os campos que devem ser usados como tags dinâmicas em seus modelos de contrato.</p>
           
+          {/* Botões de Seleção de Tags */}
+          <div className="flex space-x-2 mb-4">
+              <Button 
+                  type="button" 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => handleToggleAllTags(true)} 
+                  disabled={isSubmitting}
+              >
+                  {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <CheckCircle2 className="w-4 h-4 mr-1" />}
+                  Marcar Todas as Tags
+              </Button>
+              <Button 
+                  type="button" 
+                  variant="destructive" 
+                  size="sm" 
+                  onClick={() => handleToggleAllTags(false)} 
+                  disabled={isSubmitting}
+              >
+                  {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <XCircle className="w-4 h-4 mr-1" />}
+                  Desmarcar Todas as Tags
+              </Button>
+          </div>
+          
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <TaggedClientField control={form.control as Control<FormValues>} fieldName="cpf" label="CPF/CNPJ" placeholder="00.000.000/0000-00" resourceId={resourceId} />
               <TaggedClientField control={form.control as Control<FormValues>} fieldName="rg" label="RG" placeholder="00.000.000-0" resourceId={resourceId} />
@@ -675,8 +748,8 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, c
               ))}
             </div>
           </div>
-          <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
-            {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          <Button type="submit" className="w-full" disabled={form.formState.isSubmitting || isSubmitting}>
+            {(form.formState.isSubmitting || isSubmitting) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Salvar Alterações
           </Button>
         </form>
@@ -687,7 +760,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, c
   // Renderização completa para Criação de Usuário ou Edição de Usuário (Funcionário)
   const isContractEditable = criadorRole === 'Admin' || criadorRole === 'Cliente';
   const isNewUser = !isEditing;
-  const resourceId = usuarioInicial?.id;
+  // const resourceId = usuarioInicial?.id; // REMOVIDO: Variável não utilizada neste escopo
 
   return (
     <Form {...form}>
@@ -965,8 +1038,8 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, c
           )}
         </Tabs>
 
-        <Button type="submit" className="w-full" disabled={form.formState.isSubmitting || uploading}>
-          {(form.formState.isSubmitting || uploading) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+        <Button type="submit" className="w-full" disabled={form.formState.isSubmitting || uploading || isSubmitting}>
+          {(form.formState.isSubmitting || uploading || isSubmitting) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           {isEditing ? 'Salvar Alterações' : 'Criar Conta'}
         </Button>
       </form>

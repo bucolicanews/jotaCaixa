@@ -1,32 +1,20 @@
+import React from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { useSessao } from '@/hooks/use-sessao';
 import { Loader2 } from 'lucide-react';
 import FormPerfil from '@/components/FormPerfil';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { showError } from '@/utils/toast';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import DetalheProprioPonto from '@/components/DetalheProprioPonto';
-import { UsuarioProfile } from '@/types/usuario';
-import { useState, useEffect } from 'react';
-import { cn } from '@/lib/utils'; // Importando cn
+import { showError, showSuccess } from '@/utils/toast';
+import { supabase } from '@/integrations/supabase/client';
+import { AnyProfile } from '@/types/usuario';
 
-const Perfil = () => {
-  const { perfil, role, carregando, refetch } = useSessao();
-  
-  const isUsuario = role === 'Usuario';
-  const podeVerPonto = isUsuario && (perfil as UsuarioProfile)?.permissoes?.visualizar_proprio_ponto;
-  
-  // Define a aba inicial: se puder ver o ponto, começa em 'ponto', senão em 'dados'
-  const initialTab = podeVerPonto ? 'ponto' : 'dados';
-  const [activeTab, setActiveTab] = useState(initialTab);
+const Perfil: React.FC = () => {
+  const { perfil, role, carregando, refreshSessao } = useSessao();
 
-  // Se o usuário não puder ver o ponto, garante que ele não fique preso na aba 'ponto'
-  useEffect(() => {
-    if (!podeVerPonto && activeTab === 'ponto') {
-        setActiveTab('dados');
-    }
-  }, [podeVerPonto, activeTab]);
-
+  const handleSaveComplete = async () => {
+    showSuccess('Perfil atualizado com sucesso!');
+    await refreshSessao();
+  };
 
   if (carregando) {
     return (
@@ -38,46 +26,29 @@ const Perfil = () => {
     );
   }
 
-  if (!perfil || !role) {
-    showError('Não foi possível carregar os dados do perfil.');
-    return <LayoutPrincipal><Card><CardHeader><CardTitle>Erro</CardTitle></CardHeader><CardContent>Perfil não encontrado.</CardContent></Card></LayoutPrincipal>;
+  if (!perfil) {
+    return (
+      <LayoutPrincipal>
+        <Card>
+          <CardHeader>
+            <CardTitle>Erro de Perfil</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p>Não foi possível carregar os dados do perfil.</p>
+          </CardContent>
+        </Card>
+      </LayoutPrincipal>
+    );
   }
-  
+
   return (
     <LayoutPrincipal>
       <h1 className="text-2xl md:text-3xl font-bold mb-6">Meu Perfil</h1>
-      <div className="max-w-4xl mx-auto"> 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className={cn("grid w-full", podeVerPonto ? "grid-cols-3" : "grid-cols-2")}>
-                <TabsTrigger value="dados">Dados Pessoais</TabsTrigger>
-                {podeVerPonto && <TabsTrigger value="ponto">Meu Ponto</TabsTrigger>}
-                <TabsTrigger value="config">Configurações</TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value="dados" className="mt-4">
-                <FormPerfil 
-                    perfil={perfil} 
-                    role={role} 
-                    onSaveComplete={refetch} 
-                />
-            </TabsContent>
-            
-            {podeVerPonto && (
-                <TabsContent value="ponto" className="mt-4">
-                    <DetalheProprioPonto />
-                </TabsContent>
-            )}
-            
-            <TabsContent value="config" className="mt-4">
-                <Card>
-                    <CardHeader><CardTitle>Configurações da Conta</CardTitle></CardHeader>
-                    <CardContent>
-                        <p className="text-muted-foreground">Em breve: Opções de notificação e segurança.</p>
-                    </CardContent>
-                </Card>
-            </TabsContent>
-        </Tabs>
-      </div>
+      
+      <FormPerfil 
+        perfilInicial={perfil as AnyProfile} // Passando 'perfil' como 'perfilInicial'
+        onSaveComplete={handleSaveComplete}
+      />
     </LayoutPrincipal>
   );
 };
