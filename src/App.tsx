@@ -23,8 +23,7 @@ import ClientesPage from "./pages/Clientes";
 import Perfil from "./pages/Perfil";
 import FolhaPonto from "./pages/FolhaPonto";
 import Contratos from "./pages/Contratos";
-import GerenciarTags from "./pages/GerenciarTags";
-import GerenciarModelos from "./pages/GerenciarModelos"; // Importando a nova página
+import GerenciarTags from "./pages/GerenciarTags"; // Importando a nova página
 
 const queryClient = new QueryClient();
 
@@ -58,8 +57,7 @@ const App = () => (
             <Route path="/perfil" element={<Perfil />} />
             <Route path="/folha-ponto" element={<FolhaPonto />} />
             <Route path="/contratos" element={<Contratos />} />
-            <Route path="/contratos/tags" element={<GerenciarTags />} />
-            <Route path="/contratos/modelos" element={<GerenciarModelos />} /> {/* Nova Rota */}
+            <Route path="/contratos/tags" element={<GerenciarTags />} /> {/* Nova Rota */}
 
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />

@@ -4,7 +4,6 @@ export interface ContratoTag {
   descricao: string;
   origem_dado: string | null;
   criado_em: string;
-  empresa_id: string | null; // Adicionado para multi-tenancy
 }
 
 export interface ContratoModelo {

@@ -52,7 +52,7 @@ const SECOES_MENU: MenuSection[] = [
         perfis: ['Admin', 'Cliente'],
         itens: [
             { nome: 'Gerenciar Contratos', caminho: '/contratos', icone: FileSignature, perfis: ['Admin', 'Cliente'] },
-            { nome: 'Cadastrar Tags', caminho: '/contratos/tags', icone: Tag, perfis: ['Admin', 'Cliente'] },
+            { nome: 'Cadastrar Tags', caminho: '/contratos/tags', icone: Tag, perfis: ['Admin'] },
             { nome: 'Cadastrar Modelos', caminho: '/contratos/modelos', icone: FileTextIcon, perfis: ['Admin'] },
         ]
     },

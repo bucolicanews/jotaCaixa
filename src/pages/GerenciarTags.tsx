@@ -10,46 +10,24 @@ import { showError, showSuccess } from '@/utils/toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import FormContratoTag from '@/components/FormContratoTag';
 import { ContratoTag } from '@/types/contratos';
-import { ClienteProfile } from '@/types/usuario';
 
 const GerenciarTags = () => {
-  const { role, perfil, carregando: carregandoSessao } = useSessao();
+  const { role, carregando: carregandoSessao } = useSessao();
   const [tags, setTags] = useState<ContratoTag[]>([]);
   const [carregandoTags, setCarregandoTags] = useState(true);
   const [tagSelecionada, setTagSelecionada] = useState<ContratoTag | null>(null);
   const [dialogAberto, setDialogAberto] = useState(false);
 
   const isAdmin = role === 'Admin';
-  const isCliente = role === 'Cliente';
-  
-  const getEmpresaId = () => {
-    if (isCliente) return (perfil as ClienteProfile)?.id;
-    // Admin não tem empresa_id, mas pode criar tags globais (empresa_id: null)
-    // No entanto, para simplificar o multi-tenancy, vamos assumir que Admin gerencia tags globais (null)
-    // e Clientes gerenciam suas próprias tags (id).
-    return null; 
-  };
-  
-  const empresaId = getEmpresaId();
 
   const buscarTags = useCallback(async () => {
-    if (!role || (isCliente && !empresaId)) return;
+    if (!isAdmin) return;
     setCarregandoTags(true);
     
-    let query = supabase
+    const { data, error } = await supabase
       .from('contrato_tags')
       .select('*')
       .order('nome_tag', { ascending: true });
-      
-    if (isCliente) {
-        // Clientes só veem as tags vinculadas ao seu ID
-        query = query.eq('empresa_id', empresaId);
-    } else if (isAdmin) {
-        // Admin vê todas as tags (incluindo as globais e as de clientes)
-        // A política RLS já garante que o Admin veja tudo, então não precisamos de filtro extra aqui.
-    }
-
-    const { data, error } = await query;
 
     if (error) {
       showError('Erro ao carregar tags: ' + error.message);
@@ -58,13 +36,13 @@ const GerenciarTags = () => {
       setTags(data as ContratoTag[]);
     }
     setCarregandoTags(false);
-  }, [role, isCliente, isAdmin, empresaId]);
+  }, [isAdmin]);
 
   useEffect(() => {
-    if (!carregandoSessao && role) {
+    if (!carregandoSessao && isAdmin) {
       buscarTags();
     }
-  }, [carregandoSessao, role, buscarTags]);
+  }, [carregandoSessao, isAdmin, buscarTags]);
 
   const handleSaveComplete = () => {
     setDialogAberto(false);
@@ -103,8 +81,8 @@ const GerenciarTags = () => {
     );
   }
   
-  if (!isAdmin && !isCliente) {
-    return <LayoutPrincipal><Card><CardHeader><CardTitle>Acesso Negado</CardTitle></CardHeader><CardContent><p>Apenas administradores e clientes podem gerenciar tags de contrato.</p></CardContent></Card></LayoutPrincipal>;
+  if (!isAdmin) {
+    return <LayoutPrincipal><Card><CardHeader><CardTitle>Acesso Negado</CardTitle></CardHeader><CardContent><p>Apenas administradores podem gerenciar tags de contrato.</p></CardContent></Card></LayoutPrincipal>;
   }
 
   return (
@@ -126,7 +104,6 @@ const GerenciarTags = () => {
             </DialogHeader>
             <FormContratoTag 
               tagInicial={tagSelecionada}
-              empresaId={isCliente ? empresaId : null} // Passa o ID da empresa se for Cliente
               onSaveComplete={handleSaveComplete}
             />
           </DialogContent>
