@@ -98,6 +98,7 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
     hasPontoRecords: boolean,
     decisionRecord: 'Compensacao' | 'Extra100' | null,
     needsManagement: boolean,
+    minutosAbonados: number, // Novo campo para armazenar minutos de abono
   }> = {};
   
   for (const data of todosOsDiasDoMes) {
@@ -108,6 +109,7 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
     let entrada: Date | null = null;
     let isFalta = false;
     let isAbono = false;
+    let minutosAbonados = 0; // Inicializa minutos abonados
     let isTurnoAberto = false;
     let hasPontoRecords = false;
     let decisionRecord: 'Compensacao' | 'Extra100' | null = null;
@@ -134,9 +136,10 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
         }
         if (registro.tipo === 'Abono') {
             isAbono = true;
-            // Assumindo 8h de abono se não especificado
+            // Extrai as horas abonadas do observacao
             const horasAbonadas = parseInt(registro.observacao?.match(/(\d+)h/)?.[1] || '8'); 
-            minutosDia += horasAbonadas * 60;
+            minutosAbonados = horasAbonadas * 60;
+            minutosDia = minutosAbonados; // Define o total do dia como o abono
             break; 
         }
         
@@ -205,12 +208,14 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
     }
     
     // Acumular totais (apenas se não for folga trabalhada, nem falta/abono, nem férias)
-    if (!isFolgaFixa && !isFalta && !isAbono && !isFerias) {
+    if (!isFolgaFixa && !isFalta && !isFerias) {
+        // Se for abono, minutosDia já está definido como minutosAbonados
+        // Se for ponto batido, minutosDia é o tempo trabalhado
         totalMinutosTrabalhados += minutosDia;
     }
     
-    // Se for falta/abono, zera minutosDia para evitar contagem dupla
-    if (isFalta || isAbono) {
+    // Se for falta, zera minutosDia para evitar contagem dupla
+    if (isFalta) {
         minutosDia = 0;
     }
 
@@ -220,6 +225,7 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
         registros: registrosDoDia,
         isFalta,
         isAbono,
+        minutosAbonados, // Armazena para exibição
         isTurnoAberto,
         isFolgaFixa,
         isFerias,
@@ -241,7 +247,7 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
     totalMinutosExtras50 = minutosExcedentes; 
   }
   
-  const minutosDiferenca = jornadaMensalMinutos - totalMinutosTrabalhados; // Saldo de horas (positivo = falta, negativo = extra)
+  const minutosDiferenca = totalMinutosTrabalhados - jornadaMensalMinutos; // Saldo de horas (positivo = extra, negativo = falta)
   
   // 4. Calcular valor total
   const valorTotalNormal = (totalMinutosTrabalhados / 60) * valorHoraNormal;
@@ -298,8 +304,8 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
             <div><p className="text-sm text-muted-foreground">Horas Trabalhadas</p><p className="font-bold text-lg">{formatarHoras(totalMinutosTrabalhados)}</p></div>
             <div>
                 <p className="text-sm text-muted-foreground">Diferença (Saldo)</p>
-                <p className={cn("font-bold text-lg", minutosDiferenca > 0 ? "text-red-500" : "text-green-600")}>
-                    {minutosDiferenca > 0 ? `-${formatarHoras(minutosDiferenca)}` : formatarHoras(minutosDiferenca)}
+                <p className={cn("font-bold text-lg", minutosDiferenca < 0 ? "text-red-500" : "text-green-600")}>
+                    {formatarHoras(minutosDiferenca)}
                 </p>
             </div>
           </div>
@@ -334,7 +340,7 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
                 ) : (
                     todosOsDiasDoMes.map(data => {
                         const diaString = format(data, 'yyyy-MM-dd');
-                        const { minutos, registros, isFalta, isAbono, isTurnoAberto, isFolgaFixa, isFerias, hasPontoRecords, decisionRecord, needsManagement } = diasProcessados[diaString];
+                        const { minutos, registros, isFalta, isAbono, isTurnoAberto, isFolgaFixa, isFerias, hasPontoRecords, decisionRecord, needsManagement, minutosAbonados } = diasProcessados[diaString];
                         
                         const isDiaAtual = isSameDay(data, hoje);
                         const isDiaFuturo = data > hoje;
@@ -521,7 +527,7 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
                                     </div>
                                 </TableCell>
                                 <TableCell className="text-right font-semibold">
-                                    {statusDisplay}
+                                    {isAbono ? formatarHoras(minutosAbonados) : statusDisplay}
                                 </TableCell>
                             </TableRow>
                         );
