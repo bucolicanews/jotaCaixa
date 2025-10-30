@@ -1,11 +1,15 @@
 import React, { useState, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Loader2, DollarSign, CalendarCheck } from 'lucide-react';
+import { Loader2, DollarSign, CalendarCheck, CalendarIcon } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { RegistroPonto } from '@/types/ponto';
 import { format, parseISO, differenceInMinutes, isSameDay } from 'date-fns';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { cn } from '@/lib/utils';
+import { ptBR } from 'date-fns/locale';
 
 interface GerenciarFolgaTrabalhadaProps {
   open: boolean;
@@ -43,12 +47,28 @@ const formatarHoras = (minutos: number): string => {
 
 const GerenciarFolgaTrabalhada: React.FC<GerenciarFolgaTrabalhadaProps> = ({ open, onOpenChange, funcionario, dia, registrosDoDia, onSaveComplete }) => {
   const [loading, setLoading] = useState(false);
+  const [acaoSelecionada, setAcaoSelecionada] = useState<'Compensacao' | 'Extra100' | null>(null);
+  const [dataCompensacao, setDataCompensacao] = useState<Date | undefined>(undefined);
+  
   const diaFormatado = format(dia, 'dd/MM/yyyy');
 
   const minutosTrabalhados = useMemo(() => calculateMinutesWorked(registrosDoDia), [registrosDoDia]);
   const horasTrabalhadas = formatarHoras(minutosTrabalhados);
+  
+  // Resetar estados ao abrir o modal
+  React.useEffect(() => {
+      if (open) {
+          setAcaoSelecionada(null);
+          setDataCompensacao(undefined);
+      }
+  }, [open]);
 
   const handleDecision = async (tipo: 'Compensacao' | 'Extra100') => {
+    if (tipo === 'Compensacao' && !dataCompensacao) {
+        showError('Selecione a data da folga compensatória.');
+        return;
+    }
+    
     setLoading(true);
     
     try {
@@ -62,7 +82,7 @@ const GerenciarFolgaTrabalhada: React.FC<GerenciarFolgaTrabalhadaProps> = ({ ope
         if (deleteError) throw deleteError;
       }
 
-      // 2. Inserir o novo registro de decisão
+      // 2. Inserir o novo registro de decisão para o dia trabalhado
       const dataNoonUTC = new Date(Date.UTC(dia.getFullYear(), dia.getMonth(), dia.getDate(), 12, 0, 0));
       
       const dataToInsert = {
@@ -81,6 +101,28 @@ const GerenciarFolgaTrabalhada: React.FC<GerenciarFolgaTrabalhadaProps> = ({ ope
         .insert(dataToInsert);
             
       if (insertError) throw insertError;
+      
+      // 3. Se for Compensação, insere um registro de Abono para o dia futuro
+      if (tipo === 'Compensacao' && dataCompensacao) {
+          const dataCompensacaoNoonUTC = new Date(Date.UTC(dataCompensacao.getFullYear(), dataCompensacao.getMonth(), dataCompensacao.getDate(), 12, 0, 0));
+          
+          const abonoToInsert = {
+            funcionario_id: funcionario.id,
+            empresa_id: funcionario.empresa_id,
+            horario_registro: dataCompensacaoNoonUTC.toISOString(),
+            tipo: 'Abono' as const, // Marca como Abono
+            selfie_url: 'N/A',
+            maps_url: 'N/A',
+            atestado_url: null,
+            observacao: `8h (Compensação de folga trabalhada em ${diaFormatado})`,
+          };
+          
+          const { error: abonoError } = await supabase
+            .from('registros_ponto')
+            .insert(abonoToInsert);
+            
+          if (abonoError) throw abonoError;
+      }
 
       showSuccess(`Decisão de ${tipo === 'Extra100' ? 'Pagamento Extra' : 'Compensação'} registrada com sucesso!`);
       onSaveComplete();
@@ -93,6 +135,10 @@ const GerenciarFolgaTrabalhada: React.FC<GerenciarFolgaTrabalhadaProps> = ({ ope
       setLoading(false);
     }
   };
+  
+  const isCompensacao = acaoSelecionada === 'Compensacao';
+  const isExtra100 = acaoSelecionada === 'Extra100';
+  const isDecisionReady = isExtra100 || (isCompensacao && dataCompensacao);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -116,10 +162,10 @@ const GerenciarFolgaTrabalhada: React.FC<GerenciarFolgaTrabalhadaProps> = ({ ope
 
           <div className="grid grid-cols-1 gap-4">
             <Button 
-              variant="default" 
-              onClick={() => handleDecision('Extra100')}
+              variant={isExtra100 ? 'default' : 'outline'} 
+              onClick={() => setAcaoSelecionada('Extra100')}
               disabled={loading}
-              className="h-12 justify-start"
+              className={cn("h-12 justify-start", isExtra100 && "bg-red-600 hover:bg-red-700")}
             >
               <DollarSign className="w-5 h-5 mr-3" />
               <div className="flex flex-col items-start">
@@ -129,28 +175,67 @@ const GerenciarFolgaTrabalhada: React.FC<GerenciarFolgaTrabalhadaProps> = ({ ope
             </Button>
             
             <Button 
-              variant="outline" 
-              onClick={() => handleDecision('Compensacao')}
+              variant={isCompensacao ? 'default' : 'outline'} 
+              onClick={() => setAcaoSelecionada('Compensacao')}
               disabled={loading}
               className="h-12 justify-start"
             >
               <CalendarCheck className="w-5 h-5 mr-3" />
               <div className="flex flex-col items-start">
                 <span className="font-semibold">Escolher Outro Dia para a Folga</span>
-                <span className="text-xs opacity-80">As horas serão compensadas com um dia de folga futuro (Banco de Horas).</span>
+                <span className="text-xs opacity-80">Marca um dia futuro para folga compensatória (Abono de 8h).</span>
               </div>
             </Button>
           </div>
+          
+          {isCompensacao && (
+              <div className="space-y-2 pt-4 border-t">
+                  <label className="font-semibold text-sm">Data da Folga Compensatória</label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant={"outline"}
+                        className={cn(
+                          "w-full justify-start text-left font-normal",
+                          !dataCompensacao && "text-muted-foreground"
+                        )}
+                        disabled={loading}
+                      >
+                        {dataCompensacao ? format(dataCompensacao, "PPP", { locale: ptBR }) : <span>Selecione a data da folga</span>}
+                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={dataCompensacao}
+                        onSelect={setDataCompensacao}
+                        initialFocus
+                        locale={ptBR}
+                      />
+                    </PopoverContent>
+                  </Popover>
+              </div>
+          )}
         </div>
 
-        <Button 
-          onClick={() => onOpenChange(false)} 
-          variant="secondary"
-          className="w-full"
-          disabled={loading}
-        >
-          {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Cancelar'}
-        </Button>
+        <div className="flex space-x-2">
+            <Button 
+              onClick={() => onOpenChange(false)} 
+              variant="secondary"
+              className="flex-1"
+              disabled={loading}
+            >
+              Cancelar
+            </Button>
+            <Button 
+              onClick={() => handleDecision(acaoSelecionada!)} 
+              className="flex-1"
+              disabled={loading || !isDecisionReady}
+            >
+              {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Confirmar Decisão'}
+            </Button>
+        </div>
       </DialogContent>
     </Dialog>
   );
