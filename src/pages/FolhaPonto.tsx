@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { useSessao } from '@/hooks/use-sessao';
-import { Loader2, Filter, Clock, Users, Building2, AlertTriangle, CalendarX } from 'lucide-react';
+import { Loader2, Filter, Clock, Users, Building2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isWeekend, parseISO, isSameDay } from 'date-fns';
+import { format, startOfMonth, endOfMonth, parseISO, isSameDay } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { showError } from '@/utils/toast';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
@@ -11,10 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import DetalheFolhaPonto from '@/components/DetalheFolhaPonto';
 import { MonthPicker } from '@/components/MonthPicker';
 import GerenciarFaltas from '@/components/GerenciarFaltas';
-import { Button } from '@/components/ui/button';
-import { ptBR } from 'date-fns/locale';
-import { RegistroPonto } from '@/types/ponto';
 import AjustarPontoDialog from '@/components/AjustarPontoDialog'; // Importando o novo componente
+import { RegistroPonto } from '@/types/ponto';
 
 interface FuncionarioComDados extends UsuarioProfile {
     id: string;
@@ -156,16 +154,9 @@ const FolhaPonto: React.FC = () => {
     }
   }, [funcionarioSelecionadoId, dataSelecionada, fetchRegistros]);
   
-  // --- Lógica de Faltas (Regra 1) ---
+  // --- Lógica de Gerenciamento ---
   
   const funcionarioDetalhe = funcionarios.find(f => f.id === funcionarioSelecionadoId);
-  
-  const handleFaltaClick = (dia: Date) => {
-    if (!funcionarioDetalhe) return;
-    setRegistroParaEdicao(null); // Garante que é uma criação
-    setDiaFaltaSelecionado(dia);
-    setFaltaDialogOpen(true);
-  };
   
   const handleFaltaRegistrada = async () => {
     // Re-busca os registros após registrar/editar/deletar a falta
@@ -175,7 +166,7 @@ const FolhaPonto: React.FC = () => {
     setRegistroParaEdicao(null);
   };
   
-  const handleEditFaltaAbono = (registro: RegistroPonto, dia: Date) => {
+  const handleEditFaltaAbono = (registro: RegistroPonto | null, dia: Date) => {
     if (!funcionarioDetalhe) return;
     setRegistroParaEdicao(registro);
     setDiaFaltaSelecionado(dia);
@@ -192,38 +183,6 @@ const FolhaPonto: React.FC = () => {
     setDiaParaAjuste(dia);
     setAjustarDialogOpen(true);
   };
-
-  const getDiasSemRegistro = () => {
-    if (!funcionarioDetalhe) return [];
-    
-    const inicioMes = startOfMonth(dataSelecionada);
-    const fimMes = endOfMonth(dataSelecionada);
-    const todosOsDias = eachDayOfInterval({ start: inicioMes, end: fimMes });
-    
-    const diasComRegistro = new Set(
-        registrosDoFuncionario
-            .filter(r => r.tipo === 'Entrada' || r.tipo === 'Saida')
-            .map(r => format(parseISO(r.horario_registro), 'yyyy-MM-dd'))
-    );
-    
-    const diasComFaltaRegistrada = new Set(
-        registrosDoFuncionario
-            .filter(r => r.tipo === 'Falta' || r.tipo === 'Abono')
-            .map(r => format(parseISO(r.horario_registro), 'yyyy-MM-dd'))
-    );
-
-    return todosOsDias.filter(dia => {
-        const diaString = format(dia, 'yyyy-MM-dd');
-        // Ignora fins de semana (sábados e domingos)
-        if (isWeekend(dia)) return false; 
-        // Ignora dias futuros
-        if (dia > new Date()) return false;
-        // Se não tem registro de ponto E não tem registro de falta/abono, é um dia sem registro
-        return !diasComRegistro.has(diaString) && !diasComFaltaRegistrada.has(diaString);
-    });
-  };
-  
-  const diasSemRegistro = getDiasSemRegistro();
 
   if (carregando) {
     return <LayoutPrincipal><div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div></LayoutPrincipal>;
@@ -289,35 +248,6 @@ const FolhaPonto: React.FC = () => {
         </CardHeader>
       </Card>
       
-      {funcionarioDetalhe && diasSemRegistro.length > 0 && (
-        <Card className="mb-6 border-red-500 bg-red-50 dark:bg-red-900/20">
-            <CardHeader className="pb-2">
-                <CardTitle className="text-lg text-red-600 dark:text-red-400 flex items-center">
-                    <AlertTriangle className="w-5 h-5 mr-2" /> {diasSemRegistro.length} Dias Sem Registro (Falta Potencial)
-                </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-2">
-                <p className="text-sm text-muted-foreground mb-3">
-                    Os seguintes dias úteis não possuem registro de ponto ou falta justificada:
-                </p>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-                    {diasSemRegistro.map(dia => (
-                        <Button 
-                            key={format(dia, 'yyyy-MM-dd')} 
-                            variant="destructive" 
-                            size="sm"
-                            onClick={() => handleFaltaClick(dia)}
-                            className="w-full"
-                        >
-                            <CalendarX className="w-4 h-4 mr-1" />
-                            {format(dia, 'dd/MM (EEE)', { locale: ptBR })}
-                        </Button>
-                    ))}
-                </div>
-            </CardContent>
-        </Card>
-      )}
-
       {funcionarioDetalhe && (
         <DetalheFolhaPonto 
             funcionario={{

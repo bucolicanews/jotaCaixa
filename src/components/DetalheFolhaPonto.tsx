@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Clock, DollarSign, MapPin, Camera, FileText, AlertTriangle, Trash2, Edit } from 'lucide-react';
-import { format, parseISO, differenceInMinutes, isWeekend, isSameDay, startOfDay } from 'date-fns';
+import { Clock, DollarSign, MapPin, Camera, FileText, AlertTriangle, Trash2, Edit, CalendarX } from 'lucide-react';
+import { format, parseISO, differenceInMinutes, isWeekend, isSameDay, startOfDay, startOfMonth, endOfMonth, eachDayOfInterval } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -24,7 +24,7 @@ interface DetalheFolhaPontoProps {
   funcionario: FuncionarioDetalhe;
   mes: Date;
   onEditRegistro: (dia: Date) => void; // Para Ajuste de Ponto (Entrada/Saída)
-  onEditFaltaAbono: (registro: RegistroPonto, dia: Date) => void; // Novo: Para Edição de Falta/Abono
+  onEditFaltaAbono: (registro: RegistroPonto | null, dia: Date) => void; // Para Edição de Falta/Abono
   onDeleteRegistro: () => void; 
 }
 
@@ -47,69 +47,93 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
   let totalMinutosExtras = 0;
   let totalMinutosExtras100 = 0;
   
-  // Agrupamento de registros por dia
-  const diasTrabalhados: Record<string, { minutos: number, registros: RegistroPonto[], isFalta: boolean, isAbono: boolean, atestadoUrl: string | null, observacao: string | null, hasUnclosedEntry: boolean }> = {};
-
-  // 1. Processar registros e agrupar por dia
+  // 1. Agrupamento de registros por dia (YYYY-MM-DD)
+  const registrosPorDia: Record<string, RegistroPonto[]> = {};
   const registrosOrdenados = [...registros].sort((a, b) => parseISO(a.horario_registro).getTime() - parseISO(b.horario_registro).getTime());
   
-  let entrada: Date | null = null;
-
   for (const registro of registrosOrdenados) {
+    // Para registros de Falta/Abono, que são salvos com 12:00 UTC, usamos a data pura.
+    // Para registros de Entrada/Saída, usamos a data do registro.
     const horario = parseISO(registro.horario_registro);
     const dia = format(horario, 'yyyy-MM-dd');
-
-    if (!diasTrabalhados[dia]) {
-      diasTrabalhados[dia] = { minutos: 0, registros: [], isFalta: false, isAbono: false, atestadoUrl: null, observacao: null, hasUnclosedEntry: false };
-    }
     
-    diasTrabalhados[dia].registros.push(registro);
-
-    if (registro.tipo === 'Falta') {
-        diasTrabalhados[dia].isFalta = true;
-        diasTrabalhados[dia].atestadoUrl = registro.atestado_url || null;
-        continue;
+    if (!registrosPorDia[dia]) {
+      registrosPorDia[dia] = [];
     }
+    registrosPorDia[dia].push(registro);
+  }
+  
+  // 2. Processar todos os dias do mês
+  const inicioMes = startOfMonth(mes);
+  const fimMes = endOfMonth(mes);
+  const todosOsDiasDoMes = eachDayOfInterval({ start: inicioMes, end: fimMes });
+  
+  const diasProcessados: Record<string, { minutos: number, registros: RegistroPonto[], isFalta: boolean, isAbono: boolean, hasUnclosedEntry: boolean }> = {};
+  
+  for (const data of todosOsDiasDoMes) {
+    const diaString = format(data, 'yyyy-MM-dd');
+    const registrosDoDia = registrosPorDia[diaString] || [];
     
-    if (registro.tipo === 'Abono') {
-        diasTrabalhados[dia].isAbono = true;
-        diasTrabalhados[dia].observacao = registro.observacao || null;
+    let minutosDia = 0;
+    let entrada: Date | null = null;
+    let isFalta = false;
+    let isAbono = false;
+    let hasUnclosedEntry = false;
+    
+    // Processamento de registros de ponto (Entrada/Saída)
+    for (const registro of registrosDoDia) {
+        if (registro.tipo === 'Falta') {
+            isFalta = true;
+            break; // Se for falta, ignora o resto dos registros de ponto
+        }
+        if (registro.tipo === 'Abono') {
+            isAbono = true;
+            const horasAbonadas = parseInt(registro.observacao?.replace('h', '') || '0');
+            minutosDia += horasAbonadas * 60;
+            break; // Se for abono, ignora o resto dos registros de ponto
+        }
         
-        // Adiciona minutos do abono
-        const horasAbonadas = parseInt(registro.observacao?.replace('h', '') || '0');
-        const minutosAbonados = horasAbonadas * 60;
-        diasTrabalhados[dia].minutos += minutosAbonados;
-        totalMinutosTrabalhados += minutosAbonados;
-        continue;
-    }
-
-    if (registro.tipo === 'Entrada') {
-      entrada = horario;
-      diasTrabalhados[dia].hasUnclosedEntry = true; // Assume que está aberto
-    } else if (registro.tipo === 'Saida' && entrada && isSameDay(horario, entrada)) {
-      const minutosDia = differenceInMinutes(horario, entrada);
-      diasTrabalhados[dia].minutos += minutosDia;
-      totalMinutosTrabalhados += minutosDia;
-      entrada = null;
-      diasTrabalhados[dia].hasUnclosedEntry = false; // Fechou
-    } else if (registro.tipo === 'Saida' && entrada && !isSameDay(horario, entrada)) {
-        // Lógica simplificada para virada de dia
-        const minutosDia = differenceInMinutes(horario, entrada);
-        diasTrabalhados[dia].minutos += minutosDia;
-        totalMinutosTrabalhados += minutosDia;
-        entrada = null;
-        diasTrabalhados[dia].hasUnclosedEntry = false; // Fechou
+        const horario = parseISO(registro.horario_registro);
+        
+        if (registro.tipo === 'Entrada') {
+            entrada = horario;
+            hasUnclosedEntry = true;
+        } else if (registro.tipo === 'Saida' && entrada && isSameDay(horario, entrada)) {
+            const minutosTrabalhados = differenceInMinutes(horario, entrada);
+            minutosDia += minutosTrabalhados;
+            entrada = null;
+            hasUnclosedEntry = false;
+        } else if (registro.tipo === 'Saida' && entrada && !isSameDay(horario, entrada)) {
+            // Lógica simplificada para virada de dia
+            const minutosTrabalhados = differenceInMinutes(horario, entrada);
+            minutosDia += minutosTrabalhados;
+            entrada = null;
+            hasUnclosedEntry = false;
+        }
     }
     
-    // Se o último registro do dia for Entrada, marca como não fechado
-    if (registro.tipo === 'Entrada' && !diasTrabalhados[dia].registros.some(r => r.tipo === 'Saida' && parseISO(r.horario_registro) > horario)) {
-        diasTrabalhados[dia].hasUnclosedEntry = true;
-    } else if (registro.tipo === 'Saida') {
-        diasTrabalhados[dia].hasUnclosedEntry = false;
+    // Se o dia já passou e a última ação foi Entrada, marca como sem fechamento
+    if (entrada && startOfDay(data) < startOfDay(new Date())) {
+        hasUnclosedEntry = true;
+    } else if (!entrada) {
+        hasUnclosedEntry = false;
+    }
+
+    diasProcessados[diaString] = {
+        minutos: minutosDia,
+        registros: registrosDoDia,
+        isFalta,
+        isAbono,
+        hasUnclosedEntry,
+    };
+    
+    // Acumular totais (apenas se não for falta)
+    if (!isFalta) {
+        totalMinutosTrabalhados += minutosDia;
     }
   }
   
-  // 2. Calcular horas extras (Simplificado: tudo acima da jornada mensal é extra)
+  // 3. Calcular horas extras (Simplificado: tudo acima da jornada mensal é extra)
   const jornadaMensalMinutos = (horas_mensais || JORNADA_MENSAL_PADRAO) * 60;
   
   if (totalMinutosTrabalhados > jornadaMensalMinutos) {
@@ -117,7 +141,7 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
     totalMinutosTrabalhados = jornadaMensalMinutos;
   }
 
-  // 3. Calcular valor total
+  // 4. Calcular valor total
   const valorTotalNormal = (totalMinutosTrabalhados / 60) * valorHoraNormal;
   const valorTotalExtra = (totalMinutosExtras / 60) * valorHoraExtra;
   const valorTotalExtra100 = (totalMinutosExtras100 / 60) * valorHoraExtra100;
@@ -145,7 +169,6 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
       .eq('id', registroId);
 
     if (error) {
-      // Se houver erro, exibe a mensagem do banco de dados (se disponível)
       showError('Erro ao excluir registro: ' + error.message);
     } else {
       showSuccess('Registro excluído com sucesso.');
@@ -175,24 +198,32 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
             <Table>
               <TableHeader><TableRow><TableHead className="w-[120px]">Data</TableHead><TableHead>Registros</TableHead><TableHead className="text-right">Total Dia</TableHead></TableRow></TableHeader>
               <TableBody>
-                {Object.keys(diasTrabalhados).length === 0 ? (
-                    <TableRow><TableCell colSpan={3} className="text-center py-4 text-muted-foreground">Nenhum registro encontrado para este funcionário no mês.</TableCell></TableRow>
+                {todosOsDiasDoMes.length === 0 ? (
+                    <TableRow><TableCell colSpan={3} className="text-center py-4 text-muted-foreground">Nenhum dia encontrado para este mês.</TableCell></TableRow>
                 ) : (
-                    Object.keys(diasTrabalhados).map(dia => {
-                        const data = parseISO(dia);
+                    todosOsDiasDoMes.map(data => {
+                        const diaString = format(data, 'yyyy-MM-dd');
+                        const { minutos, registros, isFalta, isAbono, hasUnclosedEntry } = diasProcessados[diaString] || { minutos: 0, registros: [], isFalta: false, isAbono: false, hasUnclosedEntry: false };
+                        
                         const isFimDeSemana = isWeekend(data);
-                        const { minutos, registros, isFalta, isAbono, atestadoUrl, observacao, hasUnclosedEntry } = diasTrabalhados[dia];
+                        const isDiaAtual = isSameDay(data, new Date());
+                        const isDiaFuturo = data > new Date();
                         
                         let statusDisplay;
                         let isAlert = false;
                         
                         if (isFalta) {
+                            const atestadoUrl = registros.find(r => r.tipo === 'Falta')?.atestado_url;
                             statusDisplay = atestadoUrl 
                                 ? <span className="text-sm text-green-600 flex items-center"><FileText className="w-4 h-4 mr-1" /> Falta Justificada</span>
                                 : <span className="text-sm text-red-600 flex items-center"><AlertTriangle className="w-4 h-4 mr-1" /> Falta Injustificada</span>;
                         } else if (isAbono) {
+                            const observacao = registros.find(r => r.tipo === 'Abono')?.observacao;
                             statusDisplay = <span className="text-sm text-blue-600 flex items-center"><Clock className="w-4 h-4 mr-1" /> Abono ({observacao})</span>;
-                        } else if (hasUnclosedEntry && startOfDay(data) < startOfDay(new Date())) {
+                        } else if (registros.length === 0) {
+                            statusDisplay = <span className="text-sm text-muted-foreground">{isFimDeSemana ? 'Fim de Semana' : isDiaFuturo ? 'Futuro' : 'Sem Registro'}</span>;
+                            isAlert = !isFimDeSemana && !isDiaFuturo;
+                        } else if (hasUnclosedEntry && !isDiaAtual) {
                             // Dia sem fechamento (Entrada sem Saída e dia já passou)
                             statusDisplay = <span className="text-sm text-yellow-600 flex items-center"><AlertTriangle className="w-4 h-4 mr-1" /> Dia sem fechamento</span>;
                             isAlert = true;
@@ -202,9 +233,12 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
 
                         // Encontra o registro de Falta/Abono para exclusão/edição
                         const registroFaltaAbono = registros.find(r => r.tipo === 'Falta' || r.tipo === 'Abono');
+                        
+                        // Verifica se há registros de Entrada/Saída para o ajuste manual
+                        const hasPontoRecords = registros.some(r => r.tipo === 'Entrada' || r.tipo === 'Saida');
 
                         return (
-                            <TableRow key={dia} className={cn(isFimDeSemana && 'bg-secondary/30', (isFalta || isAbono) && 'bg-blue-100/50 dark:bg-blue-900/20')}>
+                            <TableRow key={diaString} className={cn(isFimDeSemana && 'bg-secondary/30', (isFalta || isAbono) && 'bg-blue-100/50 dark:bg-blue-900/20')}>
                                 <TableCell className="font-medium">{format(data, 'dd/MM (EEE)', { locale: ptBR })}</TableCell>
                                 <TableCell>
                                     <div className="flex flex-wrap gap-2 items-center">
@@ -258,7 +292,7 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
                                         ))}
                                         
                                         {/* Ações de Edição/Exclusão */}
-                                        {canEdit && (
+                                        {canEdit && !isDiaFuturo && (
                                             <div className="flex space-x-1 ml-2">
                                                 {registroFaltaAbono && (
                                                     <>
@@ -282,7 +316,8 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
                                                         </Button>
                                                     </>
                                                 )}
-                                                {isAlert && (
+                                                {/* Botão de Ajuste de Ponto (Aparece se houver alerta de fechamento OU se houver registros de ponto) */}
+                                                {(isAlert || hasPontoRecords) && !registroFaltaAbono && (
                                                     <Button 
                                                         variant="outline" 
                                                         size="sm" 
@@ -291,6 +326,18 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
                                                         className="h-6 text-xs"
                                                     >
                                                         <Edit className="w-3 h-3 mr-1" /> Ajustar Ponto
+                                                    </Button>
+                                                )}
+                                                {/* Botão de Marcar Falta (Aparece se não houver registro e não for fim de semana/futuro) */}
+                                                {!hasPontoRecords && !registroFaltaAbono && !isFimDeSemana && !isDiaFuturo && (
+                                                    <Button 
+                                                        variant="destructive" 
+                                                        size="sm" 
+                                                        onClick={() => onEditFaltaAbono(null, data)} // Marcar Falta (registro é null)
+                                                        title="Marcar Falta"
+                                                        className="h-6 text-xs"
+                                                    >
+                                                        <CalendarX className="w-3 h-3 mr-1" /> Marcar Falta
                                                     </Button>
                                                 )}
                                             </div>
