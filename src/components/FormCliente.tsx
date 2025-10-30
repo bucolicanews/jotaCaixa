@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -65,12 +65,68 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
       estado: clienteInicial?.estado || '',
     },
   });
+  
+  const cepValue = form.watch('cep');
 
   const getOwnerId = () => {
     if (role === 'Admin' || role === 'Cliente') return (perfil as any)?.id;
     if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id;
     return null;
   };
+  
+  const fetchAddressByCep = useCallback(async (cep: string) => {
+    // Remove caracteres não numéricos
+    const cleanCep = cep.replace(/\D/g, '');
+
+    if (cleanCep.length !== 8) {
+      return;
+    }
+    
+    // Bloqueia a edição dos campos enquanto busca
+    form.setValue('endereco', 'Buscando...');
+    form.setValue('bairro', 'Buscando...');
+    form.setValue('cidade', 'Buscando...');
+    form.setValue('estado', 'Buscando...');
+    
+    try {
+      const response = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
+      const data = await response.json();
+
+      if (data.erro) {
+        showError('CEP não encontrado.');
+        form.setValue('endereco', '');
+        form.setValue('bairro', '');
+        form.setValue('cidade', '');
+        form.setValue('estado', '');
+        return;
+      }
+
+      // Preenche os campos
+      form.setValue('endereco', data.logradouro || '');
+      form.setValue('bairro', data.bairro || '');
+      form.setValue('cidade', data.localidade || '');
+      form.setValue('estado', data.uf || '');
+      
+      // Foca no campo número, que é o próximo a ser preenchido
+      document.getElementById('numero')?.focus();
+
+    } catch (error) {
+      console.error('Erro ao consultar ViaCEP:', error);
+      showError('Falha ao consultar o CEP.');
+      form.setValue('endereco', '');
+      form.setValue('bairro', '');
+      form.setValue('cidade', '');
+      form.setValue('estado', '');
+    }
+  }, [form]);
+  
+  // Monitora a mudança do CEP para buscar o endereço
+  React.useEffect(() => {
+    const cleanCep = cepValue?.replace(/\D/g, '');
+    if (cleanCep && cleanCep.length === 8) {
+      fetchAddressByCep(cleanCep);
+    }
+  }, [cepValue, fetchAddressByCep]);
 
   const onSubmit = async (values: FormValues) => {
     const ownerId = getOwnerId();
@@ -155,25 +211,25 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
                 <FormItem><FormLabel>CEP</FormLabel><FormControl><Input placeholder="00000-000" {...field} /></FormControl><FormMessage /></FormItem>
             )} />
             <FormField control={form.control} name="cidade" render={({ field }) => (
-                <FormItem><FormLabel>Cidade</FormLabel><FormControl><Input placeholder="São Paulo" {...field} /></FormControl><FormMessage /></FormItem>
+                <FormItem><FormLabel>Cidade</FormLabel><FormControl><Input placeholder="São Paulo" {...field} disabled={field.value === 'Buscando...'} /></FormControl><FormMessage /></FormItem>
             )} />
             <FormField control={form.control} name="estado" render={({ field }) => (
-                <FormItem><FormLabel>Estado (UF)</FormLabel><FormControl><Input placeholder="SP" {...field} /></FormControl><FormMessage /></FormItem>
+                <FormItem><FormLabel>Estado (UF)</FormLabel><FormControl><Input placeholder="SP" {...field} disabled={field.value === 'Buscando...'} /></FormControl><FormMessage /></FormItem>
             )} />
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <FormField control={form.control} name="endereco" render={({ field }) => (
-                <FormItem><FormLabel>Logradouro/Rua</FormLabel><FormControl><Input placeholder="Rua Exemplo" {...field} /></FormControl><FormMessage /></FormItem>
+                <FormItem><FormLabel>Logradouro/Rua</FormLabel><FormControl><Input placeholder="Rua Exemplo" {...field} disabled={field.value === 'Buscando...'} /></FormControl><FormMessage /></FormItem>
             )} />
             <FormField control={form.control} name="numero" render={({ field }) => (
-                <FormItem><FormLabel>Número</FormLabel><FormControl><Input placeholder="123" {...field} /></FormControl><FormMessage /></FormItem>
+                <FormItem><FormLabel>Número</FormLabel><FormControl><Input id="numero" placeholder="123" {...field} /></FormControl><FormMessage /></FormItem>
             )} />
             <FormField control={form.control} name="complemento" render={({ field }) => (
                 <FormItem><FormLabel>Complemento</FormLabel><FormControl><Input placeholder="Apto 101" {...field} /></FormControl><FormMessage /></FormItem>
             )} />
         </div>
         <FormField control={form.control} name="bairro" render={({ field }) => (
-            <FormItem><FormLabel>Bairro</FormLabel><FormControl><Input placeholder="Centro" {...field} /></FormControl><FormMessage /></FormItem>
+            <FormItem><FormLabel>Bairro</FormLabel><FormControl><Input placeholder="Centro" {...field} disabled={field.value === 'Buscando...'} /></FormControl><FormMessage /></FormItem>
         )} />
         
         <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
