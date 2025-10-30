@@ -23,7 +23,8 @@ interface FuncionarioDetalhe {
 interface DetalheFolhaPontoProps {
   funcionario: FuncionarioDetalhe;
   mes: Date;
-  onEditRegistro: (dia: Date) => void; // Assinatura alterada para aceitar apenas o dia
+  onEditRegistro: (dia: Date) => void; // Para Ajuste de Ponto (Entrada/Saída)
+  onEditFaltaAbono: (registro: RegistroPonto, dia: Date) => void; // Novo: Para Edição de Falta/Abono
   onDeleteRegistro: () => void; 
 }
 
@@ -32,7 +33,7 @@ const JORNADA_MENSAL_PADRAO = 220; // Horas mensais padrão CLT
 const PERCENTUAL_EXTRA_NORMAL = 0.5; // 50% de adicional
 const PERCENTUAL_EXTRA_FERIADO_FIMSEMANA = 1.0; // 100% de adicional
 
-const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes, onEditRegistro, onDeleteRegistro }) => {
+const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes, onEditRegistro, onEditFaltaAbono, onDeleteRegistro }) => {
   const { salario, horas_mensais, registros } = funcionario;
   const { role } = useSessao();
   const [selfieModalOpen, setSelfieModalOpen] = useState(false);
@@ -144,6 +145,7 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
       .eq('id', registroId);
 
     if (error) {
+      // Se houver erro, exibe a mensagem do banco de dados (se disponível)
       showError('Erro ao excluir registro: ' + error.message);
     } else {
       showSuccess('Registro excluído com sucesso.');
@@ -198,7 +200,7 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
                             statusDisplay = formatarHoras(minutos);
                         }
 
-                        // Encontra o registro de Falta/Abono para exclusão
+                        // Encontra o registro de Falta/Abono para exclusão/edição
                         const registroFaltaAbono = registros.find(r => r.tipo === 'Falta' || r.tipo === 'Abono');
 
                         return (
@@ -259,21 +261,32 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
                                         {canEdit && (
                                             <div className="flex space-x-1 ml-2">
                                                 {registroFaltaAbono && (
-                                                    <Button 
-                                                        variant="ghost" 
-                                                        size="icon" 
-                                                        onClick={() => handleDelete(registroFaltaAbono.id)}
-                                                        title="Excluir Falta/Abono"
-                                                        className="h-6 w-6 text-red-500 hover:text-red-700"
-                                                    >
-                                                        <Trash2 className="w-4 h-4" />
-                                                    </Button>
+                                                    <>
+                                                        <Button 
+                                                            variant="ghost" 
+                                                            size="icon" 
+                                                            onClick={() => onEditFaltaAbono(registroFaltaAbono, data)} // Edição de Falta/Abono
+                                                            title="Editar Falta/Abono"
+                                                            className="h-6 w-6 text-primary hover:text-primary/80"
+                                                        >
+                                                            <Edit className="w-4 h-4" />
+                                                        </Button>
+                                                        <Button 
+                                                            variant="ghost" 
+                                                            size="icon" 
+                                                            onClick={() => handleDelete(registroFaltaAbono.id)}
+                                                            title="Excluir Falta/Abono"
+                                                            className="h-6 w-6 text-red-500 hover:text-red-700"
+                                                        >
+                                                            <Trash2 className="w-4 h-4" />
+                                                        </Button>
+                                                    </>
                                                 )}
                                                 {isAlert && (
                                                     <Button 
                                                         variant="outline" 
                                                         size="sm" 
-                                                        onClick={() => onEditRegistro(data)} // Passa apenas o dia
+                                                        onClick={() => onEditRegistro(data)} // Ajuste de Ponto (Entrada/Saída)
                                                         title="Ajustar Ponto"
                                                         className="h-6 text-xs"
                                                     >

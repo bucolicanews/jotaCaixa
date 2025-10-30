@@ -175,6 +175,13 @@ const FolhaPonto: React.FC = () => {
     setRegistroParaEdicao(null);
   };
   
+  const handleEditFaltaAbono = (registro: RegistroPonto, dia: Date) => {
+    if (!funcionarioDetalhe) return;
+    setRegistroParaEdicao(registro);
+    setDiaFaltaSelecionado(dia);
+    setFaltaDialogOpen(true);
+  };
+  
   const handleAjustePonto = (dia: Date) => {
     // Filtra todos os registros (Entrada/Saída) que pertencem ao dia
     const registrosDoDia = registrosDoFuncionario.filter(r => 
@@ -321,7 +328,8 @@ const FolhaPonto: React.FC = () => {
                 registros: registrosDoFuncionario,
             }}
             mes={dataSelecionada}
-            onEditRegistro={handleAjustePonto} // Passa a nova função de ajuste
+            onEditRegistro={handleAjustePonto} // Ajuste de Ponto (Entrada/Saída)
+            onEditFaltaAbono={handleEditFaltaAbono} // Edição de Falta/Abono
             onDeleteRegistro={handleFaltaRegistrada}
         />
       )}

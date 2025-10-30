@@ -86,6 +86,7 @@ const DetalheProprioPonto: React.FC = () => {
             }}
             mes={dataSelecionada}
             onEditRegistro={() => { /* Usuário não pode editar seu próprio ponto */ }}
+            onEditFaltaAbono={() => { /* Usuário não pode editar seu próprio ponto */ }}
             onDeleteRegistro={() => { /* Usuário não pode deletar seu próprio ponto */ }}
         />
     </div>
