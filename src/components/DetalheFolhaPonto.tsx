@@ -421,6 +421,13 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
                                 <TableCell className="font-medium">{format(data, 'dd/MM (EEE)', { locale: ptBR })}</TableCell>
                                 <TableCell>
                                     <div className="flex flex-wrap gap-2 items-center">
+                                        {/* NOVO AVISO DE FOLGA TRABALHADA */}
+                                        {isFolgaFixa && hasPontoRecords && (decisionRecord || needsManagement) && (
+                                            <span className="text-xs font-semibold text-red-600 bg-red-100 dark:bg-red-900/50 px-2 py-1 rounded-full">
+                                                TRABALHOU NA FOLGA
+                                            </span>
+                                        )}
+                                        
                                         {registros.filter(r => r.tipo !== 'Compensacao' && r.tipo !== 'Extra100').map(r => (
                                             <span key={r.id} className="text-sm bg-muted px-2 py-1 rounded-full flex items-center">
                                                 {r.tipo === 'Falta' ? (
