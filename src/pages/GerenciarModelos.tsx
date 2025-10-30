@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import FormContratoModelo from '@/components/FormContratoModelo';
 import { ContratoModelo } from '@/types/contratos';
 import { ClienteProfile } from '@/types/usuario';
+import ImportarModeloContrato from '@/components/ImportarModeloContrato';
 
 const GerenciarModelos = () => {
   const { role, perfil, carregando: carregandoSessao } = useSessao();
@@ -124,52 +125,59 @@ const GerenciarModelos = () => {
         </Dialog>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-xl">Modelos Cadastrados ({modelos.length})</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[300px]">Título</TableHead>
-                  <TableHead className="w-[150px]">Proprietário</TableHead>
-                  <TableHead className="w-[100px] text-right">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {modelos.length === 0 ? (
+      <div className="space-y-6">
+        <ImportarModeloContrato 
+            empresaId={empresaId}
+            onImportComplete={buscarModelos}
+        />
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-xl">Modelos Cadastrados ({modelos.length})</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
                   <TableRow>
-                    <TableCell colSpan={3} className="text-center py-4 text-muted-foreground">
-                      Nenhum modelo cadastrado.
-                    </TableCell>
+                    <TableHead className="w-[300px]">Título</TableHead>
+                    <TableHead className="w-[150px]">Proprietário</TableHead>
+                    <TableHead className="w-[100px] text-right">Ações</TableHead>
                   </TableRow>
-                ) : (
-                  modelos.map((modelo) => (
-                    <TableRow key={modelo.id}>
-                      <TableCell className="font-medium">{modelo.titulo}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {modelo.empresa_id ? 'Empresa' : 'Global (Admin)'}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end space-x-2">
-                          <Button variant="ghost" size="sm" onClick={() => handleEdit(modelo)}>
-                            <Edit className="w-4 h-4" />
-                          </Button>
-                          <Button variant="ghost" size="sm" onClick={() => handleDelete(modelo.id)}>
-                            <Trash2 className="w-4 h-4 text-red-500" />
-                          </Button>
-                        </div>
+                </TableHeader>
+                <TableBody>
+                  {modelos.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={3} className="text-center py-4 text-muted-foreground">
+                        Nenhum modelo cadastrado.
                       </TableCell>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
+                  ) : (
+                    modelos.map((modelo) => (
+                      <TableRow key={modelo.id}>
+                        <TableCell className="font-medium">{modelo.titulo}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {modelo.empresa_id ? 'Empresa' : 'Global (Admin)'}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end space-x-2">
+                            <Button variant="ghost" size="sm" onClick={() => handleEdit(modelo)}>
+                              <Edit className="w-4 h-4" />
+                            </Button>
+                            <Button variant="ghost" size="sm" onClick={() => handleDelete(modelo.id)}>
+                              <Trash2 className="w-4 h-4 text-red-500" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </LayoutPrincipal>
   );
 };

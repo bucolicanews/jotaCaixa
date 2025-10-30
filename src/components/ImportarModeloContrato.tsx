@@ -1,0 +1,138 @@
+import React, { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Upload, Loader2, FileText } from 'lucide-react';
+import { showSuccess, showError } from '@/utils/toast';
+import { supabase } from '@/integrations/supabase/client';
+import { Label } from '@/components/ui/label';
+
+interface ImportarModeloContratoProps {
+  empresaId: string | null;
+  onImportComplete: () => void;
+}
+
+const ImportarModeloContrato: React.FC<ImportarModeloContratoProps> = ({ empresaId, onImportComplete }) => {
+  const [file, setFile] = useState<File | null>(null);
+  const [titulo, setTitulo] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files && event.target.files[0]) {
+      const selectedFile = event.target.files[0];
+      setFile(selectedFile);
+      // Sugere o título baseado no nome do arquivo
+      setTitulo(selectedFile.name.replace(/\.(txt|html|doc|docx)$/i, '').trim());
+    } else {
+      setFile(null);
+      setTitulo('');
+    }
+  };
+
+  const handleImport = async () => {
+    if (!file || !titulo.trim()) {
+      showError('Por favor, selecione um arquivo e insira um título.');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const conteudo = e.target?.result as string;
+
+        if (!conteudo || conteudo.length < 50) {
+          showError('O conteúdo do arquivo é muito curto ou vazio.');
+          setLoading(false);
+          return;
+        }
+
+        const dataToInsert = {
+          titulo: titulo.trim(),
+          conteudo_template: conteudo,
+          empresa_id: empresaId,
+        };
+
+        const { error: insertError } = await supabase
+          .from('contrato_modelos')
+          .insert(dataToInsert);
+
+        if (insertError) {
+          throw new Error('Erro ao inserir modelo: ' + insertError.message);
+        }
+
+        showSuccess(`Modelo "${titulo}" importado com sucesso!`);
+        setFile(null);
+        setTitulo('');
+        onImportComplete();
+      };
+      
+      reader.onerror = () => {
+        throw new Error('Erro ao ler o arquivo.');
+      };
+
+      reader.readAsText(file);
+
+    } catch (error: any) {
+      console.error('Erro durante a importação:', error);
+      showError(error.message || 'Falha na importação do modelo.');
+    } finally {
+      // O loading é resetado dentro do reader.onload ou no catch
+      if (!file) setLoading(false); 
+    }
+  };
+
+  return (
+    <Card className="w-full">
+      <CardHeader>
+        <CardTitle className="text-xl flex items-center">
+            <FileText className="w-5 h-5 mr-2" /> Importar Modelo (TXT/HTML)
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <p className="text-sm text-muted-foreground">
+          Selecione um arquivo de texto (.txt, .html) contendo o template do contrato.
+        </p>
+        
+        <div className="space-y-2">
+            <Label htmlFor="modelo-titulo">Título do Modelo</Label>
+            <Input 
+                id="modelo-titulo"
+                value={titulo}
+                onChange={(e) => setTitulo(e.target.value)}
+                placeholder="Ex: Contrato de Prestação de Serviços"
+                disabled={loading}
+            />
+        </div>
+
+        <div className="flex items-center space-x-2">
+          <Input 
+            id="modelo-file" 
+            type="file" 
+            accept=".txt,.html" 
+            onChange={handleFileChange} 
+            className="flex-1"
+            disabled={loading}
+          />
+          <Button 
+            onClick={handleImport} 
+            disabled={!file || loading || !titulo.trim()}
+          >
+            {loading ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Upload className="mr-2 h-4 w-4" />
+            )}
+            Importar
+          </Button>
+        </div>
+        {file && (
+          <p className="text-sm text-green-600">Arquivo selecionado: {file.name}</p>
+        )}
+      </CardContent>
+    </Card>
+  );
+};
+
+export default ImportarModeloContrato;
