@@ -110,9 +110,10 @@ interface TaggedClientFieldProps {
     resourceId: string; // ID do Cliente/Empresa sendo editado
     disabled?: boolean;
     isOptional?: boolean;
+    refreshKey: number; // Adicionado para forçar atualização
 }
 
-const TaggedClientField: React.FC<TaggedClientFieldProps> = ({ control, fieldName, label, placeholder, resourceId, disabled, isOptional = true }) => {
+const TaggedClientField: React.FC<TaggedClientFieldProps> = ({ control, fieldName, label, placeholder, resourceId, disabled, isOptional = true, refreshKey }) => {
     const fieldMap = CAMPOS_CLIENTE_MAPA.find(m => m.field === fieldName);
     
     if (!fieldMap || !resourceId) {
@@ -127,10 +128,11 @@ const TaggedClientField: React.FC<TaggedClientFieldProps> = ({ control, fieldNam
         );
     }
     
+    // Passando refreshKey para o useTagManager para forçar a re-busca do estado
     const { isTagActive, loading, toggleTag } = useTagManager(resourceId, { label: fieldMap.label, tag: fieldMap.tag, field: fieldMap.field });
 
     return (
-        <FormField control={control} name={fieldName} render={({ field }) => (
+        <FormField key={fieldName + refreshKey} control={control} name={fieldName} render={({ field }) => (
             <FormItem>
                 <div className="flex justify-between items-center">
                     <FormLabel>{label} {isOptional && <span className="text-muted-foreground">(Opcional)</span>}</FormLabel>
@@ -166,7 +168,8 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, c
   
   const [activeTab, setActiveTab] = useState('pessoal');
   const [uploading, setUploading] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false); // Novo estado para controle de submissão/tags
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [tagRefreshKey, setTagRefreshKey] = useState(0); // Chave para forçar atualização das tags
 
   const permissoesDoCriador = (criadorPerfil && 'permissoes' in criadorPerfil)
     ? (criadorPerfil as ClienteProfile).permissoes
@@ -282,7 +285,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, c
     setIsSubmitting(true);
 
     try {
-        // 1. Delete existing custom tags for this client (only the mappable ones)
+        // 1. Deletar todas as tags customizadas mapeáveis para este cliente
         const { error: deleteError } = await supabase
             .from('contrato_tags')
             .delete()
@@ -292,7 +295,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, c
         if (deleteError) throw deleteError;
 
         if (activate) {
-            // 2. Insert the selected tags
+            // 2. Inserir as tags selecionadas
             const tagsToInsert = TAG_FIELDS_TO_MANAGE.map(m => ({
                 empresa_id: resourceId,
                 nome_tag: m.tag,
@@ -308,7 +311,10 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, c
         }
         
         showSuccess(`Todas as tags foram ${activate ? 'ativadas' : 'desativadas'} com sucesso!`);
-        // Nota: O useTagManager deve re-renderizar automaticamente ou na próxima montagem.
+        
+        // 3. Forçar a re-renderização dos TaggedClientField para atualizar o estado do checkbox
+        // Isso força o useTagManager a re-executar o fetchTagStatus
+        setTagRefreshKey(prev => prev + 1);
 
     } catch (error: any) {
         showError('Erro ao gerenciar tags: ' + error.message);
@@ -621,6 +627,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, c
     if (isClient && resourceId && fieldMap) {
         return (
             <TaggedClientField 
+                key={fieldName + tagRefreshKey} // Adicionando key para forçar re-renderização
                 control={form.control as Control<FormValues>} 
                 fieldName={fieldName} 
                 label={label} 
@@ -628,6 +635,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, c
                 resourceId={resourceId} 
                 disabled={disabled} 
                 isOptional={!required}
+                refreshKey={tagRefreshKey}
             />
         );
     }
@@ -671,13 +679,12 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, c
   if (isClient) {
     // Renderização para edição de Cliente (Empresa)
     const clientProfile = usuarioInicial as ClienteProfile;
-    const resourceId = clientProfile?.id;
     
     return (
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
           <h3 className="font-semibold text-lg">Dados de Identificação</h3>
-          <TaggedClientField control={form.control as Control<FormValues>} fieldName="nome" label="Nome da Empresa" placeholder="Nome completo" resourceId={resourceId} isOptional={false} />
+          {renderInputField('nome', 'Nome da Empresa', 'Nome completo', true)}
           <FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" placeholder="email@exemplo.com" value={clientProfile.email} disabled /></FormControl><FormMessage /></FormItem>
           <FormField control={form.control as unknown as Control<FormValues>} name="limite_usuarios" render={({ field }) => (
             <FormItem><FormLabel>Limite de Usuários da Equipe</FormLabel><FormControl><Input type="number" placeholder="5" {...field} /></FormControl><FormMessage /></FormItem>
@@ -711,23 +718,23 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, c
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <TaggedClientField control={form.control as Control<FormValues>} fieldName="cpf" label="CPF/CNPJ" placeholder="00.000.000/0000-00" resourceId={resourceId} />
-              <TaggedClientField control={form.control as Control<FormValues>} fieldName="rg" label="RG" placeholder="00.000.000-0" resourceId={resourceId} />
+              {renderInputField('cpf', 'CPF/CNPJ', '00.000.000/0000-00')}
+              {renderInputField('rg', 'RG', '00.000.000-0')}
           </div>
-          <TaggedClientField control={form.control as Control<FormValues>} fieldName="nome_mae" label="Nome da Mãe" placeholder="Nome completo da mãe" resourceId={resourceId} />
+          {renderInputField('nome_mae', 'Nome da Mãe', 'Nome completo da mãe')}
           
           <h4 className="font-semibold mt-6 border-t pt-4">Endereço</h4>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <TaggedClientField control={form.control as Control<FormValues>} fieldName="cep" label="CEP" placeholder="00000-000" resourceId={resourceId} />
-              <TaggedClientField control={form.control as Control<FormValues>} fieldName="cidade" label="Cidade" placeholder="São Paulo" resourceId={resourceId} />
-              <TaggedClientField control={form.control as Control<FormValues>} fieldName="estado" label="Estado (UF)" placeholder="SP" resourceId={resourceId} />
+              {renderInputField('cep', 'CEP', '00000-000')}
+              {renderInputField('cidade', 'Cidade', 'São Paulo')}
+              {renderInputField('estado', 'Estado (UF)', 'SP')}
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <TaggedClientField control={form.control as Control<FormValues>} fieldName="endereco" label="Logradouro/Rua" placeholder="Rua Exemplo" resourceId={resourceId} />
-              <TaggedClientField control={form.control as Control<FormValues>} fieldName="numero" label="Número" placeholder="123" resourceId={resourceId} />
-              <TaggedClientField control={form.control as Control<FormValues>} fieldName="complemento" label="Complemento" placeholder="Apto 101" resourceId={resourceId} />
+              {renderInputField('endereco', 'Logradouro/Rua', 'Rua Exemplo')}
+              {renderInputField('numero', 'Número', '123')}
+              {renderInputField('complemento', 'Complemento', 'Apto 101')}
           </div>
-          <TaggedClientField control={form.control as Control<FormValues>} fieldName="bairro" label="Bairro" placeholder="Centro" resourceId={resourceId} />
+          {renderInputField('bairro', 'Bairro', 'Centro')}
 
           <div className="space-y-2">
             <div className="flex justify-between items-center mb-1">
@@ -757,10 +764,9 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, c
     );
   }
 
-  // Renderização completa para Criação de Usuário ou Edição de Usuário (Funcionário)
+  // Renderização para Usuário (Funcionário)
   const isContractEditable = criadorRole === 'Admin' || criadorRole === 'Cliente';
   const isNewUser = !isEditing;
-  // const resourceId = usuarioInicial?.id; // REMOVIDO: Variável não utilizada neste escopo
 
   return (
     <Form {...form}>
