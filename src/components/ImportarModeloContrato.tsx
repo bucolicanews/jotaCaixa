@@ -40,46 +40,54 @@ const ImportarModeloContrato: React.FC<ImportarModeloContratoProps> = ({ empresa
     try {
       const reader = new FileReader();
       reader.onload = async (e) => {
-        const conteudo = e.target?.result as string;
+        try {
+            const conteudo = e.target?.result as string;
 
-        if (!conteudo || conteudo.length < 50) {
-          showError('O conteúdo do arquivo é muito curto ou vazio.');
-          setLoading(false);
-          return;
+            if (!conteudo || conteudo.length < 50) {
+              showError('O conteúdo do arquivo é muito curto ou vazio.');
+              setLoading(false);
+              return;
+            }
+
+            const dataToInsert = {
+              titulo: titulo.trim(),
+              conteudo_template: conteudo,
+              empresa_id: empresaId,
+            };
+
+            const { error: insertError } = await supabase
+              .from('contrato_modelos')
+              .insert(dataToInsert);
+
+            if (insertError) {
+              throw new Error('Erro ao inserir modelo: ' + insertError.message);
+            }
+
+            showSuccess(`Modelo "${titulo}" importado com sucesso!`);
+            setFile(null);
+            setTitulo('');
+            onImportComplete();
+            
+        } catch (error: any) {
+            console.error('Erro durante a importação:', error);
+            showError(error.message || 'Falha na importação do modelo.');
+        } finally {
+            setLoading(false);
         }
-
-        const dataToInsert = {
-          titulo: titulo.trim(),
-          conteudo_template: conteudo,
-          empresa_id: empresaId,
-        };
-
-        const { error: insertError } = await supabase
-          .from('contrato_modelos')
-          .insert(dataToInsert);
-
-        if (insertError) {
-          throw new Error('Erro ao inserir modelo: ' + insertError.message);
-        }
-
-        showSuccess(`Modelo "${titulo}" importado com sucesso!`);
-        setFile(null);
-        setTitulo('');
-        onImportComplete();
       };
       
       reader.onerror = () => {
-        throw new Error('Erro ao ler o arquivo.');
+        showError('Erro ao ler o arquivo.');
+        setLoading(false);
       };
 
       reader.readAsText(file);
 
     } catch (error: any) {
-      console.error('Erro durante a importação:', error);
+      // Este catch só pega erros antes do FileReader iniciar
+      console.error('Erro inicial durante a importação:', error);
       showError(error.message || 'Falha na importação do modelo.');
-    } finally {
-      // O loading é resetado dentro do reader.onload ou no catch
-      if (!file) setLoading(false); 
+      setLoading(false);
     }
   };
 
