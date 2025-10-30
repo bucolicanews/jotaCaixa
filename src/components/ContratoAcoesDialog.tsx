@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/button';
 import { Copy, ExternalLink, FileText, Eye, Printer } from 'lucide-react';
 import { ContratoGerado } from '@/types/contratos';
 import { showSuccess } from '@/utils/toast';
-import { Textarea } from './ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
@@ -38,11 +37,32 @@ const ContratoAcoesDialog: React.FC<ContratoAcoesDialogProps> = ({ contrato, ope
   
   const handlePrint = () => {
     if (contrato?.conteudo_renderizado) {
-        printContent(contrato.conteudo_renderizado, `Contrato: ${contrato.id}`);
+        const isHtml = contrato.valores_tags_preenchidos?.tipo_conteudo === 'html';
+        let printHtml = contrato.conteudo_renderizado;
+        
+        if (!isHtml) {
+            // Se for texto simples, envolve em <pre> para preservar a formatação na impressão
+            printHtml = `<pre style="white-space: pre-wrap; font-family: inherit; margin: 0;">${printHtml}</pre>`;
+        }
+        
+        printContent(printHtml, `Contrato: ${contrato.id}`);
     }
   };
 
   if (!contrato) return null;
+  
+  const isHtml = contrato.valores_tags_preenchidos?.tipo_conteudo === 'html';
+  
+  // Conteúdo a ser exibido na aba de prévia
+  const contentToDisplay = contrato.conteudo_renderizado ? (
+    isHtml ? (
+        <div dangerouslySetInnerHTML={{ __html: contrato.conteudo_renderizado }} />
+    ) : (
+        <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', margin: 0 }}>{contrato.conteudo_renderizado}</pre>
+    )
+  ) : (
+    <p className="text-center text-muted-foreground">Conteúdo não renderizado ou contrato em rascunho.</p>
+  );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -57,20 +77,15 @@ const ContratoAcoesDialog: React.FC<ContratoAcoesDialogProps> = ({ contrato, ope
         </DialogHeader>
         
         <Tabs defaultValue="preview">
-            <TabsList className="grid w-full grid-cols-3">
+            <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="preview" className="flex items-center"><Eye className="w-4 h-4 mr-1" /> Visualizar Contrato</TabsTrigger>
                 <TabsTrigger value="link">Link de Assinatura</TabsTrigger>
-                <TabsTrigger value="html">Visualizar HTML</TabsTrigger>
             </TabsList>
             
-            {/* NOVA ABA: PRÉVIA RENDERIZADA */}
+            {/* ABA: PRÉVIA RENDERIZADA */}
             <TabsContent value="preview" className="space-y-4 pt-4">
                 <div className="border rounded-md p-4 bg-background shadow-inner overflow-y-auto max-h-[50vh]">
-                    {contrato.conteudo_renderizado ? (
-                        <div dangerouslySetInnerHTML={{ __html: contrato.conteudo_renderizado }} />
-                    ) : (
-                        <p className="text-center text-muted-foreground">Conteúdo não renderizado ou contrato em rascunho.</p>
-                    )}
+                    {contentToDisplay}
                 </div>
                 <Button onClick={handlePrint} variant="outline" className="w-full">
                     <Printer className="w-4 h-4 mr-2" /> Imprimir / Gerar PDF
@@ -95,16 +110,6 @@ const ContratoAcoesDialog: React.FC<ContratoAcoesDialogProps> = ({ contrato, ope
                 <p className="text-sm text-muted-foreground">
                     Envie este link ao cliente para que ele possa visualizar e assinar o contrato eletronicamente.
                 </p>
-            </TabsContent>
-            
-            <TabsContent value="html" className="space-y-4 pt-4">
-                <Label>Conteúdo Renderizado do Contrato (Código Fonte)</Label>
-                <Textarea 
-                    readOnly 
-                    value={contrato.conteudo_renderizado || 'Conteúdo não renderizado.'} 
-                    rows={15} 
-                    className="font-mono text-xs"
-                />
             </TabsContent>
         </Tabs>
         

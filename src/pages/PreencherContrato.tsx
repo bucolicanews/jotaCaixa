@@ -23,6 +23,7 @@ import { TAGS_PADRAO } from '@/config/contrato-tags-padrao';
 import ContratoPreviewDialog from '@/components/ContratoPreviewDialog'; // Importando o novo componente
 
 type TipoLancamento = 'unico' | 'repetir' | 'parcelar';
+type TipoConteudo = 'html' | 'texto'; // Definindo o tipo
 
 interface EmpresaLogada {
     nome: string;
@@ -48,6 +49,9 @@ const PreencherContrato: React.FC = () => {
   // Estados para a prévia
   const [previewOpen, setPreviewOpen] = useState(false);
   const [conteudoPreview, setConteudoPreview] = useState('');
+  
+  // Novo estado para o tipo de conteúdo (assumindo HTML por padrão do modelo)
+  const [tipoConteudo, setTipoConteudo] = useState<TipoConteudo>('html'); 
   
   // Campos obrigatórios para o contrato
   const [clienteSelecionadoId, setClienteSelecionadoId] = useState<string>('');
@@ -143,6 +147,11 @@ const PreencherContrato: React.FC = () => {
             setEmpresaLogada(empresaData);
         }
     }
+    
+    // 5. Determinar o tipo de conteúdo do modelo (Assumindo HTML se não houver metadado)
+    // Para simplificar, vamos assumir que se o template começar com <, é HTML. Caso contrário, é texto.
+    const isHtmlContent = modeloData?.conteudo_template?.trim().startsWith('<') ?? true;
+    setTipoConteudo(isHtmlContent ? 'html' : 'texto');
 
     setCarregandoDados(false);
   }, [modeloId, empresaId, navigate, role, perfil]);
@@ -257,6 +266,12 @@ const PreencherContrato: React.FC = () => {
         const regex = new RegExp(tag, 'g');
         conteudoRenderizado = conteudoRenderizado.replace(regex, tags[tag]);
     }
+    
+    // Se for texto simples, converte quebras de linha para <br> para renderização HTML
+    if (tipoConteudo === 'texto') {
+        conteudoRenderizado = conteudoRenderizado.replace(/\n/g, '<br>');
+    }
+    
     return conteudoRenderizado;
   };
   
@@ -364,7 +379,7 @@ const PreencherContrato: React.FC = () => {
             data_inicio: format(new Date(), 'yyyy-MM-dd'), // Data de criação do contrato
             numero_parcelas: numParcelas,
             dia_vencimento_parcela: tipoLancamento === 'unico' ? null : intervaloDias, // Usando intervaloDias aqui para simplificar o campo
-            valores_tags_preenchidos: valoresTags,
+            valores_tags_preenchidos: { ...valoresTags, tipo_conteudo: tipoConteudo }, // SALVANDO O TIPO DE CONTEÚDO
             conteudo_renderizado: conteudoRenderizado,
             // link_assinatura_externo e documento_assinado_url serão preenchidos depois
         };
@@ -640,6 +655,7 @@ const PreencherContrato: React.FC = () => {
         onOpenChange={setPreviewOpen}
         conteudoHtml={conteudoPreview}
         titulo={modelo?.titulo || 'Prévia'}
+        isHtml={tipoConteudo === 'html'} // Passando o tipo de conteúdo
       />
     </LayoutPrincipal>
   );
