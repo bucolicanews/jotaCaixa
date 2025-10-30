@@ -391,6 +391,7 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
                             } else if (decisionRecord === 'Compensacao') {
                                 statusDisplay = <span className="text-sm text-blue-600 flex items-center"><CalendarCheck className="w-4 h-4 mr-1" /> Compensado (Banco de Horas)</span>;
                             } else {
+                                // Folga Fixa sem trabalho ou decisão
                                 statusDisplay = <span className="text-sm text-muted-foreground">Folga Fixa</span>;
                             }
                         } else if (isFalta) {
@@ -439,9 +440,11 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
                                             </span>
                                         )}
                                         
-                                        {registros.filter(r => r.tipo !== 'Compensacao' && r.tipo !== 'Extra100').map(r => (
-                                            <span key={r.id} className="text-sm bg-muted px-2 py-1 rounded-full flex items-center">
-                                                {r.tipo === 'Falta' ? (
+                                        {registros.filter(r => r.tipo !== 'Compensacao' && r.tipo !== 'Extra100').map(r => {
+                                            let registroDisplay;
+                                            
+                                            if (r.tipo === 'Falta') {
+                                                registroDisplay = (
                                                     <>
                                                         {r.atestado_url ? 'Falta Justificada' : 'Falta Injustificada'}
                                                         {r.atestado_url && (
@@ -456,11 +459,18 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
                                                             </a>
                                                         )}
                                                     </>
-                                                ) : r.tipo === 'Abono' ? (
-                                                    <>
-                                                        Abono ({r.observacao})
-                                                    </>
-                                                ) : (
+                                                );
+                                            } else if (r.tipo === 'Abono') {
+                                                // Se for abono de compensação, exibe apenas a observação
+                                                if (r.observacao?.includes('Compensação de folga trabalhada')) {
+                                                    registroDisplay = r.observacao;
+                                                } else {
+                                                    // Abono normal (4h, 6h, 8h)
+                                                    registroDisplay = `Abono (${r.observacao})`;
+                                                }
+                                            } else {
+                                                // Entrada/Saída
+                                                registroDisplay = (
                                                     <>
                                                         {r.tipo}: {format(parseISO(r.horario_registro), 'HH:mm')}
                                                         {r.maps_url && (
@@ -484,9 +494,15 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
                                                             </button>
                                                         )}
                                                     </>
-                                                )}
-                                            </span>
-                                        ))}
+                                                );
+                                            }
+                                            
+                                            return (
+                                                <span key={r.id} className="text-sm bg-muted px-2 py-1 rounded-full flex items-center">
+                                                    {registroDisplay}
+                                                </span>
+                                            );
+                                        })}
                                         
                                         {/* Ações de Edição/Exclusão */}
                                         {canEdit && !isDiaFuturo && !isFerias && !needsManagement && (
