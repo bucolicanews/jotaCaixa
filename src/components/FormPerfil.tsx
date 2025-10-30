@@ -5,7 +5,7 @@ import * as z from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Loader2, User, Upload, CalendarIcon, CheckCircle2, XCircle } from 'lucide-react';
+import { CalendarIcon, CheckCircle2, XCircle, Loader2, User, Upload } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { AnyProfile, UserRole, UsuarioProfile } from '@/types/usuario';
@@ -20,6 +20,7 @@ import { ptBR } from 'date-fns/locale';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Checkbox } from './ui/checkbox';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from './ui/accordion';
+import GerenciarFerias from './GerenciarFerias';
 
 // Esquema de validação para os campos de URL (opcional)
 const urlSchema = z.string().url('URL inválida.').optional().or(z.literal(''));
@@ -125,7 +126,6 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfil, role, onSaveComplete })
     },
   });
 
-  const [activeTab, setActiveTab] = useState('cadastrais');
   const [uploading, setUploading] = useState(false);
 
   const getTableName = (currentRole: UserRole) => {
@@ -375,10 +375,11 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfil, role, onSaveComplete })
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <Tabs value="cadastrais" className="w-full">
               <TabsList className="flex flex-wrap justify-start w-full h-auto p-1">
                 <TabsTrigger value="foto" className="flex-1 md:flex-none">Foto</TabsTrigger>
-                <TabsTrigger value="cadastrais" className="flex-1 md:flex-none">Dados Cadastrais</TabsTrigger>
+                <TabsTrigger value="cadastrais" className="flex-1 md:flex-none">Dados Pessoais</TabsTrigger>
+                {isEditingUsuario && <TabsTrigger value="folgas" className="flex-1 md:flex-none">Folgas/Férias</TabsTrigger>}
                 <TabsTrigger value="documentos" className="flex-1 md:flex-none">Documentos</TabsTrigger>
                 {isEditingUsuario && <TabsTrigger value="contrato" className="flex-1 md:flex-none">Contrato (RH)</TabsTrigger>}
               </TabsList>
@@ -426,8 +427,34 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfil, role, onSaveComplete })
                 </div>
                 {renderInputField('bairro', 'Bairro', 'Centro')}
               </TabsContent>
+              
+              {/* TAB 3: FOLGAS E FÉRIAS (Visualização) */}
+              {isEditingUsuario && (
+                <TabsContent value="folgas" className="mt-4 space-y-6 p-2 md:p-4">
+                    <h4 className="font-semibold">Configuração de Folgas (Gerenciado pelo RH)</h4>
+                    <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4 bg-muted/50">
+                        <div className="space-y-1 leading-none">
+                            <FormLabel>
+                                Folga de Domingo Obrigatória: {usuarioProfile?.folga_domingo_obrigatoria ? 'Sim' : 'Não'}
+                            </FormLabel>
+                            <p className="text-sm text-muted-foreground">
+                                Dias de Folga Fixos: {usuarioProfile?.dias_folga_fixos?.join(', ') || 'Nenhum adicional'}
+                            </p>
+                        </div>
+                    </FormItem>
+                    
+                    {usuarioProfile?.cliente_id && (
+                        <div className="pt-6 border-t">
+                            <GerenciarFerias 
+                                funcionarioId={usuarioProfile.id} 
+                                empresaId={usuarioProfile.cliente_id} 
+                            />
+                        </div>
+                    )}
+                </TabsContent>
+              )}
 
-              {/* TAB 3: DOCUMENTOS DE ADMISSÃO */}
+              {/* TAB 4: DOCUMENTOS DE ADMISSÃO */}
               <TabsContent value="documentos" className="mt-4 space-y-6 p-2 md:p-4">
                 <p className="text-sm text-muted-foreground">Anexe os documentos obrigatórios. O link será gerado automaticamente após o upload.</p>
                 
@@ -454,7 +481,6 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfil, role, onSaveComplete })
                         <AccordionContent className="space-y-4 p-2">
                             {renderDocumentField('certidao_nascimento_url', 'Certidão de Nascimento (Solteiro)', false)}
                             {renderDocumentField('certidao_casamento_url', 'Certidão de Casamento (Casado)', false)}
-                            {/* TODO: Implementar upload de certidões de filhos (JSONB) */}
                             <FormItem>
                                 <FormLabel>Certidões de Nascimento dos Filhos (Menores de 14)</FormLabel>
                                 <Input type="file" multiple disabled placeholder="Em breve" />
@@ -493,28 +519,25 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfil, role, onSaveComplete })
                 </Accordion>
               </TabsContent>
 
-              {/* TAB 4: DADOS CONTRATUAIS (RH) */}
+              {/* TAB 5: DADOS CONTRATUAIS (RH) */}
               {isEditingUsuario && (
                 <TabsContent value="contrato" className="mt-4 space-y-6 p-2 md:p-4">
                     <p className="text-sm text-muted-foreground">
-                        {isContractEditable 
-                            ? 'Estes campos são usados para gestão de RH e podem ser editados por você.'
-                            : 'Estes campos são gerenciados pelo RH da sua empresa e são somente leitura.'
-                        }
+                        Estes campos são gerenciados pelo RH da sua empresa e são somente leitura.
                     </p>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {renderDateField('data_inicio_contrato', 'Início do Contrato', !isContractEditable)}
-                        {renderDateField('data_fim_contrato', 'Fim do Contrato', !isContractEditable)}
+                        {renderDateField('data_inicio_contrato', 'Início do Contrato', true)}
+                        {renderDateField('data_fim_contrato', 'Fim do Contrato', true)}
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {renderDateField('data_inicio_aviso', 'Início do Aviso Prévio', !isContractEditable)}
+                        {renderDateField('data_inicio_aviso', 'Início do Aviso Prévio', true)}
                         <FormField
                             control={form.control as unknown as Control<FormValues>}
                             name="tipo_aviso"
                             render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Tipo de Aviso</FormLabel>
-                                    <Select onValueChange={field.onChange} defaultValue={field.value || 'Nenhum'} disabled={!isContractEditable}>
+                                    <Select onValueChange={field.onChange} defaultValue={field.value || 'Nenhum'} disabled={true}>
                                         <FormControl>
                                             <SelectTrigger>
                                                 <SelectValue placeholder="Selecione o tipo de aviso" />

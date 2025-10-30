@@ -8,16 +8,36 @@ import { showError } from '@/utils/toast';
 import { UsuarioProfile } from '@/types/usuario';
 import DetalheFolhaPonto from './DetalheFolhaPonto';
 import { MonthPicker } from './MonthPicker';
-import { RegistroPonto } from '@/types/ponto'; // Importando a interface centralizada
+import { RegistroPonto, Ferias } from '@/types/ponto'; // Importando a interface centralizada
 
 const DetalheProprioPonto: React.FC = () => {
   const { usuario, perfil, carregando } = useSessao();
   const [dataSelecionada, setDataSelecionada] = useState<Date>(startOfMonth(new Date()));
   const [carregandoDados, setCarregandoDados] = useState(true);
   const [registrosDoFuncionario, setRegistrosDoFuncionario] = useState<RegistroPonto[]>([]);
+  const [feriasDoFuncionario, setFeriasDoFuncionario] = useState<Ferias[]>([]);
   
   const usuarioProfile = perfil as UsuarioProfile;
   const funcionarioId = usuario?.id;
+
+  const fetchFerias = useCallback(async (id: string, data: Date) => {
+    const inicioMes = format(startOfMonth(data), 'yyyy-MM-dd');
+    const fimMes = format(endOfMonth(data), 'yyyy-MM-dd');
+    
+    const { data: feriasData, error } = await supabase
+        .from('ferias')
+        .select('*')
+        .eq('funcionario_id', id)
+        .lte('data_inicio', fimMes)
+        .gte('data_fim', inicioMes);
+
+    if (error) {
+        showError('Erro ao carregar férias: ' + error.message);
+        setFeriasDoFuncionario([]);
+    } else {
+        setFeriasDoFuncionario(feriasData as Ferias[]);
+    }
+  }, []);
 
   const fetchRegistros = useCallback(async (id: string, data: Date) => {
     setCarregandoDados(true);
@@ -45,8 +65,9 @@ const DetalheProprioPonto: React.FC = () => {
   useEffect(() => {
     if (funcionarioId) {
       fetchRegistros(funcionarioId, dataSelecionada);
+      fetchFerias(funcionarioId, dataSelecionada);
     }
-  }, [funcionarioId, dataSelecionada, fetchRegistros]);
+  }, [funcionarioId, dataSelecionada, fetchRegistros, fetchFerias]);
 
   if (carregando || carregandoDados) {
     return (
@@ -83,6 +104,9 @@ const DetalheProprioPonto: React.FC = () => {
                 salario: usuarioProfile.salario,
                 horas_mensais: usuarioProfile.horas_mensais,
                 registros: registrosDoFuncionario,
+                dias_folga_fixos: usuarioProfile.dias_folga_fixos || [],
+                folga_domingo_obrigatoria: usuarioProfile.folga_domingo_obrigatoria ?? true,
+                ferias: feriasDoFuncionario,
             }}
             mes={dataSelecionada}
             onEditRegistro={() => { /* Usuário não pode editar seu próprio ponto */ }}

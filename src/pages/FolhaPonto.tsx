@@ -12,7 +12,7 @@ import DetalheFolhaPonto from '@/components/DetalheFolhaPonto';
 import { MonthPicker } from '@/components/MonthPicker';
 import GerenciarFaltas from '@/components/GerenciarFaltas';
 import AjustarPontoDialog from '@/components/AjustarPontoDialog'; // Importando o novo componente
-import { RegistroPonto } from '@/types/ponto';
+import { RegistroPonto, Ferias } from '@/types/ponto';
 
 interface FuncionarioComDados extends UsuarioProfile {
     id: string;
@@ -20,6 +20,8 @@ interface FuncionarioComDados extends UsuarioProfile {
     email: string;
     salario: number;
     horas_mensais: number;
+    dias_folga_fixos: string[] | null;
+    folga_domingo_obrigatoria: boolean | null;
 }
 
 interface ClienteSimples {
@@ -40,6 +42,7 @@ const FolhaPonto: React.FC = () => {
   const [funcionarios, setFuncionarios] = useState<FuncionarioComDados[]>([]);
   const [funcionarioSelecionadoId, setFuncionarioSelecionadoId] = useState<string | null>(null);
   const [registrosDoFuncionario, setRegistrosDoFuncionario] = useState<RegistroPonto[]>([]);
+  const [feriasDoFuncionario, setFeriasDoFuncionario] = useState<Ferias[]>([]);
   
   // Estado para Gerenciar Faltas/Abonos
   const [faltaDialogOpen, setFaltaDialogOpen] = useState(false);
@@ -85,7 +88,7 @@ const FolhaPonto: React.FC = () => {
     
     let query = supabase
         .from('tbl_usuarios')
-        .select('id, nome, email, salario, horas_mensais')
+        .select('id, nome, email, salario, horas_mensais, dias_folga_fixos, folga_domingo_obrigatoria')
         .eq('cliente_id', empresaId)
         .order('nome');
 
@@ -105,6 +108,25 @@ const FolhaPonto: React.FC = () => {
     }
     setCarregandoDados(false);
   }, [funcionarioSelecionadoId]);
+  
+  const fetchFerias = useCallback(async (funcionarioId: string, data: Date) => {
+    const inicioMes = format(startOfMonth(data), 'yyyy-MM-dd');
+    const fimMes = format(endOfMonth(data), 'yyyy-MM-dd');
+    
+    const { data: feriasData, error } = await supabase
+        .from('ferias')
+        .select('*')
+        .eq('funcionario_id', funcionarioId)
+        .lte('data_inicio', fimMes)
+        .gte('data_fim', inicioMes);
+
+    if (error) {
+        showError('Erro ao carregar férias: ' + error.message);
+        setFeriasDoFuncionario([]);
+    } else {
+        setFeriasDoFuncionario(feriasData as Ferias[]);
+    }
+  }, []);
 
   const fetchRegistros = useCallback(async (funcionarioId: string, data: Date) => {
     setCarregandoDados(true);
@@ -145,14 +167,16 @@ const FolhaPonto: React.FC = () => {
     }
   }, [carregando, empresaIdParaFiltro, isAdmin, clienteSelecionadoId, fetchFuncionarios]);
 
-  // Efeito 3: Carregar Registros (depende do Funcionário e da Data)
+  // Efeito 3: Carregar Registros e Férias (depende do Funcionário e da Data)
   useEffect(() => {
     if (funcionarioSelecionadoId) {
       fetchRegistros(funcionarioSelecionadoId, dataSelecionada);
+      fetchFerias(funcionarioSelecionadoId, dataSelecionada);
     } else {
         setRegistrosDoFuncionario([]);
+        setFeriasDoFuncionario([]);
     }
-  }, [funcionarioSelecionadoId, dataSelecionada, fetchRegistros]);
+  }, [funcionarioSelecionadoId, dataSelecionada, fetchRegistros, fetchFerias]);
   
   // --- Lógica de Gerenciamento ---
   
@@ -162,6 +186,7 @@ const FolhaPonto: React.FC = () => {
     // Re-busca os registros após registrar/editar/deletar a falta
     if (funcionarioSelecionadoId) {
         await fetchRegistros(funcionarioSelecionadoId, dataSelecionada);
+        await fetchFerias(funcionarioSelecionadoId, dataSelecionada);
     }
     setRegistroParaEdicao(null);
   };
@@ -256,6 +281,9 @@ const FolhaPonto: React.FC = () => {
                 salario: funcionarioDetalhe.salario || 0,
                 horas_mensais: funcionarioDetalhe.horas_mensais || 220,
                 registros: registrosDoFuncionario,
+                dias_folga_fixos: funcionarioDetalhe.dias_folga_fixos || [],
+                folga_domingo_obrigatoria: funcionarioDetalhe.folga_domingo_obrigatoria ?? true,
+                ferias: feriasDoFuncionario,
             }}
             mes={dataSelecionada}
             onEditRegistro={handleAjustePonto} // Ajuste de Ponto (Entrada/Saída)

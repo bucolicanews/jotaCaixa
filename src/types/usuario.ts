@@ -27,6 +27,10 @@ export interface UsuarioProfile {
   cliente_id: string | null;
   permissoes: Record<string, boolean>; // Ex: { "contas_pagar": true, "relatorios": false }
   
+  // Novos campos de Folga
+  dias_folga_fixos?: string[] | null; // Ex: ['Saturday', 'Sunday']
+  folga_domingo_obrigatoria?: boolean | null;
+  
   // Novos campos de Salário/Jornada
   salario?: number | null;
   horas_semanais?: number | null;

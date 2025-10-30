@@ -9,3 +9,10 @@ export interface RegistroPonto {
   atestado_url?: string | null;
   observacao?: string | null;
 }
+
+export interface Ferias {
+  id: string;
+  data_inicio: string;
+  data_fim: string;
+  periodo_referencia: string;
+}

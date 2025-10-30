@@ -19,6 +19,7 @@ import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import GerenciarFerias from './GerenciarFerias';
 
 // Esquema de validação para os campos de URL (opcional)
 const urlSchema = z.string().url('URL inválida.').optional().or(z.literal(''));
@@ -30,6 +31,10 @@ const formSchema = z.object({
   senha: z.string().min(6, 'A senha deve ter pelo menos 6 caracteres.').optional().or(z.literal('')),
   limite_usuarios: z.coerce.number().int().min(1, 'O limite deve ser pelo menos 1.').optional(),
   permissoes: z.record(z.boolean()).optional(),
+  
+  // Novos Campos de Folga
+  dias_folga_fixos: z.array(z.string()).optional(),
+  folga_domingo_obrigatoria: z.boolean().optional(),
   
   // Novos Campos de Salário/Jornada
   salario: z.coerce.number().min(0).optional(),
@@ -83,6 +88,16 @@ interface FormUsuarioProps {
   onSaveComplete: () => void;
 }
 
+const DIAS_DA_SEMANA = [
+    { value: 'Monday', label: 'Segunda-feira' },
+    { value: 'Tuesday', label: 'Terça-feira' },
+    { value: 'Wednesday', label: 'Quarta-feira' },
+    { value: 'Thursday', label: 'Quinta-feira' },
+    { value: 'Friday', label: 'Sexta-feira' },
+    { value: 'Saturday', label: 'Sábado' },
+    { value: 'Sunday', label: 'Domingo' },
+];
+
 const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, clienteId, usuarioInicial, onSaveComplete }) => {
   const isEditing = !!usuarioInicial;
   const isClient = isEditing && usuarioInicial && 'limite_usuarios' in usuarioInicial;
@@ -135,6 +150,10 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, c
       senha: '',
       limite_usuarios: isClient ? (profileToEdit as ClienteProfile).limite_usuarios : 5,
       permissoes: defaultPermissoes,
+      
+      // Dados de Folga
+      dias_folga_fixos: (profileToEdit as UsuarioProfile)?.dias_folga_fixos || ['Saturday', 'Sunday'],
+      folga_domingo_obrigatoria: (profileToEdit as UsuarioProfile)?.folga_domingo_obrigatoria ?? true,
       
       // Dados de Salário/Jornada
       salario: (profileToEdit as UsuarioProfile)?.salario || 0,
@@ -210,6 +229,10 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, c
           // Edição de Usuário (Funcionário)
           dataToUpdate.permissoes = values.permissoes;
           
+          // Dados de Folga
+          dataToUpdate.dias_folga_fixos = values.dias_folga_fixos || [];
+          dataToUpdate.folga_domingo_obrigatoria = values.folga_domingo_obrigatoria;
+          
           // Dados de Salário/Jornada
           dataToUpdate.salario = values.salario;
           dataToUpdate.horas_semanais = values.horas_semanais;
@@ -279,6 +302,13 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, c
         // Atualiza permissões e dados cadastrais/documentos após a criação
         const { error: userUpdateError } = await supabase.from('tbl_usuarios').update({ 
             permissoes: values.permissoes,
+            // Adiciona dados de folga
+            dias_folga_fixos: values.dias_folga_fixos || ['Saturday', 'Sunday'],
+            folga_domingo_obrigatoria: values.folga_domingo_obrigatoria,
+            // Adiciona dados de salário/jornada
+            salario: values.salario,
+            horas_semanais: values.horas_semanais,
+            horas_mensais: values.horas_mensais,
             // Adiciona dados cadastrais básicos na criação
             cpf: values.cpf || null,
             rg: values.rg || null,
@@ -292,10 +322,6 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, c
             bairro: values.bairro || null,
             cidade: values.cidade || null,
             estado: values.estado || null,
-            // Adiciona dados de salário/jornada na criação
-            salario: values.salario,
-            horas_semanais: values.horas_semanais,
-            horas_mensais: values.horas_mensais,
         }).eq('email', values.email);
         
         if (userUpdateError) throw new Error('Usuário criado, mas falha ao definir dados iniciais.');
@@ -535,10 +561,11 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, c
         
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="flex flex-wrap justify-start w-full h-auto p-1">
-            <TabsTrigger value="pessoal" className="flex-1 md:flex-none md:w-1/4">Geral</TabsTrigger>
-            {isUserBeingManagedByClient && <TabsTrigger value="cadastrais" className="flex-1 md:flex-none md:w-1/4">Dados Cadastrais</TabsTrigger>}
-            {isUserBeingManagedByClient && <TabsTrigger value="documentos" className="flex-1 md:flex-none md:w-1/4">Documentos</TabsTrigger>}
-            {isUserBeingManagedByClient && <TabsTrigger value="contrato" className="flex-1 md:flex-none md:w-1/4">Contrato (RH)</TabsTrigger>}
+            <TabsTrigger value="pessoal" className="flex-1 md:flex-none md:w-1/5">Geral</TabsTrigger>
+            {isUserBeingManagedByClient && <TabsTrigger value="folgas" className="flex-1 md:flex-none md:w-1/5">Folgas/Férias</TabsTrigger>}
+            {isUserBeingManagedByClient && <TabsTrigger value="cadastrais" className="flex-1 md:flex-none md:w-1/5">Dados Cadastrais</TabsTrigger>}
+            {isUserBeingManagedByClient && <TabsTrigger value="documentos" className="flex-1 md:flex-none md:w-1/5">Documentos</TabsTrigger>}
+            {isUserBeingManagedByClient && <TabsTrigger value="contrato" className="flex-1 md:flex-none md:w-1/5">Contrato (RH)</TabsTrigger>}
           </TabsList>
 
           {/* TAB 1: GERAL (Nome, Email, Senha, Permissões, Salário) */}
@@ -584,8 +611,95 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, c
               </div>
             )}
           </TabsContent>
+          
+          {/* TAB 2: FOLGAS E FÉRIAS */}
+          {isUserBeingManagedByClient && (
+            <TabsContent value="folgas" className="mt-4 space-y-6 p-4">
+                <h4 className="font-semibold">Configuração de Folgas Fixas</h4>
+                <FormField
+                    control={form.control as unknown as Control<FormValues>}
+                    name="folga_domingo_obrigatoria"
+                    render={({ field }) => (
+                        <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                            <FormControl>
+                                <Checkbox
+                                    checked={field.value}
+                                    onCheckedChange={field.onChange}
+                                    disabled={isNewUser}
+                                />
+                            </FormControl>
+                            <div className="space-y-1 leading-none">
+                                <FormLabel>
+                                    Considerar Domingo como Folga Obrigatória (Padrão CLT)
+                                </FormLabel>
+                                <p className="text-sm text-muted-foreground">
+                                    Desmarque se o funcionário trabalha em escala 6x1 ou 12x36 e o domingo não é garantido como folga.
+                                </p>
+                            </div>
+                        </FormItem>
+                    )}
+                />
+                <FormField
+                    control={form.control as unknown as Control<FormValues>}
+                    name="dias_folga_fixos"
+                    render={() => (
+                        <FormItem>
+                            <FormLabel>Dias de Folga Fixos (Além do Domingo)</FormLabel>
+                            <div className="grid grid-cols-3 gap-2">
+                                {DIAS_DA_SEMANA.map((item) => (
+                                    <FormField
+                                        key={item.value}
+                                        control={form.control as unknown as Control<FormValues>}
+                                        name="dias_folga_fixos"
+                                        render={({ field: arrayField }) => {
+                                            const isChecked = arrayField.value?.includes(item.value);
+                                            return (
+                                                <FormItem
+                                                    key={item.value}
+                                                    className="flex flex-row items-start space-x-3 space-y-0"
+                                                >
+                                                    <FormControl>
+                                                        <Checkbox
+                                                            checked={isChecked}
+                                                            onCheckedChange={(checked) => {
+                                                                const current = arrayField.value || [];
+                                                                if (checked) {
+                                                                    arrayField.onChange([...current, item.value]);
+                                                                } else {
+                                                                    arrayField.onChange(
+                                                                        current.filter((value) => value !== item.value)
+                                                                    );
+                                                                }
+                                                            }}
+                                                            disabled={isNewUser}
+                                                        />
+                                                    </FormControl>
+                                                    <FormLabel className="font-normal">
+                                                        {item.label}
+                                                    </FormLabel>
+                                                </FormItem>
+                                            );
+                                        }}
+                                    />
+                                ))}
+                            </div>
+                            <FormMessage />
+                        </FormItem>
+                    )}
+                />
+                
+                {isEditing && isUser && (
+                    <div className="pt-6 border-t">
+                        <GerenciarFerias 
+                            funcionarioId={usuarioInicial.id} 
+                            empresaId={(usuarioInicial as UsuarioProfile).cliente_id!} 
+                        />
+                    </div>
+                )}
+            </TabsContent>
+          )}
 
-          {/* TAB 2: DADOS CADASTRAIS (Apenas para Usuário/Funcionário) */}
+          {/* TAB 3: DADOS CADASTRAIS (Apenas para Usuário/Funcionário) */}
           {isUserBeingManagedByClient && (
             <TabsContent value="cadastrais" className="mt-4 space-y-6 p-4">
               <p className="text-sm text-muted-foreground">Dados pessoais e de contato do funcionário.</p>
@@ -614,7 +728,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, c
             </TabsContent>
           )}
 
-          {/* TAB 3: DOCUMENTOS DE ADMISSÃO (Apenas para Usuário/Funcionário) */}
+          {/* TAB 4: DOCUMENTOS DE ADMISSÃO (Apenas para Usuário/Funcionário) */}
           {isUserBeingManagedByClient && (
             <TabsContent value="documentos" className="mt-4 space-y-6 p-4">
               <p className="text-sm text-muted-foreground">Anexos de documentos do funcionário.</p>
@@ -680,7 +794,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, c
             </TabsContent>
           )}
 
-          {/* TAB 4: DADOS CONTRATUAIS (RH) - Apenas para Usuário/Funcionário) */}
+          {/* TAB 5: DADOS CONTRATUAIS (RH) - Apenas para Usuário/Funcionário) */}
           {isUserBeingManagedByClient && (
             <TabsContent value="contrato" className="mt-4 space-y-6 p-4">
                 <p className="text-sm text-muted-foreground">Estes campos são usados para gestão de RH.</p>
