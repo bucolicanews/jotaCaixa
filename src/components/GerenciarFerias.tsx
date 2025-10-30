@@ -142,7 +142,7 @@ const GerenciarFerias: React.FC<GerenciarFeriasProps> = ({ funcionarioId, empres
                     defaultMonth={dateRange?.from}
                     selected={dateRange}
                     onSelect={setDateRange}
-                    numberOfMonths={1} 
+                    numberOfMonths={2}
                   />
                 </PopoverContent>
               </Popover>
