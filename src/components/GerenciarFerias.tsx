@@ -55,8 +55,9 @@ const GerenciarFerias: React.FC<GerenciarFeriasProps> = ({ funcionarioId, empres
 
   const handleAddFerias = async (e: React.FormEvent) => {
     e.preventDefault();
+    // Garantimos que o 'to' está definido. Se o usuário selecionar o mesmo dia duas vezes, 'from' e 'to' serão iguais.
     if (!dateRange?.from || !dateRange.to || !periodoReferencia.trim()) {
-      showError('Preencha o período de férias e a referência.');
+      showError('Preencha o período de férias (início e fim) e a referência.');
       return;
     }
 
@@ -128,7 +129,8 @@ const GerenciarFerias: React.FC<GerenciarFeriasProps> = ({ funcionarioId, empres
                           {format(dateRange.to, "dd/MM/yyyy")}
                         </>
                       ) : (
-                        format(dateRange.from, "dd/MM/yyyy")
+                        // Se 'from' está selecionado, mas 'to' ainda não (esperando o segundo clique)
+                        format(dateRange.from, "dd/MM/yyyy") + " (Selecione o fim)"
                       )
                     ) : (
                       <span>Selecione o período</span>
@@ -142,7 +144,7 @@ const GerenciarFerias: React.FC<GerenciarFeriasProps> = ({ funcionarioId, empres
                     defaultMonth={dateRange?.from}
                     selected={dateRange}
                     onSelect={setDateRange}
-                    numberOfMonths={2}
+                    numberOfMonths={1}
                   />
                 </PopoverContent>
               </Popover>
