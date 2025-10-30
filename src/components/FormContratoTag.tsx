@@ -21,10 +21,11 @@ type FormValues = z.infer<typeof formSchema>;
 
 interface FormContratoTagProps {
   tagInicial?: ContratoTag | null;
+  empresaId: string | null; // Novo: ID da empresa para inserção
   onSaveComplete: () => void;
 }
 
-const FormContratoTag: React.FC<FormContratoTagProps> = ({ tagInicial, onSaveComplete }) => {
+const FormContratoTag: React.FC<FormContratoTagProps> = ({ tagInicial, empresaId, onSaveComplete }) => {
   const isEditing = !!tagInicial;
 
   const form = useForm<FormValues>({
@@ -37,10 +38,17 @@ const FormContratoTag: React.FC<FormContratoTagProps> = ({ tagInicial, onSaveCom
   });
 
   const onSubmit = async (values: FormValues) => {
+    if (!isEditing && !empresaId) {
+        showError('ID da empresa não encontrado para criar a tag.');
+        return;
+    }
+    
     const dataToSave = {
       nome_tag: values.nome_tag,
       descricao: values.descricao,
       origem_dado: values.origem_dado || null,
+      // Adiciona empresa_id apenas na criação, ou se for Admin (que pode não ter empresa_id)
+      empresa_id: isEditing ? tagInicial?.empresa_id : empresaId, 
     };
 
     let error = null;
