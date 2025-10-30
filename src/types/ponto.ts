@@ -3,7 +3,7 @@ export interface RegistroPonto {
   funcionario_id: string;
   empresa_id: string;
   horario_registro: string; // ISO string
-  tipo: 'Entrada' | 'Saida' | 'Falta' | 'Abono';
+  tipo: 'Entrada' | 'Saida' | 'Falta' | 'Abono' | 'Compensacao' | 'Extra100';
   maps_url: string;
   selfie_url: string;
   atestado_url?: string | null;

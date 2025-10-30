@@ -112,6 +112,7 @@ const DetalheProprioPonto: React.FC = () => {
             onEditRegistro={() => { /* Usuário não pode editar seu próprio ponto */ }}
             onEditFaltaAbono={() => { /* Usuário não pode editar seu próprio ponto */ }}
             onDeleteRegistro={() => { /* Usuário não pode deletar seu próprio ponto */ }}
+            onManageWorkedDayOff={() => { /* Usuário não pode gerenciar folga trabalhada */ }}
         />
     </div>
   );

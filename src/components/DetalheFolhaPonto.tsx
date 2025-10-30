@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Clock, DollarSign, MapPin, Camera, FileText, AlertTriangle, Trash2, Edit, CalendarX, Plane } from 'lucide-react';
-import { format, parseISO, differenceInMinutes, isSameDay, startOfDay, startOfMonth, endOfMonth, eachDayOfInterval, isWithinInterval, getDay } from 'date-fns';
+import { Clock, DollarSign, MapPin, Camera, FileText, AlertTriangle, Trash2, Edit, CalendarX, Plane, CalendarCheck } from 'lucide-react';
+import { format, parseISO, differenceInMinutes, isSameDay, startOfMonth, endOfMonth, eachDayOfInterval, isWithinInterval, getDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -29,6 +29,7 @@ interface DetalheFolhaPontoProps {
   onEditRegistro: (dia: Date) => void; // Para Ajuste de Ponto (Entrada/Saída)
   onEditFaltaAbono: (registro: RegistroPonto | null, dia: Date) => void; // Para Edição de Falta/Abono
   onDeleteRegistro: () => void; 
+  onManageWorkedDayOff: (dia: Date, registros: RegistroPonto[]) => void; // NEW: Para gerenciar folga trabalhada
 }
 
 // Mapeamento de getDay() (0=Sunday, 6=Saturday) para strings
@@ -47,7 +48,7 @@ const JORNADA_MENSAL_PADRAO = 220; // Horas mensais padrão CLT
 const PERCENTUAL_EXTRA_NORMAL = 0.5; // 50% de adicional
 const PERCENTUAL_EXTRA_FERIADO_FIMSEMANA = 1.0; // 100% de adicional
 
-const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes, onEditRegistro, onEditFaltaAbono, onDeleteRegistro }) => {
+const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes, onEditRegistro, onEditFaltaAbono, onDeleteRegistro, onManageWorkedDayOff }) => {
   const { salario, horas_mensais, registros, dias_folga_fixos, folga_domingo_obrigatoria, ferias } = funcionario;
   const { role } = useSessao();
   const [selfieModalOpen, setSelfieModalOpen] = useState(false);
@@ -80,7 +81,18 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
   const fimMes = endOfMonth(mes);
   const todosOsDiasDoMes = eachDayOfInterval({ start: inicioMes, end: fimMes });
   
-  const diasProcessados: Record<string, { minutos: number, registros: RegistroPonto[], isFalta: boolean, isAbono: boolean, isTurnoAberto: boolean, isFolgaFixa: boolean, isFerias: boolean }> = {};
+  const diasProcessados: Record<string, { 
+    minutos: number, 
+    registros: RegistroPonto[], 
+    isFalta: boolean, 
+    isAbono: boolean, 
+    isTurnoAberto: boolean, 
+    isFolgaFixa: boolean, 
+    isFerias: boolean,
+    hasPontoRecords: boolean,
+    decisionRecord: 'Compensacao' | 'Extra100' | null,
+    needsManagement: boolean,
+  }> = {};
   
   for (const data of todosOsDiasDoMes) {
     const diaString = format(data, 'yyyy-MM-dd');
@@ -91,6 +103,8 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
     let isFalta = false;
     let isAbono = false;
     let isTurnoAberto = false;
+    let hasPontoRecords = false;
+    let decisionRecord: 'Compensacao' | 'Extra100' | null = null;
     
     // Lógica de Folga Fixa
     const diaDaSemana = DAY_MAP[getDay(data)];
@@ -106,21 +120,7 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
         return isWithinInterval(data, { start, end });
     });
 
-    // Se for folga fixa ou férias, não processa registros de ponto para cálculo de falta
-    if (isFolgaFixa || isFerias) {
-        diasProcessados[diaString] = {
-            minutos: 0,
-            registros: registrosDoDia,
-            isFalta: false,
-            isAbono: false,
-            isTurnoAberto: false,
-            isFolgaFixa,
-            isFerias,
-        };
-        continue;
-    }
-
-    // Processamento de registros de ponto (Entrada/Saída, Falta, Abono)
+    // Processamento de registros de ponto (Entrada/Saída, Falta, Abono, Compensacao, Extra100)
     for (const registro of registrosDoDia) {
         if (registro.tipo === 'Falta') {
             isFalta = true;
@@ -133,33 +133,73 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
             break; 
         }
         
-        const horario = parseISO(registro.horario_registro);
+        if (registro.tipo === 'Compensacao') {
+            decisionRecord = 'Compensacao';
+        }
+        if (registro.tipo === 'Extra100') {
+            decisionRecord = 'Extra100';
+        }
         
-        if (registro.tipo === 'Entrada') {
-            entrada = horario;
-            isTurnoAberto = true;
-        } else if (registro.tipo === 'Saida' && entrada && isSameDay(horario, entrada)) {
-            const minutosTrabalhados = differenceInMinutes(horario, entrada);
-            minutosDia += minutosTrabalhados;
-            entrada = null;
-            isTurnoAberto = false;
-        } else if (registro.tipo === 'Saida' && entrada && !isSameDay(horario, entrada)) {
-            const minutosTrabalhados = differenceInMinutes(horario, entrada);
-            minutosDia += minutosTrabalhados;
-            entrada = null;
-            isTurnoAberto = false;
+        if (registro.tipo === 'Entrada' || registro.tipo === 'Saida') {
+            hasPontoRecords = true;
+            
+            const horario = parseISO(registro.horario_registro);
+            
+            if (registro.tipo === 'Entrada') {
+                entrada = horario;
+                isTurnoAberto = true;
+            } else if (registro.tipo === 'Saida' && entrada && isSameDay(horario, entrada)) {
+                const minutosTrabalhados = differenceInMinutes(horario, entrada);
+                minutosDia += minutosTrabalhados;
+                entrada = null;
+                isTurnoAberto = false;
+            } else if (registro.tipo === 'Saida' && entrada && !isSameDay(horario, entrada)) {
+                // Caso de turno que virou a noite.
+                const minutosTrabalhados = differenceInMinutes(horario, entrada);
+                minutosDia += minutosTrabalhados;
+                entrada = null;
+                isTurnoAberto = false;
+            }
         }
     }
     
     // Se o último registro do dia foi Entrada, o turno está aberto.
     if (isTurnoAberto && entrada && isSameDay(data, new Date())) {
         minutosDia += differenceInMinutes(new Date(), entrada);
-    }
-    
-    if (isTurnoAberto && entrada && startOfDay(data) < startOfDay(new Date())) {
-        // Dia passado com turno aberto. O cálculo de minutos já está feito até a última entrada.
     } else if (!entrada) {
         isTurnoAberto = false;
+    }
+    
+    // --- LÓGICA DE FOLGA TRABALHADA ---
+    let needsManagement = false;
+    let minutosTrabalhadosFolga = 0;
+    
+    if (isFolgaFixa && hasPontoRecords && !isFerias) {
+        // Se trabalhou na folga, calcula as horas trabalhadas (minutosDia)
+        minutosTrabalhadosFolga = minutosDia;
+        
+        if (!decisionRecord) {
+            // Precisa de gestão se trabalhou na folga e não há decisão
+            needsManagement = true;
+            minutosDia = 0; // Zera o tempo normal para não contar no totalMinutosTrabalhados
+        } else if (decisionRecord === 'Extra100') {
+            // Se a decisão foi pagar 100% extra
+            totalMinutosExtras100 += minutosTrabalhadosFolga;
+            minutosDia = 0; // Não conta como hora normal
+        } else if (decisionRecord === 'Compensacao') {
+            // Se a decisão foi compensar, as horas são ignoradas para o cálculo de salário
+            minutosDia = 0;
+        }
+    }
+    
+    // Acumular totais (apenas se não for folga trabalhada, nem falta/abono, nem férias)
+    if (!isFolgaFixa && !isFalta && !isAbono && !isFerias) {
+        totalMinutosTrabalhados += minutosDia;
+    }
+    
+    // Se for falta/abono, zera minutosDia para evitar contagem dupla
+    if (isFalta || isAbono) {
+        minutosDia = 0;
     }
 
 
@@ -171,12 +211,10 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
         isTurnoAberto,
         isFolgaFixa,
         isFerias,
+        hasPontoRecords,
+        decisionRecord,
+        needsManagement,
     };
-    
-    // Acumular totais (apenas se não for falta, folga ou férias)
-    if (!isFalta && !isFolgaFixa && !isFerias) {
-        totalMinutosTrabalhados += minutosDia;
-    }
   }
   
   // 3. Calcular horas extras (Simplificado: tudo acima da jornada mensal é extra)
@@ -186,7 +224,7 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
     totalMinutosExtras = totalMinutosTrabalhados - jornadaMensalMinutos;
     totalMinutosTrabalhados = jornadaMensalMinutos;
   }
-
+  
   // 4. Calcular valor total
   const valorTotalNormal = (totalMinutosTrabalhados / 60) * valorHoraNormal;
   const valorTotalExtra = (totalMinutosExtras / 60) * valorHoraExtra;
@@ -207,7 +245,7 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
   };
   
   const handleDelete = async (registroId: string) => {
-    if (!window.confirm('Tem certeza que deseja excluir este registro de Falta/Abono? O dia voltará a ser listado como ' + '"Dia Sem Registro".')) return;
+    if (!window.confirm('Tem certeza que deseja excluir este registro de Falta/Abono/Compensação? O dia voltará ao estado anterior.')) return;
 
     const { error } = await supabase
       .from('registros_ponto')
@@ -233,6 +271,7 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
           <div><p className="text-sm text-muted-foreground">Jornada Mensal</p><p className="font-bold text-lg">{horas_mensais}h</p></div>
           <div><p className="text-sm text-muted-foreground">Horas Normais</p><p className="font-bold text-lg">{formatarHoras(totalMinutosTrabalhados)}</p></div>
           <div><p className="text-sm text-muted-foreground">Horas Extras (50%)</p><p className="font-bold text-lg text-orange-500">{formatarHoras(totalMinutosExtras)}</p></div>
+          <div><p className="text-sm text-muted-foreground">Horas Extras (100%)</p><p className="font-bold text-lg text-red-500">{formatarHoras(totalMinutosExtras100)}</p></div>
           <div className="col-span-2 md:col-span-4 border-t pt-2"><p className="text-sm text-muted-foreground">Valor Total a Pagar (Estimado)</p><p className="font-extrabold text-2xl text-primary">{formatCurrency(valorTotalPagar)}</p></div>
         </CardContent>
       </Card>
@@ -249,17 +288,40 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
                 ) : (
                     todosOsDiasDoMes.map(data => {
                         const diaString = format(data, 'yyyy-MM-dd');
-                        const { minutos, registros, isFalta, isAbono, isTurnoAberto, isFolgaFixa, isFerias } = diasProcessados[diaString];
+                        const { minutos, registros, isFalta, isAbono, isTurnoAberto, isFolgaFixa, isFerias, hasPontoRecords, decisionRecord, needsManagement } = diasProcessados[diaString];
                         
                         const isDiaAtual = isSameDay(data, new Date());
                         const isDiaFuturo = data > new Date();
                         
                         let statusDisplay;
+                        let actionButton = null;
                         
+                        // 1. Determinar Status e Ação
                         if (isFerias) {
                             statusDisplay = <span className="text-sm text-purple-600 flex items-center"><Plane className="w-4 h-4 mr-1" /> Férias</span>;
                         } else if (isFolgaFixa) {
-                            statusDisplay = <span className="text-sm text-muted-foreground">Folga Fixa</span>;
+                            if (needsManagement) {
+                                statusDisplay = <span className="text-sm text-yellow-600 flex items-center font-bold"><AlertTriangle className="w-4 h-4 mr-1" /> Folga Trabalhada (Aguardando Gestão)</span>;
+                                if (canEdit) {
+                                    actionButton = (
+                                        <Button 
+                                            variant="default" 
+                                            size="sm" 
+                                            onClick={() => onManageWorkedDayOff(data, registros.filter(r => r.tipo === 'Entrada' || r.tipo === 'Saida'))}
+                                            title="Gerenciar Compensação"
+                                            className="h-6 text-xs bg-yellow-600 hover:bg-yellow-700"
+                                        >
+                                            Gerenciar
+                                        </Button>
+                                    );
+                                }
+                            } else if (decisionRecord === 'Extra100') {
+                                statusDisplay = <span className="text-sm text-red-600 flex items-center"><DollarSign className="w-4 h-4 mr-1" /> Pago Extra (100%)</span>;
+                            } else if (decisionRecord === 'Compensacao') {
+                                statusDisplay = <span className="text-sm text-blue-600 flex items-center"><CalendarCheck className="w-4 h-4 mr-1" /> Compensado (Banco de Horas)</span>;
+                            } else {
+                                statusDisplay = <span className="text-sm text-muted-foreground">Folga Fixa</span>;
+                            }
                         } else if (isFalta) {
                             const atestadoUrl = registros.find(r => r.tipo === 'Falta')?.atestado_url;
                             statusDisplay = atestadoUrl 
@@ -282,17 +344,16 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
                             );
                         }
 
-                        // Encontra o registro de Falta/Abono para exclusão/edição
-                        const registroFaltaAbono = registros.find(r => r.tipo === 'Falta' || r.tipo === 'Abono');
+                        // 2. Encontra registros para edição/exclusão
+                        const registroFaltaAbonoCompensacao = registros.find(r => r.tipo === 'Falta' || r.tipo === 'Abono' || r.tipo === 'Compensacao' || r.tipo === 'Extra100');
+                        const hasPontoRecordsOnly = hasPontoRecords && !registroFaltaAbonoCompensacao;
                         
-                        // Verifica se há registros de Entrada/Saída para o ajuste manual
-                        const hasPontoRecords = registros.some(r => r.tipo === 'Entrada' || r.tipo === 'Saida');
-                        
-                        // Determina a cor de fundo
+                        // 3. Determina a cor de fundo
                         const rowClassName = cn(
                             isFolgaFixa && 'bg-secondary/30',
                             isFerias && 'bg-purple-100/50 dark:bg-purple-900/20',
                             (isFalta || isAbono) && 'bg-blue-100/50 dark:bg-blue-900/20',
+                            needsManagement && 'bg-yellow-100/50 dark:bg-yellow-900/20 border-l-4 border-yellow-500',
                         );
 
                         return (
@@ -300,7 +361,7 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
                                 <TableCell className="font-medium">{format(data, 'dd/MM (EEE)', { locale: ptBR })}</TableCell>
                                 <TableCell>
                                     <div className="flex flex-wrap gap-2 items-center">
-                                        {registros.map(r => (
+                                        {registros.filter(r => r.tipo !== 'Compensacao' && r.tipo !== 'Extra100').map(r => (
                                             <span key={r.id} className="text-sm bg-muted px-2 py-1 rounded-full flex items-center">
                                                 {r.tipo === 'Falta' ? (
                                                     <>
@@ -350,15 +411,24 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
                                         ))}
                                         
                                         {/* Ações de Edição/Exclusão */}
-                                        {canEdit && !isDiaFuturo && !isFerias && !isFolgaFixa && (
+                                        {canEdit && !isDiaFuturo && !isFerias && !needsManagement && (
                                             <div className="flex space-x-1 ml-2">
-                                                {registroFaltaAbono && (
+                                                {/* Edição/Exclusão de Falta/Abono/Compensação/Extra100 */}
+                                                {registroFaltaAbonoCompensacao && (
                                                     <>
                                                         <Button 
                                                             variant="ghost" 
                                                             size="icon" 
-                                                            onClick={() => onEditFaltaAbono(registroFaltaAbono, data)} // Edição de Falta/Abono
-                                                            title="Editar Falta/Abono"
+                                                            onClick={() => {
+                                                                if (isFolgaFixa && hasPontoRecords) {
+                                                                    // Se for folga fixa trabalhada e já tem decisão, reabre o dialog de gestão de folga
+                                                                    onManageWorkedDayOff(data, registros.filter(r => r.tipo === 'Entrada' || r.tipo === 'Saida'));
+                                                                } else {
+                                                                    // Se for Falta/Abono, usa o dialog de GerenciarFaltas
+                                                                    onEditFaltaAbono(registroFaltaAbonoCompensacao, data);
+                                                                }
+                                                            }}
+                                                            title="Editar Decisão"
                                                             className="h-6 w-6 text-primary hover:text-primary/80"
                                                         >
                                                             <Edit className="w-4 h-4" />
@@ -366,16 +436,16 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
                                                         <Button 
                                                             variant="ghost" 
                                                             size="icon" 
-                                                            onClick={() => handleDelete(registroFaltaAbono.id)}
-                                                            title="Excluir Falta/Abono"
+                                                            onClick={() => handleDelete(registroFaltaAbonoCompensacao.id)}
+                                                            title="Excluir Decisão"
                                                             className="h-6 w-6 text-red-500 hover:text-red-700"
                                                         >
                                                             <Trash2 className="w-4 h-4" />
                                                         </Button>
                                                     </>
                                                 )}
-                                                {/* Botão de Ajuste de Ponto (Aparece se houver registros de Entrada/Saída) */}
-                                                {hasPontoRecords && !registroFaltaAbono && (
+                                                {/* Botão de Ajuste de Ponto (Aparece se houver registros de Entrada/Saída E não houver decisão de Falta/Abono/Compensação) */}
+                                                {hasPontoRecordsOnly && (
                                                     <Button 
                                                         variant="outline" 
                                                         size="sm" 
@@ -386,8 +456,8 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
                                                         <Edit className="w-3 h-3 mr-1" /> Ajustar Ponto
                                                     </Button>
                                                 )}
-                                                {/* Botão de Marcar Falta (Aparece se não houver registro e não for fim de semana/futuro) */}
-                                                {!hasPontoRecords && !registroFaltaAbono && !isDiaFuturo && (
+                                                {/* Botão de Marcar Falta (Aparece se não houver registro e não for folga fixa/ferias/futuro) */}
+                                                {!hasPontoRecordsOnly && !registroFaltaAbonoCompensacao && !isFolgaFixa && (
                                                     <Button 
                                                         variant="destructive" 
                                                         size="sm" 
@@ -400,6 +470,8 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
                                                 )}
                                             </div>
                                         )}
+                                        {/* Renderiza o botão de Gerenciar Folga Trabalhada se necessário */}
+                                        {actionButton}
                                     </div>
                                 </TableCell>
                                 <TableCell className="text-right font-semibold">

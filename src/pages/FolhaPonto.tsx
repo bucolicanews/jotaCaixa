@@ -11,8 +11,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import DetalheFolhaPonto from '@/components/DetalheFolhaPonto';
 import { MonthPicker } from '@/components/MonthPicker';
 import GerenciarFaltas from '@/components/GerenciarFaltas';
-import AjustarPontoDialog from '@/components/AjustarPontoDialog'; // Importando o novo componente
+import AjustarPontoDialog from '@/components/AjustarPontoDialog';
 import { RegistroPonto, Ferias } from '@/types/ponto';
+import GerenciarFolgaTrabalhada from '@/components/GerenciarFolgaTrabalhada'; // NEW IMPORT
 
 interface FuncionarioComDados extends UsuarioProfile {
     id: string;
@@ -53,6 +54,11 @@ const FolhaPonto: React.FC = () => {
   const [ajustarDialogOpen, setAjustarDialogOpen] = useState(false);
   const [registrosParaAjuste, setRegistrosParaAjuste] = useState<RegistroPonto[]>([]);
   const [diaParaAjuste, setDiaParaAjuste] = useState<Date | null>(null);
+  
+  // NOVO: Estado para Gerenciar Folga Trabalhada
+  const [folgaTrabalhadaDialogOpen, setFolgaTrabalhadaDialogOpen] = useState(false);
+  const [diaFolgaTrabalhada, setDiaFolgaTrabalhada] = useState<Date | null>(null);
+  const [registrosFolgaTrabalhada, setRegistrosFolgaTrabalhada] = useState<RegistroPonto[]>([]);
 
 
   const isAdmin = role === 'Admin';
@@ -183,7 +189,7 @@ const FolhaPonto: React.FC = () => {
   const funcionarioDetalhe = funcionarios.find(f => f.id === funcionarioSelecionadoId);
   
   const handleFaltaRegistrada = async () => {
-    // Re-busca os registros após registrar/editar/deletar a falta
+    // Re-busca os registros após registrar/editar/deletar a falta/ajuste/compensação
     if (funcionarioSelecionadoId) {
         await fetchRegistros(funcionarioSelecionadoId, dataSelecionada);
         await fetchFerias(funcionarioSelecionadoId, dataSelecionada);
@@ -208,6 +214,14 @@ const FolhaPonto: React.FC = () => {
     setDiaParaAjuste(dia);
     setAjustarDialogOpen(true);
   };
+  
+  const handleManageWorkedDayOff = (dia: Date, registros: RegistroPonto[]) => {
+    if (!funcionarioDetalhe) return;
+    setDiaFolgaTrabalhada(dia);
+    setRegistrosFolgaTrabalhada(registros);
+    setFolgaTrabalhadaDialogOpen(true);
+  };
+
 
   if (carregando) {
     return <LayoutPrincipal><div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div></LayoutPrincipal>;
@@ -286,9 +300,10 @@ const FolhaPonto: React.FC = () => {
                 ferias: feriasDoFuncionario,
             }}
             mes={dataSelecionada}
-            onEditRegistro={handleAjustePonto} // Ajuste de Ponto (Entrada/Saída)
-            onEditFaltaAbono={handleEditFaltaAbono} // Edição de Falta/Abono
+            onEditRegistro={handleAjustePonto}
+            onEditFaltaAbono={handleEditFaltaAbono}
             onDeleteRegistro={handleFaltaRegistrada}
+            onManageWorkedDayOff={handleManageWorkedDayOff}
         />
       )}
 
@@ -329,7 +344,23 @@ const FolhaPonto: React.FC = () => {
             }}
             dia={diaParaAjuste}
             registrosIniciais={registrosParaAjuste}
-            onSaveComplete={handleFaltaRegistrada} // Re-busca os dados após o ajuste
+            onSaveComplete={handleFaltaRegistrada}
+        />
+      )}
+      
+      {/* NOVO: Modal de Gerenciamento de Folga Trabalhada */}
+      {funcionarioDetalhe && diaFolgaTrabalhada && (
+        <GerenciarFolgaTrabalhada
+            open={folgaTrabalhadaDialogOpen}
+            onOpenChange={setFolgaTrabalhadaDialogOpen}
+            funcionario={{ 
+                id: funcionarioDetalhe.id, 
+                nome: funcionarioDetalhe.nome, 
+                empresa_id: empresaIdParaFiltro! 
+            }}
+            dia={diaFolgaTrabalhada}
+            registrosDoDia={registrosFolgaTrabalhada}
+            onSaveComplete={handleFaltaRegistrada}
         />
       )}
     </LayoutPrincipal>
