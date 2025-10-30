@@ -10,24 +10,44 @@ import { showError, showSuccess } from '@/utils/toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import FormContratoTag from '@/components/FormContratoTag';
 import { ContratoTag } from '@/types/contratos';
+import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 
 const GerenciarTags = () => {
-  const { role, carregando: carregandoSessao } = useSessao();
+  const { role, perfil, carregando: carregandoSessao } = useSessao();
   const [tags, setTags] = useState<ContratoTag[]>([]);
   const [carregandoTags, setCarregandoTags] = useState(true);
   const [tagSelecionada, setTagSelecionada] = useState<ContratoTag | null>(null);
   const [dialogAberto, setDialogAberto] = useState(false);
 
   const isAdmin = role === 'Admin';
+  const isCliente = role === 'Cliente';
+  const isUsuario = role === 'Usuario';
+  
+  const getEmpresaId = () => {
+    if (isCliente) return (perfil as ClienteProfile)?.id;
+    if (isUsuario) return (perfil as UsuarioProfile)?.cliente_id;
+    return null;
+  };
+  
+  const empresaId = getEmpresaId();
 
   const buscarTags = useCallback(async () => {
-    if (!isAdmin) return;
+    if (!role) return;
     setCarregandoTags(true);
     
-    const { data, error } = await supabase
+    let query = supabase
       .from('contrato_tags')
       .select('*')
       .order('nome_tag', { ascending: true });
+      
+    if (isCliente || isUsuario) {
+        // Clientes e Usuários veem apenas tags da sua empresa
+        query = query.eq('empresa_id', empresaId);
+    } else if (isAdmin) {
+        // Admin vê todas (RLS garante)
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       showError('Erro ao carregar tags: ' + error.message);
@@ -36,13 +56,15 @@ const GerenciarTags = () => {
       setTags(data as ContratoTag[]);
     }
     setCarregandoTags(false);
-  }, [isAdmin]);
+  }, [role, isCliente, isUsuario, isAdmin, empresaId]);
 
   useEffect(() => {
-    if (!carregandoSessao && isAdmin) {
+    if (!carregandoSessao && (isAdmin || isCliente || (isUsuario && empresaId))) {
       buscarTags();
+    } else if (!carregandoSessao) {
+        setCarregandoTags(false);
     }
-  }, [carregandoSessao, isAdmin, buscarTags]);
+  }, [carregandoSessao, isAdmin, isCliente, isUsuario, empresaId, buscarTags]);
 
   const handleSaveComplete = () => {
     setDialogAberto(false);
@@ -81,8 +103,8 @@ const GerenciarTags = () => {
     );
   }
   
-  if (!isAdmin) {
-    return <LayoutPrincipal><Card><CardHeader><CardTitle>Acesso Negado</CardTitle></CardHeader><CardContent><p>Apenas administradores podem gerenciar tags de contrato.</p></CardContent></Card></LayoutPrincipal>;
+  if (!isAdmin && !isCliente && !(isUsuario && empresaId)) {
+    return <LayoutPrincipal><Card><CardHeader><CardTitle>Acesso Negado</CardTitle></CardHeader><CardContent><p>Você não tem permissão para gerenciar tags de contrato.</p></CardContent></Card></LayoutPrincipal>;
   }
 
   return (
