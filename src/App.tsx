@@ -22,7 +22,8 @@ import PontoEletronico from "./pages/PontoEletronico";
 import ClientesPage from "./pages/Clientes";
 import Perfil from "./pages/Perfil";
 import FolhaPonto from "./pages/FolhaPonto";
-import Contratos from "./pages/Contratos"; // Importando a nova página
+import Contratos from "./pages/Contratos";
+import GerenciarTags from "./pages/GerenciarTags"; // Importando a nova página
 
 const queryClient = new QueryClient();
 
@@ -55,7 +56,8 @@ const App = () => (
             <Route path="/ponto-eletronico" element={<PontoEletronico />} />
             <Route path="/perfil" element={<Perfil />} />
             <Route path="/folha-ponto" element={<FolhaPonto />} />
-            <Route path="/contratos" element={<Contratos />} /> {/* Nova Rota */}
+            <Route path="/contratos" element={<Contratos />} />
+            <Route path="/contratos/tags" element={<GerenciarTags />} /> {/* Nova Rota */}
 
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
