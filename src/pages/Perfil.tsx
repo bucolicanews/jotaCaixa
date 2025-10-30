@@ -4,16 +4,16 @@ import { useSessao } from '@/hooks/use-sessao';
 import { Loader2 } from 'lucide-react';
 import FormPerfil from '@/components/FormPerfil';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { showError, showSuccess } from '@/utils/toast';
-import { supabase } from '@/integrations/supabase/client';
+import { showSuccess } from '@/utils/toast'; // showError e supabase removidos
 import { AnyProfile } from '@/types/usuario';
 
 const Perfil: React.FC = () => {
-  const { perfil, role, carregando, refreshSessao } = useSessao();
+  // 'role' removido, 'refreshSessao' renomeado para 'refetch'
+  const { perfil, carregando, refetch } = useSessao(); 
 
   const handleSaveComplete = async () => {
     showSuccess('Perfil atualizado com sucesso!');
-    await refreshSessao();
+    await refetch();
   };
 
   if (carregando) {
@@ -46,7 +46,7 @@ const Perfil: React.FC = () => {
       <h1 className="text-2xl md:text-3xl font-bold mb-6">Meu Perfil</h1>
       
       <FormPerfil 
-        perfilInicial={perfil as AnyProfile} // Passando 'perfil' como 'perfilInicial'
+        perfilInicial={perfil as AnyProfile} 
         onSaveComplete={handleSaveComplete}
       />
     </LayoutPrincipal>

@@ -15,4 +15,5 @@ export interface Ferias {
   data_inicio: string;
   data_fim: string;
   periodo_referencia: string;
+  status: 'agendada' | 'concluida' | 'cancelada'; // Adicionado para compatibilidade com GerenciarFerias
 }

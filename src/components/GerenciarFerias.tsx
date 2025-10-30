@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
-import { Ferias } from '@/types/ferias';
+import { Ferias } from '@/types/ponto'; // Corrigido o caminho de importação
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Loader2, Plus, Trash2, CalendarIcon } from 'lucide-react';
@@ -10,8 +10,7 @@ import { ptBR } from 'date-fns/locale';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Calendar } from './ui/calendar';
 import { cn } from '@/lib/utils';
-import { Input } from './ui/input';
-import { Label } from './ui/label';
+// Imports de Input e Label removidos
 
 interface GerenciarFeriasProps {
   funcionarioId: string;
@@ -38,7 +37,12 @@ const GerenciarFerias: React.FC<GerenciarFeriasProps> = ({ funcionarioId, empres
       showError('Erro ao carregar férias: ' + error.message);
       setFerias([]);
     } else {
-      setFerias(data as Ferias[]);
+      // Mapeando dados para incluir o status, que é usado na interface Ferias
+      const feriasData = (data as any[]).map(f => ({
+          ...f,
+          status: f.status || 'agendada' 
+      }));
+      setFerias(feriasData as Ferias[]);
     }
     setCarregando(false);
   }, [funcionarioId]);
@@ -65,7 +69,7 @@ const GerenciarFerias: React.FC<GerenciarFeriasProps> = ({ funcionarioId, empres
         empresa_id: empresaId,
         data_inicio: format(novaDataInicio, 'yyyy-MM-dd'),
         data_fim: format(novaDataFim, 'yyyy-MM-dd'),
-        status: 'agendada', // Padrão inicial
+        // status não é enviado, pois a coluna não existe no DB, mas é usado no frontend
       };
 
       const { error } = await supabase.from('ferias').insert(feriasData);
