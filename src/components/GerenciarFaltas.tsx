@@ -129,39 +129,39 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
         
         <div className="space-y-4 py-4">
           <Label className="font-semibold">1. Selecione a Ação</Label>
-          <div className="grid grid-cols-2 gap-2 md:grid-cols-5 md:gap-4">
+          <div className="grid grid-cols-2 gap-2 md:flex md:justify-center md:gap-4">
             <Button 
               variant={acaoSelecionada === 'falta_injustificada' ? 'destructive' : 'outline'} 
               onClick={() => setAcaoSelecionada('falta_injustificada')}
-              className="flex-1 text-xs md:text-sm h-10"
+              className="w-full md:w-auto text-xs md:text-sm h-10"
             >
               Falta Injustificada
             </Button>
             <Button 
               variant={isFaltaJustificada ? 'default' : 'outline'} 
               onClick={() => setAcaoSelecionada('falta_justificada')}
-              className="flex-1 text-xs md:text-sm h-10"
+              className="w-full md:w-auto text-xs md:text-sm h-10"
             >
               Falta Justificada
             </Button>
             <Button 
               variant={acaoSelecionada === 'abono_8h' ? 'default' : 'outline'} 
               onClick={() => setAcaoSelecionada('abono_8h')}
-              className="flex-1 flex items-center justify-center text-xs md:text-sm h-10"
+              className="w-full md:w-auto flex items-center justify-center text-xs md:text-sm h-10"
             >
               <Clock className="w-3 h-3 mr-1 md:w-4 md:h-4" /> Abono 8h
             </Button>
             <Button 
               variant={acaoSelecionada === 'abono_6h' ? 'default' : 'outline'} 
               onClick={() => setAcaoSelecionada('abono_6h')}
-              className="flex-1 flex items-center justify-center text-xs md:text-sm h-10"
+              className="w-full md:w-auto flex items-center justify-center text-xs md:text-sm h-10"
             >
               <Clock className="w-3 h-3 mr-1 md:w-4 md:h-4" /> Abono 6h
             </Button>
             <Button 
               variant={acaoSelecionada === 'abono_4h' ? 'default' : 'outline'} 
               onClick={() => setAcaoSelecionada('abono_4h')}
-              className="flex-1 flex items-center justify-center text-xs md:text-sm h-10"
+              className="w-full md:w-auto flex items-center justify-center text-xs md:text-sm h-10"
             >
               <Clock className="w-3 h-3 mr-1 md:w-4 md:h-4" /> Abono 4h
             </Button>
