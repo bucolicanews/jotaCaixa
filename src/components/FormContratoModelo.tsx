@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -9,11 +9,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { Loader2, Copy, Eye } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
-import { ContratoModelo } from '@/types/contratos';
-import { TAGS_PADRAO } from '@/config/contrato-tags-padrao'; // Importando tags padrão
+import { ContratoModelo, ContratoTag } from '@/types/contratos';
+import { TAGS_FINANCEIRAS_OBRIGATORIAS } from '@/config/contrato-tags-padrao'; // Importando apenas as obrigatórias
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
-import ModeloPreviewDialog from './ModeloPreviewDialog'; // Importando o novo modal
+import ModeloPreviewDialog from './ModeloPreviewDialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { useSessao } from '@/hooks/use-sessao';
+import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 
 const formSchema = z.object({
   titulo: z.string().min(1, 'O título é obrigatório.'),
@@ -32,13 +34,63 @@ interface FormContratoModeloProps {
 const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, empresaId, onSaveComplete }) => {
   const isEditing = !!modeloInicial;
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [tagsAtivas, setTagsAtivas] = useState<ContratoTag[]>(TAGS_FINANCEIRAS_OBRIGATORIAS);
+  const [carregandoTags, setCarregandoTags] = useState(true);
+  const { role, perfil } = useSessao();
+  
+  const isCliente = role === 'Cliente';
+  const isAdmin = role === 'Admin';
+  
+  const getEmpresaId = () => {
+    if (isCliente) return (perfil as ClienteProfile)?.id;
+    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id;
+    return null;
+  };
+  
+  const empresaIdLogada = getEmpresaId();
+
+  const buscarTagsAtivas = useCallback(async () => {
+    setCarregandoTags(true);
+    
+    let query = supabase
+      .from('contrato_tags')
+      .select('*')
+      .order('nome_tag', { ascending: true });
+      
+    if (empresaIdLogada) {
+        query = query.eq('empresa_id', empresaIdLogada);
+    } else if (isAdmin) {
+        // Admin pode ver todas as tags customizadas (se houver)
+    } else {
+        setTagsAtivas(TAGS_FINANCEIRAS_OBRIGATORIAS);
+        setCarregandoTags(false);
+        return;
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      showError('Erro ao carregar tags customizadas: ' + error.message);
+      setTagsAtivas(TAGS_FINANCEIRAS_OBRIGATORIAS);
+    } else {
+      // Combina tags financeiras obrigatórias com as tags customizadas ativas
+      const customTags = data as ContratoTag[];
+      const combinedTags = [...TAGS_FINANCEIRAS_OBRIGATORIAS, ...customTags];
+      setTagsAtivas(combinedTags);
+    }
+    setCarregandoTags(false);
+  }, [empresaIdLogada, isAdmin]);
+  
+  useEffect(() => {
+      buscarTagsAtivas();
+  }, [buscarTagsAtivas]);
+
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       titulo: modeloInicial?.titulo || '',
       conteudo_template: modeloInicial?.conteudo_template || '',
-      // Nota: Assumindo que o template é HTML por padrão, pois é o formato mais comum para contratos
       tipo_conteudo: 'html', 
     },
   });
@@ -48,10 +100,6 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
   const tipoConteudo = form.watch('tipo_conteudo');
 
   const onSubmit = async (values: FormValues) => {
-    // Nota: O campo tipo_conteudo não existe na tabela, mas vamos incluí-lo no template
-    // ou assumir que o template é sempre HTML para fins de armazenamento no banco.
-    // Para simplificar, vamos armazenar o tipo de conteúdo no próprio template, se necessário,
-    // mas por enquanto, apenas salvamos o conteúdo.
     const dataToSave = {
       titulo: values.titulo,
       conteudo_template: values.conteudo_template,
@@ -61,14 +109,12 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
     let error = null;
 
     if (isEditing) {
-      // Atualizar
       const result = await supabase
         .from('contrato_modelos')
         .update(dataToSave)
         .eq('id', modeloInicial.id);
       error = result.error;
     } else {
-      // Inserir
       const result = await supabase
         .from('contrato_modelos')
         .insert(dataToSave);
@@ -159,26 +205,30 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
               {/* Coluna de Tags Padrão */}
               <Card className="lg:col-span-1 max-h-[600px] overflow-y-auto">
                   <CardHeader className="p-3 border-b">
-                      <CardTitle className="text-sm">Tags Padrão (Cópia Rápida)</CardTitle>
+                      <CardTitle className="text-sm">Tags Ativas (Cópia Rápida)</CardTitle>
                   </CardHeader>
                   <CardContent className="p-3 space-y-2">
-                      {TAGS_PADRAO.map(tag => (
-                          <div key={tag.id} className="flex flex-col space-y-1 border-b pb-2 last:border-b-0">
-                              <div className="flex justify-between items-center">
-                                  <span className="font-mono text-xs font-semibold text-primary">{tag.nome_tag}</span>
-                                  <Button 
-                                      type="button" 
-                                      variant="ghost" 
-                                      size="icon" 
-                                      className="h-6 w-6"
-                                      onClick={() => handleCopyTag(tag.nome_tag)}
-                                  >
-                                      <Copy className="w-3 h-3" />
-                                  </Button>
+                      {carregandoTags ? (
+                          <div className="flex justify-center items-center h-20"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>
+                      ) : (
+                          tagsAtivas.map(tag => (
+                              <div key={tag.id} className="flex flex-col space-y-1 border-b pb-2 last:border-b-0">
+                                  <div className="flex justify-between items-center">
+                                      <span className="font-mono text-xs font-semibold text-primary">{tag.nome_tag}</span>
+                                      <Button 
+                                          type="button" 
+                                          variant="ghost" 
+                                          size="icon" 
+                                          className="h-6 w-6"
+                                          onClick={() => handleCopyTag(tag.nome_tag)}
+                                      >
+                                          <Copy className="w-3 h-3" />
+                                      </Button>
+                                  </div>
+                                  <p className="text-xs text-muted-foreground">{tag.descricao}</p>
                               </div>
-                              <p className="text-xs text-muted-foreground">{tag.descricao}</p>
-                          </div>
-                      ))}
+                          ))
+                      )}
                   </CardContent>
               </Card>
           </div>

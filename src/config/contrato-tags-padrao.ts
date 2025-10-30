@@ -1,10 +1,7 @@
 import { ContratoTag } from "@/types/contratos";
 
-/**
- * Tags de Contrato Padrão que são preenchidas automaticamente pelo sistema.
- * Estas tags não precisam ser cadastradas manualmente pelo usuário.
- */
-export const TAGS_PADRAO: ContratoTag[] = [
+// Tags de sistema que são preenchidas automaticamente (Empresa e Cliente)
+export const TAGS_SISTEMA: ContratoTag[] = [
   // --- Dados da Empresa (Empresa Logada) ---
   {
     id: 'sys-empresa-nome',
@@ -92,8 +89,12 @@ export const TAGS_PADRAO: ContratoTag[] = [
     origem_dado: 'clientes.email',
     criado_em: new Date().toISOString(),
   },
+];
 
-  // --- Dados Financeiros e de Vencimento (Obrigatórios para Contas a Receber) ---
+/**
+ * Tags Financeiras Obrigatórias (Contas a Receber)
+ */
+export const TAGS_FINANCEIRAS_OBRIGATORIAS: ContratoTag[] = [
   {
     id: 'sys-valor-total',
     nome_tag: '{{VALOR_TOTAL_CONTRATO}}',
@@ -130,3 +131,6 @@ export const TAGS_PADRAO: ContratoTag[] = [
     criado_em: new Date().toISOString(),
   },
 ];
+
+// TAGS_PADRAO agora é a combinação de todas as tags de sistema e financeiras
+export const TAGS_PADRAO: ContratoTag[] = [...TAGS_SISTEMA, ...TAGS_FINANCEIRAS_OBRIGATORIAS];
