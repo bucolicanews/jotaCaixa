@@ -3,7 +3,7 @@ import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { useSessao } from '@/hooks/use-sessao';
 import { Loader2, Filter, Clock, Users, Building2, AlertTriangle, CalendarX } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isWeekend, parseISO } from 'date-fns';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isWeekend, parseISO, isSameDay } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { showError } from '@/utils/toast';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
@@ -13,7 +13,8 @@ import { MonthPicker } from '@/components/MonthPicker';
 import GerenciarFaltas from '@/components/GerenciarFaltas';
 import { Button } from '@/components/ui/button';
 import { ptBR } from 'date-fns/locale';
-import { RegistroPonto } from '@/types/ponto'; // Importando a interface centralizada
+import { RegistroPonto } from '@/types/ponto';
+import AjustarPontoDialog from '@/components/AjustarPontoDialog'; // Importando o novo componente
 
 interface FuncionarioComDados extends UsuarioProfile {
     id: string;
@@ -45,7 +46,13 @@ const FolhaPonto: React.FC = () => {
   // Estado para Gerenciar Faltas/Abonos
   const [faltaDialogOpen, setFaltaDialogOpen] = useState(false);
   const [diaFaltaSelecionado, setDiaFaltaSelecionado] = useState<Date | null>(null);
-  const [registroParaEdicao, setRegistroParaEdicao] = useState<RegistroPonto | null>(null); // Mantido, mas será sempre null na criação
+  const [registroParaEdicao, setRegistroParaEdicao] = useState<RegistroPonto | null>(null); 
+
+  // Estado para Ajustar Ponto (Entrada/Saída)
+  const [ajustarDialogOpen, setAjustarDialogOpen] = useState(false);
+  const [registrosParaAjuste, setRegistrosParaAjuste] = useState<RegistroPonto[]>([]);
+  const [diaParaAjuste, setDiaParaAjuste] = useState<Date | null>(null);
+
 
   const isAdmin = role === 'Admin';
   const isCliente = role === 'Cliente' && (perfil as ClienteProfile)?.aprovado;
@@ -163,9 +170,20 @@ const FolhaPonto: React.FC = () => {
   const handleFaltaRegistrada = async () => {
     // Re-busca os registros após registrar/editar/deletar a falta
     if (funcionarioSelecionadoId) {
-        await fetchRegistros(funcionarioSelecionadoId, dataSelecionada); // Adicionado await
+        await fetchRegistros(funcionarioSelecionadoId, dataSelecionada);
     }
     setRegistroParaEdicao(null);
+  };
+  
+  const handleAjustePonto = (dia: Date) => {
+    // Filtra todos os registros (Entrada/Saída) que pertencem ao dia
+    const registrosDoDia = registrosDoFuncionario.filter(r => 
+        (r.tipo === 'Entrada' || r.tipo === 'Saida') && isSameDay(parseISO(r.horario_registro), dia)
+    );
+    
+    setRegistrosParaAjuste(registrosDoDia);
+    setDiaParaAjuste(dia);
+    setAjustarDialogOpen(true);
   };
 
   const getDiasSemRegistro = () => {
@@ -177,7 +195,7 @@ const FolhaPonto: React.FC = () => {
     
     const diasComRegistro = new Set(
         registrosDoFuncionario
-            .filter(r => r.tipo !== 'Falta' && r.tipo !== 'Abono') // Ignora registros de falta/abono para esta checagem
+            .filter(r => r.tipo === 'Entrada' || r.tipo === 'Saida')
             .map(r => format(parseISO(r.horario_registro), 'yyyy-MM-dd'))
     );
     
@@ -303,7 +321,7 @@ const FolhaPonto: React.FC = () => {
                 registros: registrosDoFuncionario,
             }}
             mes={dataSelecionada}
-            onEditRegistro={() => { /* Edição removida */ }}
+            onEditRegistro={handleAjustePonto} // Passa a nova função de ajuste
             onDeleteRegistro={handleFaltaRegistrada}
         />
       )}
@@ -328,8 +346,24 @@ const FolhaPonto: React.FC = () => {
                 empresa_id: empresaIdParaFiltro! 
             }}
             dataFalta={diaFaltaSelecionado}
-            registroInicial={registroParaEdicao} // Passa o registro para edição
+            registroInicial={registroParaEdicao}
             onFaltaRegistrada={handleFaltaRegistrada}
+        />
+      )}
+      
+      {/* Modal de Ajuste de Ponto (Entrada/Saída) */}
+      {funcionarioDetalhe && diaParaAjuste && (
+        <AjustarPontoDialog
+            open={ajustarDialogOpen}
+            onOpenChange={setAjustarDialogOpen}
+            funcionario={{ 
+                id: funcionarioDetalhe.id, 
+                nome: funcionarioDetalhe.nome, 
+                empresa_id: empresaIdParaFiltro! 
+            }}
+            dia={diaParaAjuste}
+            registrosIniciais={registrosParaAjuste}
+            onSaveComplete={handleFaltaRegistrada} // Re-busca os dados após o ajuste
         />
       )}
     </LayoutPrincipal>

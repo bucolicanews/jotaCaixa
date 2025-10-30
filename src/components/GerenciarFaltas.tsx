@@ -143,7 +143,8 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
       const dataToSave = {
         funcionario_id: funcionario.id,
         empresa_id: funcionario.empresa_id,
-        horario_registro: format(dataFalta, 'yyyy-MM-dd') + 'T00:00:00Z',
+        // CORREÇÃO: Usar apenas a data para registros de dia inteiro
+        horario_registro: format(dataFalta, 'yyyy-MM-dd'), 
         tipo: tipoRegistro,
         selfie_url: 'N/A',
         maps_url: 'N/A',
