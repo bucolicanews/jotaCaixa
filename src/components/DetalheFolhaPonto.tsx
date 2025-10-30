@@ -52,7 +52,7 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
   const [selfieModalOpen, setSelfieModalOpen] = useState(false);
   const [selfieUrl, setSelfieUrl] = useState<string | null>(null);
   
-  let totalMinutosTrabalhados = 0; // Horas normais (inclui abonos, até o limite da jornada)
+  let totalMinutosTrabalhados = 0; // Horas normais (inclui abonos, sem limite)
   let totalMinutosExtras100 = 0; // Horas extras 100% (Folgas trabalhadas)
   
   // 1. Agrupamento de registros por dia (YYYY-MM-DD)
@@ -248,8 +248,7 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
   // A diferença é o quanto falta para atingir a jornada (positivo = falta, negativo = extra)
   const minutosDiferenca = jornadaMensalMinutos - totalMinutosTrabalhados; 
   
-  // 4. Ajustar totalMinutosTrabalhados para o limite da jornada (para exibição)
-  const totalMinutosTrabalhadosDisplay = Math.min(totalMinutosTrabalhados, jornadaMensalMinutos);
+  // REMOVIDO: const totalMinutosTrabalhadosDisplay = Math.min(totalMinutosTrabalhados, jornadaMensalMinutos);
   
   const formatarHoras = (minutos: number): string => {
     const sign = minutos < 0 ? '-' : '';
@@ -300,7 +299,7 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
           <div className="col-span-2 md:col-span-4 grid grid-cols-4 gap-4">
             <div><p className="text-sm text-muted-foreground">Salário Base</p><p className="font-bold text-lg">{formatCurrency(salario)}</p></div>
             <div><p className="text-sm text-muted-foreground">Jornada Mensal</p><p className="font-bold text-lg">{horas_mensais}h</p></div>
-            <div><p className="text-sm text-muted-foreground">Horas Trabalhadas</p><p className="font-bold text-lg">{formatarHoras(totalMinutosTrabalhadosDisplay)}</p></div>
+            <div><p className="text-sm text-muted-foreground">Horas Trabalhadas</p><p className="font-bold text-lg">{formatarHoras(totalMinutosTrabalhados)}</p></div>
             <div>
                 <p className="text-sm text-muted-foreground">{isExtraHours ? 'Horas Extras' : 'Diferença (Saldo)'}</p>
                 <p className={cn("font-bold text-lg", isExtraHours ? "text-green-600" : "text-red-500")}>
