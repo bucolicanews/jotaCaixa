@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { useSessao } from '@/hooks/use-sessao';
-import { Loader2, Filter, Clock, Users, Building2 } from 'lucide-react';
+import { Loader2, Filter, Clock, Users, Building2, Printer } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { format, startOfMonth, endOfMonth, parseISO, isSameDay } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
@@ -13,7 +13,11 @@ import { MonthPicker } from '@/components/MonthPicker';
 import GerenciarFaltas from '@/components/GerenciarFaltas';
 import AjustarPontoDialog from '@/components/AjustarPontoDialog';
 import { RegistroPonto, Ferias } from '@/types/ponto';
-import GerenciarFolgaTrabalhada from '@/components/GerenciarFolgaTrabalhada'; // NEW IMPORT
+import GerenciarFolgaTrabalhada from '@/components/GerenciarFolgaTrabalhada';
+import { Button } from '@/components/ui/button';
+import { usePrint } from '@/hooks/use-print';
+import FolhaPontoPrint from '@/components/FolhaPontoPrint';
+import ReactDOMServer from 'react-dom/server';
 
 interface FuncionarioComDados extends UsuarioProfile {
     id: string;
@@ -32,12 +36,14 @@ interface ClienteSimples {
 
 const FolhaPonto: React.FC = () => {
   const { role, perfil, carregando } = useSessao();
+  const { printContent } = usePrint();
   const [dataSelecionada, setDataSelecionada] = useState<Date>(startOfMonth(new Date()));
   const [carregandoDados, setCarregandoDados] = useState(false);
   
   // Estados para Admin
   const [clientes, setClientes] = useState<ClienteSimples[]>([]);
   const [clienteSelecionadoId, setClienteSelecionadoId] = useState<string | null>(null);
+  const [empresaNome, setEmpresaNome] = useState<string>('N/A');
   
   // Estados para Funcionários e Registros
   const [funcionarios, setFuncionarios] = useState<FuncionarioComDados[]>([]);
@@ -55,7 +61,7 @@ const FolhaPonto: React.FC = () => {
   const [registrosParaAjuste, setRegistrosParaAjuste] = useState<RegistroPonto[]>([]);
   const [diaParaAjuste, setDiaParaAjuste] = useState<Date | null>(null);
   
-  // NOVO: Estado para Gerenciar Folga Trabalhada
+  // Estado para Gerenciar Folga Trabalhada
   const [folgaTrabalhadaDialogOpen, setFolgaTrabalhadaDialogOpen] = useState(false);
   const [diaFolgaTrabalhada, setDiaFolgaTrabalhada] = useState<Date | null>(null);
   const [registrosFolgaTrabalhada, setRegistrosFolgaTrabalhada] = useState<RegistroPonto[]>([]);
@@ -88,6 +94,19 @@ const FolhaPonto: React.FC = () => {
     }
     setCarregandoDados(false);
   }, [isAdmin, clienteSelecionadoId]);
+  
+  // Atualiza o nome da empresa
+  useEffect(() => {
+    if (isCliente) {
+        setEmpresaNome((perfil as ClienteProfile).nome);
+    } else if (isAdmin && clienteSelecionadoId && clientes.length > 0) {
+        const selectedClient = clientes.find(c => c.id === clienteSelecionadoId);
+        setEmpresaNome(selectedClient?.nome || 'N/A');
+    } else if (isAdmin && !clienteSelecionadoId) {
+        setEmpresaNome('Selecione a Empresa');
+    }
+  }, [isCliente, isAdmin, perfil, clienteSelecionadoId, clientes]);
+
 
   const fetchFuncionarios = useCallback(async (empresaId: string) => {
     setCarregandoDados(true);
@@ -221,6 +240,159 @@ const FolhaPonto: React.FC = () => {
     setRegistrosFolgaTrabalhada(registros);
     setFolgaTrabalhadaDialogOpen(true);
   };
+  
+  // --- Lógica de Impressão ---
+  
+  const handlePrint = () => {
+    if (!funcionarioDetalhe || !empresaIdParaFiltro) {
+        showError('Selecione um funcionário e uma empresa para imprimir.');
+        return;
+    }
+    
+    // Reutiliza a lógica de processamento de dados do DetalheFolhaPonto
+    // Para obter os totais e os dias processados.
+    
+    // NOTE: Para evitar duplicar toda a lógica de cálculo aqui,
+    // vamos criar uma função utilitária que extrai os dados de cálculo
+    // do DetalheFolhaPonto. Por enquanto, vamos simular a extração
+    // e assumir que o DetalheFolhaPonto já fez o trabalho.
+    
+    // Para fins de demonstração, vamos extrair os dados necessários
+    // diretamente do DetalheFolhaPonto (que precisa ser refatorado para expor esses dados).
+    // Como não podemos refatorar o DetalheFolhaPonto para expor os dados sem quebrar o componente,
+    // vamos duplicar a lógica de cálculo necessária aqui para gerar o HTML de impressão.
+    
+    // --- DUPLICAÇÃO DA LÓGICA DE CÁLCULO (Necessário para SSR/Impressão) ---
+    
+    const JORNADA_MENSAL_PADRAO = 220;
+    const DAY_MAP: Record<number, string> = { 0: 'Sunday', 1: 'Monday', 2: 'Tuesday', 3: 'Wednesday', 4: 'Thursday', 5: 'Friday', 6: 'Saturday' };
+    
+    let totalMinutosTrabalhados = 0;
+    let totalMinutosExtras100 = 0;
+    
+    const registrosPorDia: Record<string, RegistroPonto[]> = {};
+    const registrosOrdenados = [...registrosDoFuncionario].sort((a, b) => parseISO(a.horario_registro).getTime() - parseISO(b.horario_registro).getTime());
+    
+    for (const registro of registrosOrdenados) {
+        const horario = parseISO(registro.horario_registro);
+        const dia = format(horario, 'yyyy-MM-dd');
+        if (!registrosPorDia[dia]) registrosPorDia[dia] = [];
+        registrosPorDia[dia].push(registro);
+    }
+    
+    const inicioMes = startOfMonth(dataSelecionada);
+    const fimMes = endOfMonth(dataSelecionada);
+    const hoje = new Date();
+    const todosOsDiasDoMes = eachDayOfInterval({ start: inicioMes, end: fimMes });
+    
+    const diasProcessados: Record<string, any> = {}; // Usando 'any' para simplificar a tipagem duplicada
+    
+    for (const data of todosOsDiasDoMes) {
+        const diaString = format(data, 'yyyy-MM-dd');
+        const registrosDoDia = registrosPorDia[diaString] || [];
+        
+        let minutosDia = 0;
+        let entrada: Date | null = null;
+        let isFalta = false;
+        let isAbono = false;
+        let minutosAbonados = 0; 
+        let hasPontoRecords = false;
+        let decisionRecord: 'Compensacao' | 'Extra100' | null = null;
+        let isCompensacaoAbono = false;
+        
+        const diaDaSemana = DAY_MAP[getDay(data)];
+        let isFolgaFixa = funcionarioDetalhe.dias_folga_fixos.includes(diaDaSemana);
+        if (funcionarioDetalhe.folga_domingo_obrigatoria && diaDaSemana === 'Sunday') isFolgaFixa = true;
+        
+        const isFerias = feriasDoFuncionario.some(f => {
+            const start = parseISO(f.data_inicio + 'T00:00:00');
+            const end = parseISO(f.data_fim + 'T23:59:59');
+            return isWithinInterval(data, { start, end });
+        });
+
+        for (const registro of registrosDoDia) {
+            if (registro.tipo === 'Falta') { isFalta = true; break; }
+            if (registro.tipo === 'Abono') {
+                isAbono = true;
+                if (registro.observacao?.includes('Compensação de folga trabalhada')) {
+                    isCompensacaoAbono = true;
+                } else {
+                    const horasAbonadas = parseInt(registro.observacao?.match(/(\d+)h/)?.[1] || '8'); 
+                    minutosAbonados = horasAbonadas * 60;
+                    minutosDia = minutosAbonados;
+                }
+                break; 
+            }
+            if (registro.tipo === 'Compensacao') decisionRecord = 'Compensacao';
+            if (registro.tipo === 'Extra100') decisionRecord = 'Extra100';
+            
+            if (registro.tipo === 'Entrada' || registro.tipo === 'Saida') {
+                hasPontoRecords = true;
+                const horario = parseISO(registro.horario_registro);
+                if (registro.tipo === 'Entrada') {
+                    entrada = horario;
+                } else if (registro.tipo === 'Saida' && entrada && isSameDay(horario, entrada)) {
+                    minutosDia += differenceInMinutes(horario, entrada);
+                    entrada = null;
+                }
+            }
+        }
+        
+        if (entrada && isSameDay(data, hoje)) {
+            minutosDia += differenceInMinutes(hoje, entrada);
+        }
+        
+        let minutosTrabalhadosFolga = 0;
+        let minutosParaAcumular = minutosDia;
+        let needsManagement = false;
+        
+        if (isFolgaFixa && hasPontoRecords && !isFerias) {
+            minutosTrabalhadosFolga = minutosDia;
+            if (!decisionRecord) {
+                needsManagement = true;
+                minutosParaAcumular = 0;
+            } else if (decisionRecord === 'Extra100') {
+                totalMinutosExtras100 += minutosTrabalhadosFolga;
+                minutosParaAcumular = 0;
+            } else if (decisionRecord === 'Compensacao') {
+                minutosParaAcumular = 0;
+            }
+        }
+        
+        if (!isFolgaFixa && !isFalta && !isFerias && !isCompensacaoAbono) {
+            totalMinutosTrabalhados += minutosParaAcumular;
+        } else if (isAbono && !isCompensacaoAbono) {
+            totalMinutosTrabalhados += minutosParaAcumular;
+        }
+        
+        if (isFalta) minutosDia = 0;
+
+        diasProcessados[diaString] = {
+            minutos: minutosDia,
+            registros: registrosDoDia,
+            isFalta, isAbono, isFolgaFixa, isFerias, hasPontoRecords, decisionRecord, needsManagement, minutosAbonados, minutosTrabalhadosFolga, isCompensacaoAbono,
+        };
+    }
+    
+    const jornadaMensalMinutos = (funcionarioDetalhe.horas_mensais || JORNADA_MENSAL_PADRAO) * 60;
+    const minutosDiferenca = jornadaMensalMinutos - totalMinutosTrabalhados; 
+    
+    // --- FIM DA DUPLICAÇÃO DA LÓGICA DE CÁLCULO ---
+
+    const printComponent = (
+        <FolhaPontoPrint
+            empresaNome={empresaNome}
+            funcionario={funcionarioDetalhe}
+            mes={dataSelecionada}
+            diasProcessados={diasProcessados}
+            totalMinutosTrabalhados={totalMinutosTrabalhados}
+            minutosDiferenca={minutosDiferenca}
+        />
+    );
+
+    const htmlContent = ReactDOMServer.renderToStaticMarkup(printComponent);
+    printContent(htmlContent, `Folha de Ponto - ${funcionarioDetalhe.nome} - ${format(dataSelecionada, 'MM/yyyy')}`);
+  };
 
 
   if (carregando) {
@@ -233,9 +405,18 @@ const FolhaPonto: React.FC = () => {
   
   return (
     <LayoutPrincipal>
-      <h1 className="text-2xl md:text-3xl font-bold mb-6 flex items-center">
-        <Clock className="w-6 h-6 mr-2" /> Acompanhar Folha de Ponto
-      </h1>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+        <h1 className="text-2xl md:text-3xl font-bold flex items-center">
+          <Clock className="w-6 h-6 mr-2" /> Acompanhar Folha de Ponto
+        </h1>
+        <Button 
+            onClick={handlePrint} 
+            disabled={!funcionarioDetalhe || carregandoDados}
+            className="w-full sm:w-auto"
+        >
+            <Printer className="w-4 h-4 mr-2" /> Imprimir Folha
+        </Button>
+      </div>
 
       <Card className="mb-6">
         <CardHeader className="flex flex-col md:flex-row items-start md:items-center justify-between space-y-4 md:space-y-0 pb-2">
@@ -348,7 +529,7 @@ const FolhaPonto: React.FC = () => {
         />
       )}
       
-      {/* NOVO: Modal de Gerenciamento de Folga Trabalhada */}
+      {/* Modal de Gerenciamento de Folga Trabalhada */}
       {funcionarioDetalhe && diaFolgaTrabalhada && (
         <GerenciarFolgaTrabalhada
             open={folgaTrabalhadaDialogOpen}
