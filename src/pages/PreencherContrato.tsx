@@ -225,13 +225,14 @@ const PreencherContrato: React.FC = () => {
             modelo_id: modelo.id,
             cliente_id: clienteSelecionadoId,
             empresa_id: empresaId,
-            status: 'rascunho',
+            status: 'pendente_assinatura', // ALTERADO: De rascunho para pendente_assinatura
             valor_total: valorFinalContrato,
             data_inicio: format(new Date(), 'yyyy-MM-dd'), // Data de criação do contrato
             numero_parcelas: numParcelas,
             dia_vencimento_parcela: tipoLancamento === 'unico' ? null : intervaloDias, // Usando intervaloDias aqui para simplificar o campo
             valores_tags_preenchidos: valoresTags,
             conteudo_renderizado: conteudoRenderizado,
+            // link_assinatura_externo e documento_assinado_url serão preenchidos depois
         };
         
         const { data: contratoGerado, error: contratoError } = await supabase
@@ -245,10 +246,11 @@ const PreencherContrato: React.FC = () => {
         const contratoGeradoId = contratoGerado.id;
         
         // 5. Inserir a Conta a Receber (Sintético)
+        const clienteNome = clientes.find(c => c.id === clienteSelecionadoId)?.nome || 'Cliente Desconhecido';
         const contaReceberData = {
             cliente_id: clienteSelecionadoId,
             empresa_id: empresaId,
-            descricao: `Contrato: ${modelo.titulo} - ${clientes.find(c => c.id === clienteSelecionadoId)?.nome || 'Cliente Desconhecido'}`,
+            descricao: `Contrato: ${modelo.titulo} - ${clienteNome}`,
             valor_total: valorFinalContrato,
             data_emissao: format(new Date(), 'yyyy-MM-dd'),
             data_vencimento: parcelasParaInserir[0].data_vencimento, // Primeiro vencimento
@@ -281,7 +283,7 @@ const PreencherContrato: React.FC = () => {
             
         if (parcelError) throw parcelError;
 
-        showSuccess('Contrato e Contas a Receber gerados com sucesso!');
+        showSuccess('Contrato gerado e enviado para assinatura!');
         navigate('/contratos');
         
     } catch (error: any) {
