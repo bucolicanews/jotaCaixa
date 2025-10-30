@@ -17,14 +17,14 @@ export const TAGS_PADRAO: ContratoTag[] = [
     id: 'sys-empresa-documento',
     nome_tag: '{{EMPRESA_DOCUMENTO}}',
     descricao: 'CNPJ da Empresa Contratante.',
-    origem_dado: 'tbl_clientes.documento', // Assumindo que tbl_clientes tem campo documento
+    origem_dado: 'tbl_clientes.documento',
     criado_em: new Date().toISOString(),
   },
   {
     id: 'sys-empresa-endereco',
     nome_tag: '{{EMPRESA_ENDERECO}}',
     descricao: 'Endereço completo da Empresa Contratante.',
-    origem_dado: 'tbl_clientes.endereco_completo', // Assumindo que tbl_clientes tem campo de endereço
+    origem_dado: 'tbl_clientes.endereco_completo',
     criado_em: new Date().toISOString(),
   },
   {
@@ -39,8 +39,15 @@ export const TAGS_PADRAO: ContratoTag[] = [
   {
     id: 'sys-cliente-nome',
     nome_tag: '{{CLIENTE_NOME}}',
-    descricao: 'Nome/Razão Social do Cliente Contratado.',
+    descricao: 'Nome Fantasia / Nome Pessoal do Cliente Contratado.',
     origem_dado: 'clientes.nome',
+    criado_em: new Date().toISOString(),
+  },
+  {
+    id: 'sys-cliente-razao-social',
+    nome_tag: '{{CLIENTE_RAZAO_SOCIAL}}',
+    descricao: 'Razão Social do Cliente Contratado.',
+    origem_dado: 'clientes.razao_social',
     criado_em: new Date().toISOString(),
   },
   {
@@ -53,8 +60,29 @@ export const TAGS_PADRAO: ContratoTag[] = [
   {
     id: 'sys-cliente-endereco',
     nome_tag: '{{CLIENTE_ENDERECO}}',
-    descricao: 'Endereço completo do Cliente Contratado.',
-    origem_dado: 'clientes.endereco_completo', // Assumindo que clientes tem campo de endereço
+    descricao: 'Logradouro e Número do Cliente Contratado.',
+    origem_dado: 'clientes.endereco',
+    criado_em: new Date().toISOString(),
+  },
+  {
+    id: 'sys-cliente-bairro',
+    nome_tag: '{{CLIENTE_BAIRRO}}',
+    descricao: 'Bairro do Cliente Contratado.',
+    origem_dado: 'clientes.bairro',
+    criado_em: new Date().toISOString(),
+  },
+  {
+    id: 'sys-cliente-cidade',
+    nome_tag: '{{CLIENTE_CIDADE}}',
+    descricao: 'Cidade do Cliente Contratado.',
+    origem_dado: 'clientes.cidade',
+    criado_em: new Date().toISOString(),
+  },
+  {
+    id: 'sys-cliente-estado',
+    nome_tag: '{{CLIENTE_ESTADO}}',
+    descricao: 'Estado (UF) do Cliente Contratado.',
+    origem_dado: 'clientes.estado',
     criado_em: new Date().toISOString(),
   },
   {
@@ -65,7 +93,7 @@ export const TAGS_PADRAO: ContratoTag[] = [
     criado_em: new Date().toISOString(),
   },
 
-  // --- Dados Financeiros e de Vencimento ---
+  // --- Dados Financeiros e de Vencimento (Obrigatórios para Contas a Receber) ---
   {
     id: 'sys-valor-total',
     nome_tag: '{{VALOR_TOTAL_CONTRATO}}',

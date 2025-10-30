@@ -202,7 +202,10 @@ const PreencherContrato: React.FC = () => {
                     
                 // CLIENTE
                 case '{{CLIENTE_NOME}}':
-                    newTags[tag.nome_tag] = cliente?.nome || 'N/A';
+                    newTags[tag.nome_tag] = cliente?.nome_fantasia || cliente?.nome || 'N/A';
+                    break;
+                case '{{CLIENTE_RAZAO_SOCIAL}}':
+                    newTags[tag.nome_tag] = cliente?.razao_social || 'N/A';
                     break;
                 case '{{CLIENTE_DOCUMENTO}}':
                     newTags[tag.nome_tag] = cliente?.documento || 'N/A';
@@ -211,10 +214,16 @@ const PreencherContrato: React.FC = () => {
                     newTags[tag.nome_tag] = cliente?.email || 'N/A';
                     break;
                 case '{{CLIENTE_ENDERECO}}':
-                    // Nota: A interface Cliente não tem endereco_completo, mas documento e email sim.
-                    // Se o campo fosse adicionado à tabela 'clientes', ele seria buscado aqui.
-                    // Por enquanto, usamos 'N/A' ou um campo existente se houver.
-                    newTags[tag.nome_tag] = 'N/A (Endereço do Cliente)'; 
+                    newTags[tag.nome_tag] = cliente?.endereco && cliente?.numero ? `${cliente.endereco}, ${cliente.numero}` : 'N/A';
+                    break;
+                case '{{CLIENTE_BAIRRO}}':
+                    newTags[tag.nome_tag] = cliente?.bairro || 'N/A';
+                    break;
+                case '{{CLIENTE_CIDADE}}':
+                    newTags[tag.nome_tag] = cliente?.cidade || 'N/A';
+                    break;
+                case '{{CLIENTE_ESTADO}}':
+                    newTags[tag.nome_tag] = cliente?.estado || 'N/A';
                     break;
                     
                 // FINANCEIRO

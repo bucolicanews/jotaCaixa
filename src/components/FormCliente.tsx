@@ -1,17 +1,22 @@
 import React, { useCallback } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, Control } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Tag } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { Cliente } from '@/types/cliente';
 import { useSessao } from '@/hooks/use-sessao';
 import { UsuarioProfile } from '@/types/usuario';
 import { Separator } from './ui/separator';
+import { Checkbox } from './ui/checkbox';
+import { CAMPOS_CLIENTE_MAPA } from '@/config/contrato-campos-mapeaveis';
+import { useTagManager } from '@/hooks/use-tag-manager';
+import { cn } from '@/lib/utils';
+import { Label } from '@/components/ui/label'; // Importando Label
 
 const textOptional = z.string().optional().or(z.literal(''));
 
@@ -41,8 +46,64 @@ interface FormClienteProps {
   onSaveComplete: () => void;
 }
 
+// Componente auxiliar para renderizar campos com a opção de Tag
+interface TaggedFormFieldProps {
+    control: Control<FormValues>;
+    fieldName: keyof FormValues;
+    label: string;
+    placeholder: string;
+    clienteId?: string;
+    disabled?: boolean;
+    isOptional?: boolean;
+}
+
+const TaggedFormField: React.FC<TaggedFormFieldProps> = ({ control, fieldName, label, placeholder, clienteId, disabled, isOptional = true }) => {
+    const fieldMap = CAMPOS_CLIENTE_MAPA.find(m => m.field === fieldName);
+    
+    // Se o campo não estiver mapeado para uma tag, renderiza o input normal
+    if (!fieldMap || !clienteId) {
+        return (
+            <FormField control={control} name={fieldName} render={({ field }) => (
+                <FormItem>
+                    <FormLabel>{label} {isOptional && <span className="text-muted-foreground">(Opcional)</span>}</FormLabel>
+                    <FormControl><Input placeholder={placeholder} {...field} disabled={disabled} /></FormControl>
+                    <FormMessage />
+                </FormItem>
+            )} />
+        );
+    }
+    
+    const { isTagActive, loading, toggleTag } = useTagManager(clienteId, { label: fieldMap.label, tag: fieldMap.tag, field: fieldMap.field });
+
+    return (
+        <FormField control={control} name={fieldName} render={({ field }) => (
+            <FormItem>
+                <div className="flex justify-between items-center">
+                    <FormLabel>{label} {isOptional && <span className="text-muted-foreground">(Opcional)</span>}</FormLabel>
+                    <div className="flex items-center space-x-1">
+                        <Checkbox 
+                            id={`tag-${fieldName}`}
+                            checked={isTagActive}
+                            onCheckedChange={(checked) => toggleTag(!!checked)}
+                            disabled={loading || disabled}
+                        />
+                        <Label htmlFor={`tag-${fieldName}`} className={cn("text-xs font-normal flex items-center", isTagActive ? "text-primary" : "text-muted-foreground")}>
+                            {loading ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Tag className="w-3 h-3 mr-1" />}
+                            Usar como Tag
+                        </Label>
+                    </div>
+                </div>
+                <FormControl><Input placeholder={placeholder} {...field} disabled={disabled} /></FormControl>
+                <FormMessage />
+            </FormItem>
+        )} />
+    );
+};
+
+
 const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplete }) => {
   const { perfil, role } = useSessao();
+  const clienteId = clienteInicial?.id;
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -75,7 +136,6 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
   };
   
   const fetchAddressByCep = useCallback(async (cep: string) => {
-    // Remove caracteres não numéricos
     const cleanCep = cep.replace(/\D/g, '');
 
     if (cleanCep.length !== 8) {
@@ -178,59 +238,33 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
         <h3 className="font-semibold text-lg">Dados de Identificação</h3>
-        <FormField control={form.control} name="nome" render={({ field }) => (
-          <FormItem><FormLabel>Nome Fantasia / Nome Pessoal</FormLabel><FormControl><Input placeholder="Nome Fantasia ou Nome Completo" {...field} /></FormControl><FormMessage /></FormItem>
-        )} />
-        <FormField control={form.control} name="razao_social" render={({ field }) => (
-          <FormItem><FormLabel>Razão Social (Opcional)</FormLabel><FormControl><Input placeholder="Razão Social da Empresa" {...field} /></FormControl><FormMessage /></FormItem>
-        )} />
-        <FormField control={form.control} name="documento" render={({ field }) => (
-          <FormItem><FormLabel>Documento (CPF/CNPJ)</FormLabel><FormControl><Input placeholder="00.000.000/0000-00" {...field} /></FormControl><FormMessage /></FormItem>
-        )} />
+        <TaggedFormField control={form.control as Control<FormValues>} fieldName="nome" label="Nome Fantasia / Nome Pessoal" placeholder="Nome Fantasia ou Nome Completo" clienteId={clienteId} isOptional={false} />
+        <TaggedFormField control={form.control as Control<FormValues>} fieldName="razao_social" label="Razão Social" placeholder="Razão Social da Empresa" clienteId={clienteId} />
+        <TaggedFormField control={form.control as Control<FormValues>} fieldName="documento" label="Documento (CPF/CNPJ)" placeholder="00.000.000/0000-00" clienteId={clienteId} />
         
         <Separator />
         
         <h3 className="font-semibold text-lg">Contato</h3>
-        <FormField control={form.control} name="email" render={({ field }) => (
-          <FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" placeholder="contato@cliente.com" {...field} /></FormControl><FormMessage /></FormItem>
-        )} />
+        <TaggedFormField control={form.control as Control<FormValues>} fieldName="email" label="Email" placeholder="contato@cliente.com" clienteId={clienteId} />
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <FormField control={form.control} name="telefone" render={({ field }) => (
-                <FormItem><FormLabel>Telefone (Celular/Principal)</FormLabel><FormControl><Input placeholder="(00) 90000-0000" {...field} /></FormControl><FormMessage /></FormItem>
-            )} />
-            <FormField control={form.control} name="telefone_fixo" render={({ field }) => (
-                <FormItem><FormLabel>Telefone Fixo (Opcional)</FormLabel><FormControl><Input placeholder="(00) 3000-0000" {...field} /></FormControl><FormMessage /></FormItem>
-            )} />
+            <TaggedFormField control={form.control as Control<FormValues>} fieldName="telefone" label="Telefone (Celular/Principal)" placeholder="(00) 90000-0000" clienteId={clienteId} />
+            <TaggedFormField control={form.control as Control<FormValues>} fieldName="telefone_fixo" label="Telefone Fixo" placeholder="(00) 3000-0000" clienteId={clienteId} />
         </div>
         
         <Separator />
         
         <h3 className="font-semibold text-lg">Endereço</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <FormField control={form.control} name="cep" render={({ field }) => (
-                <FormItem><FormLabel>CEP</FormLabel><FormControl><Input placeholder="00000-000" {...field} /></FormControl><FormMessage /></FormItem>
-            )} />
-            <FormField control={form.control} name="cidade" render={({ field }) => (
-                <FormItem><FormLabel>Cidade</FormLabel><FormControl><Input placeholder="São Paulo" {...field} disabled={field.value === 'Buscando...'} /></FormControl><FormMessage /></FormItem>
-            )} />
-            <FormField control={form.control} name="estado" render={({ field }) => (
-                <FormItem><FormLabel>Estado (UF)</FormLabel><FormControl><Input placeholder="SP" {...field} disabled={field.value === 'Buscando...'} /></FormControl><FormMessage /></FormItem>
-            )} />
+            <TaggedFormField control={form.control as Control<FormValues>} fieldName="cep" label="CEP" placeholder="00000-000" clienteId={clienteId} />
+            <TaggedFormField control={form.control as Control<FormValues>} fieldName="cidade" label="Cidade" placeholder="São Paulo" clienteId={clienteId} disabled={form.watch('cidade') === 'Buscando...'} />
+            <TaggedFormField control={form.control as Control<FormValues>} fieldName="estado" label="Estado (UF)" placeholder="SP" clienteId={clienteId} disabled={form.watch('estado') === 'Buscando...'} />
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <FormField control={form.control} name="endereco" render={({ field }) => (
-                <FormItem><FormLabel>Logradouro/Rua</FormLabel><FormControl><Input placeholder="Rua Exemplo" {...field} disabled={field.value === 'Buscando...'} /></FormControl><FormMessage /></FormItem>
-            )} />
-            <FormField control={form.control} name="numero" render={({ field }) => (
-                <FormItem><FormLabel>Número</FormLabel><FormControl><Input id="numero" placeholder="123" {...field} /></FormControl><FormMessage /></FormItem>
-            )} />
-            <FormField control={form.control} name="complemento" render={({ field }) => (
-                <FormItem><FormLabel>Complemento</FormLabel><FormControl><Input placeholder="Apto 101" {...field} /></FormControl><FormMessage /></FormItem>
-            )} />
+            <TaggedFormField control={form.control as Control<FormValues>} fieldName="endereco" label="Logradouro/Rua" placeholder="Rua Exemplo" clienteId={clienteId} disabled={form.watch('endereco') === 'Buscando...'} />
+            <TaggedFormField control={form.control as Control<FormValues>} fieldName="numero" label="Número" placeholder="123" clienteId={clienteId} />
+            <TaggedFormField control={form.control as Control<FormValues>} fieldName="complemento" label="Complemento" placeholder="Apto 101" clienteId={clienteId} />
         </div>
-        <FormField control={form.control} name="bairro" render={({ field }) => (
-            <FormItem><FormLabel>Bairro</FormLabel><FormControl><Input placeholder="Centro" {...field} disabled={field.value === 'Buscando...'} /></FormControl><FormMessage /></FormItem>
-        )} />
+        <TaggedFormField control={form.control as Control<FormValues>} fieldName="bairro" label="Bairro" placeholder="Centro" clienteId={clienteId} disabled={form.watch('bairro') === 'Buscando...'} />
         
         <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
           {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

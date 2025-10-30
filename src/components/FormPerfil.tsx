@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useForm, Control, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -21,6 +21,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Checkbox } from './ui/checkbox';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from './ui/accordion';
 import GerenciarFerias from './GerenciarFerias';
+import { CAMPOS_USUARIO_MAPA } from '@/config/contrato-campos-mapeaveis';
+import { Label } from './ui/label'; // Adicionando Label
 
 // Esquema de validação para os campos de URL (opcional)
 const urlSchema = z.string().url('URL inválida.').optional().or(z.literal(''));
@@ -75,10 +77,53 @@ interface FormPerfilProps {
   onSaveComplete: () => void;
 }
 
+// Componente auxiliar para renderizar campos com a opção de Tag
+interface TaggedProfileFieldProps {
+    control: Control<FormValues>;
+    fieldName: keyof FormValues;
+    label: string;
+    placeholder: string;
+    userId: string;
+    isReadOnly: boolean;
+    required?: boolean;
+}
+
+const TaggedProfileField: React.FC<TaggedProfileFieldProps> = ({ control, fieldName, label, placeholder, userId, isReadOnly, required = false }) => {
+    const fieldMap = CAMPOS_USUARIO_MAPA.find(m => m.field === fieldName);
+    
+    // Se o campo não estiver mapeado ou o usuário não for um Usuário (Funcionário), renderiza o input normal
+    if (!fieldMap || !userId) {
+        return (
+            <FormField control={control} name={fieldName} render={({ field }) => (
+                <FormItem>
+                    <FormLabel>{label} {required && <span className="text-red-500">*</span>}</FormLabel>
+                    <FormControl><Input placeholder={placeholder} {...field} value={(field.value as string) || ''} disabled={isReadOnly} /></FormControl>
+                    <FormMessage />
+                </FormItem>
+            )} />
+        );
+    }
+    
+    // O perfil logado (Usuário) não pode gerenciar tags, apenas o Cliente/Admin pode.
+    // A opção de tag só será visível no FormUsuario (Gerenciar Usuários).
+    
+    return (
+        <FormField control={control} name={fieldName} render={({ field }) => (
+            <FormItem>
+                <FormLabel>{label} {required && <span className="text-red-500">*</span>}</FormLabel>
+                <FormControl><Input placeholder={placeholder} {...field} value={(field.value as string) || ''} disabled={isReadOnly} /></FormControl>
+                <FormMessage />
+            </FormItem>
+        )} />
+    );
+};
+
+
 const FormPerfil: React.FC<FormPerfilProps> = ({ perfil, role, onSaveComplete }) => {
   const isUsuario = role === 'Usuario';
   const isManager = role === 'Admin' || role === 'Cliente';
   const usuarioProfile = perfil as UsuarioProfile;
+  const userId = perfil?.id;
 
   const parseDate = (dateString: string | null | undefined) => 
     dateString ? new Date(dateString + 'T00:00:00') : null;
@@ -143,6 +188,56 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfil, role, onSaveComplete })
   const isReadOnly = isUsuario; 
   // Determina se os campos contratuais são editáveis (true se for Manager logado)
   const isContractEditable = isManager && isEditingUsuario;
+  
+  const cepValue = form.watch('cep');
+  
+  const fetchAddressByCep = useCallback(async (cep: string) => {
+    const cleanCep = cep.replace(/\D/g, '');
+    if (cleanCep.length !== 8) return;
+    
+    form.setValue('endereco', 'Buscando...');
+    form.setValue('bairro', 'Buscando...');
+    form.setValue('cidade', 'Buscando...');
+    form.setValue('estado', 'Buscando...');
+    
+    try {
+      const response = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
+      const data = await response.json();
+
+      if (data.erro) {
+        showError('CEP não encontrado.');
+        form.setValue('endereco', '');
+        form.setValue('bairro', '');
+        form.setValue('cidade', '');
+        form.setValue('estado', '');
+        return;
+      }
+
+      form.setValue('endereco', data.logradouro || '');
+      form.setValue('bairro', data.bairro || '');
+      form.setValue('cidade', data.localidade || '');
+      form.setValue('estado', data.uf || '');
+      
+      document.getElementById('numero')?.focus();
+
+    } catch (error) {
+      console.error('Erro ao consultar ViaCEP:', error);
+      showError('Falha ao consultar o CEP.');
+      form.setValue('endereco', '');
+      form.setValue('bairro', '');
+      form.setValue('cidade', '');
+      form.setValue('estado', '');
+    }
+  }, [form]);
+  
+  React.useEffect(() => {
+    if (isReadOnly) { // Apenas o usuário logado pode usar o ViaCEP no seu perfil
+        const cleanCep = cepValue?.replace(/\D/g, '');
+        if (cleanCep && cleanCep.length === 8) {
+            fetchAddressByCep(cleanCep);
+        }
+    }
+  }, [cepValue, fetchAddressByCep, isReadOnly]);
 
 
   const onSubmit: SubmitHandler<FormValues> = async (values) => {
@@ -351,18 +446,14 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfil, role, onSaveComplete })
   );
 
   const renderInputField = (fieldName: keyof FormValues, label: string, placeholder: string, required: boolean = false) => (
-    <FormField
-      control={form.control as unknown as Control<FormValues>}
-      name={fieldName}
-      render={({ field }) => (
-        <FormItem>
-          <FormLabel>{label} {required && <span className="text-red-500">*</span>}</FormLabel>
-          <FormControl>
-            <Input placeholder={placeholder} {...field} value={(field.value as string) || ''} disabled={isReadOnly} />
-          </FormControl>
-          <FormMessage />
-        </FormItem>
-      )}
+    <TaggedProfileField 
+        control={form.control as unknown as Control<FormValues>}
+        fieldName={fieldName}
+        label={label}
+        placeholder={placeholder}
+        userId={userId!}
+        isReadOnly={isReadOnly}
+        required={required}
     />
   );
 
@@ -455,6 +546,7 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfil, role, onSaveComplete })
               )}
 
               {/* TAB 4: DOCUMENTOS DE ADMISSÃO */}
+              {/* ... (mantendo a renderização de documentos) */}
               <TabsContent value="documentos" className="mt-4 space-y-6 p-2 md:p-4">
                 <p className="text-sm text-muted-foreground">Anexe os documentos obrigatórios. O link será gerado automaticamente após o upload.</p>
                 
