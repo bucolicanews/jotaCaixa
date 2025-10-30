@@ -331,17 +331,7 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
           </div>
           
           {/* LINHA 2: HORAS EXTRAS */}
-          <div className="col-span-2 md:col-span-4 grid grid-cols-4 gap-4 pb-3">
-            <div className="col-span-1"><p className="text-sm text-muted-foreground">Horas Extras (50%)</p><p className="font-bold text-lg text-orange-500">{formatarHoras(totalMinutosExtras50)}</p></div>
-            <div className="col-span-1"><p className="text-sm text-muted-foreground">Horas Extras (70%)</p><p className="font-bold text-lg text-yellow-600">{formatarHoras(totalMinutosExtras70)}</p></div>
-            <div className="col-span-1"><p className="text-sm text-muted-foreground">Horas Extras (100%)</p><p className="font-bold text-lg text-red-500">{formatarHoras(totalMinutosExtras100)}</p></div>
-            <div>
-                <p className="text-sm text-muted-foreground">Horas Extras a Pagar</p>
-                <p className={cn("font-bold text-lg", totalMinutosExtrasPagar > 0 ? "text-primary" : "text-muted-foreground")}>
-                    {formatarHoras(totalMinutosExtrasPagar)}
-                </p>
-            </div>
-          </div>
+          {/* REMOVIDA CONFORME SOLICITAÇÃO */}
           
         </CardContent>
       </Card>
