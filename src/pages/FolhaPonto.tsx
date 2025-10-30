@@ -19,7 +19,7 @@ interface RegistroPonto {
   funcionario_id: string;
   empresa_id: string;
   horario_registro: string; // ISO string
-  tipo: 'Entrada' | 'Saida' | 'Falta'; // Adicionado 'Falta'
+  tipo: 'Entrada' | 'Saida' | 'Falta' | 'Abono'; // Tipos corrigidos
   maps_url: string;
   selfie_url: string; // Adicionado
   atestado_url?: string | null; // Adicionado
@@ -184,13 +184,13 @@ const FolhaPonto: React.FC = () => {
     
     const diasComRegistro = new Set(
         registrosDoFuncionario
-            .filter(r => r.tipo !== 'Falta') // Ignora registros de falta para esta checagem
+            .filter(r => r.tipo !== 'Falta' && r.tipo !== 'Abono') // Ignora registros de falta/abono para esta checagem
             .map(r => format(parseISO(r.horario_registro), 'yyyy-MM-dd'))
     );
     
     const diasComFaltaRegistrada = new Set(
         registrosDoFuncionario
-            .filter(r => r.tipo === 'Falta')
+            .filter(r => r.tipo === 'Falta' || r.tipo === 'Abono')
             .map(r => format(parseISO(r.horario_registro), 'yyyy-MM-dd'))
     );
 
@@ -200,7 +200,7 @@ const FolhaPonto: React.FC = () => {
         if (isWeekend(dia)) return false; 
         // Ignora dias futuros
         if (dia > new Date()) return false;
-        // Se não tem registro de ponto E não tem registro de falta, é um dia sem registro
+        // Se não tem registro de ponto E não tem registro de falta/abono, é um dia sem registro
         return !diasComRegistro.has(diaString) && !diasComFaltaRegistrada.has(diaString);
     });
   };
@@ -282,13 +282,14 @@ const FolhaPonto: React.FC = () => {
                 <p className="text-sm text-muted-foreground mb-3">
                     Os seguintes dias úteis não possuem registro de ponto ou falta justificada:
                 </p>
-                <div className="flex flex-wrap gap-2">
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
                     {diasSemRegistro.map(dia => (
                         <Button 
                             key={format(dia, 'yyyy-MM-dd')} 
                             variant="destructive" 
                             size="sm"
                             onClick={() => handleFaltaClick(dia)}
+                            className="w-full"
                         >
                             <CalendarX className="w-4 h-4 mr-1" />
                             {format(dia, 'dd/MM (EEE)', { locale: ptBR })}
