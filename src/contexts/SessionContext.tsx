@@ -2,7 +2,7 @@ import React, { createContext, useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { User } from '@supabase/supabase-js';
-import { DadosSessao, AnyProfile, UserRole } from '@/types/usuario';
+import { DadosSessao, AnyProfile, UserRole, UsuarioProfile } from '@/types/usuario';
 
 interface SessionContextType extends DadosSessao {
   refetch: () => Promise<void>;
@@ -59,15 +59,31 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       // Lógica de alta prioridade para recuperação de senha
       if (event === 'PASSWORD_RECOVERY') {
-        // Apenas navega. Não carrega dados do perfil para não ser tratado como login.
         navigate('/atualizar-senha');
       } else {
-        // Fluxo normal para todos os outros eventos (INITIAL_SESSION, SIGNED_IN, SIGNED_OUT)
         buscarDadosAdicionais(session?.user ?? null);
       }
     });
     return () => subscription.unsubscribe();
   }, [buscarDadosAdicionais, navigate]);
+  
+  // Lógica de Redirecionamento Pós-Login
+  useEffect(() => {
+      if (!estado.carregando && estado.usuario) {
+          const isUnassignedUser = estado.role === 'Usuario' && !(estado.perfil as UsuarioProfile)?.cliente_id;
+          
+          if (isUnassignedUser) {
+              // Redireciona para a seleção de perfil se for um usuário recém-cadastrado
+              navigate('/selecao-perfil', { replace: true });
+          } else if (estado.role === 'Cliente' && estado.perfil && !('aprovado' in estado.perfil && estado.perfil.aprovado === false)) {
+              // Redireciona para o painel se for Admin ou Cliente aprovado
+              if (window.location.pathname === '/login' || window.location.pathname === '/') {
+                  navigate('/painel', { replace: true });
+              }
+          }
+      }
+  }, [estado, navigate]);
+
 
   return (
     <SessionContext.Provider value={{ ...estado, refetch }}>

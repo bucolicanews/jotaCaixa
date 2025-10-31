@@ -29,6 +29,7 @@ import NovoContrato from "./pages/NovoContrato";
 import PreencherContrato from "./pages/PreencherContrato";
 import GerenciarPlanos from "./pages/GerenciarPlanos";
 import Vendas from "./pages/Vendas";
+import SelecaoPerfil from "./pages/SelecaoPerfil"; // Novo Import
 
 const queryClient = new QueryClient();
 
@@ -41,10 +42,13 @@ const App = () => (
           <Sonner />
           <Routes>
             {/* Rotas Públicas/Auth */}
-            <Route path="/" element={<Vendas />} /> {/* Rota raiz agora é Vendas */}
+            <Route path="/" element={<Vendas />} />
             <Route path="/vendas" element={<Vendas />} />
             <Route path="/login" element={<Login />} />
             <Route path="/atualizar-senha" element={<AtualizarSenha />} />
+            
+            {/* Rota de Seleção de Perfil */}
+            <Route path="/selecao-perfil" element={<SelecaoPerfil />} />
             
             {/* Rotas Autenticadas (Protegidas pelo LayoutPrincipal) */}
             <Route path="/painel" element={<Painel />} />
@@ -56,7 +60,7 @@ const App = () => (
             <Route path="/importar" element={<Importar />} />
             <Route path="/relatorios" element={<Relatorios />} />
             <Route path="/configuracoes" element={<Configuracoes />} />
-            <Route path="/planos" element={<GerenciarPlanos />} /> {/* Rota alterada para /planos */}
+            <Route path="/planos" element={<GerenciarPlanos />} />
             <Route path="/plano-contas" element={<PlanoContasPage />} />
             <Route path="/gerenciar-usuarios" element={<GerenciarUsuarios />} />
             <Route path="/cadastrar-empresa" element={<CadastrarEmpresa />} />

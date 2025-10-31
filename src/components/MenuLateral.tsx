@@ -90,9 +90,18 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick }) => {
   const isPendingClient = role === 'Cliente' && !(perfil as ClienteProfile)?.aprovado;
   const userProfile = perfil as UsuarioProfile;
   const clientProfile = perfil as ClienteProfile;
+  
+  // Se o usuário for recém-cadastrado e estiver na tela de seleção de perfil,
+  // ele não deve ver o menu completo.
+  const isPreAuthFlow = localizacao.pathname === '/selecao-perfil';
 
   const checkPermission = (item: ItemMenu) => {
     if (!item.permissionKey) return true;
+
+    // Se estiver no fluxo de seleção de perfil, só permite Painel (que é o LayoutPrincipal)
+    if (isPreAuthFlow) {
+        return item.caminho === '/painel';
+    }
 
     // O Admin agora tem acesso a todos os módulos listados, pois ele precisa gerenciar seus próprios lançamentos.
     if (role === 'Admin') {
@@ -100,6 +109,10 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick }) => {
     }
 
     if (role === 'Cliente') {
+        // Clientes pendentes só veem Painel (que mostra a mensagem de aprovação)
+        if (isPendingClient) {
+            return item.caminho === '/painel';
+        }
         // Se for 'Meu Ponto', oculta para Cliente (que usa Acompanhar Ponto)
         if (item.caminho === '/perfil' && item.permissionKey === 'visualizar_proprio_ponto') {
             return false;
@@ -108,6 +121,11 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick }) => {
     }
 
     if (role === 'Usuario') {
+        // Usuários não vinculados só veem Cadastrar Empresa e Painel
+        if (isUnassignedUser) {
+            return item.caminho === '/painel';
+        }
+        
         // Se for 'Acompanhar Ponto' (FolhaPonto), oculta para Usuário.
         if (item.caminho === '/folha-ponto') {
             return false;
@@ -128,13 +146,14 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick }) => {
         <h1 className="text-xl font-bold text-primary">Navegação</h1>
       </div>
       <nav className="flex-1 p-2 space-y-4 overflow-y-auto">
+        {/* Item de Cadastro de Empresa (Visível apenas para Usuário não vinculado) */}
         {isUnassignedUser && (
           <Link
             to="/cadastrar-empresa"
             onClick={onLinkClick}
             className={cn(
               "flex items-center p-3 rounded-lg transition-colors font-semibold text-primary bg-primary/10",
-              "hover:bg-primary/20"
+              localizacao.pathname === '/cadastrar-empresa' ? "bg-accent text-accent-foreground" : "hover:bg-primary/20"
             )}
           >
             <Building2 className="w-5 h-5 mr-3" />
@@ -147,7 +166,6 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick }) => {
             
             const itensVisiveis = secao.itens.filter(item => 
                 item.perfis.includes(role) && 
-                !isPendingClient && 
                 checkPermission(item)
             );
 
