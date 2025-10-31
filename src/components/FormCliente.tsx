@@ -207,9 +207,9 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
       return;
     }
     
-    // Validação: Se for Admin, deve ter um adminId válido.
+    // **VERIFICAÇÃO DE SEGURANÇA ADICIONAL PARA ADMIN**
     if (role === 'Admin' && !adminId) {
-        showError('Não foi possível identificar o Administrador. Não é possível salvar.');
+        showError('ID do Administrador não encontrado na sessão. Tente fazer login novamente.');
         return;
     }
 
@@ -232,8 +232,8 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
       estado: values.estado || null,
       
       // IDs de Propriedade
-      empresa_id: empresaId, // NULL se for Admin, ID da Empresa se for Cliente/Usuário
-      admin_id: adminId,     // ID do Admin se for Admin, NULL caso contrário
+      empresa_id: empresaId, // NULL se Admin
+      admin_id: adminId,     // ID do Admin se Admin (garantido não nulo pela verificação acima)
     };
 
     let error = null;
