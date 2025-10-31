@@ -580,8 +580,7 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
   }
 
   // Renderização para Usuário (Funcionário)
-  // ... (mantendo a lógica existente para Usuário)
-  const isContractEditable = role === 'Admin' || role === 'Cliente';
+  // A variável 'isContractEditable' foi removida daqui.
 
   return (
     <Form {...form}>
