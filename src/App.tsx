@@ -26,7 +26,9 @@ import Contratos from "./pages/Contratos";
 import GerenciarTags from "./pages/GerenciarTags";
 import GerenciarModelos from "./pages/GerenciarModelos";
 import NovoContrato from "./pages/NovoContrato";
-import PreencherContrato from "./pages/PreencherContrato"; // Importando a nova página
+import PreencherContrato from "./pages/PreencherContrato";
+import GerenciarPlanos from "./pages/GerenciarPlanos";
+import Vendas from "./pages/Vendas"; // Importando a nova página
 
 const queryClient = new QueryClient();
 
@@ -39,7 +41,8 @@ const App = () => (
           <Sonner />
           <Routes>
             {/* Rotas Públicas/Auth */}
-            <Route path="/" element={<Login />} />
+            <Route path="/" element={<Vendas />} /> {/* Rota raiz agora é Vendas */}
+            <Route path="/vendas" element={<Vendas />} />
             <Route path="/login" element={<Login />} />
             <Route path="/atualizar-senha" element={<AtualizarSenha />} />
             
@@ -53,6 +56,7 @@ const App = () => (
             <Route path="/importar" element={<Importar />} />
             <Route path="/relatorios" element={<Relatorios />} />
             <Route path="/configuracoes" element={<Configuracoes />} />
+            <Route path="/configuracoes/planos" element={<GerenciarPlanos />} />
             <Route path="/plano-contas" element={<PlanoContasPage />} />
             <Route path="/gerenciar-usuarios" element={<GerenciarUsuarios />} />
             <Route path="/cadastrar-empresa" element={<CadastrarEmpresa />} />
@@ -63,7 +67,7 @@ const App = () => (
             <Route path="/contratos/tags" element={<GerenciarTags />} />
             <Route path="/contratos/modelos" element={<GerenciarModelos />} />
             <Route path="/contratos/novo" element={<NovoContrato />} />
-            <Route path="/contratos/preencher/:modeloId" element={<PreencherContrato />} /> {/* Nova Rota */}
+            <Route path="/contratos/preencher/:modeloId" element={<PreencherContrato />} />
 
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
