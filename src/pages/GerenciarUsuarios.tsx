@@ -218,9 +218,12 @@ const GerenciarUsuarios: React.FC = () => {
       setIsDialogOpen(true);
   };
   
+  // Lógica de determinação do botão e do targetRole
   const isManagingClients = activeTab === 'clientes';
-  const targetRole = isManagingClients ? 'Cliente' : 'Usuario';
+  const targetRole: UserRole = isManagingClients ? 'Cliente' : 'Usuario';
   const title = 'Gerenciar Usuários'; 
+  
+  const buttonText = isManagingClients ? 'Novo Cliente (Empresa)' : 'Novo Usuário (Funcionário)';
   
   // Helper function to render the table content
   const renderTableContent = (profiles: AnyProfile[], currentRole: UserRole, currentTab: string) => {
@@ -348,9 +351,6 @@ const GerenciarUsuarios: React.FC = () => {
   if (!usuario || !role || !perfil) {
     return <LayoutPrincipal><p>Redirecionando...</p></LayoutPrincipal>;
   }
-  
-  // Determina o texto do botão de cadastro
-  const buttonText = isManagingClients ? 'Novo Cliente (Empresa)' : 'Novo Usuário (Funcionário)';
   
   // Determina o perfil alvo para o novo cadastro
   const newTargetRole: UserRole = isManagingClients ? 'Cliente' : 'Usuario';
