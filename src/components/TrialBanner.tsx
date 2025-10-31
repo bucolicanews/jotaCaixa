@@ -47,11 +47,10 @@ const TrialBanner: React.FC = () => {
         setPlanoInfo(planoData as PlanoInfo);
         
         // 2. Determinar se é Trial
-        // Se a data de fim de acesso for futura e a diferença de dias for próxima ao dias_trial, consideramos trial.
-        // Simplificando: Se a data de fim de acesso for menor ou igual a 30 dias no futuro, é trial.
-        
         const daysRemaining = differenceInDays(dataFim, new Date());
         
+        // Se a data de fim de acesso for futura E a diferença for menor que 30 dias, consideramos TRIAL.
+        // Se for 365 dias (1 ano), não é trial.
         const isTrialPeriod = isFuture(dataFim) && daysRemaining <= 30; 
         
         setIsTrial(isTrialPeriod);
