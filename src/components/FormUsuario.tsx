@@ -501,26 +501,18 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
 
       if (isClientBeingManagedByAdmin) {
         // Edição/Criação de Cliente (Empresa)
-        dataToUpdate.limite_usuarios = values.limite_usuarios;
-        dataToUpdate.permissoes = values.permissoes;
         
-        // Campos de Tags (Dados Cadastrais do Cliente)
-        dataToUpdate.cpf = values.cpf || null;
-        dataToUpdate.rg = values.rg || null;
-        dataToUpdate.email = values.email || null;
-        dataToUpdate.nome_mae = values.nome_mae || null;
-        dataToUpdate.nome_pai = values.nome_pai || null;
-        dataToUpdate.telefone = values.telefone || null;
-        dataToUpdate.cep = values.cep || null;
-        dataToUpdate.endereco = values.endereco || null;
-        dataToUpdate.numero = values.numero || null;
-        dataToUpdate.complemento = values.complemento || null;
-        dataToUpdate.bairro = values.bairro || null;
-        dataToUpdate.cidade = values.cidade || null;
-        dataToUpdate.estado = values.estado || null;
+        // Campos administrativos e de login
+        const clientUpdatePayload: Partial<ClienteProfile> = {
+            nome: values.nome,
+            email: values.email, // Email é parte da identidade de login
+            limite_usuarios: values.limite_usuarios,
+            permissoes: values.permissoes,
+            // Campos cadastrais (cpf, rg, endereço, etc.) são gerenciados pelo próprio Cliente em /perfil.
+        };
         
-        // Se for criação, insere o usuário no auth primeiro
         if (!isEditing) {
+            // Criação de Cliente (Admin)
             const { error: authError } = await supabase.auth.signUp({
                 email: values.email,
                 password: values.senha!,
@@ -530,14 +522,13 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
             });
             if (authError) throw authError;
             
-            // O trigger route_new_user cuidará da inserção em tbl_clientes
             showSuccess('Cliente criado com sucesso! Aguarde a aprovação.');
             onSaveComplete();
             return;
         }
         
-        // Se for edição
-        const { error } = await supabase.from('tbl_clientes').update(dataToUpdate).eq('id', usuarioInicial!.id);
+        // Edição de Cliente (Admin)
+        const { error } = await supabase.from('tbl_clientes').update(clientUpdatePayload).eq('id', usuarioInicial!.id);
         if (error) throw error;
         
       } else if (isUserBeingManagedByClient || isUser) {
@@ -603,7 +594,6 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
             });
             if (authError) throw authError;
             
-            // O trigger route_new_user cuidará da inserção em tbl_usuarios
             showSuccess('Usuário criado com sucesso!');
             onSaveComplete();
             return;
@@ -671,130 +661,11 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
           
           {!isEditing && renderInputField('senha', 'Senha Provisória', '••••••••', true, false)}
           
-          <h3 className="font-semibold text-lg mt-6">Dados Cadastrais (Tags de Contrato)</h3>
-          <p className="text-sm text-muted-foreground mb-4">Estes campos são usados para preencher tags dinâmicas em contratos.</p>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* CPF/CNPJ com Tag */}
-              <TaggedFormField 
-                  fieldName="cpf" 
-                  label="CPF/CNPJ" 
-                  placeholder="00.000.000/0000-00" 
-                  resourceId={resourceId} 
-                  disabled={!isEditing}
-                  mapArray={CAMPOS_CLIENTE_MAPA}
-              />
-              {/* RG com Tag */}
-              <TaggedFormField 
-                  fieldName="rg" 
-                  label="RG" 
-                  placeholder="00.000.000-0" 
-                  resourceId={resourceId} 
-                  disabled={!isEditing}
-                  mapArray={CAMPOS_CLIENTE_MAPA}
-              />
-              {/* Nome da Mãe com Tag */}
-              <TaggedFormField 
-                  fieldName="nome_mae" 
-                  label="Nome da Mãe" 
-                  placeholder="Nome completo da mãe" 
-                  resourceId={resourceId} 
-                  disabled={!isEditing}
-                  mapArray={CAMPOS_CLIENTE_MAPA}
-              />
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Telefone com Tag */}
-              <TaggedFormField 
-                  fieldName="telefone" 
-                  label="Telefone de Contato" 
-                  placeholder="(00) 90000-0000" 
-                  resourceId={resourceId} 
-                  disabled={!isEditing}
-                  mapArray={CAMPOS_CLIENTE_MAPA}
-              />
-              {/* Nome do Pai com Tag */}
-              <TaggedFormField 
-                  fieldName="nome_pai" 
-                  label="Nome do Pai" 
-                  placeholder="Nome completo do pai" 
-                  resourceId={resourceId} 
-                  disabled={!isEditing}
-                  mapArray={CAMPOS_CLIENTE_MAPA}
-              />
-          </div>
-          
-          <h4 className="font-semibold mt-6 border-t pt-4">Endereço</h4>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* CEP com Tag */}
-              <TaggedFormField 
-                  fieldName="cep" 
-                  label="CEP" 
-                  placeholder="00000-000" 
-                  resourceId={resourceId} 
-                  disabled={!isEditing}
-                  mapArray={CAMPOS_CLIENTE_MAPA}
-              />
-              {/* Cidade com Tag */}
-              <TaggedFormField 
-                  fieldName="cidade" 
-                  label="Cidade" 
-                  placeholder="São Paulo" 
-                  resourceId={resourceId} 
-                  disabled={!isEditing}
-                  mapArray={CAMPOS_CLIENTE_MAPA}
-              />
-              {/* Estado com Tag */}
-              <TaggedFormField 
-                  fieldName="estado" 
-                  label="Estado (UF)" 
-                  placeholder="SP" 
-                  resourceId={resourceId} 
-                  disabled={!isEditing}
-                  mapArray={CAMPOS_CLIENTE_MAPA}
-              />
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* Endereço com Tag */}
-              <TaggedFormField 
-                  fieldName="endereco" 
-                  label="Logradouro/Rua" 
-                  placeholder="Rua Exemplo" 
-                  resourceId={resourceId} 
-                  disabled={!isEditing}
-                  mapArray={CAMPOS_CLIENTE_MAPA}
-              />
-              {/* Número com Tag */}
-              <TaggedFormField 
-                  fieldName="numero" 
-                  label="Número" 
-                  placeholder="123" 
-                  resourceId={resourceId} 
-                  disabled={!isEditing}
-                  mapArray={CAMPOS_CLIENTE_MAPA}
-              />
-              {/* Complemento com Tag */}
-              <TaggedFormField 
-                  fieldName="complemento" 
-                  label="Complemento" 
-                  placeholder="Apto 101" 
-                  resourceId={resourceId} 
-                  disabled={!isEditing}
-                  mapArray={CAMPOS_CLIENTE_MAPA}
-              />
-          </div>
-          {/* Bairro com Tag */}
-          <TaggedFormField 
-              fieldName="bairro" 
-              label="Bairro" 
-              placeholder="Centro" 
-              resourceId={resourceId} 
-              disabled={!isEditing}
-              mapArray={CAMPOS_CLIENTE_MAPA}
-          />
-
           <h4 className="font-semibold mt-6 border-t pt-4">Configurações e Permissões</h4>
+          <p className="text-sm text-muted-foreground mb-4">
+            Os dados cadastrais (CPF/CNPJ, endereço, etc.) são gerenciados pelo próprio cliente na seção "Meu Perfil".
+          </p>
+          
           {renderNumberField('limite_usuarios', 'Limite de Usuários da Equipe', '5', !isEditing)}
 
           <div className="space-y-2">
