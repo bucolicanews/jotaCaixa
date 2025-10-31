@@ -1,9 +1,7 @@
 # VERSÃO TESTE 1.0.0.000
 -Contas a Receber 1.0 - modo dark impplantado
 
-proximo - exportar folha de ponto
-
-- ajustar contas a receber
+proximo - revisão e testar o get pagamento
 
 # Fluxo de Caixa - Sistema de Gestão Financeira
 
