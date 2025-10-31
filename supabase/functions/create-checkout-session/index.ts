@@ -1,6 +1,5 @@
-/// <reference types="https://deno.land/std@0.190.0/http/server.ts" />
-/// <reference types="https://esm.sh/@supabase/supabase-js@2.45.0" />
-/// <reference types="https://esm.sh/stripe@16.5.0?target=deno" />
+/// <reference lib="deno.ns" />
+/// <reference lib="deno.window" />
 
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
@@ -17,19 +16,13 @@ serve(async (req: Request) => {
   }
 
   try {
-    console.log('LOG: Starting checkout session creation.');
-    
-    // Log de variáveis de ambiente (para verificar se estão sendo lidas)
-    console.log('ENV:', {
-      SUPABASE_URL: Deno.env.get('SUPABASE_URL'),
-      SUPABASE_ANON_KEY_EXISTS: !!Deno.env.get('SUPABASE_ANON_KEY'),
-    });
+    console.log('LOG 1: Starting checkout session creation.');
     
     // 1. Ler o corpo da requisição
     const body = await req.json();
     const { planoId, clienteId, email } = body;
     
-    console.log(`LOG: Received data: planoId=${planoId}, clienteId=${clienteId}, email=${email}`);
+    console.log(`LOG 2: Received data: planoId=${planoId}, clienteId=${clienteId}, email=${email}`);
 
     if (!planoId || !clienteId || !email) {
       return new Response(JSON.stringify({ error: 'Missing planoId, clienteId, or email' }), {
@@ -48,7 +41,7 @@ serve(async (req: Request) => {
     );
 
     // 3. Buscar a chave secreta do Stripe (configuração global)
-    console.log('LOG: Fetching Stripe secret key...');
+    console.log('LOG 3: Fetching Stripe secret key...');
     const { data: stripeConfig, error: configError } = await supabase
       .from('configuracoes_stripe')
       .select('stripe_secret_key')
@@ -57,7 +50,7 @@ serve(async (req: Request) => {
       .single();
 
     if (configError || !stripeConfig?.stripe_secret_key) {
-      console.error('ERROR: Stripe config error:', configError);
+      console.error('ERROR 3: Stripe config error:', configError);
       return new Response(JSON.stringify({ error: 'Stripe secret key not configured or database error.' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -65,11 +58,11 @@ serve(async (req: Request) => {
     }
     
     const stripeSecretKey = stripeConfig.stripe_secret_key;
-    console.log('LOG: Stripe secret key fetched. Starts with:', stripeSecretKey.slice(0, 8));
+    console.log('LOG 4: Stripe secret key fetched. Starts with:', stripeSecretKey.slice(0, 8));
 
 
     // 4. Buscar detalhes do Plano
-    console.log(`LOG: Fetching plan details for ID: ${planoId}`);
+    console.log(`LOG 5: Fetching plan details for ID: ${planoId}`);
     const { data: plano, error: planoError } = await supabase
       .from('planos')
       .select('nome, preco_mensal')
@@ -77,29 +70,28 @@ serve(async (req: Request) => {
       .single();
 
     if (planoError || !plano) {
-      console.error('ERROR: Plano not found:', planoError);
+      console.error('ERROR 5: Plano not found:', planoError);
       return new Response(JSON.stringify({ error: 'Plano not found.' }), {
         status: 404,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
     
-    console.log(`LOG: Plan found: ${plano.nome}, Price: ${plano.preco_mensal}`);
+    console.log(`LOG 6: Plan found: ${plano.nome}, Price: ${plano.preco_mensal}`);
 
     // 5. Inicializar Stripe
-    console.log('LOG: Initializing Stripe...');
+    console.log('LOG 7: Initializing Stripe...');
     const stripe = new Stripe(stripeSecretKey, {
       apiVersion: '2024-06-20',
-      // REMOVIDO: httpClient: Stripe.createFetchHttpClient(),
     });
     
     const unitAmount = Math.round(plano.preco_mensal * 100);
     
     // 6. Tratar URL de Referer (Fallback para evitar erro de URL inválida)
     const referer = req.headers.get('referer');
-    const baseUrl = referer || 'https://jqoirlswewggyppgvgnv.supabase.co/'; // Usando o ID do projeto como fallback seguro
+    const baseUrl = referer || 'https://jqoirlswewggyppgvgnv.supabase.co/'; 
     
-    console.log(`LOG: Creating Checkout Session. Base URL: ${baseUrl}`);
+    console.log(`LOG 8: Creating Checkout Session. Base URL: ${baseUrl}`);
 
     // 7. Criar a Stripe Checkout Session
     const session = await stripe.checkout.sessions.create({
@@ -132,7 +124,7 @@ serve(async (req: Request) => {
       customer_email: email, // Usando o email extraído do corpo
     });
     
-    console.log(`LOG: Session created successfully. URL: ${session.url}`);
+    console.log(`LOG 9: Session created successfully. URL: ${session.url}`);
 
     return new Response(JSON.stringify({ sessionId: session.id, url: session.url }), {
       status: 200,
