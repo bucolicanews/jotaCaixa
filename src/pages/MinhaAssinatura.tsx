@@ -2,8 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { useSessao } from '@/hooks/use-sessao';
 import { ClienteProfile } from '@/types/usuario';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Loader2, Package, DollarSign, CalendarCheck, CreditCard } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Loader2, Package, DollarSign, CalendarCheck, ArrowDownCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError } from '@/utils/toast';
 import { Plano } from '@/types/plano';
@@ -14,7 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
 
-interface PagamentoSimulado {
+interface Pagamento {
     id: string;
     data: string;
     valor: number;
@@ -22,64 +22,97 @@ interface PagamentoSimulado {
     descricao: string;
 }
 
-// Função para gerar pagamentos simulados baseados no preço do plano
-const generateSimulatedPayments = (precoMensal: number): PagamentoSimulado[] => {
-    const today = new Date();
-    const payments: PagamentoSimulado[] = [];
-
-    // 1. Pagamento de Ativação (Hoje)
-    payments.push({
-        id: 'p0',
-        data: today.toISOString(),
-        valor: precoMensal,
-        status: 'pago',
-        descricao: 'Ativação / 1ª Mensalidade',
-    });
-
-    // Removendo a simulação de pagamentos históricos (meses anteriores)
-    
-    return payments;
-};
-
+interface ContaPagarPlano {
+    id: string;
+    data_vencimento: string;
+    valor: number;
+    status: 'pendente' | 'pago';
+    fornecedor: string;
+}
 
 const MinhaAssinatura: React.FC = () => {
     const { perfil, role, carregando } = useSessao();
     const [planoAtual, setPlanoAtual] = useState<Plano | null>(null);
     const [carregandoPlano, setCarregandoPlano] = useState(true);
-    const [pagamentos, setPagamentos] = useState<PagamentoSimulado[]>([]);
+    const [proximaContaPagar, setProximaContaPagar] = useState<ContaPagarPlano | null>(null);
+    const [historicoPagamentos, setHistoricoPagamentos] = useState<Pagamento[]>([]);
 
     const isClient = role === 'Cliente';
     const clienteProfile = perfil as ClienteProfile;
+    const clienteId = clienteProfile?.id;
 
-    const fetchPlano = useCallback(async () => {
-        if (!isClient || !clienteProfile?.plano_id) {
+    const fetchDadosAssinatura = useCallback(async () => {
+        if (!isClient || !clienteId || !clienteProfile?.plano_id) {
             setCarregandoPlano(false);
             return;
         }
 
-        const { data, error } = await supabase
+        setCarregandoPlano(true);
+
+        // 1. Buscar detalhes do Plano
+        const { data: planoData, error: planoError } = await supabase
             .from('planos')
             .select('*')
             .eq('id', clienteProfile.plano_id)
             .single();
 
-        if (error) {
-            showError('Erro ao carregar detalhes do plano: ' + error.message);
+        if (planoError) {
+            showError('Erro ao carregar detalhes do plano: ' + planoError.message);
             setPlanoAtual(null);
-        } else {
-            const plano = data as Plano;
-            setPlanoAtual(plano);
-            // Gera o histórico de pagamentos com o preço real
-            setPagamentos(generateSimulatedPayments(plano.preco_mensal));
+            setCarregandoPlano(false);
+            return;
         }
+        setPlanoAtual(planoData as Plano);
+        
+        // 2. Buscar Histórico de Pagamentos (CR do Admin contra este Cliente)
+        // Buscamos as parcelas pagas onde o cliente é o pagador (cliente_id) e a conta é de assinatura.
+        const { data: parcelasPagas, error: crError } = await supabase
+            .from('parcelas_contas_receber')
+            .select('id, data_pagamento, valor_pago, status, contas_receber(descricao, cliente_id, origem)')
+            .eq('contas_receber.cliente_id', clienteId)
+            .eq('status', 'paga')
+            .eq('contas_receber.origem', 'assinatura')
+            .order('data_pagamento', { ascending: false });
+            
+        if (crError) {
+            console.error('Erro ao buscar histórico de pagamentos:', crError);
+            setHistoricoPagamentos([]);
+        } else {
+            const historico = (parcelasPagas as any[]).map(p => ({
+                id: p.id,
+                data: p.data_pagamento!,
+                valor: p.valor_pago,
+                status: 'pago' as 'pago',
+                descricao: p.contas_receber?.descricao || 'Mensalidade Paga',
+            }));
+            setHistoricoPagamentos(historico);
+        }
+
+        // 3. Buscar a próxima Conta a Pagar (CP) do Cliente
+        const { data: contasPagar, error: cpError } = await supabase
+            .from('contas_pagar')
+            .select('id, data_vencimento, valor, status, fornecedor')
+            .eq('empresa_id', clienteId)
+            .eq('status', 'pendente')
+            .order('data_vencimento', { ascending: true })
+            .limit(1);
+            
+        if (cpError) {
+            console.error('Erro ao buscar próxima conta a pagar:', cpError);
+        } else if (contasPagar.length > 0) {
+            setProximaContaPagar(contasPagar[0] as ContaPagarPlano);
+        } else {
+            setProximaContaPagar(null);
+        }
+
         setCarregandoPlano(false);
-    }, [isClient, clienteProfile]);
+    }, [isClient, clienteId, clienteProfile]);
 
     useEffect(() => {
         if (!carregando) {
-            fetchPlano();
+            fetchDadosAssinatura();
         }
-    }, [carregando, fetchPlano]);
+    }, [carregando, fetchDadosAssinatura]);
 
     if (carregando || carregandoPlano) {
         return <LayoutPrincipal><div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div></LayoutPrincipal>;
@@ -139,46 +172,57 @@ const MinhaAssinatura: React.FC = () => {
                     </CardContent>
                 </Card>
                 
-                {/* Informações de Pagamento */}
+                {/* Próximos Pagamentos */}
                 <Card>
-                    <CardHeader><CardTitle className="text-xl flex items-center"><CreditCard className="w-5 h-5 mr-2" /> Forma de Pagamento</CardTitle></CardHeader>
+                    <CardHeader><CardTitle className="text-xl flex items-center"><ArrowDownCircle className="w-5 h-5 mr-2" /> Próxima Mensalidade</CardTitle></CardHeader>
                     <CardContent>
-                        <CardDescription>
-                            Gerencie seu cartão de crédito ou débito.
-                        </CardDescription>
-                        <Button variant="outline" className="w-full mt-4" disabled>
-                            Gerenciar Cartão (Em breve)
-                        </Button>
+                        {proximaContaPagar ? (
+                            <div className="space-y-2">
+                                <p className="text-3xl font-bold text-red-600">{formatCurrency(proximaContaPagar.valor)}</p>
+                                <p className="text-sm text-muted-foreground">Vencimento: {format(parseISO(proximaContaPagar.data_vencimento), 'dd/MM/yyyy')}</p>
+                                <p className="text-xs text-muted-foreground">Lançado em Contas a Pagar.</p>
+                            </div>
+                        ) : (
+                            <p className="text-sm text-muted-foreground">Nenhuma cobrança futura pendente.</p>
+                        )}
                     </CardContent>
                 </Card>
             </div>
 
             {/* Histórico de Pagamentos */}
             <Card>
-                <CardHeader><CardTitle className="text-xl">Histórico de Pagamentos</CardTitle></CardHeader>
+                <CardHeader><CardTitle className="text-xl">Histórico de Pagamentos (CR do Admin)</CardTitle></CardHeader>
                 <CardContent>
                     <Table>
                         <TableHeader>
                             <TableRow>
-                                <TableHead>Data</TableHead>
+                                <TableHead>Data Pagamento</TableHead>
                                 <TableHead>Descrição</TableHead>
-                                <TableHead className="text-right">Valor</TableHead>
+                                <TableHead className="text-right">Valor Pago</TableHead>
                                 <TableHead className="text-center">Status</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {pagamentos.map(p => (
-                                <TableRow key={p.id}>
-                                    <TableCell>{format(parseISO(p.data), 'dd/MM/yyyy', { locale: ptBR })}</TableCell>
-                                    <TableCell>{p.descricao}</TableCell>
-                                    <TableCell className="text-right font-medium">{formatCurrency(p.valor)}</TableCell>
-                                    <TableCell className="text-center">
-                                        <Badge variant={p.status === 'pago' ? 'success' : 'destructive'}>
-                                            {p.status === 'pago' ? 'Pago' : 'Falha'}
-                                        </Badge>
+                            {historicoPagamentos.length > 0 ? (
+                                historicoPagamentos.map(p => (
+                                    <TableRow key={p.id}>
+                                        <TableCell>{format(parseISO(p.data), 'dd/MM/yyyy', { locale: ptBR })}</TableCell>
+                                        <TableCell>{p.descricao}</TableCell>
+                                        <TableCell className="text-right font-medium">{formatCurrency(p.valor)}</TableCell>
+                                        <TableCell className="text-center">
+                                            <Badge variant={p.status === 'pago' ? 'success' : 'destructive'}>
+                                                {p.status === 'pago' ? 'Pago' : 'Falha'}
+                                            </Badge>
+                                        </TableCell>
+                                    </TableRow>
+                                ))
+                            ) : (
+                                <TableRow>
+                                    <TableCell colSpan={4} className="text-center py-4 text-muted-foreground">
+                                        Nenhum pagamento de mensalidade encontrado.
                                     </TableCell>
                                 </TableRow>
-                            ))}
+                            )}
                         </TableBody>
                     </Table>
                 </CardContent>
