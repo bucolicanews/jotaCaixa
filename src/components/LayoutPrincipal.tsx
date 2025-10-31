@@ -6,6 +6,7 @@ import { ClienteProfile } from '@/types/usuario';
 import { Card, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { cn } from '@/lib/utils';
 import Header from './Header';
+import TrialBanner from './TrialBanner'; // Importando o novo componente
 
 interface LayoutPrincipalProps {
   children: React.ReactNode;
@@ -52,6 +53,9 @@ const LayoutPrincipal: React.FC<LayoutPrincipalProps> = ({ children }) => {
     <div className="flex flex-col min-h-screen w-full bg-background">
       {/* Header Fixo no Topo */}
       <Header />
+      
+      {/* Banner de Trial (Aparece apenas para Clientes em Trial) */}
+      <TrialBanner />
       
       {/* Conteúdo Principal (Rolável) */}
       <main className={cn("flex-1 p-4 md:p-8 w-full")}>
