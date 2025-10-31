@@ -48,7 +48,7 @@ const Login = () => {
                 email_label: 'Email',
                 password_label: 'Senha',
                 button_label: 'Entrar',
-                // CORRIGIDO: Link de Login deve levar para Cadastro
+                // Link de Login deve levar para Cadastro
                 link_text: 'Não tem uma conta? Cadastre-se', 
                 social_provider_text: 'Entrar com {{provider}}',
               },
@@ -56,8 +56,8 @@ const Login = () => {
                 email_label: 'Email',
                 password_label: 'Criar Senha',
                 button_label: 'Cadastrar',
-                // CORRIGIDO: Link de Cadastro deve levar para Login
-                link_text: 'Já tem uma conta? Entrar', 
+                // Link de Cadastro deve levar para Login
+                link_text: 'Já tem uma conta? Fazer Login', // Alterado para Fazer Login
               },
               forgotten_password: {
                 email_label: 'Email',
