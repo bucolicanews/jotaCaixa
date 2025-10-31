@@ -20,24 +20,35 @@ const ClientesPage = () => {
   const [dialogAberto, setDialogAberto] = useState(false);
 
   const getOwnerId = () => {
-    if (role === 'Admin' || role === 'Cliente') return (perfil as any)?.id;
+    if (role === 'Admin') return null; // Admin não é o owner, seus clientes têm empresa_id = NULL
+    if (role === 'Cliente') return (perfil as any)?.id;
     if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id;
     return null;
   };
 
   const buscarClientes = async () => {
     const ownerId = getOwnerId();
-    if (!ownerId) {
-      setCarregandoClientes(false);
-      return;
-    }
-
+    
     setCarregandoClientes(true);
-    const { data, error } = await supabase
+    
+    let query = supabase
       .from('clientes')
       .select('*')
-      .eq('empresa_id', ownerId)
       .order('nome', { ascending: true });
+
+    if (role === 'Admin') {
+        // Admin vê apenas clientes onde empresa_id é NULL (seus próprios clientes)
+        query = query.is('empresa_id', null);
+    } else if (ownerId) {
+        // Cliente/Usuário vê clientes vinculados ao seu ownerId
+        query = query.eq('empresa_id', ownerId);
+    } else {
+        setClientes([]);
+        setCarregandoClientes(false);
+        return;
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       showError('Erro ao carregar clientes: ' + error.message);
