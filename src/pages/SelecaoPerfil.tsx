@@ -99,8 +99,8 @@ const SelecaoPerfil: React.FC = () => {
         <Card className="w-full max-w-3xl">
           <CardHeader className="text-center">
             <CardTitle className="text-3xl">Selecione seu Perfil</CardTitle>
-            <CardDescription>
-              Para começar seu teste grátis, escolha o tipo de perfil que melhor se encaixa no seu uso.
+            <CardDescription className="text-lg font-semibold text-green-500">
+                Teste Grátis por 7 dias!
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -113,7 +113,13 @@ const SelecaoPerfil: React.FC = () => {
                 <p className="text-sm text-muted-foreground mb-4">
                   Ideal para uso pessoal ou microempreendedores individuais.
                 </p>
-                <ul className="text-left text-sm space-y-1 mb-6">
+                
+                <div className="text-3xl font-extrabold text-foreground mb-4">
+                    R$ 49,90
+                    <span className="text-lg font-medium text-muted-foreground">/mês</span>
+                </div>
+                
+                <ul className="text-left text-sm space-y-1 flex-1 mb-6">
                     <li><Check className="w-4 h-4 text-green-500 inline mr-2" /> Contas a Pagar/Receber</li>
                     <li><Check className="w-4 h-4 text-green-500 inline mr-2" /> Cadastro de Clientes</li>
                     <li><Check className="w-4 h-4 text-green-500 inline mr-2" /> Relatórios Básicos</li>
@@ -135,7 +141,13 @@ const SelecaoPerfil: React.FC = () => {
                 <p className="text-sm text-muted-foreground mb-4">
                   Para empresas que precisam de gestão completa, equipe e ponto eletrônico.
                 </p>
-                <ul className="text-left text-sm space-y-1 mb-6">
+                
+                <div className="text-3xl font-extrabold text-foreground mb-4">
+                    R$ 99,90
+                    <span className="text-lg font-medium text-muted-foreground">/mês</span>
+                </div>
+                
+                <ul className="text-left text-sm space-y-1 flex-1 mb-6">
                     <li><Check className="w-4 h-4 text-green-500 inline mr-2" /> Todos os Módulos Financeiros</li>
                     <li><Check className="w-4 h-4 text-green-500 inline mr-2" /> Gestão de Usuários/Equipe</li>
                     <li><Check className="w-4 h-4 text-green-500 inline mr-2" /> Ponto Eletrônico</li>
