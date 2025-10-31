@@ -73,7 +73,8 @@ const TaggedFormField: React.FC<TaggedFormFieldProps> = ({ control, fieldName, l
         );
     }
     
-    const { isTagActive, loading, toggleTag } = useTagManager(clienteId, { label: fieldMap.label, tag: fieldMap.tag, field: fieldMap.field });
+    // Passando 0 como refreshKey, pois FormCliente não tem gerenciamento global de tags.
+    const { isTagActive, loading, toggleTag } = useTagManager(clienteId, { label: fieldMap.label, tag: fieldMap.tag, field: fieldMap.field }, 0);
 
     return (
         <FormField control={control} name={fieldName} render={({ field }) => (

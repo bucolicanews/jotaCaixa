@@ -129,7 +129,7 @@ const TaggedClientField: React.FC<TaggedClientFieldProps> = ({ control, fieldNam
     }
     
     // Passando refreshKey para o useTagManager para forçar a re-busca do estado
-    const { isTagActive, loading, toggleTag } = useTagManager(resourceId, { label: fieldMap.label, tag: fieldMap.tag, field: fieldMap.field });
+    const { isTagActive, loading, toggleTag } = useTagManager(resourceId, { label: fieldMap.label, tag: fieldMap.tag, field: fieldMap.field }, refreshKey);
 
     return (
         <FormField key={fieldName + refreshKey} control={control} name={fieldName} render={({ field }) => (

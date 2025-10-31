@@ -15,8 +15,9 @@ interface TagMetadata {
  * Hook para gerenciar o estado de tags dinâmicas de um recurso (Cliente ou Usuário).
  * @param resourceId O ID do recurso (Cliente ou Usuário) que está sendo editado.
  * @param tagMetadata O mapeamento da tag (nome e descrição).
+ * @param refreshKey Chave para forçar a re-busca do estado.
  */
-export function useTagManager(resourceId: string | undefined, tagMetadata: TagMetadata) {
+export function useTagManager(resourceId: string | undefined, tagMetadata: TagMetadata, refreshKey: number) {
     const { perfil, role } = useSessao();
     const [isTagActive, setIsTagActive] = useState(false);
     const [loading, setLoading] = useState(true);
@@ -50,7 +51,7 @@ export function useTagManager(resourceId: string | undefined, tagMetadata: TagMe
         
         setIsTagActive(!!data);
         setLoading(false);
-    }, [resourceId, empresaId, tagMetadata.tag]);
+    }, [resourceId, empresaId, tagMetadata.tag, refreshKey]); // Adicionando refreshKey aqui
 
     useEffect(() => {
         fetchTagStatus();
