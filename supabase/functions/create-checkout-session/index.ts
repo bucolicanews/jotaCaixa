@@ -1,3 +1,7 @@
+/// <reference types="https://deno.land/std@0.190.0/http/server.ts" />
+/// <reference types="https://esm.sh/@supabase/supabase-js@2.45.0" />
+/// <reference types="https://esm.sh/stripe@16.5.0?target=deno" />
+
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
 import Stripe from 'https://esm.sh/stripe@16.5.0?target=deno';
@@ -7,13 +11,15 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-serve(async (req) => {
+serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { planoId, clienteId } = await req.json();
+    // Read the request body once
+    const body = await req.json();
+    const { planoId, clienteId, email } = body;
 
     if (!planoId || !clienteId) {
       return new Response(JSON.stringify({ error: 'Missing planoId or clienteId' }), {
@@ -96,7 +102,7 @@ serve(async (req) => {
         clienteId: clienteId,
         planoId: planoId,
       },
-      customer_email: (await req.json()).email, // Tenta usar o email passado no corpo
+      customer_email: email, // Usando o email extraído do corpo
     });
 
     return new Response(JSON.stringify({ sessionId: session.id, url: session.url }), {
@@ -106,7 +112,9 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('Stripe Checkout Error:', error);
-    return new Response(JSON.stringify({ error: error.message }), {
+    // Tratamento do erro 'unknown'
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return new Response(JSON.stringify({ error: errorMessage }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
