@@ -28,7 +28,7 @@ import GerenciarModelos from "./pages/GerenciarModelos";
 import NovoContrato from "./pages/NovoContrato";
 import PreencherContrato from "./pages/PreencherContrato";
 import GerenciarPlanos from "./pages/GerenciarPlanos";
-import Vendas from "./pages/Vendas"; // Importando a nova página
+import Vendas from "./pages/Vendas";
 
 const queryClient = new QueryClient();
 
@@ -56,7 +56,7 @@ const App = () => (
             <Route path="/importar" element={<Importar />} />
             <Route path="/relatorios" element={<Relatorios />} />
             <Route path="/configuracoes" element={<Configuracoes />} />
-            <Route path="/configuracoes/planos" element={<GerenciarPlanos />} />
+            <Route path="/planos" element={<GerenciarPlanos />} /> {/* Rota alterada para /planos */}
             <Route path="/plano-contas" element={<PlanoContasPage />} />
             <Route path="/gerenciar-usuarios" element={<GerenciarUsuarios />} />
             <Route path="/cadastrar-empresa" element={<CadastrarEmpresa />} />

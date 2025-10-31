@@ -72,7 +72,7 @@ const SECOES_MENU: MenuSection[] = [
         perfis: ['Admin', 'Cliente'],
         itens: [
             { nome: 'Gerenciar Usuários', caminho: '/gerenciar-usuarios', icone: Users, perfis: ['Admin', 'Cliente'] },
-            { nome: 'Gerenciar Planos', caminho: '/configuracoes/planos', icone: Package, perfis: ['Admin'] }, // Novo item
+            { nome: 'Gerenciar Planos', caminho: '/planos', icone: Package, perfis: ['Admin'] }, // Rota alterada para /planos
             { nome: 'Configurações', caminho: '/configuracoes', icone: Settings, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'configuracoes' },
         ]
     }
