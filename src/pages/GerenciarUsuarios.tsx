@@ -47,7 +47,7 @@ const GerenciarUsuarios: React.FC = () => {
       if (!carregando && isAdmin) {
           setActiveTab('clientes');
       } else if (!carregando && isCliente) {
-          setActiveTab('usuarios');
+          setActiveTab('meus_funcionarios'); // Cliente só tem uma aba de usuários
       }
   }, [carregando, isAdmin, isCliente]);
 
@@ -141,7 +141,7 @@ const GerenciarUsuarios: React.FC = () => {
     c.email.toLowerCase().includes(filtro.toLowerCase())
   );
 
-  const filterUsers = (userList: UsuarioComEmpresa[]) => {
+  const filterUsers = (userList: UsuarioComEmpresa[], currentTab: string) => {
     const termoBusca = filtro.toLowerCase();
     return userList.filter(u => {
         const nomeEmpresa = u.nome_empresa || '';
@@ -152,7 +152,7 @@ const GerenciarUsuarios: React.FC = () => {
                
         if (!textMatch) return false;
         
-        if (isAdmin && activeTab === 'funcionarios_clientes' && filtroEmpresaId !== 'todos') {
+        if (isAdmin && currentTab === 'funcionarios_clientes' && filtroEmpresaId !== 'todos') {
             return u.cliente_id === filtroEmpresaId;
         }
 
@@ -160,11 +160,11 @@ const GerenciarUsuarios: React.FC = () => {
     });
   };
   
-  const filteredMeusFuncionarios = filterUsers(meusFuncionarios);
-  const filteredFuncionariosClientes = filterUsers(funcionariosClientes);
+  const filteredMeusFuncionarios = filterUsers(meusFuncionarios, 'meus_funcionarios');
+  const filteredFuncionariosClientes = filterUsers(funcionariosClientes, 'funcionarios_clientes');
   
   // Variável para a visualização de Cliente/Usuário (não Admin)
-  const filteredClientUsers = filterUsers(usuarios);
+  const filteredClientUsers = filterUsers(usuarios, 'meus_funcionarios');
 
 
   const handleDelete = async (id: string, nome: string, targetRole: UserRole) => {
@@ -216,11 +216,12 @@ const GerenciarUsuarios: React.FC = () => {
   };
   
   const isManagingClients = activeTab === 'clientes';
+  const isManagingMyUsers = activeTab === 'meus_funcionarios';
   const targetRole = isManagingClients ? 'Cliente' : 'Usuario';
   const title = 'Gerenciar Usuários'; 
   
   // Helper function to render the table content
-  const renderTableContent = (profiles: AnyProfile[], currentRole: UserRole) => {
+  const renderTableContent = (profiles: AnyProfile[], currentRole: UserRole, currentTab: string) => {
     // Filtra perfis nulos para satisfazer o TypeScript
     const nonNullProfiles = profiles.filter((p): p is Exclude<AnyProfile, null> => p !== null);
     
@@ -236,7 +237,7 @@ const GerenciarUsuarios: React.FC = () => {
                         <TableHead>Nome</TableHead>
                         <TableHead>Email</TableHead>
                         {currentRole === 'Cliente' && <TableHead>Limite Usuários</TableHead>}
-                        {currentRole === 'Usuario' && isAdmin && activeTab === 'funcionarios_clientes' && <TableHead>Empresa</TableHead>}
+                        {currentRole === 'Usuario' && isAdmin && currentTab === 'funcionarios_clientes' && <TableHead>Empresa</TableHead>}
                         {currentRole === 'Usuario' && <TableHead>Início Contrato</TableHead>}
                         {currentRole === 'Cliente' && <TableHead>Status</TableHead>}
                         <TableHead className="text-right">Ações</TableHead>
@@ -297,7 +298,7 @@ const GerenciarUsuarios: React.FC = () => {
                                 <TableRow key={id}>
                                     <TableCell className="font-medium">{nome}</TableCell>
                                     <TableCell>{email}</TableCell>
-                                    {isAdmin && activeTab === 'funcionarios_clientes' && (
+                                    {isAdmin && currentTab === 'funcionarios_clientes' && (
                                         <TableCell className="text-sm text-muted-foreground">{userProfile.nome_empresa || 'N/A'}</TableCell>
                                     )}
                                     <TableCell>
@@ -346,6 +347,12 @@ const GerenciarUsuarios: React.FC = () => {
     return <LayoutPrincipal><p>Redirecionando...</p></LayoutPrincipal>;
   }
   
+  // Determina o texto do botão de cadastro
+  const buttonText = isManagingClients ? 'Novo Cliente (Empresa)' : 'Novo Usuário (Funcionário)';
+  
+  // Determina o perfil alvo para o novo cadastro
+  const newTargetRole: UserRole = isManagingClients ? 'Cliente' : 'Usuario';
+
   return (
     <LayoutPrincipal>
       <div className="flex justify-between items-center mb-6">
@@ -353,16 +360,16 @@ const GerenciarUsuarios: React.FC = () => {
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
             <Button 
-                onClick={() => handleOpenDialog(null, targetRole)}
+                onClick={() => handleOpenDialog(null, newTargetRole)}
                 disabled={isCliente && isManagingClients}
             >
               <Plus className="mr-2 h-4 w-4" />
-              Novo {targetRole === 'Cliente' ? 'Cliente' : 'Usuário'}
+              {buttonText}
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>{perfilParaEditar ? `Editar ${targetRole}` : `Criar Novo ${targetRole}`}</DialogTitle>
+              <DialogTitle>{perfilParaEditar ? `Editar ${targetRole}` : `Criar Novo ${newTargetRole}`}</DialogTitle>
             </DialogHeader>
             <FormUsuario 
               criadorRole={role}
@@ -394,7 +401,7 @@ const GerenciarUsuarios: React.FC = () => {
                 />
               </div>
             </div>
-            {renderTableContent(filteredClientes, 'Cliente')}
+            {renderTableContent(filteredClientes, 'Cliente', activeTab)}
           </TabsContent>
           
           <TabsContent value="meus_funcionarios">
@@ -409,7 +416,7 @@ const GerenciarUsuarios: React.FC = () => {
                 />
               </div>
             </div>
-            {renderTableContent(filteredMeusFuncionarios, 'Usuario')}
+            {renderTableContent(filteredMeusFuncionarios, 'Usuario', activeTab)}
           </TabsContent>
           
           <TabsContent value="funcionarios_clientes">
@@ -440,7 +447,7 @@ const GerenciarUsuarios: React.FC = () => {
                   </Select>
               )}
             </div>
-            {renderTableContent(filteredFuncionariosClientes, 'Usuario')}
+            {renderTableContent(filteredFuncionariosClientes, 'Usuario', activeTab)}
           </TabsContent>
         </Tabs>
       ) : (
@@ -457,7 +464,7 @@ const GerenciarUsuarios: React.FC = () => {
               />
             </div>
           </div>
-          {renderTableContent(filteredClientUsers, 'Usuario')}
+          {renderTableContent(filteredClientUsers, 'Usuario', activeTab)}
         </>
       )}
     </LayoutPrincipal>
