@@ -7,7 +7,7 @@ import { Loader2, Package, DollarSign, CalendarCheck, CreditCard } from 'lucide-
 import { supabase } from '@/integrations/supabase/client';
 import { showError } from '@/utils/toast';
 import { Plano } from '@/types/plano';
-import { format, parseISO, isFuture, subMonths } from 'date-fns';
+import { format, parseISO, isFuture } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -36,20 +36,9 @@ const generateSimulatedPayments = (precoMensal: number): PagamentoSimulado[] => 
         descricao: 'Ativação / 1ª Mensalidade',
     });
 
-    // 2. Pagamentos Históricos (3 meses anteriores)
-    for (let i = 1; i <= 3; i++) {
-        const pastDate = subMonths(today, i);
-        payments.push({
-            id: `p${i}`,
-            data: pastDate.toISOString(),
-            valor: precoMensal,
-            status: 'pago',
-            descricao: `Mensalidade - ${format(pastDate, 'MMMM', { locale: ptBR })}`,
-        });
-    }
+    // Removendo a simulação de pagamentos históricos (meses anteriores)
     
-    // Ordena do mais recente para o mais antigo
-    return payments.sort((a, b) => parseISO(b.data).getTime() - parseISO(a.data).getTime());
+    return payments;
 };
 
 
