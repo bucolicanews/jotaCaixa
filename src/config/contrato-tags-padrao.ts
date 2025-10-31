@@ -11,17 +11,10 @@ export const TAGS_SISTEMA: ContratoTag[] = [
     criado_em: new Date().toISOString(),
   },
   {
-    id: 'sys-empresa-cpf',
-    nome_tag: '{{EMPRESA_CPF_CNPJ}}',
-    descricao: 'CPF ou CNPJ da Empresa Contratante.',
-    origem_dado: 'tbl_clientes.cpf',
-    criado_em: new Date().toISOString(),
-  },
-  {
-    id: 'sys-empresa-rg',
-    nome_tag: '{{EMPRESA_RG}}',
-    descricao: 'RG da Empresa Contratante (se pessoa física).',
-    origem_dado: 'tbl_clientes.rg',
+    id: 'sys-empresa-documento',
+    nome_tag: '{{EMPRESA_DOCUMENTO}}',
+    descricao: 'CNPJ da Empresa Contratante.',
+    origem_dado: 'tbl_clientes.documento',
     criado_em: new Date().toISOString(),
   },
   {

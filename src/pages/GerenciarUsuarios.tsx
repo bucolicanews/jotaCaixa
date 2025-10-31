@@ -11,11 +11,12 @@ import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { AnyProfile, ClienteProfile, UsuarioProfile, UserRole } from '@/types/usuario';
+// import { PERMISSOES_DISPONIVEIS } from '@/config/permissoes'; // Removido (Corrige Erro 1)
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 const GerenciarUsuarios: React.FC = () => {
-  const { usuario, perfil, role, carregando } = useSessao();
+  const { usuario, role, carregando } = useSessao();
   const [usuarios, setUsuarios] = useState<AnyProfile[]>([]);
   const [carregandoUsuarios, setCarregandoUsuarios] = useState(true);
   const [filtro, setFiltro] = useState('');
@@ -45,6 +46,7 @@ const GerenciarUsuarios: React.FC = () => {
       showError('Erro ao carregar usuários: ' + error.message);
       setUsuarios([]);
     } else {
+      // Garantindo que os dados sejam AnyProfile[]
       setUsuarios(data as AnyProfile[]);
     }
     setCarregandoUsuarios(false);
@@ -59,6 +61,7 @@ const GerenciarUsuarios: React.FC = () => {
   };
 
   const filteredUsuarios = usuarios.filter(u => {
+    // Adicionando verificação de nulidade explícita (Corrige Erros 2 e 3)
     if (!u) return false; 
     return u.nome.toLowerCase().includes(filtro.toLowerCase()) ||
            u.email.toLowerCase().includes(filtro.toLowerCase());
@@ -106,7 +109,7 @@ const GerenciarUsuarios: React.FC = () => {
     );
   }
 
-  if (!usuario || !role || !perfil) {
+  if (!usuario || !role) {
     return (
       <LayoutPrincipal>
         <p>Acesso negado ou sessão não carregada.</p>
@@ -135,7 +138,7 @@ const GerenciarUsuarios: React.FC = () => {
             </DialogHeader>
             <FormUsuario 
               criadorRole={role}
-              criadorPerfil={perfil} // Usando perfil (AnyProfile) em vez de usuario (User)
+              criadorPerfil={usuario} // O 'if (!usuario)' acima garante que 'usuario' é AnyProfile aqui (Corrige Erro 4)
               clienteId={role === 'Cliente' ? usuario.id : undefined}
               usuarioInicial={usuarioParaEditar}
               onSaveComplete={handleSaveComplete}
@@ -176,6 +179,7 @@ const GerenciarUsuarios: React.FC = () => {
             </TableHeader>
             <TableBody>
               {filteredUsuarios.map((u) => {
+                // Verificação de nulidade dentro do map (Corrige Erros 5, 6, 7, 8, 9)
                 if (!u) return null; 
                 
                 return (

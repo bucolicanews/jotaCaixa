@@ -2,7 +2,6 @@ import { ContratoTag } from "@/types/contratos";
 
 // Mapeamento de campos de perfil/cliente para tags de contrato
 export const CAMPOS_CLIENTE_MAPA: { field: string, label: string, tag: string }[] = [
-    // Mapeamentos para a tabela 'clientes' (Contratado)
     { field: 'nome', label: 'Nome Fantasia / Pessoal', tag: '{{CLIENTE_NOME}}' },
     { field: 'razao_social', label: 'Razão Social', tag: '{{CLIENTE_RAZAO_SOCIAL}}' },
     { field: 'documento', label: 'Documento (CPF/CNPJ)', tag: '{{CLIENTE_DOCUMENTO}}' },
@@ -16,11 +15,6 @@ export const CAMPOS_CLIENTE_MAPA: { field: string, label: string, tag: string }[
     { field: 'bairro', label: 'Bairro', tag: '{{CLIENTE_BAIRRO}}' },
     { field: 'cidade', label: 'Cidade', tag: '{{CLIENTE_CIDADE}}' },
     { field: 'estado', label: 'Estado (UF)', tag: '{{CLIENTE_ESTADO}}' },
-    
-    // Mapeamentos para a tabela 'tbl_clientes' (Empresa Contratante - usados no FormUsuario)
-    { field: 'cpf', label: 'CPF/CNPJ (Empresa)', tag: '{{EMPRESA_CPF_CNPJ}}' },
-    { field: 'rg', label: 'RG (Empresa)', tag: '{{EMPRESA_RG}}' },
-    { field: 'email', label: 'Email (Empresa)', tag: '{{EMPRESA_EMAIL}}' },
 ];
 
 export const CAMPOS_USUARIO_MAPA: { field: string, label: string, tag: string }[] = [

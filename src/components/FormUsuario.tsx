@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useForm, Control } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -7,26 +7,26 @@ import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Loader2, Upload, CalendarIcon, CheckCircle2, XCircle, Tag } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
-import { showError, showSuccess } from '@/utils/toast';
-import { AnyProfile, ClienteProfile, UsuarioProfile, UserRole } from '@/types/usuario';
+import { supabase } from '@/integrations/supabase/client'; // Import necessário
+import { showError, showSuccess } from '@/utils/toast'; // Imports necessários
+import { AnyProfile, ClienteProfile, UserRole, UsuarioProfile } from '@/types/usuario';
 import { PERMISSOES_DISPONIVEIS, Permissao } from '../config/permissoes';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from './ui/accordion';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
-import { format } from 'date-fns';
+import { format } from 'date-fns'; // Import necessário
 import { ptBR } from 'date-fns/locale';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import GerenciarFerias from './GerenciarFerias';
-import { useTagManager } from '@/hooks/use-tag-manager';
 import { CAMPOS_CLIENTE_MAPA, CAMPOS_USUARIO_MAPA } from '@/config/contrato-campos-mapeaveis';
+import { useTagManager } from '@/hooks/use-tag-manager';
 import { Label } from '@/components/ui/label';
-// import { Separator } from './ui/separator'; // Removido: TS6133
 
-const textOptional = z.string().optional().or(z.literal(''));
+// Esquema de validação para os campos de URL (opcional)
 const urlSchema = z.string().url('URL inválida.').optional().or(z.literal(''));
+const textOptional = z.string().optional().or(z.literal(''));
 
 const formSchema = z.object({
   nome: z.string().min(1, 'O nome é obrigatório.'),
@@ -86,8 +86,8 @@ type FormValues = z.infer<typeof formSchema>;
 interface FormUsuarioProps {
   criadorRole: UserRole;
   criadorPerfil: AnyProfile;
-  clienteId?: string; // ID do cliente se o criador for Admin
-  usuarioInicial?: AnyProfile | null;
+  clienteId?: string; // ID da empresa se estiver criando um usuário
+  usuarioInicial?: AnyProfile | null; // Perfil a ser editado
   onSaveComplete: () => void;
 }
 
@@ -101,180 +101,24 @@ const DIAS_DA_SEMANA = [
     { value: 'Sunday', label: 'Domingo' },
 ];
 
-const FormUsuario: React.FC<FormUsuarioProps> = ({
-  criadorRole,
-  criadorPerfil,
-  clienteId,
-  usuarioInicial,
-  onSaveComplete,
-}) => {
-  const isEditing = !!usuarioInicial;
-  const isClientBeingManagedByAdmin = criadorRole === 'Admin' && usuarioInicial && 'limite_usuarios' in usuarioInicial;
-  const isUserBeingManagedByClient = criadorRole !== 'Admin' && usuarioInicial && 'cliente_id' in usuarioInicial;
-  const isUser = isUserBeingManagedByClient || (!isEditing && criadorRole !== 'Admin'); // Novo usuário criado por Cliente
-  const isNewUser = !isEditing && isUser; // Novo: Variável para novo usuário (não cliente)
-  
-  const profileToEdit = usuarioInicial as UsuarioProfile | ClienteProfile;
-  
-  const [activeTab, setActiveTab] = useState('pessoal');
-  const [uploading, setUploading] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const parseDate = (dateString: string | null | undefined) => 
-    dateString ? new Date(dateString + 'T00:00:00') : null;
-
-  const defaultPermissoes = PERMISSOES_DISPONIVEIS.reduce((acc: Record<string, boolean>, p: Permissao) => {
-    if (profileToEdit && 'permissoes' in profileToEdit && (profileToEdit as any).permissoes) {
-      acc[p.key] = (profileToEdit as any).permissoes[p.key] !== false;
-    } else {
-      // Padrão para novos usuários/clientes
-      acc[p.key] = true;
-    }
-    return acc;
-  }, {} as Record<string, boolean>);
-
-  const form = useForm<FormValues>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
-      nome: profileToEdit?.nome || '',
-      email: profileToEdit?.email || '',
-      senha: '',
-      limite_usuarios: isClientBeingManagedByAdmin ? (profileToEdit as ClienteProfile).limite_usuarios : 5,
-      permissoes: defaultPermissoes,
-      
-      // Dados de Folga (Apenas Usuário)
-      dias_folga_fixos: (profileToEdit as UsuarioProfile)?.dias_folga_fixos || ['Saturday', 'Sunday'],
-      folga_domingo_obrigatoria: (profileToEdit as UsuarioProfile)?.folga_domingo_obrigatoria ?? true,
-      
-      // Dados de Salário/Jornada (Apenas Usuário)
-      salario: (profileToEdit as UsuarioProfile)?.salario || 0,
-      horas_semanais: (profileToEdit as UsuarioProfile)?.horas_semanais || 44,
-      horas_mensais: (profileToEdit as UsuarioProfile)?.horas_mensais || 220,
-
-      // Dados Cadastrais (Comum a Cliente e Usuário)
-      cpf: (profileToEdit as UsuarioProfile)?.cpf || '',
-      rg: (profileToEdit as UsuarioProfile)?.rg || '',
-      nome_mae: (profileToEdit as UsuarioProfile)?.nome_mae || '',
-      nome_pai: (profileToEdit as UsuarioProfile)?.nome_pai || '',
-      telefone: (profileToEdit as UsuarioProfile)?.telefone || '',
-      cep: (profileToEdit as UsuarioProfile)?.cep || '',
-      endereco: (profileToEdit as UsuarioProfile)?.endereco || '',
-      numero: (profileToEdit as UsuarioProfile)?.numero || '',
-      complemento: (profileToEdit as UsuarioProfile)?.complemento || '',
-      bairro: (profileToEdit as UsuarioProfile)?.bairro || '',
-      cidade: (profileToEdit as UsuarioProfile)?.cidade || '',
-      estado: (profileToEdit as UsuarioProfile)?.estado || '',
-
-      // Contratuais (Apenas Usuário)
-      data_inicio_contrato: parseDate((profileToEdit as UsuarioProfile)?.data_inicio_contrato),
-      data_fim_contrato: parseDate((profileToEdit as UsuarioProfile)?.data_fim_contrato),
-      data_inicio_aviso: parseDate((profileToEdit as UsuarioProfile)?.data_inicio_aviso),
-      tipo_aviso: (profileToEdit as UsuarioProfile)?.tipo_aviso as FormValues['tipo_aviso'] || 'Nenhum',
-
-      // Documentos (Apenas Usuário)
-      rg_url: (profileToEdit as UsuarioProfile)?.rg_url || '',
-      cpf_url: (profileToEdit as UsuarioProfile)?.cpf_url || '',
-      titulo_eleitor_url: (profileToEdit as UsuarioProfile)?.titulo_eleitor_url || '',
-      reservista_url: (profileToEdit as UsuarioProfile)?.reservista_url || '',
-      ctps_url: (profileToEdit as UsuarioProfile)?.ctps_url || '',
-      certidao_nascimento_url: (profileToEdit as UsuarioProfile)?.certidao_nascimento_url || '',
-      certidao_casamento_url: (profileToEdit as UsuarioProfile)?.certidao_casamento_url || '',
-      comprovante_residencia_url: (profileToEdit as UsuarioProfile)?.comprovante_residencia_url || '',
-      comprovante_escolaridade_url: (profileToEdit as UsuarioProfile)?.comprovante_escolaridade_url || '',
-      exame_admissional_url: (profileToEdit as UsuarioProfile)?.exame_admissional_url || '',
-      foto_3x4_url: (profileToEdit as UsuarioProfile)?.foto_3x4_url || '',
-      cnh_url: (profileToEdit as UsuarioProfile)?.cnh_url || '',
-      cartao_pis_url: (profileToEdit as UsuarioProfile)?.cartao_pis_url || '',
-      ja_admitido_anteriormente: (profileToEdit as UsuarioProfile)?.ja_admitido_anteriormente || false,
-    },
-  });
-  
-  const cepValue = form.watch('cep');
-  const isClient = isClientBeingManagedByAdmin;
-  
-  // Chave para forçar a re-busca do status da tag após salvar
-  const [tagRefreshKey, setTagRefreshKey] = useState(0);
-
-  // --- Funções Auxiliares ---
-
-  const handleSelectAll = (select: boolean) => {
-    const permissoes = isClient ? PERMISSOES_DISPONIVEIS.filter(p => p.key !== 'ponto_eletronico' && p.key !== 'visualizar_proprio_ponto') : permissoesVisiveis;
-    permissoes.forEach(p => {
-      form.setValue(`permissoes.${p.key}`, select, { shouldDirty: true });
-    });
-  };
-
-  const getTableName = (profile: AnyProfile) => {
-    if (!profile) return null;
-    if ('limite_usuarios' in profile) return 'tbl_clientes';
-    if ('cliente_id' in profile) return 'tbl_usuarios';
-    return null;
-  };
-  
-  const fetchAddressByCep = useCallback(async (cep: string) => {
-    const cleanCep = cep.replace(/\D/g, '');
-
-    if (cleanCep.length !== 8) return;
-    
-    form.setValue('endereco', 'Buscando...');
-    form.setValue('bairro', 'Buscando...');
-    form.setValue('cidade', 'Buscando...');
-    form.setValue('estado', 'Buscando...');
-    
-    try {
-      const response = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
-      const data = await response.json();
-
-      if (data.erro) {
-        showError('CEP não encontrado.');
-        form.setValue('endereco', '');
-        form.setValue('bairro', '');
-        form.setValue('cidade', '');
-        form.setValue('estado', '');
-        return;
-      }
-
-      form.setValue('endereco', data.logradouro || '');
-      form.setValue('bairro', data.bairro || '');
-      form.setValue('cidade', data.localidade || '');
-      form.setValue('estado', data.uf || '');
-      
-    } catch (error) {
-      console.error('Erro ao consultar ViaCEP:', error);
-      showError('Falha ao consultar o CEP.');
-      form.setValue('endereco', '');
-      form.setValue('bairro', '');
-      form.setValue('cidade', '');
-      form.setValue('estado', '');
-    }
-  }, [form]);
-  
-  useEffect(() => {
-    const cleanCep = cepValue?.replace(/\D/g, '');
-    if (cleanCep && cleanCep.length === 8) {
-      fetchAddressByCep(cleanCep);
-    }
-  }, [cepValue, fetchAddressByCep]);
-
-  // --- Componente Auxiliar para Campos com Tag ---
-  
-  interface TaggedFormFieldProps {
+// Componente auxiliar para renderizar campos com a opção de Tag (para Cliente/Empresa)
+interface TaggedClientFieldProps {
+    control: Control<FormValues>;
     fieldName: keyof FormValues;
     label: string;
     placeholder: string;
-    resourceId: string | undefined;
-    disabled: boolean;
+    resourceId: string; // ID do Cliente/Empresa sendo editado
+    disabled?: boolean;
     isOptional?: boolean;
-    mapArray: { field: string, label: string, tag: string }[];
-  }
+    refreshKey: number; // Adicionado para forçar atualização
+}
 
-  const TaggedFormField: React.FC<TaggedFormFieldProps> = ({ fieldName, label, placeholder, resourceId, disabled, isOptional = true, mapArray }) => {
-    const fieldMap = mapArray.find(m => m.field === fieldName);
+const TaggedClientField: React.FC<TaggedClientFieldProps> = ({ control, fieldName, label, placeholder, resourceId, disabled, isOptional = true, refreshKey }) => {
+    const fieldMap = CAMPOS_CLIENTE_MAPA.find(m => m.field === fieldName);
     
-    // Se o campo não estiver mapeado para uma tag, renderiza o input normal
     if (!fieldMap || !resourceId) {
         return (
-            <FormField control={form.control} name={fieldName} render={({ field }) => (
+            <FormField control={control} name={fieldName} render={({ field }) => (
                 <FormItem>
                     <FormLabel>{label} {isOptional && <span className="text-muted-foreground">(Opcional)</span>}</FormLabel>
                     <FormControl><Input placeholder={placeholder} {...field} value={(field.value as string) || ''} disabled={disabled} /></FormControl>
@@ -284,10 +128,11 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
         );
     }
     
-    const { isTagActive, loading, toggleTag } = useTagManager(resourceId, fieldMap, tagRefreshKey);
+    // Passando refreshKey para o useTagManager para forçar a re-busca do estado
+    const { isTagActive, loading, toggleTag } = useTagManager(resourceId, { label: fieldMap.label, tag: fieldMap.tag, field: fieldMap.field }, refreshKey);
 
     return (
-        <FormField control={form.control} name={fieldName} render={({ field }) => (
+        <FormField key={fieldName + refreshKey} control={control} name={fieldName} render={({ field }) => (
             <FormItem>
                 <div className="flex justify-between items-center">
                     <FormLabel>{label} {isOptional && <span className="text-muted-foreground">(Opcional)</span>}</FormLabel>
@@ -309,46 +154,402 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
             </FormItem>
         )} />
     );
+};
+
+
+const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, clienteId, usuarioInicial, onSaveComplete }) => {
+  const isEditing = !!usuarioInicial;
+  const isClient = isEditing && usuarioInicial && 'limite_usuarios' in usuarioInicial;
+  const isUser = isEditing && usuarioInicial && 'cliente_id' in usuarioInicial;
+  const profileToEdit = usuarioInicial as UsuarioProfile | ClienteProfile;
+
+  const isClientBeingManagedByAdmin = criadorRole === 'Admin' && isClient;
+  const isUserBeingManagedByClient = (criadorRole === 'Cliente' || criadorRole === 'Admin') && (isUser || !isEditing);
+  
+  const [activeTab, setActiveTab] = useState('pessoal');
+  const [uploading, setUploading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [tagRefreshKey, setTagRefreshKey] = useState(0); // Chave para forçar atualização das tags
+
+  const permissoesDoCriador = (criadorPerfil && 'permissoes' in criadorPerfil)
+    ? (criadorPerfil as ClienteProfile).permissoes
+    : null;
+
+  const permissoesVisiveis = PERMISSOES_DISPONIVEIS.filter(p => {
+    if (criadorRole === 'Admin') return true;
+    if (criadorRole === 'Cliente' && permissoesDoCriador) {
+      // O Cliente só pode conceder permissões que ele mesmo possui, exceto a permissão de 'visualizar_proprio_ponto'
+      // que é uma permissão de controle sobre o usuário, não sobre o módulo.
+      if (p.key === 'visualizar_proprio_ponto') return true;
+      return permissoesDoCriador[p.key] === true;
+    }
+    return false;
+  });
+
+  const defaultPermissoes = PERMISSOES_DISPONIVEIS.reduce((acc: Record<string, boolean>, p: Permissao) => {
+    if (isEditing && profileToEdit && 'permissoes' in profileToEdit && (profileToEdit as any).permissoes) {
+      acc[p.key] = (profileToEdit as any).permissoes[p.key] !== false;
+    } else {
+      // Define 'visualizar_proprio_ponto' como true por padrão para novos usuários
+      if (p.key === 'visualizar_proprio_ponto') {
+          acc[p.key] = true;
+      } else {
+          acc[p.key] = true;
+      }
+    }
+    return acc;
+  }, {} as Record<string, boolean>);
+
+  const parseDate = (dateString: string | null | undefined) => 
+    dateString ? new Date(dateString + 'T00:00:00') : null;
+
+  const form = useForm<FormValues>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      nome: profileToEdit?.nome || '',
+      email: profileToEdit?.email || '',
+      senha: '',
+      limite_usuarios: isClient ? (profileToEdit as ClienteProfile).limite_usuarios : 5,
+      permissoes: defaultPermissoes,
+      
+      // Dados de Folga
+      dias_folga_fixos: (profileToEdit as UsuarioProfile)?.dias_folga_fixos || ['Saturday', 'Sunday'],
+      folga_domingo_obrigatoria: (profileToEdit as UsuarioProfile)?.folga_domingo_obrigatoria ?? true,
+      
+      // Dados de Salário/Jornada
+      salario: (profileToEdit as UsuarioProfile)?.salario || 0,
+      horas_semanais: (profileToEdit as UsuarioProfile)?.horas_semanais || 44,
+      horas_mensais: (profileToEdit as UsuarioProfile)?.horas_mensais || 220,
+
+      // Dados Cadastrais
+      cpf: (profileToEdit as UsuarioProfile)?.cpf || '',
+      rg: (profileToEdit as UsuarioProfile)?.rg || '',
+      nome_mae: (profileToEdit as UsuarioProfile)?.nome_mae || '',
+      nome_pai: (profileToEdit as UsuarioProfile)?.nome_pai || '',
+      telefone: (profileToEdit as UsuarioProfile)?.telefone || '',
+      cep: (profileToEdit as UsuarioProfile)?.cep || '',
+      endereco: (profileToEdit as UsuarioProfile)?.endereco || '',
+      numero: (profileToEdit as UsuarioProfile)?.numero || '',
+      complemento: (profileToEdit as UsuarioProfile)?.complemento || '',
+      bairro: (profileToEdit as UsuarioProfile)?.bairro || '',
+      cidade: (profileToEdit as UsuarioProfile)?.cidade || '',
+      estado: (profileToEdit as UsuarioProfile)?.estado || '',
+
+      // Contratuais
+      data_inicio_contrato: parseDate((profileToEdit as UsuarioProfile)?.data_inicio_contrato),
+      data_fim_contrato: parseDate((profileToEdit as UsuarioProfile)?.data_fim_contrato),
+      data_inicio_aviso: parseDate((profileToEdit as UsuarioProfile)?.data_inicio_aviso),
+      tipo_aviso: (profileToEdit as UsuarioProfile)?.tipo_aviso as FormValues['tipo_aviso'] || 'Nenhum',
+
+      // Documentos
+      rg_url: (profileToEdit as UsuarioProfile)?.rg_url || '',
+      cpf_url: (profileToEdit as UsuarioProfile)?.cpf_url || '',
+      titulo_eleitor_url: (profileToEdit as UsuarioProfile)?.titulo_eleitor_url || '',
+      reservista_url: (profileToEdit as UsuarioProfile)?.reservista_url || '',
+      ctps_url: (profileToEdit as UsuarioProfile)?.ctps_url || '',
+      certidao_nascimento_url: (profileToEdit as UsuarioProfile)?.certidao_nascimento_url || '',
+      certidao_casamento_url: (profileToEdit as UsuarioProfile)?.certidao_casamento_url || '',
+      comprovante_residencia_url: (profileToEdit as UsuarioProfile)?.comprovante_residencia_url || '',
+      comprovante_escolaridade_url: (profileToEdit as UsuarioProfile)?.comprovante_escolaridade_url || '',
+      exame_admissional_url: (profileToEdit as UsuarioProfile)?.exame_admissional_url || '',
+      foto_3x4_url: (profileToEdit as UsuarioProfile)?.foto_3x4_url || '',
+      cnh_url: (profileToEdit as UsuarioProfile)?.cnh_url || '',
+      cartao_pis_url: (profileToEdit as UsuarioProfile)?.cartao_pis_url || '',
+      ja_admitido_anteriormente: (profileToEdit as UsuarioProfile)?.ja_admitido_anteriormente || false,
+    },
+  });
+
+  const handleSelectAll = (select: boolean) => {
+    permissoesVisiveis.forEach(p => {
+      form.setValue(`permissoes.${p.key}`, select, { shouldDirty: true });
+    });
   };
 
-  // --- Funções de Renderização de Campos ---
+  const getTableName = (profile: AnyProfile) => {
+    if (!profile) return null;
+    if ('limite_usuarios' in profile) return 'tbl_clientes';
+    if ('cliente_id' in profile) return 'tbl_usuarios';
+    return null;
+  };
+  
+  // Lista de campos do Cliente que podem ser Tags
+  const TAG_FIELDS_TO_MANAGE = CAMPOS_CLIENTE_MAPA.filter(m => 
+    ['nome', 'cpf', 'rg', 'nome_mae', 'nome_pai', 'telefone', 'cep', 'endereco', 'numero', 'complemento', 'bairro', 'cidade', 'estado'].includes(m.field)
+  );
+
+  const handleToggleAllTags = async (activate: boolean) => {
+    const clientProfile = usuarioInicial as ClienteProfile;
+    const resourceId = clientProfile?.id;
+    if (!resourceId) return;
+    
+    setIsSubmitting(true);
+
+    try {
+        // 1. Deletar todas as tags customizadas mapeáveis para este cliente
+        const { error: deleteError } = await supabase
+            .from('contrato_tags')
+            .delete()
+            .eq('empresa_id', resourceId)
+            .in('nome_tag', TAG_FIELDS_TO_MANAGE.map(m => m.tag));
+        
+        if (deleteError) throw deleteError;
+
+        if (activate) {
+            // 2. Inserir as tags selecionadas
+            const tagsToInsert = TAG_FIELDS_TO_MANAGE.map(m => ({
+                empresa_id: resourceId,
+                nome_tag: m.tag,
+                descricao: m.label,
+                origem_dado: `tbl_clientes.${m.field}`,
+            }));
+            
+            const { error: insertError } = await supabase
+                .from('contrato_tags')
+                .insert(tagsToInsert);
+            
+            if (insertError) throw insertError;
+        }
+        
+        showSuccess(`Todas as tags foram ${activate ? 'ativadas' : 'desativadas'} com sucesso!`);
+        
+        // 3. Forçar a re-renderização dos TaggedClientField para atualizar o estado do checkbox
+        // Isso força o useTagManager a re-executar o fetchTagStatus
+        setTagRefreshKey(prev => prev + 1);
+
+    } catch (error: any) {
+        showError('Erro ao gerenciar tags: ' + error.message);
+    } finally {
+        setIsSubmitting(false);
+    }
+  };
+
+  const onSubmit = async (values: FormValues) => {
+    setIsSubmitting(true);
+    try {
+      if (isEditing && usuarioInicial) {
+        const tableName = getTableName(usuarioInicial);
+        if (!tableName) throw new Error('Tabela de perfil não identificada.');
+
+        const dataToUpdate: any = { nome: values.nome };
+
+        if (isClient) {
+          // Edição de Cliente (Empresa)
+          dataToUpdate.limite_usuarios = values.limite_usuarios;
+          dataToUpdate.permissoes = values.permissoes;
+          
+          // Campos de Tags (Dados Cadastrais do Cliente)
+          dataToUpdate.cpf = values.cpf || null;
+          dataToUpdate.rg = values.rg || null;
+          dataToUpdate.nome_mae = values.nome_mae || null;
+          dataToUpdate.nome_pai = values.nome_pai || null;
+          dataToUpdate.telefone = values.telefone || null;
+          dataToUpdate.cep = values.cep || null;
+          dataToUpdate.endereco = values.endereco || null;
+          dataToUpdate.numero = values.numero || null;
+          dataToUpdate.complemento = values.complemento || null;
+          dataToUpdate.bairro = values.bairro || null;
+          dataToUpdate.cidade = values.cidade || null;
+          dataToUpdate.estado = values.estado || null;
+          
+          const { error } = await supabase.from('tbl_clientes').update(dataToUpdate).eq('id', usuarioInicial.id);
+          if (error) throw error;
+        } else if (isUser) {
+          // Edição de Usuário (Funcionário)
+          dataToUpdate.permissoes = values.permissoes;
+          
+          // Dados de Folga
+          dataToUpdate.dias_folga_fixos = values.dias_folga_fixos || [];
+          dataToUpdate.folga_domingo_obrigatoria = values.folga_domingo_obrigatoria;
+          
+          // Dados de Salário/Jornada
+          dataToUpdate.salario = values.salario;
+          dataToUpdate.horas_semanais = values.horas_semanais;
+          dataToUpdate.horas_mensais = values.horas_mensais;
+
+          // Dados Cadastrais
+          dataToUpdate.cpf = values.cpf || null;
+          dataToUpdate.rg = values.rg || null;
+          dataToUpdate.nome_mae = values.nome_mae || null;
+          dataToUpdate.nome_pai = values.nome_pai || null;
+          dataToUpdate.telefone = values.telefone || null;
+          dataToUpdate.cep = values.cep || null;
+          dataToUpdate.endereco = values.endereco || null;
+          dataToUpdate.numero = values.numero || null;
+          dataToUpdate.complemento = values.complemento || null;
+          dataToUpdate.bairro = values.bairro || null;
+          dataToUpdate.cidade = values.cidade || null;
+          dataToUpdate.estado = values.estado || null;
+
+          // Dados Contratuais
+          dataToUpdate.data_inicio_contrato = values.data_inicio_contrato ? format(values.data_inicio_contrato, 'yyyy-MM-dd') : null;
+          dataToUpdate.data_fim_contrato = values.data_fim_contrato ? format(values.data_fim_contrato, 'yyyy-MM-dd') : null;
+          dataToUpdate.data_inicio_aviso = values.data_inicio_aviso ? format(values.data_inicio_aviso, 'yyyy-MM-dd') : null;
+          dataToUpdate.tipo_aviso = values.tipo_aviso === 'Nenhum' ? null : values.tipo_aviso;
+
+          // Documentos (URLs)
+          dataToUpdate.rg_url = values.rg_url || null;
+          dataToUpdate.cpf_url = values.cpf_url || null;
+          dataToUpdate.titulo_eleitor_url = values.titulo_eleitor_url || null;
+          dataToUpdate.reservista_url = values.reservista_url || null;
+          dataToUpdate.ctps_url = values.ctps_url || null;
+          dataToUpdate.certidao_nascimento_url = values.certidao_nascimento_url || null;
+          dataToUpdate.certidao_casamento_url = values.certidao_casamento_url || null;
+          dataToUpdate.comprovante_residencia_url = values.comprovante_residencia_url || null;
+          dataToUpdate.comprovante_escolaridade_url = values.comprovante_escolaridade_url || null;
+          dataToUpdate.exame_admissional_url = values.exame_admissional_url || null;
+          dataToUpdate.foto_3x4_url = values.foto_3x4_url || null;
+          dataToUpdate.cnh_url = values.cnh_url || null;
+          dataToUpdate.cartao_pis_url = values.cartao_pis_url || null;
+          dataToUpdate.ja_admitido_anteriormente = values.ja_admitido_anteriormente;
+
+          const { error } = await supabase.from('tbl_usuarios').update(dataToUpdate).eq('id', usuarioInicial.id);
+          if (error) throw error;
+        }
+        showSuccess('Conta atualizada com sucesso!');
+
+      } else {
+        // --- LÓGICA DE CRIAÇÃO DE NOVO USUÁRIO/CLIENTE ---
+        if (!values.senha) {
+          form.setError('senha', { message: 'A senha é obrigatória para novos usuários.' });
+          return;
+        }
+        
+        const roleToCreate = criadorRole === 'Admin' ? 'Cliente' : 'Usuario';
+        
+        // 1. Sign Up
+        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+          email: values.email,
+          password: values.senha!,
+          options: {
+            data: {
+              nome: values.nome,
+              role: roleToCreate,
+              cliente_id: clienteId,
+            },
+          },
+        });
+        if (signUpError) throw signUpError;
+        
+        const newUserId = signUpData.user?.id;
+        if (!newUserId) throw new Error('Falha ao obter ID do novo usuário.');
+        
+        let updateError: any = null;
+
+        if (roleToCreate === 'Cliente') {
+            // 2a. Atualiza Cliente (Empresa)
+            const dataToUpdate: any = {
+                limite_usuarios: values.limite_usuarios,
+                permissoes: values.permissoes,
+                // Dados Cadastrais
+                cpf: values.cpf || null,
+                rg: values.rg || null,
+                nome_mae: values.nome_mae || null,
+                nome_pai: values.nome_pai || null,
+                telefone: values.telefone || null,
+                cep: values.cep || null,
+                endereco: values.endereco || null,
+                numero: values.numero || null,
+                complemento: values.complemento || null,
+                bairro: values.bairro || null,
+                cidade: values.cidade || null,
+                estado: values.estado || null,
+            };
+            
+            const { error } = await supabase.from('tbl_clientes').update(dataToUpdate).eq('id', newUserId);
+            updateError = error;
+            
+            // 3. INSERIR TAGS PADRÃO (RESOLVE O PROBLEMA DO CHECKBOX)
+            const tagsToInsert = TAG_FIELDS_TO_MANAGE.map(m => ({
+                empresa_id: newUserId,
+                nome_tag: m.tag,
+                descricao: m.label,
+                origem_dado: `tbl_clientes.${m.field}`,
+            }));
+            
+            const { error: tagInsertError } = await supabase
+                .from('contrato_tags')
+                .insert(tagsToInsert);
+            
+            if (tagInsertError) {
+                console.error("Falha ao inserir tags padrão:", tagInsertError);
+            }
+
+        } else {
+            // 2b. Atualiza Usuário (Funcionário)
+            const { error } = await supabase.from('tbl_usuarios').update({ 
+                permissoes: values.permissoes,
+                // Adiciona dados de folga
+                dias_folga_fixos: values.dias_folga_fixos || ['Saturday', 'Sunday'],
+                folga_domingo_obrigatoria: values.folga_domingo_obrigatoria,
+                // Adiciona dados de salário/jornada
+                salario: values.salario,
+                horas_semanais: values.horas_semanais,
+                horas_mensais: values.horas_mensais,
+                // Adiciona dados cadastrais básicos na criação
+                cpf: values.cpf || null,
+                rg: values.rg || null,
+                nome_mae: values.nome_mae || null,
+                nome_pai: values.nome_pai || null,
+                telefone: values.telefone || null,
+                cep: values.cep || null,
+                endereco: values.endereco || null,
+                numero: values.numero || null,
+                complemento: values.complemento || null,
+                bairro: values.bairro || null,
+                cidade: values.cidade || null,
+                estado: values.estado || null,
+            }).eq('id', newUserId);
+            updateError = error;
+        }
+        
+        if (updateError) throw new Error(`Usuário criado, mas falha ao definir dados iniciais: ${updateError.message}`);
+
+        showSuccess(`Conta criada! Um email de confirmação foi enviado para ${values.email}.`);
+      }
+      onSaveComplete();
+    } catch (error: any) {
+      showError(`Falha ao salvar: ${error.message}`);
+    } finally {
+        setIsSubmitting(false);
+    }
+  };
+  
+  // --- Funções de Renderização (Reutilizadas do FormPerfil) ---
+
+  const handleFileUpload = async (file: File, fieldName: keyof FormValues) => {
+    if (!usuarioInicial) return;
+    setUploading(true);
+
+    try {
+      const fileExt = file.name.split('.').pop();
+      const filePath = `${usuarioInicial.id}/${String(fieldName)}-${Date.now()}.${fileExt}`;
+      
+      const { error: uploadError } = await supabase.storage
+        .from('documentos-admissao')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: true,
+        });
+
+      if (uploadError) throw uploadError;
+
+      const { data: publicUrlData } = supabase.storage.from('documentos-admissao').getPublicUrl(filePath);
+      
+      form.setValue(fieldName, publicUrlData.publicUrl as any, { shouldDirty: true });
+      showSuccess('Documento anexado com sucesso!');
+
+    } catch (error: any) {
+      console.error('Erro de upload:', error);
+      showError('Falha ao anexar documento: ' + error.message);
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const renderDocumentField = (fieldName: keyof FormValues, label: string, required: boolean = false) => {
     const url = form.watch(fieldName) as string | undefined;
     const isUploaded = !!url;
-    const isSaving = form.formState.isSubmitting || uploading || isSubmitting; 
-
-    const handleFileUpload = async (file: File) => {
-        setUploading(true);
-
-        try {
-            const fileExt = file.name.split('.').pop();
-            const resourceId = usuarioInicial?.id || criadorPerfil?.id;
-            if (!resourceId) throw new Error('ID do recurso não encontrado para upload.');
-            
-            const filePath = `${resourceId}/documentos/${String(fieldName)}-${Date.now()}.${fileExt}`; 
-            
-            const { error: uploadError } = await supabase.storage
-                .from('documentos-admissao')
-                .upload(filePath, file, {
-                    cacheControl: '3600',
-                    upsert: true,
-                });
-
-            if (uploadError) throw uploadError;
-
-            const { data: publicUrlData } = supabase.storage.from('documentos-admissao').getPublicUrl(filePath);
-            
-            form.setValue(fieldName, publicUrlData.publicUrl as any, { shouldDirty: true });
-            showSuccess('Documento anexado com sucesso!');
-
-        } catch (error: any) {
-            console.error('Erro de upload:', error);
-            showError('Falha ao anexar documento: ' + error.message);
-        } finally {
-            setUploading(false);
-        }
-    };
+    const isSubmitting = form.formState.isSubmitting || uploading;
 
     return (
       <FormField
@@ -363,7 +564,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                 placeholder="URL do documento (preenchido automaticamente após upload)" 
                 value={(field.value as string) || ''}
                 onChange={field.onChange}
-                disabled={isSaving || isUploaded}
+                disabled={isSubmitting || isUploaded}
                 className="flex-1"
               />
               <Button 
@@ -378,7 +579,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                     document.getElementById(`file-upload-${String(fieldName)}`)?.click();
                   }
                 }}
-                disabled={isSaving}
+                disabled={isSubmitting}
               >
                 {isUploaded ? <XCircle className="w-4 h-4" /> : <Upload className="w-4 h-4" />}
               </Button>
@@ -389,7 +590,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                 className="hidden"
                 onChange={(e) => {
                   if (e.target.files?.[0]) {
-                    handleFileUpload(e.target.files[0]);
+                    handleFileUpload(e.target.files[0], fieldName);
                   }
                 }}
               />
@@ -470,234 +671,123 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
     />
   );
 
-  const renderInputField = (fieldName: keyof FormValues, label: string, placeholder: string, required: boolean = false, disabled: boolean = false) => (
-    <FormField
-      control={form.control}
-      name={fieldName}
-      render={({ field }) => (
-        <FormItem>
-          <FormLabel>{label} {required && <span className="text-red-500">*</span>}</FormLabel>
-          <FormControl><Input placeholder={placeholder} {...field} value={(field.value as string) || ''} disabled={disabled} /></FormControl>
-          <FormMessage />
-        </FormItem>
-      )}
-    />
-  );
-
-  // --- Lógica de Submissão ---
-
-  const onSubmit = async (values: FormValues) => {
-    setIsSubmitting(true);
-    try {
-      const tableName = getTableName(usuarioInicial || criadorPerfil);
-      if (!tableName) throw new Error('Tabela de perfil não identificada.');
-
-      const dataToUpdate: any = { nome: values.nome };
-      
-      if (values.senha) {
-        // Se a senha for alterada, atualiza a senha do usuário no auth
-        const { error: authError } = await supabase.auth.updateUser({ password: values.senha });
-        if (authError) throw authError;
-      }
-
-      if (isClientBeingManagedByAdmin) {
-        // Edição/Criação de Cliente (Empresa)
-        dataToUpdate.limite_usuarios = values.limite_usuarios;
-        dataToUpdate.permissoes = values.permissoes;
-        
-        // Campos de Tags (Dados Cadastrais do Cliente)
-        dataToUpdate.cpf = values.cpf || null;
-        dataToUpdate.rg = values.rg || null;
-        dataToUpdate.email = values.email || null;
-        dataToUpdate.nome_mae = values.nome_mae || null;
-        dataToUpdate.nome_pai = values.nome_pai || null;
-        dataToUpdate.telefone = values.telefone || null;
-        dataToUpdate.cep = values.cep || null;
-        dataToUpdate.endereco = values.endereco || null;
-        dataToUpdate.numero = values.numero || null;
-        dataToUpdate.complemento = values.complemento || null;
-        dataToUpdate.bairro = values.bairro || null;
-        dataToUpdate.cidade = values.cidade || null;
-        dataToUpdate.estado = values.estado || null;
-        
-        // Se for criação, insere o usuário no auth primeiro
-        if (!isEditing) {
-            const { error: authError } = await supabase.auth.signUp({
-                email: values.email,
-                password: values.senha!,
-                options: {
-                    data: { role: 'Cliente', nome: values.nome, cliente_id: null }
-                }
-            });
-            if (authError) throw authError;
-            
-            // O trigger route_new_user cuidará da inserção em tbl_clientes
-            showSuccess('Cliente criado com sucesso! Aguarde a aprovação.');
-            onSaveComplete();
-            return;
-        }
-        
-        // Se for edição
-        const { error } = await supabase.from('tbl_clientes').update(dataToUpdate).eq('id', usuarioInicial!.id);
-        if (error) throw error;
-        
-      } else if (isUserBeingManagedByClient || isUser) {
-        // Edição/Criação de Usuário (Funcionário)
-        dataToUpdate.permissoes = values.permissoes;
-        
-        // Dados de Folga
-        dataToUpdate.dias_folga_fixos = values.dias_folga_fixos || [];
-        dataToUpdate.folga_domingo_obrigatoria = values.folga_domingo_obrigatoria;
-        
-        // Dados de Salário/Jornada
-        dataToUpdate.salario = values.salario;
-        dataToUpdate.horas_semanais = values.horas_semanais;
-        dataToUpdate.horas_mensais = values.horas_mensais;
-
-        // Dados Cadastrais
-        dataToUpdate.cpf = values.cpf || null;
-        dataToUpdate.rg = values.rg || null;
-        dataToUpdate.nome_mae = values.nome_mae || null;
-        dataToUpdate.nome_pai = values.nome_pai || null;
-        dataToUpdate.telefone = values.telefone || null;
-        dataToUpdate.cep = values.cep || null;
-        dataToUpdate.endereco = values.endereco || null;
-        dataToUpdate.numero = values.numero || null;
-        dataToUpdate.complemento = values.complemento || null;
-        dataToUpdate.bairro = values.bairro || null;
-        dataToUpdate.cidade = values.cidade || null;
-        dataToUpdate.estado = values.estado || null;
-
-        // Dados Contratuais
-        dataToUpdate.data_inicio_contrato = values.data_inicio_contrato ? format(values.data_inicio_contrato, 'yyyy-MM-dd') : null;
-        dataToUpdate.data_fim_contrato = values.data_fim_contrato ? format(values.data_fim_contrato, 'yyyy-MM-dd') : null;
-        dataToUpdate.data_inicio_aviso = values.data_inicio_aviso ? format(values.data_inicio_aviso, 'yyyy-MM-dd') : null;
-        dataToUpdate.tipo_aviso = values.tipo_aviso === 'Nenhum' ? null : values.tipo_aviso;
-
-        // Documentos (URLs)
-        dataToUpdate.rg_url = values.rg_url || null;
-        dataToUpdate.cpf_url = values.cpf_url || null;
-        dataToUpdate.titulo_eleitor_url = values.titulo_eleitor_url || null;
-        dataToUpdate.reservista_url = values.reservista_url || null;
-        dataToUpdate.ctps_url = values.ctps_url || null;
-        dataToUpdate.certidao_nascimento_url = values.certidao_nascimento_url || null;
-        dataToUpdate.certidao_casamento_url = values.certidao_casamento_url || null;
-        dataToUpdate.comprovante_residencia_url = values.comprovante_residencia_url || null;
-        dataToUpdate.comprovante_escolaridade_url = values.comprovante_escolaridade_url || null;
-        dataToUpdate.exame_admissional_url = values.exame_admissional_url || null;
-        dataToUpdate.foto_3x4_url = values.foto_3x4_url || null;
-        dataToUpdate.cnh_url = values.cnh_url || null;
-        dataToUpdate.cartao_pis_url = values.cartao_pis_url || null;
-        dataToUpdate.ja_admitido_anteriormente = values.ja_admitido_anteriormente;
-        
-        const targetClienteId = clienteId || (criadorPerfil as ClienteProfile)?.id;
-        if (!targetClienteId) throw new Error('ID do cliente não encontrado para vincular o usuário.');
-
-        if (!isEditing) {
-            // Criação de Usuário
-            const { error: authError } = await supabase.auth.signUp({
-                email: values.email,
-                password: values.senha!,
-                options: {
-                    data: { role: 'Usuario', nome: values.nome, cliente_id: targetClienteId }
-                }
-            });
-            if (authError) throw authError;
-            
-            // O trigger route_new_user cuidará da inserção em tbl_usuarios
-            showSuccess('Usuário criado com sucesso!');
-            onSaveComplete();
-            return;
-        }
-        
-        // Edição de Usuário
-        const { error } = await supabase.from('tbl_usuarios').update(dataToUpdate).eq('id', usuarioInicial!.id);
-        if (error) throw error;
-      }
-      
-      showSuccess('Perfil atualizado com sucesso!');
-      setTagRefreshKey(prev => prev + 1); // Força a re-busca do status das tags
-      onSaveComplete();
-    } catch (error: any) {
-      showError(`Falha ao salvar: ${error.message}`);
-    } finally {
-      setIsSubmitting(false);
+  const renderInputField = (fieldName: keyof FormValues, label: string, placeholder: string, required: boolean = false, disabled: boolean = false) => {
+    const map = isClient ? CAMPOS_CLIENTE_MAPA : CAMPOS_USUARIO_MAPA;
+    const fieldMap = map.find(m => m.field === fieldName);
+    const resourceId = usuarioInicial?.id;
+    
+    // Se for edição de Cliente (Empresa), usamos o TaggedClientField
+    if (isClient && resourceId && fieldMap) {
+        return (
+            <TaggedClientField 
+                key={fieldName + tagRefreshKey} // Adicionando key para forçar re-renderização
+                control={form.control as Control<FormValues>} 
+                fieldName={fieldName} 
+                label={label} 
+                placeholder={placeholder} 
+                resourceId={resourceId} 
+                disabled={disabled} 
+                isOptional={!required}
+                refreshKey={tagRefreshKey}
+            />
+        );
     }
+    
+    // Se for edição de Usuário (Funcionário), renderiza o campo simples
+    if (isUser && resourceId && fieldMap) {
+        // Renderiza o campo simples para Usuário (Funcionário)
+        return (
+            <FormField
+                control={form.control}
+                name={fieldName}
+                render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>{label} {required && <span className="text-red-500">*</span>}</FormLabel>
+                        <FormControl><Input placeholder={placeholder} {...field} value={(field.value as string) || ''} disabled={disabled} /></FormControl>
+                        <FormMessage />
+                    </FormItem>
+                )}
+            />
+        );
+    }
+    
+    // Renderiza o campo simples (para criação de novo usuário ou campos não mapeados)
+    return (
+        <FormField
+            control={form.control}
+            name={fieldName}
+            render={({ field }) => (
+                <FormItem>
+                    <FormLabel>{label} {required && <span className="text-red-500">*</span>}</FormLabel>
+                    <FormControl><Input placeholder={placeholder} {...field} value={(field.value as string) || ''} disabled={disabled} /></FormControl>
+                    <FormMessage />
+                </FormItem>
+            )}
+        />
+    );
   };
-  
-  // --- Permissões Visíveis (Filtradas pelo Cliente Logado) ---
-  const permissoesCliente = criadorRole === 'Cliente' ? (criadorPerfil as ClienteProfile)?.permissoes : {};
-  const permissoesVisiveis = PERMISSOES_DISPONIVEIS.filter(p => {
-    if (criadorRole === 'Admin') return true;
-    // Se for Cliente, só pode gerenciar permissões que ele mesmo tem acesso
-    return permissoesCliente[p.key] === true || p.key === 'visualizar_proprio_ponto' || p.key === 'ponto_eletronico';
-  });
 
   // --- Renderização Principal ---
 
-  if (isClientBeingManagedByAdmin) {
-    // Renderização para Cliente (Empresa)
+  if (isClient) {
+    // Renderização para edição de Cliente (Empresa)
     const clientProfile = usuarioInicial as ClienteProfile;
     
     return (
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
           <h3 className="font-semibold text-lg">Dados de Identificação</h3>
-          {renderInputField('nome', 'Nome da Empresa', 'Nome completo', true, !isEditing)}
-          {renderInputField('email', 'Email', 'email@exemplo.com', true, isEditing)}
-          {!isEditing && renderInputField('senha', 'Senha Provisória', '••••••••', true, false)}
+          {renderInputField('nome', 'Nome da Empresa', 'Nome completo', true)}
+          <FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" placeholder="email@exemplo.com" value={clientProfile.email} disabled /></FormControl><FormMessage /></FormItem>
+          <FormField control={form.control as unknown as Control<FormValues>} name="limite_usuarios" render={({ field }) => (
+            <FormItem><FormLabel>Limite de Usuários da Equipe</FormLabel><FormControl><Input type="number" placeholder="5" {...field} /></FormControl><FormMessage /></FormItem>
+          )} />
           
-          <h3 className="font-semibold text-lg mt-6">Dados Cadastrais (Tags de Contrato)</h3>
-          <p className="text-sm text-muted-foreground mb-4">Estes campos são usados para preencher tags dinâmicas em contratos.</p>
+          <h3 className="font-semibold text-lg mt-6">Tags de Contrato (Dados Cadastrais)</h3>
+          <p className="text-sm text-muted-foreground mb-4">Marque os campos que devem ser usados como tags dinâmicas em seus modelos de contrato.</p>
           
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <TaggedFormField 
-                  fieldName="cpf" 
-                  label="CPF/CNPJ" 
-                  placeholder="00.000.000/0000-00" 
-                  resourceId={clientProfile.id} 
-                  disabled={!isEditing}
-                  mapArray={CAMPOS_CLIENTE_MAPA}
-              />
-              <TaggedFormField 
-                  fieldName="rg" 
-                  label="RG" 
-                  placeholder="00.000.000-0" 
-                  resourceId={clientProfile.id} 
-                  disabled={!isEditing}
-                  mapArray={CAMPOS_CLIENTE_MAPA}
-              />
-              <TaggedFormField 
-                  fieldName="email" 
-                  label="Email" 
-                  placeholder="contato@empresa.com" 
-                  resourceId={clientProfile.id} 
-                  disabled={!isEditing}
-                  mapArray={CAMPOS_CLIENTE_MAPA}
-              />
+          {/* Botões de Seleção de Tags */}
+          <div className="flex space-x-2 mb-4">
+              <Button 
+                  type="button" 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => handleToggleAllTags(true)} 
+                  disabled={isSubmitting}
+              >
+                  {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <CheckCircle2 className="w-4 h-4 mr-1" />}
+                  Marcar Todas as Tags
+              </Button>
+              <Button 
+                  type="button" 
+                  variant="destructive" 
+                  size="sm" 
+                  onClick={() => handleToggleAllTags(false)} 
+                  disabled={isSubmitting}
+              >
+                  {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <XCircle className="w-4 h-4 mr-1" />}
+                  Desmarcar Todas as Tags
+              </Button>
           </div>
           
-          <h4 className="font-semibold mt-6 border-t pt-4">Endereço e Contato</h4>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {renderInputField('telefone', 'Telefone de Contato', '(00) 90000-0000', false, !isEditing)}
-              {renderInputField('nome_mae', 'Nome da Mãe', 'Nome completo da mãe', false, !isEditing)}
+              {renderInputField('cpf', 'CPF/CNPJ', '00.000.000/0000-00')}
+              {renderInputField('rg', 'RG', '00.000.000-0')}
           </div>
-          {renderInputField('nome_pai', 'Nome do Pai', 'Nome completo do pai', false, !isEditing)}
+          {renderInputField('nome_mae', 'Nome da Mãe', 'Nome completo da mãe')}
           
+          <h4 className="font-semibold mt-6 border-t pt-4">Endereço</h4>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {renderInputField('cep', 'CEP', '00000-000', false, !isEditing)}
-              {renderInputField('cidade', 'Cidade', 'São Paulo', false, !isEditing)}
-              {renderInputField('estado', 'Estado (UF)', 'SP', false, !isEditing)}
+              {renderInputField('cep', 'CEP', '00000-000')}
+              {renderInputField('cidade', 'Cidade', 'São Paulo')}
+              {renderInputField('estado', 'Estado (UF)', 'SP')}
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {renderInputField('endereco', 'Logradouro/Rua', 'Rua Exemplo', false, !isEditing)}
-              {renderInputField('numero', 'Número', '123', false, !isEditing)}
-              {renderInputField('complemento', 'Complemento', 'Apto 101', false, !isEditing)}
+              {renderInputField('endereco', 'Logradouro/Rua', 'Rua Exemplo')}
+              {renderInputField('numero', 'Número', '123')}
+              {renderInputField('complemento', 'Complemento', 'Apto 101')}
           </div>
-          {renderInputField('bairro', 'Bairro', 'Centro', false, !isEditing)}
-
-          <h4 className="font-semibold mt-6 border-t pt-4">Configurações e Permissões</h4>
-          {renderNumberField('limite_usuarios', 'Limite de Usuários da Equipe', '5', !isEditing)}
+          {renderInputField('bairro', 'Bairro', 'Centro')}
 
           <div className="space-y-2">
             <div className="flex justify-between items-center mb-1">
@@ -708,20 +798,19 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4 rounded-lg border p-4">
-              {PERMISSOES_DISPONIVEIS.filter(p => p.key !== 'ponto_eletronico' && p.key !== 'visualizar_proprio_ponto').map((p: Permissao) => (
+              {permissoesVisiveis.map((p: Permissao) => (
                 <FormField key={p.key} control={form.control as unknown as Control<FormValues>} name={`permissoes.${p.key}`} render={({ field }) => (
                   <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                    <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} disabled={!isEditing} /></FormControl>
+                    <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl>
                     <FormLabel className="font-normal">{p.label}</FormLabel>
                   </FormItem>
                 )} />
               ))}
             </div>
           </div>
-          
           <Button type="submit" className="w-full" disabled={form.formState.isSubmitting || isSubmitting}>
             {(form.formState.isSubmitting || isSubmitting) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {isEditing ? 'Salvar Alterações' : 'Criar Cliente'}
+            Salvar Alterações
           </Button>
         </form>
       </Form>
@@ -730,6 +819,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
 
   // Renderização para Usuário (Funcionário)
   const isContractEditable = criadorRole === 'Admin' || criadorRole === 'Cliente';
+  const isNewUser = !isEditing;
 
   return (
     <Form {...form}>
@@ -843,7 +933,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                                                                     arrayField.onChange([...current, item.value]);
                                                                 } else {
                                                                     arrayField.onChange(
-                                                                        current.filter((value: string) => value !== item.value)
+                                                                        current.filter((value) => value !== item.value)
                                                                     );
                                                                 }
                                                             }}
@@ -881,110 +971,26 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
               <p className="text-sm text-muted-foreground">Dados pessoais e de contato do funcionário.</p>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <TaggedFormField 
-                      fieldName="cpf" 
-                      label="CPF" 
-                      placeholder="000.000.000-00" 
-                      resourceId={usuarioInicial?.id} 
-                      disabled={isNewUser}
-                      mapArray={CAMPOS_USUARIO_MAPA}
-                  />
-                  <TaggedFormField 
-                      fieldName="rg" 
-                      label="RG" 
-                      placeholder="00.000.000-0" 
-                      resourceId={usuarioInicial?.id} 
-                      disabled={isNewUser}
-                      mapArray={CAMPOS_USUARIO_MAPA}
-                  />
+                  {renderInputField('cpf', 'CPF', '000.000.000-00', false, isNewUser)}
+                  {renderInputField('rg', 'RG', '00.000.000-0', false, isNewUser)}
               </div>
 
-              <TaggedFormField 
-                  fieldName="nome_mae" 
-                  label="Nome da Mãe" 
-                  placeholder="Nome completo da mãe" 
-                  resourceId={usuarioInicial?.id} 
-                  disabled={isNewUser}
-                  mapArray={CAMPOS_USUARIO_MAPA}
-              />
-              <TaggedFormField 
-                  fieldName="nome_pai" 
-                  label="Nome do Pai" 
-                  placeholder="Nome completo do pai" 
-                  resourceId={usuarioInicial?.id} 
-                  disabled={isNewUser}
-                  mapArray={CAMPOS_USUARIO_MAPA}
-              />
-              <TaggedFormField 
-                  fieldName="telefone" 
-                  label="Telefone de Contato" 
-                  placeholder="(00) 90000-0000" 
-                  resourceId={usuarioInicial?.id} 
-                  disabled={isNewUser}
-                  mapArray={CAMPOS_USUARIO_MAPA}
-              />
+              {renderInputField('nome_mae', 'Nome da Mãe', 'Nome completo da mãe', false, isNewUser)}
+              {renderInputField('nome_pai', 'Nome do Pai', 'Nome completo do pai', false, isNewUser)}
+              {renderInputField('telefone', 'Telefone de Contato', '(00) 90000-0000', false, isNewUser)}
 
               <h4 className="font-semibold mt-6 border-t pt-4">Endereço</h4>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <TaggedFormField 
-                      fieldName="cep" 
-                      label="CEP" 
-                      placeholder="00000-000" 
-                      resourceId={usuarioInicial?.id} 
-                      disabled={isNewUser}
-                      mapArray={CAMPOS_USUARIO_MAPA}
-                  />
-                  <TaggedFormField 
-                      fieldName="cidade" 
-                      label="Cidade" 
-                      placeholder="São Paulo" 
-                      resourceId={usuarioInicial?.id} 
-                      disabled={isNewUser}
-                      mapArray={CAMPOS_USUARIO_MAPA}
-                  />
-                  <TaggedFormField 
-                      fieldName="estado" 
-                      label="Estado (UF)" 
-                      placeholder="SP" 
-                      resourceId={usuarioInicial?.id} 
-                      disabled={isNewUser}
-                      mapArray={CAMPOS_USUARIO_MAPA}
-                  />
+                  {renderInputField('cep', 'CEP', '00000-000', false, isNewUser)}
+                  {renderInputField('cidade', 'Cidade', 'São Paulo', false, isNewUser)}
+                  {renderInputField('estado', 'Estado (UF)', 'SP', false, isNewUser)}
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <TaggedFormField 
-                      fieldName="endereco" 
-                      label="Logradouro/Rua" 
-                      placeholder="Rua Exemplo" 
-                      resourceId={usuarioInicial?.id} 
-                      disabled={isNewUser}
-                      mapArray={CAMPOS_USUARIO_MAPA}
-                  />
-                  <TaggedFormField 
-                      fieldName="numero" 
-                      label="Número" 
-                      placeholder="123" 
-                      resourceId={usuarioInicial?.id} 
-                      disabled={isNewUser}
-                      mapArray={CAMPOS_USUARIO_MAPA}
-                  />
-                  <TaggedFormField 
-                      fieldName="complemento" 
-                      label="Complemento" 
-                      placeholder="Apto 101" 
-                      resourceId={usuarioInicial?.id} 
-                      disabled={isNewUser}
-                      mapArray={CAMPOS_USUARIO_MAPA}
-                  />
+                  {renderInputField('endereco', 'Logradouro/Rua', 'Rua Exemplo', false, isNewUser)}
+                  {renderInputField('numero', 'Número', '123', false, isNewUser)}
+                  {renderInputField('complemento', 'Complemento', 'Apto 101', false, isNewUser)}
               </div>
-              <TaggedFormField 
-                  fieldName="bairro" 
-                  label="Bairro" 
-                  placeholder="Centro" 
-                  resourceId={usuarioInicial?.id} 
-                  disabled={isNewUser}
-                  mapArray={CAMPOS_USUARIO_MAPA}
-              />
+              {renderInputField('bairro', 'Bairro', 'Centro', false, isNewUser)}
             </TabsContent>
           )}
 
