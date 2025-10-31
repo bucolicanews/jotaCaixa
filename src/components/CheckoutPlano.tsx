@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Loader2, CheckCircle, Copy, QrCode } from 'lucide-react';
+import { Loader2, CheckCircle, Package, CreditCard } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { Plano } from '@/types/plano';
@@ -9,14 +9,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
+import { useStripeConfig } from '@/hooks/use-stripe-config'; // Importando o hook do Stripe
 
 interface CheckoutPlanoProps {
   plano: Plano;
 }
-
-// Simulação de dados PIX (deve ser configurável pelo Admin no futuro)
-const CHAVE_PIX_PADRAO = '123.456.789-00'; 
-const QR_CODE_SIMULADO_URL = 'https://public.dyad.sh/assets/qr-code-placeholder.png';
 
 const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano }) => {
   const [email, setEmail] = useState('');
@@ -24,6 +21,8 @@ const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRegistered, setIsRegistered] = useState(false);
   const navigate = useNavigate();
+  
+  const { stripePromise, loading: loadingStripe } = useStripeConfig();
 
   const handleAdesao = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,8 +34,8 @@ const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano }) => {
     setIsSubmitting(true);
 
     try {
-      // 1. Cadastrar o novo cliente no Supabase Auth
-      // Passamos plano_id e permissoes como strings JSON para o trigger route_new_user
+      // 1. Cadastrar o novo cliente no Supabase Auth (Simulação de Trial)
+      // A data de fim de acesso é definida no SelecaoPerfil.tsx
       const { data: _data, error: authError } = await supabase.auth.signUp({
         email: email,
         password: Math.random().toString(36).substring(2, 15), // Senha temporária
@@ -46,7 +45,6 @@ const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano }) => {
             role: 'Cliente', 
             nome: nomeEmpresa, 
             cliente_id: null, 
-            // Passando como string JSON para garantir que o trigger consiga ler
             plano_id: plano.id, 
             permissoes: JSON.stringify(plano.permissoes), 
           }
@@ -73,10 +71,46 @@ const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano }) => {
     }
   };
   
-  const handleCopyPix = () => {
-      navigator.clipboard.writeText(CHAVE_PIX_PADRAO);
-      showSuccess('Chave PIX copiada!');
+  const handleCheckout = async () => {
+    if (loadingStripe || !stripePromise) {
+        showError('Sistema de pagamento ainda não carregado.');
+        return;
+    }
+    
+    setIsSubmitting(true);
+    
+    try {
+        const stripe = await stripePromise;
+        if (!stripe) throw new Error('Falha ao inicializar Stripe.');
+
+        // SIMULAÇÃO: Criar uma sessão de checkout (em um ambiente real, isso seria feito em uma Edge Function)
+        // Aqui, simulamos o redirecionamento para o checkout do Stripe.
+        
+        // Em um ambiente real, você faria uma chamada RPC ou Edge Function:
+        // const { data: sessionData, error: sessionError } = await supabase.functions.invoke('create-stripe-checkout', { body: { planoId: plano.id } });
+        
+        // Simulando o redirecionamento para o checkout do Stripe
+        const simulatedSessionId = `cs_test_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6`;
+        
+        // Redireciona para a URL de checkout simulada
+        window.location.href = `https://checkout.stripe.com/pay/${simulatedSessionId}`;
+        
+    } catch (error: any) {
+        console.error('Erro no checkout:', error);
+        showError('Falha ao iniciar o checkout: ' + (error.message || 'Erro desconhecido.'));
+    } finally {
+        setIsSubmitting(false);
+    }
   };
+
+  if (loadingStripe) {
+      return (
+        <Card className="w-full max-w-md mx-auto">
+            <CardHeader><CardTitle className="text-xl">Carregando Pagamento...</CardTitle></CardHeader>
+            <CardContent className="flex justify-center items-center h-20"><Loader2 className="h-6 w-6 animate-spin text-primary" /></CardContent>
+        </Card>
+      );
+  }
 
   if (isRegistered) {
     const dataVencimentoTrial = format(new Date(Date.now() + plano.dias_trial * 24 * 60 * 60 * 1000), 'dd/MM/yyyy');
@@ -88,36 +122,23 @@ const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano }) => {
             <CheckCircle className="w-6 h-6 mr-2" /> Adesão Concluída!
           </CardTitle>
           <CardDescription>
-            Seu trial de {plano.dias_trial} dias começa agora. Você receberá um email para definir sua senha.
+            Seu trial de {plano.dias_trial} dias começa agora. Você receberá um email para definir a senha e acessar o sistema.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="p-4 border rounded-md bg-yellow-50 dark:bg-yellow-900/20">
             <p className="font-semibold">Próxima Etapa: Pagamento</p>
             <p className="text-sm mt-1">
-              Seu período de teste termina em <strong>{dataVencimentoTrial}</strong>. Para continuar usando o plano {plano.nome} (R$ {plano.preco_mensal.toFixed(2)}/mês), realize o pagamento via PIX.
+              Seu período de teste termina em <strong>{dataVencimentoTrial}</strong>. Para continuar usando o plano {plano.nome} (R$ {plano.preco_mensal.toFixed(2)}/mês), inicie o checkout.
             </p>
           </div>
           
-          <div className="space-y-4">
-            <h3 className="font-semibold flex items-center"><QrCode className="w-4 h-4 mr-2" /> Pagamento PIX</h3>
-            
-            <div className="flex justify-center">
-                <img src={QR_CODE_SIMULADO_URL} alt="QR Code Simulado" className="w-32 h-32 border p-1 rounded-md" />
-            </div>
-            
-            <div className="space-y-2">
-                <Label>Chave PIX (CNPJ/CPF)</Label>
-                <div className="flex space-x-2">
-                    <Input readOnly value={CHAVE_PIX_PADRAO} className="flex-1" />
-                    <Button onClick={handleCopyPix} variant="secondary" size="icon">
-                        <Copy className="w-4 h-4" />
-                    </Button>
-                </div>
-            </div>
-          </div>
+          <Button onClick={handleCheckout} className="w-full" disabled={isSubmitting}>
+            {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CreditCard className="mr-2 h-4 w-4" />}
+            Ir para o Checkout (R$ {plano.preco_mensal.toFixed(2)})
+          </Button>
           
-          <Button onClick={() => navigate('/login')} className="w-full">
+          <Button onClick={() => navigate('/login')} variant="secondary" className="w-full">
             Ir para o Login
           </Button>
         </CardContent>
