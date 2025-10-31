@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Loader2, CheckCircle, Package, CreditCard } from 'lucide-react';
+import { Loader2, CheckCircle, CreditCard } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { Plano } from '@/types/plano';
@@ -9,13 +9,15 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
-import { useStripeConfig } from '@/hooks/use-stripe-config'; // Importando o hook do Stripe
+import { useStripeConfig } from '@/hooks/use-stripe-config';
+import { useSessao } from '@/hooks/use-sessao';
 
 interface CheckoutPlanoProps {
   plano: Plano;
+  isUpgrade?: boolean; // Novo prop para diferenciar fluxo de upgrade
 }
 
-const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano }) => {
+const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano, isUpgrade = false }) => {
   const [email, setEmail] = useState('');
   const [nomeEmpresa, setNomeEmpresa] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -23,9 +25,12 @@ const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano }) => {
   const navigate = useNavigate();
   
   const { stripePromise, loading: loadingStripe } = useStripeConfig();
+  useSessao(); // Chamado, mas sem desestruturar se os valores não forem usados diretamente
 
   const handleAdesao = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isUpgrade) return;
+    
     if (!email || !nomeEmpresa) {
       showError('Preencha o email e o nome da empresa/pessoa.');
       return;
@@ -35,7 +40,6 @@ const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano }) => {
 
     try {
       // 1. Cadastrar o novo cliente no Supabase Auth (Simulação de Trial)
-      // A data de fim de acesso é definida no SelecaoPerfil.tsx
       const { data: _data, error: authError } = await supabase.auth.signUp({
         email: email,
         password: Math.random().toString(36).substring(2, 15), // Senha temporária
@@ -83,13 +87,7 @@ const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano }) => {
         const stripe = await stripePromise;
         if (!stripe) throw new Error('Falha ao inicializar Stripe.');
 
-        // SIMULAÇÃO: Criar uma sessão de checkout (em um ambiente real, isso seria feito em uma Edge Function)
-        // Aqui, simulamos o redirecionamento para o checkout do Stripe.
-        
-        // Em um ambiente real, você faria uma chamada RPC ou Edge Function:
-        // const { data: sessionData, error: sessionError } = await supabase.functions.invoke('create-stripe-checkout', { body: { planoId: plano.id } });
-        
-        // Simulando o redirecionamento para o checkout do Stripe
+        // SIMULAÇÃO: Criar uma sessão de checkout
         const simulatedSessionId = `cs_test_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6`;
         
         // Redireciona para a URL de checkout simulada
@@ -111,7 +109,26 @@ const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano }) => {
         </Card>
       );
   }
+  
+  // Fluxo 2: Cliente Logado (Upgrade)
+  if (isUpgrade) {
+      return (
+        <Card className="w-full max-w-md mx-auto">
+            <CardHeader>
+                <CardTitle className="text-2xl">Atualizar para {plano.nome}</CardTitle>
+                <CardDescription>Confirme a atualização do seu plano. O valor de R$ {plano.preco_mensal.toFixed(2)} será cobrado mensalmente.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+                <Button onClick={handleCheckout} className="w-full" disabled={isSubmitting}>
+                    {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CreditCard className="mr-2 h-4 w-4" />}
+                    Pagar e Atualizar Plano
+                </Button>
+            </CardContent>
+        </Card>
+      );
+  }
 
+  // Fluxo 1: Público (Adesão e Trial)
   if (isRegistered) {
     const dataVencimentoTrial = format(new Date(Date.now() + plano.dias_trial * 24 * 60 * 60 * 1000), 'dd/MM/yyyy');
     
@@ -122,14 +139,14 @@ const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano }) => {
             <CheckCircle className="w-6 h-6 mr-2" /> Adesão Concluída!
           </CardTitle>
           <CardDescription>
-            Seu trial de {plano.dias_trial} dias começa agora. Você receberá um email para definir a senha e acessar o sistema.
+            Seu trial de {plano.dias_trial} dias começa agora. Verifique seu email para definir a senha.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="p-4 border rounded-md bg-yellow-50 dark:bg-yellow-900/20">
             <p className="font-semibold">Próxima Etapa: Pagamento</p>
             <p className="text-sm mt-1">
-              Seu período de teste termina em <strong>{dataVencimentoTrial}</strong>. Para continuar usando o plano {plano.nome} (R$ {plano.preco_mensal.toFixed(2)}/mês), inicie o checkout.
+              Seu período de teste termina em <strong>{dataVencimentoTrial}</strong>. Inicie o checkout para garantir a continuidade.
             </p>
           </div>
           
