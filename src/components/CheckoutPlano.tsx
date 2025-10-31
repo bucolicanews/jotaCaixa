@@ -25,7 +25,7 @@ const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano, isUpgrade = false 
   const navigate = useNavigate();
   
   const { stripePromise, loading: loadingStripe } = useStripeConfig();
-  useSessao(); // Chamado, mas sem desestruturar se os valores não forem usados diretamente
+  const { usuario, carregando: carregandoSessao } = useSessao();
 
   const handleAdesao = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -75,7 +75,7 @@ const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano, isUpgrade = false 
     }
   };
   
-  const handleCheckout = async () => {
+  const handleCheckout = async (emailCliente?: string, clienteId?: string) => {
     if (loadingStripe || !stripePromise) {
         showError('Sistema de pagamento ainda não carregado.');
         return;
@@ -84,14 +84,30 @@ const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano, isUpgrade = false 
     setIsSubmitting(true);
     
     try {
-        const stripe = await stripePromise;
-        if (!stripe) throw new Error('Falha ao inicializar Stripe.');
-
-        // SIMULAÇÃO: Criar uma sessão de checkout
-        const simulatedSessionId = `cs_test_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6`;
+        // 1. Determinar o ID do cliente e email
+        const finalClienteId = clienteId || usuario?.id;
+        const finalEmail = emailCliente || usuario?.email;
         
-        // Redireciona para a URL de checkout simulada
-        window.location.href = `https://checkout.stripe.com/pay/${simulatedSessionId}`;
+        if (!finalClienteId || !finalEmail) {
+            throw new Error('Dados do cliente não disponíveis para checkout.');
+        }
+
+        // 2. Chamar a Edge Function para criar a sessão de checkout
+        const { data, error } = await supabase.functions.invoke('create-checkout-session', {
+            body: {
+                planoId: plano.id,
+                clienteId: finalClienteId,
+                email: finalEmail,
+            },
+        });
+        
+        if (error) throw error;
+        
+        const { url } = data;
+        if (!url) throw new Error('URL de checkout não recebida.');
+
+        // 3. Redirecionar para o Stripe
+        window.location.href = url;
         
     } catch (error: any) {
         console.error('Erro no checkout:', error);
@@ -101,7 +117,7 @@ const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano, isUpgrade = false 
     }
   };
 
-  if (loadingStripe) {
+  if (loadingStripe || carregandoSessao) {
       return (
         <Card className="w-full max-w-md mx-auto">
             <CardHeader><CardTitle className="text-xl">Carregando Pagamento...</CardTitle></CardHeader>
@@ -119,7 +135,7 @@ const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano, isUpgrade = false 
                 <CardDescription>Confirme a atualização do seu plano. O valor de R$ {plano.preco_mensal.toFixed(2)} será cobrado mensalmente.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-                <Button onClick={handleCheckout} className="w-full" disabled={isSubmitting}>
+                <Button onClick={() => handleCheckout(usuario?.email, usuario?.id)} className="w-full" disabled={isSubmitting}>
                     {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CreditCard className="mr-2 h-4 w-4" />}
                     Pagar e Atualizar Plano
                 </Button>
@@ -150,7 +166,8 @@ const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano, isUpgrade = false 
             </p>
           </div>
           
-          <Button onClick={handleCheckout} className="w-full" disabled={isSubmitting}>
+          {/* Aqui, usamos o email e o ID do usuário recém-criado (que ainda está na sessão) */}
+          <Button onClick={() => handleCheckout(email, usuario?.id)} className="w-full" disabled={isSubmitting}>
             {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CreditCard className="mr-2 h-4 w-4" />}
             Ir para o Checkout (R$ {plano.preco_mensal.toFixed(2)})
           </Button>
