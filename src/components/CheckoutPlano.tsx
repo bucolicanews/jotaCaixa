@@ -36,7 +36,7 @@ const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano }) => {
 
     try {
       // 1. Cadastrar o novo cliente no Supabase Auth
-      // Usamos signUp para que o cliente receba o link de confirmação/senha
+      // Passamos plano_id e permissoes como strings JSON para o trigger route_new_user
       const { data: _data, error: authError } = await supabase.auth.signUp({
         email: email,
         password: Math.random().toString(36).substring(2, 15), // Senha temporária
@@ -45,9 +45,10 @@ const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano }) => {
           data: { 
             role: 'Cliente', 
             nome: nomeEmpresa, 
-            cliente_id: null, // O trigger route_new_user cuidará disso
-            plano_id: plano.id, // Passa o ID do plano para o trigger
-            permissoes: plano.permissoes, // Passa as permissões do plano
+            cliente_id: null, 
+            // Passando como string JSON para garantir que o trigger consiga ler
+            plano_id: plano.id, 
+            permissoes: JSON.stringify(plano.permissoes), 
           }
         }
       });

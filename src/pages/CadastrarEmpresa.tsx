@@ -9,12 +9,33 @@ import { useSessao } from '@/hooks/use-sessao';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
+import { UsuarioProfile } from '@/types/usuario';
 
 const CadastrarEmpresa = () => {
     const [companyName, setCompanyName] = useState('');
     const [loading, setLoading] = useState(false);
-    const { refetch } = useSessao();
+    const { refetch, role, perfil, carregando } = useSessao();
     const navigate = useNavigate();
+
+    if (carregando) {
+        return <LayoutPrincipal><div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div></LayoutPrincipal>;
+    }
+    
+    const isUnassignedUser = role === 'Usuario' && !(perfil as UsuarioProfile)?.cliente_id;
+
+    if (!isUnassignedUser) {
+        // Se não for um Usuário não vinculado, redireciona para o painel
+        if (role === 'Cliente' || role === 'Admin') {
+            navigate('/painel', { replace: true });
+            return null;
+        }
+        // Se for um Usuário já vinculado, não deve estar aqui
+        if (role === 'Usuario' && (perfil as UsuarioProfile)?.cliente_id) {
+            navigate('/painel', { replace: true });
+            return null;
+        }
+        // Se for um Cliente pendente, o LayoutPrincipal já cuida disso.
+    }
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -23,6 +44,8 @@ const CadastrarEmpresa = () => {
             return;
         }
         setLoading(true);
+        
+        // Nota: O RPC request_client_promotion move o usuário de tbl_usuarios para tbl_clientes.
         const { error } = await supabase.rpc('request_client_promotion', { p_company_name: companyName });
 
         if (error) {
