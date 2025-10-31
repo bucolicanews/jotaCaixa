@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useForm, Control } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -30,6 +30,7 @@ const urlSchema = z.string().url('URL inválida.').optional().or(z.literal(''));
 const formSchema = z.object({
   nome: z.string().min(1, 'O nome é obrigatório.'),
   email: z.string().email('Email inválido.'),
+  // A senha é opcional apenas na edição. Na criação, usaremos inviteUserByEmail.
   senha: z.string().min(6, 'A senha deve ter pelo menos 6 caracteres.').optional().or(z.literal('')),
   limite_usuarios: z.coerce.number().int().min(1, 'O limite deve ser pelo menos 1.').optional(),
   permissoes: z.record(z.boolean()).optional(),
@@ -189,12 +190,12 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
   });
   
   const cepValue = form.watch('cep');
-  const isClient = isClientBeingManagedByAdmin || isNewClient;
+  const isClientScope = isClientBeingManagedByAdmin || isNewClient; // Renomeado para evitar conflito
   
   // --- Funções Auxiliares ---
 
   const handleSelectAll = (select: boolean) => {
-    const permissoes = isClient ? PERMISSOES_DISPONIVEIS.filter(p => p.key !== 'ponto_eletronico' && p.key !== 'visualizar_proprio_ponto') : permissoesVisiveis;
+    const permissoes = isClientScope ? PERMISSOES_DISPONIVEIS.filter(p => p.key !== 'ponto_eletronico' && p.key !== 'visualizar_proprio_ponto') : permissoesVisiveis;
     permissoes.forEach(p => {
       form.setValue(`permissoes.${p.key}`, select, { shouldDirty: true });
     });
@@ -516,19 +517,16 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
         };
         
         if (isNewClient) {
-            // Criação de Cliente (Admin)
-            if (!values.senha) throw new Error('A senha provisória é obrigatória para novos clientes.');
+            // CRIAÇÃO DE NOVO CLIENTE (ADMIN) - USANDO INVITE
             
-            const { error: authError } = await supabase.auth.signUp({
-                email: values.email,
-                password: values.senha,
-                options: {
-                    data: { role: 'Cliente', nome: values.nome, cliente_id: null }
-                }
+            const { error: authError } = await supabase.auth.inviteUserAndSendEmail(values.email, {
+                redirectTo: `${window.location.origin}/atualizar-senha`,
+                data: { role: 'Cliente', nome: values.nome, cliente_id: null }
             });
+            
             if (authError) throw authError;
             
-            showSuccess('Cliente criado com sucesso! Aguarde a aprovação.');
+            showSuccess(`Convite enviado para o email ${values.email}. O cliente deve clicar no link para finalizar o cadastro.`);
             onSaveComplete();
             return;
         }
@@ -600,19 +598,16 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
         dataToUpdate.ja_admitido_anteriormente = values.ja_admitido_anteriormente;
         
         if (isNewUser) {
-            // Criação de Usuário
-            if (!values.senha) throw new Error('A senha provisória é obrigatória para novos usuários.');
+            // CRIAÇÃO DE NOVO USUÁRIO (FUNCIONÁRIO) - USANDO INVITE
             
-            const { error: authError } = await supabase.auth.signUp({
-                email: values.email,
-                password: values.senha,
-                options: {
-                    data: { role: 'Usuario', nome: values.nome, cliente_id: targetClienteId }
-                }
+            const { error: authError } = await supabase.auth.inviteUserAndSendEmail(values.email, {
+                redirectTo: `${window.location.origin}/atualizar-senha`,
+                data: { role: 'Usuario', nome: values.nome, cliente_id: targetClienteId }
             });
+            
             if (authError) throw authError;
             
-            showSuccess('Usuário criado com sucesso!');
+            showSuccess(`Convite enviado para o email ${values.email}. O usuário deve clicar no link para definir a senha.`);
             onSaveComplete();
             return;
         }
@@ -640,7 +635,6 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
     return permissoesCliente[p.key] === true || p.key === 'visualizar_proprio_ponto' || p.key === 'ponto_eletronico';
   });
   
-  const isClient = isClientBeingManagedByAdmin || isNewClient;
   const isContractEditable = criadorRole === 'Admin' || criadorRole === 'Cliente';
   const resourceId = usuarioInicial?.id;
   
@@ -650,9 +644,8 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
 
   // --- Renderização Principal ---
 
-  if (isClient) {
+  if (isClientScope) {
     // Renderização para Cliente (Empresa)
-    const clientProfile = usuarioInicial as ClienteProfile;
     
     return (
       <Form {...form}>
@@ -681,7 +674,8 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
               isOptional={false}
           />
           
-          {!isEditing && renderInputField('senha', 'Senha Provisória', '••••••••', true, false)}
+          {/* SENHA: Apenas na edição */}
+          {isEditing && renderInputField('senha', 'Alterar Senha (Opcional)', '••••••••', false, false)}
           
           <h4 className="font-semibold mt-6 border-t pt-4">Configurações e Permissões</h4>
           <p className="text-sm text-muted-foreground mb-4">
@@ -712,7 +706,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
           
           <Button type="submit" className="w-full" disabled={form.formState.isSubmitting || isSubmitting}>
             {(form.formState.isSubmitting || isSubmitting) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {isEditing ? 'Salvar Alterações' : 'Criar Cliente'}
+            {isEditing ? 'Salvar Alterações' : 'Enviar Convite de Cadastro'}
           </Button>
         </form>
       </Form>
@@ -741,11 +735,8 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
             <FormField control={form.control as unknown as Control<FormValues>} name="email" render={({ field }) => (
               <FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" placeholder="email@exemplo.com" {...field} disabled={isEditing} /></FormControl><FormMessage /></FormItem>
             )} />
-            {!isEditing && (
-              <FormField control={form.control as unknown as Control<FormValues>} name="senha" render={({ field }) => (
-                <FormItem><FormLabel>Senha Provisória</FormLabel><FormControl><Input type="password" placeholder="••••••••" {...field} /></FormControl><FormMessage /></FormItem>
-              )} />
-            )}
+            {/* SENHA: Apenas na edição */}
+            {isEditing && renderInputField('senha', 'Alterar Senha (Opcional)', '••••••••', false, false)}
             
             <h4 className="font-semibold mt-6 border-t pt-4">Remuneração e Jornada</h4>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1082,7 +1073,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
 
         <Button type="submit" className="w-full" disabled={form.formState.isSubmitting || uploading || isSubmitting}>
           {(form.formState.isSubmitting || uploading || isSubmitting) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          {isEditing ? 'Salvar Alterações' : 'Criar Conta'}
+          {isEditing ? 'Salvar Alterações' : 'Enviar Convite de Cadastro'}
         </Button>
       </form>
     </Form>
