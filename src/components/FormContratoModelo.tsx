@@ -27,11 +27,10 @@ type FormValues = z.infer<typeof formSchema>;
 
 interface FormContratoModeloProps {
   modeloInicial?: ContratoModelo | null;
-  empresaId: string | null; // ID da empresa (null se for Admin)
   onSaveComplete: () => void;
 }
 
-const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, empresaId, onSaveComplete }) => {
+const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, onSaveComplete }) => {
   const isEditing = !!modeloInicial;
   const [previewOpen, setPreviewOpen] = useState(false);
   const [tagsAtivas, setTagsAtivas] = useState<ContratoTag[]>(TAGS_FINANCEIRAS_OBRIGATORIAS);
