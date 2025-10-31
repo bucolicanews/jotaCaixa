@@ -30,6 +30,8 @@ const SelecaoPerfil: React.FC = () => {
 
   const buscarPlanos = useCallback(async () => {
     setCarregandoPlanos(true);
+    
+    // Busca todos os planos e ordena por preço
     const { data, error } = await supabase
       .from('planos')
       .select('*')
@@ -132,7 +134,7 @@ const SelecaoPerfil: React.FC = () => {
   return (
     <LayoutPrincipal>
       <div className="flex items-center justify-center min-h-[80vh] p-4">
-        <Card className="w-full max-w-6xl">
+        <Card className="w-full max-w-7xl"> {/* Aumentando o max-w para 7xl */}
           <CardHeader className="text-center">
             <CardTitle className="text-3xl">Selecione seu Plano</CardTitle>
             <CardDescription className="text-lg font-semibold text-green-500">
@@ -140,51 +142,53 @@ const SelecaoPerfil: React.FC = () => {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"> {/* Ajustando o grid */}
               
               {planos.map((plano) => (
                   <Card 
                       key={plano.id} 
                       className={cn(
-                          "p-4 flex flex-col items-center text-center transition-colors",
+                          "p-4 flex flex-col items-center text-center transition-all duration-300",
                           plano.tipo_cliente === 'PJ' ? "border-primary shadow-lg" : "border-secondary"
                       )}
                   >
                       {plano.tipo_cliente === 'PJ' ? (
-                          <Building2 className="w-10 h-10 text-primary mb-3" />
+                          <Building2 className="w-8 h-8 text-primary mb-3" />
                       ) : (
-                          <User className="w-10 h-10 text-primary mb-3" />
+                          <User className="w-8 h-8 text-primary mb-3" />
                       )}
                       
-                      <h3 className="text-xl font-semibold mb-2">{plano.nome} ({plano.tipo_cliente})</h3>
-                      <p className="text-sm text-muted-foreground mb-4">
+                      <h3 className="text-xl font-semibold mb-1">{plano.nome} ({plano.tipo_cliente})</h3>
+                      <p className="text-sm text-muted-foreground mb-4 h-10 overflow-hidden">
                         {plano.descricao || (plano.tipo_cliente === 'PJ' ? 'Gestão completa para empresas.' : 'Uso pessoal e microempreendedores.')}
                       </p>
                       
-                      <div className="text-4xl font-extrabold text-foreground mb-4">
+                      <div className="text-3xl font-extrabold text-foreground mb-4">
                           {formatCurrency(plano.preco_mensal)}
-                          <span className="text-lg font-medium text-muted-foreground">/mês</span>
+                          <span className="text-base font-medium text-muted-foreground">/mês</span>
                       </div>
                       
-                      <div className="space-y-3 flex-1 text-left w-full px-4">
-                          <h4 className="font-semibold flex items-center text-primary mb-3">
+                      <div className="space-y-3 flex-1 text-left w-full">
+                          <h4 className="font-semibold flex items-center text-primary mb-2">
                               <Package className="w-4 h-4 mr-2" /> Módulos Incluídos:
                           </h4>
-                          {permissoesMap.map(p => {
-                              const isIncluded = plano.permissoes[p.key] === true;
-                              return (
-                                  <div key={p.key} className="flex items-center space-x-2">
-                                      {isIncluded ? (
-                                          <Check className="w-4 h-4 text-green-500 flex-shrink-0" />
-                                      ) : (
-                                          <X className="w-4 h-4 text-red-500 flex-shrink-0" />
-                                      )}
-                                      <span className={cn("text-sm", !isIncluded && "text-muted-foreground line-through")}>
-                                          {p.label}
-                                      </span>
-                                  </div>
-                              );
-                          })}
+                          <div className="space-y-1">
+                              {permissoesMap.map(p => {
+                                  const isIncluded = plano.permissoes[p.key] === true;
+                                  return (
+                                      <div key={p.key} className="flex items-center space-x-2">
+                                          {isIncluded ? (
+                                              <Check className="w-4 h-4 text-green-500 flex-shrink-0" />
+                                          ) : (
+                                              <X className="w-4 h-4 text-red-500 flex-shrink-0" />
+                                          )}
+                                          <span className={cn("text-sm", !isIncluded && "text-muted-foreground line-through")}>
+                                              {p.label}
+                                          </span>
+                                      </div>
+                                  );
+                              })}
+                          </div>
                       </div>
                       
                       <Button 
