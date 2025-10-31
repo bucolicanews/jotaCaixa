@@ -519,9 +519,14 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
         if (isNewClient) {
             // CRIAÇÃO DE NOVO CLIENTE (ADMIN) - USANDO INVITE
             
-            const { error: authError } = await (supabase.auth as any).inviteUserByEmail(values.email, {
-                redirectTo: `${window.location.origin}/atualizar-senha`,
-                data: { role: 'Cliente', nome: values.nome, cliente_id: null }
+            // Usando o método signUp com um email temporário e data para forçar o fluxo de redefinição de senha
+            const { error: authError } = await supabase.auth.signUp({
+                email: values.email,
+                password: Math.random().toString(36).substring(2, 15), // Senha temporária
+                options: {
+                    emailRedirectTo: `${window.location.origin}/atualizar-senha`,
+                    data: { role: 'Cliente', nome: values.nome, cliente_id: null }
+                }
             });
             
             if (authError) throw authError;
@@ -600,9 +605,14 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
         if (isNewUser) {
             // CRIAÇÃO DE NOVO USUÁRIO (FUNCIONÁRIO) - USANDO INVITE
             
-            const { error: authError } = await (supabase.auth as any).inviteUserByEmail(values.email, {
-                redirectTo: `${window.location.origin}/atualizar-senha`,
-                data: { role: 'Usuario', nome: values.nome, cliente_id: targetClienteId }
+            // Usando o método signUp com um email temporário e data para forçar o fluxo de redefinição de senha
+            const { error: authError } = await supabase.auth.signUp({
+                email: values.email,
+                password: Math.random().toString(36).substring(2, 15), // Senha temporária
+                options: {
+                    emailRedirectTo: `${window.location.origin}/atualizar-senha`,
+                    data: { role: 'Usuario', nome: values.nome, cliente_id: targetClienteId }
+                }
             });
             
             if (authError) throw authError;
@@ -652,13 +662,13 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
           <h3 className="font-semibold text-lg">Dados de Identificação</h3>
           
-          {/* Nome da Empresa (Mapeável) - AGORA SEM DISABLED NA CRIAÇÃO */}
+          {/* Nome da Empresa (Mapeável) */}
           <TaggedFormField 
               fieldName="nome" 
               label="Nome da Empresa" 
               placeholder="Nome completo" 
               resourceId={resourceId} 
-              disabled={false} // Removido o disabled condicional
+              disabled={false}
               mapArray={CAMPOS_CLIENTE_MAPA}
               isOptional={false}
           />
@@ -730,7 +740,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
           {/* TAB 1: GERAL (Nome, Email, Senha, Permissões, Salário) */}
           <TabsContent value="pessoal" className="mt-4 space-y-4 p-4">
             <FormField control={form.control as unknown as Control<FormValues>} name="nome" render={({ field }) => (
-              <FormItem><FormLabel>Nome Completo</FormLabel><FormControl><Input placeholder="Nome completo" {...field} /></FormControl><FormMessage /></FormItem>
+              <FormItem><FormLabel>Nome Completo</FormLabel><FormControl><Input placeholder="Nome completo" {...field} disabled={isNewUser} /></FormControl><FormMessage /></FormItem>
             )} />
             <FormField control={form.control as unknown as Control<FormValues>} name="email" render={({ field }) => (
               <FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" placeholder="email@exemplo.com" {...field} disabled={isEditing} /></FormControl><FormMessage /></FormItem>
@@ -758,7 +768,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                   {permissoesVisiveis.map((p: Permissao) => (
                     <FormField key={p.key} control={form.control as unknown as Control<FormValues>} name={`permissoes.${p.key}`} render={({ field }) => (
                       <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                        <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+                        <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} disabled={isNewUser} /></FormControl>
                         <FormLabel className="font-normal">{p.label}</FormLabel>
                       </FormItem>
                     )} />
@@ -919,7 +929,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                       label="Cidade" 
                       placeholder="São Paulo" 
                       resourceId={resourceId} 
-                      disabled={isNewUser}
+                      disabled={isNewUser || form.watch('cidade') === 'Buscando...'}
                       mapArray={CAMPOS_USUARIO_MAPA}
                   />
                   <TaggedFormField 
@@ -927,7 +937,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                       label="Estado (UF)" 
                       placeholder="SP" 
                       resourceId={resourceId} 
-                      disabled={isNewUser}
+                      disabled={isNewUser || form.watch('estado') === 'Buscando...'}
                       mapArray={CAMPOS_USUARIO_MAPA}
                   />
               </div>
@@ -937,7 +947,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                       label="Logradouro/Rua" 
                       placeholder="Rua Exemplo" 
                       resourceId={resourceId} 
-                      disabled={isNewUser}
+                      disabled={isNewUser || form.watch('endereco') === 'Buscando...'}
                       mapArray={CAMPOS_USUARIO_MAPA}
                   />
                   <TaggedFormField 
@@ -962,7 +972,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                   label="Bairro" 
                   placeholder="Centro" 
                   resourceId={resourceId} 
-                  disabled={isNewUser}
+                  disabled={isNewUser || form.watch('bairro') === 'Buscando...'}
                   mapArray={CAMPOS_USUARIO_MAPA}
               />
             </TabsContent>
