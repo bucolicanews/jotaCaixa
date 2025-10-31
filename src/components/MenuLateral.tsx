@@ -71,8 +71,9 @@ const SECOES_MENU: MenuSection[] = [
         titulo: 'Administração',
         perfis: ['Admin', 'Cliente'],
         itens: [
-            { nome: 'Gerenciar Usuários', caminho: '/gerenciar-usuarios', icone: Users, perfis: ['Admin', 'Cliente'] },
-            { nome: 'Gerenciar Planos', caminho: '/planos', icone: Package, perfis: ['Admin'] }, // Rota alterada para /planos
+            // Adicionando permissionKey aqui
+            { nome: 'Gerenciar Usuários', caminho: '/gerenciar-usuarios', icone: Users, perfis: ['Admin', 'Cliente'], permissionKey: 'cadastrar_usuarios' },
+            { nome: 'Gerenciar Planos', caminho: '/planos', icone: Package, perfis: ['Admin'] }, 
             { nome: 'Configurações', caminho: '/configuracoes', icone: Settings, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'configuracoes' },
         ]
     }
@@ -117,6 +118,7 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick }) => {
         if (item.caminho === '/perfil' && item.permissionKey === 'visualizar_proprio_ponto') {
             return false;
         }
+        // Verifica a permissão do Cliente
         return clientProfile.permissoes?.[item.permissionKey] === true;
     }
 
@@ -130,11 +132,10 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick }) => {
         if (item.caminho === '/folha-ponto') {
             return false;
         }
-        // Se for 'Meu Ponto', verifica a permissão específica
+        // Verifica a permissão do Usuário
         if (item.caminho === '/perfil' && item.permissionKey === 'visualizar_proprio_ponto') {
             return userProfile.permissoes?.[item.permissionKey] === true;
         }
-        // Para Ponto Eletrônico e outros módulos, verifica a permissão.
         return userProfile.permissoes?.[item.permissionKey] === true;
     }
     return false;
