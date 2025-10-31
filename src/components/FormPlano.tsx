@@ -184,8 +184,8 @@ const FormPlano: React.FC<FormPlanoProps> = ({ planoInicial, onSaveComplete }) =
                 </FormControl>
                 <FormLabel className="font-normal">{p.label}</FormLabel>
               </FormItem>
-            ))}
-          />
+            )} />
+          ))}
         </div>
 
         <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
