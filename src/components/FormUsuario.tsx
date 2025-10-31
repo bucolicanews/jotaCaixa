@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { useForm, Control } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -116,6 +116,8 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
   const [activeTab, setActiveTab] = useState('pessoal');
   const [uploading, setUploading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [tagRefreshKey, setTagRefreshKey] = useState(0);
+
 
   const parseDate = (dateString: string | null | undefined) => 
     dateString ? new Date(dateString + 'T00:00:00') : null;
@@ -189,9 +191,6 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
   const cepValue = form.watch('cep');
   const isClient = isClientBeingManagedByAdmin || isNewClient;
   
-  // Chave para forçar a re-busca do status da tag após salvar
-  const [tagRefreshKey, setTagRefreshKey] = useState(0);
-
   // --- Funções Auxiliares ---
 
   const handleSelectAll = (select: boolean) => {
@@ -499,8 +498,8 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
     try {
       const dataToUpdate: any = { nome: values.nome };
       
-      if (values.senha) {
-        // Se a senha for alterada, atualiza a senha do usuário no auth
+      // Lógica de Edição de Senha (APENAS SE ESTIVER EDITANDO)
+      if (isEditing && values.senha) {
         const { error: authError } = await supabase.auth.updateUser({ password: values.senha });
         if (authError) throw authError;
       }
@@ -640,17 +639,21 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
     // Se for Cliente, só pode gerenciar permissões que ele mesmo tem acesso
     return permissoesCliente[p.key] === true || p.key === 'visualizar_proprio_ponto' || p.key === 'ponto_eletronico';
   });
+  
+  const isClient = isClientBeingManagedByAdmin || isNewClient;
+  const isContractEditable = criadorRole === 'Admin' || criadorRole === 'Cliente';
+  const resourceId = usuarioInicial?.id;
+  
+  // Permissões que o Admin pode gerenciar para o Cliente (Empresa)
+  const permissoesClienteAdmin = PERMISSOES_DISPONIVEIS.filter(p => p.key !== 'ponto_eletronico' && p.key !== 'visualizar_proprio_ponto');
+
 
   // --- Renderização Principal ---
 
-  if (isClientBeingManagedByAdmin || isNewClient) {
+  if (isClient) {
     // Renderização para Cliente (Empresa)
     const clientProfile = usuarioInicial as ClienteProfile;
-    const resourceId = clientProfile?.id;
     
-    // Permissões que o Admin pode gerenciar para o Cliente (Empresa)
-    const permissoesClienteAdmin = PERMISSOES_DISPONIVEIS.filter(p => p.key !== 'ponto_eletronico' && p.key !== 'visualizar_proprio_ponto');
-
     return (
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -717,9 +720,6 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
   }
 
   // Renderização para Usuário (Funcionário)
-  const isContractEditable = criadorRole === 'Admin' || criadorRole === 'Cliente';
-  const resourceId = usuarioInicial?.id;
-
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
