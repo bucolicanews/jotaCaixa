@@ -190,7 +190,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
   });
   
   const cepValue = form.watch('cep');
-  const isClientScope = isClientBeingManagedByAdmin || isNewClient; // Renomeado para evitar conflito
+  const isClientScope = isClientBeingManagedByAdmin || isNewClient; // Variável de escopo
   
   // --- Funções Auxiliares ---
 
@@ -519,7 +519,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
         if (isNewClient) {
             // CRIAÇÃO DE NOVO CLIENTE (ADMIN) - USANDO INVITE
             
-            const { error: authError } = await supabase.auth.inviteUserAndSendEmail(values.email, {
+            const { error: authError } = await (supabase.auth as any).inviteUserByEmail(values.email, {
                 redirectTo: `${window.location.origin}/atualizar-senha`,
                 data: { role: 'Cliente', nome: values.nome, cliente_id: null }
             });
@@ -600,7 +600,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
         if (isNewUser) {
             // CRIAÇÃO DE NOVO USUÁRIO (FUNCIONÁRIO) - USANDO INVITE
             
-            const { error: authError } = await supabase.auth.inviteUserAndSendEmail(values.email, {
+            const { error: authError } = await (supabase.auth as any).inviteUserByEmail(values.email, {
                 redirectTo: `${window.location.origin}/atualizar-senha`,
                 data: { role: 'Usuario', nome: values.nome, cliente_id: targetClienteId }
             });
