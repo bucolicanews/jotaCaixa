@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { useSessao } from '@/hooks/use-sessao';
-import { Loader2, Plus, Search, Trash2, Edit, Building2 } from 'lucide-react';
+import { Loader2, Plus, Search, Trash2, Edit, Building2, Filter } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -12,19 +12,28 @@ import { showError, showSuccess } from '@/utils/toast';
 import { AnyProfile, UsuarioProfile, UserRole, ClienteProfile } from '@/types/usuario';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 // Tipagem para o perfil de usuário com nome da empresa
 type UsuarioComEmpresa = UsuarioProfile & { nome_empresa?: string };
+
+// Tipo para o filtro de empresa (inclui o Admin)
+interface EmpresaFiltro {
+    id: string;
+    nome: string;
+}
 
 const GerenciarUsuarios: React.FC = () => {
   const { usuario, perfil, role, carregando } = useSessao();
   const [usuarios, setUsuarios] = useState<UsuarioComEmpresa[]>([]);
   const [clientes, setClientes] = useState<ClienteProfile[]>([]);
+  const [empresasFiltro, setEmpresasFiltro] = useState<EmpresaFiltro[]>([]);
   const [carregandoDados, setCarregandoDados] = useState(true);
   const [filtro, setFiltro] = useState('');
+  const [filtroEmpresaId, setFiltroEmpresaId] = useState('todos');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [perfilParaEditar, setPerfilParaEditar] = useState<AnyProfile | null>(null);
   const [activeTab, setActiveTab] = useState(role === 'Admin' ? 'clientes' : 'usuarios');
@@ -36,6 +45,9 @@ const GerenciarUsuarios: React.FC = () => {
     if (!usuario || !role) return;
 
     setCarregandoDados(true);
+    
+    let fetchedClientes: ClienteProfile[] = [];
+    let fetchedUsuarios: UsuarioComEmpresa[] = [];
 
     if (isAdmin) {
       // ADMIN: Busca TODOS os Clientes (Empresas) do sistema
@@ -46,40 +58,46 @@ const GerenciarUsuarios: React.FC = () => {
 
       if (clientesError) {
         showError('Erro ao carregar clientes: ' + clientesError.message);
-        setClientes([]);
       } else {
-        setClientes(clientesData as ClienteProfile[]);
+        fetchedClientes = clientesData as ClienteProfile[];
+        setClientes(fetchedClientes);
       }
       
-      // ADMIN: Busca TODOS os Usuários (Funcionários) do sistema
-      let queryUsuarios = supabase.from('tbl_usuarios').select('*, tbl_clientes(nome)').order('nome', { ascending: true });
+      // Configura opções de filtro para o Admin
+      const adminFilterOption: EmpresaFiltro = { id: usuario.id, nome: 'Meus Usuários (Admin)' };
+      const clientFilterOptions: EmpresaFiltro[] = fetchedClientes.map(c => ({ id: c.id, nome: c.nome }));
+      setEmpresasFiltro([adminFilterOption, ...clientFilterOptions]);
       
-      const { data: usuariosData, error: usuariosError } = await queryUsuarios;
+      // ADMIN: Busca TODOS os Usuários (Funcionários) do sistema
+      // Seleciona o nome do cliente para exibição
+      const { data: usuariosData, error: usuariosError } = await supabase
+        .from('tbl_usuarios')
+        .select('*, tbl_clientes(nome)')
+        .order('nome', { ascending: true });
 
       if (usuariosError) {
         showError('Erro ao carregar usuários: ' + usuariosError.message);
-        setUsuarios([]);
       } else {
-        const mappedData = usuariosData.map(item => {
-          if (isAdmin && item.tbl_clientes) {
-            return { ...item, nome_empresa: item.tbl_clientes.nome } as UsuarioComEmpresa;
-          }
-          return item as UsuarioComEmpresa;
+        fetchedUsuarios = (usuariosData as any[]).map(item => {
+          const nomeEmpresa = item.tbl_clientes?.nome || (item.cliente_id === usuario.id ? 'Meus Usuários (Admin)' : 'N/A');
+          return { ...item, nome_empresa: nomeEmpresa } as UsuarioComEmpresa;
         });
-        setUsuarios(mappedData);
+        setUsuarios(fetchedUsuarios);
       }
 
     } else if (isCliente) {
       // CLIENTE: Busca APENAS seus próprios Usuários (Funcionários)
-      let queryUsuarios = supabase.from('tbl_usuarios').select('*, tbl_clientes(nome)').eq('cliente_id', usuario.id).order('nome', { ascending: true });
-      
-      const { data: usuariosData, error: usuariosError } = await queryUsuarios;
+      const { data: usuariosData, error: usuariosError } = await supabase
+        .from('tbl_usuarios')
+        .select('*')
+        .eq('cliente_id', usuario.id)
+        .order('nome', { ascending: true });
 
       if (usuariosError) {
         showError('Erro ao carregar usuários: ' + usuariosError.message);
-        setUsuarios([]);
       } else {
-        setUsuarios(usuariosData as UsuarioComEmpresa[]);
+        fetchedUsuarios = usuariosData as UsuarioComEmpresa[];
+        setUsuarios(fetchedUsuarios);
       }
     }
     
@@ -100,10 +118,22 @@ const GerenciarUsuarios: React.FC = () => {
   );
 
   const filteredUsuarios = usuarios.filter(u => {
+    const termoBusca = filtro.toLowerCase();
     const nomeEmpresa = u.nome_empresa || '';
-    return u.nome.toLowerCase().includes(filtro.toLowerCase()) ||
-           u.email.toLowerCase().includes(filtro.toLowerCase()) ||
-           nomeEmpresa.toLowerCase().includes(filtro.toLowerCase());
+    
+    // Filtro de texto
+    const textMatch = u.nome.toLowerCase().includes(termoBusca) ||
+           u.email.toLowerCase().includes(termoBusca) ||
+           nomeEmpresa.toLowerCase().includes(termoBusca);
+           
+    if (!textMatch) return false;
+    
+    // Filtro de empresa (apenas para Admin)
+    if (isAdmin && filtroEmpresaId !== 'todos') {
+        return u.cliente_id === filtroEmpresaId;
+    }
+
+    return true;
   });
 
   const handleDelete = async (id: string, nome: string, targetRole: UserRole) => {
@@ -158,7 +188,6 @@ const GerenciarUsuarios: React.FC = () => {
   
   const isManagingClients = activeTab === 'clientes';
   const targetRole = isManagingClients ? 'Cliente' : 'Usuario';
-  // Corrigindo o título da página
   const title = 'Gerenciar Usuários'; 
   const profilesToDisplay = isManagingClients ? filteredClientes : filteredUsuarios;
 
@@ -199,7 +228,7 @@ const GerenciarUsuarios: React.FC = () => {
         </Tabs>
       )}
 
-      <div className="flex mb-4 space-x-2">
+      <div className="flex flex-col sm:flex-row mb-4 gap-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -209,101 +238,119 @@ const GerenciarUsuarios: React.FC = () => {
             className="pl-10"
           />
         </div>
+        
+        {/* Filtro de Empresa (Apenas na aba Usuários e se for Admin) */}
+        {!isManagingClients && isAdmin && (
+            <Select value={filtroEmpresaId} onValueChange={setFiltroEmpresaId}>
+                <SelectTrigger className="w-full sm:w-[250px]">
+                    <Filter className="w-4 h-4 mr-2 text-muted-foreground" />
+                    <SelectValue placeholder="Filtrar por Empresa" />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="todos">Todas as Empresas</SelectItem>
+                    {empresasFiltro.map(e => (
+                        <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>
+                    ))}
+                </SelectContent>
+            </Select>
+        )}
       </div>
 
-      {profilesToDisplay.length === 0 ? (
-        <p className="text-center text-muted-foreground">Nenhum {targetRole} encontrado.</p>
-      ) : (
-        <div className="rounded-md border overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Nome</TableHead>
-                <TableHead>Email</TableHead>
-                {isManagingClients && <TableHead>Limite Usuários</TableHead>}
-                {!isManagingClients && isAdmin && <TableHead>Empresa</TableHead>}
-                {!isManagingClients && <TableHead>Início Contrato</TableHead>}
-                {isManagingClients && <TableHead>Status</TableHead>}
-                <TableHead className="text-right">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {profilesToDisplay.map((p) => {
-                const id = p.id;
-                const nome = p.nome;
-                const email = p.email;
-                
-                if (isManagingClients) {
-                    const cliente = p as ClienteProfile;
-                    const isAprovado = cliente.aprovado;
-                    
-                    return (
-                        <TableRow key={id} className={cn(!isAprovado && "bg-yellow-500/10")}>
-                            <TableCell className="font-medium">{nome}</TableCell>
-                            <TableCell>{email}</TableCell>
-                            <TableCell>{cliente.limite_usuarios}</TableCell>
-                            <TableCell>
-                                <Badge variant={isAprovado ? 'default' : 'warning'}>
-                                    {isAprovado ? 'Aprovado' : 'Pendente'}
-                                </Badge>
-                            </TableCell>
-                            <TableCell className="text-right space-x-2">
-                                <Button 
-                                    variant="outline" 
-                                    size="icon" 
-                                    onClick={() => handleOpenDialog(cliente, 'Cliente')}
-                                >
-                                    <Edit className="h-4 w-4" />
-                                </Button>
-                                <Button 
-                                    variant="destructive" 
-                                    size="icon" 
-                                    onClick={() => handleDelete(id, nome, 'Cliente')}
-                                >
-                                    <Trash2 className="h-4 w-4" />
-                                </Button>
-                            </TableCell>
-                        </TableRow>
-                    );
-                } else {
-                    const userProfile = p as UsuarioComEmpresa;
-                    
-                    return (
-                        <TableRow key={id}>
-                            <TableCell className="font-medium">{nome}</TableCell>
-                            <TableCell>{email}</TableCell>
-                            {isAdmin && (
-                                <TableCell className="text-sm text-muted-foreground">{userProfile.nome_empresa || 'N/A'}</TableCell>
-                            )}
-                            <TableCell>
-                                {userProfile.data_inicio_contrato 
-                                    ? format(new Date(userProfile.data_inicio_contrato!), 'dd/MM/yyyy', { locale: ptBR })
-                                    : 'N/A'}
-                            </TableCell>
-                            <TableCell className="text-right space-x-2">
-                                <Button 
-                                    variant="outline" 
-                                    size="icon" 
-                                    onClick={() => handleOpenDialog(userProfile, 'Usuario')}
-                                >
-                                    <Edit className="h-4 w-4" />
-                                </Button>
-                                <Button 
-                                    variant="destructive" 
-                                    size="icon" 
-                                    onClick={() => handleDelete(id, nome, 'Usuario')}
-                                >
-                                    <Trash2 className="h-4 w-4" />
-                                </Button>
-                            </TableCell>
-                        </TableRow>
-                    );
-                }
-              })}
-            </TableBody>
-          </Table>
-        </div>
-      )}
+      <TabsContent value={activeTab}>
+        {profilesToDisplay.length === 0 ? (
+          <p className="text-center text-muted-foreground">Nenhum {targetRole} encontrado.</p>
+        ) : (
+          <div className="rounded-md border overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Nome</TableHead>
+                  <TableHead>Email</TableHead>
+                  {isManagingClients && <TableHead>Limite Usuários</TableHead>}
+                  {!isManagingClients && isAdmin && <TableHead>Empresa</TableHead>}
+                  {!isManagingClients && <TableHead>Início Contrato</TableHead>}
+                  {isManagingClients && <TableHead>Status</TableHead>}
+                  <TableHead className="text-right">Ações</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {profilesToDisplay.map((p) => {
+                  const id = p.id;
+                  const nome = p.nome;
+                  const email = p.email;
+                  
+                  if (isManagingClients) {
+                      const cliente = p as ClienteProfile;
+                      const isAprovado = cliente.aprovado;
+                      
+                      return (
+                          <TableRow key={id} className={cn(!isAprovado && "bg-yellow-500/10")}>
+                              <TableCell className="font-medium">{nome}</TableCell>
+                              <TableCell>{email}</TableCell>
+                              <TableCell>{cliente.limite_usuarios}</TableCell>
+                              <TableCell>
+                                  <Badge variant={isAprovado ? 'default' : 'warning'}>
+                                      {isAprovado ? 'Aprovado' : 'Pendente'}
+                                  </Badge>
+                              </TableCell>
+                              <TableCell className="text-right space-x-2">
+                                  <Button 
+                                      variant="outline" 
+                                      size="icon" 
+                                      onClick={() => handleOpenDialog(cliente, 'Cliente')}
+                                  >
+                                      <Edit className="h-4 w-4" />
+                                  </Button>
+                                  <Button 
+                                      variant="destructive" 
+                                      size="icon" 
+                                      onClick={() => handleDelete(id, nome, 'Cliente')}
+                                  >
+                                      <Trash2 className="h-4 w-4" />
+                                  </Button>
+                              </TableCell>
+                          </TableRow>
+                      );
+                  } else {
+                      const userProfile = p as UsuarioComEmpresa;
+                      
+                      return (
+                          <TableRow key={id}>
+                              <TableCell className="font-medium">{nome}</TableCell>
+                              <TableCell>{email}</TableCell>
+                              {isAdmin && (
+                                  <TableCell className="text-sm text-muted-foreground">{userProfile.nome_empresa || 'N/A'}</TableCell>
+                              )}
+                              <TableCell>
+                                  {userProfile.data_inicio_contrato 
+                                      ? format(new Date(userProfile.data_inicio_contrato!), 'dd/MM/yyyy', { locale: ptBR })
+                                      : 'N/A'}
+                              </TableCell>
+                              <TableCell className="text-right space-x-2">
+                                  <Button 
+                                      variant="outline" 
+                                      size="icon" 
+                                      onClick={() => handleOpenDialog(userProfile, 'Usuario')}
+                                  >
+                                      <Edit className="h-4 w-4" />
+                                  </Button>
+                                  <Button 
+                                      variant="destructive" 
+                                      size="icon" 
+                                      onClick={() => handleDelete(id, nome, 'Usuario')}
+                                  >
+                                      <Trash2 className="h-4 w-4" />
+                                  </Button>
+                              </TableCell>
+                          </TableRow>
+                      );
+                  }
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </TabsContent>
     </LayoutPrincipal>
   );
 };
