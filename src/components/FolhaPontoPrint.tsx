@@ -86,6 +86,23 @@ const FolhaPontoPrint: React.FC<FolhaPontoPrintProps> = ({
         
         return '';
     };
+    
+    // Função auxiliar para extrair as 4 primeiras batidas
+    const getBatidasDoDia = (registros: RegistroPonto[]) => {
+        const batidas = registros
+            .filter(r => r.tipo === 'Entrada' || r.tipo === 'Saida')
+            .sort((a, b) => parseISO(a.horario_registro).getTime() - parseISO(b.horario_registro).getTime());
+            
+        const times = batidas.map(r => format(parseISO(r.horario_registro), 'HH:mm'));
+        
+        // Retorna as 4 primeiras batidas (E1, S1, E2, S2)
+        return {
+            e1: times[0] || '',
+            s1: times[1] || '',
+            e2: times[2] || '',
+            s2: times[3] || '',
+        };
+    };
 
     return (
         <div className="print-container">
@@ -118,12 +135,14 @@ const FolhaPontoPrint: React.FC<FolhaPontoPrintProps> = ({
                 <table className="print-table">
                     <thead>
                         <tr>
-                            <th style={{ width: '10%' }}>Data</th>
-                            <th style={{ width: '10%' }}>Dia</th>
-                            <th style={{ width: '30%' }}>Entradas</th>
-                            <th style={{ width: '30%' }}>Saídas</th>
+                            <th style={{ width: '8%' }}>Data</th>
+                            <th style={{ width: '8%' }}>Dia</th>
+                            <th style={{ width: '10%' }}>Entrada 1</th>
+                            <th style={{ width: '10%' }}>Saída 1</th>
+                            <th style={{ width: '10%' }}>Entrada 2</th>
+                            <th style={{ width: '10%' }}>Saída 2</th>
                             <th style={{ width: '10%' }}>Total Dia</th>
-                            <th style={{ width: '10%' }}>Observações</th>
+                            <th style={{ width: '24%' }}>Observações</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -132,9 +151,7 @@ const FolhaPontoPrint: React.FC<FolhaPontoPrintProps> = ({
                             const data = parseISO(diaString);
                             const diaSemana = format(data, 'EEE', { locale: ptBR });
                             
-                            const batidas = diaData.registros.filter(r => r.tipo === 'Entrada' || r.tipo === 'Saida');
-                            const entradas = batidas.filter(r => r.tipo === 'Entrada');
-                            const saidas = batidas.filter(r => r.tipo === 'Saida');
+                            const { e1, s1, e2, s2 } = getBatidasDoDia(diaData.registros);
                             
                             const observacaoPrincipal = getObservacaoPrincipal(diaData);
                                 
@@ -158,8 +175,10 @@ const FolhaPontoPrint: React.FC<FolhaPontoPrintProps> = ({
                                 <tr key={diaString}>
                                     <td>{format(data, 'dd/MM')}</td>
                                     <td>{diaSemana}</td>
-                                    <td>{entradas.map(r => format(parseISO(r.horario_registro), 'HH:mm')).join(' | ')}</td>
-                                    <td>{saidas.map(r => format(parseISO(r.horario_registro), 'HH:mm')).join(' | ')}</td>
+                                    <td>{e1}</td>
+                                    <td>{s1}</td>
+                                    <td>{e2}</td>
+                                    <td>{s2}</td>
                                     <td>{totalDiaDisplay}</td>
                                     <td>{observacaoPrincipal}</td>
                                 </tr>
