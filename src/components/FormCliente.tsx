@@ -94,7 +94,7 @@ const TaggedFormField: React.FC<TaggedFormFieldProps> = ({ control, fieldName, l
                         </Label>
                     </div>
                 </div>
-                <FormControl><Input placeholder={placeholder} {...field} disabled={disabled} /></FormControl>
+                <FormControl><Input placeholder={placeholder} {...field} value={(field.value as string) || ''} disabled={disabled} /></FormControl>
                 <FormMessage />
             </FormItem>
         )} />
@@ -131,8 +131,15 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
   const cepValue = form.watch('cep');
 
   const getOwnerId = () => {
-    if (role === 'Admin' || role === 'Cliente') return (perfil as any)?.id;
+    // Se for Admin, ele não é o owner de uma empresa cliente, então o ownerId deve ser NULL
+    if (role === 'Admin') return null; 
+    
+    // Se for Cliente, o ownerId é o seu próprio ID
+    if (role === 'Cliente') return (perfil as any)?.id;
+    
+    // Se for Usuário, o ownerId é o ID da empresa vinculada
     if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id;
+    
     return null;
   };
   
@@ -191,8 +198,13 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
 
   const onSubmit = async (values: FormValues) => {
     const ownerId = getOwnerId();
-    if (!ownerId) {
-      showError('Não foi possível identificar o proprietário (empresa/admin). Não é possível salvar.');
+    
+    // Se for Admin, ownerId é NULL, o que é esperado.
+    // Se for Cliente/Usuário, ownerId é o ID da empresa, o que é esperado.
+    
+    // Se for Cliente/Usuário e ownerId for NULL, não pode salvar.
+    if (role !== 'Admin' && !ownerId) {
+      showError('Não foi possível identificar o proprietário (empresa). Não é possível salvar.');
       return;
     }
 
@@ -214,7 +226,8 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
       cidade: values.cidade || null,
       estado: values.estado || null,
       
-      empresa_id: ownerId,
+      // Se for Admin, empresa_id é NULL. Se for Cliente/Usuário, é o ownerId.
+      empresa_id: ownerId, 
     };
 
     let error = null;
