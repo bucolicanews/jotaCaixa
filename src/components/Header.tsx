@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '@/contexts/ThemeProvider';
 import { Button } from '@/components/ui/button';
-import { Sun, Moon, LogOut, Menu, User, Settings, Key } from 'lucide-react';
+import { Sun, Moon, LogOut, Menu, User, Settings, Key, CalendarCheck } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
@@ -11,6 +11,8 @@ import { useSessao } from '@/hooks/use-sessao';
 import UserAvatar from './UserAvatar';
 import { Link } from 'react-router-dom';
 import { UsuarioProfile, ClienteProfile } from '@/types/usuario';
+import { format, parseISO } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 const ThemeToggle = () => {
   const { theme, setTheme } = useTheme();
@@ -81,6 +83,10 @@ const Header: React.FC = () => {
     if (error) console.error('Falha ao enviar email de reset:', error);
     else alert('Link de redefinição de senha enviado para seu email.');
   };
+  
+  const clienteProfile = perfil && 'limite_usuarios' in perfil ? perfil as ClienteProfile : null;
+  const dataFimAcesso = clienteProfile?.data_fim_acesso;
+  const dataFimFormatada = dataFimAcesso ? format(parseISO(dataFimAcesso), 'dd/MM/yyyy', { locale: ptBR }) : null;
 
   return (
     <header className={cn(
@@ -127,6 +133,15 @@ const Header: React.FC = () => {
                   </p>
                 </div>
               </DropdownMenuLabel>
+              
+              {/* NOVO ITEM: Data de Expiração do Acesso (Apenas para Clientes) */}
+              {clienteProfile && dataFimFormatada && (
+                  <DropdownMenuItem className="text-xs text-muted-foreground cursor-default" disabled>
+                      <CalendarCheck className="mr-2 h-4 w-4" />
+                      Expira em: {dataFimFormatada}
+                  </DropdownMenuItem>
+              )}
+              
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild>
                 <Link to="/perfil">

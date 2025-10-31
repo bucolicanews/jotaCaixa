@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useSessao } from '@/hooks/use-sessao';
 import { ClienteProfile } from '@/types/usuario';
 import { supabase } from '@/integrations/supabase/client';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, isFuture, isToday, differenceInDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -14,9 +14,10 @@ interface PlanoInfo {
 }
 
 const TrialBanner: React.FC = () => {
-    const { perfil, role, usuario, carregando } = useSessao();
+    const { perfil, role, carregando } = useSessao();
     const [planoInfo, setPlanoInfo] = useState<PlanoInfo | null>(null);
     const [dataFimAcesso, setDataFimAcesso] = useState<Date | null>(null);
+    const [isTrial, setIsTrial] = useState(false);
     const [loading, setLoading] = useState(true);
 
     const isClient = role === 'Cliente';
@@ -41,9 +42,23 @@ const TrialBanner: React.FC = () => {
             return;
         }
         
-        // 2. Usar a data de fim de acesso salva no perfil
-        setDataFimAcesso(parseISO(clienteProfile.data_fim_acesso));
+        const dataFim = parseISO(clienteProfile.data_fim_acesso);
+        setDataFimAcesso(dataFim);
         setPlanoInfo(planoData as PlanoInfo);
+        
+        // 2. Determinar se é Trial
+        // Se a data de fim de acesso for igual à data de criação + dias de trial, é um trial.
+        // Como não temos a data de criação do usuário aqui, vamos simplificar:
+        // Se a data de fim de acesso for futura e a diferença de dias for próxima ao dias_trial, consideramos trial.
+        // Para ser mais preciso, vamos assumir que se a data de fim de acesso for menor que 30 dias a partir de hoje, é um trial.
+        
+        const daysRemaining = differenceInDays(dataFim, new Date());
+        
+        // Se a data de fim de acesso for futura e o plano tiver dias de trial > 0, e estivermos dentro do período de trial (ex: 30 dias), consideramos trial.
+        // Simplificando: Se a data de fim de acesso for menor ou igual a 30 dias no futuro, é trial.
+        const isTrialPeriod = isFuture(dataFim) && daysRemaining <= 30; 
+        
+        setIsTrial(isTrialPeriod);
         setLoading(false);
 
     }, [isClient, clienteProfile]);
@@ -54,8 +69,9 @@ const TrialBanner: React.FC = () => {
         }
     }, [carregando, fetchPlanoDetails]);
 
-    if (loading || carregando || !isClient || !planoInfo || !dataFimAcesso) {
-        return null; // Não renderiza se não for cliente, estiver carregando ou faltar dados
+    // O banner só é exibido se for um cliente E estiver em período de trial
+    if (loading || carregando || !isClient || !planoInfo || !dataFimAcesso || !isTrial) {
+        return null; 
     }
 
     const dataCobranca = format(dataFimAcesso, 'dd/MM/yyyy', { locale: ptBR });
