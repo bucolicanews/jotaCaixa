@@ -15,9 +15,6 @@ export const CAMPOS_CLIENTE_MAPA: { field: string, label: string, tag: string }[
     { field: 'bairro', label: 'Bairro', tag: '{{CLIENTE_BAIRRO}}' },
     { field: 'cidade', label: 'Cidade', tag: '{{CLIENTE_CIDADE}}' },
     { field: 'estado', label: 'Estado (UF)', tag: '{{CLIENTE_ESTADO}}' },
-    { field: 'rg', label: 'RG', tag: '{{CLIENTE_RG}}' }, // Adicionado RG
-    { field: 'nome_mae', label: 'Nome da Mãe', tag: '{{CLIENTE_NOME_MAE}}' }, // Adicionado Nome da Mãe
-    { field: 'nome_pai', label: 'Nome do Pai', tag: '{{CLIENTE_NOME_PAI}}' }, // Adicionado Nome do Pai
 ];
 
 export const CAMPOS_USUARIO_MAPA: { field: string, label: string, tag: string }[] = [
