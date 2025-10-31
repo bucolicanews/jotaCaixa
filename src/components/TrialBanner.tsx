@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useSessao } from '@/hooks/use-sessao';
 import { ClienteProfile } from '@/types/usuario';
 import { supabase } from '@/integrations/supabase/client';
-import { format, addDays, parseISO } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -23,7 +23,7 @@ const TrialBanner: React.FC = () => {
     const clienteProfile = perfil as ClienteProfile;
 
     const fetchPlanoDetails = useCallback(async () => {
-        if (!isClient || !clienteProfile?.plano_id || !usuario) {
+        if (!isClient || !clienteProfile?.plano_id || !clienteProfile.data_fim_acesso) {
             setLoading(false);
             return;
         }
@@ -41,24 +41,12 @@ const TrialBanner: React.FC = () => {
             return;
         }
         
-        // 2. Determinar a data de fim do acesso
-        let dataFim: Date | null = null;
-        
-        if (clienteProfile.data_fim_acesso) {
-            // Prioriza a data de fim de acesso registrada no perfil (trial ou pagamento)
-            dataFim = parseISO(clienteProfile.data_fim_acesso);
-        } else if (usuario) {
-            // Fallback: Se não estiver definida, usa a data de criação do usuário + dias de trial
-            const createdAt = usuario.created_at;
-            const dataCadastro = parseISO(createdAt);
-            dataFim = addDays(dataCadastro, planoData.dias_trial);
-        }
-        
+        // 2. Usar a data de fim de acesso salva no perfil
+        setDataFimAcesso(parseISO(clienteProfile.data_fim_acesso));
         setPlanoInfo(planoData as PlanoInfo);
-        setDataFimAcesso(dataFim);
         setLoading(false);
 
-    }, [isClient, clienteProfile, usuario]);
+    }, [isClient, clienteProfile]);
 
     useEffect(() => {
         if (!carregando) {
