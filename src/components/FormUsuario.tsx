@@ -639,6 +639,9 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
     const clientProfile = usuarioInicial as ClienteProfile;
     const resourceId = clientProfile.id;
     
+    // Permissões que o Admin pode gerenciar para o Cliente (Empresa)
+    const permissoesClienteAdmin = PERMISSOES_DISPONIVEIS.filter(p => p.key !== 'ponto_eletronico' && p.key !== 'visualizar_proprio_ponto');
+
     return (
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -803,7 +806,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4 rounded-lg border p-4">
-              {PERMISSOES_DISPONIVEIS.filter(p => p.key !== 'ponto_eletronico' && p.key !== 'visualizar_proprio_ponto').map((p: Permissao) => (
+              {permissoesClienteAdmin.map((p: Permissao) => (
                 <FormField key={p.key} control={form.control as unknown as Control<FormValues>} name={`permissoes.${p.key}`} render={({ field }) => (
                   <FormItem className="flex flex-row items-start space-x-3 space-y-0">
                     <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} disabled={!isEditing} /></FormControl>
