@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { useSessao } from '@/hooks/use-sessao';
-import { Loader2, Plus, Search, Trash2, Edit, Building2, Filter } from 'lucide-react';
+import { Loader2, Plus, Search, Trash2, Edit, Building2, Filter, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -177,6 +177,23 @@ const GerenciarUsuarios: React.FC = () => {
       showError('Falha ao deletar conta: ' + error.message);
     }
   };
+  
+  const handleAprovarCliente = async (cliente: ClienteProfile) => {
+    if (!window.confirm(`Tem certeza que deseja aprovar a empresa ${cliente.nome}?`)) return;
+    
+    setCarregandoDados(true);
+    const { error } = await supabase
+        .from('tbl_clientes')
+        .update({ aprovado: true })
+        .eq('id', cliente.id);
+        
+    if (error) {
+        showError('Erro ao aprovar cliente: ' + error.message);
+    } else {
+        showSuccess(`Empresa ${cliente.nome} aprovada com sucesso!`);
+        fetchDados();
+    }
+  };
 
   const handleSaveComplete = () => {
     setIsDialogOpen(false);
@@ -236,7 +253,17 @@ const GerenciarUsuarios: React.FC = () => {
                                             {isAprovado ? 'Aprovado' : 'Pendente'}
                                         </Badge>
                                     </TableCell>
-                                    <TableCell className="text-right space-x-2">
+                                    <TableCell className="text-right space-x-2 min-w-[150px]">
+                                        {!isAprovado && (
+                                            <Button 
+                                                variant="default" 
+                                                size="sm" 
+                                                onClick={() => handleAprovarCliente(cliente)}
+                                                className="h-8"
+                                            >
+                                                <CheckCircle className="h-4 w-4 mr-1" /> Aprovar
+                                            </Button>
+                                        )}
                                         <Button 
                                             variant="outline" 
                                             size="icon" 
