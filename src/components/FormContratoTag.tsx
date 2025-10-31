@@ -10,6 +10,8 @@ import { Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { ContratoTag } from '@/types/contratos';
+import { useSessao } from '@/hooks/use-sessao';
+import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 
 const formSchema = z.object({
   nome_tag: z.string().min(3, 'A tag deve ter pelo menos 3 caracteres.').regex(/^\{\{[a-z0-9_]+\}\}$/, 'A tag deve estar no formato {{nome_tag}} e conter apenas letras minúsculas, números e underscore.'),
@@ -26,6 +28,16 @@ interface FormContratoTagProps {
 
 const FormContratoTag: React.FC<FormContratoTagProps> = ({ tagInicial, onSaveComplete }) => {
   const isEditing = !!tagInicial;
+  const { role, perfil, usuario } = useSessao();
+  
+  const getOwnerId = () => {
+    if (role === 'Admin') return usuario?.id || null;
+    if (role === 'Cliente') return (perfil as ClienteProfile)?.id;
+    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id;
+    return null;
+  };
+  
+  const ownerId = getOwnerId();
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -37,10 +49,16 @@ const FormContratoTag: React.FC<FormContratoTagProps> = ({ tagInicial, onSaveCom
   });
 
   const onSubmit = async (values: FormValues) => {
+    if (!ownerId) {
+        showError('ID do proprietário não encontrado. Não é possível salvar.');
+        return;
+    }
+    
     const dataToSave = {
       nome_tag: values.nome_tag,
       descricao: values.descricao,
       origem_dado: values.origem_dado || null,
+      empresa_id: ownerId, // Usando o ID do Admin/Cliente
     };
 
     let error = null;

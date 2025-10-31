@@ -35,7 +35,7 @@ interface EmpresaLogada {
 const PreencherContrato: React.FC = () => {
   const { modeloId } = useParams<{ modeloId: string }>();
   const navigate = useNavigate();
-  const { role, perfil, carregando: carregandoSessao } = useSessao();
+  const { role, perfil, usuario, carregando: carregandoSessao } = useSessao();
   
   const [modelo, setModelo] = useState<ContratoModelo | null>(null);
   const [tags, setTags] = useState<ContratoTag[]>([]);
@@ -64,21 +64,24 @@ const PreencherContrato: React.FC = () => {
   const [dataPrimeiroVencimento, setDataPrimeiroVencimento] = useState<Date | undefined>(undefined);
   const [intervaloDias, setIntervaloDias] = useState<number>(30); // Usado para Repetir/Parcelar
 
-  const isCliente = role === 'Cliente';
   const isAdmin = role === 'Admin';
-  const empresaId = isCliente ? (perfil as ClienteProfile)?.id : (role === 'Usuario' ? (perfil as UsuarioProfile)?.cliente_id : null);
-
+  const isCliente = role === 'Cliente';
+  
+  // ID do proprietário (Admin ou Cliente)
   const getOwnerId = () => {
-    if (role === 'Admin' || role === 'Cliente') return (perfil as any)?.id;
+    if (isAdmin) return usuario?.id || null;
+    if (isCliente) return (perfil as ClienteProfile)?.id;
     if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id;
     return null;
   };
   
+  const ownerId = getOwnerId();
+
   const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
   const formatDate = (date: Date) => format(date, 'dd/MM/yyyy');
 
   const buscarDados = useCallback(async () => {
-    if (!modeloId || !empresaId) {
+    if (!modeloId || !ownerId) {
         setCarregandoDados(false);
         return;
     }
@@ -99,11 +102,11 @@ const PreencherContrato: React.FC = () => {
     }
     setModelo(modeloData as ContratoModelo);
     
-    // 2. Buscar Tags (apenas as da empresa ou globais)
+    // 2. Buscar Tags (apenas as do ownerId)
     const { data: tagsData, error: tagsError } = await supabase
         .from('contrato_tags')
         .select('*')
-        .or(`empresa_id.eq.${empresaId},empresa_id.is.null`)
+        .eq('empresa_id', ownerId)
         .order('nome_tag');
         
     if (tagsError) {
@@ -113,8 +116,7 @@ const PreencherContrato: React.FC = () => {
         setTags(tagsData as ContratoTag[]);
     }
     
-    // 3. Buscar Clientes
-    const ownerId = getOwnerId();
+    // 3. Buscar Clientes (apenas os do ownerId)
     let fetchedClientes: Cliente[] = [];
     if (ownerId) {
         const { data: clientesData, error: clientesError } = await supabase
@@ -132,7 +134,15 @@ const PreencherContrato: React.FC = () => {
     }
     
     // 4. Buscar Dados da Empresa Logada (Cliente/Admin)
-    if (role === 'Cliente' || role === 'Admin') {
+    if (isAdmin) {
+        const profile = perfil as ClienteProfile; // Admin usa o perfil de Admin, mas buscamos dados básicos
+        setEmpresaLogada({
+            nome: profile.nome,
+            email: profile.email,
+            documento: null, // Admin não tem documento na tbl_admins
+            endereco_completo: null,
+        });
+    } else if (isCliente) {
         const profile = perfil as ClienteProfile;
         setEmpresaLogada({
             nome: profile.nome,
@@ -140,29 +150,28 @@ const PreencherContrato: React.FC = () => {
             documento: profile.documento,
             endereco_completo: profile.endereco_completo,
         });
-    } else if (role === 'Usuario' && empresaId) {
+    } else if (role === 'Usuario' && ownerId) {
         // Se for usuário, busca os dados da empresa vinculada
-        const { data: empresaData } = await supabase.from('tbl_clientes').select('nome, email, documento, endereco_completo').eq('id', empresaId).single();
+        const { data: empresaData } = await supabase.from('tbl_clientes').select('nome, email, documento, endereco_completo').eq('id', ownerId).single();
         if (empresaData) {
             setEmpresaLogada(empresaData);
         }
     }
     
-    // 5. Determinar o tipo de conteúdo do modelo (Assumindo HTML se não houver metadado)
-    // Para simplificar, vamos assumir que se o template começar com <, é HTML. Caso contrário, é texto.
+    // 5. Determinar o tipo de conteúdo do modelo
     const isHtmlContent = modeloData?.conteudo_template?.trim().startsWith('<') ?? true;
     setTipoConteudo(isHtmlContent ? 'html' : 'texto');
 
     setCarregandoDados(false);
-  }, [modeloId, empresaId, navigate, role, perfil]);
+  }, [modeloId, ownerId, navigate, role, perfil, usuario, isAdmin, isCliente]);
 
   useEffect(() => {
-    if (!carregandoSessao && (isAdmin || isCliente || (role === 'Usuario' && empresaId))) {
+    if (!carregandoSessao && (isAdmin || isCliente || (role === 'Usuario' && ownerId))) {
       buscarDados();
     } else if (!carregandoSessao && !isAdmin && !isCliente) {
         navigate('/painel', { replace: true });
     }
-  }, [carregandoSessao, isAdmin, isCliente, role, empresaId, buscarDados, navigate]);
+  }, [carregandoSessao, isAdmin, isCliente, role, ownerId, buscarDados, navigate]);
   
   // Efeito para preencher tags padrão automaticamente
   useEffect(() => {
@@ -318,7 +327,7 @@ const PreencherContrato: React.FC = () => {
                 numero_parcela: i + 1,
                 valor_parcela: valorParcela,
                 data_vencimento: format(dataVencimento, 'yyyy-MM-dd'),
-                status: 'aberta',
+                status: 'aberta'
             });
         }
     }
@@ -330,8 +339,8 @@ const PreencherContrato: React.FC = () => {
     const numParcelas = Number(numeroParcelas);
     
     // 1. Validação
-    if (!modelo || !clienteSelecionadoId || valorTotal === '' || !empresaId || valorNumerico <= 0) {
-        showError('Preencha Cliente e Valor Total.');
+    if (!modelo || !clienteSelecionadoId || valorTotal === '' || !ownerId || valorNumerico <= 0) {
+        showError('Preencha Cliente, Valor Total e Proprietário.');
         return;
     }
     
@@ -382,7 +391,7 @@ const PreencherContrato: React.FC = () => {
         const contratoData = {
             modelo_id: modelo.id,
             cliente_id: clienteSelecionadoId,
-            empresa_id: empresaId,
+            empresa_id: ownerId, // ID do Admin/Cliente
             status: 'pendente_assinatura',
             valor_total: valorFinalContrato,
             data_inicio: format(new Date(), 'yyyy-MM-dd'), // Data de criação do contrato
@@ -407,7 +416,7 @@ const PreencherContrato: React.FC = () => {
         const clienteNome = clientes.find(c => c.id === clienteSelecionadoId)?.nome || 'Cliente Desconhecido';
         const contaReceberData = {
             cliente_id: clienteSelecionadoId,
-            empresa_id: empresaId,
+            empresa_id: ownerId, // ID do Admin/Cliente
             descricao: `Contrato: ${modelo.titulo} - ${clienteNome}`,
             valor_total: valorFinalContrato,
             data_emissao: format(new Date(), 'yyyy-MM-dd'),
@@ -432,7 +441,7 @@ const PreencherContrato: React.FC = () => {
         const parcelasComId = parcelasParaInserir.map(p => ({ 
             ...p, 
             conta_receber_id: contaReceberId, 
-            empresa_id: empresaId 
+            empresa_id: ownerId // ID do Admin/Cliente
         }));
         
         const { error: parcelError } = await supabase

@@ -36,18 +36,20 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
   const [previewOpen, setPreviewOpen] = useState(false);
   const [tagsAtivas, setTagsAtivas] = useState<ContratoTag[]>(TAGS_FINANCEIRAS_OBRIGATORIAS);
   const [carregandoTags, setCarregandoTags] = useState(true);
-  const { role, perfil } = useSessao();
+  const { role, perfil, usuario } = useSessao();
   
   const isCliente = role === 'Cliente';
   const isAdmin = role === 'Admin';
   
-  const getEmpresaId = () => {
+  // Determina o ID a ser usado na coluna empresa_id
+  const getOwnerId = () => {
+    if (isAdmin) return usuario?.id || null; // Admin usa seu próprio ID
     if (isCliente) return (perfil as ClienteProfile)?.id;
     if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id;
     return null;
   };
   
-  const empresaIdLogada = getEmpresaId();
+  const ownerId = getOwnerId(); // ID que será usado para filtrar tags e salvar o modelo
 
   const buscarTagsAtivas = useCallback(async () => {
     setCarregandoTags(true);
@@ -57,11 +59,11 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
       .select('*')
       .order('nome_tag', { ascending: true });
       
-    if (empresaIdLogada) {
-        query = query.eq('empresa_id', empresaIdLogada);
-    } else if (isAdmin) {
-        // Admin pode ver todas as tags customizadas (se houver)
+    if (ownerId) {
+        // Cliente/Admin vê suas próprias tags
+        query = query.eq('empresa_id', ownerId);
     } else {
+        // Se não houver ownerId (ex: Usuário não vinculado), mostra apenas padrão
         setTagsAtivas(TAGS_FINANCEIRAS_OBRIGATORIAS);
         setCarregandoTags(false);
         return;
@@ -79,7 +81,7 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
       setTagsAtivas(combinedTags);
     }
     setCarregandoTags(false);
-  }, [empresaIdLogada, isAdmin]);
+  }, [ownerId]);
   
   useEffect(() => {
       buscarTagsAtivas();
@@ -100,10 +102,15 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
   const tipoConteudo = form.watch('tipo_conteudo');
 
   const onSubmit = async (values: FormValues) => {
+    if (!ownerId) {
+        showError('ID do proprietário não encontrado. Não é possível salvar.');
+        return;
+    }
+    
     const dataToSave = {
       titulo: values.titulo,
       conteudo_template: values.conteudo_template,
-      empresa_id: empresaId, // Será null para Admin, ou o ID do Cliente
+      empresa_id: ownerId, // Usando o ID do Admin/Cliente
     };
 
     let error = null;

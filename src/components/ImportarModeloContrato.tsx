@@ -6,6 +6,7 @@ import { Upload, Loader2, FileText } from 'lucide-react';
 import { showSuccess, showError } from '@/utils/toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Label } from '@/components/ui/label';
+import { useSessao } from '@/hooks/use-sessao';
 
 interface ImportarModeloContratoProps {
   empresaId: string | null;
@@ -13,9 +14,20 @@ interface ImportarModeloContratoProps {
 }
 
 const ImportarModeloContrato: React.FC<ImportarModeloContratoProps> = ({ empresaId, onImportComplete }) => {
+  const { role, usuario } = useSessao();
   const [file, setFile] = useState<File | null>(null);
   const [titulo, setTitulo] = useState('');
   const [loading, setLoading] = useState(false);
+  
+  const isAdmin = role === 'Admin';
+  
+  // Determina o ID a ser usado na coluna empresa_id
+  const getOwnerId = () => {
+    if (isAdmin) return usuario?.id || null; // Admin usa seu próprio ID
+    return empresaId;
+  };
+  
+  const ownerId = getOwnerId();
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files[0]) {
@@ -33,6 +45,10 @@ const ImportarModeloContrato: React.FC<ImportarModeloContratoProps> = ({ empresa
     if (!file || !titulo.trim()) {
       showError('Por favor, selecione um arquivo e insira um título.');
       return;
+    }
+    if (!ownerId) {
+        showError('ID do proprietário não encontrado. Não é possível importar.');
+        return;
     }
 
     setLoading(true);
@@ -52,7 +68,7 @@ const ImportarModeloContrato: React.FC<ImportarModeloContratoProps> = ({ empresa
             const dataToInsert = {
               titulo: titulo.trim(),
               conteudo_template: conteudo,
-              empresa_id: empresaId,
+              empresa_id: ownerId, // Usando o ID do Admin/Cliente
             };
 
             const { error: insertError } = await supabase
