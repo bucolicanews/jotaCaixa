@@ -25,20 +25,17 @@ const Vendas: React.FC = () => {
                 Gerencie contas a pagar, a receber, folha de ponto e contratos em uma única plataforma multi-tenant, segura e eficiente.
             </p>
             
-            <Link to="/login">
-                <Button 
-                    size="lg" 
-                    className="text-lg px-8 py-6 shadow-lg hover:shadow-xl transition-all"
-                >
-                    Fazer Login ou Cadastrar
-                </Button>
-            </Link>
+            <Button 
+                onClick={scrollToPlans} 
+                size="lg" 
+                className="text-lg px-8 py-6 shadow-lg hover:shadow-xl transition-all"
+            >
+                Ver Planos e Iniciar Trial Grátis
+                <ArrowDown className="w-5 h-5 ml-2" />
+            </Button>
             
             <div className="mt-12 text-center">
-                <p className="text-sm text-muted-foreground">Veja os detalhes dos planos abaixo.</p>
-                <Button variant="link" onClick={scrollToPlans} className="p-0 h-auto text-primary">
-                    <ArrowDown className="w-4 h-4 mr-1" /> Ver Planos
-                </Button>
+                <p className="text-sm text-muted-foreground">Já é cliente? <Link to="/login" className="text-primary hover:underline">Faça login aqui.</Link></p>
             </div>
         </div>
 
