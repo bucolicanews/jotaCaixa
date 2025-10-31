@@ -20,7 +20,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import GerenciarFerias from './GerenciarFerias';
-// import { CAMPOS_USUARIO_MAPA } from '@/config/contrato-campos-mapeaveis'; // REMOVIDO: Não utilizado
+import { useSessao } from '@/hooks/use-sessao';
 
 // Esquema de validação para os campos de URL (opcional)
 const urlSchema = z.string().url('URL inválida.').optional().or(z.literal(''));
@@ -97,12 +97,23 @@ const DIAS_DA_SEMANA = [
 ];
 
 const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }) => {
+  const { role } = useSessao();
+  
   // Verificação de tipo garantida pela prop, mas para segurança do runtime:
   if (!perfilInicial) return null; 
     
   const isClient = 'limite_usuarios' in perfilInicial;
   const isUser = 'cliente_id' in perfilInicial;
   const profileToEdit = perfilInicial as UsuarioProfile | ClienteProfile;
+  
+  // Determina se o usuário logado é o Admin
+  const isLoggedUserAdmin = role === 'Admin';
+  
+  // Determina se o usuário logado é o próprio Cliente que está sendo editado
+  const isEditingOwnClientProfile = isClient && role === 'Cliente';
+  
+  // Campos administrativos devem ser bloqueados se for o próprio Cliente
+  const isAdministrativeFieldDisabled = isEditingOwnClientProfile;
   
   const [activeTab, setActiveTab] = useState('pessoal');
   const [uploading, setUploading] = useState(false);
@@ -203,8 +214,12 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
 
       if (isClient) {
         // Edição de Cliente (Empresa)
-        dataToUpdate.limite_usuarios = values.limite_usuarios;
-        dataToUpdate.permissoes = values.permissoes;
+        
+        // Apenas Admin pode alterar limite_usuarios e permissoes
+        if (isLoggedUserAdmin) {
+            dataToUpdate.limite_usuarios = values.limite_usuarios;
+            dataToUpdate.permissoes = values.permissoes;
+        }
         
         // Campos de Tags (Dados Cadastrais do Cliente)
         dataToUpdate.cpf = values.cpf || null;
@@ -224,18 +239,30 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
         if (error) throw error;
       } else if (isUser) {
         // Edição de Usuário (Funcionário)
-        dataToUpdate.permissoes = values.permissoes;
         
-        // Dados de Folga
-        dataToUpdate.dias_folga_fixos = values.dias_folga_fixos || [];
-        dataToUpdate.folga_domingo_obrigatoria = values.folga_domingo_obrigatoria;
+        // Permissões e dados de RH só podem ser alterados pelo Admin/Cliente (gestor)
+        const canEditUserAdminFields = role === 'Admin' || role === 'Cliente';
         
-        // Dados de Salário/Jornada
-        dataToUpdate.salario = values.salario;
-        dataToUpdate.horas_semanais = values.horas_semanais;
-        dataToUpdate.horas_mensais = values.horas_mensais;
+        if (canEditUserAdminFields) {
+            dataToUpdate.permissoes = values.permissoes;
+            
+            // Dados de Folga
+            dataToUpdate.dias_folga_fixos = values.dias_folga_fixos || [];
+            dataToUpdate.folga_domingo_obrigatoria = values.folga_domingo_obrigatoria;
+            
+            // Dados de Salário/Jornada
+            dataToUpdate.salario = values.salario;
+            dataToUpdate.horas_semanais = values.horas_semanais;
+            dataToUpdate.horas_mensais = values.horas_mensais;
 
-        // Dados Cadastrais
+            // Dados Contratuais
+            dataToUpdate.data_inicio_contrato = values.data_inicio_contrato ? format(values.data_inicio_contrato, 'yyyy-MM-dd') : null;
+            dataToUpdate.data_fim_contrato = values.data_fim_contrato ? format(values.data_fim_contrato, 'yyyy-MM-dd') : null;
+            dataToUpdate.data_inicio_aviso = values.data_inicio_aviso ? format(values.data_inicio_aviso, 'yyyy-MM-dd') : null;
+            dataToUpdate.tipo_aviso = values.tipo_aviso === 'Nenhum' ? null : values.tipo_aviso;
+        }
+
+        // Dados Cadastrais e Documentos podem ser editados pelo próprio usuário
         dataToUpdate.cpf = values.cpf || null;
         dataToUpdate.rg = values.rg || null;
         dataToUpdate.nome_mae = values.nome_mae || null;
@@ -248,12 +275,6 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
         dataToUpdate.bairro = values.bairro || null;
         dataToUpdate.cidade = values.cidade || null;
         dataToUpdate.estado = values.estado || null;
-
-        // Dados Contratuais
-        dataToUpdate.data_inicio_contrato = values.data_inicio_contrato ? format(values.data_inicio_contrato, 'yyyy-MM-dd') : null;
-        dataToUpdate.data_fim_contrato = values.data_fim_contrato ? format(values.data_fim_contrato, 'yyyy-MM-dd') : null;
-        dataToUpdate.data_inicio_aviso = values.data_inicio_aviso ? format(values.data_inicio_aviso, 'yyyy-MM-dd') : null;
-        dataToUpdate.tipo_aviso = values.tipo_aviso === 'Nenhum' ? null : values.tipo_aviso;
 
         // Documentos (URLs)
         dataToUpdate.rg_url = values.rg_url || null;
@@ -464,10 +485,40 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
           <h3 className="font-semibold text-lg">Dados de Identificação</h3>
           {renderInputField('nome', 'Nome da Empresa', 'Nome completo', true)}
-          <FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" placeholder="email@exemplo.com" value={clientProfile.email} disabled /></FormControl><FormMessage /></FormItem>
-          <FormField control={form.control as unknown as Control<FormValues>} name="limite_usuarios" render={({ field }) => (
-            <FormItem><FormLabel>Limite de Usuários da Equipe</FormLabel><FormControl><Input type="number" placeholder="5" {...field} /></FormControl><FormMessage /></FormItem>
-          )} />
+          
+          {/* EMAIL BLOQUEADO PARA O PRÓPRIO CLIENTE */}
+          <FormItem>
+            <FormLabel>Email</FormLabel>
+            <FormControl>
+              <Input 
+                type="email" 
+                placeholder="email@exemplo.com" 
+                value={clientProfile.email} 
+                disabled={isAdministrativeFieldDisabled} 
+              />
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+          
+          {/* LIMITE DE USUÁRIOS BLOQUEADO PARA O PRÓPRIO CLIENTE */}
+          <FormField 
+            control={form.control as unknown as Control<FormValues>} 
+            name="limite_usuarios" 
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Limite de Usuários da Equipe</FormLabel>
+                <FormControl>
+                  <Input 
+                    type="number" 
+                    placeholder="5" 
+                    {...field} 
+                    disabled={isAdministrativeFieldDisabled} 
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )} 
+          />
           
           <h3 className="font-semibold text-lg mt-6">Dados Cadastrais (Tags de Contrato)</h3>
           <p className="text-sm text-muted-foreground mb-4">Estes campos são usados para preencher tags dinâmicas em contratos.</p>
@@ -494,16 +545,25 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
           <div className="space-y-2">
             <div className="flex justify-between items-center mb-1">
               <FormLabel>Permissões de Acesso</FormLabel>
-              <div className="space-x-2">
-                <Button type="button" variant="link" size="sm" onClick={() => handleSelectAll(true)} className="p-0 h-auto">Selecionar Todos</Button>
-                <Button type="button" variant="link" size="sm" onClick={() => handleSelectAll(false)} className="p-0 h-auto text-destructive">Desmarcar Todos</Button>
-              </div>
+              {/* BOTÕES DE SELECIONAR/DESMARCAR TODOS BLOQUEADOS PARA O PRÓPRIO CLIENTE */}
+              {!isAdministrativeFieldDisabled && (
+                <div className="space-x-2">
+                  <Button type="button" variant="link" size="sm" onClick={() => handleSelectAll(true)} className="p-0 h-auto">Selecionar Todos</Button>
+                  <Button type="button" variant="link" size="sm" onClick={() => handleSelectAll(false)} className="p-0 h-auto text-destructive">Desmarcar Todos</Button>
+                </div>
+              )}
             </div>
             <div className="grid grid-cols-2 gap-4 rounded-lg border p-4">
               {PERMISSOES_DISPONIVEIS.map((p: Permissao) => (
                 <FormField key={p.key} control={form.control as unknown as Control<FormValues>} name={`permissoes.${p.key}`} render={({ field }) => (
                   <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                    <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+                    <FormControl>
+                      <Checkbox 
+                        checked={field.value} 
+                        onCheckedChange={field.onChange} 
+                        disabled={isAdministrativeFieldDisabled} 
+                      />
+                    </FormControl>
                     <FormLabel className="font-normal">{p.label}</FormLabel>
                   </FormItem>
                 )} />
@@ -520,8 +580,8 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
   }
 
   // Renderização para Usuário (Funcionário)
-  // const isContractEditable = true; // REMOVIDO: Não utilizado
-  // const isNewUser = false; // REMOVIDO: Não utilizado
+  // ... (mantendo a lógica existente para Usuário)
+  const isContractEditable = role === 'Admin' || role === 'Cliente';
 
   return (
     <Form {...form}>
@@ -767,8 +827,8 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
           )}
         </Tabs>
 
-        <Button type="submit" className="w-full" disabled={form.formState.isSubmitting || uploading}>
-          {(form.formState.isSubmitting || uploading) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+        <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
+          {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Salvar Alterações
         </Button>
       </form>
