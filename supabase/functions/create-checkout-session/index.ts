@@ -1,6 +1,3 @@
-/// <reference lib="deno.ns" />
-/// <reference lib="deno.window" />
-
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
 import Stripe from 'https://esm.sh/stripe@16.5.0?target=deno';
@@ -34,8 +31,8 @@ serve(async (req: Request) => {
 
     // 2️⃣ Inicializar Supabase Client (usa as variáveis padrão do Supabase)
     const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_ANON_KEY')!,
+      (Deno.env.get('SUPABASE_URL') as any)!,
+      (Deno.env.get('SUPABASE_ANON_KEY') as any)!,
       { auth: { persistSession: false } }
     );
 
@@ -96,13 +93,13 @@ serve(async (req: Request) => {
     // 6️⃣ Corrigir URL base (em caso de ausência de referer)
     const referer = req.headers.get('referer');
     // Usando uma URL de fallback mais segura
-    const baseUrl = referer || `https://${Deno.env.get('SUPABASE_URL')?.split('//')[1].split('.')[0]}.vercel.app/`; 
+    const baseUrl = referer || `https://${(Deno.env.get('SUPABASE_URL') as any)?.split('//')[1].split('.')[0]}.vercel.app/`; 
 
     console.log(`LOG 8: Creating Checkout Session. Base URL: ${baseUrl}`);
 
     // 7️⃣ Criar a sessão de checkout
     const session = await stripe.checkout.sessions.create({
-      mode: 'subscription',
+      mode: 'payment', // Alterado para pagamento único
       payment_method_types: ['card'],
       line_items: [
         {
@@ -110,7 +107,7 @@ serve(async (req: Request) => {
             currency: 'brl',
             product_data: { name: plano.nome },
             unit_amount: unitAmount,
-            recurring: { interval: 'month' },
+            // Removido: recurring: { interval: 'month' },
           },
           quantity: 1,
         },
