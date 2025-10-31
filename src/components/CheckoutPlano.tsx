@@ -40,7 +40,7 @@ const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano, isUpgrade = false 
 
     try {
       // 1. Cadastrar o novo cliente no Supabase Auth (Simulação de Trial)
-      const { data: authData, error: authError } = await supabase.auth.signUp({
+      const { error: authError } = await supabase.auth.signUp({
         email: email,
         password: Math.random().toString(36).substring(2, 15), // Senha temporária
         options: {

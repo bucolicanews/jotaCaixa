@@ -1,8 +1,9 @@
+import React from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useSearchParams, useNavigate } from "react-router-dom";
 import { SessionProvider } from "@/contexts/SessionContext";
 import NotFound from "./pages/NotFound";
 import Login from "./pages/Login";
@@ -30,8 +31,72 @@ import PreencherContrato from "./pages/PreencherContrato";
 import GerenciarPlanos from "./pages/GerenciarPlanos";
 import Vendas from "./pages/Vendas";
 import SelecaoPerfil from "./pages/SelecaoPerfil";
+import { supabase } from "./integrations/supabase/client";
+import { showSuccess, showError } from "./utils/toast";
+import { useSessao } from "./hooks/use-sessao";
+import MinhaAssinatura from "./pages/MinhaAssinatura";
 
 const queryClient = new QueryClient();
+
+// Componente para lidar com o redirecionamento pós-pagamento
+const PaymentSuccessHandler = () => {
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const { usuario, refetch, carregando } = useSessao();
+  
+  const paymentStatus = searchParams.get('payment');
+  const sessionId = searchParams.get('session_id');
+
+  // Lógica para ativar a assinatura
+  React.useEffect(() => {
+    if (paymentStatus === 'success' && sessionId && usuario && !carregando) {
+      const activateSubscription = async () => {
+        // 1. Buscar metadados da sessão do Stripe (simulado)
+        // Em um ambiente real, você faria isso no webhook. Aqui, simulamos a busca.
+        // Como não temos a função de buscar a sessão, vamos assumir que os metadados
+        // (clienteId e planoId) estão disponíveis na sessão do usuário ou foram passados
+        // de alguma forma. No nosso caso, o clienteId é o próprio usuario.id.
+        
+        // 2. Buscar o plano atual do cliente (que foi definido no signUp/upsert inicial)
+        const { data: clienteData, error: clienteError } = await supabase
+            .from('tbl_clientes')
+            .select('plano_id')
+            .eq('id', usuario.id)
+            .single();
+            
+        if (clienteError || !clienteData?.plano_id) {
+            showError('Falha ao encontrar o plano do cliente para ativação.');
+            navigate('/painel', { replace: true });
+            return;
+        }
+        
+        // 3. Chamar a função RPC para ativar a assinatura
+        const { error: rpcError } = await supabase.rpc('activate_subscription', {
+            p_cliente_id: usuario.id,
+            p_plano_id: clienteData.plano_id,
+        });
+
+        if (rpcError) {
+          showError(`Falha ao ativar assinatura: ${rpcError.message}`);
+        } else {
+          showSuccess('Assinatura ativada com sucesso! Bem-vindo(a).');
+          await refetch(); // Atualiza o perfil para remover o banner de trial
+        }
+        
+        // Limpa a URL
+        navigate('/painel', { replace: true });
+      };
+      
+      activateSubscription();
+    } else if (paymentStatus === 'canceled') {
+        showError('O pagamento foi cancelado.');
+        navigate('/vendas', { replace: true });
+    }
+  }, [paymentStatus, sessionId, usuario, carregando, navigate, refetch]);
+
+  return null;
+};
+
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -43,6 +108,7 @@ const App = () => (
         }}
       >
         <SessionProvider>
+          <PaymentSuccessHandler />
           <Toaster />
           <Sonner />
           <Routes>
@@ -77,6 +143,7 @@ const App = () => (
             <Route path="/contratos/modelos" element={<GerenciarModelos />} />
             <Route path="/contratos/novo" element={<NovoContrato />} />
             <Route path="/contratos/preencher/:modeloId" element={<PreencherContrato />} />
+            <Route path="/minha-assinatura" element={<MinhaAssinatura />} />
 
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '@/contexts/ThemeProvider';
 import { Button } from '@/components/ui/button';
-import { Sun, Moon, LogOut, Menu, User, Settings, Key, CalendarCheck } from 'lucide-react';
+import { Sun, Moon, LogOut, Menu, User, Settings, Key, CalendarCheck, Package, DollarSign } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
@@ -38,6 +38,7 @@ const Header: React.FC = () => {
   const [sheetOpen, setSheetOpen] = useState(false);
   const { perfil, role } = useSessao();
   const [tituloApp, setTituloApp] = useState('Fluxo de Caixa');
+  const [nomePlano, setNomePlano] = useState<string | null>(null);
 
   useEffect(() => {
     const updateTitle = async () => {
@@ -46,28 +47,47 @@ const Header: React.FC = () => {
         return;
       }
 
+      let currentPlanoId: string | null = null;
+
       if (role === 'Admin') {
         setTituloApp('Admin Dashboard');
       } else if (role === 'Cliente') {
-        setTituloApp((perfil as ClienteProfile).nome);
+        const clienteProfile = perfil as ClienteProfile;
+        setTituloApp(clienteProfile.nome);
+        // Correção 1: Coalesce para null para garantir o tipo string | null
+        currentPlanoId = clienteProfile.plano_id || null; 
       } else if (role === 'Usuario') {
         const usuarioProfile = perfil as UsuarioProfile;
         if (usuarioProfile.cliente_id) {
           // Buscar o nome da empresa (Cliente)
           const { data } = await supabase
             .from('tbl_clientes')
-            .select('nome')
+            .select('nome, plano_id')
             .eq('id', usuarioProfile.cliente_id)
             .single();
           
           if (data) {
             setTituloApp(data.nome);
+            currentPlanoId = data.plano_id || null;
           } else {
             setTituloApp('Usuário - Sem Empresa');
           }
         } else {
           setTituloApp('Usuário Não Vinculado');
         }
+      }
+      
+      // Buscar nome do plano
+      if (currentPlanoId) {
+          const { data: planoData } = await supabase
+              .from('planos')
+              .select('nome')
+              .eq('id', currentPlanoId)
+              .single();
+          
+          setNomePlano(planoData?.nome || 'Plano Desconhecido');
+      } else {
+          setNomePlano(null);
       }
     };
     updateTitle();
@@ -134,6 +154,16 @@ const Header: React.FC = () => {
                 </div>
               </DropdownMenuLabel>
               
+              <DropdownMenuSeparator />
+              
+              {/* NOVO ITEM: Plano Atual */}
+              {nomePlano && (
+                  <DropdownMenuItem className="text-xs text-muted-foreground cursor-default" disabled>
+                      <Package className="mr-2 h-4 w-4" />
+                      Plano: {nomePlano}
+                  </DropdownMenuItem>
+              )}
+              
               {/* NOVO ITEM: Data de Expiração do Acesso (Apenas para Clientes) */}
               {clienteProfile && dataFimFormatada && (
                   <DropdownMenuItem className="text-xs text-muted-foreground cursor-default" disabled>
@@ -149,6 +179,17 @@ const Header: React.FC = () => {
                   Editar Perfil
                 </Link>
               </DropdownMenuItem>
+              
+              {/* Link para Minha Assinatura (Apenas Cliente) */}
+              {role === 'Cliente' && (
+                  <DropdownMenuItem asChild>
+                      <Link to="/minha-assinatura">
+                          <DollarSign className="mr-2 h-4 w-4" />
+                          Minha Assinatura
+                      </Link>
+                  </DropdownMenuItem>
+              )}
+              
               <DropdownMenuItem onClick={handlePasswordReset}>
                 <Key className="mr-2 h-4 w-4" />
                 Redefinir Senha
