@@ -97,7 +97,10 @@ const GerenciarUsuarios: React.FC = () => {
           const nomeEmpresa = item.tbl_clientes?.nome || (item.cliente_id === usuario.id ? 'Meus Usuários (Admin)' : 'N/A');
           return { ...item, nome_empresa: nomeEmpresa } as UsuarioComEmpresa;
         });
-        setUsuarios(fetchedUsuarios);
+        
+        // FILTRA O PRÓPRIO ADMIN DA LISTA DE USUÁRIOS (tbl_usuarios)
+        const filteredUsers = fetchedUsuarios.filter(u => u.id !== usuario.id);
+        setUsuarios(filteredUsers);
       }
 
     } else if (isCliente) {
@@ -216,7 +219,6 @@ const GerenciarUsuarios: React.FC = () => {
   };
   
   const isManagingClients = activeTab === 'clientes';
-  const isManagingMyUsers = activeTab === 'meus_funcionarios';
   const targetRole = isManagingClients ? 'Cliente' : 'Usuario';
   const title = 'Gerenciar Usuários'; 
   
