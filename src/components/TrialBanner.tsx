@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useSessao } from '@/hooks/use-sessao';
 import { ClienteProfile } from '@/types/usuario';
 import { supabase } from '@/integrations/supabase/client';
-import { format, parseISO, isFuture, isToday, differenceInDays } from 'date-fns';
+import { format, parseISO, isFuture, differenceInDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -47,15 +47,11 @@ const TrialBanner: React.FC = () => {
         setPlanoInfo(planoData as PlanoInfo);
         
         // 2. Determinar se é Trial
-        // Se a data de fim de acesso for igual à data de criação + dias de trial, é um trial.
-        // Como não temos a data de criação do usuário aqui, vamos simplificar:
         // Se a data de fim de acesso for futura e a diferença de dias for próxima ao dias_trial, consideramos trial.
-        // Para ser mais preciso, vamos assumir que se a data de fim de acesso for menor que 30 dias a partir de hoje, é um trial.
+        // Simplificando: Se a data de fim de acesso for menor ou igual a 30 dias no futuro, é trial.
         
         const daysRemaining = differenceInDays(dataFim, new Date());
         
-        // Se a data de fim de acesso for futura e o plano tiver dias de trial > 0, e estivermos dentro do período de trial (ex: 30 dias), consideramos trial.
-        // Simplificando: Se a data de fim de acesso for menor ou igual a 30 dias no futuro, é trial.
         const isTrialPeriod = isFuture(dataFim) && daysRemaining <= 30; 
         
         setIsTrial(isTrialPeriod);

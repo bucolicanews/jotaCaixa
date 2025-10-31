@@ -2,6 +2,9 @@ import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { useSessao } from '@/hooks/use-sessao';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Link } from 'react-router-dom';
+import { Package } from 'lucide-react';
 
 const Painel = () => {
   const { role, perfil } = useSessao();
@@ -23,10 +26,22 @@ const Painel = () => {
     const permissoes = usuarioProfile?.permissoes || {};
     hasFinancePermissions = permissoes.contas_pagar || permissoes.contas_receber;
   }
+  
+  const isClient = role === 'Cliente';
 
   return (
     <LayoutPrincipal>
-      <h1 className="text-2xl md:text-3xl font-bold mb-6">Painel de Controle</h1>
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl md:text-3xl font-bold">Painel de Controle</h1>
+        {isClient && (
+          <Link to="/vendas">
+            <Button variant="default">
+              <Package className="w-4 h-4 mr-2" />
+              Atualizar Plano
+            </Button>
+          </Link>
+        )}
+      </div>
       
       {isClientApproved ? (
         <>
