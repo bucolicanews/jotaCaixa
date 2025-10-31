@@ -135,14 +135,18 @@ const FolhaPontoPrint: React.FC<FolhaPontoPrintProps> = ({
                 <table className="print-table">
                     <thead>
                         <tr>
-                            <th style={{ width: '8%' }}>Data</th>
-                            <th style={{ width: '8%' }}>Dia</th>
-                            <th style={{ width: '10%' }}>Entrada 1</th>
-                            <th style={{ width: '10%' }}>Saída 1</th>
-                            <th style={{ width: '10%' }}>Entrada 2</th>
-                            <th style={{ width: '10%' }}>Saída 2</th>
-                            <th style={{ width: '10%' }}>Total Dia</th>
-                            <th style={{ width: '24%' }}>Observações</th>
+                            <th rowSpan={2} style={{ width: '8%' }}>Data</th>
+                            <th rowSpan={2} style={{ width: '8%' }}>Dia</th>
+                            <th colSpan={2} style={{ width: '20%', textAlign: 'center' }}>Primeiro Turno</th>
+                            <th colSpan={2} style={{ width: '20%', textAlign: 'center' }}>Segundo Turno</th>
+                            <th rowSpan={2} style={{ width: '10%' }}>Total Dia</th>
+                            <th rowSpan={2} style={{ width: '24%' }}>Observações</th>
+                        </tr>
+                        <tr>
+                            <th style={{ width: '10%' }}>Entrada</th>
+                            <th style={{ width: '10%' }}>Saída</th>
+                            <th style={{ width: '10%' }}>Entrada</th>
+                            <th style={{ width: '10%' }}>Saída</th>
                         </tr>
                     </thead>
                     <tbody>
