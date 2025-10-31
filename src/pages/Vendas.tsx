@@ -1,7 +1,8 @@
 import React, { useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Zap, ArrowDown } from 'lucide-react';
-import VendasPlanos from '@/components/VendasPlanos'; // Importando o novo componente
+import VendasPlanos from '@/components/VendasPlanos';
+import { Link } from 'react-router-dom'; // Importando Link
 
 const Vendas: React.FC = () => {
   const planosRef = useRef<HTMLDivElement>(null);
@@ -24,17 +25,20 @@ const Vendas: React.FC = () => {
                 Gerencie contas a pagar, a receber, folha de ponto e contratos em uma única plataforma multi-tenant, segura e eficiente.
             </p>
             
-            <Button 
-                onClick={scrollToPlans} 
-                size="lg" 
-                className="text-lg px-8 py-6 shadow-lg hover:shadow-xl transition-all"
-            >
-                Ver Planos e Iniciar Trial Grátis
-                <ArrowDown className="w-5 h-5 ml-2" />
-            </Button>
+            <Link to="/login">
+                <Button 
+                    size="lg" 
+                    className="text-lg px-8 py-6 shadow-lg hover:shadow-xl transition-all"
+                >
+                    Fazer Login ou Cadastrar
+                </Button>
+            </Link>
             
             <div className="mt-12 text-center">
-                <p className="text-sm text-muted-foreground">Já é cliente? <a href="/login" className="text-primary hover:underline">Faça login aqui.</a></p>
+                <p className="text-sm text-muted-foreground">Veja os detalhes dos planos abaixo.</p>
+                <Button variant="link" onClick={scrollToPlans} className="p-0 h-auto text-primary">
+                    <ArrowDown className="w-4 h-4 mr-1" /> Ver Planos
+                </Button>
             </div>
         </div>
 

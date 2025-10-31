@@ -7,12 +7,11 @@ import { showError } from '@/utils/toast';
 import { Plano } from '@/types/plano';
 import { PERMISSOES_DISPONIVEIS } from '@/config/permissoes';
 import { cn } from '@/lib/utils';
-import CheckoutPlano from '@/components/CheckoutPlano';
+import { Link } from 'react-router-dom'; // Adicionando Link
 
 const VendasPlanos: React.FC = () => {
   const [planos, setPlanos] = useState<Plano[]>([]);
   const [carregando, setCarregando] = useState(true);
-  const [planoSelecionado, setPlanoSelecionado] = useState<Plano | null>(null);
 
   const buscarPlanos = useCallback(async () => {
     setCarregando(true);
@@ -35,10 +34,6 @@ const VendasPlanos: React.FC = () => {
     buscarPlanos();
   }, [buscarPlanos]);
   
-  const handleSelectPlano = (plano: Plano) => {
-      setPlanoSelecionado(plano);
-  };
-  
   const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
   
   const permissoesMap = PERMISSOES_DISPONIVEIS.filter(p => 
@@ -55,15 +50,11 @@ const VendasPlanos: React.FC = () => {
       </div>
     );
   }
-  
-  if (planoSelecionado) {
-      return <CheckoutPlano plano={planoSelecionado} />;
-  }
 
   return (
     <div className="max-w-6xl mx-auto text-center">
       <h2 className="text-3xl font-bold mb-4 text-foreground flex items-center justify-center">
-          <DollarSign className="w-6 h-6 mr-2" /> Escolha seu Plano
+          <DollarSign className="w-6 h-6 mr-2" /> Nossos Planos
       </h2>
       <p className="text-lg text-muted-foreground mb-10">
         Todos os planos incluem {planos[0]?.dias_trial || 7} dias de teste grátis.
@@ -118,17 +109,19 @@ const VendasPlanos: React.FC = () => {
                           })}
                       </div>
                       
-                      <Button 
-                          onClick={() => handleSelectPlano(plano)} 
-                          className="mt-8 w-full"
-                          variant={plano.tipo_cliente === 'PJ' ? 'default' : 'secondary'}
-                      >
-                          Aderir ao Plano
-                      </Button>
+                      {/* Botão de adesão removido */}
                   </Card>
               ))}
           </div>
       )}
+      
+      <div className="mt-10">
+          <Link to="/login">
+              <Button size="lg" className="text-lg px-8 py-6 shadow-lg hover:shadow-xl transition-all">
+                  Fazer Login ou Cadastrar
+              </Button>
+          </Link>
+      </div>
     </div>
   );
 };
