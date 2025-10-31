@@ -642,31 +642,20 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
           <h3 className="font-semibold text-lg">Dados de Identificação</h3>
+          
+          {/* Nome da Empresa (Não mapeável) */}
           {renderInputField('nome', 'Nome da Empresa', 'Nome completo', true, !isEditing)}
           
-          {/* Email de Login (Desabilitado na Edição) */}
-          <FormField control={form.control} name="email" render={({ field }) => (
-            <FormItem>
-                <div className="flex justify-between items-center">
-                    <FormLabel>Email (Login) <span className="text-red-500">*</span></FormLabel>
-                    {/* Checkbox de Tag para Email */}
-                    {isEditing && (
-                        <div className="flex items-center space-x-1">
-                            <TaggedFormField 
-                                fieldName="email" 
-                                label="Email" 
-                                placeholder="contato@empresa.com" 
-                                resourceId={clientProfile.id} 
-                                disabled={!isEditing}
-                                mapArray={CAMPOS_CLIENTE_MAPA}
-                            />
-                        </div>
-                    )}
-                </div>
-                <FormControl><Input type="email" placeholder="email@exemplo.com" {...field} disabled={isEditing} /></FormControl>
-                <FormMessage />
-            </FormItem>
-          )} />
+          {/* Email de Login (Mapeável e desabilitado na edição) */}
+          <TaggedFormField 
+              fieldName="email" 
+              label="Email (Login)" 
+              placeholder="contato@empresa.com" 
+              resourceId={clientProfile.id} 
+              disabled={!isEditing}
+              mapArray={CAMPOS_CLIENTE_MAPA}
+              isOptional={false}
+          />
           
           {!isEditing && renderInputField('senha', 'Senha Provisória', '••••••••', true, false)}
           
@@ -692,28 +681,106 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                   disabled={!isEditing}
                   mapArray={CAMPOS_CLIENTE_MAPA}
               />
-              {/* Espaço vazio para manter o grid */}
-              <div />
+              {/* Nome da Mãe com Tag */}
+              <TaggedFormField 
+                  fieldName="nome_mae" 
+                  label="Nome da Mãe" 
+                  placeholder="Nome completo da mãe" 
+                  resourceId={clientProfile.id} 
+                  disabled={!isEditing}
+                  mapArray={CAMPOS_CLIENTE_MAPA}
+              />
           </div>
           
-          <h4 className="font-semibold mt-6 border-t pt-4">Endereço e Contato</h4>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {renderInputField('telefone', 'Telefone de Contato', '(00) 90000-0000', false, !isEditing)}
-              {renderInputField('nome_mae', 'Nome da Mãe', 'Nome completo da mãe', false, !isEditing)}
+              {/* Telefone com Tag */}
+              <TaggedFormField 
+                  fieldName="telefone" 
+                  label="Telefone de Contato" 
+                  placeholder="(00) 90000-0000" 
+                  resourceId={clientProfile.id} 
+                  disabled={!isEditing}
+                  mapArray={CAMPOS_CLIENTE_MAPA}
+              />
+              {/* Nome do Pai com Tag */}
+              <TaggedFormField 
+                  fieldName="nome_pai" 
+                  label="Nome do Pai" 
+                  placeholder="Nome completo do pai" 
+                  resourceId={clientProfile.id} 
+                  disabled={!isEditing}
+                  mapArray={CAMPOS_CLIENTE_MAPA}
+              />
           </div>
-          {renderInputField('nome_pai', 'Nome do Pai', 'Nome completo do pai', false, !isEditing)}
           
+          <h4 className="font-semibold mt-6 border-t pt-4">Endereço</h4>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {renderInputField('cep', 'CEP', '00000-000', false, !isEditing)}
-              {renderInputField('cidade', 'Cidade', 'São Paulo', false, !isEditing)}
-              {renderInputField('estado', 'Estado (UF)', 'SP', false, !isEditing)}
+              {/* CEP com Tag */}
+              <TaggedFormField 
+                  fieldName="cep" 
+                  label="CEP" 
+                  placeholder="00000-000" 
+                  resourceId={clientProfile.id} 
+                  disabled={!isEditing}
+                  mapArray={CAMPOS_CLIENTE_MAPA}
+              />
+              {/* Cidade com Tag */}
+              <TaggedFormField 
+                  fieldName="cidade" 
+                  label="Cidade" 
+                  placeholder="São Paulo" 
+                  resourceId={clientProfile.id} 
+                  disabled={!isEditing}
+                  mapArray={CAMPOS_CLIENTE_MAPA}
+              />
+              {/* Estado com Tag */}
+              <TaggedFormField 
+                  fieldName="estado" 
+                  label="Estado (UF)" 
+                  placeholder="SP" 
+                  resourceId={clientProfile.id} 
+                  disabled={!isEditing}
+                  mapArray={CAMPOS_CLIENTE_MAPA}
+              />
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {renderInputField('endereco', 'Logradouro/Rua', 'Rua Exemplo', false, !isEditing)}
-              {renderInputField('numero', 'Número', '123', false, !isEditing)}
-              {renderInputField('complemento', 'Complemento', 'Apto 101', false, !isEditing)}
+              {/* Endereço com Tag */}
+              <TaggedFormField 
+                  fieldName="endereco" 
+                  label="Logradouro/Rua" 
+                  placeholder="Rua Exemplo" 
+                  resourceId={clientProfile.id} 
+                  disabled={!isEditing}
+                  mapArray={CAMPOS_CLIENTE_MAPA}
+              />
+              {/* Número com Tag */}
+              <TaggedFormField 
+                  fieldName="numero" 
+                  label="Número" 
+                  placeholder="123" 
+                  resourceId={clientProfile.id} 
+                  disabled={!isEditing}
+                  mapArray={CAMPOS_CLIENTE_MAPA}
+              />
+              {/* Complemento com Tag */}
+              <TaggedFormField 
+                  fieldName="complemento" 
+                  label="Complemento" 
+                  placeholder="Apto 101" 
+                  resourceId={clientProfile.id} 
+                  disabled={!isEditing}
+                  mapArray={CAMPOS_CLIENTE_MAPA}
+              />
           </div>
-          {renderInputField('bairro', 'Bairro', 'Centro', false, !isEditing)}
+          {/* Bairro com Tag */}
+          <TaggedFormField 
+              fieldName="bairro" 
+              label="Bairro" 
+              placeholder="Centro" 
+              resourceId={clientProfile.id} 
+              disabled={!isEditing}
+              mapArray={CAMPOS_CLIENTE_MAPA}
+          />
 
           <h4 className="font-semibold mt-6 border-t pt-4">Configurações e Permissões</h4>
           {renderNumberField('limite_usuarios', 'Limite de Usuários da Equipe', '5', !isEditing)}
