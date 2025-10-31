@@ -37,7 +37,7 @@ const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano }) => {
     try {
       // 1. Cadastrar o novo cliente no Supabase Auth
       // Usamos signUp para que o cliente receba o link de confirmação/senha
-      const { data, error: authError } = await supabase.auth.signUp({
+      const { data: _data, error: authError } = await supabase.auth.signUp({
         email: email,
         password: Math.random().toString(36).substring(2, 15), // Senha temporária
         options: {
@@ -61,8 +61,6 @@ const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano }) => {
         throw authError;
       }
       
-      // Para simular o fluxo, assumimos que o ID do usuário é o ID do cliente
-      // setClienteId(data.user?.id || 'simulado'); // Removido
       setIsRegistered(true);
       showSuccess('Cadastro inicial realizado! Verifique seu email para definir a senha.');
 

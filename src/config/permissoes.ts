@@ -17,4 +17,5 @@ export const PERMISSOES_DISPONIVEIS: Permissao[] = [
   { key: 'folha_ponto', label: 'Acompanhar Ponto (Gestor)', path: '/folha-ponto' },
   { key: 'visualizar_proprio_ponto', label: 'Usuário pode ver seu Ponto', path: '/perfil' },
   { key: 'cadastrar_usuarios', label: 'Cadastrar Usuários', path: '/gerenciar-usuarios' },
+  { key: 'contratos', label: 'Contratos (Gerenciamento)', path: '/contratos' }, // NOVA PERMISSÃO
 ];
