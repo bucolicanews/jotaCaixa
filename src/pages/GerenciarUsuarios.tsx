@@ -12,7 +12,7 @@ import { showError, showSuccess } from '@/utils/toast';
 import { AnyProfile, UsuarioProfile, UserRole, ClienteProfile } from '@/types/usuario';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
@@ -124,7 +124,7 @@ const GerenciarUsuarios: React.FC = () => {
     fetchDados();
   };
   
-  const handleOpenDialog = (profile: AnyProfile | null, targetRole: UserRole) => {
+  const handleOpenDialog = (profile: AnyProfile | null, _targetRole: UserRole) => {
       setPerfilParaEditar(profile);
       setIsDialogOpen(true);
   };

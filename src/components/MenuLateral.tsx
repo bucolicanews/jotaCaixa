@@ -40,12 +40,12 @@ const SECOES_MENU: MenuSection[] = [
         titulo: 'Financeiro',
         perfis: ['Admin', 'Cliente', 'Usuario'],
         itens: [
-            // Removendo Admin do perfil para módulos financeiros
-            { nome: 'Contas a Pagar', caminho: '/contas-pagar', icone: ArrowDownCircle, perfis: ['Cliente', 'Usuario'], permissionKey: 'contas_pagar' },
-            { nome: 'Contas a Receber', caminho: '/contas-receber', icone: ArrowUpCircle, perfis: ['Cliente', 'Usuario'], permissionKey: 'contas_receber' },
-            { nome: 'Bancos / Caixas', caminho: '/bancos', icone: Banknote, perfis: ['Cliente', 'Usuario'], permissionKey: 'bancos' },
-            { nome: 'Conciliação', caminho: '/conciliacao', icone: DollarSign, perfis: ['Cliente', 'Usuario'], permissionKey: 'conciliacao' },
-            { nome: 'Relatórios', caminho: '/relatorios', icone: FileText, perfis: ['Cliente', 'Usuario'], permissionKey: 'relatorios' },
+            // Admin agora tem acesso a estes módulos para gerenciar seus próprios lançamentos
+            { nome: 'Contas a Pagar', caminho: '/contas-pagar', icone: ArrowDownCircle, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'contas_pagar' },
+            { nome: 'Contas a Receber', caminho: '/contas-receber', icone: ArrowUpCircle, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'contas_receber' },
+            { nome: 'Bancos / Caixas', caminho: '/bancos', icone: Banknote, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'bancos' },
+            { nome: 'Conciliação', caminho: '/conciliacao', icone: DollarSign, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'conciliacao' },
+            { nome: 'Relatórios', caminho: '/relatorios', icone: FileText, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'relatorios' },
         ]
     },
     {
@@ -61,10 +61,10 @@ const SECOES_MENU: MenuSection[] = [
         titulo: 'Cadastros',
         perfis: ['Admin', 'Cliente', 'Usuario'],
         itens: [
-            // Clientes e Plano de Contas são cadastros de suporte ao financeiro, limitando Admin aqui também
-            { nome: 'Clientes', caminho: '/clientes', icone: Contact, perfis: ['Cliente', 'Usuario'], permissionKey: 'contas_receber' },
-            { nome: 'Plano de Contas', caminho: '/plano-contas', icone: BookOpen, perfis: ['Cliente', 'Usuario'], permissionKey: 'plano_contas' },
-            { nome: 'Importar', caminho: '/importar', icone: Upload, perfis: ['Cliente', 'Usuario'], permissionKey: 'importar' },
+            // Admin agora tem acesso a estes cadastros para gerenciar seus próprios dados
+            { nome: 'Clientes', caminho: '/clientes', icone: Contact, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'contas_receber' },
+            { nome: 'Plano de Contas', caminho: '/plano-contas', icone: BookOpen, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'plano_contas' },
+            { nome: 'Importar', caminho: '/importar', icone: Upload, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'importar' },
         ]
     },
     {
@@ -93,14 +93,9 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick }) => {
   const checkPermission = (item: ItemMenu) => {
     if (!item.permissionKey) return true;
 
-    // O Admin não tem permissões de módulo, mas tem acesso a rotas administrativas
+    // O Admin agora tem acesso a todos os módulos listados, pois ele precisa gerenciar seus próprios lançamentos.
     if (role === 'Admin') {
-        // Permite acesso a rotas administrativas e de gestão (Contratos, Usuários, Folha Ponto)
-        if (item.caminho.startsWith('/contratos') || item.caminho === '/gerenciar-usuarios' || item.caminho === '/folha-ponto' || item.caminho === '/painel' || item.caminho === '/configuracoes') {
-            return true;
-        }
-        // Bloqueia acesso a rotas financeiras e cadastros de suporte ao financeiro
-        return false;
+        return true;
     }
 
     if (role === 'Cliente') {

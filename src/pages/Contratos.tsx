@@ -14,10 +14,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import ContratoAcoesDialog from '@/components/ContratoAcoesDialog';
 import { format, parseISO } from 'date-fns';
+import { cn } from '@/lib/utils';
 
 const Contratos = () => {
   const { role, perfil, carregando: carregandoSessao } = useSessao();
-  const [activeTab, setActiveTab] = useState('pendentes');
   const [contratos, setContratos] = useState<ContratoGerado[]>([]);
   const [carregandoContratos, setCarregandoContratos] = useState(true);
   const [contratoSelecionado, setContratoSelecionado] = useState<ContratoGerado | null>(null);
@@ -26,12 +26,21 @@ const Contratos = () => {
   const canManageModels = role === 'Admin' || role === 'Cliente';
   const canCreateContract = role === 'Admin' || role === 'Cliente';
   
-  const isCliente = role === 'Cliente';
   const isAdmin = role === 'Admin';
-  const empresaId = isCliente ? (perfil as ClienteProfile)?.id : (role === 'Usuario' ? (perfil as UsuarioProfile)?.cliente_id : null);
+  const isCliente = role === 'Cliente';
+  
+  const getEmpresaId = () => {
+    if (isAdmin) return null; // Admin usa RLS para NULL
+    if (isCliente) return (perfil as ClienteProfile)?.id;
+    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id;
+    return null;
+  };
+  
+  const empresaId = getEmpresaId();
+  
+  const [activeContratoTab, setActiveContratoTab] = useState(isAdmin ? 'meus_contratos' : 'pendentes');
 
-  const buscarContratos = useCallback(async () => {
-    if (!empresaId && !isAdmin) return;
+  const buscarMeusContratos = useCallback(async () => {
     setCarregandoContratos(true);
     
     let query = supabase
@@ -39,10 +48,17 @@ const Contratos = () => {
       .select('*, clientes(nome)')
       .order('criado_em', { ascending: false });
       
-    // RLS deve cuidar da filtragem por empresa_id, mas garantimos a busca
-    // if (!isAdmin) {
-    //     query = query.eq('empresa_id', empresaId);
-    // }
+    if (isAdmin) {
+        // Admin: Busca onde empresa_id é NULL (seus próprios contratos)
+        query = query.is('empresa_id', null);
+    } else if (empresaId) {
+        // Cliente/Usuário: Busca pelo ID da empresa
+        query = query.eq('empresa_id', empresaId);
+    } else {
+        setContratos([]);
+        setCarregandoContratos(false);
+        return;
+    }
 
     const { data, error } = await query;
 
@@ -54,12 +70,40 @@ const Contratos = () => {
     }
     setCarregandoContratos(false);
   }, [empresaId, isAdmin]);
+  
+  const buscarSupervisao = useCallback(async () => {
+    if (!isAdmin) return;
+    setCarregandoContratos(true);
+    
+    // Supervisão: Busca todos os contratos onde empresa_id NÃO é NULL
+    const { data, error } = await supabase
+      .from('contratos_gerados')
+      .select('*, clientes(nome)')
+      .not('empresa_id', 'is', null)
+      .order('criado_em', { ascending: false });
+
+    if (error) {
+      showError('Erro ao carregar contratos de supervisão: ' + error.message);
+      setContratos([]);
+    } else {
+      setContratos(data as any[]);
+    }
+    setCarregandoContratos(false);
+  }, [isAdmin]);
+
+  const buscarDados = useCallback(() => {
+    if (!carregandoSessao && (isAdmin || empresaId)) {
+        if (isAdmin && activeContratoTab === 'supervisao') {
+            buscarSupervisao();
+        } else {
+            buscarMeusContratos();
+        }
+    }
+  }, [carregandoSessao, isAdmin, empresaId, activeContratoTab, buscarMeusContratos, buscarSupervisao]);
 
   useEffect(() => {
-    if (!carregandoSessao && (isAdmin || empresaId)) {
-      buscarContratos();
-    }
-  }, [carregandoSessao, isAdmin, empresaId, buscarContratos]);
+    buscarDados();
+  }, [buscarDados]);
   
   const handleOpenAcoes = (contrato: ContratoGerado) => {
       setContratoSelecionado(contrato);
@@ -92,7 +136,7 @@ const Contratos = () => {
         </h1>
         <div className="flex space-x-2 w-full sm:w-auto">
             <Link to="/contratos/novo">
-                <Button className="w-full sm:w-auto" disabled={!canCreateContract}>
+                <Button className="w-full sm:w-auto" disabled={!canCreateContract || (isAdmin && activeContratoTab === 'supervisao')}>
                     <PlusCircle className="w-4 h-4 mr-2" />
                     Novo Contrato
                 </Button>
@@ -100,26 +144,42 @@ const Contratos = () => {
         </div>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-2 md:grid-cols-3">
-          <TabsTrigger value="pendentes">Pendentes de Assinatura ({contratosPendentes.length})</TabsTrigger>
-          <TabsTrigger value="gerados">Contratos Ativos ({contratosAtivos.length})</TabsTrigger>
-          {canManageModels && <TabsTrigger value="modelos">Modelos e Tags</TabsTrigger>}
+      <Tabs value={activeContratoTab} onValueChange={setActiveContratoTab} className="w-full">
+        <TabsList className={cn("grid w-full", isAdmin ? "grid-cols-4" : "grid-cols-3")}>
+          {isAdmin && <TabsTrigger value="meus_contratos">Meus Contratos</TabsTrigger>}
+          {isAdmin && <TabsTrigger value="supervisao">Supervisão</TabsTrigger>}
+          <TabsTrigger value="pendentes">Pendentes ({contratosPendentes.length})</TabsTrigger>
+          <TabsTrigger value="gerados">Ativos ({contratosAtivos.length})</TabsTrigger>
+          {canManageModels && <TabsTrigger value="modelos">Modelos/Tags</TabsTrigger>}
         </TabsList>
         
+        {/* ABA DE SUPERVISÃO (APENAS ADMIN) */}
+        {isAdmin && activeContratoTab === 'supervisao' && (
+            <div className="p-4 bg-yellow-100 dark:bg-yellow-900/20 border border-yellow-500 rounded-md mt-4">
+                <p className="text-sm text-yellow-700 dark:text-yellow-300 font-semibold">
+                    Modo Supervisão: Visualizando contratos de todas as empresas clientes.
+                </p>
+            </div>
+        )}
+        
+        {/* ABA DE CONTRATOS PENDENTES */}
         <TabsContent value="pendentes" className="mt-4">
           <Card>
             <CardHeader><CardTitle className="text-xl">Contratos Pendentes de Assinatura</CardTitle></CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
                 <Table>
-                  <TableHeader><TableRow><TableHead>Cliente</TableHead><TableHead>Valor</TableHead><TableHead>Data Criação</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader>
+                  <TableHeader><TableRow>
+                    {isAdmin && activeContratoTab === 'supervisao' && <TableHead>Empresa</TableHead>}
+                    <TableHead>Cliente</TableHead><TableHead>Valor</TableHead><TableHead>Data Criação</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Ações</TableHead>
+                  </TableRow></TableHeader>
                   <TableBody>
                     {contratosPendentes.length === 0 ? (
-                      <TableRow><TableCell colSpan={5} className="text-center py-4 text-muted-foreground">Nenhum contrato pendente de assinatura.</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={isAdmin && activeContratoTab === 'supervisao' ? 6 : 5} className="text-center py-4 text-muted-foreground">Nenhum contrato pendente de assinatura.</TableCell></TableRow>
                     ) : (
                       contratosPendentes.map(c => (
                         <TableRow key={c.id}>
+                          {isAdmin && activeContratoTab === 'supervisao' && <TableCell className="text-sm text-muted-foreground">{(c as any).empresa_id || 'Admin'}</TableCell>}
                           <TableCell className="font-medium">{(c as any).clientes?.nome || 'N/A'}</TableCell>
                           <TableCell>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(c.valor_total)}</TableCell>
                           <TableCell>{format(parseISO(c.criado_em), 'dd/MM/yyyy')}</TableCell>
@@ -139,19 +199,24 @@ const Contratos = () => {
           </Card>
         </TabsContent>
         
+        {/* ABA DE CONTRATOS ATIVOS */}
         <TabsContent value="gerados" className="mt-4">
           <Card>
             <CardHeader><CardTitle className="text-xl">Contratos Ativos e Concluídos</CardTitle></CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
                 <Table>
-                  <TableHeader><TableRow><TableHead>Cliente</TableHead><TableHead>Valor</TableHead><TableHead>Data Início</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader>
+                  <TableHeader><TableRow>
+                    {isAdmin && activeContratoTab === 'supervisao' && <TableHead>Empresa</TableHead>}
+                    <TableHead>Cliente</TableHead><TableHead>Valor</TableHead><TableHead>Data Início</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Ações</TableHead>
+                  </TableRow></TableHeader>
                   <TableBody>
                     {contratosAtivos.length === 0 ? (
-                      <TableRow><TableCell colSpan={5} className="text-center py-4 text-muted-foreground">Nenhum contrato ativo ou concluído.</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={isAdmin && activeContratoTab === 'supervisao' ? 6 : 5} className="text-center py-4 text-muted-foreground">Nenhum contrato ativo ou concluído.</TableCell></TableRow>
                     ) : (
                       contratosAtivos.map(c => (
                         <TableRow key={c.id}>
+                          {isAdmin && activeContratoTab === 'supervisao' && <TableCell className="text-sm text-muted-foreground">{(c as any).empresa_id || 'Admin'}</TableCell>}
                           <TableCell className="font-medium">{(c as any).clientes?.nome || 'N/A'}</TableCell>
                           <TableCell>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(c.valor_total)}</TableCell>
                           <TableCell>{format(parseISO(c.data_inicio), 'dd/MM/yyyy')}</TableCell>
@@ -171,6 +236,7 @@ const Contratos = () => {
           </Card>
         </TabsContent>
         
+        {/* ABA DE MODELOS E TAGS */}
         {canManageModels && (
             <TabsContent value="modelos" className="mt-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
