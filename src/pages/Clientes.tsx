@@ -20,7 +20,7 @@ const ClientesPage = () => {
   const [dialogAberto, setDialogAberto] = useState(false);
 
   const getOwnerId = () => {
-    if (role === 'Admin') return null; // Admin não é o owner, seus clientes têm empresa_id = NULL
+    if (role === 'Admin') return usuario?.id || null; // Admin usa seu próprio ID
     if (role === 'Cliente') return (perfil as any)?.id;
     if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id;
     return null;
@@ -37,10 +37,10 @@ const ClientesPage = () => {
       .order('nome', { ascending: true });
 
     if (role === 'Admin') {
-        // Admin vê apenas clientes onde empresa_id é NULL (seus próprios clientes)
-        query = query.is('empresa_id', null);
+        // Admin vê apenas clientes onde admin_id é igual ao seu ID
+        query = query.eq('admin_id', ownerId);
     } else if (ownerId) {
-        // Cliente/Usuário vê clientes vinculados ao seu ownerId
+        // Cliente/Usuário vê clientes vinculados ao seu ownerId (empresa_id)
         query = query.eq('empresa_id', ownerId);
     } else {
         setClientes([]);

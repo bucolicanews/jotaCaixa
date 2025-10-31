@@ -103,7 +103,7 @@ const TaggedFormField: React.FC<TaggedFormFieldProps> = ({ control, fieldName, l
 
 
 const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplete }) => {
-  const { perfil, role } = useSessao();
+  const { perfil, role, usuario } = useSessao();
   const clienteId = clienteInicial?.id;
 
   const form = useForm<FormValues>({
@@ -130,17 +130,19 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
   
   const cepValue = form.watch('cep');
 
-  const getOwnerId = () => {
-    // Se for Admin, ele não é o owner de uma empresa cliente, então o ownerId deve ser NULL
-    if (role === 'Admin') return null; 
+  const getOwnerIds = () => {
+    let empresaId: string | null = null;
+    let adminId: string | null = null;
     
-    // Se for Cliente, o ownerId é o seu próprio ID
-    if (role === 'Cliente') return (perfil as any)?.id;
+    if (role === 'Admin') {
+        adminId = usuario?.id || null;
+    } else if (role === 'Cliente') {
+        empresaId = (perfil as any)?.id;
+    } else if (role === 'Usuario') {
+        empresaId = (perfil as UsuarioProfile)?.cliente_id;
+    }
     
-    // Se for Usuário, o ownerId é o ID da empresa vinculada
-    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id;
-    
-    return null;
+    return { empresaId, adminId };
   };
   
   const fetchAddressByCep = useCallback(async (cep: string) => {
@@ -197,15 +199,18 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
   }, [cepValue, fetchAddressByCep]);
 
   const onSubmit = async (values: FormValues) => {
-    const ownerId = getOwnerId();
+    const { empresaId, adminId } = getOwnerIds();
     
-    // Se for Admin, ownerId é NULL, o que é esperado.
-    // Se for Cliente/Usuário, ownerId é o ID da empresa, o que é esperado.
-    
-    // Se for Cliente/Usuário e ownerId for NULL, não pode salvar.
-    if (role !== 'Admin' && !ownerId) {
+    // Validação: Se não for Admin, deve ter um empresaId válido.
+    if (role !== 'Admin' && !empresaId) {
       showError('Não foi possível identificar o proprietário (empresa). Não é possível salvar.');
       return;
+    }
+    
+    // Validação: Se for Admin, deve ter um adminId válido.
+    if (role === 'Admin' && !adminId) {
+        showError('Não foi possível identificar o Administrador. Não é possível salvar.');
+        return;
     }
 
     const dataToSave = {
@@ -226,8 +231,9 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
       cidade: values.cidade || null,
       estado: values.estado || null,
       
-      // Se for Admin, empresa_id é NULL. Se for Cliente/Usuário, é o ownerId.
-      empresa_id: ownerId, 
+      // IDs de Propriedade
+      empresa_id: empresaId, // NULL se for Admin, ID da Empresa se for Cliente/Usuário
+      admin_id: adminId,     // ID do Admin se for Admin, NULL caso contrário
     };
 
     let error = null;
