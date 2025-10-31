@@ -5,6 +5,7 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
 import Stripe from 'https://esm.sh/stripe@16.5.0?target=deno';
 
+// Cabeçalhos CORS (para funcionar com o front-end)
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -17,11 +18,11 @@ serve(async (req: Request) => {
 
   try {
     console.log('LOG 1: Starting checkout session creation.');
-    
-    // 1. Ler o corpo da requisição
+
+    // 1️⃣ Ler o corpo da requisição
     const body = await req.json();
     const { planoId, clienteId, email } = body;
-    
+
     console.log(`LOG 2: Received data: planoId=${planoId}, clienteId=${clienteId}, email=${email}`);
 
     if (!planoId || !clienteId || !email) {
@@ -31,16 +32,14 @@ serve(async (req: Request) => {
       });
     }
 
-    // 2. Inicializar Supabase Client (para buscar a chave secreta)
+    // 2️⃣ Inicializar Supabase Client (usa as variáveis padrão do Supabase)
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_ANON_KEY')!,
-      {
-        auth: { persistSession: false },
-      }
+      { auth: { persistSession: false } }
     );
 
-    // 3. Buscar a chave secreta do Stripe (configuração global)
+    // 3️⃣ Buscar a chave secreta Stripe (configuração global)
     console.log('LOG 3: Fetching Stripe secret key...');
     const { data: stripeConfig, error: configError } = await supabase
       .from('configuracoes_stripe')
@@ -49,19 +48,26 @@ serve(async (req: Request) => {
       .limit(1)
       .single();
 
-    if (configError || !stripeConfig?.stripe_secret_key) {
-      console.error('ERROR 3: Stripe config error:', configError);
-      return new Response(JSON.stringify({ error: 'Stripe secret key not configured or database error.' }), {
+    if (configError && configError.code !== 'PGRST116') {
+      console.error('❌ Database error fetching Stripe config:', configError);
+      return new Response(JSON.stringify({ error: 'Database error fetching Stripe config.' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
-    
+
+    if (!stripeConfig?.stripe_secret_key) {
+      console.error('❌ No Stripe secret key found in configuracoes_stripe.');
+      return new Response(JSON.stringify({ error: 'Stripe secret key not found. Admin must configure it.' }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const stripeSecretKey = stripeConfig.stripe_secret_key;
     console.log('LOG 4: Stripe secret key fetched. Starts with:', stripeSecretKey.slice(0, 8));
 
-
-    // 4. Buscar detalhes do Plano
+    // 4️⃣ Buscar detalhes do plano
     console.log(`LOG 5: Fetching plan details for ID: ${planoId}`);
     const { data: plano, error: planoError } = await supabase
       .from('planos')
@@ -70,60 +76,51 @@ serve(async (req: Request) => {
       .single();
 
     if (planoError || !plano) {
-      console.error('ERROR 5: Plano not found:', planoError);
+      console.error('❌ Plano not found:', planoError);
       return new Response(JSON.stringify({ error: 'Plano not found.' }), {
         status: 404,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
-    
+
     console.log(`LOG 6: Plan found: ${plano.nome}, Price: ${plano.preco_mensal}`);
 
-    // 5. Inicializar Stripe
+    // 5️⃣ Inicializar Stripe
     console.log('LOG 7: Initializing Stripe...');
     const stripe = new Stripe(stripeSecretKey, {
       apiVersion: '2024-06-20',
     });
-    
+
     const unitAmount = Math.round(plano.preco_mensal * 100);
-    
-    // 6. Tratar URL de Referer (Fallback para evitar erro de URL inválida)
+
+    // 6️⃣ Corrigir URL base (em caso de ausência de referer)
     const referer = req.headers.get('referer');
-    const baseUrl = referer || 'https://jqoirlswewggyppgvgnv.supabase.co/'; 
-    
+    // Usando uma URL de fallback mais segura
+    const baseUrl = referer || `https://${Deno.env.get('SUPABASE_URL')?.split('//')[1].split('.')[0]}.vercel.app/`; 
+
     console.log(`LOG 8: Creating Checkout Session. Base URL: ${baseUrl}`);
 
-    // 7. Criar a Stripe Checkout Session
+    // 7️⃣ Criar a sessão de checkout
     const session = await stripe.checkout.sessions.create({
-      mode: 'subscription', // Assumindo que planos são assinaturas
+      mode: 'subscription',
       payment_method_types: ['card'],
       line_items: [
         {
           price_data: {
             currency: 'brl',
-            product_data: {
-              name: plano.nome,
-            },
-            unit_amount: unitAmount, // Preço em centavos
-            recurring: {
-              interval: 'month',
-            },
+            product_data: { name: plano.nome },
+            unit_amount: unitAmount,
+            recurring: { interval: 'month' },
           },
           quantity: 1,
         },
       ],
-      // URLs de redirecionamento
       success_url: `${baseUrl}painel?payment=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${baseUrl}vendas?payment=canceled`,
-      
-      // Metadados para identificar o cliente e o plano após o pagamento
-      metadata: {
-        clienteId: clienteId,
-        planoId: planoId,
-      },
-      customer_email: email, // Usando o email extraído do corpo
+      metadata: { clienteId, planoId },
+      customer_email: email,
     });
-    
+
     console.log(`LOG 9: Session created successfully. URL: ${session.url}`);
 
     return new Response(JSON.stringify({ sessionId: session.id, url: session.url }), {
@@ -132,11 +129,9 @@ serve(async (req: Request) => {
     });
 
   } catch (error) {
-    console.error('FATAL ERROR in Edge Function:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error during checkout process.';
-    
-    // Retorna 500 com a mensagem de erro detalhada no corpo
-    return new Response(JSON.stringify({ error: errorMessage }), {
+    console.error('💥 FATAL ERROR in Edge Function:', error);
+    const message = error instanceof Error ? error.message : 'Unknown error during checkout process.';
+    return new Response(JSON.stringify({ error: message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

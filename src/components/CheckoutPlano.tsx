@@ -40,7 +40,7 @@ const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano, isUpgrade = false 
 
     try {
       // 1. Cadastrar o novo cliente no Supabase Auth (Simulação de Trial)
-      const { data: _data, error: authError } = await supabase.auth.signUp({
+      const { data: authData, error: authError } = await supabase.auth.signUp({
         email: email,
         password: Math.random().toString(36).substring(2, 15), // Senha temporária
         options: {
@@ -64,6 +64,9 @@ const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano, isUpgrade = false 
         throw authError;
       }
       
+      // Se o cadastro for bem-sucedido, o usuário é automaticamente logado (sessão temporária)
+      // e o `usuario` no useSessao será atualizado.
+      
       setIsRegistered(true);
       showSuccess('Cadastro inicial realizado! Verifique seu email para definir a senha.');
 
@@ -85,6 +88,7 @@ const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano, isUpgrade = false 
     
     try {
         // 1. Determinar o ID do cliente e email
+        // No fluxo de upgrade, usa o usuário logado. No fluxo de adesão, usa o usuário recém-criado (que está no estado `usuario`).
         const finalClienteId = clienteId || usuario?.id;
         const finalEmail = emailCliente || usuario?.email;
         
@@ -166,8 +170,8 @@ const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano, isUpgrade = false 
             </p>
           </div>
           
-          {/* Aqui, usamos o email e o ID do usuário recém-criado (que ainda está na sessão) */}
-          <Button onClick={() => handleCheckout(email, usuario?.id)} className="w-full" disabled={isSubmitting}>
+          {/* No fluxo de adesão, o usuário está logado temporariamente. Usamos o ID e email da sessão. */}
+          <Button onClick={() => handleCheckout(usuario?.email, usuario?.id)} className="w-full" disabled={isSubmitting}>
             {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CreditCard className="mr-2 h-4 w-4" />}
             Ir para o Checkout (R$ {plano.preco_mensal.toFixed(2)})
           </Button>
