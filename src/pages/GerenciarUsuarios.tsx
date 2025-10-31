@@ -42,7 +42,11 @@ const GerenciarUsuarios: React.FC = () => {
   const isCliente = role === 'Cliente';
 
   const fetchDados = useCallback(async () => {
-    if (!usuario || !role) return;
+    if (!usuario || !role) {
+        // Se a sessão não estiver pronta, saímos, mas mantemos o carregandoDados em true
+        // até que o useEffect abaixo o defina como false.
+        return;
+    }
 
     setCarregandoDados(true);
     
@@ -58,6 +62,7 @@ const GerenciarUsuarios: React.FC = () => {
 
       if (clientesError) {
         showError('Erro ao carregar clientes: ' + clientesError.message);
+        setClientes([]);
       } else {
         fetchedClientes = clientesData as ClienteProfile[];
         setClientes(fetchedClientes);
@@ -77,10 +82,9 @@ const GerenciarUsuarios: React.FC = () => {
 
       if (usuariosError) {
         showError('Erro ao carregar usuários: ' + usuariosError.message);
+        setUsuarios([]);
       } else {
         fetchedUsuarios = (usuariosData as any[]).map(item => {
-          // Se cliente_id for null, ou se tbl_clientes for null (o que acontece se cliente_id for o ID do Admin),
-          // usamos 'Meus Usuários (Admin)'.
           const nomeEmpresa = item.tbl_clientes?.nome || (item.cliente_id === usuario.id ? 'Meus Usuários (Admin)' : 'N/A');
           return { ...item, nome_empresa: nomeEmpresa } as UsuarioComEmpresa;
         });
@@ -97,8 +101,10 @@ const GerenciarUsuarios: React.FC = () => {
 
       if (usuariosError) {
         showError('Erro ao carregar usuários: ' + usuariosError.message);
+        setUsuarios([]);
       } else {
-        setUsuarios(usuariosData as UsuarioComEmpresa[]);
+        fetchedUsuarios = usuariosData as UsuarioComEmpresa[];
+        setUsuarios(fetchedUsuarios);
       }
     }
     
@@ -106,8 +112,17 @@ const GerenciarUsuarios: React.FC = () => {
   }, [usuario, role, isAdmin, isCliente]);
 
   useEffect(() => {
-    fetchDados();
-  }, [fetchDados]);
+    if (!carregando) {
+        // Se a sessão terminou de carregar (carregando é false)
+        if (usuario) {
+            // Se há usuário, busca os dados
+            fetchDados();
+        } else {
+            // Se não há usuário, mas terminou de carregar, finaliza o carregamento de dados
+            setCarregandoDados(false);
+        }
+    }
+  }, [carregando, usuario, fetchDados]);
 
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFiltro(e.target.value);
@@ -185,11 +200,8 @@ const GerenciarUsuarios: React.FC = () => {
   }
 
   if (!usuario || !role || !perfil) {
-    return (
-      <LayoutPrincipal>
-        <p>Acesso negado ou sessão não carregada.</p>
-      </LayoutPrincipal>
-    );
+    // Se não há usuário, mas o carregamento terminou, redireciona para o login (tratado pelo LayoutPrincipal)
+    return <LayoutPrincipal><p>Redirecionando...</p></LayoutPrincipal>;
   }
   
   const isManagingClients = activeTab === 'clientes';
