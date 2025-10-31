@@ -79,6 +79,8 @@ const GerenciarUsuarios: React.FC = () => {
         showError('Erro ao carregar usuários: ' + usuariosError.message);
       } else {
         fetchedUsuarios = (usuariosData as any[]).map(item => {
+          // Se cliente_id for null, ou se tbl_clientes for null (o que acontece se cliente_id for o ID do Admin),
+          // usamos 'Meus Usuários (Admin)'.
           const nomeEmpresa = item.tbl_clientes?.nome || (item.cliente_id === usuario.id ? 'Meus Usuários (Admin)' : 'N/A');
           return { ...item, nome_empresa: nomeEmpresa } as UsuarioComEmpresa;
         });
@@ -96,8 +98,7 @@ const GerenciarUsuarios: React.FC = () => {
       if (usuariosError) {
         showError('Erro ao carregar usuários: ' + usuariosError.message);
       } else {
-        fetchedUsuarios = usuariosData as UsuarioComEmpresa[];
-        setUsuarios(fetchedUsuarios);
+        setUsuarios(usuariosData as UsuarioComEmpresa[]);
       }
     }
     
@@ -130,6 +131,11 @@ const GerenciarUsuarios: React.FC = () => {
     
     // Filtro de empresa (apenas para Admin)
     if (isAdmin && filtroEmpresaId !== 'todos') {
+        // Se o filtro for o ID do Admin, filtramos por cliente_id = ID do Admin
+        if (filtroEmpresaId === usuario?.id) {
+            return u.cliente_id === usuario?.id;
+        }
+        // Caso contrário, filtramos pelo ID do Cliente
         return u.cliente_id === filtroEmpresaId;
     }
 
@@ -228,35 +234,35 @@ const GerenciarUsuarios: React.FC = () => {
         </Tabs>
       )}
 
-      <div className="flex flex-col sm:flex-row mb-4 gap-4">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder={`Buscar por nome, email ${isManagingClients ? '' : 'ou empresa'}...`}
-            value={filtro}
-            onChange={handleSearch}
-            className="pl-10"
-          />
-        </div>
-        
-        {/* Filtro de Empresa (Apenas na aba Usuários e se for Admin) */}
-        {!isManagingClients && isAdmin && (
-            <Select value={filtroEmpresaId} onValueChange={setFiltroEmpresaId}>
-                <SelectTrigger className="w-full sm:w-[250px]">
-                    <Filter className="w-4 h-4 mr-2 text-muted-foreground" />
-                    <SelectValue placeholder="Filtrar por Empresa" />
-                </SelectTrigger>
-                <SelectContent>
-                    <SelectItem value="todos">Todas as Empresas</SelectItem>
-                    {empresasFiltro.map(e => (
-                        <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>
-                    ))}
-                </SelectContent>
-            </Select>
-        )}
-      </div>
-
       <TabsContent value={activeTab}>
+        <div className="flex flex-col sm:flex-row mb-4 gap-4">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder={`Buscar por nome, email ${isManagingClients ? '' : 'ou empresa'}...`}
+              value={filtro}
+              onChange={handleSearch}
+              className="pl-10"
+            />
+          </div>
+          
+          {/* Filtro de Empresa (Apenas na aba Usuários e se for Admin) */}
+          {!isManagingClients && isAdmin && empresasFiltro.length > 0 && (
+              <Select value={filtroEmpresaId} onValueChange={setFiltroEmpresaId}>
+                  <SelectTrigger className="w-full sm:w-[250px]">
+                      <Filter className="w-4 h-4 mr-2 text-muted-foreground" />
+                      <SelectValue placeholder="Filtrar por Empresa" />
+                  </SelectTrigger>
+                  <SelectContent>
+                      <SelectItem value="todos">Todas as Empresas</SelectItem>
+                      {empresasFiltro.map(e => (
+                          <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>
+                      ))}
+                  </SelectContent>
+              </Select>
+          )}
+        </div>
+
         {profilesToDisplay.length === 0 ? (
           <p className="text-center text-muted-foreground">Nenhum {targetRole} encontrado.</p>
         ) : (
