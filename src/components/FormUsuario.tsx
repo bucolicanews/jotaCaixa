@@ -85,7 +85,6 @@ type FormValues = z.infer<typeof formSchema>;
 interface FormUsuarioProps {
   criadorRole: UserRole;
   criadorPerfil: AnyProfile;
-  clienteId?: string; // ID do cliente se o criador for Admin
   usuarioInicial?: AnyProfile | null;
   onSaveComplete: () => void;
 }
@@ -103,15 +102,14 @@ const DIAS_DA_SEMANA = [
 const FormUsuario: React.FC<FormUsuarioProps> = ({
   criadorRole,
   criadorPerfil,
-  clienteId,
   usuarioInicial,
   onSaveComplete,
 }) => {
   const isEditing = !!usuarioInicial;
   const isClientBeingManagedByAdmin = criadorRole === 'Admin' && usuarioInicial && 'limite_usuarios' in usuarioInicial;
-  const isUserBeingManagedByClient = criadorRole !== 'Admin' && usuarioInicial && 'cliente_id' in usuarioInicial;
-  const isUser = isUserBeingManagedByClient || (!isEditing && criadorRole !== 'Admin'); // Novo usuário criado por Cliente
-  const isNewUser = !isEditing && isUser; // Novo: Variável para novo usuário (não cliente)
+  const isUserBeingManagedByClient = (criadorRole === 'Cliente' || criadorRole === 'Admin') && usuarioInicial && 'cliente_id' in usuarioInicial;
+  const isNewClient = criadorRole === 'Admin' && !isEditing;
+  const isNewUser = !isEditing && !isNewClient;
   
   const profileToEdit = usuarioInicial as UsuarioProfile | ClienteProfile;
   
@@ -189,7 +187,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
   });
   
   const cepValue = form.watch('cep');
-  const isClient = isClientBeingManagedByAdmin;
+  const isClient = isClientBeingManagedByAdmin || isNewClient;
   
   // Chave para forçar a re-busca do status da tag após salvar
   const [tagRefreshKey, setTagRefreshKey] = useState(0);
@@ -203,7 +201,9 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
     });
   };
 
-  const getTableName = (profile: AnyProfile) => {
+  const getTableName = (profile: AnyProfile | null, isNewClient: boolean, isNewUser: boolean): 'tbl_clientes' | 'tbl_usuarios' | null => {
+    if (isNewClient) return 'tbl_clientes';
+    if (isNewUser) return 'tbl_usuarios';
     if (!profile) return null;
     if ('limite_usuarios' in profile) return 'tbl_clientes';
     if ('cliente_id' in profile) return 'tbl_usuarios';
@@ -487,10 +487,16 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
 
   const onSubmit = async (values: FormValues) => {
     setIsSubmitting(true);
+    
+    // 1. Determinar a tabela e o ID do cliente
+    const tableName = getTableName(usuarioInicial || null, isNewClient, isNewUser); // Corrigido Erro 2
+    if (!tableName) {
+        showError('Tabela de perfil não identificada.');
+        setIsSubmitting(false);
+        return;
+    }
+    
     try {
-      const tableName = getTableName(usuarioInicial || criadorPerfil);
-      if (!tableName) throw new Error('Tabela de perfil não identificada.');
-
       const dataToUpdate: any = { nome: values.nome };
       
       if (values.senha) {
@@ -499,7 +505,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
         if (authError) throw authError;
       }
 
-      if (isClientBeingManagedByAdmin) {
+      if (isClientBeingManagedByAdmin || isNewClient) {
         // Edição/Criação de Cliente (Empresa)
         
         // Campos administrativos e de login
@@ -508,14 +514,15 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
             email: values.email, // Email é parte da identidade de login
             limite_usuarios: values.limite_usuarios,
             permissoes: values.permissoes,
-            // Campos cadastrais (cpf, rg, endereço, etc.) são gerenciados pelo próprio Cliente em /perfil.
         };
         
-        if (!isEditing) {
+        if (isNewClient) {
             // Criação de Cliente (Admin)
+            if (!values.senha) throw new Error('A senha provisória é obrigatória para novos clientes.');
+            
             const { error: authError } = await supabase.auth.signUp({
                 email: values.email,
-                password: values.senha!,
+                password: values.senha,
                 options: {
                     data: { role: 'Cliente', nome: values.nome, cliente_id: null }
                 }
@@ -531,8 +538,21 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
         const { error } = await supabase.from('tbl_clientes').update(clientUpdatePayload).eq('id', usuarioInicial!.id);
         if (error) throw error;
         
-      } else if (isUserBeingManagedByClient || isUser) {
+      } else if (isUserBeingManagedByClient || isNewUser) {
         // Edição/Criação de Usuário (Funcionário)
+        
+        // Determina o ID do cliente/empresa para vincular o usuário
+        let targetClienteId: string | null = null;
+        if (isNewUser) {
+            // Se for novo usuário, o cliente_id é o ID do criador (se for Cliente) ou o ID do Admin (se for Admin)
+            targetClienteId = (criadorRole === 'Cliente' ? (criadorPerfil as ClienteProfile)?.id : criadorPerfil?.id) || null; // Corrigido Erro 3
+        } else {
+            // Se for edição, usa o cliente_id existente
+            targetClienteId = (usuarioInicial as UsuarioProfile)?.cliente_id;
+        }
+        
+        if (!targetClienteId) throw new Error('ID do cliente não encontrado para vincular o usuário.');
+
         dataToUpdate.permissoes = values.permissoes;
         
         // Dados de Folga
@@ -580,14 +600,13 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
         dataToUpdate.cartao_pis_url = values.cartao_pis_url || null;
         dataToUpdate.ja_admitido_anteriormente = values.ja_admitido_anteriormente;
         
-        const targetClienteId = clienteId || (criadorPerfil as ClienteProfile)?.id;
-        if (!targetClienteId) throw new Error('ID do cliente não encontrado para vincular o usuário.');
-
-        if (!isEditing) {
+        if (isNewUser) {
             // Criação de Usuário
+            if (!values.senha) throw new Error('A senha provisória é obrigatória para novos usuários.');
+            
             const { error: authError } = await supabase.auth.signUp({
                 email: values.email,
-                password: values.senha!,
+                password: values.senha,
                 options: {
                     data: { role: 'Usuario', nome: values.nome, cliente_id: targetClienteId }
                 }
@@ -624,10 +643,10 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
 
   // --- Renderização Principal ---
 
-  if (isClientBeingManagedByAdmin) {
+  if (isClientBeingManagedByAdmin || isNewClient) {
     // Renderização para Cliente (Empresa)
     const clientProfile = usuarioInicial as ClienteProfile;
-    const resourceId = clientProfile.id;
+    const resourceId = clientProfile?.id;
     
     // Permissões que o Admin pode gerenciar para o Cliente (Empresa)
     const permissoesClienteAdmin = PERMISSOES_DISPONIVEIS.filter(p => p.key !== 'ponto_eletronico' && p.key !== 'visualizar_proprio_ponto');
@@ -654,7 +673,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
               label="Email (Login)" 
               placeholder="contato@empresa.com" 
               resourceId={resourceId} 
-              disabled={!isEditing}
+              disabled={isEditing}
               mapArray={CAMPOS_CLIENTE_MAPA}
               isOptional={false}
           />
@@ -834,10 +853,10 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                     )}
                 />
                 
-                {isEditing && isUser && (
+                {isEditing && isUserBeingManagedByClient && (
                     <div className="pt-6 border-t">
                         <GerenciarFerias 
-                            funcionarioId={usuarioInicial.id} 
+                            funcionarioId={usuarioInicial!.id} 
                             empresaId={(usuarioInicial as UsuarioProfile).cliente_id!} 
                         />
                     </div>

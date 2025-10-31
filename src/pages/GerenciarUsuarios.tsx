@@ -173,7 +173,6 @@ const GerenciarUsuarios: React.FC = () => {
             <FormUsuario 
               criadorRole={role}
               criadorPerfil={perfil}
-              clienteId={isCliente ? usuario.id : undefined}
               usuarioInicial={perfilParaEditar}
               onSaveComplete={handleSaveComplete}
             />

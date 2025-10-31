@@ -12,6 +12,7 @@ export interface ContratoModelo {
   conteudo_template: string;
   empresa_id: string | null;
   criado_em: string;
+  updated_at: string; // Adicionado para resolver TS2339
 }
 
 export interface ContratoGerado {
