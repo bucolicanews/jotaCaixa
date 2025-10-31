@@ -21,7 +21,7 @@ import { ptBR } from 'date-fns/locale';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import GerenciarFerias from './GerenciarFerias';
 import { useTagManager } from '@/hooks/use-tag-manager';
-import { CAMPOS_CLIENTE_MAPA, CAMPOS_USUARIO_MAPA } from '@/config/contrato-campos-mapeaveis';
+import { CAMPOS_USUARIO_MAPA } from '@/config/contrato-campos-mapeaveis';
 import { Label } from '@/components/ui/label';
 
 const textOptional = z.string().optional().or(z.literal(''));
@@ -506,7 +506,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
       }
 
       if (isClientBeingManagedByAdmin || isNewClient) {
-        // Edição/Criação de Cliente (Empresa)
+        // Edição/Criação de Cliente (Empresa do Sistema)
         
         // Campos administrativos e de login
         const clientUpdatePayload: Partial<ClienteProfile> = {
@@ -514,12 +514,12 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
             email: values.email, // Email é parte da identidade de login
             limite_usuarios: values.limite_usuarios,
             permissoes: values.permissoes,
+            // Não incluímos campos cadastrais aqui, pois são gerenciados pelo próprio cliente
         };
         
         if (isNewClient) {
             // CRIAÇÃO DE NOVO CLIENTE (ADMIN) - USANDO INVITE
             
-            // Usando o método signUp com um email temporário e data para forçar o fluxo de redefinição de senha
             const { error: authError } = await supabase.auth.signUp({
                 email: values.email,
                 password: Math.random().toString(36).substring(2, 15), // Senha temporária
@@ -605,7 +605,6 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
         if (isNewUser) {
             // CRIAÇÃO DE NOVO USUÁRIO (FUNCIONÁRIO) - USANDO INVITE
             
-            // Usando o método signUp com um email temporário e data para forçar o fluxo de redefinição de senha
             const { error: authError } = await supabase.auth.signUp({
                 email: values.email,
                 password: Math.random().toString(36).substring(2, 15), // Senha temporária
@@ -658,41 +657,25 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
   // --- Renderização Principal ---
 
   if (isClientScope) {
-    // Renderização para Cliente (Empresa)
+    // Renderização para Cliente (Empresa do Sistema)
     
     return (
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
           <h3 className="font-semibold text-lg">Dados de Identificação</h3>
           
-          {/* Nome da Empresa (Mapeável) */}
-          <TaggedFormField 
-              fieldName="nome" 
-              label={nomeLabel} 
-              placeholder="Nome completo" 
-              resourceId={resourceId} 
-              disabled={false}
-              mapArray={CAMPOS_CLIENTE_MAPA}
-              isOptional={false}
-          />
+          {/* Nome da Empresa */}
+          {renderInputField('nome', nomeLabel, 'Nome completo', true, false)}
           
-          {/* Email de Login (Mapeável e desabilitado na edição) */}
-          <TaggedFormField 
-              fieldName="email" 
-              label="Email (Login)" 
-              placeholder="contato@empresa.com" 
-              resourceId={resourceId} 
-              disabled={isEditing}
-              mapArray={CAMPOS_CLIENTE_MAPA}
-              isOptional={false}
-          />
+          {/* Email de Login (desabilitado na edição) */}
+          {renderInputField('email', 'Email (Login)', 'contato@empresa.com', true, isEditing)}
           
           {/* SENHA: Apenas na edição */}
           {isEditing && renderInputField('senha', 'Alterar Senha (Opcional)', '••••••••', false, false)}
           
           <h4 className="font-semibold mt-6 border-t pt-4">Configurações e Permissões</h4>
           <p className="text-sm text-muted-foreground mb-4">
-            Os dados cadastrais (CPF/CNPJ, endereço, etc.) são gerenciados pelo próprio cliente na seção "Meu Perfil".
+            Estes campos controlam o acesso da empresa ao sistema.
           </p>
           
           {renderNumberField('limite_usuarios', 'Limite de Usuários da Equipe', '5', !isEditing)}
