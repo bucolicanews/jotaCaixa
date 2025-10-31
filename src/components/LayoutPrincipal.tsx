@@ -3,17 +3,18 @@ import { useSessao } from '@/hooks/use-sessao';
 import { useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { ClienteProfile } from '@/types/usuario';
-import { Card, CardDescription, CardHeader, CardTitle } from './ui/card';
+import { Card, CardDescription, CardHeader, CardTitle, CardContent } from './ui/card';
 import { cn } from '@/lib/utils';
 import Header from './Header';
-import TrialBanner from './TrialBanner'; // Importando o novo componente
+import TrialBanner from './TrialBanner';
+import TrialButton from './TrialButton'; // Importando o novo componente
 
 interface LayoutPrincipalProps {
   children: React.ReactNode;
 }
 
 const LayoutPrincipal: React.FC<LayoutPrincipalProps> = ({ children }) => {
-  const { usuario, carregando, role, perfil } = useSessao();
+  const { usuario, carregando, role, perfil, refetch } = useSessao();
   const navegar = useNavigate();
 
   if (carregando) {
@@ -30,6 +31,7 @@ const LayoutPrincipal: React.FC<LayoutPrincipalProps> = ({ children }) => {
   }
 
   const isPendingClient = role === 'Cliente' && !(perfil as ClienteProfile)?.aprovado;
+  const clienteProfile = perfil as ClienteProfile;
 
   if (isPendingClient) {
     return (
@@ -43,6 +45,13 @@ const LayoutPrincipal: React.FC<LayoutPrincipalProps> = ({ children }) => {
                 Sua empresa foi cadastrada e está aguardando a aprovação de um administrador. Você será notificado quando sua conta for ativada.
               </CardDescription>
             </CardHeader>
+            <CardContent>
+                {/* Adicionando o botão de Trial */}
+                <TrialButton 
+                    clienteProfile={clienteProfile} 
+                    onTrialActivated={refetch} 
+                />
+            </CardContent>
           </Card>
         </main>
       </div>
