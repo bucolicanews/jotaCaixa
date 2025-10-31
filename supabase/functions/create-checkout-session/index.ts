@@ -90,7 +90,7 @@ serve(async (req: Request) => {
     console.log('LOG: Initializing Stripe...');
     const stripe = new Stripe(stripeSecretKey, {
       apiVersion: '2024-06-20',
-      httpClient: Stripe.createFetchHttpClient(),
+      // REMOVIDO: httpClient: Stripe.createFetchHttpClient(),
     });
     
     const unitAmount = Math.round(plano.preco_mensal * 100);
