@@ -20,6 +20,7 @@ type FormValues = z.infer<typeof formSchema>;
 const FormConfiguracoesStripe: React.FC = () => {
   const { role, carregando: carregandoSessao } = useSessao();
   const [loadingData, setLoadingData] = useState(true);
+  const [existingId, setExistingId] = useState<string | null>(null); // Armazena o ID da linha existente
   const isAdmin = role === 'Admin';
 
   const form = useForm<FormValues>({
@@ -49,10 +50,13 @@ const FormConfiguracoesStripe: React.FC = () => {
     if (error && error.code !== 'PGRST116') { // PGRST116 = No rows found
       showError('Erro ao carregar configurações do Stripe: ' + error.message);
     } else if (data) {
+      setExistingId(data.id); // Armazena o ID para uso no update
       form.reset({
         stripe_publishable_key: data.stripe_publishable_key || '',
         stripe_secret_key: data.stripe_secret_key || '',
       });
+    } else {
+      setExistingId(null);
     }
     setLoadingData(false);
   }, [isAdmin, form]);
@@ -76,15 +80,27 @@ const FormConfiguracoesStripe: React.FC = () => {
     };
 
     try {
-      // Tenta atualizar ou inserir (upsert)
-      const { error } = await supabase
-        .from('configuracoes_stripe')
-        .upsert(dataToSave, { onConflict: 'empresa_id' }); // Conflito em empresa_id=NULL
+      let error = null;
+      
+      if (existingId) {
+        // Se o ID existir, atualiza a linha existente
+        const { error: updateError } = await supabase
+          .from('configuracoes_stripe')
+          .update(dataToSave)
+          .eq('id', existingId);
+        error = updateError;
+      } else {
+        // Se o ID não existir, insere uma nova linha
+        const { error: insertError } = await supabase
+          .from('configuracoes_stripe')
+          .insert(dataToSave);
+        error = insertError;
+      }
 
       if (error) throw error;
 
       showSuccess('Configurações do Stripe salvas com sucesso!');
-      fetchConfig(); // Re-busca para garantir que o cache seja atualizado (se houver)
+      fetchConfig(); // Re-busca para atualizar o estado e o ID
     } catch (error: any) {
       showError(`Falha ao salvar configurações: ${error.message}`);
     }
