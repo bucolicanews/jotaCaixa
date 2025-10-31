@@ -70,13 +70,16 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // Lógica de Redirecionamento Pós-Login
   useEffect(() => {
       if (!estado.carregando && estado.usuario) {
-          const isUnassignedUser = estado.role === 'Usuario' && !(estado.perfil as UsuarioProfile)?.cliente_id;
-          
-          if (isUnassignedUser) {
-              // Redireciona para a seleção de perfil se for um usuário recém-cadastrado
-              navigate('/selecao-perfil', { replace: true });
-          } else if (estado.role === 'Cliente' && estado.perfil && !('aprovado' in estado.perfil && estado.perfil.aprovado === false)) {
-              // Redireciona para o painel se for Admin ou Cliente aprovado
+          // Se for Cliente (aprovado ou pendente) ou Admin, redireciona para o painel.
+          // O LayoutPrincipal agora lida com a tela de 'Aguardando Aprovação' para Clientes pendentes.
+          if (estado.role === 'Cliente' || estado.role === 'Admin') {
+              if (window.location.pathname === '/login' || window.location.pathname === '/') {
+                  navigate('/painel', { replace: true });
+              }
+          }
+          // Usuários (Funcionários) são redirecionados para o painel se estiverem vinculados.
+          // Usuários não vinculados não devem mais existir, pois o padrão agora é Cliente.
+          if (estado.role === 'Usuario' && (estado.perfil as UsuarioProfile)?.cliente_id) {
               if (window.location.pathname === '/login' || window.location.pathname === '/') {
                   navigate('/painel', { replace: true });
               }

@@ -30,7 +30,6 @@ import NovoContrato from "./pages/NovoContrato";
 import PreencherContrato from "./pages/PreencherContrato";
 import GerenciarPlanos from "./pages/GerenciarPlanos";
 import Vendas from "./pages/Vendas";
-import SelecaoPerfil from "./pages/SelecaoPerfil";
 import { supabase } from "./integrations/supabase/client";
 import { showSuccess, showError } from "./utils/toast";
 import { useSessao } from "./hooks/use-sessao";
@@ -117,9 +116,6 @@ const App = () => (
             <Route path="/vendas" element={<Vendas />} />
             <Route path="/login" element={<Login />} />
             <Route path="/atualizar-senha" element={<AtualizarSenha />} />
-            
-            {/* Rota de Seleção de Perfil */}
-            <Route path="/selecao-perfil" element={<SelecaoPerfil />} />
             
             {/* Rotas Autenticadas (Protegidas pelo LayoutPrincipal) */}
             <Route path="/painel" element={<Painel />} />

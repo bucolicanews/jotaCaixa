@@ -40,16 +40,16 @@ const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano, isUpgrade = false 
 
     try {
       // 1. Cadastrar o novo cliente no Supabase Auth (Simulação de Trial)
+      // IMPORTANTE: Definir role: 'Cliente' e plano_id para que o trigger insira diretamente em tbl_clientes.
       const { error: authError } = await supabase.auth.signUp({
         email: email,
         password: Math.random().toString(36).substring(2, 15), // Senha temporária
         options: {
           emailRedirectTo: `${window.location.origin}/atualizar-senha`,
           data: { 
-            role: 'Cliente', 
+            role: 'Cliente', // Define a role para que o trigger insira em tbl_clientes
             nome: nomeEmpresa, 
-            cliente_id: null, 
-            plano_id: plano.id, 
+            plano_id: plano.id, // Indica que veio do fluxo de vendas/plano
             permissoes: JSON.stringify(plano.permissoes), 
           }
         }
