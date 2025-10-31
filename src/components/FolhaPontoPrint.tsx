@@ -63,6 +63,29 @@ const FolhaPontoPrint: React.FC<FolhaPontoPrintProps> = ({
     const displayExtraHours = formatarHoras(Math.abs(minutosDiferenca));
     
     const diasOrdenados = Object.keys(diasProcessados).sort();
+    
+    const getObservacaoPrincipal = (diaData: DiaProcessado): string => {
+        if (diaData.isFerias) return 'FÉRIAS';
+        if (diaData.isFalta) {
+            const faltaRegistro = diaData.registros.find(r => r.tipo === 'Falta');
+            return faltaRegistro?.atestado_url ? 'Falta Justificada (Atestado Anexado)' : 'Falta Injustificada';
+        }
+        if (diaData.isAbono) {
+            const abonoRegistro = diaData.registros.find(r => r.tipo === 'Abono');
+            if (diaData.isCompensacaoAbono) {
+                return abonoRegistro?.observacao || 'Folga Compensatória';
+            }
+            return `Abono (${abonoRegistro?.observacao || '8h'})`;
+        }
+        if (diaData.isFolgaFixa && diaData.hasPontoRecords) {
+            if (diaData.decisionRecord === 'Extra100') return 'Folga Trabalhada (Paga Extra 100%)';
+            if (diaData.decisionRecord === 'Compensacao') return 'Folga Trabalhada (Compensada)';
+            if (diaData.needsManagement) return 'Folga Trabalhada (Gestão Pendente)';
+        }
+        if (diaData.isFolgaFixa && !diaData.hasPontoRecords) return 'Folga Fixa';
+        
+        return '';
+    };
 
     return (
         <div className="print-container">
@@ -113,17 +136,7 @@ const FolhaPontoPrint: React.FC<FolhaPontoPrintProps> = ({
                             const entradas = batidas.filter(r => r.tipo === 'Entrada');
                             const saidas = batidas.filter(r => r.tipo === 'Saida');
                             
-                            const observacoes = diaData.registros
-                                .filter(r => r.tipo !== 'Entrada' && r.tipo !== 'Saida')
-                                .map(r => {
-                                    if (r.tipo === 'Falta') return r.atestado_url ? 'Falta Justificada' : 'Falta Injustificada';
-                                    if (r.tipo === 'Abono') return `Abono (${r.observacao})`;
-                                    if (r.tipo === 'Compensacao') return 'Folga Compensada';
-                                    if (r.tipo === 'Extra100') return 'Folga Paga Extra 100%';
-                                    return r.observacao || '';
-                                })
-                                .filter(obs => obs)
-                                .join('; ');
+                            const observacaoPrincipal = getObservacaoPrincipal(diaData);
                                 
                             const isFolga = diaData.isFolgaFixa && !diaData.hasPontoRecords && !diaData.isFerias;
                             const isFaltaOuAbono = diaData.isFalta || diaData.isAbono;
@@ -148,7 +161,7 @@ const FolhaPontoPrint: React.FC<FolhaPontoPrintProps> = ({
                                     <td>{entradas.map(r => format(parseISO(r.horario_registro), 'HH:mm')).join(' | ')}</td>
                                     <td>{saidas.map(r => format(parseISO(r.horario_registro), 'HH:mm')).join(' | ')}</td>
                                     <td>{totalDiaDisplay}</td>
-                                    <td>{observacoes}</td>
+                                    <td>{observacaoPrincipal}</td>
                                 </tr>
                             );
                         })}
