@@ -651,6 +651,9 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
   // Permissões que o Admin pode gerenciar para o Cliente (Empresa)
   const permissoesClienteAdmin = PERMISSOES_DISPONIVEIS.filter(p => p.key !== 'ponto_eletronico' && p.key !== 'visualizar_proprio_ponto');
 
+  // Determina o rótulo do campo Nome
+  const nomeLabel = isClientScope ? 'Nome da Empresa' : 'Nome Completo do Usuário';
+
 
   // --- Renderização Principal ---
 
@@ -665,7 +668,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
           {/* Nome da Empresa (Mapeável) */}
           <TaggedFormField 
               fieldName="nome" 
-              label="Nome da Empresa" 
+              label={nomeLabel} 
               placeholder="Nome completo" 
               resourceId={resourceId} 
               disabled={false}
@@ -740,7 +743,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
           {/* TAB 1: GERAL (Nome, Email, Senha, Permissões, Salário) */}
           <TabsContent value="pessoal" className="mt-4 space-y-4 p-4">
             <FormField control={form.control as unknown as Control<FormValues>} name="nome" render={({ field }) => (
-              <FormItem><FormLabel>Nome Completo</FormLabel><FormControl><Input placeholder="Nome completo" {...field} disabled={isNewUser} /></FormControl><FormMessage /></FormItem>
+              <FormItem><FormLabel>{nomeLabel}</FormLabel><FormControl><Input placeholder="Nome completo" {...field} disabled={isNewUser} /></FormControl><FormMessage /></FormItem>
             )} />
             <FormField control={form.control as unknown as Control<FormValues>} name="email" render={({ field }) => (
               <FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" placeholder="email@exemplo.com" {...field} disabled={isEditing} /></FormControl><FormMessage /></FormItem>

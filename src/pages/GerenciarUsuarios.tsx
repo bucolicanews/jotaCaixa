@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { useSessao } from '@/hooks/use-sessao';
-import { Loader2, Plus, Search, Trash2, Edit, Building2, Filter, CheckCircle } from 'lucide-react';
+import { Loader2, Plus, Search, Trash2, Edit, Building2, Filter, CheckCircle, Users as UsersIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -133,30 +133,39 @@ const GerenciarUsuarios: React.FC = () => {
     setFiltro(e.target.value);
   };
 
+  const meusFuncionarios = usuarios.filter(u => u.cliente_id === usuario?.id);
+  const funcionariosClientes = usuarios.filter(u => u.cliente_id !== usuario?.id);
+
   const filteredClientes = clientes.filter(c => 
     c.nome.toLowerCase().includes(filtro.toLowerCase()) ||
     c.email.toLowerCase().includes(filtro.toLowerCase())
   );
 
-  const filteredUsuarios = usuarios.filter(u => {
+  const filterUsers = (userList: UsuarioComEmpresa[]) => {
     const termoBusca = filtro.toLowerCase();
-    const nomeEmpresa = u.nome_empresa || '';
-    
-    const textMatch = u.nome.toLowerCase().includes(termoBusca) ||
-           u.email.toLowerCase().includes(termoBusca) ||
-           nomeEmpresa.toLowerCase().includes(termoBusca);
-           
-    if (!textMatch) return false;
-    
-    if (isAdmin && filtroEmpresaId !== 'todos') {
-        if (filtroEmpresaId === usuario?.id) {
-            return u.cliente_id === usuario?.id;
+    return userList.filter(u => {
+        const nomeEmpresa = u.nome_empresa || '';
+        
+        const textMatch = u.nome.toLowerCase().includes(termoBusca) ||
+               u.email.toLowerCase().includes(termoBusca) ||
+               nomeEmpresa.toLowerCase().includes(termoBusca);
+               
+        if (!textMatch) return false;
+        
+        if (isAdmin && activeTab === 'funcionarios_clientes' && filtroEmpresaId !== 'todos') {
+            return u.cliente_id === filtroEmpresaId;
         }
-        return u.cliente_id === filtroEmpresaId;
-    }
 
-    return true;
-  });
+        return true;
+    });
+  };
+  
+  const filteredMeusFuncionarios = filterUsers(meusFuncionarios);
+  const filteredFuncionariosClientes = filterUsers(funcionariosClientes);
+  
+  // Variável para a visualização de Cliente/Usuário (não Admin)
+  const filteredClientUsers = filterUsers(usuarios);
+
 
   const handleDelete = async (id: string, nome: string, targetRole: UserRole) => {
     if (!window.confirm(`Tem certeza que deseja deletar a conta de ${nome}? Esta ação é irreversível.`)) return;
@@ -177,7 +186,7 @@ const GerenciarUsuarios: React.FC = () => {
       showError('Falha ao deletar conta: ' + error.message);
     }
   };
-  
+
   const handleAprovarCliente = async (cliente: ClienteProfile) => {
     if (!window.confirm(`Tem certeza que deseja aprovar a empresa ${cliente.nome}?`)) return;
     
@@ -227,7 +236,7 @@ const GerenciarUsuarios: React.FC = () => {
                         <TableHead>Nome</TableHead>
                         <TableHead>Email</TableHead>
                         {currentRole === 'Cliente' && <TableHead>Limite Usuários</TableHead>}
-                        {currentRole === 'Usuario' && isAdmin && <TableHead>Empresa</TableHead>}
+                        {currentRole === 'Usuario' && isAdmin && activeTab === 'funcionarios_clientes' && <TableHead>Empresa</TableHead>}
                         {currentRole === 'Usuario' && <TableHead>Início Contrato</TableHead>}
                         {currentRole === 'Cliente' && <TableHead>Status</TableHead>}
                         <TableHead className="text-right">Ações</TableHead>
@@ -288,7 +297,7 @@ const GerenciarUsuarios: React.FC = () => {
                                 <TableRow key={id}>
                                     <TableCell className="font-medium">{nome}</TableCell>
                                     <TableCell>{email}</TableCell>
-                                    {isAdmin && (
+                                    {isAdmin && activeTab === 'funcionarios_clientes' && (
                                         <TableCell className="text-sm text-muted-foreground">{userProfile.nome_empresa || 'N/A'}</TableCell>
                                     )}
                                     <TableCell>
@@ -367,9 +376,10 @@ const GerenciarUsuarios: React.FC = () => {
 
       {isAdmin ? (
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full mb-6">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="clientes" className="flex items-center"><Building2 className="w-4 h-4 mr-2" /> Clientes (Empresas)</TabsTrigger>
-            <TabsTrigger value="usuarios" className="flex items-center"><Building2 className="w-4 h-4 mr-2" /> Usuários (Funcionários)</TabsTrigger>
+            <TabsTrigger value="meus_funcionarios" className="flex items-center"><UsersIcon className="w-4 h-4 mr-2" /> Meus Funcionários</TabsTrigger>
+            <TabsTrigger value="funcionarios_clientes" className="flex items-center"><UsersIcon className="w-4 h-4 mr-2" /> Funcionários dos Clientes</TabsTrigger>
           </TabsList>
           
           <TabsContent value="clientes">
@@ -387,7 +397,22 @@ const GerenciarUsuarios: React.FC = () => {
             {renderTableContent(filteredClientes, 'Cliente')}
           </TabsContent>
           
-          <TabsContent value="usuarios">
+          <TabsContent value="meus_funcionarios">
+            <div className="flex flex-col sm:flex-row mb-4 gap-4">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar por nome ou email..."
+                  value={filtro}
+                  onChange={handleSearch}
+                  className="pl-10"
+                />
+              </div>
+            </div>
+            {renderTableContent(filteredMeusFuncionarios, 'Usuario')}
+          </TabsContent>
+          
+          <TabsContent value="funcionarios_clientes">
             <div className="flex flex-col sm:flex-row mb-4 gap-4">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -407,14 +432,15 @@ const GerenciarUsuarios: React.FC = () => {
                       </SelectTrigger>
                       <SelectContent>
                           <SelectItem value="todos">Todas as Empresas</SelectItem>
-                          {empresasFiltro.map(e => (
+                          {/* Filtra a opção 'Meus Usuários (Admin)' para esta aba */}
+                          {empresasFiltro.filter(e => e.id !== usuario?.id).map(e => (
                               <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>
                           ))}
                       </SelectContent>
                   </Select>
               )}
             </div>
-            {renderTableContent(filteredUsuarios, 'Usuario')}
+            {renderTableContent(filteredFuncionariosClientes, 'Usuario')}
           </TabsContent>
         </Tabs>
       ) : (
@@ -431,7 +457,7 @@ const GerenciarUsuarios: React.FC = () => {
               />
             </div>
           </div>
-          {renderTableContent(filteredUsuarios, 'Usuario')}
+          {renderTableContent(filteredClientUsers, 'Usuario')}
         </>
       )}
     </LayoutPrincipal>
