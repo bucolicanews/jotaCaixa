@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Zap, Loader2, User, Building2, Check, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'; // Reimportando todos os componentes Card
+import { Card } from '@/components/ui/card'; // Apenas Card é mantido
 import { supabase } from '@/integrations/supabase/client';
 import { showError } from '@/utils/toast';
 import { Plano } from '@/types/plano';
