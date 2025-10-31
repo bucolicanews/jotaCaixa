@@ -49,21 +49,15 @@ const TrialBanner: React.FC = () => {
         // 2. Determinar se é Trial
         const daysRemaining = differenceInDays(dataFim, new Date());
         
-        // O cliente está em Trial se:
-        // a) A data de fim de acesso for futura.
-        // b) E a duração restante for próxima ao período de trial (ex: 7 dias)
-        //    OU a duração for menor que 30 dias (para pegar trials de 7 ou 20 dias).
-        //    Se o pagamento for feito, o acesso é estendido para 30 dias, o que não é um trial.
+        // Consideramos TRIAL APENAS se a data de fim de acesso for futura E
+        // o número de dias restantes for próximo ao período de trial (ex: 7 dias)
+        // e não for o período padrão de 30 dias de um plano pago.
         
-        // Vamos considerar Trial se a data de fim de acesso for menor que 30 dias no futuro.
-        // Se o pagamento for feito, o acesso é estendido para 30 dias, mas o TrialButton
-        // só é usado quando o cliente está PENDENTE.
+        // Se daysRemaining for > 30, é um plano pago de longo prazo (não implementado, mas seguro).
+        // Se daysRemaining for 30, é o primeiro mês pago (não é trial).
+        // Se daysRemaining for <= planoData.dias_trial (ex: 7), é trial.
         
-        // Se o cliente pagou, o data_fim_acesso é 30 dias. Se ele está no fluxo de TrialButton,
-        // o data_fim_acesso é 7 dias.
-        
-        // Vamos usar uma heurística mais simples: se o acesso for maior que 30 dias, não é trial.
-        const isTrialPeriod = isFuture(dataFim) && daysRemaining < 30; 
+        const isTrialPeriod = isFuture(dataFim) && daysRemaining <= (planoData.dias_trial || 7); 
         
         setIsTrial(isTrialPeriod);
         setLoading(false);
