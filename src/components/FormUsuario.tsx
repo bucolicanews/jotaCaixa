@@ -23,6 +23,7 @@ import GerenciarFerias from './GerenciarFerias';
 import { useTagManager } from '@/hooks/use-tag-manager';
 import { CAMPOS_CLIENTE_MAPA, CAMPOS_USUARIO_MAPA } from '@/config/contrato-campos-mapeaveis';
 import { Label } from '@/components/ui/label';
+// import { Separator } from './ui/separator'; // Removido: TS6133
 
 const textOptional = z.string().optional().or(z.literal(''));
 const urlSchema = z.string().url('URL inválida.').optional().or(z.literal(''));
@@ -315,7 +316,6 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
   const renderDocumentField = (fieldName: keyof FormValues, label: string, required: boolean = false) => {
     const url = form.watch(fieldName) as string | undefined;
     const isUploaded = !!url;
-    // Corrigindo o erro de referência circular e tipagem
     const isSaving = form.formState.isSubmitting || uploading || isSubmitting; 
 
     const handleFileUpload = async (file: File) => {
@@ -509,6 +509,16 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
         dataToUpdate.cpf = values.cpf || null;
         dataToUpdate.rg = values.rg || null;
         dataToUpdate.email = values.email || null;
+        dataToUpdate.nome_mae = values.nome_mae || null;
+        dataToUpdate.nome_pai = values.nome_pai || null;
+        dataToUpdate.telefone = values.telefone || null;
+        dataToUpdate.cep = values.cep || null;
+        dataToUpdate.endereco = values.endereco || null;
+        dataToUpdate.numero = values.numero || null;
+        dataToUpdate.complemento = values.complemento || null;
+        dataToUpdate.bairro = values.bairro || null;
+        dataToUpdate.cidade = values.cidade || null;
+        dataToUpdate.estado = values.estado || null;
         
         // Se for criação, insere o usuário no auth primeiro
         if (!isEditing) {
@@ -667,6 +677,25 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
               />
           </div>
           
+          <h4 className="font-semibold mt-6 border-t pt-4">Endereço e Contato</h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {renderInputField('telefone', 'Telefone de Contato', '(00) 90000-0000', false, !isEditing)}
+              {renderInputField('nome_mae', 'Nome da Mãe', 'Nome completo da mãe', false, !isEditing)}
+          </div>
+          {renderInputField('nome_pai', 'Nome do Pai', 'Nome completo do pai', false, !isEditing)}
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {renderInputField('cep', 'CEP', '00000-000', false, !isEditing)}
+              {renderInputField('cidade', 'Cidade', 'São Paulo', false, !isEditing)}
+              {renderInputField('estado', 'Estado (UF)', 'SP', false, !isEditing)}
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {renderInputField('endereco', 'Logradouro/Rua', 'Rua Exemplo', false, !isEditing)}
+              {renderInputField('numero', 'Número', '123', false, !isEditing)}
+              {renderInputField('complemento', 'Complemento', 'Apto 101', false, !isEditing)}
+          </div>
+          {renderInputField('bairro', 'Bairro', 'Centro', false, !isEditing)}
+
           <h4 className="font-semibold mt-6 border-t pt-4">Configurações e Permissões</h4>
           {renderNumberField('limite_usuarios', 'Limite de Usuários da Equipe', '5', !isEditing)}
 
@@ -813,7 +842,6 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                                                                 if (checked) {
                                                                     arrayField.onChange([...current, item.value]);
                                                                 } else {
-                                                                    // Corrigido: Tipagem implícita 'any'
                                                                     arrayField.onChange(
                                                                         current.filter((value: string) => value !== item.value)
                                                                     );
