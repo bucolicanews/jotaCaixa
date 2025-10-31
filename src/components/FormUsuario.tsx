@@ -7,8 +7,8 @@ import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Loader2, Upload, CalendarIcon, CheckCircle2, XCircle, Tag } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
-import { showError, showSuccess } from '@/utils/toast';
+import { supabase } from '@/integrations/supabase/client'; // Import necessário
+import { showError, showSuccess } from '@/utils/toast'; // Imports necessários
 import { AnyProfile, ClienteProfile, UserRole, UsuarioProfile } from '@/types/usuario';
 import { PERMISSOES_DISPONIVEIS, Permissao } from '../config/permissoes';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
@@ -16,7 +16,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from './
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
-import { format } from 'date-fns';
+import { format } from 'date-fns'; // Import necessário
 import { ptBR } from 'date-fns/locale';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import GerenciarFerias from './GerenciarFerias';
@@ -324,6 +324,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, c
   };
 
   const onSubmit = async (values: FormValues) => {
+    setIsSubmitting(true);
     try {
       if (isEditing && usuarioInicial) {
         const tableName = getTableName(usuarioInicial);
@@ -407,13 +408,16 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, c
         showSuccess('Conta atualizada com sucesso!');
 
       } else {
-        // Criação de Novo Usuário (Apenas nome, email, senha, role e cliente_id)
+        // --- LÓGICA DE CRIAÇÃO DE NOVO USUÁRIO/CLIENTE ---
         if (!values.senha) {
           form.setError('senha', { message: 'A senha é obrigatória para novos usuários.' });
           return;
         }
+        
         const roleToCreate = criadorRole === 'Admin' ? 'Cliente' : 'Usuario';
-        const { error } = await supabase.auth.signUp({
+        
+        // 1. Sign Up
+        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
           email: values.email,
           password: values.senha!,
           options: {
@@ -424,40 +428,89 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, c
             },
           },
         });
-        if (error) throw error;
+        if (signUpError) throw signUpError;
         
-        // Atualiza permissões e dados cadastrais/documentos após a criação
-        const { error: userUpdateError } = await supabase.from('tbl_usuarios').update({ 
-            permissoes: values.permissoes,
-            // Adiciona dados de folga
-            dias_folga_fixos: values.dias_folga_fixos || ['Saturday', 'Sunday'],
-            folga_domingo_obrigatoria: values.folga_domingo_obrigatoria,
-            // Adiciona dados de salário/jornada
-            salario: values.salario,
-            horas_semanais: values.horas_semanais,
-            horas_mensais: values.horas_mensais,
-            // Adiciona dados cadastrais básicos na criação
-            cpf: values.cpf || null,
-            rg: values.rg || null,
-            nome_mae: values.nome_mae || null,
-            nome_pai: values.nome_pai || null,
-            telefone: values.telefone || null,
-            cep: values.cep || null,
-            endereco: values.endereco || null,
-            numero: values.numero || null,
-            complemento: values.complemento || null,
-            bairro: values.bairro || null,
-            cidade: values.cidade || null,
-            estado: values.estado || null,
-        }).eq('email', values.email);
+        const newUserId = signUpData.user?.id;
+        if (!newUserId) throw new Error('Falha ao obter ID do novo usuário.');
         
-        if (userUpdateError) throw new Error('Usuário criado, mas falha ao definir dados iniciais.');
+        let updateError: any = null;
+
+        if (roleToCreate === 'Cliente') {
+            // 2a. Atualiza Cliente (Empresa)
+            const dataToUpdate: any = {
+                limite_usuarios: values.limite_usuarios,
+                permissoes: values.permissoes,
+                // Dados Cadastrais
+                cpf: values.cpf || null,
+                rg: values.rg || null,
+                nome_mae: values.nome_mae || null,
+                nome_pai: values.nome_pai || null,
+                telefone: values.telefone || null,
+                cep: values.cep || null,
+                endereco: values.endereco || null,
+                numero: values.numero || null,
+                complemento: values.complemento || null,
+                bairro: values.bairro || null,
+                cidade: values.cidade || null,
+                estado: values.estado || null,
+            };
+            
+            const { error } = await supabase.from('tbl_clientes').update(dataToUpdate).eq('id', newUserId);
+            updateError = error;
+            
+            // 3. INSERIR TAGS PADRÃO (RESOLVE O PROBLEMA DO CHECKBOX)
+            const tagsToInsert = TAG_FIELDS_TO_MANAGE.map(m => ({
+                empresa_id: newUserId,
+                nome_tag: m.tag,
+                descricao: m.label,
+                origem_dado: `tbl_clientes.${m.field}`,
+            }));
+            
+            const { error: tagInsertError } = await supabase
+                .from('contrato_tags')
+                .insert(tagsToInsert);
+            
+            if (tagInsertError) {
+                console.error("Falha ao inserir tags padrão:", tagInsertError);
+            }
+
+        } else {
+            // 2b. Atualiza Usuário (Funcionário)
+            const { error } = await supabase.from('tbl_usuarios').update({ 
+                permissoes: values.permissoes,
+                // Adiciona dados de folga
+                dias_folga_fixos: values.dias_folga_fixos || ['Saturday', 'Sunday'],
+                folga_domingo_obrigatoria: values.folga_domingo_obrigatoria,
+                // Adiciona dados de salário/jornada
+                salario: values.salario,
+                horas_semanais: values.horas_semanais,
+                horas_mensais: values.horas_mensais,
+                // Adiciona dados cadastrais básicos na criação
+                cpf: values.cpf || null,
+                rg: values.rg || null,
+                nome_mae: values.nome_mae || null,
+                nome_pai: values.nome_pai || null,
+                telefone: values.telefone || null,
+                cep: values.cep || null,
+                endereco: values.endereco || null,
+                numero: values.numero || null,
+                complemento: values.complemento || null,
+                bairro: values.bairro || null,
+                cidade: values.cidade || null,
+                estado: values.estado || null,
+            }).eq('id', newUserId);
+            updateError = error;
+        }
+        
+        if (updateError) throw new Error(`Usuário criado, mas falha ao definir dados iniciais: ${updateError.message}`);
 
         showSuccess(`Conta criada! Um email de confirmação foi enviado para ${values.email}.`);
       }
       onSaveComplete();
     } catch (error: any) {
       showError(`Falha ao salvar: ${error.message}`);
+    } finally {
+        setIsSubmitting(false);
     }
   };
   
