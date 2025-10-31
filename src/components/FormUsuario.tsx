@@ -541,8 +541,8 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
         // Determina o ID do cliente/empresa para vincular o usuário
         let targetClienteId: string | null = null;
         if (isNewUser) {
-            // Se for novo usuário, o cliente_id é o ID do criador (se for Cliente) ou o ID do Admin (se for Admin)
-            targetClienteId = (criadorRole === 'Cliente' ? (criadorPerfil as ClienteProfile)?.id : criadorPerfil?.id) || null;
+            // Se for novo usuário, o cliente_id é o ID do criador (Admin ou Cliente)
+            targetClienteId = criadorPerfil?.id || null;
         } else {
             // Se for edição, usa o cliente_id existente
             targetClienteId = (usuarioInicial as UsuarioProfile)?.cliente_id;

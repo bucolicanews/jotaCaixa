@@ -10,7 +10,7 @@ import { showError } from '@/utils/toast';
 import { Cliente } from '@/types/cliente';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import FormCliente from '@/components/FormCliente';
-import { UsuarioProfile } from '@/types/usuario';
+import { UsuarioProfile, ClienteProfile } from '@/types/usuario';
 
 const ClientesPage = () => {
   const { usuario, perfil, role, carregando: carregandoSessao } = useSessao();
@@ -21,7 +21,7 @@ const ClientesPage = () => {
 
   const getOwnerId = () => {
     if (role === 'Admin') return usuario?.id || null; // Admin usa seu próprio ID
-    if (role === 'Cliente') return (perfil as any)?.id;
+    if (role === 'Cliente') return (perfil as ClienteProfile)?.id;
     if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id;
     return null;
   };

@@ -74,7 +74,7 @@ const ContasReceber = () => {
   const [activeTab, setActiveTab] = useState(isAdmin ? 'meus_lancamentos' : 'lancamentos');
 
   const getOwnerId = () => {
-    if (role === 'Admin') return null; // Admin não tem ownerId, usa RLS para NULL
+    if (role === 'Admin') return usuario?.id || null; // Admin usa seu próprio ID
     if (role === 'Cliente') return (perfil as ClienteProfile)?.id;
     if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id;
     return null;
@@ -89,9 +89,9 @@ const ContasReceber = () => {
     let parcelasQuery = supabase.from('parcelas_contas_receber').select('*, contas_receber(descricao, clientes(nome))').order('data_vencimento', { ascending: true });
 
     if (isAdmin) {
-        // Admin: Busca onde empresa_id é NULL (seus próprios lançamentos)
-        contasQuery = contasQuery.is('empresa_id', null);
-        parcelasQuery = parcelasQuery.is('empresa_id', null);
+        // Admin: Busca onde empresa_id é o ID do Admin
+        contasQuery = contasQuery.eq('empresa_id', empresaId);
+        parcelasQuery = parcelasQuery.eq('empresa_id', empresaId);
     } else if (empresaId) {
         // Cliente/Usuário: Busca pelo ID da empresa
         contasQuery = contasQuery.eq('empresa_id', empresaId);
@@ -119,10 +119,10 @@ const ContasReceber = () => {
     if (!isAdmin) return;
     setCarregandoDados(true);
     
-    // Supervisão: Busca todos os lançamentos onde empresa_id NÃO é NULL
+    // Supervisão: Busca todos os lançamentos onde empresa_id NÃO é o ID do Admin
     const [contasRes, parcelasRes] = await Promise.all([
-      supabase.from('contas_receber').select('*, clientes(*)').not('empresa_id', 'is', null).order('data_vencimento', { ascending: true }),
-      supabase.from('parcelas_contas_receber').select('*, contas_receber(descricao, clientes(nome))').not('empresa_id', 'is', null).order('data_vencimento', { ascending: true })
+      supabase.from('contas_receber').select('*, clientes(*)').not('empresa_id', 'eq', empresaId).order('data_vencimento', { ascending: true }),
+      supabase.from('parcelas_contas_receber').select('*, contas_receber(descricao, clientes(nome))').not('empresa_id', 'eq', empresaId).order('data_vencimento', { ascending: true })
     ]);
 
     if (contasRes.error) showError('Erro ao carregar contas de supervisão: ' + contasRes.error.message);
@@ -142,7 +142,7 @@ const ContasReceber = () => {
             buscarMeusLancamentos();
         }
     }
-  }, [carregandoSessao, usuario, isAdmin, activeTab]);
+  }, [carregandoSessao, usuario, isAdmin, activeTab, empresaId]);
 
   useEffect(() => {
     buscarDados();

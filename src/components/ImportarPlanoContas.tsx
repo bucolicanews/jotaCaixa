@@ -8,6 +8,7 @@ import { parseCSV } from '@/utils/csv-parser';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { ContaCSV } from '@/types/plano-contas';
+import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 
 interface ImportarPlanoContasProps {
   onImportComplete: () => void;
@@ -16,7 +17,7 @@ interface ImportarPlanoContasProps {
 const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportComplete }) => {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
-  const { usuario } = useSessao();
+  const { usuario, role, perfil } = useSessao();
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files[0]) {
@@ -26,18 +27,11 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
     }
   };
 
-  const getEmpresaId = async (userId: string): Promise<string | null> => {
-    const { data, error } = await supabase
-      .from('empresas')
-      .select('id')
-      .eq('usuario_id', userId)
-      .single();
-
-    if (error) {
-      console.error('Erro ao buscar empresa:', error);
-      return null;
-    }
-    return data?.id || null;
+  const getEmpresaId = (): string | null => {
+    if (role === 'Admin') return usuario?.id || null;
+    if (role === 'Cliente') return (perfil as ClienteProfile)?.id || null;
+    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id || null;
+    return null;
   };
 
   const handleImport = async () => {
@@ -45,21 +39,17 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
       showError('Por favor, selecione um arquivo CSV.');
       return;
     }
-    if (!usuario) {
-      showError('Usuário não autenticado.');
+    
+    const empresaId = getEmpresaId();
+    if (!empresaId) {
+      showError('Usuário não autenticado ou sem empresa vinculada.');
+      setLoading(false);
       return;
     }
 
     setLoading(true);
 
     try {
-      const empresaId = await getEmpresaId(usuario.id);
-      if (!empresaId) {
-        showError('Não foi possível encontrar a empresa vinculada ao seu usuário.');
-        setLoading(false);
-        return;
-      }
-
       const parsedData: ContaCSV[] = await parseCSV(file);
 
       if (parsedData.length === 0) {
@@ -128,7 +118,7 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
           />
           <Button 
             onClick={handleImport} 
-            disabled={!file || loading}
+            disabled={!file || loading || !getEmpresaId()}
           >
             {loading ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />

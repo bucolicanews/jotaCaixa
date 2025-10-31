@@ -11,9 +11,10 @@ import { PlanoContas } from '@/types/plano-contas';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import FormPlanoContas from '@/components/FormPlanoContas';
 import ImportarPlanoContas from '@/components/ImportarPlanoContas';
+import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 
 const PlanoContasPage = () => {
-  const { usuario, carregando: carregandoSessao } = useSessao();
+  const { usuario, perfil, role, carregando: carregandoSessao } = useSessao();
   const [contas, setContas] = useState<PlanoContas[]>([]);
   const [carregandoContas, setCarregandoContas] = useState(true);
   const [empresaId, setEmpresaId] = useState<string | null>(null);
@@ -35,33 +36,23 @@ const PlanoContasPage = () => {
   }, [empresaId, usuario, carregandoSessao]);
 
   const buscarEmpresaId = async (userId: string) => {
-    const { data, error } = await supabase
-      .from('tbl_clientes') // Assumindo que a empresa é o cliente logado
-      .select('id')
-      .eq('id', userId)
-      .single();
+    let ownerId: string | null = null;
 
-    if (error) {
-      // Se não for cliente, pode ser usuário vinculado a um cliente
-      const { data: userData } = await supabase
-        .from('tbl_usuarios')
-        .select('cliente_id')
-        .eq('id', userId)
-        .single();
-      
-      if (userData?.cliente_id) {
-        setEmpresaId(userData.cliente_id);
-        return;
-      }
-
-      // Se o erro persistir e não for encontrado cliente_id, mostra erro.
-      if (!userData?.cliente_id) {
-        showError('Erro ao buscar empresa: ' + error.message);
+    if (role === 'Admin') {
+        ownerId = userId; // Admin usa seu próprio ID
+    } else if (role === 'Cliente') {
+        ownerId = (perfil as ClienteProfile)?.id || null;
+    } else if (role === 'Usuario') {
+        ownerId = (perfil as UsuarioProfile)?.cliente_id || null;
+    }
+    
+    if (!ownerId) {
+        showError('Não foi possível determinar o ID da empresa/proprietário.');
         setCarregandoContas(false);
         return;
-      }
     }
-    setEmpresaId(data?.id || null);
+    
+    setEmpresaId(ownerId);
   };
 
   const buscarPlanoContas = async (id: string) => {

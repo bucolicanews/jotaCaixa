@@ -6,22 +6,31 @@ import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError } from '@/utils/toast';
 import { ContratoModelo } from '@/types/contratos';
-import { ClienteProfile } from '@/types/usuario';
+import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 import { Button } from '@/components/ui/button';
 import { Link, useNavigate } from 'react-router-dom';
 
 const NovoContrato: React.FC = () => {
-  const { role, perfil, carregando: carregandoSessao } = useSessao();
+  const { role, perfil, usuario, carregando: carregandoSessao } = useSessao();
   const navigate = useNavigate();
   const [modelos, setModelos] = useState<ContratoModelo[]>([]);
   const [carregandoModelos, setCarregandoModelos] = useState(true);
 
   const isCliente = role === 'Cliente';
   const isAdmin = role === 'Admin';
-  const empresaId = isCliente ? (perfil as ClienteProfile)?.id : null;
+  
+  // ID do proprietário (Admin ou Cliente)
+  const getOwnerId = () => {
+    if (isAdmin) return usuario?.id || null;
+    if (isCliente) return (perfil as ClienteProfile)?.id;
+    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id;
+    return null;
+  };
+  
+  const ownerId = getOwnerId();
 
   const buscarModelos = useCallback(async () => {
-    if (!role) return;
+    if (!role || !ownerId) return;
     setCarregandoModelos(true);
     
     let query = supabase
@@ -30,10 +39,15 @@ const NovoContrato: React.FC = () => {
       .order('titulo', { ascending: true });
       
     if (isCliente) {
-        // Clientes veem seus próprios modelos e modelos globais (empresa_id is null)
-        query = query.or(`empresa_id.eq.${empresaId},empresa_id.is.null`);
+        // Clientes veem seus próprios modelos (ownerId) e modelos globais (empresa_id is null)
+        query = query.or(`empresa_id.eq.${ownerId},empresa_id.is.null`);
     } else if (isAdmin) {
-        // Admin vê todos
+        // Admin vê seus próprios modelos (ownerId) e modelos de clientes (empresa_id is not null)
+        // Para simplificar, Admin vê todos os modelos (RLS deve garantir isso, mas a query explícita é mais segura)
+        // Vamos buscar todos os modelos onde empresa_id é o ID do Admin OU onde empresa_id é diferente do ID do Admin (supervisão)
+        // No entanto, para a tela de Novo Contrato, o Admin só deve usar modelos que ele criou (ownerId) ou modelos globais (null).
+        // Modelos criados por Clientes não devem ser usados pelo Admin para criar contratos.
+        query = query.or(`empresa_id.eq.${ownerId},empresa_id.is.null`);
     }
 
     const { data, error } = await query;
@@ -45,13 +59,13 @@ const NovoContrato: React.FC = () => {
       setModelos(data as ContratoModelo[]);
     }
     setCarregandoModelos(false);
-  }, [role, isCliente, isAdmin, empresaId]);
+  }, [role, isCliente, isAdmin, ownerId]);
 
   useEffect(() => {
-    if (!carregandoSessao && (isAdmin || isCliente)) {
+    if (!carregandoSessao && ownerId) {
       buscarModelos();
     }
-  }, [carregandoSessao, isAdmin, isCliente, buscarModelos]);
+  }, [carregandoSessao, ownerId, buscarModelos]);
   
   const handleSelectModel = (modeloId: string) => {
       navigate(`/contratos/preencher/${modeloId}`);

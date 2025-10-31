@@ -10,7 +10,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { Cliente } from '@/types/cliente';
 import { useSessao } from '@/hooks/use-sessao';
-import { UsuarioProfile } from '@/types/usuario';
+import { UsuarioProfile, ClienteProfile } from '@/types/usuario';
 import { Separator } from './ui/separator';
 import { Checkbox } from './ui/checkbox';
 import { CAMPOS_CLIENTE_MAPA } from '@/config/contrato-campos-mapeaveis';
@@ -134,11 +134,13 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
     let empresaId: string | null = null;
     
     if (role === 'Admin') {
-        // Admin usa seu próprio ID como empresa_id, conforme solicitado.
+        // Admin usa seu próprio ID como empresa_id
         empresaId = usuario?.id || null;
     } else if (role === 'Cliente') {
-        empresaId = (perfil as any)?.id;
+        // Cliente usa seu próprio ID como empresa_id
+        empresaId = (perfil as ClienteProfile)?.id;
     } else if (role === 'Usuario') {
+        // Usuário usa o ID do seu cliente/empresa
         empresaId = (perfil as UsuarioProfile)?.cliente_id;
     }
     

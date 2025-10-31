@@ -17,7 +17,7 @@ import { format, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
 
 const Contratos = () => {
-  const { role, perfil, carregando: carregandoSessao } = useSessao();
+  const { role, perfil, usuario, carregando: carregandoSessao } = useSessao();
   const [contratos, setContratos] = useState<ContratoGerado[]>([]);
   const [carregandoContratos, setCarregandoContratos] = useState(true);
   const [contratoSelecionado, setContratoSelecionado] = useState<ContratoGerado | null>(null);
@@ -29,14 +29,14 @@ const Contratos = () => {
   const isAdmin = role === 'Admin';
   const isCliente = role === 'Cliente';
   
-  const getEmpresaId = () => {
-    if (isAdmin) return null; // Admin usa RLS para NULL
+  const getOwnerId = () => {
+    if (isAdmin) return usuario?.id || null; // Admin usa seu próprio ID
     if (isCliente) return (perfil as ClienteProfile)?.id;
     if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id;
     return null;
   };
   
-  const empresaId = getEmpresaId();
+  const empresaId = getOwnerId();
   
   const [activeContratoTab, setActiveContratoTab] = useState(isAdmin ? 'meus_contratos' : 'pendentes');
 
@@ -48,11 +48,8 @@ const Contratos = () => {
       .select('*, clientes(nome)')
       .order('criado_em', { ascending: false });
       
-    if (isAdmin) {
-        // Admin: Busca onde empresa_id é NULL (seus próprios contratos)
-        query = query.is('empresa_id', null);
-    } else if (empresaId) {
-        // Cliente/Usuário: Busca pelo ID da empresa
+    if (empresaId) {
+        // Admin/Cliente/Usuário: Busca onde empresa_id é o ID do proprietário
         query = query.eq('empresa_id', empresaId);
     } else {
         setContratos([]);
@@ -69,17 +66,17 @@ const Contratos = () => {
       setContratos(data as any[]);
     }
     setCarregandoContratos(false);
-  }, [empresaId, isAdmin]);
+  }, [empresaId]);
   
   const buscarSupervisao = useCallback(async () => {
-    if (!isAdmin) return;
+    if (!isAdmin || !empresaId) return;
     setCarregandoContratos(true);
     
-    // Supervisão: Busca todos os contratos onde empresa_id NÃO é NULL
+    // Supervisão: Busca todos os contratos onde empresa_id NÃO é o ID do Admin
     const { data, error } = await supabase
       .from('contratos_gerados')
       .select('*, clientes(nome)')
-      .not('empresa_id', 'is', null)
+      .not('empresa_id', 'eq', empresaId)
       .order('criado_em', { ascending: false });
 
     if (error) {
@@ -89,7 +86,7 @@ const Contratos = () => {
       setContratos(data as any[]);
     }
     setCarregandoContratos(false);
-  }, [isAdmin]);
+  }, [isAdmin, empresaId]);
 
   const buscarDados = useCallback(() => {
     if (!carregandoSessao && (isAdmin || empresaId)) {
