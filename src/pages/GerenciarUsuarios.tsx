@@ -37,7 +37,6 @@ const GerenciarUsuarios: React.FC = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [perfilParaEditar, setPerfilParaEditar] = useState<AnyProfile | null>(null);
   
-  // Inicialização segura do activeTab
   const [activeTab, setActiveTab] = useState('usuarios');
 
   const isAdmin = role === 'Admin';
@@ -55,6 +54,7 @@ const GerenciarUsuarios: React.FC = () => {
 
   const fetchDados = useCallback(async () => {
     if (!usuario || !role) {
+        setCarregandoDados(false);
         return;
     }
 
@@ -84,7 +84,6 @@ const GerenciarUsuarios: React.FC = () => {
       setEmpresasFiltro([adminFilterOption, ...clientFilterOptions]);
       
       // ADMIN: Busca TODOS os Usuários (Funcionários) do sistema
-      // Seleciona o nome do cliente para exibição
       const { data: usuariosData, error: usuariosError } = await supabase
         .from('tbl_usuarios')
         .select('*, tbl_clientes(nome)')
@@ -95,8 +94,6 @@ const GerenciarUsuarios: React.FC = () => {
         setUsuarios([]);
       } else {
         fetchedUsuarios = (usuariosData as any[]).map(item => {
-          // Se cliente_id for null, ou se tbl_clientes for null (o que acontece se cliente_id for o ID do Admin),
-          // usamos 'Meus Usuários (Admin)'.
           const nomeEmpresa = item.tbl_clientes?.nome || (item.cliente_id === usuario.id ? 'Meus Usuários (Admin)' : 'N/A');
           return { ...item, nome_empresa: nomeEmpresa } as UsuarioComEmpresa;
         });
@@ -145,20 +142,16 @@ const GerenciarUsuarios: React.FC = () => {
     const termoBusca = filtro.toLowerCase();
     const nomeEmpresa = u.nome_empresa || '';
     
-    // Filtro de texto
     const textMatch = u.nome.toLowerCase().includes(termoBusca) ||
            u.email.toLowerCase().includes(termoBusca) ||
            nomeEmpresa.toLowerCase().includes(termoBusca);
            
     if (!textMatch) return false;
     
-    // Filtro de empresa (apenas para Admin)
     if (isAdmin && filtroEmpresaId !== 'todos') {
-        // Se o filtro for o ID do Admin, filtramos por cliente_id = ID do Admin
         if (filtroEmpresaId === usuario?.id) {
             return u.cliente_id === usuario?.id;
         }
-        // Caso contrário, filtramos pelo ID do Cliente
         return u.cliente_id === filtroEmpresaId;
     }
 
@@ -171,7 +164,6 @@ const GerenciarUsuarios: React.FC = () => {
     try {
       const tableName = targetRole === 'Cliente' ? 'tbl_clientes' : 'tbl_usuarios';
       
-      // 1. Deletar o registro do perfil
       const { error: profileError } = await supabase
         .from(tableName)
         .delete()
@@ -196,6 +188,113 @@ const GerenciarUsuarios: React.FC = () => {
       setPerfilParaEditar(profile);
       setIsDialogOpen(true);
   };
+  
+  const isManagingClients = activeTab === 'clientes';
+  const targetRole = isManagingClients ? 'Cliente' : 'Usuario';
+  const title = 'Gerenciar Usuários'; 
+  
+  // Helper function to render the table content
+  const renderTableContent = (profiles: AnyProfile[], currentRole: UserRole) => {
+    // Filtra perfis nulos para satisfazer o TypeScript
+    const nonNullProfiles = profiles.filter((p): p is Exclude<AnyProfile, null> => p !== null);
+    
+    if (nonNullProfiles.length === 0) {
+        return <p className="text-center text-muted-foreground">Nenhum {currentRole} encontrado.</p>;
+    }
+    
+    return (
+        <div className="rounded-md border overflow-x-auto">
+            <Table>
+                <TableHeader>
+                    <TableRow>
+                        <TableHead>Nome</TableHead>
+                        <TableHead>Email</TableHead>
+                        {currentRole === 'Cliente' && <TableHead>Limite Usuários</TableHead>}
+                        {currentRole === 'Usuario' && isAdmin && <TableHead>Empresa</TableHead>}
+                        {currentRole === 'Usuario' && <TableHead>Início Contrato</TableHead>}
+                        {currentRole === 'Cliente' && <TableHead>Status</TableHead>}
+                        <TableHead className="text-right">Ações</TableHead>
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
+                    {nonNullProfiles.map((p) => {
+                        const id = p.id;
+                        const nome = p.nome;
+                        const email = p.email;
+                        
+                        if (currentRole === 'Cliente') {
+                            const cliente = p as ClienteProfile;
+                            const isAprovado = cliente.aprovado;
+                            
+                            return (
+                                <TableRow key={id} className={cn(!isAprovado && "bg-yellow-500/10")}>
+                                    <TableCell className="font-medium">{nome}</TableCell>
+                                    <TableCell>{email}</TableCell>
+                                    <TableCell>{cliente.limite_usuarios}</TableCell>
+                                    <TableCell>
+                                        <Badge variant={isAprovado ? 'default' : 'warning'}>
+                                            {isAprovado ? 'Aprovado' : 'Pendente'}
+                                        </Badge>
+                                    </TableCell>
+                                    <TableCell className="text-right space-x-2">
+                                        <Button 
+                                            variant="outline" 
+                                            size="icon" 
+                                            onClick={() => handleOpenDialog(cliente, 'Cliente')}
+                                        >
+                                            <Edit className="h-4 w-4" />
+                                        </Button>
+                                        <Button 
+                                            variant="destructive" 
+                                            size="icon" 
+                                            onClick={() => handleDelete(id, nome, 'Cliente')}
+                                        >
+                                            <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                    </TableCell>
+                                </TableRow>
+                            );
+                        } else {
+                            const userProfile = p as UsuarioComEmpresa;
+                            
+                            return (
+                                <TableRow key={id}>
+                                    <TableCell className="font-medium">{nome}</TableCell>
+                                    <TableCell>{email}</TableCell>
+                                    {isAdmin && (
+                                        <TableCell className="text-sm text-muted-foreground">{userProfile.nome_empresa || 'N/A'}</TableCell>
+                                    )}
+                                    <TableCell>
+                                        {userProfile.data_inicio_contrato 
+                                            ? format(new Date(userProfile.data_inicio_contrato!), 'dd/MM/yyyy', { locale: ptBR })
+                                            : 'N/A'}
+                                    </TableCell>
+                                    <TableCell className="text-right space-x-2">
+                                        <Button 
+                                            variant="outline" 
+                                            size="icon" 
+                                            onClick={() => handleOpenDialog(userProfile, 'Usuario')}
+                                        >
+                                            <Edit className="h-4 w-4" />
+                                        </Button>
+                                        <Button 
+                                            variant="destructive" 
+                                            size="icon" 
+                                            onClick={() => handleDelete(id, nome, 'Usuario')}
+                                        >
+                                            <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                    </TableCell>
+                                </TableRow>
+                            );
+                        }
+                    })}
+                </TableBody>
+            </Table>
+        </div>
+    );
+  };
+
 
   if (carregando || carregandoDados) {
     return (
@@ -208,15 +307,9 @@ const GerenciarUsuarios: React.FC = () => {
   }
 
   if (!usuario || !role || !perfil) {
-    // Se não há usuário, mas o carregamento terminou, redireciona para o login (tratado pelo LayoutPrincipal)
     return <LayoutPrincipal><p>Redirecionando...</p></LayoutPrincipal>;
   }
   
-  const isManagingClients = activeTab === 'clientes';
-  const targetRole = isManagingClients ? 'Cliente' : 'Usuario';
-  const title = 'Gerenciar Usuários'; 
-  const profilesToDisplay = isManagingClients ? filteredClientes : filteredUsuarios;
-
   return (
     <LayoutPrincipal>
       <div className="flex justify-between items-center mb-6">
@@ -225,7 +318,7 @@ const GerenciarUsuarios: React.FC = () => {
           <DialogTrigger asChild>
             <Button 
                 onClick={() => handleOpenDialog(null, targetRole)}
-                disabled={isCliente && isManagingClients} // Cliente não pode criar Clientes
+                disabled={isCliente && isManagingClients}
             >
               <Plus className="mr-2 h-4 w-4" />
               Novo {targetRole === 'Cliente' ? 'Cliente' : 'Usuário'}
@@ -245,138 +338,75 @@ const GerenciarUsuarios: React.FC = () => {
         </Dialog>
       </div>
 
-      {isAdmin && (
+      {isAdmin ? (
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full mb-6">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="clientes" className="flex items-center"><Building2 className="w-4 h-4 mr-2" /> Clientes (Empresas)</TabsTrigger>
             <TabsTrigger value="usuarios" className="flex items-center"><Building2 className="w-4 h-4 mr-2" /> Usuários (Funcionários)</TabsTrigger>
           </TabsList>
-        </Tabs>
-      )}
-
-      <TabsContent value={activeTab}>
-        <div className="flex flex-col sm:flex-row mb-4 gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder={`Buscar por nome, email ${isManagingClients ? '' : 'ou empresa'}...`}
-              value={filtro}
-              onChange={handleSearch}
-              className="pl-10"
-            />
-          </div>
           
-          {/* Filtro de Empresa (Apenas na aba Usuários e se for Admin) */}
-          {!isManagingClients && isAdmin && empresasFiltro.length > 0 && (
-              <Select value={filtroEmpresaId} onValueChange={setFiltroEmpresaId}>
-                  <SelectTrigger className="w-full sm:w-[250px]">
-                      <Filter className="w-4 h-4 mr-2 text-muted-foreground" />
-                      <SelectValue placeholder="Filtrar por Empresa" />
-                  </SelectTrigger>
-                  <SelectContent>
-                      <SelectItem value="todos">Todas as Empresas</SelectItem>
-                      {empresasFiltro.map(e => (
-                          <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>
-                      ))}
-                  </SelectContent>
-              </Select>
-          )}
-        </div>
-
-        {profilesToDisplay.length === 0 ? (
-          <p className="text-center text-muted-foreground">Nenhum {targetRole} encontrado.</p>
-        ) : (
-          <div className="rounded-md border overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nome</TableHead>
-                  <TableHead>Email</TableHead>
-                  {isManagingClients && <TableHead>Limite Usuários</TableHead>}
-                  {!isManagingClients && isAdmin && <TableHead>Empresa</TableHead>}
-                  {!isManagingClients && <TableHead>Início Contrato</TableHead>}
-                  {isManagingClients && <TableHead>Status</TableHead>}
-                  <TableHead className="text-right">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {profilesToDisplay.map((p) => {
-                  const id = p.id;
-                  const nome = p.nome;
-                  const email = p.email;
-                  
-                  if (isManagingClients) {
-                      const cliente = p as ClienteProfile;
-                      const isAprovado = cliente.aprovado;
-                      
-                      return (
-                          <TableRow key={id} className={cn(!isAprovado && "bg-yellow-500/10")}>
-                              <TableCell className="font-medium">{nome}</TableCell>
-                              <TableCell>{email}</TableCell>
-                              <TableCell>{cliente.limite_usuarios}</TableCell>
-                              <TableCell>
-                                  <Badge variant={isAprovado ? 'default' : 'warning'}>
-                                      {isAprovado ? 'Aprovado' : 'Pendente'}
-                                  </Badge>
-                              </TableCell>
-                              <TableCell className="text-right space-x-2">
-                                  <Button 
-                                      variant="outline" 
-                                      size="icon" 
-                                      onClick={() => handleOpenDialog(cliente, 'Cliente')}
-                                  >
-                                      <Edit className="h-4 w-4" />
-                                  </Button>
-                                  <Button 
-                                      variant="destructive" 
-                                      size="icon" 
-                                      onClick={() => handleDelete(id, nome, 'Cliente')}
-                                  >
-                                      <Trash2 className="h-4 w-4" />
-                                  </Button>
-                              </TableCell>
-                          </TableRow>
-                      );
-                  } else {
-                      const userProfile = p as UsuarioComEmpresa;
-                      
-                      return (
-                          <TableRow key={id}>
-                              <TableCell className="font-medium">{nome}</TableCell>
-                              <TableCell>{email}</TableCell>
-                              {isAdmin && (
-                                  <TableCell className="text-sm text-muted-foreground">{userProfile.nome_empresa || 'N/A'}</TableCell>
-                              )}
-                              <TableCell>
-                                  {userProfile.data_inicio_contrato 
-                                      ? format(new Date(userProfile.data_inicio_contrato!), 'dd/MM/yyyy', { locale: ptBR })
-                                      : 'N/A'}
-                              </TableCell>
-                              <TableCell className="text-right space-x-2">
-                                  <Button 
-                                      variant="outline" 
-                                      size="icon" 
-                                      onClick={() => handleOpenDialog(userProfile, 'Usuario')}
-                                  >
-                                      <Edit className="h-4 w-4" />
-                                  </Button>
-                                  <Button 
-                                      variant="destructive" 
-                                      size="icon" 
-                                      onClick={() => handleDelete(id, nome, 'Usuario')}
-                                  >
-                                      <Trash2 className="h-4 w-4" />
-                                  </Button>
-                              </TableCell>
-                          </TableRow>
-                      );
-                  }
-                })}
-              </TableBody>
-            </Table>
+          <TabsContent value="clientes">
+            <div className="flex flex-col sm:flex-row mb-4 gap-4">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar por nome, email..."
+                  value={filtro}
+                  onChange={handleSearch}
+                  className="pl-10"
+                />
+              </div>
+            </div>
+            {renderTableContent(filteredClientes, 'Cliente')}
+          </TabsContent>
+          
+          <TabsContent value="usuarios">
+            <div className="flex flex-col sm:flex-row mb-4 gap-4">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar por nome, email ou empresa..."
+                  value={filtro}
+                  onChange={handleSearch}
+                  className="pl-10"
+                />
+              </div>
+              
+              {empresasFiltro.length > 0 && (
+                  <Select value={filtroEmpresaId} onValueChange={setFiltroEmpresaId}>
+                      <SelectTrigger className="w-full sm:w-[250px]">
+                          <Filter className="w-4 h-4 mr-2 text-muted-foreground" />
+                          <SelectValue placeholder="Filtrar por Empresa" />
+                      </SelectTrigger>
+                      <SelectContent>
+                          <SelectItem value="todos">Todas as Empresas</SelectItem>
+                          {empresasFiltro.map(e => (
+                              <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>
+                          ))}
+                      </SelectContent>
+                  </Select>
+              )}
+            </div>
+            {renderTableContent(filteredUsuarios, 'Usuario')}
+          </TabsContent>
+        </Tabs>
+      ) : (
+        // Cliente/Usuário (apenas gerencia usuários)
+        <>
+          <div className="flex flex-col sm:flex-row mb-4 gap-4">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar por nome ou email..."
+                value={filtro}
+                onChange={handleSearch}
+                className="pl-10"
+              />
+            </div>
           </div>
-        )}
-      </TabsContent>
+          {renderTableContent(filteredUsuarios, 'Usuario')}
+        </>
+      )}
     </LayoutPrincipal>
   );
 };
