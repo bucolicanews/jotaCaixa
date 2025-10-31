@@ -17,9 +17,13 @@ serve(async (req: Request) => {
   }
 
   try {
+    console.log('LOG: Starting checkout session creation.');
+    
     // Read the request body once
     const body = await req.json();
     const { planoId, clienteId, email } = body;
+    
+    console.log(`LOG: Received data: planoId=${planoId}, clienteId=${clienteId}, email=${email}`);
 
     if (!planoId || !clienteId) {
       return new Response(JSON.stringify({ error: 'Missing planoId or clienteId' }), {
@@ -38,6 +42,7 @@ serve(async (req: Request) => {
     );
 
     // 2. Buscar a chave secreta do Stripe (configuração global)
+    console.log('LOG: Fetching Stripe secret key...');
     const { data: stripeConfig, error: configError } = await supabase
       .from('configuracoes_stripe')
       .select('stripe_secret_key')
@@ -46,14 +51,18 @@ serve(async (req: Request) => {
       .single();
 
     if (configError || !stripeConfig?.stripe_secret_key) {
-      console.error('Stripe config error:', configError);
-      return new Response(JSON.stringify({ error: 'Stripe secret key not configured.' }), {
+      console.error('ERROR: Stripe config error:', configError);
+      return new Response(JSON.stringify({ error: 'Stripe secret key not configured or database error.' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+    
+    console.log('LOG: Stripe secret key fetched successfully.');
+    const stripeSecretKey = stripeConfig.stripe_secret_key;
 
     // 3. Buscar detalhes do Plano
+    console.log(`LOG: Fetching plan details for ID: ${planoId}`);
     const { data: plano, error: planoError } = await supabase
       .from('planos')
       .select('nome, preco_mensal')
@@ -61,18 +70,25 @@ serve(async (req: Request) => {
       .single();
 
     if (planoError || !plano) {
-      console.error('Plano not found:', planoError);
+      console.error('ERROR: Plano not found:', planoError);
       return new Response(JSON.stringify({ error: 'Plano not found.' }), {
         status: 404,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+    
+    console.log(`LOG: Plan found: ${plano.nome}, Price: ${plano.preco_mensal}`);
 
     // 4. Inicializar Stripe
-    const stripe = new Stripe(stripeConfig.stripe_secret_key, {
+    console.log('LOG: Initializing Stripe...');
+    const stripe = new Stripe(stripeSecretKey, {
       apiVersion: '2024-06-20',
       httpClient: Stripe.createFetchHttpClient(),
     });
+    
+    const unitAmount = Math.round(plano.preco_mensal * 100);
+    
+    console.log(`LOG: Creating Checkout Session. Unit Amount: ${unitAmount}`);
 
     // 5. Criar a Stripe Checkout Session
     const session = await stripe.checkout.sessions.create({
@@ -85,7 +101,7 @@ serve(async (req: Request) => {
             product_data: {
               name: plano.nome,
             },
-            unit_amount: Math.round(plano.preco_mensal * 100), // Preço em centavos
+            unit_amount: unitAmount, // Preço em centavos
             recurring: {
               interval: 'month',
             },
@@ -104,6 +120,8 @@ serve(async (req: Request) => {
       },
       customer_email: email, // Usando o email extraído do corpo
     });
+    
+    console.log(`LOG: Session created successfully. URL: ${session.url}`);
 
     return new Response(JSON.stringify({ sessionId: session.id, url: session.url }), {
       status: 200,
@@ -111,9 +129,8 @@ serve(async (req: Request) => {
     });
 
   } catch (error) {
-    console.error('Stripe Checkout Error:', error);
-    // Tratamento do erro 'unknown'
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('FATAL ERROR in Edge Function:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error during checkout process.';
     return new Response(JSON.stringify({ error: errorMessage }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
