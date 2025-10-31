@@ -36,11 +36,8 @@ const ClientesPage = () => {
       .select('*')
       .order('nome', { ascending: true });
 
-    if (role === 'Admin') {
-        // Admin vê apenas clientes onde admin_id é igual ao seu ID
-        query = query.eq('admin_id', ownerId);
-    } else if (ownerId) {
-        // Cliente/Usuário vê clientes vinculados ao seu ownerId (empresa_id)
+    if (ownerId) {
+        // Admin, Cliente e Usuário agora usam ownerId para filtrar empresa_id
         query = query.eq('empresa_id', ownerId);
     } else {
         setClientes([]);

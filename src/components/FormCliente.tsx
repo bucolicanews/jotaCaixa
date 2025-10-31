@@ -132,17 +132,17 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
 
   const getOwnerIds = () => {
     let empresaId: string | null = null;
-    let adminId: string | null = null;
     
     if (role === 'Admin') {
-        adminId = usuario?.id || null;
+        // Admin usa seu próprio ID como empresa_id, conforme solicitado.
+        empresaId = usuario?.id || null;
     } else if (role === 'Cliente') {
         empresaId = (perfil as any)?.id;
     } else if (role === 'Usuario') {
         empresaId = (perfil as UsuarioProfile)?.cliente_id;
     }
     
-    return { empresaId, adminId };
+    return { empresaId };
   };
   
   const fetchAddressByCep = useCallback(async (cep: string) => {
@@ -199,20 +199,14 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
   }, [cepValue, fetchAddressByCep]);
 
   const onSubmit = async (values: FormValues) => {
-    const { empresaId, adminId } = getOwnerIds();
+    const { empresaId } = getOwnerIds();
     
     // Validação: Se não for Admin, deve ter um empresaId válido.
-    if (role !== 'Admin' && !empresaId) {
-      showError('Não foi possível identificar o proprietário (empresa). Não é possível salvar.');
+    if (!empresaId) {
+      showError('Não foi possível identificar o proprietário. Não é possível salvar.');
       return;
     }
     
-    // **VERIFICAÇÃO DE SEGURANÇA ADICIONAL PARA ADMIN**
-    if (role === 'Admin' && !adminId) {
-        showError('ID do Administrador não encontrado na sessão. Tente fazer login novamente.');
-        return;
-    }
-
     const dataToSave = {
       nome: values.nome,
       razao_social: values.razao_social || null,
@@ -232,8 +226,7 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
       estado: values.estado || null,
       
       // IDs de Propriedade
-      empresa_id: empresaId, // NULL se Admin
-      admin_id: adminId,     // ID do Admin se Admin (garantido não nulo pela verificação acima)
+      empresa_id: empresaId, // ID do Admin ou ID da Empresa Cliente
     };
 
     let error = null;
