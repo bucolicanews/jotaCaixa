@@ -29,14 +29,19 @@ import NovoContrato from "./pages/NovoContrato";
 import PreencherContrato from "./pages/PreencherContrato";
 import GerenciarPlanos from "./pages/GerenciarPlanos";
 import Vendas from "./pages/Vendas";
-import SelecaoPerfil from "./pages/SelecaoPerfil"; // Novo Import
+import SelecaoPerfil from "./pages/SelecaoPerfil";
 
 const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
-      <BrowserRouter>
+      <BrowserRouter 
+        future={{ 
+          v7_startTransition: true, 
+          v7_relativeSplatPath: true 
+        }}
+      >
         <SessionProvider>
           <Toaster />
           <Sonner />
