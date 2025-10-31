@@ -25,6 +25,10 @@ export function useTagManager(resourceId: string | undefined, tagMetadata: TagMe
     const getEmpresaId = () => {
         if (role === 'Cliente') return (perfil as ClienteProfile)?.id;
         if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id;
+        
+        // Se for Admin, o ID da empresa para a qual a tag será criada/lida é o ID do recurso (Cliente) que está sendo editado.
+        if (role === 'Admin' && resourceId) return resourceId;
+        
         return null;
     };
     
