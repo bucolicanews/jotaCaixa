@@ -38,7 +38,7 @@ const GerenciarUsuarios: React.FC = () => {
     setCarregandoDados(true);
 
     if (isAdmin) {
-      // ADMIN: Busca Clientes (Empresas)
+      // ADMIN: Busca TODOS os Clientes (Empresas) do sistema
       const { data: clientesData, error: clientesError } = await supabase
         .from('tbl_clientes')
         .select('*')
@@ -50,28 +50,37 @@ const GerenciarUsuarios: React.FC = () => {
       } else {
         setClientes(clientesData as ClienteProfile[]);
       }
-    }
+      
+      // ADMIN: Busca TODOS os Usuários (Funcionários) do sistema
+      let queryUsuarios = supabase.from('tbl_usuarios').select('*, tbl_clientes(nome)').order('nome', { ascending: true });
+      
+      const { data: usuariosData, error: usuariosError } = await queryUsuarios;
 
-    // ADMIN e CLIENTE: Busca Usuários (Funcionários)
-    let query = supabase.from('tbl_usuarios').select('*, tbl_clientes(nome)').order('nome', { ascending: true });
+      if (usuariosError) {
+        showError('Erro ao carregar usuários: ' + usuariosError.message);
+        setUsuarios([]);
+      } else {
+        const mappedData = usuariosData.map(item => {
+          if (isAdmin && item.tbl_clientes) {
+            return { ...item, nome_empresa: item.tbl_clientes.nome } as UsuarioComEmpresa;
+          }
+          return item as UsuarioComEmpresa;
+        });
+        setUsuarios(mappedData);
+      }
 
-    if (isCliente) {
-      query = query.eq('cliente_id', usuario.id);
-    }
-    
-    const { data: usuariosData, error: usuariosError } = await query;
+    } else if (isCliente) {
+      // CLIENTE: Busca APENAS seus próprios Usuários (Funcionários)
+      let queryUsuarios = supabase.from('tbl_usuarios').select('*, tbl_clientes(nome)').eq('cliente_id', usuario.id).order('nome', { ascending: true });
+      
+      const { data: usuariosData, error: usuariosError } = await queryUsuarios;
 
-    if (usuariosError) {
-      showError('Erro ao carregar usuários: ' + usuariosError.message);
-      setUsuarios([]);
-    } else {
-      const mappedData = usuariosData.map(item => {
-        if (isAdmin && item.tbl_clientes) {
-          return { ...item, nome_empresa: item.tbl_clientes.nome } as UsuarioComEmpresa;
-        }
-        return item as UsuarioComEmpresa;
-      });
-      setUsuarios(mappedData);
+      if (usuariosError) {
+        showError('Erro ao carregar usuários: ' + usuariosError.message);
+        setUsuarios([]);
+      } else {
+        setUsuarios(usuariosData as UsuarioComEmpresa[]);
+      }
     }
     
     setCarregandoDados(false);
@@ -149,7 +158,8 @@ const GerenciarUsuarios: React.FC = () => {
   
   const isManagingClients = activeTab === 'clientes';
   const targetRole = isManagingClients ? 'Cliente' : 'Usuario';
-  const title = isManagingClients ? 'Gerenciar Clientes (Empresas)' : 'Gerenciar Usuários (Equipe)';
+  // Corrigindo o título da página
+  const title = 'Gerenciar Usuários'; 
   const profilesToDisplay = isManagingClients ? filteredClientes : filteredUsuarios;
 
   return (
@@ -163,7 +173,7 @@ const GerenciarUsuarios: React.FC = () => {
                 disabled={isCliente && isManagingClients} // Cliente não pode criar Clientes
             >
               <Plus className="mr-2 h-4 w-4" />
-              Novo {targetRole}
+              Novo {targetRole === 'Cliente' ? 'Cliente' : 'Usuário'}
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
