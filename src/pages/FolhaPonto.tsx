@@ -38,7 +38,7 @@ interface ClienteSimples {
 const JORNADA_MENSAL_PADRAO = 220; // Horas mensais padrão CLT
 
 const FolhaPonto: React.FC = () => {
-  const { role, perfil, carregando } = useSessao();
+  const { role, perfil, usuario, carregando } = useSessao();
   const { printContent } = usePrint();
   const [dataSelecionada, setDataSelecionada] = useState<Date>(startOfMonth(new Date()));
   const [carregandoDados, setCarregandoDados] = useState(false);
@@ -76,7 +76,7 @@ const FolhaPonto: React.FC = () => {
   const empresaIdParaFiltro = isAdmin ? clienteSelecionadoId : (isCliente ? perfil?.id : null);
 
   const fetchClientes = useCallback(async () => {
-    if (!isAdmin) return;
+    if (!isAdmin || !usuario?.id) return;
     
     setCarregandoDados(true);
     const { data, error } = await supabase
@@ -90,13 +90,19 @@ const FolhaPonto: React.FC = () => {
         setClientes([]);
     } else {
         const clientData = data as ClienteSimples[];
-        setClientes(clientData);
-        if (clientData.length > 0 && !clienteSelecionadoId) {
-            setClienteSelecionadoId(clientData[0].id);
+        
+        // Adiciona a opção para os próprios usuários do Admin
+        const adminOption: ClienteSimples = { id: usuario.id, nome: 'Meus Usuários (Admin)' };
+        const allClients = [adminOption, ...clientData];
+        
+        setClientes(allClients);
+        
+        if (!clienteSelecionadoId && allClients.length > 0) {
+            setClienteSelecionadoId(allClients[0].id);
         }
     }
     setCarregandoDados(false);
-  }, [isAdmin, clienteSelecionadoId]);
+  }, [isAdmin, clienteSelecionadoId, usuario?.id]);
   
   // Atualiza o nome da empresa
   useEffect(() => {
