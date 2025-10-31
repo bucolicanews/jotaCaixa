@@ -489,7 +489,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
     setIsSubmitting(true);
     
     // 1. Determinar a tabela e o ID do cliente
-    const tableName = getTableName(usuarioInicial || null, isNewClient, isNewUser); // Corrigido Erro 2
+    const tableName = getTableName(usuarioInicial || null, isNewClient, isNewUser);
     if (!tableName) {
         showError('Tabela de perfil não identificada.');
         setIsSubmitting(false);
@@ -545,7 +545,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
         let targetClienteId: string | null = null;
         if (isNewUser) {
             // Se for novo usuário, o cliente_id é o ID do criador (se for Cliente) ou o ID do Admin (se for Admin)
-            targetClienteId = (criadorRole === 'Cliente' ? (criadorPerfil as ClienteProfile)?.id : criadorPerfil?.id) || null; // Corrigido Erro 3
+            targetClienteId = (criadorRole === 'Cliente' ? (criadorPerfil as ClienteProfile)?.id : criadorPerfil?.id) || null;
         } else {
             // Se for edição, usa o cliente_id existente
             targetClienteId = (usuarioInicial as UsuarioProfile)?.cliente_id;
@@ -656,13 +656,13 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
           <h3 className="font-semibold text-lg">Dados de Identificação</h3>
           
-          {/* Nome da Empresa (Mapeável) */}
+          {/* Nome da Empresa (Mapeável) - AGORA SEM DISABLED NA CRIAÇÃO */}
           <TaggedFormField 
               fieldName="nome" 
               label="Nome da Empresa" 
               placeholder="Nome completo" 
               resourceId={resourceId} 
-              disabled={!isEditing}
+              disabled={false} // Removido o disabled condicional
               mapArray={CAMPOS_CLIENTE_MAPA}
               isOptional={false}
           />
