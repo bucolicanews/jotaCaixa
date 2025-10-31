@@ -7,7 +7,7 @@ import { Loader2, Package, DollarSign, CalendarCheck, CreditCard } from 'lucide-
 import { supabase } from '@/integrations/supabase/client';
 import { showError } from '@/utils/toast';
 import { Plano } from '@/types/plano';
-import { format, parseISO, isFuture } from 'date-fns';
+import { format, parseISO, isFuture, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -22,16 +22,42 @@ interface PagamentoSimulado {
     descricao: string;
 }
 
-const PAGAMENTOS_SIMULADOS: PagamentoSimulado[] = [
-    { id: 'p1', data: '2025-10-01T10:00:00Z', valor: 50.00, status: 'pago', descricao: 'Mensalidade - Outubro' },
-    { id: 'p2', data: '2025-09-01T10:00:00Z', valor: 50.00, status: 'pago', descricao: 'Mensalidade - Setembro' },
-    { id: 'p3', data: '2025-08-01T10:00:00Z', valor: 50.00, status: 'pago', descricao: 'Mensalidade - Agosto' },
-];
+// Função para gerar pagamentos simulados baseados no preço do plano
+const generateSimulatedPayments = (precoMensal: number): PagamentoSimulado[] => {
+    const today = new Date();
+    const payments: PagamentoSimulado[] = [];
+
+    // 1. Pagamento de Ativação (Hoje)
+    payments.push({
+        id: 'p0',
+        data: today.toISOString(),
+        valor: precoMensal,
+        status: 'pago',
+        descricao: 'Ativação / 1ª Mensalidade',
+    });
+
+    // 2. Pagamentos Históricos (3 meses anteriores)
+    for (let i = 1; i <= 3; i++) {
+        const pastDate = subMonths(today, i);
+        payments.push({
+            id: `p${i}`,
+            data: pastDate.toISOString(),
+            valor: precoMensal,
+            status: 'pago',
+            descricao: `Mensalidade - ${format(pastDate, 'MMMM', { locale: ptBR })}`,
+        });
+    }
+    
+    // Ordena do mais recente para o mais antigo
+    return payments.sort((a, b) => parseISO(b.data).getTime() - parseISO(a.data).getTime());
+};
+
 
 const MinhaAssinatura: React.FC = () => {
     const { perfil, role, carregando } = useSessao();
     const [planoAtual, setPlanoAtual] = useState<Plano | null>(null);
     const [carregandoPlano, setCarregandoPlano] = useState(true);
+    const [pagamentos, setPagamentos] = useState<PagamentoSimulado[]>([]);
 
     const isClient = role === 'Cliente';
     const clienteProfile = perfil as ClienteProfile;
@@ -52,7 +78,10 @@ const MinhaAssinatura: React.FC = () => {
             showError('Erro ao carregar detalhes do plano: ' + error.message);
             setPlanoAtual(null);
         } else {
-            setPlanoAtual(data as Plano);
+            const plano = data as Plano;
+            setPlanoAtual(plano);
+            // Gera o histórico de pagamentos com o preço real
+            setPagamentos(generateSimulatedPayments(plano.preco_mensal));
         }
         setCarregandoPlano(false);
     }, [isClient, clienteProfile]);
@@ -76,7 +105,10 @@ const MinhaAssinatura: React.FC = () => {
     }
     
     const dataFimAcesso = clienteProfile.data_fim_acesso ? parseISO(clienteProfile.data_fim_acesso) : null;
-    const isTrial = dataFimAcesso && isFuture(dataFimAcesso) && planoAtual.dias_trial > 0;
+    
+    // Lógica para determinar se é Trial: Se a data de fim de acesso for futura E a diferença for menor que 1 ano (ou seja, foi definida recentemente pelo trial)
+    const isTrial = dataFimAcesso && isFuture(dataFimAcesso) && planoAtual.dias_trial > 0 && dataFimAcesso.getFullYear() < new Date().getFullYear() + 1;
+    
     const statusAssinatura = isTrial ? 'Trial Ativo' : (dataFimAcesso && isFuture(dataFimAcesso) ? 'Ativa' : 'Expirada');
     const dataExpiracaoFormatada = dataFimAcesso ? format(dataFimAcesso, 'dd/MM/yyyy', { locale: ptBR }) : 'N/A';
     const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -146,7 +178,7 @@ const MinhaAssinatura: React.FC = () => {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {PAGAMENTOS_SIMULADOS.map(p => (
+                            {pagamentos.map(p => (
                                 <TableRow key={p.id}>
                                     <TableCell>{format(parseISO(p.data), 'dd/MM/yyyy', { locale: ptBR })}</TableCell>
                                     <TableCell>{p.descricao}</TableCell>
