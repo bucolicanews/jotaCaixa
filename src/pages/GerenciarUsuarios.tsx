@@ -7,10 +7,9 @@ import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import FormUsuario from '@/components/FormUsuario';
-import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
-import { AnyProfile, ClienteProfile, UsuarioProfile, UserRole } from '@/types/usuario';
+import { AnyProfile, UsuarioProfile, UserRole } from '@/types/usuario';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -29,10 +28,10 @@ const GerenciarUsuarios: React.FC = () => {
     let query;
 
     if (role === 'Admin') {
-      // Admin vê todos os Clientes (Empresas)
-      query = supabase.from('tbl_clientes').select('*').order('nome', { ascending: true });
+      // ADMIN: Busca todos os Usuários (Funcionários) e o nome da empresa vinculada
+      query = supabase.from('tbl_usuarios').select('*, tbl_clientes(nome)').order('nome', { ascending: true });
     } else if (role === 'Cliente') {
-      // Cliente vê seus próprios Usuários (Funcionários)
+      // CLIENTE: Vê seus próprios Usuários (Funcionários)
       query = supabase.from('tbl_usuarios').select('*').eq('cliente_id', usuario.id).order('nome', { ascending: true });
     } else {
       setCarregandoUsuarios(false);
@@ -45,8 +44,15 @@ const GerenciarUsuarios: React.FC = () => {
       showError('Erro ao carregar usuários: ' + error.message);
       setUsuarios([]);
     } else {
-      // Garantindo que os dados sejam AnyProfile[]
-      setUsuarios(data as AnyProfile[]);
+      // Mapeia os dados para garantir que o perfil seja do tipo correto
+      const mappedData = data.map(item => {
+        if (role === 'Admin' && item.tbl_clientes) {
+          // Adiciona o nome da empresa ao perfil do usuário para exibição
+          return { ...item, nome_empresa: item.tbl_clientes.nome } as UsuarioProfile & { nome_empresa: string };
+        }
+        return item as UsuarioProfile;
+      });
+      setUsuarios(mappedData as AnyProfile[]);
     }
     setCarregandoUsuarios(false);
   }, [usuario, role]);
@@ -60,10 +66,12 @@ const GerenciarUsuarios: React.FC = () => {
   };
 
   const filteredUsuarios = usuarios.filter(u => {
-    // Adicionando verificação de nulidade explícita (Corrige Erros 2 e 3)
     if (!u) return false; 
+    // Garante que nomeEmpresa é uma string antes de chamar toLowerCase()
+    const nomeEmpresa = ('nome_empresa' in u && typeof u.nome_empresa === 'string') ? u.nome_empresa : '';
     return u.nome.toLowerCase().includes(filtro.toLowerCase()) ||
-           u.email.toLowerCase().includes(filtro.toLowerCase());
+           u.email.toLowerCase().includes(filtro.toLowerCase()) ||
+           nomeEmpresa.toLowerCase().includes(filtro.toLowerCase());
   });
 
   const handleDelete = async (id: string, nome: string, targetRole: UserRole) => {
@@ -79,11 +87,6 @@ const GerenciarUsuarios: React.FC = () => {
         .eq('id', id);
 
       if (profileError) throw profileError;
-
-      // 2. Deletar o usuário do auth (apenas se for Admin ou se for Cliente deletando Usuário)
-      // Nota: A deleção do usuário auth deve ser feita com privilégios de serviço ou RLS adequado.
-      // Aqui, assumimos que a deleção do perfil é suficiente para a interface, e a limpeza do auth
-      // pode ser tratada por um trigger de banco de dados ou função de serviço.
       
       showSuccess(`Conta de ${nome} deletada com sucesso.`);
       fetchUsuarios();
@@ -116,9 +119,14 @@ const GerenciarUsuarios: React.FC = () => {
     );
   }
 
+  // Se for Admin, ele gerencia Usuários (Funcionários) de todas as empresas
   const isManagingClients = role === 'Admin';
-  const targetRole = isManagingClients ? 'Cliente' : 'Usuario';
-  const title = isManagingClients ? 'Gerenciar Clientes (Empresas)' : 'Gerenciar Usuários (Equipe)';
+  const targetRole = 'Usuario'; // Admin gerencia Usuários (Funcionários)
+  const title = isManagingClients ? 'Gerenciar Usuários (Funcionários)' : 'Gerenciar Usuários (Equipe)';
+  
+  // Se o Admin está aqui, ele gerencia Usuários. Se o Cliente está aqui, ele gerencia Usuários.
+  // A única exceção é se o Admin precisar gerenciar Clientes, mas isso deve ser em outra rota ou tab.
+  // Mantendo a rota atual focada em Usuários (Funcionários) para ambos os perfis.
 
   return (
     <LayoutPrincipal>
@@ -137,7 +145,7 @@ const GerenciarUsuarios: React.FC = () => {
             </DialogHeader>
             <FormUsuario 
               criadorRole={role}
-              criadorPerfil={perfil} // CORRIGIDO: Passando perfil (AnyProfile)
+              criadorPerfil={perfil}
               clienteId={role === 'Cliente' ? usuario.id : undefined}
               usuarioInicial={usuarioParaEditar}
               onSaveComplete={handleSaveComplete}
@@ -150,7 +158,7 @@ const GerenciarUsuarios: React.FC = () => {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder={`Buscar por nome ou email...`}
+            placeholder={`Buscar por nome, email ou empresa...`}
             value={filtro}
             onChange={handleSearch}
             className="pl-10"
@@ -171,35 +179,30 @@ const GerenciarUsuarios: React.FC = () => {
               <TableRow>
                 <TableHead>Nome</TableHead>
                 <TableHead>Email</TableHead>
-                {isManagingClients && <TableHead>Limite Usuários</TableHead>}
-                {!isManagingClients && <TableHead>Início Contrato</TableHead>}
+                {role === 'Admin' && <TableHead>Empresa</TableHead>}
+                <TableHead>Início Contrato</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredUsuarios.map((u) => {
-                // Verificação de nulidade dentro do map (Corrige Erros 5, 6, 7, 8, 9)
-                if (!u) return null; 
+                if (!u || !('cliente_id' in u)) return null; // Garante que é um UsuarioProfile
+                const userProfile = u as UsuarioProfile & { nome_empresa?: string };
                 
                 return (
                 <TableRow key={u.id}>
                   <TableCell className="font-medium">
-                    {u.nome}
-                    {isManagingClients && (u as ClienteProfile).limite_usuarios === 0 && (
-                        <Badge variant="destructive" className="ml-2">Bloqueado</Badge>
-                    )}
+                    {userProfile.nome}
                   </TableCell>
-                  <TableCell>{u.email}</TableCell>
-                  {isManagingClients && (
-                    <TableCell>{(u as ClienteProfile).limite_usuarios}</TableCell>
+                  <TableCell>{userProfile.email}</TableCell>
+                  {role === 'Admin' && (
+                    <TableCell className="text-sm text-muted-foreground">{userProfile.nome_empresa || 'N/A'}</TableCell>
                   )}
-                  {!isManagingClients && (
-                    <TableCell>
-                        {(u as UsuarioProfile).data_inicio_contrato 
-                            ? format(new Date((u as UsuarioProfile).data_inicio_contrato!), 'dd/MM/yyyy', { locale: ptBR })
-                            : 'N/A'}
-                    </TableCell>
-                  )}
+                  <TableCell>
+                      {userProfile.data_inicio_contrato 
+                          ? format(new Date(userProfile.data_inicio_contrato!), 'dd/MM/yyyy', { locale: ptBR })
+                          : 'N/A'}
+                  </TableCell>
                   <TableCell className="text-right space-x-2">
                     <Button 
                       variant="outline" 
@@ -214,7 +217,7 @@ const GerenciarUsuarios: React.FC = () => {
                     <Button 
                       variant="destructive" 
                       size="icon" 
-                      onClick={() => handleDelete(u.id, u.nome, isManagingClients ? 'Cliente' : 'Usuario')}
+                      onClick={() => handleDelete(u.id, u.nome, 'Usuario')}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
