@@ -87,45 +87,36 @@ const SelecaoPerfil: React.FC = () => {
     const dataFimAcesso = addDays(new Date(), plano.dias_trial).toISOString();
 
     try {
-        // 1. Cadastrar o novo cliente no Supabase Auth
-        // Passamos plano_id e permissoes como strings JSON para o trigger route_new_user
-        const { data: _data, error: authError } = await supabase.auth.signUp({
-            email: usuario.email, // Usamos o email do usuário logado (se for isUnassignedUser)
-            password: Math.random().toString(36).substring(2, 15), // Senha temporária
-            options: {
-                emailRedirectTo: `${window.location.origin}/atualizar-senha`,
-                data: { 
-                    role: 'Cliente', 
-                    nome: nome, 
-                    cliente_id: null, 
-                    // Passando como string JSON para garantir que o trigger consiga ler
-                    plano_id: plano.id, 
-                    permissoes: JSON.stringify(plano.permissoes), 
-                }
+        // 1. Atualizar metadados do Auth para forçar a role 'Cliente' e passar dados para o trigger
+        const { error: authUpdateError } = await supabase.auth.updateUser({
+            data: { 
+                role: 'Cliente', 
+                nome: nome, 
+                cliente_id: null, 
+                plano_id: plano.id, 
+                permissoes: JSON.stringify(plano.permissoes), 
+                aprovado: true, // Marca como aprovado no fluxo de vendas
             }
         });
-
-        if (authError && !authError.message.includes('already registered')) {
-            throw authError;
-        }
         
-        // 2. Promover/Atualizar o usuário para Cliente na tbl_clientes
+        if (authUpdateError) throw authUpdateError;
+        
+        // 2. Inserir/Atualizar na tbl_clientes diretamente (o trigger route_new_user fará a maior parte,
+        // mas fazemos o upsert aqui para garantir que os dados do plano sejam salvos, caso o trigger falhe ou para dados adicionais)
         const dataToInsert = {
             id: usuario.id,
             nome: nome,
             email: usuario.email,
-            aprovado: true, // Aprovação automática para PF/PJ via vendas
-            limite_usuarios: 1, // Limite inicial de 1 para o próprio cliente
+            aprovado: true, 
+            limite_usuarios: 1, 
             permissoes: permissoes,
             tipo_cliente: plano.tipo_cliente,
             plano_id: plano.id,
-            data_fim_acesso: dataFimAcesso, // NOVO CAMPO
+            data_fim_acesso: dataFimAcesso, 
         };
         
         // Se for um Usuário não vinculado, precisamos deletá-lo da tbl_usuarios primeiro
         if (isUnassignedUser) {
-            // Nota: O RLS pode impedir o delete, mas o upsert deve funcionar se o RLS permitir update/insert.
-            // Vamos confiar no upsert para sobrescrever o registro.
             await supabase.from('tbl_usuarios').delete().eq('id', usuario.id);
         }
         
@@ -135,13 +126,6 @@ const SelecaoPerfil: React.FC = () => {
             .upsert(dataToInsert);
 
         if (insertError) throw insertError;
-        
-        // 3. Atualizar metadados do Auth para forçar a role 'Cliente'
-        const { error: authUpdateError } = await supabase.auth.updateUser({
-            data: { role: 'Cliente' }
-        });
-        
-        if (authUpdateError) throw authUpdateError;
 
         showSuccess(`Plano ${plano.nome} selecionado com sucesso!`);
         await refetch(); // Força a atualização da sessão
