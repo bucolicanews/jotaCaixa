@@ -19,6 +19,12 @@ serve(async (req: Request) => {
   try {
     console.log('LOG: Starting checkout session creation.');
     
+    // Log de variáveis de ambiente (para verificar se estão sendo lidas)
+    console.log('ENV:', {
+      SUPABASE_URL: Deno.env.get('SUPABASE_URL'),
+      SUPABASE_ANON_KEY_EXISTS: !!Deno.env.get('SUPABASE_ANON_KEY'),
+    });
+    
     // 1. Ler o corpo da requisição
     const body = await req.json();
     const { planoId, clienteId, email } = body;
@@ -58,8 +64,9 @@ serve(async (req: Request) => {
       });
     }
     
-    console.log('LOG: Stripe secret key fetched successfully.');
     const stripeSecretKey = stripeConfig.stripe_secret_key;
+    console.log('LOG: Stripe secret key fetched. Starts with:', stripeSecretKey.slice(0, 8));
+
 
     // 4. Buscar detalhes do Plano
     console.log(`LOG: Fetching plan details for ID: ${planoId}`);
@@ -88,9 +95,13 @@ serve(async (req: Request) => {
     
     const unitAmount = Math.round(plano.preco_mensal * 100);
     
-    console.log(`LOG: Creating Checkout Session. Unit Amount: ${unitAmount}`);
+    // 6. Tratar URL de Referer (Fallback para evitar erro de URL inválida)
+    const referer = req.headers.get('referer');
+    const baseUrl = referer || 'https://jqoirlswewggyppgvgnv.supabase.co/'; // Usando o ID do projeto como fallback seguro
+    
+    console.log(`LOG: Creating Checkout Session. Base URL: ${baseUrl}`);
 
-    // 6. Criar a Stripe Checkout Session
+    // 7. Criar a Stripe Checkout Session
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription', // Assumindo que planos são assinaturas
       payment_method_types: ['card'],
@@ -109,9 +120,9 @@ serve(async (req: Request) => {
           quantity: 1,
         },
       ],
-      // URLs de redirecionamento (usando o domínio do cliente)
-      success_url: `${req.headers.get('referer')}painel?payment=success&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${req.headers.get('referer')}vendas?payment=canceled`,
+      // URLs de redirecionamento
+      success_url: `${baseUrl}painel?payment=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${baseUrl}vendas?payment=canceled`,
       
       // Metadados para identificar o cliente e o plano após o pagamento
       metadata: {
