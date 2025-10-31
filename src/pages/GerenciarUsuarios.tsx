@@ -36,15 +36,25 @@ const GerenciarUsuarios: React.FC = () => {
   const [filtroEmpresaId, setFiltroEmpresaId] = useState('todos');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [perfilParaEditar, setPerfilParaEditar] = useState<AnyProfile | null>(null);
-  const [activeTab, setActiveTab] = useState(role === 'Admin' ? 'clientes' : 'usuarios');
+  
+  // Inicialização segura do activeTab
+  const [activeTab, setActiveTab] = useState('usuarios');
 
   const isAdmin = role === 'Admin';
   const isCliente = role === 'Cliente';
 
+  // Efeito para definir a aba ativa inicial
+  useEffect(() => {
+      if (!carregando && isAdmin) {
+          setActiveTab('clientes');
+      } else if (!carregando && isCliente) {
+          setActiveTab('usuarios');
+      }
+  }, [carregando, isAdmin, isCliente]);
+
+
   const fetchDados = useCallback(async () => {
     if (!usuario || !role) {
-        // Se a sessão não estiver pronta, saímos, mas mantemos o carregandoDados em true
-        // até que o useEffect abaixo o defina como false.
         return;
     }
 
@@ -85,6 +95,8 @@ const GerenciarUsuarios: React.FC = () => {
         setUsuarios([]);
       } else {
         fetchedUsuarios = (usuariosData as any[]).map(item => {
+          // Se cliente_id for null, ou se tbl_clientes for null (o que acontece se cliente_id for o ID do Admin),
+          // usamos 'Meus Usuários (Admin)'.
           const nomeEmpresa = item.tbl_clientes?.nome || (item.cliente_id === usuario.id ? 'Meus Usuários (Admin)' : 'N/A');
           return { ...item, nome_empresa: nomeEmpresa } as UsuarioComEmpresa;
         });
@@ -103,8 +115,7 @@ const GerenciarUsuarios: React.FC = () => {
         showError('Erro ao carregar usuários: ' + usuariosError.message);
         setUsuarios([]);
       } else {
-        fetchedUsuarios = usuariosData as UsuarioComEmpresa[];
-        setUsuarios(fetchedUsuarios);
+        setUsuarios(usuariosData as UsuarioComEmpresa[]);
       }
     }
     
@@ -113,12 +124,9 @@ const GerenciarUsuarios: React.FC = () => {
 
   useEffect(() => {
     if (!carregando) {
-        // Se a sessão terminou de carregar (carregando é false)
         if (usuario) {
-            // Se há usuário, busca os dados
             fetchDados();
         } else {
-            // Se não há usuário, mas terminou de carregar, finaliza o carregamento de dados
             setCarregandoDados(false);
         }
     }
