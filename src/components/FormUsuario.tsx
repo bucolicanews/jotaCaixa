@@ -637,21 +637,30 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
   if (isClientBeingManagedByAdmin) {
     // Renderização para Cliente (Empresa)
     const clientProfile = usuarioInicial as ClienteProfile;
+    const resourceId = clientProfile.id;
     
     return (
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
           <h3 className="font-semibold text-lg">Dados de Identificação</h3>
           
-          {/* Nome da Empresa (Não mapeável) */}
-          {renderInputField('nome', 'Nome da Empresa', 'Nome completo', true, !isEditing)}
+          {/* Nome da Empresa (Mapeável) */}
+          <TaggedFormField 
+              fieldName="nome" 
+              label="Nome da Empresa" 
+              placeholder="Nome completo" 
+              resourceId={resourceId} 
+              disabled={!isEditing}
+              mapArray={CAMPOS_CLIENTE_MAPA}
+              isOptional={false}
+          />
           
           {/* Email de Login (Mapeável e desabilitado na edição) */}
           <TaggedFormField 
               fieldName="email" 
               label="Email (Login)" 
               placeholder="contato@empresa.com" 
-              resourceId={clientProfile.id} 
+              resourceId={resourceId} 
               disabled={!isEditing}
               mapArray={CAMPOS_CLIENTE_MAPA}
               isOptional={false}
@@ -668,7 +677,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                   fieldName="cpf" 
                   label="CPF/CNPJ" 
                   placeholder="00.000.000/0000-00" 
-                  resourceId={clientProfile.id} 
+                  resourceId={resourceId} 
                   disabled={!isEditing}
                   mapArray={CAMPOS_CLIENTE_MAPA}
               />
@@ -677,7 +686,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                   fieldName="rg" 
                   label="RG" 
                   placeholder="00.000.000-0" 
-                  resourceId={clientProfile.id} 
+                  resourceId={resourceId} 
                   disabled={!isEditing}
                   mapArray={CAMPOS_CLIENTE_MAPA}
               />
@@ -686,7 +695,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                   fieldName="nome_mae" 
                   label="Nome da Mãe" 
                   placeholder="Nome completo da mãe" 
-                  resourceId={clientProfile.id} 
+                  resourceId={resourceId} 
                   disabled={!isEditing}
                   mapArray={CAMPOS_CLIENTE_MAPA}
               />
@@ -698,7 +707,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                   fieldName="telefone" 
                   label="Telefone de Contato" 
                   placeholder="(00) 90000-0000" 
-                  resourceId={clientProfile.id} 
+                  resourceId={resourceId} 
                   disabled={!isEditing}
                   mapArray={CAMPOS_CLIENTE_MAPA}
               />
@@ -707,7 +716,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                   fieldName="nome_pai" 
                   label="Nome do Pai" 
                   placeholder="Nome completo do pai" 
-                  resourceId={clientProfile.id} 
+                  resourceId={resourceId} 
                   disabled={!isEditing}
                   mapArray={CAMPOS_CLIENTE_MAPA}
               />
@@ -720,7 +729,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                   fieldName="cep" 
                   label="CEP" 
                   placeholder="00000-000" 
-                  resourceId={clientProfile.id} 
+                  resourceId={resourceId} 
                   disabled={!isEditing}
                   mapArray={CAMPOS_CLIENTE_MAPA}
               />
@@ -729,7 +738,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                   fieldName="cidade" 
                   label="Cidade" 
                   placeholder="São Paulo" 
-                  resourceId={clientProfile.id} 
+                  resourceId={resourceId} 
                   disabled={!isEditing}
                   mapArray={CAMPOS_CLIENTE_MAPA}
               />
@@ -738,7 +747,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                   fieldName="estado" 
                   label="Estado (UF)" 
                   placeholder="SP" 
-                  resourceId={clientProfile.id} 
+                  resourceId={resourceId} 
                   disabled={!isEditing}
                   mapArray={CAMPOS_CLIENTE_MAPA}
               />
@@ -749,7 +758,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                   fieldName="endereco" 
                   label="Logradouro/Rua" 
                   placeholder="Rua Exemplo" 
-                  resourceId={clientProfile.id} 
+                  resourceId={resourceId} 
                   disabled={!isEditing}
                   mapArray={CAMPOS_CLIENTE_MAPA}
               />
@@ -758,7 +767,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                   fieldName="numero" 
                   label="Número" 
                   placeholder="123" 
-                  resourceId={clientProfile.id} 
+                  resourceId={resourceId} 
                   disabled={!isEditing}
                   mapArray={CAMPOS_CLIENTE_MAPA}
               />
@@ -767,7 +776,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                   fieldName="complemento" 
                   label="Complemento" 
                   placeholder="Apto 101" 
-                  resourceId={clientProfile.id} 
+                  resourceId={resourceId} 
                   disabled={!isEditing}
                   mapArray={CAMPOS_CLIENTE_MAPA}
               />
@@ -777,7 +786,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
               fieldName="bairro" 
               label="Bairro" 
               placeholder="Centro" 
-              resourceId={clientProfile.id} 
+              resourceId={resourceId} 
               disabled={!isEditing}
               mapArray={CAMPOS_CLIENTE_MAPA}
           />
@@ -816,6 +825,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
 
   // Renderização para Usuário (Funcionário)
   const isContractEditable = criadorRole === 'Admin' || criadorRole === 'Cliente';
+  const resourceId = usuarioInicial?.id;
 
   return (
     <Form {...form}>
@@ -895,7 +905,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                                     Considerar Domingo como Folga Obrigatória (Padrão CLT)
                                 </FormLabel>
                                 <p className="text-sm text-muted-foreground">
-                                    Desmarque se o funcionário trabalha em escala 6x1 ou 12x36 e o domingo não é garantido como folga.
+                                    Configuração definida pela empresa.
                                 </p>
                             </div>
                         </FormItem>
@@ -971,7 +981,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                       fieldName="cpf" 
                       label="CPF" 
                       placeholder="000.000.000-00" 
-                      resourceId={usuarioInicial?.id} 
+                      resourceId={resourceId} 
                       disabled={isNewUser}
                       mapArray={CAMPOS_USUARIO_MAPA}
                   />
@@ -979,7 +989,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                       fieldName="rg" 
                       label="RG" 
                       placeholder="00.000.000-0" 
-                      resourceId={usuarioInicial?.id} 
+                      resourceId={resourceId} 
                       disabled={isNewUser}
                       mapArray={CAMPOS_USUARIO_MAPA}
                   />
@@ -989,7 +999,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                   fieldName="nome_mae" 
                   label="Nome da Mãe" 
                   placeholder="Nome completo da mãe" 
-                  resourceId={usuarioInicial?.id} 
+                  resourceId={resourceId} 
                   disabled={isNewUser}
                   mapArray={CAMPOS_USUARIO_MAPA}
               />
@@ -997,7 +1007,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                   fieldName="nome_pai" 
                   label="Nome do Pai" 
                   placeholder="Nome completo do pai" 
-                  resourceId={usuarioInicial?.id} 
+                  resourceId={resourceId} 
                   disabled={isNewUser}
                   mapArray={CAMPOS_USUARIO_MAPA}
               />
@@ -1005,7 +1015,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                   fieldName="telefone" 
                   label="Telefone de Contato" 
                   placeholder="(00) 90000-0000" 
-                  resourceId={usuarioInicial?.id} 
+                  resourceId={resourceId} 
                   disabled={isNewUser}
                   mapArray={CAMPOS_USUARIO_MAPA}
               />
@@ -1016,7 +1026,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                       fieldName="cep" 
                       label="CEP" 
                       placeholder="00000-000" 
-                      resourceId={usuarioInicial?.id} 
+                      resourceId={resourceId} 
                       disabled={isNewUser}
                       mapArray={CAMPOS_USUARIO_MAPA}
                   />
@@ -1024,7 +1034,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                       fieldName="cidade" 
                       label="Cidade" 
                       placeholder="São Paulo" 
-                      resourceId={usuarioInicial?.id} 
+                      resourceId={resourceId} 
                       disabled={isNewUser}
                       mapArray={CAMPOS_USUARIO_MAPA}
                   />
@@ -1032,7 +1042,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                       fieldName="estado" 
                       label="Estado (UF)" 
                       placeholder="SP" 
-                      resourceId={usuarioInicial?.id} 
+                      resourceId={resourceId} 
                       disabled={isNewUser}
                       mapArray={CAMPOS_USUARIO_MAPA}
                   />
@@ -1042,7 +1052,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                       fieldName="endereco" 
                       label="Logradouro/Rua" 
                       placeholder="Rua Exemplo" 
-                      resourceId={usuarioInicial?.id} 
+                      resourceId={resourceId} 
                       disabled={isNewUser}
                       mapArray={CAMPOS_USUARIO_MAPA}
                   />
@@ -1050,7 +1060,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                       fieldName="numero" 
                       label="Número" 
                       placeholder="123" 
-                      resourceId={usuarioInicial?.id} 
+                      resourceId={resourceId} 
                       disabled={isNewUser}
                       mapArray={CAMPOS_USUARIO_MAPA}
                   />
@@ -1058,7 +1068,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                       fieldName="complemento" 
                       label="Complemento" 
                       placeholder="Apto 101" 
-                      resourceId={usuarioInicial?.id} 
+                      resourceId={resourceId} 
                       disabled={isNewUser}
                       mapArray={CAMPOS_USUARIO_MAPA}
                   />
@@ -1067,7 +1077,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                   fieldName="bairro" 
                   label="Bairro" 
                   placeholder="Centro" 
-                  resourceId={usuarioInicial?.id} 
+                  resourceId={resourceId} 
                   disabled={isNewUser}
                   mapArray={CAMPOS_USUARIO_MAPA}
               />
