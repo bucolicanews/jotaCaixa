@@ -1,52 +1,80 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSessao } from '@/hooks/use-sessao';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Loader2, User, Building2, Check, X } from 'lucide-react';
-import { PERMISSOES_PF, PERMISSOES_PJ } from '@/config/permissoes-padrao';
+import { Loader2, User, Building2, Check, X, Package } from 'lucide-react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
-import { UsuarioProfile } from '@/types/usuario';
+import { UsuarioProfile, ClienteProfile } from '@/types/usuario';
+import { Plano } from '@/types/plano';
+import { PERMISSOES_DISPONIVEIS } from '@/config/permissoes';
+import { cn } from '@/lib/utils';
 
 const SelecaoPerfil: React.FC = () => {
   const { usuario, role, perfil, carregando, refetch } = useSessao();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [planos, setPlanos] = useState<Plano[]>([]);
+  const [carregandoPlanos, setCarregandoPlanos] = useState(true);
 
-  if (carregando) {
+  const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+  
+  const permissoesMap = PERMISSOES_DISPONIVEIS.filter(p => 
+    p.key !== 'ponto_eletronico' && p.key !== 'visualizar_proprio_ponto'
+  ).map(p => ({
+      key: p.key,
+      label: p.label,
+  }));
+
+  const buscarPlanos = useCallback(async () => {
+    setCarregandoPlanos(true);
+    const { data, error } = await supabase
+      .from('planos')
+      .select('*')
+      .order('preco_mensal', { ascending: true });
+
+    if (error) {
+      showError('Erro ao carregar planos: ' + error.message);
+      setPlanos([]);
+    } else {
+      setPlanos(data as Plano[]);
+    }
+    setCarregandoPlanos(false);
+  }, []);
+
+  useEffect(() => {
+    buscarPlanos();
+  }, [buscarPlanos]);
+
+  // --- Redirecionamento de Segurança ---
+  if (carregando || carregandoPlanos) {
     return <LayoutPrincipal><div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div></LayoutPrincipal>;
   }
 
-  // Redireciona se o perfil já estiver definido (Admin ou Cliente)
-  if (role === 'Admin' || (role === 'Cliente' && perfil && 'aprovado' in perfil)) {
+  const isUnassignedUser = role === 'Usuario' && !(perfil as UsuarioProfile)?.cliente_id;
+  const isClientApproved = role === 'Cliente' && (perfil as ClienteProfile)?.aprovado;
+
+  if (role === 'Admin' || isClientApproved) {
     navigate('/painel', { replace: true });
     return null;
   }
   
-  // Esta página só deve ser acessível por um Usuário não vinculado ou um Cliente pendente sem plano definido.
-  const isUnassignedUser = role === 'Usuario' && !(perfil as UsuarioProfile)?.cliente_id;
-  const isPendingClient = role === 'Cliente' && perfil && !('plano_id' in perfil); // Cliente sem plano definido
-
-  if (!isUnassignedUser && !isPendingClient) {
-      // Se o usuário já é um Cliente pendente com plano, ele deve ir para a tela de aprovação.
-      if (role === 'Cliente') {
-          navigate('/painel', { replace: true });
-          return null;
-      }
-      // Se for um usuário logado sem perfil claro, mas não é 'Usuario' não vinculado, algo está errado.
+  // Se o usuário não for Admin, nem Cliente aprovado, e não for um Usuário não vinculado, algo está errado.
+  if (!isUnassignedUser && role !== 'Cliente') {
       if (!usuario) {
           navigate('/login', { replace: true });
           return null;
       }
   }
+  // -------------------------------------
 
-  const handleSelectProfile = async (tipo: 'PF' | 'PJ') => {
+  const handleSelectProfile = async (plano: Plano) => {
     if (!usuario) return;
     setLoading(true);
 
-    const permissoes = tipo === 'PF' ? PERMISSOES_PF : PERMISSOES_PJ;
+    const permissoes = plano.permissoes;
     const nome = perfil?.nome || usuario.email?.split('@')[0] || 'Novo Cliente';
     
     try {
@@ -58,8 +86,8 @@ const SelecaoPerfil: React.FC = () => {
             aprovado: true, // Aprovação automática para PF/PJ via vendas
             limite_usuarios: 1, // Limite inicial de 1 para o próprio cliente
             permissoes: permissoes,
-            tipo_cliente: tipo, // Adicionando o tipo de cliente
-            // plano_id será null por enquanto, até implementarmos a tabela de planos
+            tipo_cliente: plano.tipo_cliente,
+            plano_id: plano.id, // Vinculando o plano
         };
         
         // Se for um Usuário não vinculado, precisamos deletá-lo da tbl_usuarios primeiro
@@ -81,7 +109,7 @@ const SelecaoPerfil: React.FC = () => {
         
         if (authUpdateError) throw authUpdateError;
 
-        showSuccess(`Perfil ${tipo} selecionado com sucesso!`);
+        showSuccess(`Plano ${plano.nome} selecionado com sucesso!`);
         await refetch(); // Força a atualização da sessão
         navigate('/painel', { replace: true });
 
@@ -93,74 +121,81 @@ const SelecaoPerfil: React.FC = () => {
     }
   };
 
+  if (planos.length === 0) {
+      return (
+        <LayoutPrincipal>
+            <Card className="mt-10"><CardContent className="text-center py-8 text-muted-foreground">Nenhum plano de assinatura disponível. Contate o administrador.</CardContent></Card>
+        </LayoutPrincipal>
+      );
+  }
+
   return (
     <LayoutPrincipal>
       <div className="flex items-center justify-center min-h-[80vh] p-4">
-        <Card className="w-full max-w-3xl">
+        <Card className="w-full max-w-6xl">
           <CardHeader className="text-center">
-            <CardTitle className="text-3xl">Selecione seu Perfil</CardTitle>
+            <CardTitle className="text-3xl">Selecione seu Plano</CardTitle>
             <CardDescription className="text-lg font-semibold text-green-500">
-                Teste Grátis por 7 dias!
+                Teste Grátis por {planos[0]?.dias_trial || 7} dias!
             </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               
-              {/* Opção Pessoa Física */}
-              <Card className="p-4 flex flex-col items-center text-center hover:border-primary transition-colors">
-                <User className="w-10 h-10 text-primary mb-3" />
-                <h3 className="text-xl font-semibold mb-2">Pessoa Física (PF)</h3>
-                <p className="text-sm text-muted-foreground mb-4">
-                  Ideal para uso pessoal ou microempreendedores individuais.
-                </p>
-                
-                <div className="text-3xl font-extrabold text-foreground mb-4">
-                    R$ 49,90
-                    <span className="text-lg font-medium text-muted-foreground">/mês</span>
-                </div>
-                
-                <ul className="text-left text-sm space-y-1 flex-1 mb-6">
-                    <li><Check className="w-4 h-4 text-green-500 inline mr-2" /> Contas a Pagar/Receber</li>
-                    <li><Check className="w-4 h-4 text-green-500 inline mr-2" /> Cadastro de Clientes</li>
-                    <li><Check className="w-4 h-4 text-green-500 inline mr-2" /> Relatórios Básicos</li>
-                    <li><X className="w-4 h-4 text-red-500 inline mr-2" /> Gestão de Equipe/Ponto</li>
-                </ul>
-                <Button 
-                  onClick={() => handleSelectProfile('PF')} 
-                  disabled={loading}
-                  className="w-full mt-auto"
-                >
-                  {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Selecionar PF'}
-                </Button>
-              </Card>
-              
-              {/* Opção Pessoa Jurídica */}
-              <Card className="p-4 flex flex-col items-center text-center hover:border-primary transition-colors">
-                <Building2 className="w-10 h-10 text-primary mb-3" />
-                <h3 className="text-xl font-semibold mb-2">Pessoa Jurídica (PJ)</h3>
-                <p className="text-sm text-muted-foreground mb-4">
-                  Para empresas que precisam de gestão completa, equipe e ponto eletrônico.
-                </p>
-                
-                <div className="text-3xl font-extrabold text-foreground mb-4">
-                    R$ 99,90
-                    <span className="text-lg font-medium text-muted-foreground">/mês</span>
-                </div>
-                
-                <ul className="text-left text-sm space-y-1 flex-1 mb-6">
-                    <li><Check className="w-4 h-4 text-green-500 inline mr-2" /> Todos os Módulos Financeiros</li>
-                    <li><Check className="w-4 h-4 text-green-500 inline mr-2" /> Gestão de Usuários/Equipe</li>
-                    <li><Check className="w-4 h-4 text-green-500 inline mr-2" /> Ponto Eletrônico</li>
-                    <li><Check className="w-4 h-4 text-green-500 inline mr-2" /> Contratos e Tags</li>
-                </ul>
-                <Button 
-                  onClick={() => handleSelectProfile('PJ')} 
-                  disabled={loading}
-                  className="w-full mt-auto"
-                >
-                  {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Selecionar PJ'}
-                </Button>
-              </Card>
+              {planos.map((plano) => (
+                  <Card 
+                      key={plano.id} 
+                      className={cn(
+                          "p-4 flex flex-col items-center text-center transition-colors",
+                          plano.tipo_cliente === 'PJ' ? "border-primary shadow-lg" : "border-secondary"
+                      )}
+                  >
+                      {plano.tipo_cliente === 'PJ' ? (
+                          <Building2 className="w-10 h-10 text-primary mb-3" />
+                      ) : (
+                          <User className="w-10 h-10 text-primary mb-3" />
+                      )}
+                      
+                      <h3 className="text-xl font-semibold mb-2">{plano.nome} ({plano.tipo_cliente})</h3>
+                      <p className="text-sm text-muted-foreground mb-4">
+                        {plano.descricao || (plano.tipo_cliente === 'PJ' ? 'Gestão completa para empresas.' : 'Uso pessoal e microempreendedores.')}
+                      </p>
+                      
+                      <div className="text-4xl font-extrabold text-foreground mb-4">
+                          {formatCurrency(plano.preco_mensal)}
+                          <span className="text-lg font-medium text-muted-foreground">/mês</span>
+                      </div>
+                      
+                      <div className="space-y-3 flex-1 text-left w-full px-4">
+                          <h4 className="font-semibold flex items-center text-primary mb-3">
+                              <Package className="w-4 h-4 mr-2" /> Módulos Incluídos:
+                          </h4>
+                          {permissoesMap.map(p => {
+                              const isIncluded = plano.permissoes[p.key] === true;
+                              return (
+                                  <div key={p.key} className="flex items-center space-x-2">
+                                      {isIncluded ? (
+                                          <Check className="w-4 h-4 text-green-500 flex-shrink-0" />
+                                      ) : (
+                                          <X className="w-4 h-4 text-red-500 flex-shrink-0" />
+                                      )}
+                                      <span className={cn("text-sm", !isIncluded && "text-muted-foreground line-through")}>
+                                          {p.label}
+                                      </span>
+                                  </div>
+                              );
+                          })}
+                      </div>
+                      
+                      <Button 
+                          onClick={() => handleSelectProfile(plano)} 
+                          disabled={loading}
+                          className="w-full mt-6"
+                      >
+                          {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : `Iniciar Trial de ${plano.dias_trial} dias`}
+                      </Button>
+                  </Card>
+              ))}
             </div>
           </CardContent>
         </Card>

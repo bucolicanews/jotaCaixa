@@ -1,16 +1,9 @@
-import React, { useRef } from 'react';
+import React from 'react';
 import { Button } from '@/components/ui/button';
-import { Zap, ArrowDown } from 'lucide-react';
-import VendasPlanos from '@/components/VendasPlanos';
-import { Link } from 'react-router-dom'; // Importando Link
+import { Zap } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 const Vendas: React.FC = () => {
-  const planosRef = useRef<HTMLDivElement>(null);
-
-  const scrollToPlans = () => {
-    planosRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
-
   return (
     <div className="min-h-screen bg-background p-4 md:p-12">
       <div className="max-w-6xl mx-auto text-center">
@@ -25,23 +18,18 @@ const Vendas: React.FC = () => {
                 Gerencie contas a pagar, a receber, folha de ponto e contratos em uma única plataforma multi-tenant, segura e eficiente.
             </p>
             
-            <Button 
-                onClick={scrollToPlans} 
-                size="lg" 
-                className="text-lg px-8 py-6 shadow-lg hover:shadow-xl transition-all"
-            >
-                Ver Planos e Iniciar Trial Grátis
-                <ArrowDown className="w-5 h-5 ml-2" />
-            </Button>
+            <Link to="/login">
+                <Button 
+                    size="lg" 
+                    className="text-lg px-8 py-6 shadow-lg hover:shadow-xl transition-all"
+                >
+                    Fazer Login ou Cadastrar
+                </Button>
+            </Link>
             
             <div className="mt-12 text-center">
                 <p className="text-sm text-muted-foreground">Já é cliente? <Link to="/login" className="text-primary hover:underline">Faça login aqui.</Link></p>
             </div>
-        </div>
-
-        {/* Seção de Planos (Scroll Target) */}
-        <div ref={planosRef} className="pt-16 pb-16">
-            <VendasPlanos />
         </div>
         
       </div>
