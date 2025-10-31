@@ -274,7 +274,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({ criadorRole, criadorPerfil, c
   
   // Lista de campos do Cliente que podem ser Tags
   const TAG_FIELDS_TO_MANAGE = CAMPOS_CLIENTE_MAPA.filter(m => 
-    ['cpf', 'rg', 'nome_mae', 'nome_pai', 'telefone', 'cep', 'endereco', 'numero', 'complemento', 'bairro', 'cidade', 'estado'].includes(m.field)
+    ['nome', 'cpf', 'rg', 'nome_mae', 'nome_pai', 'telefone', 'cep', 'endereco', 'numero', 'complemento', 'bairro', 'cidade', 'estado'].includes(m.field)
   );
 
   const handleToggleAllTags = async (activate: boolean) => {
