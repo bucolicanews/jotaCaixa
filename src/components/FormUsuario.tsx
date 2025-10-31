@@ -79,6 +79,9 @@ const formSchema = z.object({
   cnh_url: urlSchema,
   cartao_pis_url: urlSchema,
   ja_admitido_anteriormente: z.boolean().optional(),
+  
+  // NOVO CAMPO DE ACESSO
+  data_fim_acesso: z.date().optional().nullable(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -165,13 +168,13 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
       cidade: (profileToEdit as UsuarioProfile)?.cidade || '',
       estado: (profileToEdit as UsuarioProfile)?.estado || '',
 
-      // Contratuais (Apenas Usuário)
+      // Contratuais (Apenas para UsuarioProfile)
       data_inicio_contrato: parseDate((profileToEdit as UsuarioProfile)?.data_inicio_contrato),
       data_fim_contrato: parseDate((profileToEdit as UsuarioProfile)?.data_fim_contrato),
       data_inicio_aviso: parseDate((profileToEdit as UsuarioProfile)?.data_inicio_aviso),
       tipo_aviso: (profileToEdit as UsuarioProfile)?.tipo_aviso as FormValues['tipo_aviso'] || 'Nenhum',
 
-      // Documentos (Apenas Usuário)
+      // Documentos (URLs)
       rg_url: (profileToEdit as UsuarioProfile)?.rg_url || '',
       cpf_url: (profileToEdit as UsuarioProfile)?.cpf_url || '',
       titulo_eleitor_url: (profileToEdit as UsuarioProfile)?.titulo_eleitor_url || '',
@@ -186,6 +189,9 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
       cnh_url: (profileToEdit as UsuarioProfile)?.cnh_url || '',
       cartao_pis_url: (profileToEdit as UsuarioProfile)?.cartao_pis_url || '',
       ja_admitido_anteriormente: (profileToEdit as UsuarioProfile)?.ja_admitido_anteriormente || false,
+      
+      // NOVO CAMPO DE ACESSO
+      data_fim_acesso: isClientBeingManagedByAdmin ? parseDate((profileToEdit as ClienteProfile)?.data_fim_acesso) : null,
     },
   });
   
@@ -512,10 +518,15 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
         const clientUpdatePayload: Partial<ClienteProfile> = {
             nome: values.nome,
             email: values.email, // Email é parte da identidade de login
-            limite_usuarios: values.limite_usuarios,
-            permissoes: values.permissoes,
-            // Não incluímos campos cadastrais aqui, pois são gerenciados pelo próprio cliente
         };
+        
+        if (criadorRole === 'Admin') { // Only Admin can update these fields
+            clientUpdatePayload.limite_usuarios = values.limite_usuarios;
+            clientUpdatePayload.permissoes = values.permissoes;
+            
+            // NEW: Data Fim Acesso
+            clientUpdatePayload.data_fim_acesso = values.data_fim_acesso ? values.data_fim_acesso.toISOString() : null;
+        }
         
         if (isNewClient) {
             // CRIAÇÃO DE NOVO CLIENTE (ADMIN) - USANDO INVITE
@@ -678,21 +689,32 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
             Estes campos controlam o acesso da empresa ao sistema.
           </p>
           
-          {renderNumberField('limite_usuarios', 'Limite de Usuários da Equipe', '5', !isEditing)}
+          {/* NOVO CAMPO: Data Fim Acesso (Apenas Admin) */}
+          {criadorRole === 'Admin' && isEditing && (
+              <div className="space-y-2">
+                  <Label>Data Fim Acesso (Expiração)</Label>
+                  {renderDateField('data_fim_acesso', 'Data de Expiração do Acesso', false)}
+                  <p className="text-xs text-muted-foreground">
+                      Define até quando o cliente tem acesso ao sistema.
+                  </p>
+              </div>
+          )}
+          
+          {renderNumberField('limite_usuarios', 'Limite de Usuários da Equipe', '5', criadorRole !== 'Admin')}
 
           <div className="space-y-2">
             <div className="flex justify-between items-center mb-1">
               <FormLabel>Permissões de Acesso</FormLabel>
               <div className="space-x-2">
-                <Button type="button" variant="link" size="sm" onClick={() => handleSelectAll(true)} className="p-0 h-auto">Selecionar Todos</Button>
-                <Button type="button" variant="link" size="sm" onClick={() => handleSelectAll(false)} className="p-0 h-auto text-destructive">Desmarcar Todos</Button>
+                <Button type="button" variant="link" size="sm" onClick={() => handleSelectAll(true)} className="p-0 h-auto" disabled={criadorRole !== 'Admin'}>Selecionar Todos</Button>
+                <Button type="button" variant="link" size="sm" onClick={() => handleSelectAll(false)} className="p-0 h-auto text-destructive" disabled={criadorRole !== 'Admin'}>Desmarcar Todos</Button>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4 rounded-lg border p-4">
               {permissoesClienteAdmin.map((p: Permissao) => (
                 <FormField key={p.key} control={form.control as unknown as Control<FormValues>} name={`permissoes.${p.key}`} render={({ field }) => (
                   <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                    <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} disabled={!isEditing} /></FormControl>
+                    <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} disabled={criadorRole !== 'Admin'} /></FormControl>
                     <FormLabel className="font-normal">{p.label}</FormLabel>
                   </FormItem>
                 )} />
@@ -757,7 +779,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                         <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} disabled={isNewUser} /></FormControl>
                         <FormLabel className="font-normal">{p.label}</FormLabel>
                       </FormItem>
-                    )} />
+                    ))} />
                   ))}
                 </div>
               </div>

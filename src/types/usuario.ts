@@ -19,6 +19,7 @@ export interface ClienteProfile {
   permissoes: Record<string, boolean>;
   tipo_cliente?: 'PF' | 'PJ' | null;
   plano_id?: string | null; // NOVO CAMPO
+  data_fim_acesso?: string | null; // NOVO CAMPO: Data e hora do fim do acesso
   // Novos campos para Contrato
   documento?: string | null;
   endereco_completo?: string | null;

@@ -16,7 +16,7 @@ interface PlanoInfo {
 const TrialBanner: React.FC = () => {
     const { perfil, role, usuario, carregando } = useSessao();
     const [planoInfo, setPlanoInfo] = useState<PlanoInfo | null>(null);
-    const [dataCadastro, setDataCadastro] = useState<Date | null>(null);
+    const [dataFimAcesso, setDataFimAcesso] = useState<Date | null>(null);
     const [loading, setLoading] = useState(true);
 
     const isClient = role === 'Cliente';
@@ -37,17 +37,25 @@ const TrialBanner: React.FC = () => {
 
         if (planoError) {
             console.error('Erro ao buscar plano:', planoError);
-            // showError('Não foi possível carregar detalhes do plano.');
             setLoading(false);
             return;
         }
         
-        // 2. Buscar data de criação do usuário (para calcular o fim do trial)
-        // Usamos a data de criação do usuário no auth.users
-        const createdAt = usuario.created_at;
+        // 2. Determinar a data de fim do acesso
+        let dataFim: Date | null = null;
+        
+        if (clienteProfile.data_fim_acesso) {
+            // Prioriza a data de fim de acesso registrada no perfil (trial ou pagamento)
+            dataFim = parseISO(clienteProfile.data_fim_acesso);
+        } else if (usuario) {
+            // Fallback: Se não estiver definida, usa a data de criação do usuário + dias de trial
+            const createdAt = usuario.created_at;
+            const dataCadastro = parseISO(createdAt);
+            dataFim = addDays(dataCadastro, planoData.dias_trial);
+        }
         
         setPlanoInfo(planoData as PlanoInfo);
-        setDataCadastro(parseISO(createdAt));
+        setDataFimAcesso(dataFim);
         setLoading(false);
 
     }, [isClient, clienteProfile, usuario]);
@@ -58,12 +66,11 @@ const TrialBanner: React.FC = () => {
         }
     }, [carregando, fetchPlanoDetails]);
 
-    if (loading || carregando || !isClient || !planoInfo || !dataCadastro) {
+    if (loading || carregando || !isClient || !planoInfo || !dataFimAcesso) {
         return null; // Não renderiza se não for cliente, estiver carregando ou faltar dados
     }
 
-    const dataFimTrial = addDays(dataCadastro, planoInfo.dias_trial);
-    const dataCobranca = format(dataFimTrial, 'dd/MM/yyyy', { locale: ptBR });
+    const dataCobranca = format(dataFimAcesso, 'dd/MM/yyyy', { locale: ptBR });
     const precoFormatado = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(planoInfo.preco_mensal);
 
     return (
