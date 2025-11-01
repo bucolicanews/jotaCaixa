@@ -86,30 +86,51 @@ const FormEmpresaAvulsa: React.FC<FormEmpresaAvulsaProps> = ({ onSaveComplete })
     }
 
     try {
-      // 1. Criar usuário no Auth usando INVITE (envia o email de autenticação)
-      const { data: authData, error: authError } = await (supabase.auth as any).inviteUserByEmail(values.email, {
-        redirectTo: `${window.location.origin}/atualizar-senha`,
-        data: { 
-          role: 'Cliente', 
-          nome: values.nome, 
-          plano_id: values.plano_id, 
-          permissoes: JSON.stringify(planoSelecionado.permissoes), 
-          aprovado: true, // Já é aprovado
+      let newUserId: string | undefined;
+      
+      // 1. Tentar criar o usuário no Auth (se já existir, o erro será capturado)
+      const tempPassword = Math.random().toString(36).substring(2, 15);
+      
+      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+        email: values.email,
+        password: tempPassword,
+        options: {
+          data: { 
+            role: 'Cliente', 
+            nome: values.nome, 
+            plano_id: values.plano_id, 
+            permissoes: JSON.stringify(planoSelecionado.permissoes), 
+            aprovado: true, // Já é aprovado
+          }
         }
       });
 
-      if (authError) {
-        if (authError.message.includes('already registered')) {
-            showError('Este email já está cadastrado. Use a edição de perfil para vincular.');
-            return;
+      if (signUpError) {
+        if (signUpError.message.includes('already registered')) {
+            // Se já estiver registrado, tentamos obter o usuário para prosseguir com o reset de senha
+            const { data: userData } = await supabase.auth.getUser();
+            newUserId = userData.user?.id;
+            if (!newUserId) throw new Error('Usuário já registrado, mas ID não encontrado.');
+        } else {
+            throw signUpError;
         }
-        throw authError;
+      } else {
+          newUserId = signUpData.user?.id;
       }
       
-      const newUserId = authData.user?.id;
-      if (!newUserId) throw new Error('Falha ao criar usuário no Auth.');
+      if (!newUserId) throw new Error('Falha ao criar ou obter ID do usuário no Auth.');
 
-      // 2. Atualizar tbl_clientes (o trigger já inseriu, mas precisamos garantir os dados avulsos)
+      // 2. Enviar o link de redefinição de senha (que funciona como convite)
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(values.email, {
+          redirectTo: `${window.location.origin}/atualizar-senha`,
+      });
+      
+      if (resetError) {
+          // Se o reset falhar, ainda podemos prosseguir com a atualização do perfil
+          console.error('Aviso: Falha ao enviar email de redefinição de senha:', resetError);
+      }
+
+      // 3. Atualizar tbl_clientes (o trigger já inseriu, mas precisamos garantir os dados avulsos)
       const dataToUpdate = {
         nome: values.nome,
         email: values.email,
