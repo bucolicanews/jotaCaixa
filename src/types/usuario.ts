@@ -17,7 +17,7 @@ export interface ClienteProfile {
   limite_usuarios: number;
   aprovado: boolean;
   permissoes: Record<string, boolean>;
-  tipo_cliente?: 'PF' | 'PJ' | null;
+  tipo_cliente?: 'PF' | 'PJ' | 'PF_Avulso' | 'PJ_Avulso' | null; // NOVOS TIPOS
   plano_id?: string | null; // NOVO CAMPO
   data_fim_acesso?: string | null; // NOVO CAMPO: Data e hora do fim do acesso
   // Novos campos para Contrato

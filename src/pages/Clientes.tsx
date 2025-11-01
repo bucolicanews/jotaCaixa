@@ -17,7 +17,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import FormUsuario from '@/components/FormUsuario';
-import { parseISO, isPast, format } from 'date-fns'; // Importando 'format'
+import { parseISO, isPast, format } from 'date-fns';
+import FormEmpresaAvulsa from '@/components/FormEmpresaAvulsa'; // Importando o novo formulário
 
 // Tipo para o filtro de empresa (inclui o Admin)
 interface EmpresaFiltro {
@@ -43,6 +44,7 @@ const ClientesPage = () => {
   const [clienteSelecionado, setClienteSelecionado] = useState<Cliente | null>(null);
   const [dialogAberto, setDialogAberto] = useState(false);
   const [perfilParaEditar, setPerfilParaEditar] = useState<AnyProfile | null>(null);
+  const [dialogAvulsaAberto, setDialogAvulsaAberto] = useState(false); // Novo estado para dialog avulsa
   
   // Filtros para Admin
   const [empresasFiltro, setEmpresasFiltro] = useState<EmpresaFiltro[]>([]);
@@ -160,6 +162,7 @@ const ClientesPage = () => {
 
   const handleSaveComplete = () => {
     setDialogAberto(false);
+    setDialogAvulsaAberto(false); // Fechar o dialog avulso
     setClienteSelecionado(null);
     setPerfilParaEditar(null);
     buscarDados();
@@ -249,7 +252,7 @@ const ClientesPage = () => {
       return empresasSistema.filter(e => {
           const dataFimAcesso = e.data_fim_acesso ? parseISO(e.data_fim_acesso) : null;
           const isAtivo = dataFimAcesso && isPast(now) === false; // Data de fim de acesso é futura ou hoje
-          const isAvulso = e.plano_id === null;
+          const isAvulso = e.tipo_cliente?.endsWith('_Avulso') ?? false; // Verifica o novo sufixo
           
           if (status === 'ativos') {
               // Ativos: Aprovados, não avulsos e com acesso futuro
@@ -260,7 +263,7 @@ const ClientesPage = () => {
               return e.aprovado && !isAvulso && !isAtivo;
           }
           if (status === 'avulsos') {
-              // Avulsos: Aprovados e sem plano_id (criados manualmente)
+              // Avulsos: Aprovados e com o sufixo _Avulso
               return e.aprovado && isAvulso;
           }
           return false;
@@ -334,7 +337,7 @@ const ClientesPage = () => {
                 <TableRow>
                     <TableHead>Nome da Empresa</TableHead>
                     <TableHead>Email (Login)</TableHead>
-                    <TableHead>Limite Usuários</TableHead>
+                    <TableHead>Plano</TableHead>
                     <TableHead>Acesso Expira</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Ações</TableHead>
@@ -356,7 +359,7 @@ const ClientesPage = () => {
                         let statusBadge;
                         if (!isAprovado) {
                             statusBadge = <Badge variant="warning">Pendente</Badge>;
-                        } else if (empresa.plano_id === null) {
+                        } else if (empresa.tipo_cliente?.endsWith('_Avulso')) {
                             statusBadge = <Badge variant="secondary">Avulso</Badge>;
                         } else if (isAtivo) {
                             statusBadge = <Badge variant="default">Ativo</Badge>;
@@ -370,7 +373,7 @@ const ClientesPage = () => {
                             <TableRow key={empresa.id} className={cn(!isAprovado && "bg-yellow-500/10")}>
                                 <TableCell className="font-medium">{empresa.nome}</TableCell>
                                 <TableCell>{empresa.email}</TableCell>
-                                <TableCell>{empresa.limite_usuarios}</TableCell>
+                                <TableCell className="text-sm text-muted-foreground">{empresa.plano_id || 'N/A'}</TableCell>
                                 <TableCell>{dataExpiracaoDisplay}</TableCell>
                                 <TableCell>{statusBadge}</TableCell>
                                 <TableCell className="text-right space-x-2 min-w-[150px]">
@@ -417,23 +420,44 @@ const ClientesPage = () => {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
         <h1 className="text-2xl md:text-3xl font-bold">Gerenciamento de Clientes</h1>
         
-        <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
-          <DialogTrigger asChild>
-            <Button onClick={handleNewCR} className="w-full sm:w-auto" disabled={isAdmin && activeTab === 'empresas_sistema'}>
-              <PlusCircle className="w-4 h-4 mr-2" />
-              Novo Cliente (CR)
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>{clienteSelecionado ? 'Editar Cliente CR' : 'Novo Cliente CR'}</DialogTitle>
-            </DialogHeader>
-            <FormCliente 
-              clienteInicial={clienteSelecionado}
-              onSaveComplete={handleSaveComplete}
-            />
-          </DialogContent>
-        </Dialog>
+        <div className="flex space-x-2 w-full sm:w-auto">
+            {/* Botão para Novo Cliente CR */}
+            <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
+              <DialogTrigger asChild>
+                <Button onClick={handleNewCR} className="w-full sm:w-auto" disabled={isAdmin && activeTab === 'empresas_sistema'}>
+                  <PlusCircle className="w-4 h-4 mr-2" />
+                  Novo Cliente (CR)
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>{clienteSelecionado ? 'Editar Cliente CR' : 'Novo Cliente CR'}</DialogTitle>
+                </DialogHeader>
+                <FormCliente 
+                  clienteInicial={clienteSelecionado}
+                  onSaveComplete={handleSaveComplete}
+                />
+              </DialogContent>
+            </Dialog>
+            
+            {/* Botão para Nova Empresa Avulsa (Apenas Admin) */}
+            {isAdmin && (
+                <Dialog open={dialogAvulsaAberto} onOpenChange={setDialogAvulsaAberto}>
+                    <DialogTrigger asChild>
+                        <Button variant="secondary" onClick={() => setDialogAvulsaAberto(true)} className="w-full sm:w-auto">
+                            <Building2 className="w-4 h-4 mr-2" />
+                            Nova Empresa Avulsa
+                        </Button>
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+                        <DialogHeader>
+                            <DialogTitle>Cadastrar Empresa Avulsa</DialogTitle>
+                        </DialogHeader>
+                        <FormEmpresaAvulsa onSaveComplete={handleSaveComplete} />
+                    </DialogContent>
+                </Dialog>
+            )}
+        </div>
       </div>
       
       {isAdmin ? (
