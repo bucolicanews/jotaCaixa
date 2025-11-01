@@ -196,9 +196,15 @@ const MinhaAssinatura: React.FC = () => {
   const isTrial = dataFimAcesso && isFuture(dataFimAcesso) && daysRemaining < 30;
   const statusAssinatura = isTrial ? 'Trial Ativo' : (dataFimAcesso && isFuture(dataFimAcesso) ? 'Ativa' : 'Expirada');
   
-  const dataProximaCobranca = proximaCobranca?.data_vencimento 
+  // Data de bloqueio (data_fim_acesso)
+  const dataBloqueioFormatada = dataFimAcesso 
+    ? format(dataFimAcesso, 'dd/MM/yyyy', { locale: ptBR }) 
+    : 'N/A';
+    
+  // Data de vencimento da próxima cobrança (data da parcela pendente)
+  const dataVencimentoCobranca = proximaCobranca?.data_vencimento 
     ? format(parseISO(proximaCobranca.data_vencimento), 'dd/MM/yyyy', { locale: ptBR }) 
-    : (dataFimAcesso ? format(dataFimAcesso, 'dd/MM/yyyy', { locale: ptBR }) : 'N/A');
+    : 'N/A';
     
   const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
@@ -239,9 +245,9 @@ const MinhaAssinatura: React.FC = () => {
             </div>
             <div className="flex justify-between items-center">
               <span className="font-semibold flex items-center">
-                <CalendarCheck className="w-4 h-4 mr-2" /> Próxima Cobrança:
+                <CalendarCheck className="w-4 h-4 mr-2" /> Acesso Expira Em:
               </span>
-              <span className="font-bold">{dataProximaCobranca}</span>
+              <span className="font-bold">{dataBloqueioFormatada}</span>
             </div>
           </CardContent>
         </Card>
@@ -258,7 +264,7 @@ const MinhaAssinatura: React.FC = () => {
               <div className="space-y-2">
                 <p className="text-3xl font-bold text-red-600">{formatCurrency(proximaCobranca.valor)}</p>
                 <p className="text-sm text-muted-foreground">
-                  Vencimento: {format(parseISO(proximaCobranca.data_vencimento), 'dd/MM/yyyy', { locale: ptBR })}
+                  Vencimento: {dataVencimentoCobranca}
                 </p>
                 <p className="text-xs text-muted-foreground">
                   Parcela Nº {proximaCobranca.numero_parcela}
