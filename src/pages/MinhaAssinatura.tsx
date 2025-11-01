@@ -84,12 +84,11 @@ const MinhaAssinatura: React.FC = () => {
       console.error('Erro ao buscar histórico de recebimentos:', crError);
       setHistoricoPagamentos([]);
     } else if (recebimentos && recebimentos.length > 0) {
-      const historico = (recebimentos as any[]).map((r) => ({ // Usando any[] para tipagem segura
+      const historico = (recebimentos as any[]).map((r) => ({
         id: r.id,
         data: r.data_recebimento!,
         valor: Number(r.valor_recebido),
         status: 'pago' as const,
-        // CORREÇÃO: Acessa o primeiro elemento do array admin_contas_receber
         descricao:
           r.admin_parcelas_receber?.[0]?.admin_contas_receber?.descricao ||
           'Mensalidade Paga',
@@ -160,7 +159,13 @@ const MinhaAssinatura: React.FC = () => {
   const daysRemaining = dataFimAcesso ? differenceInDays(dataFimAcesso, new Date()) : 0;
   const isTrial = dataFimAcesso && isFuture(dataFimAcesso) && daysRemaining < 30;
   const statusAssinatura = isTrial ? 'Trial Ativo' : (dataFimAcesso && isFuture(dataFimAcesso) ? 'Ativa' : 'Expirada');
-  const dataExpiracaoFormatada = dataFimAcesso ? format(dataFimAcesso, 'dd/MM/yyyy', { locale: ptBR }) : 'N/A';
+  
+  // CORREÇÃO: A data de Próxima Cobrança deve ser a data de vencimento da próxima conta a pagar (se existir),
+  // pois é o dia em que a cobrança deve ser feita para evitar o bloqueio.
+  const dataProximaCobranca = proximaContaPagar?.data_vencimento 
+    ? format(parseISO(proximaContaPagar.data_vencimento), 'dd/MM/yyyy', { locale: ptBR }) 
+    : (dataFimAcesso ? format(dataFimAcesso, 'dd/MM/yyyy', { locale: ptBR }) : 'N/A');
+    
   const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
   return (
@@ -205,7 +210,7 @@ const MinhaAssinatura: React.FC = () => {
               <span className="font-semibold flex items-center">
                 <CalendarCheck className="w-4 h-4 mr-2" /> Próxima Cobrança:
               </span>
-              <span className="font-bold">{dataExpiracaoFormatada}</span>
+              <span className="font-bold">{dataProximaCobranca}</span>
             </div>
           </CardContent>
         </Card>
