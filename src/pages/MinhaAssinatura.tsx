@@ -3,7 +3,7 @@ import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { useSessao } from '@/hooks/use-sessao';
 import { ClienteProfile } from '@/types/usuario';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, Package, DollarSign, CalendarCheck, ArrowDownCircle, CreditCard } from 'lucide-react';
+import { Loader2, Package, DollarSign, CalendarCheck, ArrowDownCircle, CreditCard, ListChecks } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError } from '@/utils/toast';
 import { Plano } from '@/types/plano';
@@ -14,6 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Link, useNavigate } from 'react-router-dom';
 import { useStripeConfig } from '@/hooks/use-stripe-config';
+import DetalhesAssinaturaDialog from '@/components/DetalhesAssinaturaDialog'; // Importando o novo componente
 
 interface Pagamento {
   id: string;
@@ -54,6 +55,7 @@ const MinhaAssinatura: React.FC = () => {
   const [historicoPagamentos, setHistoricoPagamentos] = useState<Pagamento[]>([]);
   const [ultimoRegistroAssinatura, setUltimoRegistroAssinatura] = useState<AdminContaReceber | null>(null);
   const [isSubmitting] = useState(false);
+  const [detalhesDialogOpen, setDetalhesDialogOpen] = useState(false); // NOVO ESTADO
 
   const isClient = role === 'Cliente';
   const clienteProfile = perfil as ClienteProfile;
@@ -139,8 +141,8 @@ const MinhaAssinatura: React.FC = () => {
     const { data: parcelasPendentes, error: parcelasError } = await supabase
       .from('admin_parcelas_receber')
       .select('id, data_vencimento, valor_parcela, numero_parcela')
-      .eq('admin_id', ultimoRegistroAssinatura?.admin_id) // Usa o admin_id do último registro sintético
-      .eq('conta_receber_id', ultimoRegistroAssinatura?.id) // Usa o ID da conta sintética
+      .eq('admin_id', ultimoRegistro?.admin_id) // Usa o admin_id do último registro sintético
+      .eq('conta_receber_id', ultimoRegistro?.id) // Usa o ID da conta sintética
       .in('status', ['aberta', 'reprogramada', 'parcial'])
       .order('data_vencimento', { ascending: true })
       .limit(1);
@@ -288,16 +290,28 @@ const MinhaAssinatura: React.FC = () => {
                   Parcela Nº {proximaCobranca.numero_parcela}
                 </p>
                 
-                <Button 
-                    variant="default" 
-                    size="sm" 
-                    className="mt-4 w-full"
-                    onClick={handleNavigateToRenewal}
-                    disabled={isSubmitting}
-                >
-                    {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CreditCard className="w-4 h-4 mr-2" />}
-                    Pagar Mensalidade (Stripe)
-                </Button>
+                <div className="flex flex-col space-y-2 mt-4">
+                    <Button 
+                        variant="default" 
+                        size="sm" 
+                        onClick={handleNavigateToRenewal}
+                        disabled={isSubmitting}
+                    >
+                        {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CreditCard className="w-4 h-4 mr-2" />}
+                        Pagar Mensalidade (Stripe)
+                    </Button>
+                    
+                    {/* NOVO BOTÃO DE DETALHES */}
+                    {ultimoRegistroAssinatura && (
+                        <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => setDetalhesDialogOpen(true)}
+                        >
+                            <ListChecks className="w-4 h-4 mr-2" /> Ver Detalhes da Recorrência
+                        </Button>
+                    )}
+                </div>
                 
                 <Link to="/contas-receber">
                     <Button variant="secondary" size="sm" className="mt-2 w-full">
@@ -360,6 +374,13 @@ const MinhaAssinatura: React.FC = () => {
           </CardContent>
         </Card>
       </div>
+      
+      {/* Modal de Detalhes da Assinatura */}
+      <DetalhesAssinaturaDialog
+        contaRecorrenciaId={ultimoRegistroAssinatura?.id || null}
+        open={detalhesDialogOpen}
+        onOpenChange={setDetalhesDialogOpen}
+      />
     </LayoutPrincipal>
   );
 };
