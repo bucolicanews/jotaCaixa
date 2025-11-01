@@ -39,7 +39,7 @@ const MinhaAssinatura: React.FC = () => {
 
     const isClient = role === 'Cliente';
     const clienteProfile = perfil as ClienteProfile;
-    const clienteId = clienteProfile?.id;
+    const clienteId = clienteProfile?.id; // ID do cliente logado
 
     const fetchDadosAssinatura = useCallback(async () => {
         if (!isClient || !clienteId || !clienteProfile?.plano_id) {
@@ -65,7 +65,7 @@ const MinhaAssinatura: React.FC = () => {
         setPlanoAtual(planoData as Plano);
         
         // 2. Buscar Histórico de Pagamentos (CR do Admin contra este Cliente)
-        // CORREÇÃO: Usando join aninhado para buscar a descrição da conta a receber
+        // Busca na tabela admin_recebimentos usando o cliente_id (que é o ID do cliente logado)
         const { data: recebimentos, error: crError } = await supabase
             .from('admin_recebimentos')
             .select(`
@@ -98,11 +98,11 @@ const MinhaAssinatura: React.FC = () => {
         }
 
         // 3. Buscar a próxima Conta a Pagar (CP) do Cliente
-        // Busca na tabela contas_pagar do cliente (empresa_id = clienteId)
+        // Busca na tabela contas_pagar onde empresa_id é o ID do cliente logado
         const { data: contasPagar, error: cpError } = await supabase
             .from('contas_pagar')
             .select('id, data_vencimento, valor, status, fornecedor')
-            .eq('empresa_id', clienteId)
+            .eq('empresa_id', clienteId) // Usa o ID do cliente logado como empresa_id
             .eq('status', 'pendente')
             .order('data_vencimento', { ascending: true })
             .limit(1);
