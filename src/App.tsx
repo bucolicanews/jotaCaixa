@@ -49,14 +49,18 @@ const PaymentSuccessHandler = () => {
   // Lógica para ativar a assinatura
   React.useEffect(() => {
     if (paymentStatus === 'success' && sessionId && usuario && !carregando) {
+      
+      // CRÍTICO: Verifica se a sessão já foi processada
+      const processedKey = `processed_session_${sessionId}`;
+      if (sessionStorage.getItem(processedKey) === 'true') {
+          navigate('/painel', { replace: true });
+          return;
+      }
+      
       const activateSubscription = async () => {
-        // 1. Buscar metadados da sessão do Stripe (simulado)
-        // Em um ambiente real, você faria isso no webhook. Aqui, simulamos a busca.
-        // Como não temos a função de buscar a sessão, vamos assumir que os metadados
-        // (clienteId e planoId) estão disponíveis na sessão do usuário ou foram passados
-        // de alguma forma. No nosso caso, o clienteId é o próprio usuario.id.
+        sessionStorage.setItem(processedKey, 'true'); // Marca como processado
         
-        // 2. Buscar o plano atual do cliente (que foi definido no signUp/upsert inicial)
+        // 1. Buscar o plano atual do cliente (que foi definido no signUp/upsert inicial)
         const { data: clienteData, error: clienteError } = await supabase
             .from('tbl_clientes')
             .select('plano_id')
@@ -69,7 +73,7 @@ const PaymentSuccessHandler = () => {
             return;
         }
         
-        // 3. Chamar a função RPC para ativar a assinatura
+        // 2. Chamar a função RPC para ativar a assinatura
         const { error: rpcError } = await supabase.rpc('activate_subscription', {
             p_cliente_id: usuario.id,
             p_plano_id: clienteData.plano_id,
