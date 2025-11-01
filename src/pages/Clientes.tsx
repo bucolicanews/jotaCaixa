@@ -16,7 +16,8 @@ import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import FormUsuario from '@/components/FormUsuario'; // Importando FormUsuario
+import FormUsuario from '@/components/FormUsuario';
+import { parseISO, isPast, format } from 'date-fns'; // Importando 'format'
 
 // Tipo para o filtro de empresa (inclui o Admin)
 interface EmpresaFiltro {
@@ -30,6 +31,8 @@ interface EmpresaSistema extends ClienteProfile {
     nome: string;
     aprovado: boolean;
     email: string;
+    data_fim_acesso?: string | null;
+    plano_id?: string | null;
 }
 
 const ClientesPage = () => {
@@ -39,7 +42,7 @@ const ClientesPage = () => {
   const [carregandoDados, setCarregandoDados] = useState(true);
   const [clienteSelecionado, setClienteSelecionado] = useState<Cliente | null>(null);
   const [dialogAberto, setDialogAberto] = useState(false);
-  const [perfilParaEditar, setPerfilParaEditar] = useState<AnyProfile | null>(null); // Declarando estado
+  const [perfilParaEditar, setPerfilParaEditar] = useState<AnyProfile | null>(null);
   
   // Filtros para Admin
   const [empresasFiltro, setEmpresasFiltro] = useState<EmpresaFiltro[]>([]);
@@ -47,9 +50,9 @@ const ClientesPage = () => {
   const [filtroNome, setFiltroNome] = useState('');
   
   const [activeTab, setActiveTab] = useState('clientes_cr');
+  const [activeEmpresaTab, setActiveEmpresaTab] = useState('ativos'); // Novo estado para sub-aba
 
   const isAdmin = role === 'Admin';
-  // const isCliente = role === 'Cliente'; // Removido, pois não é usado
 
   const getOwnerId = () => {
     if (role === 'Admin') return usuario?.id || null; // Admin usa seu próprio ID
@@ -158,20 +161,19 @@ const ClientesPage = () => {
   const handleSaveComplete = () => {
     setDialogAberto(false);
     setClienteSelecionado(null);
-    setPerfilParaEditar(null); // Limpa o perfil de edição
+    setPerfilParaEditar(null);
     buscarDados();
   };
 
   const handleEditCR = (cliente: Cliente) => {
     setClienteSelecionado(cliente);
-    setPerfilParaEditar(null); // Garante que o FormCliente seja usado
+    setPerfilParaEditar(null);
     setDialogAberto(true);
   };
   
   const handleEditEmpresaSistema = (empresa: EmpresaSistema) => {
-    // Para editar a empresa do sistema, usamos o FormUsuario, pois ele lida com ClienteProfile
     setPerfilParaEditar(empresa);
-    setClienteSelecionado(null); // Garante que o FormUsuario seja usado
+    setClienteSelecionado(null);
     setDialogAberto(true);
   };
 
@@ -192,25 +194,91 @@ const ClientesPage = () => {
     if (!window.confirm(`Tem certeza que deseja aprovar a empresa ${cliente.nome}?`)) return;
     
     setCarregandoDados(true);
+    
+    // 1. Buscar o plano de trial (assumindo o mais barato)
+    const { data: planos, error: planosError } = await supabase
+        .from('planos')
+        .select('id, dias_trial, permissoes, tipo_cliente')
+        .order('preco_mensal', { ascending: true })
+        .limit(1);
+        
+    if (planosError || planos.length === 0) {
+        showError('Nenhum plano de trial encontrado. Não é possível aprovar.');
+        setCarregandoDados(false);
+        return;
+    }
+    
+    const planoTrial = planos[0];
+    const dataFimAcesso = planoTrial.dias_trial > 0 
+        ? parseISO(new Date().toISOString()).setDate(new Date().getDate() + planoTrial.dias_trial)
+        : null;
+        
+    const dataFimISO = dataFimAcesso ? new Date(dataFimAcesso).toISOString() : null;
+
+    // 2. Atualizar o perfil do cliente
     const { error } = await supabase
         .from('tbl_clientes')
-        .update({ aprovado: true })
+        .update({ 
+            aprovado: true,
+            plano_id: planoTrial.id,
+            data_fim_acesso: dataFimISO,
+            permissoes: planoTrial.permissoes,
+            tipo_cliente: planoTrial.tipo_cliente,
+        })
         .eq('id', cliente.id);
         
     if (error) {
         showError('Erro ao aprovar cliente: ' + error.message);
     } else {
-        showSuccess(`Empresa ${cliente.nome} aprovada com sucesso!`);
+        showSuccess(`Empresa ${cliente.nome} aprovada com sucesso! Trial de ${planoTrial.dias_trial} dias iniciado.`);
         buscarDados();
     }
+    setCarregandoDados(false);
   };
   
   const handleNewCR = () => {
       setClienteSelecionado(null);
-      setPerfilParaEditar(null); // Garante que o FormCliente seja usado
+      setPerfilParaEditar(null);
       setDialogAberto(true);
   };
   
+  // --- Lógica de Filtragem de Empresas do Sistema ---
+  const filterEmpresasSistema = (status: 'ativos' | 'inativos' | 'avulsos') => {
+      const now = new Date();
+      
+      return empresasSistema.filter(e => {
+          const dataFimAcesso = e.data_fim_acesso ? parseISO(e.data_fim_acesso) : null;
+          const isAtivo = dataFimAcesso && isPast(now) === false; // Data de fim de acesso é futura ou hoje
+          const isAvulso = e.plano_id === null;
+          
+          if (status === 'ativos') {
+              // Ativos: Aprovados, não avulsos e com acesso futuro
+              return e.aprovado && !isAvulso && isAtivo;
+          }
+          if (status === 'inativos') {
+              // Inativos: Aprovados, não avulsos e com acesso expirado
+              return e.aprovado && !isAvulso && !isAtivo;
+          }
+          if (status === 'avulsos') {
+              // Avulsos: Aprovados e sem plano_id (criados manualmente)
+              return e.aprovado && isAvulso;
+          }
+          return false;
+      });
+  };
+  
+  const empresasAtivas = filterEmpresasSistema('ativos');
+  const empresasInativas = filterEmpresasSistema('inativos');
+  const empresasAvulsas = filterEmpresasSistema('avulsos');
+  
+  const empresasParaExibir = activeEmpresaTab === 'ativos' 
+      ? empresasAtivas 
+      : activeEmpresaTab === 'inativos' 
+      ? empresasInativas 
+      : activeEmpresaTab === 'avulsos' 
+      ? empresasAvulsas
+      : empresasSistema.filter(e => !e.aprovado); // Pendentes
+
   // Renderização do conteúdo da tabela de Clientes CR
   const renderClientesCRTable = () => (
     <div className="overflow-x-auto">
@@ -259,7 +327,7 @@ const ClientesPage = () => {
   );
   
   // Renderização do conteúdo da tabela de Empresas do Sistema
-  const renderEmpresasSistemaTable = () => (
+  const renderEmpresasSistemaTable = (empresas: EmpresaSistema[]) => (
     <div className="overflow-x-auto">
         <Table>
             <TableHeader>
@@ -267,30 +335,44 @@ const ClientesPage = () => {
                     <TableHead>Nome da Empresa</TableHead>
                     <TableHead>Email (Login)</TableHead>
                     <TableHead>Limite Usuários</TableHead>
+                    <TableHead>Acesso Expira</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
             </TableHeader>
             <TableBody>
-                {empresasSistema.length === 0 ? (
+                {empresas.length === 0 ? (
                     <TableRow>
-                        <TableCell colSpan={5} className="text-center py-4 text-muted-foreground">
-                            Nenhuma empresa cadastrada no sistema.
+                        <TableCell colSpan={6} className="text-center py-4 text-muted-foreground">
+                            Nenhuma empresa encontrada nesta categoria.
                         </TableCell>
                     </TableRow>
                 ) : (
-                    empresasSistema.map((empresa) => {
+                    empresas.map((empresa) => {
                         const isAprovado = empresa.aprovado;
+                        const dataFimAcesso = empresa.data_fim_acesso ? parseISO(empresa.data_fim_acesso) : null;
+                        const isAtivo = dataFimAcesso && isPast(new Date()) === false;
+                        
+                        let statusBadge;
+                        if (!isAprovado) {
+                            statusBadge = <Badge variant="warning">Pendente</Badge>;
+                        } else if (empresa.plano_id === null) {
+                            statusBadge = <Badge variant="secondary">Avulso</Badge>;
+                        } else if (isAtivo) {
+                            statusBadge = <Badge variant="default">Ativo</Badge>;
+                        } else {
+                            statusBadge = <Badge variant="destructive">Inativo</Badge>;
+                        }
+                        
+                        const dataExpiracaoDisplay = dataFimAcesso ? format(dataFimAcesso, 'dd/MM/yyyy') : 'N/A';
+
                         return (
                             <TableRow key={empresa.id} className={cn(!isAprovado && "bg-yellow-500/10")}>
                                 <TableCell className="font-medium">{empresa.nome}</TableCell>
                                 <TableCell>{empresa.email}</TableCell>
                                 <TableCell>{empresa.limite_usuarios}</TableCell>
-                                <TableCell>
-                                    <Badge variant={isAprovado ? 'default' : 'warning'}>
-                                        {isAprovado ? 'Aprovado' : 'Pendente'}
-                                    </Badge>
-                                </TableCell>
+                                <TableCell>{dataExpiracaoDisplay}</TableCell>
+                                <TableCell>{statusBadge}</TableCell>
                                 <TableCell className="text-right space-x-2 min-w-[150px]">
                                     {!isAprovado && (
                                         <Button 
@@ -309,7 +391,6 @@ const ClientesPage = () => {
                                     >
                                         <Edit className="h-4 w-4" />
                                     </Button>
-                                    {/* Remoção de empresa do sistema é uma ação crítica, vamos simplificar para não permitir exclusão direta aqui */}
                                 </TableCell>
                             </TableRow>
                         );
@@ -336,7 +417,6 @@ const ClientesPage = () => {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
         <h1 className="text-2xl md:text-3xl font-bold">Gerenciamento de Clientes</h1>
         
-        {/* Botão de Novo Cliente (CR) ou Nova Empresa (Sistema) */}
         <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
           <DialogTrigger asChild>
             <Button onClick={handleNewCR} className="w-full sm:w-auto" disabled={isAdmin && activeTab === 'empresas_sistema'}>
@@ -396,23 +476,53 @@ const ClientesPage = () => {
             </TabsContent>
             
             <TabsContent value="empresas_sistema">
-                <Card className="mt-4">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-lg flex items-center"><Filter className="w-4 h-4 mr-2" /> Filtro</CardTitle>
-                    </CardHeader>
-                    <CardContent className="flex flex-col md:flex-row gap-4">
-                        <Input
-                            placeholder="Buscar por nome ou email da empresa..."
-                            value={filtroNome}
-                            onChange={(e) => setFiltroNome(e.target.value)}
-                            className="w-full md:max-w-xs"
-                        />
-                    </CardContent>
-                </Card>
-                <Card className="mt-4">
-                    <CardHeader><CardTitle className="text-xl">Empresas do Sistema ({empresasSistema.length})</CardTitle></CardHeader>
-                    <CardContent>{renderEmpresasSistemaTable()}</CardContent>
-                </Card>
+                <Tabs value={activeEmpresaTab} onValueChange={setActiveEmpresaTab} className="w-full">
+                    <TabsList className="grid w-full grid-cols-4">
+                        <TabsTrigger value="pendentes">Pendentes ({empresasSistema.filter(e => !e.aprovado).length})</TabsTrigger>
+                        <TabsTrigger value="ativos">Ativos ({empresasAtivas.length})</TabsTrigger>
+                        <TabsTrigger value="inativos">Inativos ({empresasInativas.length})</TabsTrigger>
+                        <TabsTrigger value="avulsos">Avulsos ({empresasAvulsas.length})</TabsTrigger>
+                    </TabsList>
+                    
+                    <Card className="mt-4">
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-lg flex items-center"><Filter className="w-4 h-4 mr-2" /> Filtro</CardTitle>
+                        </CardHeader>
+                        <CardContent className="flex flex-col md:flex-row gap-4">
+                            <Input
+                                placeholder="Buscar por nome ou email da empresa..."
+                                value={filtroNome}
+                                onChange={(e) => setFiltroNome(e.target.value)}
+                                className="w-full md:max-w-xs"
+                            />
+                        </CardContent>
+                    </Card>
+                    
+                    <TabsContent value="pendentes" className="mt-4">
+                        <Card>
+                            <CardHeader><CardTitle className="text-xl">Empresas Pendentes de Aprovação ({empresasSistema.filter(e => !e.aprovado).length})</CardTitle></CardHeader>
+                            <CardContent>{renderEmpresasSistemaTable(empresasParaExibir.filter(e => !e.aprovado))}</CardContent>
+                        </Card>
+                    </TabsContent>
+                    <TabsContent value="ativos" className="mt-4">
+                        <Card>
+                            <CardHeader><CardTitle className="text-xl">Empresas Ativas ({empresasAtivas.length})</CardTitle></CardHeader>
+                            <CardContent>{renderEmpresasSistemaTable(empresasParaExibir.filter(e => empresasAtivas.includes(e)))}</CardContent>
+                        </Card>
+                    </TabsContent>
+                    <TabsContent value="inativos" className="mt-4">
+                        <Card>
+                            <CardHeader><CardTitle className="text-xl">Empresas Inativas ({empresasInativas.length})</CardTitle></CardHeader>
+                            <CardContent>{renderEmpresasSistemaTable(empresasParaExibir.filter(e => empresasInativas.includes(e)))}</CardContent>
+                        </Card>
+                    </TabsContent>
+                    <TabsContent value="avulsos" className="mt-4">
+                        <Card>
+                            <CardHeader><CardTitle className="text-xl">Empresas Avulsas ({empresasAvulsas.length})</CardTitle></CardHeader>
+                            <CardContent>{renderEmpresasSistemaTable(empresasParaExibir.filter(e => empresasAvulsas.includes(e)))}</CardContent>
+                        </Card>
+                    </TabsContent>
+                </Tabs>
             </TabsContent>
         </Tabs>
       ) : (

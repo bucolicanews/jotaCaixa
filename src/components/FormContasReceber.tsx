@@ -81,23 +81,8 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
       
       let combinedClients: ClienteCombinado[] = [];
       
-      // 1. Buscar Clientes de Contas a Receber (clientes)
-      let queryCR = supabase.from('clientes').select('id, nome').order('nome');
-      
-      // Se não for Admin, filtra pelo ID da empresa/proprietário
-      if (role !== 'Admin') {
-        queryCR = queryCR.eq('empresa_id', ownerId);
-      }
-      const { data: dataCR, error: errorCR } = await queryCR;
-      
-      if (errorCR) {
-          showError('Erro ao carregar clientes CR.');
-      } else {
-          combinedClients.push(...(dataCR as Cliente[]).map(c => ({ id: c.id, nome: c.nome, tipo: 'CR' as const })));
-      }
-      
-      // 2. Se for Admin, buscar Empresas do Sistema (tbl_clientes)
       if (role === 'Admin') {
+          // ADMIN: Busca APENAS Empresas do Sistema (tbl_clientes)
           const { data: dataSistema, error: errorSistema } = await supabase
               .from('tbl_clientes')
               .select('id, nome')
@@ -107,14 +92,21 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
           if (errorSistema) {
               showError('Erro ao carregar empresas do sistema.');
           } else {
-              // Adiciona empresas do sistema, garantindo que não haja duplicatas de ID
-              const sistemaClients = (dataSistema as any[]).map(c => ({ id: c.id, nome: c.nome, tipo: 'Sistema' as const }));
-              
-              // Filtra IDs duplicados (se um cliente CR tiver o mesmo ID de uma empresa do sistema, o CR prevalece)
-              const existingIds = new Set(combinedClients.map(c => c.id));
-              const uniqueSistemaClients = sistemaClients.filter(c => !existingIds.has(c.id));
-              
-              combinedClients.push(...uniqueSistemaClients);
+              combinedClients = (dataSistema as any[]).map(c => ({ id: c.id, nome: c.nome, tipo: 'Sistema' as const }));
+          }
+      } else {
+          // Cliente/Usuário: Busca APENAS Clientes de Contas a Receber (clientes)
+          let queryCR = supabase.from('clientes').select('id, nome').order('nome');
+          
+          // Se não for Admin, filtra pelo ownerId
+          queryCR = queryCR.eq('empresa_id', ownerId);
+          
+          const { data: dataCR, error: errorCR } = await queryCR;
+          
+          if (errorCR) {
+              showError('Erro ao carregar clientes CR.');
+          } else {
+              combinedClients.push(...(dataCR as Cliente[]).map(c => ({ id: c.id, nome: c.nome, tipo: 'CR' as const })));
           }
       }
       
