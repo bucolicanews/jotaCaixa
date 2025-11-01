@@ -5,7 +5,7 @@ import { ClienteProfile } from '@/types/usuario';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, Package, DollarSign, CalendarCheck, ArrowDownCircle, CreditCard } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { showError } from '@/utils/toast';
+import { showError, showSuccess } from '@/utils/toast';
 import { Plano } from '@/types/plano';
 import { format, parseISO, isFuture, differenceInDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -13,7 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
-import PagarMensalidadeDialog from '@/components/PagarMensalidadeDialog'; // Importando o novo dialog
+import { useStripeConfig } from '@/hooks/use-stripe-config'; // Importando useStripeConfig
 
 interface Pagamento {
   id: string;
@@ -31,12 +31,14 @@ interface ContaPagarPlano {
 }
 
 const MinhaAssinatura: React.FC = () => {
-  const { perfil, role, carregando, refetch } = useSessao();
+  const { perfil, role, carregando, refetch, usuario } = useSessao();
+  const { stripePromise, loading: loadingStripe } = useStripeConfig();
+  
   const [planoAtual, setPlanoAtual] = useState<Plano | null>(null);
   const [carregandoPlano, setCarregandoPlano] = useState(true);
   const [proximaContaPagar, setProximaContaPagar] = useState<ContaPagarPlano | null>(null);
   const [historicoPagamentos, setHistoricoPagamentos] = useState<Pagamento[]>([]);
-  const [pagarMensalidadeOpen, setPagarMensalidadeOpen] = useState(false); // Estado do dialog
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const isClient = role === 'Cliente';
   const clienteProfile = perfil as ClienteProfile;
@@ -130,13 +132,47 @@ const MinhaAssinatura: React.FC = () => {
     }
   }, [carregando, fetchDadosAssinatura]);
   
-  const handleRenewalComplete = () => {
-      setPagarMensalidadeOpen(false);
-      fetchDadosAssinatura(); // Re-busca os dados da assinatura
-      refetch(); // Atualiza a sessão para pegar a nova data_fim_acesso
+  const handleCheckoutRenewal = async () => {
+    if (!proximaContaPagar || !planoAtual || !usuario?.email || !clienteId) {
+        showError('Dados incompletos para iniciar o pagamento.');
+        return;
+    }
+    if (loadingStripe || !stripePromise) {
+        showError('Sistema de pagamento ainda não carregado.');
+        return;
+    }
+    
+    setIsSubmitting(true);
+    
+    try {
+        // 1. Chamar a Edge Function para criar a sessão de checkout
+        // Passamos o ID da Conta a Pagar para que o webhook saiba qual conta marcar como paga.
+        const { data, error } = await supabase.functions.invoke('create-renewal-session', {
+            body: {
+                planoId: planoAtual.id,
+                clienteId: clienteId,
+                email: usuario.email,
+                contaPagarId: proximaContaPagar.id, // Passa o ID da conta a pagar
+            },
+        });
+        
+        if (error) throw error;
+        
+        const { url } = data;
+        if (!url) throw new Error('URL de checkout não recebida.');
+
+        // 2. Redirecionar para o Stripe
+        window.location.href = url;
+        
+    } catch (error: any) {
+        console.error('Erro no checkout de renovação:', error);
+        showError('Falha ao iniciar o checkout: ' + (error.message || 'Erro desconhecido.'));
+    } finally {
+        setIsSubmitting(false);
+    }
   };
 
-  if (carregando || carregandoPlano) {
+  if (carregando || carregandoPlano || loadingStripe) {
     return (
       <LayoutPrincipal>
         <div className="flex justify-center items-center h-64">
@@ -241,9 +277,11 @@ const MinhaAssinatura: React.FC = () => {
                     variant="default" 
                     size="sm" 
                     className="mt-4 w-full"
-                    onClick={() => setPagarMensalidadeOpen(true)}
+                    onClick={handleCheckoutRenewal}
+                    disabled={isSubmitting}
                 >
-                    <CreditCard className="w-4 h-4 mr-2" /> Pagar Mensalidade
+                    {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CreditCard className="w-4 h-4 mr-2" />}
+                    Pagar Mensalidade (Stripe)
                 </Button>
                 
                 <Link to="/contas-pagar">
@@ -299,15 +337,6 @@ const MinhaAssinatura: React.FC = () => {
           </Table>
         </CardContent>
       </Card>
-      
-      {/* Dialog de Pagamento Manual */}
-      <PagarMensalidadeDialog
-        contaPagar={proximaContaPagar}
-        clienteId={clienteId}
-        open={pagarMensalidadeOpen}
-        onOpenChange={setPagarMensalidadeOpen}
-        onSaveComplete={handleRenewalComplete}
-      />
     </LayoutPrincipal>
   );
 };
