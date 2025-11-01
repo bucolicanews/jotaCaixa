@@ -115,13 +115,14 @@ const SelecaoPagamentoRenovacao: React.FC = () => {
                     plano={planoSelecionado} 
                     isUpgrade={true} 
                     contaPagarId={contaPagarId} 
-                    valorCobrado={valorParaCheckout} // Passa o valor CONDICIONAL
+                    valorCobrado={valorParaCheckout}
                 />
             </div>
         </LayoutPrincipal>
       );
   }
 
+  // Renderiza a seleção de planos APENAS se nenhum plano estiver selecionado
   return (
     <LayoutPrincipal>
         <div className="max-w-6xl mx-auto text-center pt-8">
