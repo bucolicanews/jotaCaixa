@@ -25,7 +25,7 @@ const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano, isUpgrade = false 
   const navigate = useNavigate();
   
   const { stripePromise, loading: loadingStripe } = useStripeConfig();
-  const { usuario, carregando: carregandoSessao } = useSessao();
+  const { usuario, carregando: carregandoSessao, refetch } = useSessao();
 
   const handleAdesao = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -97,6 +97,21 @@ const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano, isUpgrade = false 
         if (!finalClienteId || !finalEmail) {
             throw new Error('Dados do cliente não disponíveis para checkout.');
         }
+        
+        // **NOVA ETAPA:** Atualizar o plano_id na tbl_clientes antes do checkout
+        // Isso garante que o RPC de sucesso de pagamento use o plano correto.
+        if (isUpgrade) {
+            const { error: updateError } = await supabase
+                .from('tbl_clientes')
+                .update({ plano_id: plano.id })
+                .eq('id', finalClienteId);
+                
+            if (updateError) throw new Error('Falha ao atualizar plano no perfil: ' + updateError.message);
+            
+            // Força o refetch para atualizar o perfil na sessão antes de prosseguir
+            await refetch();
+        }
+
 
         // 2. Chamar a Edge Function para criar a sessão de checkout
         const { data, error } = await supabase.functions.invoke('create-checkout-session', {
