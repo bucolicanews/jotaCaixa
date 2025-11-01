@@ -38,7 +38,7 @@ const Header: React.FC = () => {
   const [sheetOpen, setSheetOpen] = useState(false);
   const { perfil, role } = useSessao();
   const [tituloApp, setTituloApp] = useState('Fluxo de Caixa');
-  const [nomePlano, setNomePlano] = useState<string | null>(null);
+  const [planoDetalhes, setPlanoDetalhes] = useState<{ nome: string, preco: number } | null>(null);
 
   useEffect(() => {
     const updateTitle = async () => {
@@ -54,7 +54,6 @@ const Header: React.FC = () => {
       } else if (role === 'Cliente') {
         const clienteProfile = perfil as ClienteProfile;
         setTituloApp(clienteProfile.nome);
-        // Correção 1: Coalesce para null para garantir o tipo string | null
         currentPlanoId = clienteProfile.plano_id || null; 
       } else if (role === 'Usuario') {
         const usuarioProfile = perfil as UsuarioProfile;
@@ -77,17 +76,21 @@ const Header: React.FC = () => {
         }
       }
       
-      // Buscar nome do plano
+      // Buscar nome e preço do plano
       if (currentPlanoId) {
           const { data: planoData } = await supabase
               .from('planos')
-              .select('nome')
+              .select('nome, preco_mensal')
               .eq('id', currentPlanoId)
               .single();
           
-          setNomePlano(planoData?.nome || 'Plano Desconhecido');
+          if (planoData) {
+              setPlanoDetalhes({ nome: planoData.nome, preco: planoData.preco_mensal });
+          } else {
+              setPlanoDetalhes(null);
+          }
       } else {
-          setNomePlano(null);
+          setPlanoDetalhes(null);
       }
     };
     updateTitle();
@@ -107,6 +110,8 @@ const Header: React.FC = () => {
   const clienteProfile = perfil && 'limite_usuarios' in perfil ? perfil as ClienteProfile : null;
   const dataFimAcesso = clienteProfile?.data_fim_acesso;
   const dataFimFormatada = dataFimAcesso ? format(parseISO(dataFimAcesso), 'dd/MM/yyyy', { locale: ptBR }) : null;
+  
+  const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
   return (
     <header className={cn(
@@ -157,10 +162,10 @@ const Header: React.FC = () => {
               <DropdownMenuSeparator />
               
               {/* NOVO ITEM: Plano Atual */}
-              {nomePlano && (
+              {planoDetalhes && (
                   <DropdownMenuItem className="text-xs text-muted-foreground cursor-default" disabled>
                       <Package className="mr-2 h-4 w-4" />
-                      Plano: {nomePlano}
+                      Plano: {planoDetalhes.nome} ({formatCurrency(planoDetalhes.preco)})
                   </DropdownMenuItem>
               )}
               
