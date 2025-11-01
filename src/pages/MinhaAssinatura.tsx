@@ -65,30 +65,29 @@ const MinhaAssinatura: React.FC = () => {
         setPlanoAtual(planoData as Plano);
         
         // 2. Buscar Histórico de Pagamentos (CR do Admin contra este Cliente)
-        // Agora buscamos na nova tabela admin_parcelas_receber, filtrando pelo cliente_id
-        const { data: parcelasPagas, error: crError } = await supabase
-            .from('admin_parcelas_receber')
-            .select('id, data_pagamento, valor_pago, status, admin_contas_receber(descricao, cliente_id, origem)')
-            .eq('admin_contas_receber.cliente_id', clienteId)
-            .eq('status', 'paga')
-            .order('data_pagamento', { ascending: false });
+        // CORREÇÃO: Busca na tabela admin_recebimentos usando o cliente_id
+        const { data: recebimentos, error: crError } = await supabase
+            .from('admin_recebimentos')
+            .select('id, data_recebimento, valor_recebido, forma_pagamento, parcela_id, admin_parcelas_receber(admin_contas_receber(descricao))')
+            .eq('cliente_id', clienteId) // Filtra pelo ID do cliente que pagou
+            .order('data_recebimento', { ascending: false });
             
         if (crError) {
             console.error('Erro ao buscar histórico de pagamentos:', crError);
             setHistoricoPagamentos([]);
         } else {
-            const historico = (parcelasPagas as any[]).map(p => ({
-                id: p.id,
-                data: p.data_pagamento!,
-                valor: p.valor_pago,
-                status: 'pago' as 'pago',
-                descricao: p.admin_contas_receber?.descricao || 'Mensalidade Paga',
+            const historico = (recebimentos as any[]).map(r => ({
+                id: r.id,
+                data: r.data_recebimento!,
+                valor: r.valor_recebido,
+                status: 'pago' as 'pago', // Assumimos que se está em admin_recebimentos, foi pago
+                descricao: r.admin_parcelas_receber?.admin_contas_receber?.descricao || 'Mensalidade Paga',
             }));
             setHistoricoPagamentos(historico);
         }
 
         // 3. Buscar a próxima Conta a Pagar (CP) do Cliente
-        // Esta continua na tabela contas_pagar do cliente (empresa_id = clienteId)
+        // Busca na tabela contas_pagar do cliente (empresa_id = clienteId)
         const { data: contasPagar, error: cpError } = await supabase
             .from('contas_pagar')
             .select('id, data_vencimento, valor, status, fornecedor')
@@ -181,7 +180,7 @@ const MinhaAssinatura: React.FC = () => {
                             <div className="space-y-2">
                                 <p className="text-3xl font-bold text-red-600">{formatCurrency(proximaContaPagar.valor)}</p>
                                 <p className="text-sm text-muted-foreground">Vencimento: {format(parseISO(proximaContaPagar.data_vencimento), 'dd/MM/yyyy')}</p>
-                                <p className="text-xs text-muted-foreground">Lançado em Contas a Pagar.</p>
+                                <p className="text-xs text-muted-foreground">Fornecedor: {proximaContaPagar.fornecedor}</p>
                             </div>
                         ) : (
                             <p className="text-sm text-muted-foreground">Nenhuma cobrança futura pendente.</p>
