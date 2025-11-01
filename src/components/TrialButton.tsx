@@ -17,7 +17,8 @@ const TrialButton: React.FC<TrialButtonProps> = ({ clienteProfile, onTrialActiva
   const [shareLoading, setShareLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleStartTrial = async (days: number) => {
+  // Alterando o trial padrão para 7 dias, conforme a regra de negócio
+  const handleStartTrial = async (days: number = 7) => {
     setLoading(true);
     
     // 1. Buscar o Plano de Trial (assumindo que o plano mais barato é o de trial, ou o primeiro)
@@ -99,12 +100,12 @@ const TrialButton: React.FC<TrialButtonProps> = ({ clienteProfile, onTrialActiva
       <h3 className="text-lg font-semibold">Opções de Acesso Imediato</h3>
       
       <Button 
-        onClick={() => handleStartTrial(30)} // Trial padrão de 30 dias
+        onClick={() => handleStartTrial(7)} // Trial padrão de 7 dias
         className="w-full bg-green-600 hover:bg-green-700"
         disabled={loading}
       >
         {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
-        Iniciar Trial Grátis de 30 Dias
+        Iniciar Trial Grátis de 7 Dias
       </Button>
       
       <Button 

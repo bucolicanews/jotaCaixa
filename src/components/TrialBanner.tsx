@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useSessao } from '@/hooks/use-sessao';
 import { ClienteProfile } from '@/types/usuario';
 import { supabase } from '@/integrations/supabase/client';
-import { format, parseISO, isFuture, differenceInDays } from 'date-fns';
+import { format, parseISO, isFuture, differenceInDays, addDays, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -21,7 +21,7 @@ const TrialBanner: React.FC = () => {
     const clienteProfile = perfil as ClienteProfile;
 
     const fetchPlanoDetails = useCallback(async () => {
-        if (!isClient || !clienteProfile?.plano_id || !clienteProfile.data_fim_acesso) {
+        if (!isClient || !clienteProfile?.plano_id || !clienteProfile.data_fim_acesso || !clienteProfile.criado_em) {
             setLoading(false);
             return;
         }
@@ -31,7 +31,7 @@ const TrialBanner: React.FC = () => {
         // 1. Buscar detalhes do Plano
         const { data: planoData, error: planoError } = await supabase
             .from('planos')
-            .select('*') // Busca todas as colunas (agora sem dias_trial)
+            .select('*') // Busca todas as colunas
             .eq('id', clienteProfile.plano_id)
             .single();
 
@@ -42,16 +42,20 @@ const TrialBanner: React.FC = () => {
         }
         
         const dataFim = parseISO(clienteProfile.data_fim_acesso);
+        const dataCriacao = parseISO(clienteProfile.criado_em);
         setDataFimAcesso(dataFim);
         setPlanoInfo(planoData as PlanoInfo);
         
-        // 2. Determinar se é Trial (Regra: Acesso ainda não expirou E o acesso restante é curto - 30 dias ou menos)
+        // 2. Determinar se é Trial (Regra: Acesso futuro E data_fim_acesso <= (criado_em + 7 dias))
         const isFutureAccess = isFuture(dataFim);
-        const daysRemaining = differenceInDays(dataFim, new Date());
-        const isShortTermAccess = daysRemaining <= 30 && daysRemaining >= 0; // Deve ser 30 dias ou menos, mas não expirado
+        const dataLimiteTrial = addDays(dataCriacao, 7);
+        
+        // Compara se a data de fim de acesso é igual ou anterior à data limite do trial (criado_em + 7 dias)
+        // Usamos isSameDay para evitar problemas de fuso horário na comparação de datas
+        const isWithinTrialPeriod = isSameDay(dataFim, dataLimiteTrial) || dataFim < dataLimiteTrial;
 
-        // O banner só aparece se o acesso for futuro e for de curto prazo (indicando um trial ou período de carência)
-        setIsTrial(isFutureAccess && isShortTermAccess);
+        // O banner só aparece se o acesso for futuro E estiver dentro do período de trial inicial
+        setIsTrial(isFutureAccess && isWithinTrialPeriod);
         setLoading(false);
 
     }, [isClient, clienteProfile]);
