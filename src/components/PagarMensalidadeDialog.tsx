@@ -31,11 +31,12 @@ interface PagarMensalidadeDialogProps {
   onSaveComplete: () => void;
 }
 
+// Alterando o esquema para aceitar 'keep_current_plan' em vez de string vazia
 const formSchema = z.object({
   valor_pago: z.coerce.number().positive('O valor deve ser maior que zero.'),
   data_pagamento: z.date({ required_error: 'A data é obrigatória.' }),
   forma_pagamento: z.string().min(1, 'A forma de pagamento é obrigatória.'),
-  novo_plano_id: z.string().uuid('Selecione um plano válido.').optional().or(z.literal('')),
+  novo_plano_id: z.string().uuid('Selecione um plano válido.').optional().or(z.literal('keep_current_plan')),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -52,7 +53,7 @@ const PagarMensalidadeDialog: React.FC<PagarMensalidadeDialogProps> = ({ contaPa
       valor_pago: contaPagar?.valor || 0,
       data_pagamento: new Date(),
       forma_pagamento: 'Pix',
-      novo_plano_id: '',
+      novo_plano_id: 'keep_current_plan', // Novo valor padrão
     },
   });
   
@@ -63,7 +64,7 @@ const PagarMensalidadeDialog: React.FC<PagarMensalidadeDialogProps> = ({ contaPa
               valor_pago: contaPagar.valor,
               data_pagamento: new Date(),
               forma_pagamento: 'Pix',
-              novo_plano_id: '',
+              novo_plano_id: 'keep_current_plan', // Novo valor padrão
           });
       }
   }, [contaPagar, form]);
@@ -96,9 +97,12 @@ const PagarMensalidadeDialog: React.FC<PagarMensalidadeDialogProps> = ({ contaPa
   const onSubmit = async (values: FormValues) => {
     if (!contaPagar || !clienteId) return;
     
-    // Se nenhum plano novo foi selecionado, usamos o plano atual do cliente (que está no perfil)
+    // Se 'keep_current_plan' foi selecionado, usamos o plano atual do cliente
     const clienteProfile = (await supabase.from('tbl_clientes').select('plano_id').eq('id', clienteId).single()).data;
-    const planoParaRenovacao = values.novo_plano_id || clienteProfile?.plano_id;
+    
+    const planoParaRenovacao = values.novo_plano_id === 'keep_current_plan' 
+        ? clienteProfile?.plano_id 
+        : values.novo_plano_id;
     
     if (!planoParaRenovacao) {
         showError('Plano de renovação não encontrado. Tente novamente.');
@@ -178,7 +182,8 @@ const PagarMensalidadeDialog: React.FC<PagarMensalidadeDialogProps> = ({ contaPa
                             </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                            <SelectItem value="">Manter Plano Atual</SelectItem>
+                            {/* CORREÇÃO: Usando uma string não vazia para a opção de manter o plano */}
+                            <SelectItem value="keep_current_plan">Manter Plano Atual</SelectItem>
                             {planos.map(p => (
                                 <SelectItem key={p.id} value={p.id}>
                                     {p.nome} ({new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.preco_mensal)}/mês)
@@ -190,7 +195,7 @@ const PagarMensalidadeDialog: React.FC<PagarMensalidadeDialogProps> = ({ contaPa
                 </FormItem>
             )} />
             
-            {planoSelecionadoId && planoAtual && (
+            {planoSelecionadoId && planoAtual && planoSelecionadoId !== 'keep_current_plan' && (
                 <div className="p-3 bg-blue-100 dark:bg-blue-900/20 border border-blue-500 rounded-md text-sm text-blue-600 dark:text-blue-400">
                     A próxima mensalidade será baseada no preço do plano **{planoAtual.nome}** ({new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(planoAtual.preco_mensal)}).
                 </div>
