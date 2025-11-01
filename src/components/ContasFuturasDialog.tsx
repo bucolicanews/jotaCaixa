@@ -19,7 +19,8 @@ interface ParcelaFutura {
   valor_parcela: number;
   numero_parcela: number;
   status: 'aberta' | 'parcial' | 'paga' | 'reprogramada' | 'cancelada';
-  admin_contas_receber: ContaReceberDetalhe[] | null; 
+  // O join retorna um objeto aninhado, mas o Supabase tipa como array se for 1:1
+  admin_contas_receber: ContaReceberDetalhe | null; 
 }
 
 interface ContaSintetica {
@@ -94,6 +95,7 @@ const ContasFuturasDialog: React.FC<ContasFuturasDialogProps> = ({ clienteId, op
       showError('Erro ao carregar contas futuras: ' + error.message);
       setParcelas([]);
     } else {
+      // O Supabase retorna o objeto aninhado diretamente, não um array, se for 1:1
       setParcelas(data as ParcelaFutura[]); 
     }
     setLoading(false);
@@ -165,8 +167,8 @@ const ContasFuturasDialog: React.FC<ContasFuturasDialogProps> = ({ clienteId, op
                     </TableRow>
                   ) : (
                     parcelas.map((p) => {
-                        // Acessa a descrição do primeiro item do array (ou usa fallback)
-                        const descricao = p.admin_contas_receber?.[0]?.descricao || 'Mensalidade Recorrente';
+                        // Acessa a descrição do objeto aninhado
+                        const descricao = p.admin_contas_receber?.descricao || 'Mensalidade Recorrente';
                         
                         return (
                           <TableRow key={p.id}>
