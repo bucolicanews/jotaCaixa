@@ -412,45 +412,95 @@ const PreencherContrato: React.FC = () => {
         
         const contratoGeradoId = contratoGerado.id;
         
-        // 5. Inserir a Conta a Receber (Sintético)
+        // 5. Inserir a Conta a Receber (Sintético) e Parcelas (Analítico)
         const clienteNome = clientes.find(c => c.id === clienteSelecionadoId)?.nome || 'Cliente Desconhecido';
-        const contaReceberData = {
-            cliente_id: clienteSelecionadoId,
-            empresa_id: ownerId, // ID do Admin/Cliente
-            descricao: `Contrato: ${modelo.titulo} - ${clienteNome}`,
-            valor_total: valorFinalContrato,
-            data_emissao: format(new Date(), 'yyyy-MM-dd'),
-            data_vencimento: parcelasParaInserir[0].data_vencimento, // Primeiro vencimento
-            tipo_receita: tipoLancamento === 'unico' ? 'única' : 'recorrente',
-            status: 'aberta',
-            origem: 'contrato',
-            contrato_gerado_id: contratoGeradoId,
-        };
         
-        const { data: contaReceber, error: contaReceberError } = await supabase
-            .from('contas_receber')
-            .insert(contaReceberData)
-            .select('id')
-            .single();
+        let contaReceberId: string;
+        let tabelaContasReceber: string;
+        let tabelaParcelasReceber: string;
+        
+        if (isAdmin) {
+            // ADMIN: Usa as novas tabelas admin_*
+            tabelaContasReceber = 'admin_contas_receber';
+            tabelaParcelasReceber = 'admin_parcelas_receber';
             
-        if (contaReceberError) throw contaReceberError;
-        
-        const contaReceberId = contaReceber.id;
-        
-        // 6. Inserir as Parcelas (Analítico)
-        const parcelasComId = parcelasParaInserir.map(p => ({ 
-            ...p, 
-            conta_receber_id: contaReceberId, 
-            empresa_id: ownerId // ID do Admin/Cliente
-        }));
-        
-        const { error: parcelError } = await supabase
-            .from('parcelas_contas_receber')
-            .insert(parcelasComId);
+            const contaReceberDataAdmin = {
+                admin_id: ownerId, // Admin é o recebedor
+                cliente_id: clienteSelecionadoId, // Cliente é o pagador
+                descricao: `Contrato: ${modelo.titulo} - ${clienteNome}`,
+                valor_total: valorFinalContrato,
+                data_emissao: format(new Date(), 'yyyy-MM-dd'),
+                data_vencimento: parcelasParaInserir[0].data_vencimento, // Primeiro vencimento
+                tipo_receita: tipoLancamento === 'unico' ? 'única' : 'recorrente',
+                status: 'aberta',
+                origem: 'contrato',
+                contrato_gerado_id: contratoGeradoId,
+            };
             
-        if (parcelError) throw parcelError;
+            const { data: contaReceber, error: contaReceberError } = await supabase
+                .from(tabelaContasReceber)
+                .insert(contaReceberDataAdmin)
+                .select('id')
+                .single();
+                
+            if (contaReceberError) throw contaReceberError;
+            contaReceberId = contaReceber.id;
+            
+            // Inserir Parcelas Admin
+            const parcelasComId = parcelasParaInserir.map(p => ({ 
+                ...p, 
+                conta_receber_id: contaReceberId, 
+                admin_id: ownerId // Admin é o proprietário da parcela
+            }));
+            
+            const { error: parcelError } = await supabase
+                .from(tabelaParcelasReceber)
+                .insert(parcelasComId);
+                
+            if (parcelError) throw parcelError;
+            
+        } else {
+            // CLIENTE/USUÁRIO: Usa as tabelas normais (contas_receber)
+            tabelaContasReceber = 'contas_receber';
+            tabelaParcelasReceber = 'parcelas_contas_receber';
+            
+            const contaReceberDataCliente = {
+                cliente_id: clienteSelecionadoId,
+                empresa_id: ownerId, // Cliente/Empresa é o recebedor
+                descricao: `Contrato: ${modelo.titulo} - ${clienteNome}`,
+                valor_total: valorFinalContrato,
+                data_emissao: format(new Date(), 'yyyy-MM-dd'),
+                data_vencimento: parcelasParaInserir[0].data_vencimento, // Primeiro vencimento
+                tipo_receita: tipoLancamento === 'unico' ? 'única' : 'recorrente',
+                status: 'aberta',
+                origem: 'contrato',
+                contrato_gerado_id: contratoGeradoId,
+            };
+            
+            const { data: contaReceber, error: contaReceberError } = await supabase
+                .from(tabelaContasReceber)
+                .insert(contaReceberDataCliente)
+                .select('id')
+                .single();
+                
+            if (contaReceberError) throw contaReceberError;
+            contaReceberId = contaReceber.id;
+            
+            // Inserir Parcelas Cliente
+            const parcelasComId = parcelasParaInserir.map(p => ({ 
+                ...p, 
+                conta_receber_id: contaReceberId, 
+                empresa_id: ownerId // Cliente/Empresa é o proprietário da parcela
+            }));
+            
+            const { error: parcelError } = await supabase
+                .from(tabelaParcelasReceber)
+                .insert(parcelasComId);
+                
+            if (parcelError) throw parcelError;
+        }
 
-        showSuccess('Contrato gerado e enviado para assinatura!');
+        showSuccess('Contrato gerado e contas a receber criadas!');
         navigate('/contratos');
         
     } catch (error: any) {

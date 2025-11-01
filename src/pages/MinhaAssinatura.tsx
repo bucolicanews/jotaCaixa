@@ -7,7 +7,7 @@ import { Loader2, Package, DollarSign, CalendarCheck, ArrowDownCircle } from 'lu
 import { supabase } from '@/integrations/supabase/client';
 import { showError } from '@/utils/toast';
 import { Plano } from '@/types/plano';
-import { format, parseISO, isFuture } from 'date-fns';
+import { format, parseISO, isFuture, differenceInDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
