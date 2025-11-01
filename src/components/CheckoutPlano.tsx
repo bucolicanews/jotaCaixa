@@ -98,12 +98,14 @@ const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano, isUpgrade = false 
             throw new Error('Dados do cliente não disponíveis para checkout.');
         }
         
-        // **NOVA ETAPA:** Atualizar o plano_id na tbl_clientes antes do checkout
-        // Isso garante que o RPC de sucesso de pagamento use o plano correto.
+        // **ETAPA DE UPGRADE:** Atualizar o plano_id E as permissões na tbl_clientes antes do checkout
         if (isUpgrade) {
             const { error: updateError } = await supabase
                 .from('tbl_clientes')
-                .update({ plano_id: plano.id })
+                .update({ 
+                    plano_id: plano.id,
+                    permissoes: plano.permissoes, // <-- ATUALIZA AS PERMISSÕES IMEDIATAMENTE
+                })
                 .eq('id', finalClienteId);
                 
             if (updateError) throw new Error('Falha ao atualizar plano no perfil: ' + updateError.message);
