@@ -129,7 +129,7 @@ const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano, isUpgrade = false,
                 clienteId: finalClienteId,
                 email: finalEmail,
                 contaPagarId: contaPagarId, // Passa o ID da conta a pagar
-                valorCobrado: valorParaCheckout, // NOVO: Passa o valor real a ser cobrado
+                valorCobrado: valorParaCheckout, // Passa o valor real a ser cobrado
             };
         } else {
             // Fluxo de Adesão (usa a Edge Function de adesão)
@@ -173,9 +173,14 @@ const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano, isUpgrade = false,
   // Fluxo 2: Cliente Logado (Upgrade/Renovação)
   if (isUpgrade) {
       const title = contaPagarId ? `Pagar Mensalidade: ${plano.nome}` : `Atualizar para ${plano.nome}`;
-      const description = contaPagarId 
-        ? `Você está pagando o valor de R$ ${valorParaExibir.toFixed(2)} para o plano ${plano.nome}.`
-        : `Confirme a atualização do seu plano. O valor de R$ ${valorParaExibir.toFixed(2)} será cobrado mensalmente.`;
+      
+      // Descrição mais clara para o fluxo de renovação/upgrade
+      let description;
+      if (contaPagarId) {
+          description = `Você está pagando o valor de R$ ${valorParaExibir.toFixed(2)} para o plano ${plano.nome}.`;
+      } else {
+          description = `Confirme a atualização do seu plano. O valor de R$ ${valorParaExibir.toFixed(2)} será cobrado mensalmente.`;
+      }
         
       return (
         <Card className="w-full max-w-md mx-auto">
