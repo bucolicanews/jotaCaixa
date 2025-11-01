@@ -279,6 +279,20 @@ const MinhaAssinatura: React.FC = () => {
               </span>
               <span className="font-bold">{dataProximaCobranca}</span>
             </div>
+            
+            {/* BOTÃO DE DETALHES MOVIDO PARA O CARD PRINCIPAL */}
+            {ultimoRegistroAssinatura && (
+                <div className="pt-4 border-t">
+                    <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => setDetalhesDialogOpen(true)}
+                        className="w-full"
+                    >
+                        <ListChecks className="w-4 h-4 mr-2" /> Ver Detalhes da Recorrência
+                    </Button>
+                </div>
+            )}
           </CardContent>
         </Card>
 
@@ -306,21 +320,11 @@ const MinhaAssinatura: React.FC = () => {
                         size="sm" 
                         onClick={handleNavigateToRenewal}
                         disabled={isSubmitting}
+                        className="w-full"
                     >
                         {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CreditCard className="w-4 h-4 mr-2" />}
                         Pagar Mensalidade (Stripe)
                     </Button>
-                    
-                    {/* NOVO BOTÃO DE DETALHES */}
-                    {ultimoRegistroAssinatura && (
-                        <Button 
-                            variant="outline" 
-                            size="sm" 
-                            onClick={() => setDetalhesDialogOpen(true)}
-                        >
-                            <ListChecks className="w-4 h-4 mr-2" /> Ver Detalhes da Recorrência
-                        </Button>
-                    )}
                 </div>
                 
                 <Link to="/contas-receber">
