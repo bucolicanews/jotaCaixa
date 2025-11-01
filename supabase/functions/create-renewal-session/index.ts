@@ -1,3 +1,4 @@
+/// <reference lib="deno.ns" />
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
 import Stripe from 'https://esm.sh/stripe@16.5.0?target=deno';
@@ -29,10 +30,10 @@ serve(async (req: Request) => {
       });
     }
 
-    // 2️⃣ Inicializar Supabase Client
+    // 2️⃣ Inicializar Supabase Client com SERVICE ROLE KEY para BYPASS RLS
     const supabase = createClient(
       (Deno.env.get('SUPABASE_URL') as any)!,
-      (Deno.env.get('SUPABASE_ANON_KEY') as any)!,
+      (Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') as any)!, // <-- USING SERVICE ROLE KEY
       { auth: { persistSession: false } }
     );
 
@@ -70,7 +71,7 @@ serve(async (req: Request) => {
     
     if (contaPagarRes.error || !contaPagarRes.data) {
       console.error('❌ Conta a Pagar not found:', contaPagarRes.error);
-      return new Response(JSON.stringify({ error: 'Conta a Pagar not found.' }), {
+      return new Response(JSON.stringify({ error: 'Conta a Pagar not found or access denied.' }), {
         status: 404,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
