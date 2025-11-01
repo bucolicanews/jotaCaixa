@@ -86,9 +86,12 @@ serve(async (req: Request) => {
     });
 
     const referer = req.headers.get('referer');
-    const baseUrl = referer || `https://${(Deno.env.get('SUPABASE_URL') as any)?.split('//')[1].split('.')[0]}.vercel.app/`; 
+    // Usando a URL base do projeto Supabase como fallback seguro
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const projectId = supabaseUrl ? supabaseUrl.split('//')[1].split('.')[0] : 'jqoirlswewggyppgvgnv';
+    const baseUrl = referer || `https://${projectId}.vercel.app/`; 
 
-    console.log(`LOG 6: Creating Renewal Checkout Session. Value: ${valorCobrado}`);
+    console.log(`LOG 6: Creating Renewal Checkout Session. Value: ${valorCobrado}. Base URL: ${baseUrl}`);
 
     // 6️⃣ Criar a sessão de checkout
     const session = await stripe.checkout.sessions.create({
