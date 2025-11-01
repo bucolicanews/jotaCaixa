@@ -15,9 +15,10 @@ import { useSessao } from '@/hooks/use-sessao';
 interface CheckoutPlanoProps {
   plano: Plano;
   isUpgrade?: boolean; // Novo prop para diferenciar fluxo de upgrade
+  contaPagarId?: string; // NOVO: ID da conta a pagar se for renovação
 }
 
-const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano, isUpgrade = false }) => {
+const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano, isUpgrade = false, contaPagarId }) => {
   const [email, setEmail] = useState('');
   const [nomeEmpresa, setNomeEmpresa] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -68,7 +69,6 @@ const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano, isUpgrade = false 
       }
       
       // Se o cadastro for bem-sucedido, o usuário é automaticamente logado (sessão temporária)
-      // e o `usuario` no useSessao será atualizado.
       
       setIsRegistered(true);
       showSuccess('Cadastro inicial realizado! Verifique seu email para definir a senha.');
@@ -98,13 +98,13 @@ const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano, isUpgrade = false 
             throw new Error('Dados do cliente não disponíveis para checkout.');
         }
         
-        // **ETAPA DE UPGRADE:** Atualizar o plano_id E as permissões na tbl_clientes antes do checkout
+        // **ETAPA DE UPGRADE/RENOVAÇÃO:** Atualizar o plano_id E as permissões na tbl_clientes antes do checkout
         if (isUpgrade) {
             const { error: updateError } = await supabase
                 .from('tbl_clientes')
                 .update({ 
                     plano_id: plano.id,
-                    permissoes: plano.permissoes, // <-- ATUALIZA AS PERMISSÕES IMEDIATAMENTE
+                    permissoes: plano.permissoes, 
                 })
                 .eq('id', finalClienteId);
                 
@@ -114,15 +114,30 @@ const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano, isUpgrade = false 
             await refetch();
         }
 
-
-        // 2. Chamar a Edge Function para criar a sessão de checkout
-        const { data, error } = await supabase.functions.invoke('create-checkout-session', {
-            body: {
+        // 2. Chamar a Edge Function correta
+        let functionName: 'create-checkout-session' | 'create-renewal-session';
+        let body: any;
+        
+        if (contaPagarId) {
+            // Fluxo de Renovação (usa a Edge Function de renovação)
+            functionName = 'create-renewal-session';
+            body = {
                 planoId: plano.id,
                 clienteId: finalClienteId,
                 email: finalEmail,
-            },
-        });
+                contaPagarId: contaPagarId, // Passa o ID da conta a pagar
+            };
+        } else {
+            // Fluxo de Adesão (usa a Edge Function de adesão)
+            functionName = 'create-checkout-session';
+            body = {
+                planoId: plano.id,
+                clienteId: finalClienteId,
+                email: finalEmail,
+            };
+        }
+
+        const { data, error } = await supabase.functions.invoke(functionName, { body });
         
         if (error) throw error;
         
@@ -149,18 +164,23 @@ const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano, isUpgrade = false 
       );
   }
   
-  // Fluxo 2: Cliente Logado (Upgrade)
+  // Fluxo 2: Cliente Logado (Upgrade/Renovação)
   if (isUpgrade) {
+      const title = contaPagarId ? `Pagar Mensalidade: ${plano.nome}` : `Atualizar para ${plano.nome}`;
+      const description = contaPagarId 
+        ? `Você está pagando o plano ${plano.nome}. O valor de R$ ${plano.preco_mensal.toFixed(2)} será cobrado.`
+        : `Confirme a atualização do seu plano. O valor de R$ ${plano.preco_mensal.toFixed(2)} será cobrado mensalmente.`;
+        
       return (
         <Card className="w-full max-w-md mx-auto">
             <CardHeader>
-                <CardTitle className="text-2xl">Atualizar para {plano.nome}</CardTitle>
-                <CardDescription>Confirme a atualização do seu plano. O valor de R$ {plano.preco_mensal.toFixed(2)} será cobrado mensalmente.</CardDescription>
+                <CardTitle className="text-2xl">{title}</CardTitle>
+                <CardDescription>{description}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
                 <Button onClick={() => handleCheckout(usuario?.email, usuario?.id)} className="w-full" disabled={isSubmitting}>
                     {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CreditCard className="mr-2 h-4 w-4" />}
-                    Pagar e Atualizar Plano
+                    Pagar Agora (R$ {plano.preco_mensal.toFixed(2)})
                 </Button>
             </CardContent>
         </Card>

@@ -34,6 +34,7 @@ import { supabase } from "./integrations/supabase/client";
 import { showSuccess, showError } from "./utils/toast";
 import { useSessao } from "./hooks/use-sessao";
 import MinhaAssinatura from "./pages/MinhaAssinatura";
+import SelecaoPagamentoRenovacao from "./pages/SelecaoPagamentoRenovacao"; // NOVA IMPORTAÇÃO
 
 const queryClient = new QueryClient();
 
@@ -150,6 +151,7 @@ const PaymentRenewalHandler = () => {
         }
         
         // 3. Chamar a função RPC para renovar a assinatura manualmente (simulando o webhook)
+        // O plano_id usado aqui é o plano ATUALMENTE salvo no perfil do cliente (que foi atualizado no CheckoutPlano)
         const { error: rpcError } = await supabase.rpc('manual_subscription_renewal', {
             p_cliente_id: usuario.id,
             p_plano_id: clienteData.plano_id,
@@ -224,6 +226,7 @@ const App = () => (
             <Route path="/contratos/novo" element={<NovoContrato />} />
             <Route path="/contratos/preencher/:modeloId" element={<PreencherContrato />} />
             <Route path="/minha-assinatura" element={<MinhaAssinatura />} />
+            <Route path="/renovacao" element={<SelecaoPagamentoRenovacao />} /> {/* NOVA ROTA */}
 
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />

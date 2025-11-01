@@ -5,15 +5,15 @@ import { ClienteProfile } from '@/types/usuario';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, Package, DollarSign, CalendarCheck, ArrowDownCircle, CreditCard } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { showError } from '@/utils/toast'; // Removido showSuccess
+import { showError } from '@/utils/toast';
 import { Plano } from '@/types/plano';
 import { format, parseISO, isFuture, differenceInDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Link } from 'react-router-dom';
-import { useStripeConfig } from '@/hooks/use-stripe-config'; // Importando useStripeConfig
+import { Link, useNavigate } from 'react-router-dom';
+import { useStripeConfig } from '@/hooks/use-stripe-config';
 
 interface Pagamento {
   id: string;
@@ -31,14 +31,15 @@ interface ContaPagarPlano {
 }
 
 const MinhaAssinatura: React.FC = () => {
-  const { perfil, role, carregando, usuario } = useSessao(); // Removido refetch
-  const { stripePromise, loading: loadingStripe } = useStripeConfig();
+  const { perfil, role, carregando } = useSessao();
+  const navigate = useNavigate();
+  const { loading: loadingStripe } = useStripe-config();
   
   const [planoAtual, setPlanoAtual] = useState<Plano | null>(null);
   const [carregandoPlano, setCarregandoPlano] = useState(true);
   const [proximaContaPagar, setProximaContaPagar] = useState<ContaPagarPlano | null>(null);
   const [historicoPagamentos, setHistoricoPagamentos] = useState<Pagamento[]>([]);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSubmitting] = useState(false); // Removido setIsSubmitting
 
   const isClient = role === 'Cliente';
   const clienteProfile = perfil as ClienteProfile;
@@ -132,44 +133,13 @@ const MinhaAssinatura: React.FC = () => {
     }
   }, [carregando, fetchDadosAssinatura]);
   
-  const handleCheckoutRenewal = async () => {
-    if (!proximaContaPagar || !planoAtual || !usuario?.email || !clienteId) {
-        showError('Dados incompletos para iniciar o pagamento.');
+  const handleNavigateToRenewal = () => {
+    if (!proximaContaPagar) {
+        showError('Nenhuma mensalidade pendente para pagar.');
         return;
     }
-    if (loadingStripe || !stripePromise) {
-        showError('Sistema de pagamento ainda não carregado.');
-        return;
-    }
-    
-    setIsSubmitting(true);
-    
-    try {
-        // 1. Chamar a Edge Function para criar a sessão de checkout
-        // Passamos o ID da Conta a Pagar para que o webhook saiba qual conta marcar como paga.
-        const { data, error } = await supabase.functions.invoke('create-renewal-session', {
-            body: {
-                planoId: planoAtual.id,
-                clienteId: clienteId,
-                email: usuario.email,
-                contaPagarId: proximaContaPagar.id, // Passa o ID da conta a pagar
-            },
-        });
-        
-        if (error) throw error;
-        
-        const { url } = data;
-        if (!url) throw new Error('URL de checkout não recebida.');
-
-        // 2. Redirecionar para o Stripe
-        window.location.href = url;
-        
-    } catch (error: any) {
-        console.error('Erro no checkout de renovação:', error);
-        showError('Falha ao iniciar o checkout: ' + (error.message || 'Erro desconhecido.'));
-    } finally {
-        setIsSubmitting(false);
-    }
+    // Redireciona para a nova página de seleção de plano, passando o ID da conta a pagar
+    navigate(`/renovacao?cp_id=${proximaContaPagar.id}`);
   };
 
   if (carregando || carregandoPlano || loadingStripe) {
@@ -221,9 +191,7 @@ const MinhaAssinatura: React.FC = () => {
             <CardTitle className="text-xl flex items-center">
               <Package className="w-5 h-5 mr-2" /> Plano Atual
             </CardTitle>
-            <Link to="/vendas">
-              <Button variant="default" size="sm">Mudar Plano</Button>
-            </Link>
+            {/* BOTÃO 'Mudar Plano' REMOVIDO */}
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex justify-between items-center border-b pb-2">
@@ -277,7 +245,7 @@ const MinhaAssinatura: React.FC = () => {
                     variant="default" 
                     size="sm" 
                     className="mt-4 w-full"
-                    onClick={handleCheckoutRenewal}
+                    onClick={handleNavigateToRenewal}
                     disabled={isSubmitting}
                 >
                     {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CreditCard className="w-4 h-4 mr-2" />}
