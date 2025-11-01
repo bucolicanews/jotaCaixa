@@ -1,10 +1,3 @@
 import { createRoot } from "react-dom/client";
-import App from "./App.tsx";
+import { App } from "./App.tsx"; // Corrigido para named import
 import "./globals.css";
-import { ThemeProvider } from "./contexts/ThemeProvider.tsx";
-
-createRoot(document.getElementById("root")!).render(
-  <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
-    <App />
-  </ThemeProvider>
-);
