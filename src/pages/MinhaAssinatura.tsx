@@ -30,6 +30,15 @@ interface ContaPagarPlano {
     fornecedor: string;
 }
 
+// Interface para tipar o resultado do join aninhado
+interface ParcelaDetalhe {
+    id: string;
+    conta_receber_id: string;
+    admin_contas_receber: {
+        descricao: string | null;
+    } | null;
+}
+
 const MinhaAssinatura: React.FC = () => {
     const { perfil, role, carregando } = useSessao();
     const [planoAtual, setPlanoAtual] = useState<Plano | null>(null);
@@ -64,8 +73,7 @@ const MinhaAssinatura: React.FC = () => {
         }
         setPlanoAtual(planoData as Plano);
         
-        // 2. Buscar Histórico de Pagamentos (CR do Admin contra este Cliente)
-        // Busca na tabela admin_recebimentos usando o cliente_id (que é o ID do cliente logado)
+        // 2. Buscar Histórico de Pagamentos (admin_recebimentos)
         const { data: recebimentos, error: crError } = await supabase
             .from('admin_recebimentos')
             .select(`
@@ -73,32 +81,51 @@ const MinhaAssinatura: React.FC = () => {
                 data_recebimento, 
                 valor_recebido, 
                 forma_pagamento, 
-                admin_parcelas_receber (
-                    admin_contas_receber (
-                        descricao
-                    )
-                )
+                parcela_id
             `)
             .eq('cliente_id', clienteId) // Filtra pelo ID do cliente que pagou
             .order('data_recebimento', { ascending: false });
             
         if (crError) {
-            console.error('Erro ao buscar histórico de pagamentos:', crError);
+            console.error('Erro ao buscar histórico de recebimentos:', crError);
             setHistoricoPagamentos([]);
         } else {
-            const historico = (recebimentos as any[]).map(r => ({
-                id: r.id,
-                data: r.data_recebimento!,
-                valor: r.valor_recebido,
-                status: 'pago' as 'pago', // Assumimos que se está em admin_recebimentos, foi pago
-                // Acessa a descrição através do join aninhado
-                descricao: r.admin_parcelas_receber?.admin_contas_receber?.descricao || 'Mensalidade Paga',
-            }));
-            setHistoricoPagamentos(historico);
+            const parcelaIds = recebimentos.map(r => r.parcela_id);
+            
+            if (parcelaIds.length > 0) {
+                // 2b. Buscar as descrições das contas a receber associadas às parcelas
+                const { data: parcelasDetalhes, error: detalhesError } = await supabase
+                    .from('admin_parcelas_receber')
+                    .select(`
+                        id,
+                        conta_receber_id,
+                        admin_contas_receber (
+                            descricao
+                        )
+                    `)
+                    .in('id', parcelaIds);
+                    
+                if (detalhesError) {
+                    console.error('Erro ao buscar detalhes das parcelas:', detalhesError);
+                } else {
+                    // Tipagem explícita aqui
+                    const detalhesMap = new Map((parcelasDetalhes as ParcelaDetalhe[]).map(d => [d.id, d.admin_contas_receber?.descricao || 'Mensalidade Paga']));
+                    
+                    const historico = recebimentos.map(r => ({
+                        id: r.id,
+                        data: r.data_recebimento!,
+                        valor: r.valor_recebido,
+                        status: 'pago' as 'pago',
+                        descricao: detalhesMap.get(r.parcela_id) || 'Mensalidade Paga',
+                    }));
+                    setHistoricoPagamentos(historico);
+                }
+            } else {
+                setHistoricoPagamentos([]);
+            }
         }
 
         // 3. Buscar a próxima Conta a Pagar (CP) do Cliente
-        // Busca na tabela contas_pagar onde empresa_id é o ID do cliente logado
         const { data: contasPagar, error: cpError } = await supabase
             .from('contas_pagar')
             .select('id, data_vencimento, valor, status, fornecedor')
@@ -152,7 +179,7 @@ const MinhaAssinatura: React.FC = () => {
                 <DollarSign className="w-6 h-6 mr-2" /> Minha Assinatura
             </h1>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+            <div className="grid grid-cols-1 lg:col-span-3 gap-6 mb-8">
                 {/* Detalhes do Plano */}
                 <Card className="lg:col-span-2">
                     <CardHeader className="flex flex-row items-center justify-between">
