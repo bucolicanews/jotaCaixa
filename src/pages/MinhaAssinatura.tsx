@@ -3,7 +3,7 @@ import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { useSessao } from '@/hooks/use-sessao';
 import { ClienteProfile } from '@/types/usuario';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, Package, DollarSign, CalendarCheck, ArrowDownCircle, CreditCard, ListChecks } from 'lucide-react';
+import { Loader2, Package, DollarSign, CalendarCheck, ArrowDownCircle, CreditCard } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError } from '@/utils/toast';
 import { Plano } from '@/types/plano';
@@ -14,7 +14,6 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Link, useNavigate } from 'react-router-dom';
 import { useStripeConfig } from '@/hooks/use-stripe-config';
-import DetalhesAssinaturaDialog from '@/components/DetalhesAssinaturaDialog'; // Importando o novo componente
 
 interface Pagamento {
   id: string;
@@ -32,18 +31,6 @@ interface ProximaCobranca {
   numero_parcela: number;
 }
 
-// Interface para o registro de admin_contas_receber
-interface AdminContaReceber {
-    id: string;
-    admin_id: string; // PROPRIEDADE ADICIONADA
-    descricao: string;
-    valor_total: number;
-    data_vencimento: string;
-    status: string;
-    origem: string;
-    created_at: string;
-}
-
 const MinhaAssinatura: React.FC = () => {
   const { perfil, role, carregando } = useSessao();
   const navigate = useNavigate();
@@ -51,11 +38,9 @@ const MinhaAssinatura: React.FC = () => {
   
   const [planoAtual, setPlanoAtual] = useState<Plano | null>(null);
   const [carregandoPlano, setCarregandoPlano] = useState(true);
-  const [proximaCobranca, setProximaCobranca] = useState<ProximaCobranca | null>(null); // Alterado para ProximaCobranca
+  const [proximaCobranca, setProximaCobranca] = useState<ProximaCobranca | null>(null);
   const [historicoPagamentos, setHistoricoPagamentos] = useState<Pagamento[]>([]);
-  const [ultimoRegistroAssinatura, setUltimoRegistroAssinatura] = useState<AdminContaReceber | null>(null);
   const [isSubmitting] = useState(false);
-  const [detalhesDialogOpen, setDetalhesDialogOpen] = useState(false); // NOVO ESTADO
 
   const isClient = role === 'Cliente';
   const clienteProfile = perfil as ClienteProfile;
@@ -86,26 +71,15 @@ const MinhaAssinatura: React.FC = () => {
     setPlanoAtual(planoData as Plano);
     
     // 2️⃣ Buscar o último registro de assinatura (admin_contas_receber)
-    const { data: ultimoRegistro, error: registroError } = await supabase
+    const { data: ultimoRegistro } = await supabase
         .from('admin_contas_receber')
-        .select('*')
+        .select('id, admin_id')
         .eq('cliente_id', clienteId)
         .eq('origem', 'assinatura_recorrente')
         .order('created_at', { ascending: false })
         .limit(1)
         .single();
         
-    if (registroError && registroError.code !== 'PGRST116') {
-        console.error('Erro ao buscar último registro de assinatura:', registroError);
-    } else if (ultimoRegistro) {
-        setUltimoRegistroAssinatura(ultimoRegistro as AdminContaReceber);
-        console.log("LOG: Ultimo Registro Assinatura encontrado:", ultimoRegistro.id);
-    } else {
-        setUltimoRegistroAssinatura(null);
-        console.log("LOG: Nenhum Ultimo Registro Assinatura encontrado.");
-    }
-    
-    // Usamos o ID do registro sintético encontrado (ou null) para buscar as parcelas
     const contaRecorrenciaId = ultimoRegistro?.id;
     const adminId = ultimoRegistro?.admin_id;
 
@@ -171,7 +145,7 @@ const MinhaAssinatura: React.FC = () => {
     }
 
     setCarregandoPlano(false);
-  }, [isClient, clienteId, clienteProfile]); // Removendo dependências que causavam loop
+  }, [isClient, clienteId, clienteProfile]);
 
   useEffect(() => {
     if (!carregando) {
@@ -230,20 +204,6 @@ const MinhaAssinatura: React.FC = () => {
         <DollarSign className="w-6 h-6 mr-2" /> Minha Assinatura
       </h1>
       
-      {/* Card de Debug (Sempre visível se clienteId existir) */}
-      {clienteId && (
-          <Card className="mb-6 bg-secondary/50">
-              <CardHeader className="p-3">
-                  <CardTitle className="text-sm font-semibold">Conta Sintética de Recorrência (admin_contas_receber)</CardTitle>
-              </CardHeader>
-              <CardContent className="p-3 pt-0 text-xs overflow-x-auto">
-                  <pre className="whitespace-pre-wrap break-all">
-                      {ultimoRegistroAssinatura ? JSON.stringify(ultimoRegistroAssinatura, null, 2) : 'Nenhum registro sintético encontrado.'}
-                  </pre>
-              </CardContent>
-          </Card>
-      )}
-
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
         {/* Detalhes do Plano */}
         <Card className="lg:col-span-3">
@@ -279,20 +239,6 @@ const MinhaAssinatura: React.FC = () => {
               </span>
               <span className="font-bold">{dataProximaCobranca}</span>
             </div>
-            
-            {/* BOTÃO DE DETALHES MOVIDO PARA O CARD PRINCIPAL */}
-            {ultimoRegistroAssinatura && (
-                <div className="pt-4 border-t">
-                    <Button 
-                        variant="outline" 
-                        size="sm" 
-                        onClick={() => setDetalhesDialogOpen(true)}
-                        className="w-full"
-                    >
-                        <ListChecks className="w-4 h-4 mr-2" /> Ver Detalhes da Recorrência
-                    </Button>
-                </div>
-            )}
           </CardContent>
         </Card>
 
@@ -388,13 +334,6 @@ const MinhaAssinatura: React.FC = () => {
           </CardContent>
         </Card>
       </div>
-      
-      {/* Modal de Detalhes da Assinatura */}
-      <DetalhesAssinaturaDialog
-        contaRecorrenciaId={ultimoRegistroAssinatura?.id || null}
-        open={detalhesDialogOpen}
-        onOpenChange={setDetalhesDialogOpen}
-      />
     </LayoutPrincipal>
   );
 };
