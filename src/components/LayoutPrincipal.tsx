@@ -36,6 +36,7 @@ const LayoutPrincipal: React.FC<LayoutPrincipalProps> = ({ children }) => {
   const isPendingClient = role === 'Cliente' && !(perfil as ClienteProfile)?.aprovado;
   const clienteProfile = perfil as ClienteProfile;
   
+  // Lógica de Expiração: Se for Cliente, aprovado, e a data de fim de acesso for passada.
   const dataFimAcesso = clienteProfile?.data_fim_acesso ? parseISO(clienteProfile.data_fim_acesso) : null;
   const isAccessExpired = role === 'Cliente' && clienteProfile?.aprovado && dataFimAcesso && isPast(dataFimAcesso);
 

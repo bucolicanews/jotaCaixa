@@ -4,6 +4,7 @@ import { LayoutDashboard, DollarSign, ArrowUpCircle, ArrowDownCircle, Banknote, 
 import React from 'react';
 import { useSessao } from '@/hooks/use-sessao';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
+import { isPast, parseISO } from 'date-fns';
 
 interface ItemMenu {
   nome: string;
@@ -93,12 +94,21 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick }) => {
   const userProfile = perfil as UsuarioProfile;
   const clientProfile = perfil as ClienteProfile;
   
+  // Lógica de Expiração: Se for Cliente, aprovado, e a data de fim de acesso for passada.
+  const dataFimAcesso = clientProfile?.data_fim_acesso ? parseISO(clientProfile.data_fim_acesso) : null;
+  const isAccessExpired = role === 'Cliente' && clientProfile?.aprovado && dataFimAcesso && isPast(dataFimAcesso);
+  
   // Se o usuário for recém-cadastrado e estiver na tela de seleção de perfil,
   // ele não deve ver o menu completo.
   const isPreAuthFlow = localizacao.pathname === '/selecao-perfil';
 
   const checkPermission = (item: ItemMenu) => {
     if (!item.permissionKey) return true;
+
+    // Se o acesso expirou, bloqueia todos os módulos, exceto Painel e Minha Assinatura
+    if (isAccessExpired) {
+        return item.caminho === '/painel' || item.caminho === '/minha-assinatura';
+    }
 
     // Se estiver no fluxo de seleção de perfil, só permite Painel (que é o LayoutPrincipal)
     if (isPreAuthFlow) {
@@ -179,17 +189,23 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick }) => {
                     {itensVisiveis.map((item) => {
                         const estaAtivo = localizacao.pathname === item.caminho;
                         const Icone = item.icone;
+                        
+                        // Se o acesso expirou e não é Painel ou Minha Assinatura, desabilita o link
+                        const isDisabled = isAccessExpired && item.caminho !== '/painel' && item.caminho !== '/minha-assinatura';
+
                         return (
                             <Link
                                 key={item.nome}
-                                to={item.caminho}
-                                onClick={onLinkClick}
+                                to={isDisabled ? localizacao.pathname : item.caminho} // Se desabilitado, linka para a página atual
+                                onClick={isDisabled ? (e) => e.preventDefault() : onLinkClick}
                                 className={cn(
                                     "flex items-center p-3 rounded-lg transition-colors",
                                     estaAtivo
                                         ? "bg-accent text-accent-foreground font-semibold"
                                         : "hover:bg-accent/50 hover:text-foreground",
+                                    isDisabled && "opacity-50 cursor-not-allowed hover:bg-transparent hover:text-foreground"
                                 )}
+                                title={isDisabled ? "Acesso expirado. Renove seu plano." : item.nome}
                             >
                                 <Icone className="w-5 h-5 mr-3" />
                                 {item.nome}
