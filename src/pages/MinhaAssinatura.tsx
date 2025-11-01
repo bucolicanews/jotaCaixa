@@ -230,15 +230,15 @@ const MinhaAssinatura: React.FC = () => {
         <DollarSign className="w-6 h-6 mr-2" /> Minha Assinatura
       </h1>
       
-      {/* NOVO: Exibição do Último Registro de Assinatura (para debug/visualização) */}
-      {ultimoRegistroAssinatura && (
+      {/* Card de Debug (Sempre visível se clienteId existir) */}
+      {clienteId && (
           <Card className="mb-6 bg-secondary/50">
               <CardHeader className="p-3">
                   <CardTitle className="text-sm font-semibold">Conta Sintética de Recorrência (admin_contas_receber)</CardTitle>
               </CardHeader>
               <CardContent className="p-3 pt-0 text-xs overflow-x-auto">
                   <pre className="whitespace-pre-wrap break-all">
-                      {JSON.stringify(ultimoRegistroAssinatura, null, 2)}
+                      {ultimoRegistroAssinatura ? JSON.stringify(ultimoRegistroAssinatura, null, 2) : 'Nenhum registro sintético encontrado.'}
                   </pre>
               </CardContent>
           </Card>
