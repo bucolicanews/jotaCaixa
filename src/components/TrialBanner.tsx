@@ -29,6 +29,8 @@ const TrialBanner: React.FC = () => {
             return;
         }
 
+        setLoading(true);
+
         // 1. Buscar detalhes do Plano
         const { data: planoData, error: planoError } = await supabase
             .from('planos')
@@ -46,20 +48,12 @@ const TrialBanner: React.FC = () => {
         setDataFimAcesso(dataFim);
         setPlanoInfo(planoData as PlanoInfo);
         
-        // 2. Determinar se é Trial
-        const daysRemaining = differenceInDays(dataFim, new Date());
+        // 2. Determinar se é Trial (Regra: Apenas se for 7 dias de trial E a data de fim for futura)
+        const isFutureAccess = isFuture(dataFim);
+        const isSevenDayTrial = planoData.dias_trial === 7;
         
-        // Consideramos TRIAL APENAS se a data de fim de acesso for futura E
-        // o número de dias restantes for próximo ao período de trial (ex: 7 dias)
-        // e não for o período padrão de 30 dias de um plano pago.
-        
-        // Se daysRemaining for > 30, é um plano pago de longo prazo (não implementado, mas seguro).
-        // Se daysRemaining for 30, é o primeiro mês pago (não é trial).
-        // Se daysRemaining for <= planoData.dias_trial (ex: 7), é trial.
-        
-        const isTrialPeriod = isFuture(dataFim) && daysRemaining <= (planoData.dias_trial || 7); 
-        
-        setIsTrial(isTrialPeriod);
+        // O banner só aparece se for um trial de 7 dias E o acesso ainda não expirou.
+        setIsTrial(isSevenDayTrial && isFutureAccess);
         setLoading(false);
 
     }, [isClient, clienteProfile]);
@@ -70,7 +64,7 @@ const TrialBanner: React.FC = () => {
         }
     }, [carregando, fetchPlanoDetails]);
 
-    // O banner só é exibido se for um cliente E estiver em período de trial
+    // O banner só é exibido se for um cliente E estiver em período de trial (7 dias)
     if (loading || carregando || !isClient || !planoInfo || !dataFimAcesso || !isTrial) {
         return null; 
     }
