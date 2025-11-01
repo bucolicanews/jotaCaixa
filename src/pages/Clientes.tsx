@@ -3,7 +3,7 @@ import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Edit, Trash2, PlusCircle, Filter, Building2, CheckCircle, Users as UsersIcon } from 'lucide-react';
+import { Loader2, Edit, Trash2, PlusCircle, Filter, Building2, CheckCircle, Users as UsersIcon, Mail } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
@@ -262,6 +262,25 @@ const ClientesPage = () => {
     setCarregandoDados(false);
   };
   
+  const handleResendInvite = async (email: string, nome: string) => {
+      if (!window.confirm(`Tem certeza que deseja reenviar o convite de acesso para ${nome} (${email})?`)) return;
+      
+      setCarregandoDados(true);
+      try {
+          const { error } = await (supabase.auth as any).inviteUserByEmail(email, {
+              redirectTo: `${window.location.origin}/atualizar-senha`,
+          });
+          
+          if (error) throw error;
+          
+          showSuccess(`Convite de acesso reenviado para ${email}.`);
+      } catch (error: any) {
+          showError('Falha ao reenviar convite: ' + error.message);
+      } finally {
+          setCarregandoDados(false);
+      }
+  };
+  
   const handleNewCR = () => {
       setClienteSelecionado(null);
       setPerfilParaEditar(null);
@@ -378,11 +397,12 @@ const ClientesPage = () => {
                         const isAprovado = empresa.aprovado;
                         const dataFimAcesso = empresa.data_fim_acesso ? parseISO(empresa.data_fim_acesso) : null;
                         const isAtivo = dataFimAcesso && isPast(new Date()) === false;
+                        const isAvulso = empresa.tipo_cliente?.endsWith('_Avulso') ?? false;
                         
                         let statusBadge;
                         if (!isAprovado) {
                             statusBadge = <Badge variant="warning">Pendente</Badge>;
-                        } else if (empresa.tipo_cliente?.endsWith('_Avulso')) {
+                        } else if (isAvulso) {
                             statusBadge = <Badge variant="secondary">Avulso</Badge>;
                         } else if (isAtivo) {
                             statusBadge = <Badge variant="default">Ativo</Badge>;
@@ -410,6 +430,20 @@ const ClientesPage = () => {
                                             <CheckCircle className="h-4 w-4 mr-1" /> Aprovar
                                         </Button>
                                     )}
+                                    
+                                    {/* Botão de Reenviar Convite (Apenas para Avulsos) */}
+                                    {isAvulso && (
+                                        <Button 
+                                            variant="outline" 
+                                            size="icon" 
+                                            onClick={() => handleResendInvite(empresa.email, empresa.nome)}
+                                            title="Reenviar Convite de Acesso"
+                                            disabled={carregandoDados}
+                                        >
+                                            <Mail className="h-4 w-4" />
+                                        </Button>
+                                    )}
+                                    
                                     <Button 
                                         variant="outline" 
                                         size="icon" 

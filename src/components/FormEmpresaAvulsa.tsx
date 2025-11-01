@@ -86,20 +86,15 @@ const FormEmpresaAvulsa: React.FC<FormEmpresaAvulsaProps> = ({ onSaveComplete })
     }
 
     try {
-      // 1. Criar usuário no Auth (com role 'Cliente' e metadados)
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: values.email,
-        password: Math.random().toString(36).substring(2, 15), // Senha temporária
-        options: {
-          emailRedirectTo: `${window.location.origin}/atualizar-senha`,
-          data: { 
-            role: 'Cliente', 
-            nome: values.nome, 
-            cliente_id: null, 
-            plano_id: values.plano_id, 
-            permissoes: JSON.stringify(planoSelecionado.permissoes), 
-            aprovado: true, // Já é aprovado
-          }
+      // 1. Criar usuário no Auth usando INVITE (envia o email de autenticação)
+      const { data: authData, error: authError } = await (supabase.auth as any).inviteUserByEmail(values.email, {
+        redirectTo: `${window.location.origin}/atualizar-senha`,
+        data: { 
+          role: 'Cliente', 
+          nome: values.nome, 
+          plano_id: values.plano_id, 
+          permissoes: JSON.stringify(planoSelecionado.permissoes), 
+          aprovado: true, // Já é aprovado
         }
       });
 
@@ -133,7 +128,7 @@ const FormEmpresaAvulsa: React.FC<FormEmpresaAvulsaProps> = ({ onSaveComplete })
 
       if (updateError) throw updateError;
 
-      showSuccess(`Empresa Avulsa ${values.nome} cadastrada com sucesso! Convite enviado.`);
+      showSuccess(`Empresa Avulsa ${values.nome} cadastrada com sucesso! Convite de acesso enviado para ${values.email}.`);
       onSaveComplete();
 
     } catch (error: any) {
