@@ -23,16 +23,18 @@ interface Pagamento {
   descricao: string;
 }
 
-interface ContaPagarPlano {
-  id: string;
+// Tipo para a próxima cobrança (agora é uma parcela)
+interface ProximaCobranca {
+  id: string; // ID da parcela
   data_vencimento: string;
   valor: number;
-  fornecedor: string;
+  numero_parcela: number;
 }
 
 // Interface para o registro de admin_contas_receber
 interface AdminContaReceber {
     id: string;
+    admin_id: string; // PROPRIEDADE ADICIONADA
     descricao: string;
     valor_total: number;
     data_vencimento: string;
@@ -48,9 +50,9 @@ const MinhaAssinatura: React.FC = () => {
   
   const [planoAtual, setPlanoAtual] = useState<Plano | null>(null);
   const [carregandoPlano, setCarregandoPlano] = useState(true);
-  const [proximaContaPagar, setProximaContaPagar] = useState<ContaPagarPlano | null>(null);
+  const [proximaCobranca, setProximaCobranca] = useState<ProximaCobranca | null>(null); // Alterado para ProximaCobranca
   const [historicoPagamentos, setHistoricoPagamentos] = useState<Pagamento[]>([]);
-  const [ultimoRegistroAssinatura, setUltimoRegistroAssinatura] = useState<AdminContaReceber | null>(null); // NOVO ESTADO
+  const [ultimoRegistroAssinatura, setUltimoRegistroAssinatura] = useState<AdminContaReceber | null>(null);
   const [isSubmitting] = useState(false);
 
   const isClient = role === 'Cliente';
@@ -86,7 +88,7 @@ const MinhaAssinatura: React.FC = () => {
         .from('admin_contas_receber')
         .select('*')
         .eq('cliente_id', clienteId)
-        .eq('origem', 'assinatura')
+        .eq('origem', 'assinatura_recorrente')
         .order('created_at', { ascending: false })
         .limit(1)
         .single();
@@ -125,7 +127,7 @@ const MinhaAssinatura: React.FC = () => {
         valor: Number(r.valor_recebido),
         status: 'pago' as const,
         descricao:
-          r.admin_parcelas_receber?.[0]?.admin_contas_receber?.descricao ||
+          r.admin_parcelas_receber?.admin_contas_receber?.descricao ||
           'Mensalidade Paga',
       }));
       setHistoricoPagamentos(historico);
@@ -133,30 +135,31 @@ const MinhaAssinatura: React.FC = () => {
       setHistoricoPagamentos([]);
     }
 
-    // 4️⃣ Buscar próxima conta a pagar (contas_pagar)
-    const { data: contasPagar, error: cpError } = await supabase
-      .from('contas_pagar')
-      .select('id, data_vencimento, valor, status, fornecedor')
-      .eq('empresa_id', clienteId) // Filtra pelo ID do cliente que deve pagar
-      .in('status', ['pendente', 'atrasado'])
+    // 4️⃣ Buscar próxima cobrança pendente (admin_parcelas_receber)
+    const { data: parcelasPendentes, error: parcelasError } = await supabase
+      .from('admin_parcelas_receber')
+      .select('id, data_vencimento, valor_parcela, numero_parcela')
+      .eq('admin_id', ultimoRegistroAssinatura?.admin_id) // Usa o admin_id do último registro sintético
+      .eq('conta_receber_id', ultimoRegistroAssinatura?.id) // Usa o ID da conta sintética
+      .in('status', ['aberta', 'reprogramada', 'parcial'])
       .order('data_vencimento', { ascending: true })
       .limit(1);
 
-    if (cpError) {
-      console.error('Erro ao buscar próxima conta a pagar:', cpError);
-    } else if (contasPagar && contasPagar.length > 0) {
-      setProximaContaPagar({
-        id: contasPagar[0].id,
-        data_vencimento: contasPagar[0].data_vencimento,
-        valor: Number(contasPagar[0].valor),
-        fornecedor: contasPagar[0].fornecedor || 'Mensalidade',
+    if (parcelasError) {
+      console.error('Erro ao buscar próxima cobrança:', parcelasError);
+    } else if (parcelasPendentes && parcelasPendentes.length > 0) {
+      setProximaCobranca({
+        id: parcelasPendentes[0].id,
+        data_vencimento: parcelasPendentes[0].data_vencimento,
+        valor: Number(parcelasPendentes[0].valor_parcela),
+        numero_parcela: parcelasPendentes[0].numero_parcela,
       });
     } else {
-      setProximaContaPagar(null);
+      setProximaCobranca(null);
     }
 
     setCarregandoPlano(false);
-  }, [isClient, clienteId, clienteProfile]);
+  }, [isClient, clienteId, clienteProfile, ultimoRegistroAssinatura?.admin_id, ultimoRegistroAssinatura?.id]);
 
   useEffect(() => {
     if (!carregando) {
@@ -165,12 +168,12 @@ const MinhaAssinatura: React.FC = () => {
   }, [carregando, fetchDadosAssinatura]);
   
   const handleNavigateToRenewal = () => {
-    if (!proximaContaPagar) {
+    if (!proximaCobranca) {
         showError('Nenhuma mensalidade pendente para pagar.');
         return;
     }
-    // Redireciona para a página de seleção de plano/pagamento, passando o ID da conta a pagar
-    navigate(`/renovacao?cp_id=${proximaContaPagar.id}`);
+    // Redireciona para a página de seleção de plano/pagamento, passando o ID da PARCELA
+    navigate(`/renovacao?cp_id=${proximaCobranca.id}`);
   };
 
   if (carregando || carregandoPlano || loadingStripe) {
@@ -203,8 +206,8 @@ const MinhaAssinatura: React.FC = () => {
   const isTrial = dataFimAcesso && isFuture(dataFimAcesso) && daysRemaining < 30;
   const statusAssinatura = isTrial ? 'Trial Ativo' : (dataFimAcesso && isFuture(dataFimAcesso) ? 'Ativa' : 'Expirada');
   
-  const dataProximaCobranca = proximaContaPagar?.data_vencimento 
-    ? format(parseISO(proximaContaPagar.data_vencimento), 'dd/MM/yyyy', { locale: ptBR }) 
+  const dataProximaCobranca = proximaCobranca?.data_vencimento 
+    ? format(parseISO(proximaCobranca.data_vencimento), 'dd/MM/yyyy', { locale: ptBR }) 
     : (dataFimAcesso ? format(dataFimAcesso, 'dd/MM/yyyy', { locale: ptBR }) : 'N/A');
     
   const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -219,7 +222,7 @@ const MinhaAssinatura: React.FC = () => {
       {ultimoRegistroAssinatura && (
           <Card className="mb-6 bg-secondary/50">
               <CardHeader className="p-3">
-                  <CardTitle className="text-sm font-semibold">Último Registro de Assinatura (admin_contas_receber)</CardTitle>
+                  <CardTitle className="text-sm font-semibold">Conta Sintética de Recorrência (admin_contas_receber)</CardTitle>
               </CardHeader>
               <CardContent className="p-3 pt-0 text-xs overflow-x-auto">
                   <pre className="whitespace-pre-wrap break-all">
@@ -267,22 +270,22 @@ const MinhaAssinatura: React.FC = () => {
           </CardContent>
         </Card>
 
-        {/* Próxima Mensalidade (Mantido na coluna 1 para layout) */}
+        {/* Próxima Mensalidade */}
         <Card className="lg:col-span-1">
           <CardHeader>
             <CardTitle className="text-xl flex items-center">
-              <ArrowDownCircle className="w-5 h-5 mr-2" /> Próxima Mensalidade
+              <ArrowDownCircle className="w-5 h-5 mr-2" /> Próxima Cobrança
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {proximaContaPagar ? (
+            {proximaCobranca ? (
               <div className="space-y-2">
-                <p className="text-3xl font-bold text-red-600">{formatCurrency(proximaContaPagar.valor)}</p>
+                <p className="text-3xl font-bold text-red-600">{formatCurrency(proximaCobranca.valor)}</p>
                 <p className="text-sm text-muted-foreground">
-                  Vencimento: {format(parseISO(proximaContaPagar.data_vencimento), 'dd/MM/yyyy', { locale: ptBR })}
+                  Vencimento: {format(parseISO(proximaCobranca.data_vencimento), 'dd/MM/yyyy', { locale: ptBR })}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  {proximaContaPagar.fornecedor}
+                  Parcela Nº {proximaCobranca.numero_parcela}
                 </p>
                 
                 <Button 
@@ -296,9 +299,9 @@ const MinhaAssinatura: React.FC = () => {
                     Pagar Mensalidade (Stripe)
                 </Button>
                 
-                <Link to="/contas-pagar">
+                <Link to="/contas-receber">
                     <Button variant="secondary" size="sm" className="mt-2 w-full">
-                        Ver Contas a Pagar
+                        Ver Lançamentos do Admin
                     </Button>
                 </Link>
               </div>
@@ -308,7 +311,7 @@ const MinhaAssinatura: React.FC = () => {
           </CardContent>
         </Card>
         
-        {/* Histórico de Pagamentos (Movido para col-span-2) */}
+        {/* Histórico de Pagamentos */}
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle className="text-xl">Histórico de Pagamentos</CardTitle>

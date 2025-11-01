@@ -109,11 +109,11 @@ const PaymentRenewalHandler = () => {
   
   const renewalStatus = searchParams.get('renewal');
   const sessionId = searchParams.get('session_id');
-  const contaPagarId = searchParams.get('cp_id');
+  const parcelaId = searchParams.get('cp_id'); // Agora é o ID da PARCELA
 
   // Lógica para renovar a assinatura
   React.useEffect(() => {
-    if (renewalStatus === 'success' && sessionId && contaPagarId && usuario && !carregando) {
+    if (renewalStatus === 'success' && sessionId && parcelaId && usuario && !carregando) {
       
       const processedKey = `processed_renewal_session_${sessionId}`;
       if (sessionStorage.getItem(processedKey) === 'true') {
@@ -154,7 +154,7 @@ const PaymentRenewalHandler = () => {
         const { error: rpcError } = await supabase.rpc('manual_subscription_renewal', {
             p_cliente_id: usuario.id,
             p_plano_id: clienteData.plano_id,
-            p_conta_pagar_id: contaPagarId,
+            p_conta_pagar_id: parcelaId, // Passa o ID da PARCELA
             p_valor_pago: valorPago, // Usa o valor pago do Stripe
             p_forma_pagamento: 'Stripe',
         });
@@ -175,7 +175,7 @@ const PaymentRenewalHandler = () => {
         showError('O pagamento foi cancelado.');
         navigate('/minha-assinatura', { replace: true });
     }
-  }, [renewalStatus, sessionId, contaPagarId, usuario, carregando, navigate, refetch]);
+  }, [renewalStatus, sessionId, parcelaId, usuario, carregando, navigate, refetch]);
 
   return null;
 };

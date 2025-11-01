@@ -22,9 +22,9 @@ const SelecaoPagamentoRenovacao: React.FC = () => {
   const [planos, setPlanos] = useState<Plano[]>([]);
   const [carregandoPlanos, setCarregandoPlanos] = useState(true);
   const [planoSelecionado, setPlanoSelecionado] = useState<Plano | null>(null);
-  const [valorContaPagar, setValorContaPagar] = useState<number | null>(null);
+  const [valorParcela, setValorParcela] = useState<number | null>(null); // Alterado para valorParcela
   
-  const contaPagarId = searchParams.get('cp_id');
+  const contaPagarId = searchParams.get('cp_id'); // Este é o ID da Parcela
   const clienteProfile = perfil as ClienteProfile;
   const planoAtualId = clienteProfile?.plano_id;
 
@@ -54,33 +54,34 @@ const SelecaoPagamentoRenovacao: React.FC = () => {
     setCarregandoPlanos(false);
   }, []);
   
-  const fetchContaPagarValor = useCallback(async (id: string) => {
+  // Busca o valor da parcela (que é a conta a pagar pendente)
+  const fetchParcelaValor = useCallback(async (id: string) => {
       const { data, error } = await supabase
-          .from('contas_pagar')
-          .select('valor')
+          .from('admin_parcelas_receber')
+          .select('valor_parcela')
           .eq('id', id)
           .single();
           
       if (error || !data) {
-          showError('Não foi possível carregar o valor da conta a pagar.');
+          showError('Não foi possível carregar o valor da parcela pendente.');
           navigate('/minha-assinatura', { replace: true });
           return null;
       }
-      setValorContaPagar(Number(data.valor));
-      return Number(data.valor);
+      setValorParcela(Number(data.valor_parcela));
+      return Number(data.valor_parcela);
   }, [navigate]);
 
   useEffect(() => {
     if (!carregando && role === 'Cliente' && contaPagarId) {
         buscarPlanos();
-        fetchContaPagarValor(contaPagarId);
+        fetchParcelaValor(contaPagarId);
     } else if (!carregando && role !== 'Cliente') {
         navigate('/painel', { replace: true });
     } else if (!contaPagarId) {
         showError('ID da conta a pagar não fornecido.');
         navigate('/minha-assinatura', { replace: true });
     }
-  }, [carregando, role, contaPagarId, buscarPlanos, navigate, fetchContaPagarValor]);
+  }, [carregando, role, contaPagarId, buscarPlanos, navigate, fetchParcelaValor]);
   
   const handleSelectPlan = (plano: Plano) => {
       setPlanoSelecionado(plano);
@@ -90,7 +91,7 @@ const SelecaoPagamentoRenovacao: React.FC = () => {
       setPlanoSelecionado(null);
   };
 
-  if (carregando || carregandoPlanos || !contaPagarId || valorContaPagar === null) {
+  if (carregando || carregandoPlanos || !contaPagarId || valorParcela === null) {
     return (
         <LayoutPrincipal>
             <div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
@@ -101,7 +102,8 @@ const SelecaoPagamentoRenovacao: React.FC = () => {
   if (planoSelecionado) {
       // Lógica Condicional do Valor:
       const isPayingCurrentPlan = planoSelecionado.id === planoAtualId;
-      const valorParaCheckout = isPayingCurrentPlan ? valorContaPagar : planoSelecionado.preco_mensal;
+      // Se for o plano atual, cobra o valor da parcela pendente. Se for upgrade/downgrade, cobra o preço mensal do novo plano.
+      const valorParaCheckout = isPayingCurrentPlan ? valorParcela : planoSelecionado.preco_mensal;
       
       // RETORNO ANTECIPADO: Renderiza APENAS o CheckoutPlano
       return (
@@ -113,7 +115,7 @@ const SelecaoPagamentoRenovacao: React.FC = () => {
                 <CheckoutPlano 
                     plano={planoSelecionado} 
                     isUpgrade={true} 
-                    contaPagarId={contaPagarId} 
+                    contaPagarId={contaPagarId} // ID da Parcela
                     valorCobrado={valorParaCheckout}
                 />
             </div>
@@ -133,7 +135,7 @@ const SelecaoPagamentoRenovacao: React.FC = () => {
             </p>
             <div className="p-4 bg-red-100 dark:bg-red-900/20 border border-red-500 rounded-md mb-8 max-w-md mx-auto">
                 <p className="font-semibold text-red-700 dark:text-red-300">
-                    Valor pendente na conta a pagar: {formatCurrency(valorContaPagar)}
+                    Valor pendente na parcela: {formatCurrency(valorParcela)}
                 </p>
                 <p className="text-sm text-red-600 dark:text-red-400 mt-1">
                     Se você mudar de plano, o valor cobrado agora será o preço mensal do novo plano.
