@@ -63,6 +63,7 @@ const SECOES_MENU: MenuSection[] = [
         perfis: ['Admin', 'Cliente', 'Usuario'],
         itens: [
             // Admin agora tem acesso a estes cadastros para gerenciar seus próprios dados
+            // Clientes está vinculado a 'contas_receber'
             { nome: 'Clientes', caminho: '/clientes', icone: Contact, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'contas_receber' },
             { nome: 'Plano de Contas', caminho: '/plano-contas', icone: BookOpen, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'plano_contas' },
             { nome: 'Importar', caminho: '/importar', icone: Upload, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'importar' },
@@ -130,6 +131,7 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick }) => {
             return false;
         }
         // Verifica a permissão do Cliente
+        // Se a permissão for explicitamente false ou não existir, bloqueia.
         return clientProfile.permissoes?.[item.permissionKey] === true;
     }
 
