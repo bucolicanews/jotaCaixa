@@ -90,8 +90,9 @@ const ContasReceber = () => {
     
     if (isAdmin) {
         // ADMIN: Busca nas tabelas admin_*
-        contasQuery = supabase.from('admin_contas_receber').select('*, clientes(*)').eq('admin_id', empresaId).order('data_vencimento', { ascending: true });
-        parcelasQuery = supabase.from('admin_parcelas_receber').select('*, admin_contas_receber(descricao, clientes(nome))').eq('admin_id', empresaId).order('data_vencimento', { ascending: true });
+        // Corrigido: Busca o cliente_id e depois o nome do cliente separadamente
+        contasQuery = supabase.from('admin_contas_receber').select('*, clientes(nome)').eq('admin_id', empresaId).order('data_vencimento', { ascending: true });
+        parcelasQuery = supabase.from('admin_parcelas_receber').select('*, admin_contas_receber(descricao, cliente_id)').eq('admin_id', empresaId).order('data_vencimento', { ascending: true });
     } else if (empresaId) {
         // Cliente/Usuário: Busca nas tabelas normais
         contasQuery = supabase.from('contas_receber').select('*, clientes(*)').eq('empresa_id', empresaId).order('data_vencimento', { ascending: true });
@@ -208,13 +209,22 @@ const ContasReceber = () => {
     }
 
     // 3. Filtro Geral (Texto)
-    const clienteNome = isAdmin && activeTab === 'meus_lancamentos' 
-        ? (p as any).admin_contas_receber?.clientes?.nome || 'N/A'
-        : (p as any).contas_receber?.clientes?.nome || 'N/A';
-        
-    const descricao = isAdmin && activeTab === 'meus_lancamentos' 
-        ? (p as any).admin_contas_receber?.descricao || 'N/A'
-        : (p as any).contas_receber?.descricao || 'N/A';
+    // Lógica de acesso ao nome do cliente e descrição
+    let clienteNome = 'N/A';
+    let descricao = 'N/A';
+    
+    if (isAdmin && activeTab === 'meus_lancamentos') {
+        // Admin: Acessa o cliente_id através de admin_contas_receber e precisa buscar o nome do cliente
+        const contaReceber = (p as any).admin_contas_receber;
+        descricao = contaReceber?.descricao || 'N/A';
+        // Nota: O nome do cliente não está disponível diretamente aqui, mas o ID está.
+        // Para fins de filtro, vamos usar apenas a descrição e o ID por enquanto.
+    } else {
+        // Cliente/Supervisão: Acessa o nome do cliente diretamente
+        const contaReceber = (p as any).contas_receber;
+        clienteNome = contaReceber?.clientes?.nome || 'N/A';
+        descricao = contaReceber?.descricao || 'N/A';
+    }
 
     return (
       clienteNome.toLowerCase().includes(termoBusca) ||
@@ -314,13 +324,14 @@ const ContasReceber = () => {
                     {parcelasFiltradas.length > 0 ? (
                       parcelasFiltradas.map((p) => {
                         // Determina o nome do cliente e a descrição com base na aba ativa (Admin vs Cliente)
-                        const clienteNome = isAdmin && activeTab === 'meus_lancamentos' 
-                            ? (p as any).admin_contas_receber?.clientes?.nome || 'N/A'
-                            : (p as any).contas_receber?.clientes?.nome || 'N/A';
+                        const isMyLaunch = isAdmin && activeTab === 'meus_lancamentos';
+                        
+                        const contaReceber = isMyLaunch 
+                            ? (p as any).admin_contas_receber 
+                            : (p as any).contas_receber;
                             
-                        const descricao = isAdmin && activeTab === 'meus_lancamentos' 
-                            ? (p as any).admin_contas_receber?.descricao || 'N/A'
-                            : (p as any).contas_receber?.descricao || 'N/A';
+                        const clienteNome = contaReceber?.clientes?.nome || 'N/A';
+                        const descricao = contaReceber?.descricao || 'N/A';
                             
                         const empresaIdDisplay = isAdmin && activeTab === 'supervisao' 
                             ? (p as any).contas_receber?.empresa_id || 'N/A'
