@@ -30,6 +30,17 @@ interface ContaPagarPlano {
   fornecedor: string;
 }
 
+// Interface para o registro de admin_contas_receber
+interface AdminContaReceber {
+    id: string;
+    descricao: string;
+    valor_total: number;
+    data_vencimento: string;
+    status: string;
+    origem: string;
+    created_at: string;
+}
+
 const MinhaAssinatura: React.FC = () => {
   const { perfil, role, carregando } = useSessao();
   const navigate = useNavigate();
@@ -39,6 +50,7 @@ const MinhaAssinatura: React.FC = () => {
   const [carregandoPlano, setCarregandoPlano] = useState(true);
   const [proximaContaPagar, setProximaContaPagar] = useState<ContaPagarPlano | null>(null);
   const [historicoPagamentos, setHistoricoPagamentos] = useState<Pagamento[]>([]);
+  const [ultimoRegistroAssinatura, setUltimoRegistroAssinatura] = useState<AdminContaReceber | null>(null); // NOVO ESTADO
   const [isSubmitting] = useState(false);
 
   const isClient = role === 'Cliente';
@@ -68,8 +80,27 @@ const MinhaAssinatura: React.FC = () => {
     }
 
     setPlanoAtual(planoData as Plano);
+    
+    // 2️⃣ Buscar o último registro de assinatura (admin_contas_receber)
+    const { data: ultimoRegistro, error: registroError } = await supabase
+        .from('admin_contas_receber')
+        .select('*')
+        .eq('cliente_id', clienteId)
+        .eq('origem', 'assinatura')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+        
+    if (registroError && registroError.code !== 'PGRST116') {
+        console.error('Erro ao buscar último registro de assinatura:', registroError);
+    } else if (ultimoRegistro) {
+        setUltimoRegistroAssinatura(ultimoRegistro as AdminContaReceber);
+    } else {
+        setUltimoRegistroAssinatura(null);
+    }
 
-    // 2️⃣ Buscar histórico de pagamentos (admin_recebimentos)
+
+    // 3️⃣ Buscar histórico de pagamentos (admin_recebimentos)
     const { data: recebimentos, error: crError } = await supabase
       .from('admin_recebimentos')
       .select(`
@@ -102,7 +133,7 @@ const MinhaAssinatura: React.FC = () => {
       setHistoricoPagamentos([]);
     }
 
-    // 3️⃣ Buscar próxima conta a pagar (contas_pagar)
+    // 4️⃣ Buscar próxima conta a pagar (contas_pagar)
     const { data: contasPagar, error: cpError } = await supabase
       .from('contas_pagar')
       .select('id, data_vencimento, valor, status, fornecedor')
@@ -183,15 +214,28 @@ const MinhaAssinatura: React.FC = () => {
       <h1 className="text-2xl md:text-3xl font-bold mb-6 flex items-center">
         <DollarSign className="w-6 h-6 mr-2" /> Minha Assinatura
       </h1>
+      
+      {/* NOVO: Exibição do Último Registro de Assinatura (para debug/visualização) */}
+      {ultimoRegistroAssinatura && (
+          <Card className="mb-6 bg-secondary/50">
+              <CardHeader className="p-3">
+                  <CardTitle className="text-sm font-semibold">Último Registro de Assinatura (admin_contas_receber)</CardTitle>
+              </CardHeader>
+              <CardContent className="p-3 pt-0 text-xs overflow-x-auto">
+                  <pre className="whitespace-pre-wrap break-all">
+                      {JSON.stringify(ultimoRegistroAssinatura, null, 2)}
+                  </pre>
+              </CardContent>
+          </Card>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
         {/* Detalhes do Plano */}
-        <Card className="lg:col-span-3"> {/* Ajustado para col-span-3 */}
+        <Card className="lg:col-span-3">
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-xl flex items-center">
               <Package className="w-5 h-5 mr-2" /> Plano Atual
             </CardTitle>
-            {/* Botão 'Mudar Plano' removido */}
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex justify-between items-center border-b pb-2">
