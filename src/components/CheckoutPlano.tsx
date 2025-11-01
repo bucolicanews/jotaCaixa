@@ -15,10 +15,11 @@ import { useSessao } from '@/hooks/use-sessao';
 interface CheckoutPlanoProps {
   plano: Plano;
   isUpgrade?: boolean; // Novo prop para diferenciar fluxo de upgrade
-  contaPagarId?: string; // NOVO: ID da conta a pagar se for renovação
+  contaPagarId?: string; // ID da conta a pagar se for renovação
+  valorCobrado?: number; // NOVO: Valor real a ser cobrado neste ciclo
 }
 
-const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano, isUpgrade = false, contaPagarId }) => {
+const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano, isUpgrade = false, contaPagarId, valorCobrado }) => {
   const [email, setEmail] = useState('');
   const [nomeEmpresa, setNomeEmpresa] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -104,7 +105,7 @@ const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano, isUpgrade = false,
                 .from('tbl_clientes')
                 .update({ 
                     plano_id: plano.id,
-                    permissoes: plano.permissoes, 
+                    permissoes: plano.permissoes, // ATUALIZA AS PERMISSÕES IMEDIATAMENTE
                 })
                 .eq('id', finalClienteId);
                 
@@ -154,6 +155,8 @@ const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano, isUpgrade = false,
         setIsSubmitting(false);
     }
   };
+  
+  const valorParaExibir = contaPagarId && valorCobrado !== undefined ? valorCobrado : plano.preco_mensal;
 
   if (loadingStripe || carregandoSessao) {
       return (
@@ -168,8 +171,8 @@ const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano, isUpgrade = false,
   if (isUpgrade) {
       const title = contaPagarId ? `Pagar Mensalidade: ${plano.nome}` : `Atualizar para ${plano.nome}`;
       const description = contaPagarId 
-        ? `Você está pagando o plano ${plano.nome}. O valor de R$ ${plano.preco_mensal.toFixed(2)} será cobrado.`
-        : `Confirme a atualização do seu plano. O valor de R$ ${plano.preco_mensal.toFixed(2)} será cobrado mensalmente.`;
+        ? `Você está pagando o valor pendente de R$ ${valorParaExibir.toFixed(2)} para o plano ${plano.nome}.`
+        : `Confirme a atualização do seu plano. O valor de R$ ${valorParaExibir.toFixed(2)} será cobrado mensalmente.`;
         
       return (
         <Card className="w-full max-w-md mx-auto">
@@ -180,7 +183,7 @@ const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano, isUpgrade = false,
             <CardContent className="space-y-4">
                 <Button onClick={() => handleCheckout(usuario?.email, usuario?.id)} className="w-full" disabled={isSubmitting}>
                     {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CreditCard className="mr-2 h-4 w-4" />}
-                    Pagar Agora (R$ {plano.preco_mensal.toFixed(2)})
+                    Pagar Agora (R$ {valorParaExibir.toFixed(2)})
                 </Button>
             </CardContent>
         </Card>

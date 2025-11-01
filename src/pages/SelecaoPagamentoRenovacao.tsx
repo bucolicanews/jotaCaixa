@@ -12,7 +12,7 @@ import CheckoutPlano from '@/components/CheckoutPlano';
 import { useSessao } from '@/hooks/use-sessao';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ClienteProfile } from '@/types/usuario';
-import { Badge } from '@/components/ui/badge'; // Adicionado Badge
+import { Badge } from '@/components/ui/badge';
 
 const SelecaoPagamentoRenovacao: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -22,6 +22,7 @@ const SelecaoPagamentoRenovacao: React.FC = () => {
   const [planos, setPlanos] = useState<Plano[]>([]);
   const [carregandoPlanos, setCarregandoPlanos] = useState(true);
   const [planoSelecionado, setPlanoSelecionado] = useState<Plano | null>(null);
+  const [valorContaPagar, setValorContaPagar] = useState<number | null>(null); // NOVO ESTADO
   
   const contaPagarId = searchParams.get('cp_id');
   const clienteProfile = perfil as ClienteProfile;
@@ -52,17 +53,34 @@ const SelecaoPagamentoRenovacao: React.FC = () => {
     }
     setCarregandoPlanos(false);
   }, []);
+  
+  const fetchContaPagarValor = useCallback(async (id: string) => {
+      const { data, error } = await supabase
+          .from('contas_pagar')
+          .select('valor')
+          .eq('id', id)
+          .single();
+          
+      if (error || !data) {
+          showError('Não foi possível carregar o valor da conta a pagar.');
+          navigate('/minha-assinatura', { replace: true });
+          return null;
+      }
+      setValorContaPagar(Number(data.valor));
+      return Number(data.valor);
+  }, [navigate]);
 
   useEffect(() => {
     if (!carregando && role === 'Cliente' && contaPagarId) {
         buscarPlanos();
+        fetchContaPagarValor(contaPagarId);
     } else if (!carregando && role !== 'Cliente') {
         navigate('/painel', { replace: true });
     } else if (!contaPagarId) {
         showError('ID da conta a pagar não fornecido.');
         navigate('/minha-assinatura', { replace: true });
     }
-  }, [carregando, role, contaPagarId, buscarPlanos, navigate]);
+  }, [carregando, role, contaPagarId, buscarPlanos, navigate, fetchContaPagarValor]);
   
   const handleSelectPlan = (plano: Plano) => {
       setPlanoSelecionado(plano);
@@ -72,7 +90,7 @@ const SelecaoPagamentoRenovacao: React.FC = () => {
       setPlanoSelecionado(null);
   };
 
-  if (carregando || carregandoPlanos || !contaPagarId) {
+  if (carregando || carregandoPlanos || !contaPagarId || valorContaPagar === null) {
     return (
         <LayoutPrincipal>
             <div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
@@ -81,7 +99,7 @@ const SelecaoPagamentoRenovacao: React.FC = () => {
   }
   
   if (planoSelecionado) {
-      // Passamos o ID da conta a pagar para o CheckoutPlano, que o repassará para a Edge Function
+      // Passamos o ID da conta a pagar E o valor da conta a pagar para o CheckoutPlano
       return (
         <LayoutPrincipal>
             <div className="max-w-xl mx-auto">
@@ -91,7 +109,8 @@ const SelecaoPagamentoRenovacao: React.FC = () => {
                 <CheckoutPlano 
                     plano={planoSelecionado} 
                     isUpgrade={true} 
-                    contaPagarId={contaPagarId} // Passa o ID da conta a pagar
+                    contaPagarId={contaPagarId} 
+                    valorCobrado={valorContaPagar} // NOVO PROP
                 />
             </div>
         </LayoutPrincipal>
@@ -104,9 +123,17 @@ const SelecaoPagamentoRenovacao: React.FC = () => {
             <h1 className="text-3xl md:text-4xl font-bold mb-4 flex items-center justify-center">
                 <DollarSign className="w-8 h-8 mr-2" /> Renovar Assinatura
             </h1>
-            <p className="text-lg text-muted-foreground mb-10">
+            <p className="text-lg text-muted-foreground mb-4">
                 Selecione o plano que deseja pagar para o próximo ciclo.
             </p>
+            <div className="p-4 bg-red-100 dark:bg-red-900/20 border border-red-500 rounded-md mb-8 max-w-md mx-auto">
+                <p className="font-semibold text-red-700 dark:text-red-300">
+                    Valor a ser cobrado neste ciclo: {formatCurrency(valorContaPagar)}
+                </p>
+                <p className="text-sm text-red-600 dark:text-red-400 mt-1">
+                    O valor da próxima mensalidade será ajustado conforme o plano selecionado.
+                </p>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {planos.map((plano) => {
                     const isCurrentPlan = plano.id === planoAtualId;
