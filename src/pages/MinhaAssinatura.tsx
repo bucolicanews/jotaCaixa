@@ -99,9 +99,15 @@ const MinhaAssinatura: React.FC = () => {
         console.error('Erro ao buscar último registro de assinatura:', registroError);
     } else if (ultimoRegistro) {
         setUltimoRegistroAssinatura(ultimoRegistro as AdminContaReceber);
+        console.log("LOG: Ultimo Registro Assinatura encontrado:", ultimoRegistro.id);
     } else {
         setUltimoRegistroAssinatura(null);
+        console.log("LOG: Nenhum Ultimo Registro Assinatura encontrado.");
     }
+    
+    // Usamos o ID do registro sintético encontrado (ou null) para buscar as parcelas
+    const contaRecorrenciaId = ultimoRegistro?.id;
+    const adminId = ultimoRegistro?.admin_id;
 
 
     // 3️⃣ Buscar histórico de pagamentos (admin_recebimentos)
@@ -138,30 +144,34 @@ const MinhaAssinatura: React.FC = () => {
     }
 
     // 4️⃣ Buscar próxima cobrança pendente (admin_parcelas_receber)
-    const { data: parcelasPendentes, error: parcelasError } = await supabase
-      .from('admin_parcelas_receber')
-      .select('id, data_vencimento, valor_parcela, numero_parcela')
-      .eq('admin_id', ultimoRegistro?.admin_id) // Usa o admin_id do último registro sintético
-      .eq('conta_receber_id', ultimoRegistro?.id) // Usa o ID da conta sintética
-      .in('status', ['aberta', 'reprogramada', 'parcial'])
-      .order('data_vencimento', { ascending: true })
-      .limit(1);
-
-    if (parcelasError) {
-      console.error('Erro ao buscar próxima cobrança:', parcelasError);
-    } else if (parcelasPendentes && parcelasPendentes.length > 0) {
-      setProximaCobranca({
-        id: parcelasPendentes[0].id,
-        data_vencimento: parcelasPendentes[0].data_vencimento,
-        valor: Number(parcelasPendentes[0].valor_parcela),
-        numero_parcela: parcelasPendentes[0].numero_parcela,
-      });
+    if (contaRecorrenciaId && adminId) {
+        const { data: parcelasPendentes, error: parcelasError } = await supabase
+          .from('admin_parcelas_receber')
+          .select('id, data_vencimento, valor_parcela, numero_parcela')
+          .eq('admin_id', adminId) 
+          .eq('conta_receber_id', contaRecorrenciaId) 
+          .in('status', ['aberta', 'reprogramada', 'parcial'])
+          .order('data_vencimento', { ascending: true })
+          .limit(1);
+    
+        if (parcelasError) {
+          console.error('Erro ao buscar próxima cobrança:', parcelasError);
+        } else if (parcelasPendentes && parcelasPendentes.length > 0) {
+          setProximaCobranca({
+            id: parcelasPendentes[0].id,
+            data_vencimento: parcelasPendentes[0].data_vencimento,
+            valor: Number(parcelasPendentes[0].valor_parcela),
+            numero_parcela: parcelasPendentes[0].numero_parcela,
+          });
+        } else {
+          setProximaCobranca(null);
+        }
     } else {
-      setProximaCobranca(null);
+        setProximaCobranca(null);
     }
 
     setCarregandoPlano(false);
-  }, [isClient, clienteId, clienteProfile, ultimoRegistroAssinatura?.admin_id, ultimoRegistroAssinatura?.id]);
+  }, [isClient, clienteId, clienteProfile]); // Removendo dependências que causavam loop
 
   useEffect(() => {
     if (!carregando) {
