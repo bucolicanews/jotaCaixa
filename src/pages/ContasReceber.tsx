@@ -90,8 +90,9 @@ const ContasReceber = () => {
     
     if (isAdmin) {
         // ADMIN: Busca nas tabelas admin_*
-        // Corrigido: Busca o cliente_id e depois o nome do cliente separadamente
-        contasQuery = supabase.from('admin_contas_receber').select('*, clientes(nome)').eq('admin_id', empresaId).order('data_vencimento', { ascending: true });
+        // Sintético: Busca todas as colunas, incluindo cliente_id, mas sem join aninhado
+        contasQuery = supabase.from('admin_contas_receber').select('*').eq('admin_id', empresaId).order('data_vencimento', { ascending: true });
+        // Analítico: Busca a descrição e o cliente_id da conta sintética
         parcelasQuery = supabase.from('admin_parcelas_receber').select('*, admin_contas_receber(descricao, cliente_id)').eq('admin_id', empresaId).order('data_vencimento', { ascending: true });
     } else if (empresaId) {
         // Cliente/Usuário: Busca nas tabelas normais
@@ -214,13 +215,13 @@ const ContasReceber = () => {
     let descricao = 'N/A';
     
     if (isAdmin && activeTab === 'meus_lancamentos') {
-        // Admin: Acessa o cliente_id através de admin_contas_receber e precisa buscar o nome do cliente
+        // Admin: Acessa o cliente_id e a descrição da conta sintética
         const contaReceber = (p as any).admin_contas_receber;
         descricao = contaReceber?.descricao || 'N/A';
-        // Nota: O nome do cliente não está disponível diretamente aqui, mas o ID está.
-        // Para fins de filtro, vamos usar apenas a descrição e o ID por enquanto.
+        // O nome do cliente não está disponível diretamente, mas o ID está.
+        // Para fins de filtro, usamos apenas a descrição.
     } else {
-        // Cliente/Supervisão: Acessa o nome do cliente diretamente
+        // Cliente/Supervisão: Acessa o nome do cliente e descrição
         const contaReceber = (p as any).contas_receber;
         clienteNome = contaReceber?.clientes?.nome || 'N/A';
         descricao = contaReceber?.descricao || 'N/A';
@@ -239,9 +240,23 @@ const ContasReceber = () => {
   
   const contasFiltradas = contas.filter(c => {
     const termoBusca = filtroGeral.toLowerCase();
+    
+    // Lógica de acesso ao nome do cliente e descrição
+    let clienteNome = 'N/A';
+    let descricao = c.descricao;
+    
+    if (isAdmin && activeTab === 'meus_lancamentos') {
+        // Admin: Acessa o cliente_id e a descrição da conta sintética
+        // O nome do cliente não está disponível diretamente, mas o ID está.
+        // Para fins de filtro, usamos apenas a descrição.
+    } else {
+        // Cliente/Supervisão: Acessa o nome do cliente diretamente
+        clienteNome = c.clientes?.nome || 'N/A';
+    }
+    
     return (
-      (c.clientes?.nome?.toLowerCase() || '').includes(termoBusca) ||
-      c.descricao.toLowerCase().includes(termoBusca) ||
+      clienteNome.toLowerCase().includes(termoBusca) ||
+      descricao.toLowerCase().includes(termoBusca) ||
       formatCurrency(c.valor_total).includes(termoBusca) ||
       c.status.toLowerCase().includes(termoBusca)
     );
@@ -330,7 +345,8 @@ const ContasReceber = () => {
                             ? (p as any).admin_contas_receber 
                             : (p as any).contas_receber;
                             
-                        const clienteNome = contaReceber?.clientes?.nome || 'N/A';
+                        // Se for Admin/Meus Lançamentos, o nome do cliente não está no join, usamos N/A
+                        const clienteNome = isMyLaunch ? 'N/A' : contaReceber?.clientes?.nome || 'N/A';
                         const descricao = contaReceber?.descricao || 'N/A';
                             
                         const empresaIdDisplay = isAdmin && activeTab === 'supervisao' 
@@ -397,6 +413,17 @@ const ContasReceber = () => {
 
                       // Se estiver em modo supervisão, o Admin não pode editar/deletar
                       const canEditOrDelete = !isAdmin || activeTab === 'meus_lancamentos';
+                      
+                      // Lógica de exibição do nome do cliente
+                      let clienteNomeDisplay = 'N/A';
+                      if (isAdmin && activeTab === 'meus_lancamentos') {
+                          // Se for Admin/Meus Lançamentos, o nome do cliente não está no join, usamos o cliente_id
+                          clienteNomeDisplay = conta.cliente_id || 'N/A';
+                      } else {
+                          // Cliente/Supervisão: Acessa o nome do cliente diretamente
+                          clienteNomeDisplay = conta.clientes?.nome || 'N/A';
+                      }
+
 
                       return (
                         <TableRow key={conta.id}>
@@ -418,7 +445,7 @@ const ContasReceber = () => {
                           {isAdmin && activeTab === 'supervisao' && <TableCell className="text-sm text-muted-foreground">{(conta as any).empresa_id || 'Admin'}</TableCell>}
                           
                           <TableCell className="font-medium">
-                            {conta.clientes?.nome || 'N/A'}
+                            {clienteNomeDisplay}
                             <span className={cn("block text-xs font-normal sm:hidden", statusColorClass)}>
                               ({conta.status})
                             </span>
