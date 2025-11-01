@@ -100,11 +100,10 @@ const SelecaoPagamentoRenovacao: React.FC = () => {
   
   if (planoSelecionado) {
       // Lógica Condicional do Valor:
-      // Se o plano selecionado for o plano atual, cobra o valor pendente (valorContaPagar).
-      // Se for um plano diferente, cobra o preço mensal do NOVO plano.
       const isPayingCurrentPlan = planoSelecionado.id === planoAtualId;
       const valorParaCheckout = isPayingCurrentPlan ? valorContaPagar : planoSelecionado.preco_mensal;
       
+      // RETORNO ANTECIPADO: Renderiza APENAS o CheckoutPlano
       return (
         <LayoutPrincipal>
             <div className="max-w-xl mx-auto">
