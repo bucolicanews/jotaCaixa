@@ -177,7 +177,7 @@ const ClientesPage = () => {
   const handleEditEmpresaSistema = (empresa: EmpresaSistema) => {
     setPerfilParaEditar(empresa);
     setClienteSelecionado(null);
-    setDialogAberto(true);
+    setDialogAberto(true); // ABRIR O DIALOG AQUI
   };
 
   const handleDeleteCR = async (id: string) => {
