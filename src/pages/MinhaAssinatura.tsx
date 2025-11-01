@@ -66,7 +66,6 @@ const MinhaAssinatura: React.FC = () => {
     setPlanoAtual(planoData as Plano);
 
     // 2️⃣ Buscar histórico de pagamentos (admin_recebimentos)
-    // O cliente paga ao Admin, então o registro está na tabela de recebimentos do Admin.
     const { data: recebimentos, error: crError } = await supabase
       .from('admin_recebimentos')
       .select(`
@@ -85,13 +84,14 @@ const MinhaAssinatura: React.FC = () => {
       console.error('Erro ao buscar histórico de recebimentos:', crError);
       setHistoricoPagamentos([]);
     } else if (recebimentos && recebimentos.length > 0) {
-      const historico = recebimentos.map((r) => ({
+      const historico = (recebimentos as any[]).map((r) => ({ // Usando any[] para tipagem segura
         id: r.id,
         data: r.data_recebimento!,
         valor: Number(r.valor_recebido),
         status: 'pago' as const,
+        // CORREÇÃO: Acessa o primeiro elemento do array admin_contas_receber
         descricao:
-          r.admin_parcelas_receber?.admin_contas_receber?.descricao ||
+          r.admin_parcelas_receber?.[0]?.admin_contas_receber?.descricao ||
           'Mensalidade Paga',
       }));
       setHistoricoPagamentos(historico);
@@ -100,7 +100,6 @@ const MinhaAssinatura: React.FC = () => {
     }
 
     // 3️⃣ Buscar próxima conta a pagar (contas_pagar)
-    // O cliente tem uma conta a pagar para o Admin, registrada em 'contas_pagar'
     const { data: contasPagar, error: cpError } = await supabase
       .from('contas_pagar')
       .select('id, data_vencimento, valor, status, fornecedor')
