@@ -51,9 +51,15 @@ interface FormContasReceberProps {
   onSaveComplete: () => void;
 }
 
+interface ClienteCombinado {
+  id: string;
+  nome: string;
+  tipo: 'CR' | 'Sistema';
+}
+
 const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onSaveComplete }) => {
   const { perfil, role } = useSessao();
-  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [clientes, setClientes] = useState<ClienteCombinado[]>([]);
   const [loadingClientes, setLoadingClientes] = useState(true);
   const isEditing = !!contaInicial;
 
@@ -72,20 +78,48 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
       }
       setLoadingClientes(true);
       
-      let query = supabase
-        .from('clientes')
-        .select('*')
-        .order('nome');
-        
+      let combinedClients: ClienteCombinado[] = [];
+      
+      // 1. Buscar Clientes de Contas a Receber (clientes)
+      let queryCR = supabase.from('clientes').select('id, nome').order('nome');
+      
       // Se não for Admin, filtra pelo ID da empresa/proprietário
       if (role !== 'Admin') {
-        query = query.eq('empresa_id', ownerId);
+        queryCR = queryCR.eq('empresa_id', ownerId);
       }
-        
-      const { data, error } = await query;
-        
-      if (error) showError('Erro ao carregar clientes.');
-      else setClientes(data as Cliente[]);
+      const { data: dataCR, error: errorCR } = await queryCR;
+      
+      if (errorCR) {
+          showError('Erro ao carregar clientes CR.');
+      } else {
+          combinedClients.push(...(dataCR as Cliente[]).map(c => ({ id: c.id, nome: c.nome, tipo: 'CR' as const })));
+      }
+      
+      // 2. Se for Admin, buscar Empresas do Sistema (tbl_clientes)
+      if (role === 'Admin') {
+          const { data: dataSistema, error: errorSistema } = await supabase
+              .from('tbl_clientes')
+              .select('id, nome')
+              .eq('aprovado', true)
+              .order('nome');
+              
+          if (errorSistema) {
+              showError('Erro ao carregar empresas do sistema.');
+          } else {
+              // Adiciona empresas do sistema, garantindo que não haja duplicatas de ID
+              const sistemaClients = (dataSistema as any[]).map(c => ({ id: c.id, nome: c.nome, tipo: 'Sistema' as const }));
+              
+              // Filtra IDs duplicados (se um cliente CR tiver o mesmo ID de uma empresa do sistema, o CR prevalece)
+              const existingIds = new Set(combinedClients.map(c => c.id));
+              const uniqueSistemaClients = sistemaClients.filter(c => !existingIds.has(c.id));
+              
+              combinedClients.push(...uniqueSistemaClients);
+          }
+      }
+      
+      // 3. Ordenar e definir estado
+      combinedClients.sort((a, b) => a.nome.localeCompare(b.nome));
+      setClientes(combinedClients);
       setLoadingClientes(false);
     };
     fetchClientes();
@@ -176,7 +210,13 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
         <FormField control={form.control} name="cliente_id" render={({ field }) => (
-          <FormItem><FormLabel>1. Cliente</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value} disabled={loadingClientes || isEditing}><FormControl><SelectTrigger><SelectValue placeholder={loadingClientes ? "Carregando..." : "Selecione um cliente"} /></SelectTrigger></FormControl><SelectContent>{clientes.map((c) => (<SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>
+          <FormItem><FormLabel>1. Cliente</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value} disabled={loadingClientes || isEditing}><FormControl><SelectTrigger><SelectValue placeholder={loadingClientes ? "Carregando..." : "Selecione um cliente"} /></SelectTrigger></FormControl><SelectContent>
+            {clientes.map((c) => (
+              <SelectItem key={c.id} value={c.id}>
+                {c.nome} {c.tipo === 'Sistema' && <span className="text-xs text-muted-foreground">(Empresa do Sistema)</span>}
+              </SelectItem>
+            ))}
+          </SelectContent></Select><FormMessage /></FormItem>
         )} />
         <Separator />
         <FormField control={form.control} name="descricao" render={({ field }) => (
