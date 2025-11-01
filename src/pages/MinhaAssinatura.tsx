@@ -65,13 +65,12 @@ const MinhaAssinatura: React.FC = () => {
         setPlanoAtual(planoData as Plano);
         
         // 2. Buscar Histórico de Pagamentos (CR do Admin contra este Cliente)
-        // Buscamos as parcelas pagas onde o cliente é o pagador (cliente_id) e a conta é de assinatura.
+        // Agora buscamos na nova tabela admin_parcelas_receber, filtrando pelo cliente_id
         const { data: parcelasPagas, error: crError } = await supabase
-            .from('parcelas_contas_receber')
-            .select('id, data_pagamento, valor_pago, status, contas_receber(descricao, cliente_id, origem)')
-            .eq('contas_receber.cliente_id', clienteId)
+            .from('admin_parcelas_receber')
+            .select('id, data_pagamento, valor_pago, status, admin_contas_receber(descricao, cliente_id, origem)')
+            .eq('admin_contas_receber.cliente_id', clienteId)
             .eq('status', 'paga')
-            .eq('contas_receber.origem', 'assinatura')
             .order('data_pagamento', { ascending: false });
             
         if (crError) {
@@ -83,12 +82,13 @@ const MinhaAssinatura: React.FC = () => {
                 data: p.data_pagamento!,
                 valor: p.valor_pago,
                 status: 'pago' as 'pago',
-                descricao: p.contas_receber?.descricao || 'Mensalidade Paga',
+                descricao: p.admin_contas_receber?.descricao || 'Mensalidade Paga',
             }));
             setHistoricoPagamentos(historico);
         }
 
         // 3. Buscar a próxima Conta a Pagar (CP) do Cliente
+        // Esta continua na tabela contas_pagar do cliente (empresa_id = clienteId)
         const { data: contasPagar, error: cpError } = await supabase
             .from('contas_pagar')
             .select('id, data_vencimento, valor, status, fornecedor')
@@ -128,8 +128,9 @@ const MinhaAssinatura: React.FC = () => {
     
     const dataFimAcesso = clienteProfile.data_fim_acesso ? parseISO(clienteProfile.data_fim_acesso) : null;
     
-    // Lógica para determinar se é Trial: Se a data de fim de acesso for futura E a diferença for menor que 1 ano (ou seja, foi definida recentemente pelo trial)
-    const isTrial = dataFimAcesso && isFuture(dataFimAcesso) && planoAtual.dias_trial > 0 && dataFimAcesso.getFullYear() < new Date().getFullYear() + 1;
+    // Lógica para determinar se é Trial: Se a data de fim de acesso for futura E a diferença for menor que 30 dias
+    const daysRemaining = dataFimAcesso ? differenceInDays(dataFimAcesso, new Date()) : 0;
+    const isTrial = dataFimAcesso && isFuture(dataFimAcesso) && daysRemaining < 30;
     
     const statusAssinatura = isTrial ? 'Trial Ativo' : (dataFimAcesso && isFuture(dataFimAcesso) ? 'Ativa' : 'Expirada');
     const dataExpiracaoFormatada = dataFimAcesso ? format(dataFimAcesso, 'dd/MM/yyyy', { locale: ptBR }) : 'N/A';
