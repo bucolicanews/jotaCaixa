@@ -123,8 +123,12 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
   const [tagRefreshKey, setTagRefreshKey] = useState(0);
 
 
-  const parseDate = (dateString: string | null | undefined) => 
-    dateString ? new Date(dateString + 'T00:00:00') : null;
+  // CORREÇÃO: Retorna Date ou undefined, nunca null, para evitar RangeError no format
+  const parseDate = (dateString: string | null | undefined): Date | undefined => {
+    if (!dateString) return undefined;
+    const date = new Date(dateString + 'T00:00:00');
+    return isNaN(date.getTime()) ? undefined : date;
+  };
 
   const defaultPermissoes = PERMISSOES_DISPONIVEIS.reduce((acc: Record<string, boolean>, p: Permissao) => {
     if (profileToEdit && 'permissoes' in profileToEdit && (profileToEdit as any).permissoes) {
@@ -191,7 +195,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
       ja_admitido_anteriormente: (profileToEdit as UsuarioProfile)?.ja_admitido_anteriormente || false,
       
       // NOVO CAMPO DE ACESSO
-      data_fim_acesso: isClientBeingManagedByAdmin ? parseDate((profileToEdit as ClienteProfile)?.data_fim_acesso) : null,
+      data_fim_acesso: isClientBeingManagedByAdmin ? parseDate((profileToEdit as ClienteProfile)?.data_fim_acesso) : undefined,
     },
   });
   
@@ -431,6 +435,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                   )}
                   disabled={disabled}
                 >
+                  {/* CORREÇÃO: Verifica se field.value existe antes de formatar */}
                   {field.value ? format(field.value as Date, "PPP", { locale: ptBR }) : <span>Selecione a data</span>}
                   <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                 </Button>
@@ -525,7 +530,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
             clientUpdatePayload.permissoes = values.permissoes;
             
             // NEW: Data Fim Acesso
-            clientUpdatePayload.data_fim_acesso = values.data_fim_acesso ? values.data_fim_acesso.toISOString() : null;
+            clientUpdatePayload.data_fim_acesso = values.data_fim_acesso ? format(values.data_fim_acesso, 'yyyy-MM-dd') + 'T12:00:00Z' : null;
         }
         
         if (isNewClient) {
