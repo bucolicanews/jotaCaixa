@@ -34,7 +34,7 @@ import { supabase } from "./integrations/supabase/client";
 import { showSuccess, showError } from "./utils/toast";
 import { useSessao } from "./hooks/use-sessao";
 import MinhaAssinatura from "./pages/MinhaAssinatura";
-import SelecaoPagamentoRenovacao from "./pages/SelecaoPagamentoRenovacao"; // NOVA IMPORTAÇÃO
+import SelecaoPagamentoRenovacao from "./pages/SelecaoPagamentoRenovacao";
 
 const queryClient = new QueryClient();
 
@@ -124,7 +124,20 @@ const PaymentRenewalHandler = () => {
       const renewSubscription = async () => {
         sessionStorage.setItem(processedKey, 'true'); // Marca como processado
         
-        // 1. Buscar dados necessários para o RPC
+        // 1. Buscar dados da sessão do Stripe para obter o valor pago
+        const { data: sessionData, error: sessionError } = await supabase.functions.invoke('get-stripe-session', {
+            body: { sessionId },
+        });
+        
+        if (sessionError || !sessionData?.metadata?.valorCobrado) {
+            showError('Falha ao obter detalhes da sessão de pagamento.');
+            navigate('/minha-assinatura', { replace: true });
+            return;
+        }
+        
+        const valorPago = parseFloat(sessionData.metadata.valorCobrado);
+        
+        // 2. Buscar o plano atual do cliente (que foi atualizado no CheckoutPlano)
         const { data: clienteData, error: clienteError } = await supabase
             .from('tbl_clientes')
             .select('plano_id')
@@ -137,27 +150,13 @@ const PaymentRenewalHandler = () => {
             return;
         }
         
-        // 2. Buscar o valor da conta a pagar (para passar ao RPC)
-        const { data: cpData, error: cpError } = await supabase
-            .from('contas_pagar')
-            .select('valor')
-            .eq('id', contaPagarId)
-            .single();
-            
-        if (cpError || !cpData?.valor) {
-            showError('Falha ao encontrar o valor da conta a pagar.');
-            navigate('/minha-assinatura', { replace: true });
-            return;
-        }
-        
-        // 3. Chamar a função RPC para renovar a assinatura manualmente (simulando o webhook)
-        // O plano_id usado aqui é o plano ATUALMENTE salvo no perfil do cliente (que foi atualizado no CheckoutPlano)
+        // 3. Chamar a função RPC para renovar a assinatura manualmente
         const { error: rpcError } = await supabase.rpc('manual_subscription_renewal', {
             p_cliente_id: usuario.id,
             p_plano_id: clienteData.plano_id,
             p_conta_pagar_id: contaPagarId,
-            p_valor_pago: cpData.valor,
-            p_forma_pagamento: 'Stripe', // Forma de pagamento fixa para checkout
+            p_valor_pago: valorPago, // Usa o valor pago do Stripe
+            p_forma_pagamento: 'Stripe',
         });
 
         if (rpcError) {
@@ -226,7 +225,7 @@ const App = () => (
             <Route path="/contratos/novo" element={<NovoContrato />} />
             <Route path="/contratos/preencher/:modeloId" element={<PreencherContrato />} />
             <Route path="/minha-assinatura" element={<MinhaAssinatura />} />
-            <Route path="/renovacao" element={<SelecaoPagamentoRenovacao />} /> {/* NOVA ROTA */}
+            <Route path="/renovacao" element={<SelecaoPagamentoRenovacao />} />
 
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />

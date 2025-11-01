@@ -22,7 +22,7 @@ const SelecaoPagamentoRenovacao: React.FC = () => {
   const [planos, setPlanos] = useState<Plano[]>([]);
   const [carregandoPlanos, setCarregandoPlanos] = useState(true);
   const [planoSelecionado, setPlanoSelecionado] = useState<Plano | null>(null);
-  const [valorContaPagar, setValorContaPagar] = useState<number | null>(null); // NOVO ESTADO
+  const [valorContaPagar, setValorContaPagar] = useState<number | null>(null);
   
   const contaPagarId = searchParams.get('cp_id');
   const clienteProfile = perfil as ClienteProfile;
@@ -99,7 +99,12 @@ const SelecaoPagamentoRenovacao: React.FC = () => {
   }
   
   if (planoSelecionado) {
-      // Passamos o ID da conta a pagar E o valor da conta a pagar para o CheckoutPlano
+      // Lógica Condicional do Valor:
+      // Se o plano selecionado for o plano atual, cobra o valor pendente (valorContaPagar).
+      // Se for um plano diferente, cobra o preço mensal do NOVO plano.
+      const isPayingCurrentPlan = planoSelecionado.id === planoAtualId;
+      const valorParaCheckout = isPayingCurrentPlan ? valorContaPagar : planoSelecionado.preco_mensal;
+      
       return (
         <LayoutPrincipal>
             <div className="max-w-xl mx-auto">
@@ -110,7 +115,7 @@ const SelecaoPagamentoRenovacao: React.FC = () => {
                     plano={planoSelecionado} 
                     isUpgrade={true} 
                     contaPagarId={contaPagarId} 
-                    valorCobrado={valorContaPagar} // NOVO PROP
+                    valorCobrado={valorParaCheckout} // Passa o valor CONDICIONAL
                 />
             </div>
         </LayoutPrincipal>
@@ -128,10 +133,10 @@ const SelecaoPagamentoRenovacao: React.FC = () => {
             </p>
             <div className="p-4 bg-red-100 dark:bg-red-900/20 border border-red-500 rounded-md mb-8 max-w-md mx-auto">
                 <p className="font-semibold text-red-700 dark:text-red-300">
-                    Valor a ser cobrado neste ciclo: {formatCurrency(valorContaPagar)}
+                    Valor pendente na conta a pagar: {formatCurrency(valorContaPagar)}
                 </p>
                 <p className="text-sm text-red-600 dark:text-red-400 mt-1">
-                    O valor da próxima mensalidade será ajustado conforme o plano selecionado.
+                    Se você mudar de plano, o valor cobrado agora será o preço mensal do novo plano.
                 </p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">

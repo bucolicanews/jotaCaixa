@@ -119,6 +119,8 @@ const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano, isUpgrade = false,
         let functionName: 'create-checkout-session' | 'create-renewal-session';
         let body: any;
         
+        const valorParaCheckout = contaPagarId && valorCobrado !== undefined ? valorCobrado : plano.preco_mensal;
+
         if (contaPagarId) {
             // Fluxo de Renovação (usa a Edge Function de renovação)
             functionName = 'create-renewal-session';
@@ -127,6 +129,7 @@ const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano, isUpgrade = false,
                 clienteId: finalClienteId,
                 email: finalEmail,
                 contaPagarId: contaPagarId, // Passa o ID da conta a pagar
+                valorCobrado: valorParaCheckout, // NOVO: Passa o valor real a ser cobrado
             };
         } else {
             // Fluxo de Adesão (usa a Edge Function de adesão)
@@ -171,7 +174,7 @@ const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano, isUpgrade = false,
   if (isUpgrade) {
       const title = contaPagarId ? `Pagar Mensalidade: ${plano.nome}` : `Atualizar para ${plano.nome}`;
       const description = contaPagarId 
-        ? `Você está pagando o valor pendente de R$ ${valorParaExibir.toFixed(2)} para o plano ${plano.nome}.`
+        ? `Você está pagando o valor de R$ ${valorParaExibir.toFixed(2)} para o plano ${plano.nome}.`
         : `Confirme a atualização do seu plano. O valor de R$ ${valorParaExibir.toFixed(2)} será cobrado mensalmente.`;
         
       return (

@@ -19,12 +19,12 @@ serve(async (req: Request) => {
 
     // 1️⃣ Ler o corpo da requisição
     const body = await req.json();
-    const { planoId, clienteId, email, contaPagarId } = body;
+    const { planoId, clienteId, email, contaPagarId, valorCobrado } = body; // NOVO: valorCobrado
 
-    console.log(`LOG 2: Received data: planoId=${planoId}, clienteId=${clienteId}, email=${email}, contaPagarId=${contaPagarId}`);
+    console.log(`LOG 2: Received data: planoId=${planoId}, clienteId=${clienteId}, email=${email}, contaPagarId=${contaPagarId}, valorCobrado=${valorCobrado}`);
 
-    if (!planoId || !clienteId || !email || !contaPagarId) {
-      return new Response(JSON.stringify({ error: 'Missing required fields (planoId, clienteId, email, contaPagarId)' }), {
+    if (!planoId || !clienteId || !email || !contaPagarId || valorCobrado === undefined || valorCobrado === null) {
+      return new Response(JSON.stringify({ error: 'Missing required fields (planoId, clienteId, email, contaPagarId, valorCobrado)' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -55,30 +55,22 @@ serve(async (req: Request) => {
 
     const stripeSecretKey = stripeConfig.stripe_secret_key;
 
-    // 4️⃣ Buscar detalhes do plano e o valor da conta a pagar
-    const [planoRes, contaPagarRes] = await Promise.all([
-        supabase.from('planos').select('nome, preco_mensal').eq('id', planoId).single(),
-        supabase.from('contas_pagar').select('valor').eq('id', contaPagarId).single(),
-    ]);
+    // 4️⃣ Buscar detalhes do plano (apenas nome)
+    const { data: planoRes, error: planoError } = await supabase
+        .from('planos')
+        .select('nome')
+        .eq('id', planoId)
+        .single();
 
-    if (planoRes.error || !planoRes.data) {
-      console.error('❌ Plano not found:', planoRes.error);
+    if (planoError || !planoRes) {
+      console.error('❌ Plano not found:', planoError);
       return new Response(JSON.stringify({ error: 'Plano not found.' }), {
         status: 404,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
     
-    if (contaPagarRes.error || !contaPagarRes.data) {
-      console.error('❌ Conta a Pagar not found:', contaPagarRes.error);
-      return new Response(JSON.stringify({ error: 'Conta a Pagar not found or access denied.' }), {
-        status: 404,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-    
-    // Usamos o valor da conta a pagar, que pode ser diferente do preco_mensal do plano (ex: desconto)
-    const valorCobrado = contaPagarRes.data.valor; 
+    // Usamos o valorCobrado passado pelo frontend
     const unitAmount = Math.round(valorCobrado * 100);
 
     // 5️⃣ Inicializar Stripe
@@ -102,7 +94,7 @@ serve(async (req: Request) => {
         {
           price_data: {
             currency: 'brl',
-            product_data: { name: `Renovação: ${planoRes.data.nome}` },
+            product_data: { name: `Renovação: ${planoRes.nome}` },
             unit_amount: unitAmount,
           },
           quantity: 1,
@@ -111,7 +103,7 @@ serve(async (req: Request) => {
       // Redireciona para o handler de sucesso de renovação
       success_url: `${baseUrl}minha-assinatura?renewal=success&session_id={CHECKOUT_SESSION_ID}&cp_id=${contaPagarId}`,
       cancel_url: `${baseUrl}minha-assinatura?renewal=canceled`,
-      metadata: { clienteId, planoId, contaPagarId }, // Passa o ID da conta a pagar
+      metadata: { clienteId, planoId, contaPagarId, valorCobrado: valorCobrado.toString() }, // Passa o valor cobrado no metadata
       customer_email: email,
     });
 
