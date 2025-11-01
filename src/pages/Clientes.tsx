@@ -267,13 +267,15 @@ const ClientesPage = () => {
       
       setCarregandoDados(true);
       try {
-          const { error } = await (supabase.auth as any).inviteUserByEmail(email, {
+          // Usamos resetPasswordForEmail para reenviar o link de autenticação/atualização de senha,
+          // que é o fluxo seguro e disponível no cliente para convites.
+          const { error } = await supabase.auth.resetPasswordForEmail(email, {
               redirectTo: `${window.location.origin}/atualizar-senha`,
           });
           
           if (error) throw error;
           
-          showSuccess(`Convite de acesso reenviado para ${email}.`);
+          showSuccess(`Link de acesso reenviado para ${email}.`);
       } catch (error: any) {
           showError('Falha ao reenviar convite: ' + error.message);
       } finally {
