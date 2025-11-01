@@ -34,9 +34,10 @@ interface ContaPagarPlano {
 interface ParcelaDetalhe {
     id: string;
     conta_receber_id: string;
+    // O Supabase retorna um array para o join, mesmo que seja 1:1
     admin_contas_receber: {
         descricao: string | null;
-    } | null;
+    }[] | null; 
 }
 
 const MinhaAssinatura: React.FC = () => {
@@ -108,9 +109,14 @@ const MinhaAssinatura: React.FC = () => {
                 if (detalhesError) {
                     console.error('Erro ao buscar detalhes das parcelas:', detalhesError);
                 } else {
-                    // Tipagem explícita aqui
-                    const detalhesMap = new Map((parcelasDetalhes as ParcelaDetalhe[]).map(d => [d.id, d.admin_contas_receber?.descricao || 'Mensalidade Paga']));
+                    // Mapeia os detalhes para um mapa de ID da Parcela -> Descrição
+                    const detalhesMap = new Map((parcelasDetalhes as ParcelaDetalhe[]).map(d => {
+                        // CORREÇÃO: Acessa o primeiro elemento do array retornado pelo join
+                        const descricao = d.admin_contas_receber?.[0]?.descricao || 'Mensalidade Paga';
+                        return [d.id, descricao];
+                    }));
                     
+                    // Combina os recebimentos com as descrições
                     const historico = recebimentos.map(r => ({
                         id: r.id,
                         data: r.data_recebimento!,
@@ -179,7 +185,7 @@ const MinhaAssinatura: React.FC = () => {
                 <DollarSign className="w-6 h-6 mr-2" /> Minha Assinatura
             </h1>
 
-            <div className="grid grid-cols-1 lg:col-span-3 gap-6 mb-8">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
                 {/* Detalhes do Plano */}
                 <Card className="lg:col-span-2">
                     <CardHeader className="flex flex-row items-center justify-between">
