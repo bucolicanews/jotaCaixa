@@ -6,12 +6,9 @@ import { format, parseISO, isFuture, differenceInDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Plano } from '@/types/plano'; // Importando a interface Plano atualizada
 
-interface PlanoInfo {
-    nome: string;
-    dias_trial: number;
-    preco_mensal: number;
-}
+interface PlanoInfo extends Plano {} // Usando a interface Plano diretamente
 
 const TrialBanner: React.FC = () => {
     const { perfil, role, carregando } = useSessao();
@@ -34,7 +31,7 @@ const TrialBanner: React.FC = () => {
         // 1. Buscar detalhes do Plano
         const { data: planoData, error: planoError } = await supabase
             .from('planos')
-            .select('nome, dias_trial, preco_mensal')
+            .select('*') // Busca todas as colunas (agora sem dias_trial)
             .eq('id', clienteProfile.plano_id)
             .single();
 
@@ -48,16 +45,13 @@ const TrialBanner: React.FC = () => {
         setDataFimAcesso(dataFim);
         setPlanoInfo(planoData as PlanoInfo);
         
-        // 2. Determinar se é Trial (Regra: Apenas se for 7 dias de trial E a data de fim for futura E o acesso restante for curto)
+        // 2. Determinar se é Trial (Regra: Acesso ainda não expirou E o acesso restante é curto - 30 dias ou menos)
         const isFutureAccess = isFuture(dataFim);
-        const isSevenDayTrial = planoData.dias_trial === 7;
-        
-        // Se a data de fim de acesso for muito distante (ex: mais de 30 dias), não é um trial ativo.
         const daysRemaining = differenceInDays(dataFim, new Date());
-        const isShortTermAccess = daysRemaining <= 30;
-        
-        // O banner só aparece se for um trial de 7 dias, o acesso ainda não expirou, E for um acesso de curto prazo.
-        setIsTrial(isSevenDayTrial && isFutureAccess && isShortTermAccess);
+        const isShortTermAccess = daysRemaining <= 30 && daysRemaining >= 0; // Deve ser 30 dias ou menos, mas não expirado
+
+        // O banner só aparece se o acesso for futuro e for de curto prazo (indicando um trial ou período de carência)
+        setIsTrial(isFutureAccess && isShortTermAccess);
         setLoading(false);
 
     }, [isClient, clienteProfile]);
@@ -68,7 +62,7 @@ const TrialBanner: React.FC = () => {
         }
     }, [carregando, fetchPlanoDetails]);
 
-    // O banner só é exibido se for um cliente E estiver em período de trial (7 dias)
+    // O banner só é exibido se for um cliente E estiver em período de trial (curto prazo)
     if (loading || carregando || !isClient || !planoInfo || !dataFimAcesso || !isTrial) {
         return null; 
     }

@@ -23,7 +23,7 @@ const TrialButton: React.FC<TrialButtonProps> = ({ clienteProfile, onTrialActiva
     // 1. Buscar o Plano de Trial (assumindo que o plano mais barato é o de trial, ou o primeiro)
     const { data: planos, error: planosError } = await supabase
         .from('planos')
-        .select('id, dias_trial, permissoes, tipo_cliente')
+        .select('id, permissoes, tipo_cliente')
         .order('preco_mensal', { ascending: true })
         .limit(1);
         
@@ -99,12 +99,12 @@ const TrialButton: React.FC<TrialButtonProps> = ({ clienteProfile, onTrialActiva
       <h3 className="text-lg font-semibold">Opções de Acesso Imediato</h3>
       
       <Button 
-        onClick={() => handleStartTrial(7)} 
+        onClick={() => handleStartTrial(30)} // Trial padrão de 30 dias
         className="w-full bg-green-600 hover:bg-green-700"
         disabled={loading}
       >
         {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
-        Iniciar Trial Grátis de 7 Dias
+        Iniciar Trial Grátis de 30 Dias
       </Button>
       
       <Button 

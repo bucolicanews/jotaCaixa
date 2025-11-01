@@ -8,7 +8,7 @@ import { Plano } from '@/types/plano';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useNavigate } from 'react-router-dom';
-import { format } from 'date-fns';
+import { format, addDays } from 'date-fns';
 import { useStripeConfig } from '@/hooks/use-stripe-config';
 import { useSessao } from '@/hooks/use-sessao';
 
@@ -39,7 +39,9 @@ const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano, isUpgrade = false 
     setIsSubmitting(true);
 
     try {
-      // 1. Cadastrar o novo cliente no Supabase Auth (Simulação de Trial)
+      // 1. Cadastrar o novo cliente no Supabase Auth (Simulação de Trial de 30 dias)
+      const dataFimAcesso = addDays(new Date(), 30).toISOString();
+      
       // IMPORTANTE: Definir role: 'Cliente' e plano_id para que o trigger insira diretamente em tbl_clientes.
       const { error: authError } = await supabase.auth.signUp({
         email: email,
@@ -51,6 +53,7 @@ const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano, isUpgrade = false 
             nome: nomeEmpresa, 
             plano_id: plano.id, // Indica que veio do fluxo de vendas/plano
             permissoes: JSON.stringify(plano.permissoes), 
+            data_fim_acesso: dataFimAcesso, // Passa a data de fim de acesso
           }
         }
       });
@@ -88,7 +91,6 @@ const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano, isUpgrade = false 
     
     try {
         // 1. Determinar o ID do cliente e email
-        // No fluxo de upgrade, usa o usuário logado. No fluxo de adesão, usa o usuário recém-criado (que está no estado `usuario`).
         const finalClienteId = clienteId || usuario?.id;
         const finalEmail = emailCliente || usuario?.email;
         
@@ -150,7 +152,8 @@ const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano, isUpgrade = false 
 
   // Fluxo 1: Público (Adesão e Trial)
   if (isRegistered) {
-    const dataVencimentoTrial = format(new Date(Date.now() + plano.dias_trial * 24 * 60 * 60 * 1000), 'dd/MM/yyyy');
+    // Assumimos 30 dias de trial no fluxo de adesão
+    const dataVencimentoTrial = format(addDays(new Date(), 30), 'dd/MM/yyyy');
     
     return (
       <Card className="w-full max-w-md mx-auto">
@@ -159,7 +162,7 @@ const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano, isUpgrade = false 
             <CheckCircle className="w-6 h-6 mr-2" /> Adesão Concluída!
           </CardTitle>
           <CardDescription>
-            Seu trial de {plano.dias_trial} dias começa agora. Verifique seu email para definir a senha.
+            Seu trial de 30 dias começa agora. Verifique seu email para definir a senha.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -188,7 +191,7 @@ const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano, isUpgrade = false 
     <Card className="w-full max-w-md mx-auto">
       <CardHeader>
         <CardTitle className="text-2xl">Aderir ao Plano {plano.nome}</CardTitle>
-        <CardDescription>Inicie seu trial de {plano.dias_trial} dias. Preço: R$ {plano.preco_mensal.toFixed(2)}/mês.</CardDescription>
+        <CardDescription>Inicie seu trial de 30 dias. Preço: R$ {plano.preco_mensal.toFixed(2)}/mês.</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleAdesao} className="space-y-4">

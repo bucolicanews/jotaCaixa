@@ -126,14 +126,13 @@ const GerenciarPlanos: React.FC = () => {
                   <TableHead className="w-[100px]">Tipo</TableHead>
                   <TableHead>Descrição</TableHead>
                   <TableHead className="w-[100px] text-right">Preço Mensal</TableHead>
-                  <TableHead className="w-[100px] text-center">Trial</TableHead>
                   <TableHead className="w-[100px] text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {planos.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-4 text-muted-foreground">
+                    <TableCell colSpan={5} className="text-center py-4 text-muted-foreground">
                       Nenhum plano cadastrado.
                     </TableCell>
                   </TableRow>
@@ -144,7 +143,6 @@ const GerenciarPlanos: React.FC = () => {
                       <TableCell><Badge variant={plano.tipo_cliente === 'PJ' ? 'default' : 'secondary'}>{plano.tipo_cliente}</Badge></TableCell>
                       <TableCell className="text-sm text-muted-foreground">{plano.descricao || '-'}</TableCell>
                       <TableCell className="text-right font-semibold">{formatCurrency(plano.preco_mensal)}</TableCell>
-                      <TableCell className="text-center">{plano.dias_trial} dias</TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end space-x-2">
                           <Button variant="ghost" size="sm" onClick={() => handleEdit(plano)}>

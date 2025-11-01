@@ -233,7 +233,7 @@ const Vendas: React.FC = () => {
                             onClick={() => handleSelectPlan(plano)} 
                             className="w-full mt-6"
                         >
-                            Iniciar Trial Grátis
+                            Iniciar Adesão
                         </Button>
                     </Card>
                 ))}

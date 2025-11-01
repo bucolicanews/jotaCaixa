@@ -83,8 +83,8 @@ const SelecaoPerfil: React.FC = () => {
     const permissoes = plano.permissoes;
     const nome = perfil?.nome || usuario.email?.split('@')[0] || 'Novo Cliente';
     
-    // Calcula a data de fim de acesso (Data atual + dias de trial)
-    const dataFimAcesso = addDays(new Date(), plano.dias_trial).toISOString();
+    // Define a data de fim de acesso para 30 dias (simulando um trial padrão)
+    const dataFimAcesso = addDays(new Date(), 30).toISOString();
 
     try {
         // 1. Atualizar metadados do Auth para forçar a role 'Cliente' e passar dados para o trigger
@@ -154,7 +154,7 @@ const SelecaoPerfil: React.FC = () => {
           <CardHeader className="text-center">
             <CardTitle className="text-3xl">Selecione seu Plano</CardTitle>
             <CardDescription className="text-lg font-semibold text-green-500">
-                Teste Grátis por {planos[0]?.dias_trial || 7} dias!
+                Teste Grátis por 30 dias!
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -212,7 +212,7 @@ const SelecaoPerfil: React.FC = () => {
                           disabled={loading}
                           className="w-full mt-6"
                       >
-                          {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : `Iniciar Trial de ${plano.dias_trial} dias`}
+                          {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : `Iniciar Trial de 30 dias`}
                       </Button>
                   </Card>
               ))}

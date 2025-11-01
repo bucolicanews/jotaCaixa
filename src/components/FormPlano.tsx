@@ -18,7 +18,7 @@ const formSchema = z.object({
   nome: z.string().min(1, 'O nome é obrigatório.'),
   descricao: z.string().optional(),
   preco_mensal: z.coerce.number().positive('O preço deve ser positivo.'),
-  dias_trial: z.coerce.number().int().min(0, 'O trial deve ser 0 ou mais dias.'),
+  // dias_trial removido
   tipo_cliente: z.enum(['PF', 'PJ'], { required_error: 'O tipo de cliente é obrigatório.' }),
   permissoes: z.record(z.boolean()).optional(),
 });
@@ -54,7 +54,7 @@ const FormPlano: React.FC<FormPlanoProps> = ({ planoInicial, onSaveComplete }) =
       nome: planoInicial?.nome || '',
       descricao: planoInicial?.descricao || '',
       preco_mensal: planoInicial?.preco_mensal || 0,
-      dias_trial: planoInicial?.dias_trial || 7,
+      // dias_trial removido
       tipo_cliente: planoInicial?.tipo_cliente || 'PJ',
       permissoes: defaultPermissoes,
     },
@@ -65,7 +65,7 @@ const FormPlano: React.FC<FormPlanoProps> = ({ planoInicial, onSaveComplete }) =
       nome: values.nome,
       descricao: values.descricao || null,
       preco_mensal: values.preco_mensal,
-      dias_trial: values.dias_trial,
+      // dias_trial removido
       tipo_cliente: values.tipo_cliente,
       permissoes: values.permissoes,
     };
@@ -158,17 +158,7 @@ const FormPlano: React.FC<FormPlanoProps> = ({ planoInicial, onSaveComplete }) =
               </FormItem>
             )}
           />
-          <FormField
-            control={form.control}
-            name="dias_trial"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Dias de Trial Grátis</FormLabel>
-                <FormControl><Input type="number" step="1" placeholder="7" {...field} /></FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+          {/* Campo dias_trial removido */}
         </div>
         
         <h3 className="font-semibold mt-6 border-t pt-4">Módulos Liberados (Permissões)</h3>
