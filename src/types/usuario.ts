@@ -23,6 +23,7 @@ export interface ClienteProfile {
   // Novos campos para Contrato
   documento?: string | null;
   endereco_completo?: string | null;
+  criado_em: string; // ADICIONADO
 }
 
 export interface UsuarioProfile {
