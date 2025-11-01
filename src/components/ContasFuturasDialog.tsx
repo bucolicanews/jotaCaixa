@@ -7,6 +7,7 @@ import { showError } from '@/utils/toast';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Badge } from './ui/badge';
+import { Card, CardContent } from './ui/card';
 
 interface ContaReceberDetalhe {
   descricao: string;
@@ -18,8 +19,15 @@ interface ParcelaFutura {
   valor_parcela: number;
   numero_parcela: number;
   status: 'aberta' | 'parcial' | 'paga' | 'reprogramada' | 'cancelada';
-  // O Supabase retorna o relacionamento como um array, mesmo que seja single()
   admin_contas_receber: ContaReceberDetalhe[] | null; 
+}
+
+interface ContaSintetica {
+    id: string;
+    descricao: string;
+    valor_total: number;
+    data_vencimento: string;
+    status: string;
 }
 
 interface ContasFuturasDialogProps {
@@ -30,7 +38,11 @@ interface ContasFuturasDialogProps {
 
 const ContasFuturasDialog: React.FC<ContasFuturasDialogProps> = ({ clienteId, open, onOpenChange }) => {
   const [parcelas, setParcelas] = useState<ParcelaFutura[]>([]);
+  const [contaSintetica, setContaSintetica] = useState<ContaSintetica | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+  const formatDate = (dateString: string) => format(parseISO(dateString + 'T00:00:00'), 'dd/MM/yyyy', { locale: ptBR });
 
   const fetchParcelasFuturas = useCallback(async () => {
     if (!clienteId) return;
@@ -39,7 +51,7 @@ const ContasFuturasDialog: React.FC<ContasFuturasDialogProps> = ({ clienteId, op
     // 1. Buscar a conta sintética de recorrência do cliente (admin_contas_receber)
     const { data: contaRecorrencia, error: contaError } = await supabase
         .from('admin_contas_receber')
-        .select('id')
+        .select('id, descricao, valor_total, data_vencimento, status')
         .eq('cliente_id', clienteId)
         .eq('origem', 'assinatura_recorrente')
         .limit(1)
@@ -47,16 +59,20 @@ const ContasFuturasDialog: React.FC<ContasFuturasDialogProps> = ({ clienteId, op
         
     if (contaError && contaError.code !== 'PGRST116') { // PGRST116 = No rows found
         showError('Erro ao buscar conta de recorrência: ' + contaError.message);
+        setContaSintetica(null);
         setParcelas([]);
         setLoading(false);
         return;
     }
     
     if (!contaRecorrencia) {
+        setContaSintetica(null);
         setParcelas([]);
         setLoading(false);
         return;
     }
+    
+    setContaSintetica(contaRecorrencia as ContaSintetica);
     
     // 2. Buscar todas as parcelas (analítico) vinculadas a essa conta sintética que não foram pagas
     const { data, error } = await supabase
@@ -77,7 +93,6 @@ const ContasFuturasDialog: React.FC<ContasFuturasDialogProps> = ({ clienteId, op
       showError('Erro ao carregar contas futuras: ' + error.message);
       setParcelas([]);
     } else {
-      // O cast é seguro após a correção da interface ParcelaFutura
       setParcelas(data as ParcelaFutura[]); 
     }
     setLoading(false);
@@ -88,9 +103,6 @@ const ContasFuturasDialog: React.FC<ContasFuturasDialogProps> = ({ clienteId, op
       fetchParcelasFuturas();
     }
   }, [open, fetchParcelasFuturas]);
-
-  const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
-  const formatDate = (dateString: string) => format(parseISO(dateString + 'T00:00:00'), 'dd/MM/yyyy', { locale: ptBR });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -107,7 +119,31 @@ const ContasFuturasDialog: React.FC<ContasFuturasDialogProps> = ({ clienteId, op
         {loading ? (
           <div className="flex justify-center items-center h-40"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
         ) : (
-          <div className="mt-4">
+          <div className="mt-4 space-y-4">
+            
+            {/* Detalhes da Conta Sintética */}
+            {contaSintetica ? (
+                <Card className="border-blue-500/50 bg-blue-50 dark:bg-blue-900/20">
+                    <CardContent className="p-4 text-sm space-y-1">
+                        <div className="flex justify-between">
+                            <span className="font-semibold">Conta Sintética:</span>
+                            <span>{contaSintetica.descricao}</span>
+                        </div>
+                        <div className="flex justify-between">
+                            <span className="font-semibold">Próximo Vencimento Sintético:</span>
+                            <span>{formatDate(contaSintetica.data_vencimento)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                            <span className="font-semibold">Status Sintético:</span>
+                            <Badge variant="secondary">{contaSintetica.status}</Badge>
+                        </div>
+                    </CardContent>
+                </Card>
+            ) : (
+                <p className="text-center text-muted-foreground">Nenhuma conta de recorrência ativa encontrada.</p>
+            )}
+
+            {/* Lista de Parcelas */}
             <div className="border rounded-md">
               <Table>
                 <TableHeader>
