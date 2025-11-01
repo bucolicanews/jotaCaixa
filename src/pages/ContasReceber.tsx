@@ -20,7 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { isToday, isPast, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
-
+import { useSearchParams } from 'react-router-dom'; // Importando useSearchParams
 
 type ParcelaStatus = 'aberta' | 'parcial' | 'paga' | 'reprogramada' | 'cancelada';
 type BadgeVariant = 'success' | 'warning' | 'secondary' | 'destructive' | 'default' | 'info';
@@ -58,21 +58,35 @@ const getBadgeVariant = (status: ParcelaStatus, dataVencimento: string): BadgeVa
 
 const ContasReceber = () => {
   const { usuario, perfil, role, carregando: carregandoSessao } = useSessao();
+  const [searchParams] = useSearchParams(); // Hook para ler a URL
+  
   const [contas, setContas] = useState<ContaReceber[]>([]);
   const [parcelas, setParcelas] = useState<ParcelaDetalhada[]>([]);
   const [carregandoDados, setCarregandoDados] = useState(true);
   const [contaSelecionada, setContaSelecionada] = useState<ContaReceber | null>(null);
   const [dialogFormAberto, setDialogFormAberto] = useState(false);
   const [dialogParcelasAberto, setDialogParcelasAberto] = useState(false);
-  const [clienteNomeMap, setClienteNomeMap] = useState<Record<string, string>>({}); // Novo mapa de nomes
+  const [clienteNomeMap, setClienteNomeMap] = useState<Record<string, string>>({});
   
   // Filtros
   const [filtroGeral, setFiltroGeral] = useState('');
   const [filtroPeriodo, setFiltroPeriodo] = useState<DateRange | undefined>(undefined);
-  const [filtroStatus, setFiltroStatus] = useState<string>('todos'); // 'todos', 'aberta', 'paga', 'pendente'
   
+  // Inicializa filtroStatus e activeTab com base na URL
+  const initialStatus = searchParams.get('status') || 'todos';
+  const initialTab = initialStatus === 'pendente' ? 'parcelas' : 'lancamentos';
+  
+  const [filtroStatus, setFiltroStatus] = useState<string>(initialStatus); 
   const isAdmin = role === 'Admin';
-  const [activeTab, setActiveTab] = useState(isAdmin ? 'meus_lancamentos' : 'lancamentos');
+  const [activeTab, setActiveTab] = useState(isAdmin ? 'meus_lancamentos' : initialTab);
+
+  // Efeito para forçar a aba correta se o filtro 'status' for passado na URL
+  useEffect(() => {
+      if (initialStatus === 'pendente') {
+          setActiveTab('parcelas');
+      }
+  }, [initialStatus]);
+
 
   const getOwnerId = () => {
     if (role === 'Admin') return usuario?.id || null; // Admin usa seu próprio ID

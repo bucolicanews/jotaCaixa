@@ -290,7 +290,7 @@ const MinhaAssinatura: React.FC = () => {
                 </Link>
                 
                 {/* NOVO BOTÃO: Contas Futuras */}
-                <Link to="/contas-receber">
+                <Link to="/contas-receber?status=pendente">
                     <Button variant="outline" className="w-full">
                         <ListChecks className="w-4 h-4 mr-2" />
                         Contas Futuras
