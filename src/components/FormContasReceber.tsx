@@ -71,11 +71,18 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
         return;
       }
       setLoadingClientes(true);
-      const { data, error } = await supabase
+      
+      let query = supabase
         .from('clientes')
         .select('*')
-        .eq('empresa_id', ownerId)
         .order('nome');
+        
+      // Se não for Admin, filtra pelo ID da empresa/proprietário
+      if (role !== 'Admin') {
+        query = query.eq('empresa_id', ownerId);
+      }
+        
+      const { data, error } = await query;
         
       if (error) showError('Erro ao carregar clientes.');
       else setClientes(data as Cliente[]);
@@ -118,26 +125,44 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
           parcelasParaInserir.push({ numero_parcela: i + 1, valor_parcela: valorParcela, data_vencimento: format(addDays(data_primeiro_vencimento!, i * intervalo_dias!), 'yyyy-MM-dd'), status: 'aberta' });
         }
       }
-
-      const contaData = { cliente_id: values.cliente_id, empresa_id: ownerId, descricao: values.descricao, valor_total: valorTotal, data_emissao: isEditing ? contaInicial.data_emissao : format(new Date(), 'yyyy-MM-dd'), data_vencimento: parcelasParaInserir[0].data_vencimento, tipo_receita: 'única', status: 'aberta', origem: 'manual' };
       
       let contaReceberId: string;
+      let tabelaContasReceber = role === 'Admin' ? 'admin_contas_receber' : 'contas_receber';
+      let tabelaParcelasReceber = role === 'Admin' ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
+      
+      const baseData = role === 'Admin' ? { admin_id: ownerId, cliente_id: values.cliente_id } : { empresa_id: ownerId, cliente_id: values.cliente_id };
+      
+      const contaReceberPayload = {
+          ...baseData,
+          descricao: values.descricao,
+          valor_total: valorTotal,
+          data_emissao: format(new Date(), 'yyyy-MM-dd'),
+          data_vencimento: parcelasParaInserir[0].data_vencimento,
+          tipo_receita: 'única',
+          status: 'aberta',
+          origem: 'manual',
+      };
 
       if (isEditing) {
-        const { data, error } = await supabase.from('contas_receber').update(contaData).eq('id', contaInicial.id).select('id').single();
+        const { data, error } = await supabase.from(tabelaContasReceber).update(contaReceberPayload).eq('id', contaInicial.id).select('id').single();
         if (error) throw error;
         contaReceberId = data.id;
         
-        const { error: deleteError } = await supabase.from('parcelas_contas_receber').delete().eq('conta_receber_id', contaReceberId);
+        const { error: deleteError } = await supabase.from(tabelaParcelasReceber).delete().eq('conta_receber_id', contaReceberId);
         if (deleteError) throw deleteError;
       } else {
-        const { data, error } = await supabase.from('contas_receber').insert(contaData).select('id').single();
+        const { data, error } = await supabase.from(tabelaContasReceber).insert(contaReceberPayload).select('id').single();
         if (error) throw error;
         contaReceberId = data.id;
       }
 
-      const parcelasComId = parcelasParaInserir.map(p => ({ ...p, conta_receber_id: contaReceberId, empresa_id: ownerId }));
-      const { error: parcelError } = await supabase.from('parcelas_contas_receber').insert(parcelasComId);
+      const parcelasComId = parcelasParaInserir.map(p => ({ 
+          ...p, 
+          conta_receber_id: contaReceberId, 
+          ...(role === 'Admin' ? { admin_id: ownerId } : { empresa_id: ownerId })
+      }));
+      
+      const { error: parcelError } = await supabase.from(tabelaParcelasReceber).insert(parcelasComId);
       if (parcelError) throw parcelError;
 
       showSuccess(`Conta ${isEditing ? 'atualizada' : 'salva'} com sucesso!`);
