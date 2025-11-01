@@ -65,10 +65,20 @@ const MinhaAssinatura: React.FC = () => {
         setPlanoAtual(planoData as Plano);
         
         // 2. Buscar Histórico de Pagamentos (CR do Admin contra este Cliente)
-        // CORREÇÃO: Busca na tabela admin_recebimentos usando o cliente_id
+        // CORREÇÃO: Usando join aninhado para buscar a descrição da conta a receber
         const { data: recebimentos, error: crError } = await supabase
             .from('admin_recebimentos')
-            .select('id, data_recebimento, valor_recebido, forma_pagamento, parcela_id, admin_parcelas_receber(admin_contas_receber(descricao))')
+            .select(`
+                id, 
+                data_recebimento, 
+                valor_recebido, 
+                forma_pagamento, 
+                admin_parcelas_receber (
+                    admin_contas_receber (
+                        descricao
+                    )
+                )
+            `)
             .eq('cliente_id', clienteId) // Filtra pelo ID do cliente que pagou
             .order('data_recebimento', { ascending: false });
             
@@ -81,6 +91,7 @@ const MinhaAssinatura: React.FC = () => {
                 data: r.data_recebimento!,
                 valor: r.valor_recebido,
                 status: 'pago' as 'pago', // Assumimos que se está em admin_recebimentos, foi pago
+                // Acessa a descrição através do join aninhado
                 descricao: r.admin_parcelas_receber?.admin_contas_receber?.descricao || 'Mensalidade Paga',
             }));
             setHistoricoPagamentos(historico);
