@@ -64,6 +64,7 @@ const ContasReceber = () => {
   const [contaSelecionada, setContaSelecionada] = useState<ContaReceber | null>(null);
   const [dialogFormAberto, setDialogFormAberto] = useState(false);
   const [dialogParcelasAberto, setDialogParcelasAberto] = useState(false);
+  const [clienteNomeMap, setClienteNomeMap] = useState<Record<string, string>>({}); // Novo mapa de nomes
   
   // Filtros
   const [filtroGeral, setFiltroGeral] = useState('');
@@ -81,6 +82,32 @@ const ContasReceber = () => {
   };
   
   const empresaId = getOwnerId();
+  
+  const fetchClienteNames = useCallback(async () => {
+    if (!isAdmin) return;
+    
+    // Busca todos os clientes de CR e Empresas do Sistema para mapear IDs para Nomes
+    const [crRes, sistemaRes] = await Promise.all([
+        supabase.from('clientes').select('id, nome'),
+        supabase.from('tbl_clientes').select('id, nome'),
+    ]);
+    
+    const map: Record<string, string> = {};
+    
+    if (crRes.data) {
+        crRes.data.forEach(c => map[c.id] = c.nome);
+    }
+    if (sistemaRes.data) {
+        // Adiciona nomes de empresas do sistema, mas não sobrescreve se já existir em 'clientes'
+        sistemaRes.data.forEach(c => {
+            if (!map[c.id]) {
+                map[c.id] = c.nome;
+            }
+        });
+    }
+    
+    setClienteNomeMap(map);
+  }, [isAdmin]);
 
   const buscarMeusLancamentos = async () => {
     setCarregandoDados(true);
@@ -138,13 +165,18 @@ const ContasReceber = () => {
 
   const buscarDados = useCallback(() => {
     if (!carregandoSessao && usuario) {
-        if (isAdmin && activeTab === 'supervisao') {
-            buscarSupervisao();
+        if (isAdmin) {
+            fetchClienteNames(); // Busca nomes de clientes para o mapa
+            if (activeTab === 'supervisao') {
+                buscarSupervisao();
+            } else {
+                buscarMeusLancamentos();
+            }
         } else {
             buscarMeusLancamentos();
         }
     }
-  }, [carregandoSessao, usuario, isAdmin, activeTab, empresaId]);
+  }, [carregandoSessao, usuario, isAdmin, activeTab, empresaId, fetchClienteNames]);
 
   useEffect(() => {
     buscarDados();
@@ -215,11 +247,10 @@ const ContasReceber = () => {
     let descricao = 'N/A';
     
     if (isAdmin && activeTab === 'meus_lancamentos') {
-        // Admin: Acessa o cliente_id e a descrição da conta sintética
+        // Admin: Usa o mapa para buscar o nome do cliente
         const contaReceber = (p as any).admin_contas_receber;
         descricao = contaReceber?.descricao || 'N/A';
-        // O nome do cliente não está disponível diretamente, mas o ID está.
-        // Para fins de filtro, usamos apenas a descrição.
+        clienteNome = clienteNomeMap[contaReceber?.cliente_id] || 'N/A';
     } else {
         // Cliente/Supervisão: Acessa o nome do cliente e descrição
         const contaReceber = (p as any).contas_receber;
@@ -246,9 +277,8 @@ const ContasReceber = () => {
     let descricao = c.descricao;
     
     if (isAdmin && activeTab === 'meus_lancamentos') {
-        // Admin: Acessa o cliente_id e a descrição da conta sintética
-        // O nome do cliente não está disponível diretamente, mas o ID está.
-        // Para fins de filtro, usamos apenas a descrição.
+        // Admin: Usa o mapa para buscar o nome do cliente
+        clienteNome = clienteNomeMap[c.cliente_id] || 'N/A';
     } else {
         // Cliente/Supervisão: Acessa o nome do cliente diretamente
         clienteNome = c.clientes?.nome || 'N/A';
@@ -345,8 +375,8 @@ const ContasReceber = () => {
                             ? (p as any).admin_contas_receber 
                             : (p as any).contas_receber;
                             
-                        // Se for Admin/Meus Lançamentos, o nome do cliente não está no join, usamos N/A
-                        const clienteNome = isMyLaunch ? 'N/A' : contaReceber?.clientes?.nome || 'N/A';
+                        const clienteId = isMyLaunch ? contaReceber?.cliente_id : contaReceber?.clientes?.id;
+                        const clienteNome = isMyLaunch ? clienteNomeMap[clienteId] || 'N/A' : contaReceber?.clientes?.nome || 'N/A';
                         const descricao = contaReceber?.descricao || 'N/A';
                             
                         const empresaIdDisplay = isAdmin && activeTab === 'supervisao' 
@@ -417,8 +447,8 @@ const ContasReceber = () => {
                       // Lógica de exibição do nome do cliente
                       let clienteNomeDisplay = 'N/A';
                       if (isAdmin && activeTab === 'meus_lancamentos') {
-                          // Se for Admin/Meus Lançamentos, o nome do cliente não está no join, usamos o cliente_id
-                          clienteNomeDisplay = conta.cliente_id || 'N/A';
+                          // Admin: Usa o mapa para buscar o nome do cliente
+                          clienteNomeDisplay = clienteNomeMap[conta.cliente_id] || 'N/A';
                       } else {
                           // Cliente/Supervisão: Acessa o nome do cliente diretamente
                           clienteNomeDisplay = conta.clientes?.nome || 'N/A';
@@ -442,7 +472,7 @@ const ContasReceber = () => {
                             </div>
                           </TableCell>
                           
-                          {isAdmin && activeTab === 'supervisao' && <TableCell className="text-sm text-muted-foreground">{(conta as any).empresa_id || 'Admin'}</TableCell>}
+                          {isAdmin && activeTab === 'supervisao' && <TableCell className="text-sm text-muted-foreground">{(conta as any).empresa_id || 'N/A'}</TableCell>}
                           
                           <TableCell className="font-medium">
                             {clienteNomeDisplay}

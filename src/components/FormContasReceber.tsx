@@ -68,10 +68,11 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
     if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id;
     return null;
   };
+  
+  const ownerId = getOwnerId();
 
   useEffect(() => {
     const fetchClientes = async () => {
-      const ownerId = getOwnerId();
       if (!ownerId) {
         setLoadingClientes(false);
         return;
@@ -123,7 +124,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
       setLoadingClientes(false);
     };
     fetchClientes();
-  }, [perfil, role]);
+  }, [perfil, role, ownerId]);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -145,6 +146,26 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
     if (!ownerId) { showError('ID da empresa/admin não pôde ser determinado.'); return; }
     
     try {
+      // 0. GARANTIR QUE O CLIENTE EXISTA NA TABELA 'clientes' (para FK)
+      const clienteSelecionado = clientes.find(c => c.id === values.cliente_id);
+      if (!clienteSelecionado) throw new Error('Cliente selecionado não encontrado.');
+      
+      const clienteData = {
+          id: values.cliente_id,
+          empresa_id: ownerId, // O Admin/Cliente logado é o gestor deste cliente de CR
+          nome: clienteSelecionado.nome,
+          documento: 'N/A', // Placeholder
+          email: 'N/A', // Placeholder
+      };
+      
+      // Upsert na tabela 'clientes'
+      const { error: upsertError } = await supabase
+          .from('clientes')
+          .upsert(clienteData, { onConflict: 'id' });
+          
+      if (upsertError) throw new Error('Falha ao garantir a existência do cliente na tabela CR: ' + upsertError.message);
+      
+      // 1. Calcular valores e parcelas
       let valorTotal: number;
       let parcelasParaInserir = [];
 
