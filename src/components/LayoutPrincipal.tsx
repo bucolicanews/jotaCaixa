@@ -1,13 +1,16 @@
 import React from 'react';
 import { useSessao } from '@/hooks/use-sessao';
 import { useNavigate } from 'react-router-dom';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Package } from 'lucide-react';
 import { ClienteProfile } from '@/types/usuario';
 import { Card, CardDescription, CardHeader, CardTitle, CardContent } from './ui/card';
 import { cn } from '@/lib/utils';
 import Header from './Header';
 import TrialBanner from './TrialBanner';
 import TrialButton from './TrialButton'; // Importando o novo componente
+import { isPast, parseISO } from 'date-fns';
+import { Link } from 'react-router-dom';
+import { Button } from './ui/button';
 
 interface LayoutPrincipalProps {
   children: React.ReactNode;
@@ -32,6 +35,9 @@ const LayoutPrincipal: React.FC<LayoutPrincipalProps> = ({ children }) => {
 
   const isPendingClient = role === 'Cliente' && !(perfil as ClienteProfile)?.aprovado;
   const clienteProfile = perfil as ClienteProfile;
+  
+  const dataFimAcesso = clienteProfile?.data_fim_acesso ? parseISO(clienteProfile.data_fim_acesso) : null;
+  const isAccessExpired = role === 'Cliente' && clienteProfile?.aprovado && dataFimAcesso && isPast(dataFimAcesso);
 
   if (isPendingClient) {
     return (
@@ -56,6 +62,32 @@ const LayoutPrincipal: React.FC<LayoutPrincipalProps> = ({ children }) => {
         </main>
       </div>
     );
+  }
+  
+  if (isAccessExpired) {
+      return (
+        <div className="flex flex-col min-h-screen bg-background">
+          <Header />
+          <main className="flex-1 p-4 md:p-8 overflow-y-auto flex items-center justify-center">
+            <Card className="w-full max-w-lg text-center border-red-500">
+              <CardHeader>
+                <CardTitle className="text-2xl text-destructive">Acesso Expirado</CardTitle>
+                <CardDescription className="mt-2">
+                  Seu período de acesso (Trial ou Plano) terminou. Para continuar utilizando o sistema, por favor, renove sua assinatura.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                  <Link to="/vendas">
+                      <Button variant="default" className="w-full">
+                          <Package className="w-4 h-4 mr-2" />
+                          Renovar Assinatura
+                      </Button>
+                  </Link>
+              </CardContent>
+            </Card>
+          </main>
+        </div>
+      );
   }
 
   return (
