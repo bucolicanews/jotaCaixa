@@ -33,13 +33,13 @@ interface ContaPagarPlano {
 const MinhaAssinatura: React.FC = () => {
   const { perfil, role, carregando } = useSessao();
   const navigate = useNavigate();
-  const { loading: loadingStripe } = useStripe-config();
+  const { loading: loadingStripe } = useStripeConfig();
   
   const [planoAtual, setPlanoAtual] = useState<Plano | null>(null);
   const [carregandoPlano, setCarregandoPlano] = useState(true);
   const [proximaContaPagar, setProximaContaPagar] = useState<ContaPagarPlano | null>(null);
   const [historicoPagamentos, setHistoricoPagamentos] = useState<Pagamento[]>([]);
-  const [isSubmitting] = useState(false); // Removido setIsSubmitting
+  const [isSubmitting] = useState(false);
 
   const isClient = role === 'Cliente';
   const clienteProfile = perfil as ClienteProfile;
@@ -138,7 +138,7 @@ const MinhaAssinatura: React.FC = () => {
         showError('Nenhuma mensalidade pendente para pagar.');
         return;
     }
-    // Redireciona para a nova página de seleção de plano, passando o ID da conta a pagar
+    // Redireciona para a página de seleção de plano/pagamento, passando o ID da conta a pagar
     navigate(`/renovacao?cp_id=${proximaContaPagar.id}`);
   };
 
@@ -186,12 +186,12 @@ const MinhaAssinatura: React.FC = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
         {/* Detalhes do Plano */}
-        <Card className="lg:col-span-2">
+        <Card className="lg:col-span-3"> {/* Ajustado para col-span-3 */}
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-xl flex items-center">
               <Package className="w-5 h-5 mr-2" /> Plano Atual
             </CardTitle>
-            {/* BOTÃO 'Mudar Plano' REMOVIDO */}
+            {/* Botão 'Mudar Plano' removido */}
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex justify-between items-center border-b pb-2">
@@ -223,8 +223,8 @@ const MinhaAssinatura: React.FC = () => {
           </CardContent>
         </Card>
 
-        {/* Próxima Mensalidade */}
-        <Card>
+        {/* Próxima Mensalidade (Mantido na coluna 1 para layout) */}
+        <Card className="lg:col-span-1">
           <CardHeader>
             <CardTitle className="text-xl flex items-center">
               <ArrowDownCircle className="w-5 h-5 mr-2" /> Próxima Mensalidade
@@ -263,48 +263,48 @@ const MinhaAssinatura: React.FC = () => {
             )}
           </CardContent>
         </Card>
-      </div>
-
-      {/* Histórico de Pagamentos */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-xl">Histórico de Pagamentos</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Data Pagamento</TableHead>
-                <TableHead>Descrição</TableHead>
-                <TableHead className="text-right">Valor Pago</TableHead>
-                <TableHead className="text-center">Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {historicoPagamentos.length > 0 ? (
-                historicoPagamentos.map((p) => (
-                  <TableRow key={p.id}>
-                    <TableCell>{format(parseISO(p.data), 'dd/MM/yyyy', { locale: ptBR })}</TableCell>
-                    <TableCell>{p.descricao}</TableCell>
-                    <TableCell className="text-right font-medium">{formatCurrency(p.valor)}</TableCell>
-                    <TableCell className="text-center">
-                      <Badge variant={p.status === 'pago' ? 'success' : 'destructive'}>
-                        {p.status === 'pago' ? 'Pago' : 'Falha'}
-                      </Badge>
+        
+        {/* Histórico de Pagamentos (Movido para col-span-2) */}
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle className="text-xl">Histórico de Pagamentos</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Data Pagamento</TableHead>
+                  <TableHead>Descrição</TableHead>
+                  <TableHead className="text-right">Valor Pago</TableHead>
+                  <TableHead className="text-center">Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {historicoPagamentos.length > 0 ? (
+                  historicoPagamentos.map((p) => (
+                    <TableRow key={p.id}>
+                      <TableCell>{format(parseISO(p.data), 'dd/MM/yyyy', { locale: ptBR })}</TableCell>
+                      <TableCell>{p.descricao}</TableCell>
+                      <TableCell className="text-right font-medium">{formatCurrency(p.valor)}</TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant={p.status === 'pago' ? 'success' : 'destructive'}>
+                          {p.status === 'pago' ? 'Pago' : 'Falha'}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center py-4 text-muted-foreground">
+                      Nenhum pagamento encontrado.
                     </TableCell>
                   </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={4} className="text-center py-4 text-muted-foreground">
-                    Nenhum pagamento encontrado.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      </div>
     </LayoutPrincipal>
   );
 };
