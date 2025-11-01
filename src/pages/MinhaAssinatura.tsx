@@ -5,7 +5,7 @@ import { ClienteProfile } from '@/types/usuario';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, Package, DollarSign, CalendarCheck, ArrowDownCircle, CreditCard } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { showError, showSuccess } from '@/utils/toast';
+import { showError } from '@/utils/toast'; // Removido showSuccess
 import { Plano } from '@/types/plano';
 import { format, parseISO, isFuture, differenceInDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -31,7 +31,7 @@ interface ContaPagarPlano {
 }
 
 const MinhaAssinatura: React.FC = () => {
-  const { perfil, role, carregando, refetch, usuario } = useSessao();
+  const { perfil, role, carregando, usuario } = useSessao(); // Removido refetch
   const { stripePromise, loading: loadingStripe } = useStripeConfig();
   
   const [planoAtual, setPlanoAtual] = useState<Plano | null>(null);
