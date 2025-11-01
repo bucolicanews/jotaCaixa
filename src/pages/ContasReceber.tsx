@@ -85,17 +85,17 @@ const ContasReceber = () => {
   const buscarMeusLancamentos = async () => {
     setCarregandoDados(true);
     
-    let contasQuery = supabase.from('contas_receber').select('*, clientes(*)').order('data_vencimento', { ascending: true });
-    let parcelasQuery = supabase.from('parcelas_contas_receber').select('*, contas_receber(descricao, clientes(nome))').order('data_vencimento', { ascending: true });
-
+    let contasQuery;
+    let parcelasQuery;
+    
     if (isAdmin) {
-        // Admin: Busca onde empresa_id é o ID do Admin
-        contasQuery = contasQuery.eq('empresa_id', empresaId);
-        parcelasQuery = parcelasQuery.eq('empresa_id', empresaId);
+        // ADMIN: Busca nas tabelas admin_*
+        contasQuery = supabase.from('admin_contas_receber').select('*, clientes(*)').eq('admin_id', empresaId).order('data_vencimento', { ascending: true });
+        parcelasQuery = supabase.from('admin_parcelas_receber').select('*, admin_contas_receber(descricao, clientes(nome))').eq('admin_id', empresaId).order('data_vencimento', { ascending: true });
     } else if (empresaId) {
-        // Cliente/Usuário: Busca pelo ID da empresa
-        contasQuery = contasQuery.eq('empresa_id', empresaId);
-        parcelasQuery = parcelasQuery.eq('empresa_id', empresaId);
+        // Cliente/Usuário: Busca nas tabelas normais
+        contasQuery = supabase.from('contas_receber').select('*, clientes(*)').eq('empresa_id', empresaId).order('data_vencimento', { ascending: true });
+        parcelasQuery = supabase.from('parcelas_contas_receber').select('*, contas_receber(descricao, clientes(nome))').eq('empresa_id', empresaId).order('data_vencimento', { ascending: true });
     } else {
         // Sem ID de empresa (usuário não vinculado)
         setContas([]);
@@ -156,7 +156,10 @@ const ContasReceber = () => {
 
   const handleDelete = async (contaId: string) => {
     if (!window.confirm('Tem certeza que deseja excluir este conta e todas as suas parcelas? A ação não pode ser desfeita.')) return;
-    const { error } = await supabase.from('contas_receber').delete().eq('id', contaId);
+    
+    const tabelaContasReceber = isAdmin ? 'admin_contas_receber' : 'contas_receber';
+    
+    const { error } = await supabase.from(tabelaContasReceber).delete().eq('id', contaId);
     if (error) showError('Erro ao excluir conta: ' + error.message);
     else {
       showSuccess('Conta excluída com sucesso.');
@@ -205,9 +208,17 @@ const ContasReceber = () => {
     }
 
     // 3. Filtro Geral (Texto)
+    const clienteNome = isAdmin && activeTab === 'meus_lancamentos' 
+        ? (p as any).admin_contas_receber?.clientes?.nome || 'N/A'
+        : (p as any).contas_receber?.clientes?.nome || 'N/A';
+        
+    const descricao = isAdmin && activeTab === 'meus_lancamentos' 
+        ? (p as any).admin_contas_receber?.descricao || 'N/A'
+        : (p as any).contas_receber?.descricao || 'N/A';
+
     return (
-      (p.contas_receber?.clientes?.nome?.toLowerCase() || '').includes(termoBusca) ||
-      (p.contas_receber?.descricao?.toLowerCase() || '').includes(termoBusca) ||
+      clienteNome.toLowerCase().includes(termoBusca) ||
+      descricao.toLowerCase().includes(termoBusca) ||
       String(p.numero_parcela).includes(termoBusca) ||
       formatDate(p.data_vencimento).includes(termoBusca) ||
       formatCurrency(p.valor_parcela).includes(termoBusca) ||
@@ -301,18 +312,33 @@ const ContasReceber = () => {
                   </TableRow></TableHeader>
                   <TableBody>
                     {parcelasFiltradas.length > 0 ? (
-                      parcelasFiltradas.map((p) => (
-                        <TableRow key={p.id}>
-                          {isAdmin && activeTab === 'supervisao' && <TableCell className="text-sm text-muted-foreground">{(p.contas_receber as any)?.empresa_id || 'Admin'}</TableCell>}
-                          <TableCell>{p.contas_receber?.clientes?.nome || 'N/A'}</TableCell>
-                          <TableCell>{p.contas_receber?.descricao || 'N/A'}</TableCell>
-                          <TableCell className="text-center">{p.numero_parcela}</TableCell>
-                          <TableCell>{formatDate(p.data_vencimento)}</TableCell>
-                          <TableCell>{formatCurrency(p.valor_parcela)}</TableCell>
-                          <TableCell className="font-medium">{formatCurrency(p.valor_pago || 0)}</TableCell>
-                          <TableCell><Badge variant={getBadgeVariant(p.status, p.data_vencimento)}>{p.status}</Badge></TableCell>
-                        </TableRow>
-                      ))
+                      parcelasFiltradas.map((p) => {
+                        // Determina o nome do cliente e a descrição com base na aba ativa (Admin vs Cliente)
+                        const clienteNome = isAdmin && activeTab === 'meus_lancamentos' 
+                            ? (p as any).admin_contas_receber?.clientes?.nome || 'N/A'
+                            : (p as any).contas_receber?.clientes?.nome || 'N/A';
+                            
+                        const descricao = isAdmin && activeTab === 'meus_lancamentos' 
+                            ? (p as any).admin_contas_receber?.descricao || 'N/A'
+                            : (p as any).contas_receber?.descricao || 'N/A';
+                            
+                        const empresaIdDisplay = isAdmin && activeTab === 'supervisao' 
+                            ? (p as any).contas_receber?.empresa_id || 'N/A'
+                            : (p as any).admin_contas_receber?.admin_id || 'N/A';
+
+                        return (
+                          <TableRow key={p.id}>
+                            {isAdmin && activeTab === 'supervisao' && <TableCell className="text-sm text-muted-foreground">{empresaIdDisplay}</TableCell>}
+                            <TableCell>{clienteNome}</TableCell>
+                            <TableCell>{descricao}</TableCell>
+                            <TableCell className="text-center">{p.numero_parcela}</TableCell>
+                            <TableCell>{formatDate(p.data_vencimento)}</TableCell>
+                            <TableCell>{formatCurrency(p.valor_parcela)}</TableCell>
+                            <TableCell className="font-medium">{formatCurrency(p.valor_pago || 0)}</TableCell>
+                            <TableCell><Badge variant={getBadgeVariant(p.status, p.data_vencimento)}>{p.status}</Badge></TableCell>
+                          </TableRow>
+                        );
+                      })
                     ) : (
                       <TableRow>
                         <TableCell colSpan={isAdmin && activeTab === 'supervisao' ? 8 : 7} className="text-center h-24">
