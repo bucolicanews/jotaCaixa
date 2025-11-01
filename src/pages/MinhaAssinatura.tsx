@@ -14,6 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Link, useNavigate } from 'react-router-dom';
 import { useStripeConfig } from '@/hooks/use-stripe-config';
+import ContasFuturasDialog from '@/components/ContasFuturasDialog'; // Importando o novo componente
 
 interface Pagamento {
   id: string;
@@ -41,6 +42,9 @@ const MinhaAssinatura: React.FC = () => {
   const [proximaCobranca, setProximaCobranca] = useState<ProximaCobranca | null>(null);
   const [historicoPagamentos, setHistoricoPagamentos] = useState<Pagamento[]>([]);
   const [isSubmitting] = useState(false);
+  
+  // Estado do novo modal
+  const [contasFuturasOpen, setContasFuturasOpen] = useState(false);
 
   const isClient = role === 'Cliente';
   const clienteProfile = perfil as ClienteProfile;
@@ -273,11 +277,15 @@ const MinhaAssinatura: React.FC = () => {
                     </Button>
                 </div>
                 
-                <Link to="/contas-receber">
-                    <Button variant="secondary" size="sm" className="mt-2 w-full">
-                        Ver Lançamentos do Admin
-                    </Button>
-                </Link>
+                <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="mt-2 w-full"
+                    onClick={() => setContasFuturasOpen(true)} // Abre o novo modal
+                >
+                    <ListChecks className="w-4 h-4 mr-2" />
+                    Contas Futuras
+                </Button>
               </div>
             ) : (
               <div className="space-y-4">
@@ -289,13 +297,15 @@ const MinhaAssinatura: React.FC = () => {
                     </Button>
                 </Link>
                 
-                {/* NOVO BOTÃO: Contas Futuras */}
-                <Link to="/contas-receber?status=pendente">
-                    <Button variant="outline" className="w-full">
-                        <ListChecks className="w-4 h-4 mr-2" />
-                        Contas Futuras
-                    </Button>
-                </Link>
+                {/* Botão que abre o modal */}
+                <Button 
+                    variant="outline" 
+                    className="w-full"
+                    onClick={() => setContasFuturasOpen(true)}
+                >
+                    <ListChecks className="w-4 h-4 mr-2" />
+                    Contas Futuras
+                </Button>
               </div>
             )}
           </CardContent>
@@ -342,6 +352,15 @@ const MinhaAssinatura: React.FC = () => {
           </CardContent>
         </Card>
       </div>
+      
+      {/* Novo Modal de Contas Futuras */}
+      {clienteId && (
+          <ContasFuturasDialog
+              clienteId={clienteId}
+              open={contasFuturasOpen}
+              onOpenChange={setContasFuturasOpen}
+          />
+      )}
     </LayoutPrincipal>
   );
 };
