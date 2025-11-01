@@ -3,7 +3,7 @@ import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { useSessao } from '@/hooks/use-sessao';
 import { ClienteProfile } from '@/types/usuario';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, Package, DollarSign, CalendarCheck, ArrowDownCircle, CreditCard } from 'lucide-react';
+import { Loader2, Package, DollarSign, CalendarCheck, ArrowDownCircle, CreditCard, ListChecks } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError } from '@/utils/toast';
 import { Plano } from '@/types/plano';
@@ -286,6 +286,14 @@ const MinhaAssinatura: React.FC = () => {
                     <Button variant="default" className="w-full">
                         <Package className="w-4 h-4 mr-2" />
                         Renovar Plano / Mudar Plano
+                    </Button>
+                </Link>
+                
+                {/* NOVO BOTÃO: Contas Futuras */}
+                <Link to="/contas-receber">
+                    <Button variant="outline" className="w-full">
+                        <ListChecks className="w-4 h-4 mr-2" />
+                        Contas Futuras
                     </Button>
                 </Link>
               </div>
