@@ -1,5 +1,9 @@
 # Fluxo de Caixa - Sistema de Gestão Financeira (v2.0)
 
+# PROXIMO PASSO
+
+- VERIFICAR CONTAS  APAGAR
+
 Este é um sistema de gestão financeira e RH multi-inquilino (multi-tenant) construído com React, TypeScript e Supabase.
 
 ## 🚀 Novas Funcionalidades e Módulos
