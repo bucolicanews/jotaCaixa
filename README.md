@@ -1,144 +1,92 @@
-# VERSÃO TESTE 1.0.0.000
--Contas a Receber 1.0 - modo dark impplantado
+# Fluxo de Caixa - Sistema de Gestão Financeira (v2.0)
 
-proximo - revisão e testar o get pagamento
+Este é um sistema de gestão financeira e RH multi-inquilino (multi-tenant) construído com React, TypeScript e Supabase.
 
-# Fluxo de Caixa - Sistema de Gestão Financeira
+## 🚀 Novas Funcionalidades e Módulos
 
-Este é um sistema de gestão financeira multi-inquilino (multi-tenant) construído com React, TypeScript e Supabase. Ele foi projetado para permitir que múltiplos clientes (empresas) gerenciem suas finanças, enquanto um Administrador central supervisiona e gerencia os clientes.
+A versão 2.0 introduz módulos robustos de RH e Contratos, além de um fluxo completo de vendas e gestão de assinaturas via Stripe.
 
-## 🚀 Principais Funcionalidades
+### 1. Módulo de Assinatura e Faturamento (Stripe)
 
--   **Arquitetura Multi-Inquilino:** O sistema suporta três níveis de acesso:
-    1.  **Admin:** Gerencia clientes, aprova novas empresas e tem visão geral do sistema.
-    2.  **Cliente (Empresa):** Gerencia sua própria equipe de usuários, define suas permissões e utiliza os módulos financeiros.
-    3.  **Usuário:** Membro da equipe de um cliente, com acesso apenas aos módulos permitidos por seu gestor (Cliente).
--   **Sistema de Permissões em Cascata (Admin -> Cliente -> Usuário):** O controle de acesso foi aprimorado para um modelo de dois níveis:
-    1.  **Admin para Cliente:** O Administrador define quais módulos (Contas a Pagar, Relatórios, etc.) cada empresa Cliente pode acessar. Isso é feito através de uma coluna `permissoes` na tabela `tbl_clientes`.
-    2.  **Cliente para Usuário:** A empresa Cliente pode, então, gerenciar as permissões de sua própria equipe, mas apenas dentro dos limites que o Administrador permitiu. Se um módulo está desativado para a empresa, ela não pode ativá-lo para seus usuários.
-    3.  **Permissão para Cadastrar:** O Admin também controla se uma empresa pode ou não adicionar novos usuários à sua equipe através da permissão "Cadastrar Usuários".
--   **Módulos Financeiros:** Inclui funcionalidades para Contas a Pagar, Contas a Receber, Gestão de Contas Bancárias, Plano de Contas, Conciliação e Relatórios.
--   **Autenticação Segura:** Utiliza o sistema de autenticação do Supabase, incluindo um fluxo corrigido e seguro para recuperação de senha.
--   **Importação de Dados:** Funcionalidade para importar dados via arquivos CSV, como o Plano de Contas.
+Implementação completa do ciclo de vida da assinatura, desde a adesão até o faturamento recorrente.
 
-## 🛠️ Tech Stack
+*   **Fluxo de Vendas (`/vendas`):** Permite a adesão a planos (PF/PJ) e inicia o Trial de 30 dias.
+*   **Checkout Stripe (Edge Function):** Utiliza a função `create-checkout-session` para gerar sessões de pagamento único (Edge Function) e registrar o pagamento inicial.
+*   **Ativação de Assinatura (RPC `activate_subscription`):** Função de banco de dados que, após o pagamento, atualiza o `plano_id` e a `data_fim_acesso` do cliente (30 dias de renovação) e gera os registros de faturamento do Admin.
+*   **Minha Assinatura (`/minha-assinatura`):** Exibe o plano atual, a próxima data de cobrança (vencimento da `contas_pagar`) e o histórico de pagamentos.
 
--   **Frontend:** React, TypeScript, Vite
--   **Estilização:** Tailwind CSS, shadcn/ui
--   **Roteamento:** React Router
--   **Backend (BaaS):** Supabase
-    -   **Autenticação:** Supabase Auth
-    -   **Banco de Dados:** Supabase (PostgreSQL)
-    -   **Funções de Banco de Dados:** PL/pgSQL
+### 2. Módulo de Ponto Eletrônico e Folha de Ponto
 
-## 📦 Scripts Disponíveis
+Sistema completo para registro de ponto por funcionários e acompanhamento por gestores.
 
--   `npm run dev`: Inicia o servidor de desenvolvimento.
--   `npm run build`: Compila o projeto para produção.
--   `npm run lint`: Executa o linter para análise de código.
+*   **Registro de Ponto (`/ponto-eletronico`):** Permite que o usuário (Funcionário) registre Entrada/Saída com captura de selfie e geolocalização.
+*   **Folha de Ponto (`/folha-ponto`):** Interface de gestão para Clientes/Admin, permitindo:
+    *   Visualização detalhada da jornada mensal (horas trabalhadas, saldo, horas extras).
+    *   Ajuste manual de registros de Entrada/Saída.
+    *   Gerenciamento de Faltas (Justificadas/Injustificadas) e Abonos (4h, 6h, 8h).
+    *   Gestão de Folgas Trabalhadas (Compensação ou Pagamento Extra 100%).
+    *   Impressão da Folha de Ponto.
 
-## 🗄️ Arquitetura do Banco de Dados (Supabase/PostgreSQL)
+### 3. Módulo de Contratos
 
-O banco de dados é o coração do sistema multi-inquilino.
+Criação, gestão e preenchimento de contratos dinâmicos.
 
-### Extensões PostgreSQL Utilizadas
-
--   `plpgsql`: Para a criação de funções e triggers.
--   `uuid-ossp`: Para a geração de UUIDs (padrão no Supabase).
-
-### Principais Tabelas
-
--   `public.tbl_admins`: Armazena os administradores do sistema.
-    -   `id (uuid)`: Chave primária, vinculada a `auth.users.id`.
-    -   `nome (text)`
-    -   `email (text)`
-
--   `public.tbl_clientes`: Armazena as empresas/clientes que usam o sistema.
-    -   `id (uuid)`: Chave primária, vinculada a `auth.users.id`.
-    -   `nome (text)`: Nome da empresa.
-    -   `aprovado (boolean)`: Controla se o cliente foi aprovado pelo Admin.
-    -   `limite_usuarios (integer)`: Número máximo de usuários que o cliente pode cadastrar.
-    -   `permissoes (jsonb)`: Controlado pelo Admin, define quais módulos a empresa pode acessar e, consequentemente, conceder aos seus usuários.
-
--   `public.tbl_usuarios`: Armazena os usuários finais, que pertencem a um cliente.
-    -   `id (uuid)`: Chave primária, vinculada a `auth.users.id`.
-    -   `cliente_id (uuid)`: Chave estrangeira para `public.tbl_clientes.id`, vinculando o usuário à sua empresa.
-    -   `permissoes (jsonb)`: Armazena as permissões de acesso do usuário (ex: `{"contas_pagar": true, "relatorios": false}`), definidas pelo gestor do Cliente.
-
-### Lógica de Roteamento de Usuários
-
--   Um trigger (`on_auth_user_created`) em `auth.users` executa a função `route_new_user()` sempre que um novo usuário se cadastra.
--   A função `route_new_user()` lê os metadados (`role`, `cliente_id`) fornecidos no momento do cadastro e insere o registro na tabela correta (`tbl_admins`, `tbl_clientes` ou `tbl_usuarios`), estabelecendo a arquitetura de papéis.
+*   **Gerenciamento de Tags (`/contratos/tags`):** Criação de tags dinâmicas customizadas.
+*   **Gerenciamento de Modelos (`/contratos/modelos`):** Criação e importação de templates de contrato (HTML ou Texto Simples).
+*   **Geração de Contrato (`/contratos/preencher/:modeloId`):** Fluxo para selecionar um cliente, preencher tags customizadas e dados financeiros (valor, parcelamento), renderizar o contrato e gerar as Contas a Receber correspondentes.
 
 ---
 
-## 🧠 Análise de Caso: Resolvendo o Bug do "Link Mágico" na Recuperação de Senha
+## 🗄️ Arquitetura do Banco de Dados (Supabase/PostgreSQL)
 
-Um dos desafios críticos resolvidos neste projeto foi o bug onde o link de recuperação de senha se comportava como um link de login mágico, autenticando o usuário e redirecionando-o para o painel principal em vez da página de atualização de senha.
+### 1. Configuração de RLS e Permissões
 
-### O Problema
+Foram adicionadas políticas de RLS cruciais para garantir que os Clientes possam acessar seus próprios dados financeiros e de RH, mas não os dados de outros clientes ou os dados de faturamento do Admin.
 
-1.  O usuário solicita a recuperação de senha.
-2.  Ele recebe o link por e-mail e clica nele.
-3.  O aplicativo o redireciona para `/painel` como se estivesse logado, nunca mostrando a tela para criar uma nova senha.
+| Tabela | Política Adicionada | Propósito |
+| :--- | :--- | :--- |
+| `public.contas_pagar` | `Empresas podem gerenciar suas contas a pagar` | Permite que Clientes (`empresa_id = auth.uid()`) e seus Usuários (`empresa_id = cliente_id`) vejam suas próprias contas a pagar. |
+| `public.admin_recebimentos` | `Clientes can view their own payments` | Permite que o Cliente logado veja os registros de recebimento do Admin onde ele é o pagador (`cliente_id = auth.uid()`). |
+| `public.tbl_admins` | `Allow read access for authenticated users` | Permite que qualquer usuário autenticado leia a tabela `tbl_admins` (necessário para o `SessionContext` determinar a role). |
 
-### A Causa Raiz: Corrida de Eventos (Race Condition)
+### 2. Integridade de Dados (Foreign Keys)
 
-O Supabase Auth emite diferentes eventos de autenticação. O problema ocorria devido à ordem e à forma como o aplicativo reagia a eles:
+Foram adicionadas chaves estrangeiras nas tabelas de faturamento do Admin para garantir a integridade dos dados:
 
--   Quando o usuário clica no link de recuperação, o Supabase cria uma sessão temporária e emite **dois eventos** em rápida sucessão: primeiro um evento genérico `SIGNED_IN` (usuário logado) e depois o evento específico `PASSWORD_RECOVERY` (recuperação de senha).
--   A lógica de autenticação global do aplicativo (no `SessionContext`) via o evento `SIGNED_IN` primeiro, concluía que o usuário estava logado e executava o redirecionamento padrão para o painel.
--   O evento `PASSWORD_RECOVERY` chegava tarde demais; o redirecionamento já havia ocorrido.
+```sql
+-- FKs para admin_contas_receber
+ALTER TABLE public.admin_contas_receber ADD CONSTRAINT fk_admin_id FOREIGN KEY (admin_id) REFERENCES public.tbl_admins(id) ON DELETE CASCADE;
+ALTER TABLE public.admin_contas_receber ADD CONSTRAINT fk_cliente_id_cr FOREIGN KEY (cliente_id) REFERENCES public.clientes(id) ON DELETE RESTRICT;
 
-### A Solução Definitiva (Implementada)
-
-A solução foi reestruturar a lógica de autenticação para tratar a recuperação de senha como uma exceção de alta prioridade, interrompendo o fluxo de login normal.
-
-**Passo 1: Priorizar o Evento `PASSWORD_RECOVERY`**
-
-No `SessionContext.tsx`, o listener `onAuthStateChange` foi modificado para verificar **primeiro** se o evento é de recuperação de senha.
-
-```typescript
-// Dentro de SessionContext.tsx
-
-supabase.auth.onAuthStateChange((event, session) => {
-  // Lógica de alta prioridade:
-  if (event === 'PASSWORD_RECOVERY') {
-    // 1. Navega IMEDIATAMENTE para a página correta.
-    navigate('/atualizar-senha');
-    // 2. NÃO executa o resto do código (como buscar perfil),
-    //    impedindo que o app trate isso como um login.
-  } else {
-    // Fluxo normal para todos os outros eventos (SIGNED_IN, SIGNED_OUT, etc.)
-    buscarDadosAdicionais(session?.user ?? null);
-  }
-});
+-- FKs para admin_recebimentos
+ALTER TABLE public.admin_recebimentos ADD CONSTRAINT fk_admin_id_recebimento FOREIGN KEY (admin_id) REFERENCES public.tbl_admins(id) ON DELETE CASCADE;
+ALTER TABLE public.admin_recebimentos ADD CONSTRAINT fk_cliente_id_pagador FOREIGN KEY (cliente_id) REFERENCES public.tbl_clientes(id) ON DELETE RESTRICT;
 ```
 
-**Passo 2: Proteger e Limpar na Página de Atualização**
+### 3. Função RPC `activate_subscription` (Faturamento)
 
-A página `AtualizarSenha.tsx` foi simplificada para ter uma única responsabilidade: atualizar a senha e limpar a sessão.
+Esta função é o coração do fluxo de pagamento. Ela é chamada após o checkout bem-sucedido e executa a lógica de renovação de 30 dias e faturamento:
 
-```typescript
-// Dentro de AtualizarSenha.tsx
+1.  **Calcula a `v_new_data_fim_acesso`:** Define a nova data de expiração do acesso (30 dias a partir da data base, ajustada para o final do dia).
+2.  **Atualiza `tbl_clientes`:** Define o novo `plano_id`, `data_fim_acesso` e `permissoes`.
+3.  **Registra o Faturamento do Admin:** Cria um registro de Conta a Receber (`admin_contas_receber`) marcado como `recebida` (paga), com a `data_vencimento` refletindo o período de acesso contratado.
+4.  **Cria a Próxima Cobrança do Cliente:** Insere um registro `pendente` na tabela `contas_pagar` do cliente, com a `data_vencimento` sendo o dia seguinte à `data_fim_acesso`.
 
-const handleSubmit = async (e: React.FormEvent) => {
-  // ... lógica de validação da senha ...
+---
 
-  const { error } = await supabase.auth.updateUser({ password });
+## 💻 Implementação Frontend e Integrações
 
-  if (error) {
-    // Trata o erro
-  } else {
-    showSuccess('Senha atualizada com sucesso!');
-    
-    // PASSO CRUCIAL: Destruir a sessão temporária de recuperação.
-    await supabase.auth.signOut(); 
-    
-    // Redirecionar para o login.
-    navigate('/login');
-  }
-};
-```
+### 1. `src/App.tsx` (Payment Success Handler)
 
-> **Principal Lição Aprendida:** Em sistemas de autenticação baseados em eventos, sempre trate os casos de uso específicos (como recuperação de senha, verificação de e-mail) com prioridade máxima antes de lidar com o caso genérico de "usuário logado". Isso evita corridas de eventos e comportamentos inesperados.
+O componente `PaymentSuccessHandler` intercepta os parâmetros de URL (`payment=success&session_id=...`) após o retorno do Stripe e chama o RPC `activate_subscription` para finalizar a transação e atualizar o perfil do usuário.
+
+### 2. `src/hooks/use-sessao.ts` (Fluxo de Auth)
+
+A lógica de autenticação foi aprimorada para priorizar o evento `PASSWORD_RECOVERY`, garantindo que o usuário seja redirecionado para `/atualizar-senha` em vez de ser logado automaticamente no painel.
+
+### 3. Componentes Chave
+
+*   **`src/components/CheckoutPlano.tsx`:** Gerencia a coleta de dados de adesão e a chamada para a Edge Function do Stripe.
+*   **`src/components/LayoutPrincipal.tsx`:** Implementa a lógica de bloqueio de acesso (`isAccessExpired` / `isAccessBlocked`) e exibe o `TrialBanner` e o `TrialButton` conforme o status do cliente.
+*   **`src/components/FormUsuario.tsx` / `src/components/FormCliente.tsx`:** Formulários de perfil que agora incluem campos de RH (salário, jornada, folgas) e a integração com o `useTagManager` para criar tags de contrato automaticamente.
+*   **`src/hooks/use-tag-manager.ts`:** Hook responsável por verificar e alternar a presença de tags de contrato na tabela `contrato_tags` com base nos campos do perfil do Cliente/Usuário.
