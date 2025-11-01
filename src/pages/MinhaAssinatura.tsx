@@ -306,7 +306,15 @@ const MinhaAssinatura: React.FC = () => {
                 </Link>
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">Nenhuma cobrança futura pendente.</p>
+              <div className="space-y-4">
+                <p className="text-sm text-muted-foreground">Nenhuma cobrança futura pendente.</p>
+                <Link to="/vendas">
+                    <Button variant="default" className="w-full">
+                        <Package className="w-4 h-4 mr-2" />
+                        Renovar Plano / Mudar Plano
+                    </Button>
+                </Link>
+              </div>
             )}
           </CardContent>
         </Card>
