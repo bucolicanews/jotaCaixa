@@ -3,7 +3,7 @@ import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { useSessao } from '@/hooks/use-sessao';
 import { ClienteProfile } from '@/types/usuario';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, Package, DollarSign, CalendarCheck, ArrowDownCircle } from 'lucide-react';
+import { Loader2, Package, DollarSign, CalendarCheck, ArrowDownCircle, CreditCard } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError } from '@/utils/toast';
 import { Plano } from '@/types/plano';
@@ -13,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
+import PagarMensalidadeDialog from '@/components/PagarMensalidadeDialog'; // Importando o novo dialog
 
 interface Pagamento {
   id: string;
@@ -26,16 +27,16 @@ interface ContaPagarPlano {
   id: string;
   data_vencimento: string;
   valor: number;
-  status: 'pendente' | 'pago';
   fornecedor: string;
 }
 
 const MinhaAssinatura: React.FC = () => {
-  const { perfil, role, carregando } = useSessao();
+  const { perfil, role, carregando, refetch } = useSessao();
   const [planoAtual, setPlanoAtual] = useState<Plano | null>(null);
   const [carregandoPlano, setCarregandoPlano] = useState(true);
   const [proximaContaPagar, setProximaContaPagar] = useState<ContaPagarPlano | null>(null);
   const [historicoPagamentos, setHistoricoPagamentos] = useState<Pagamento[]>([]);
+  const [pagarMensalidadeOpen, setPagarMensalidadeOpen] = useState(false); // Estado do dialog
 
   const isClient = role === 'Cliente';
   const clienteProfile = perfil as ClienteProfile;
@@ -114,7 +115,6 @@ const MinhaAssinatura: React.FC = () => {
         id: contasPagar[0].id,
         data_vencimento: contasPagar[0].data_vencimento,
         valor: Number(contasPagar[0].valor),
-        status: contasPagar[0].status as 'pendente' | 'pago',
         fornecedor: contasPagar[0].fornecedor || 'Mensalidade',
       });
     } else {
@@ -129,6 +129,12 @@ const MinhaAssinatura: React.FC = () => {
       fetchDadosAssinatura();
     }
   }, [carregando, fetchDadosAssinatura]);
+  
+  const handleRenewalComplete = () => {
+      setPagarMensalidadeOpen(false);
+      fetchDadosAssinatura(); // Re-busca os dados da assinatura
+      refetch(); // Atualiza a sessão para pegar a nova data_fim_acesso
+  };
 
   if (carregando || carregandoPlano) {
     return (
@@ -160,8 +166,6 @@ const MinhaAssinatura: React.FC = () => {
   const isTrial = dataFimAcesso && isFuture(dataFimAcesso) && daysRemaining < 30;
   const statusAssinatura = isTrial ? 'Trial Ativo' : (dataFimAcesso && isFuture(dataFimAcesso) ? 'Ativa' : 'Expirada');
   
-  // CORREÇÃO: A data de Próxima Cobrança deve ser a data de vencimento da próxima conta a pagar (se existir),
-  // pois é o dia em que a cobrança deve ser feita para evitar o bloqueio.
   const dataProximaCobranca = proximaContaPagar?.data_vencimento 
     ? format(parseISO(proximaContaPagar.data_vencimento), 'dd/MM/yyyy', { locale: ptBR }) 
     : (dataFimAcesso ? format(dataFimAcesso, 'dd/MM/yyyy', { locale: ptBR }) : 'N/A');
@@ -232,9 +236,19 @@ const MinhaAssinatura: React.FC = () => {
                 <p className="text-xs text-muted-foreground">
                   {proximaContaPagar.fornecedor}
                 </p>
+                
+                <Button 
+                    variant="default" 
+                    size="sm" 
+                    className="mt-4 w-full"
+                    onClick={() => setPagarMensalidadeOpen(true)}
+                >
+                    <CreditCard className="w-4 h-4 mr-2" /> Pagar Mensalidade
+                </Button>
+                
                 <Link to="/contas-pagar">
                     <Button variant="secondary" size="sm" className="mt-2 w-full">
-                        Ver Detalhes
+                        Ver Contas a Pagar
                     </Button>
                 </Link>
               </div>
@@ -285,6 +299,15 @@ const MinhaAssinatura: React.FC = () => {
           </Table>
         </CardContent>
       </Card>
+      
+      {/* Dialog de Pagamento Manual */}
+      <PagarMensalidadeDialog
+        contaPagar={proximaContaPagar}
+        clienteId={clienteId}
+        open={pagarMensalidadeOpen}
+        onOpenChange={setPagarMensalidadeOpen}
+        onSaveComplete={handleRenewalComplete}
+      />
     </LayoutPrincipal>
   );
 };
