@@ -3,7 +3,7 @@ import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Edit, Trash2, PlusCircle, Filter, Building2, CheckCircle, Users as UsersIcon, Mail } from 'lucide-react';
+import { Loader2, Edit, Trash2, PlusCircle, Filter, Building2, CheckCircle, Users as UsersIcon, Mail, PowerOff } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
@@ -207,12 +207,33 @@ const ClientesPage = () => {
       
       // 2. Deleta o usuário do auth.users (Admin tem permissão para isso)
       // Nota: Em um ambiente real, isso requer service_role, mas aqui simulamos a exclusão do perfil.
-      // Para fins de UI, a exclusão do perfil é suficiente para remover a empresa da lista.
       
       showSuccess(`Empresa ${nome} deletada com sucesso.`);
       buscarDados();
     } catch (error: any) {
       showError('Falha ao deletar empresa: ' + error.message);
+    }
+  };
+  
+  const handleDesativarCliente = async (id: string, nome: string) => {
+    if (!window.confirm(`Tem certeza que deseja DESATIVAR o acesso da empresa ${nome}? O acesso será bloqueado imediatamente.`)) return;
+    
+    setCarregandoDados(true);
+    
+    try {
+        const { error } = await supabase
+            .from('tbl_clientes')
+            .update({ data_fim_acesso: null }) // Define data_fim_acesso como NULL
+            .eq('id', id);
+            
+        if (error) throw error;
+        
+        showSuccess(`Acesso da empresa ${nome} desativado com sucesso.`);
+        buscarDados();
+    } catch (error: any) {
+        showError('Falha ao desativar acesso: ' + error.message);
+    } finally {
+        setCarregandoDados(false);
     }
   };
   
@@ -224,7 +245,7 @@ const ClientesPage = () => {
     // 1. Buscar o plano de trial (assumindo o mais barato)
     const { data: planos, error: planosError } = await supabase
         .from('planos')
-        .select('id, dias_trial, permissoes, tipo_cliente')
+        .select('id, permissoes, tipo_cliente')
         .order('preco_mensal', { ascending: true })
         .limit(1);
         
@@ -235,19 +256,18 @@ const ClientesPage = () => {
     }
     
     const planoTrial = planos[0];
-    const dataFimAcesso = planoTrial.dias_trial > 0 
-        ? parseISO(new Date().toISOString()).setDate(new Date().getDate() + planoTrial.dias_trial)
-        : null;
-        
-    const dataFimISO = dataFimAcesso ? new Date(dataFimAcesso).toISOString() : null;
-
-    // 2. Atualizar o perfil do cliente
+    
+    // 2. Calcular a data de fim de acesso (7 dias de trial)
+    const dataFimAcesso = parseISO(new Date().toISOString());
+    const dataFimISO = format(dataFimAcesso, 'yyyy-MM-dd') + 'T12:00:00Z'; // Usando a data de hoje + 7 dias
+    
+    // 3. Atualizar o perfil do cliente
     const { error } = await supabase
         .from('tbl_clientes')
         .update({ 
             aprovado: true,
             plano_id: planoTrial.id,
-            data_fim_acesso: dataFimISO,
+            data_fim_acesso: dataFimISO, // Define a data de expiração para 7 dias
             permissoes: planoTrial.permissoes,
             tipo_cliente: planoTrial.tipo_cliente,
         })
@@ -256,7 +276,7 @@ const ClientesPage = () => {
     if (error) {
         showError('Erro ao aprovar cliente: ' + error.message);
     } else {
-        showSuccess(`Empresa ${cliente.nome} aprovada com sucesso! Trial de ${planoTrial.dias_trial} dias iniciado.`);
+        showSuccess(`Empresa ${cliente.nome} aprovada com sucesso! Trial de 7 dias iniciado.`);
         buscarDados();
     }
     setCarregandoDados(false);
@@ -297,14 +317,15 @@ const ClientesPage = () => {
           const dataFimAcesso = e.data_fim_acesso ? parseISO(e.data_fim_acesso) : null;
           const isAtivo = dataFimAcesso && isPast(now) === false; // Data de fim de acesso é futura ou hoje
           const isAvulso = e.tipo_cliente?.endsWith('_Avulso') ?? false; // Verifica o novo sufixo
+          const isBlocked = dataFimAcesso === null && e.aprovado; // Aprovado, mas sem data de fim (desativado)
           
           if (status === 'ativos') {
               // Ativos: Aprovados, não avulsos e com acesso futuro
               return e.aprovado && !isAvulso && isAtivo;
           }
           if (status === 'inativos') {
-              // Inativos: Aprovados, não avulsos e com acesso expirado
-              return e.aprovado && !isAvulso && !isAtivo;
+              // Inativos: Aprovados, não avulsos e com acesso expirado OU bloqueado
+              return e.aprovado && !isAvulso && (!isAtivo || isBlocked);
           }
           if (status === 'avulsos') {
               // Avulsos: Aprovados e com o sufixo _Avulso
@@ -400,22 +421,25 @@ const ClientesPage = () => {
                         const dataFimAcesso = empresa.data_fim_acesso ? parseISO(empresa.data_fim_acesso) : null;
                         const isAtivo = dataFimAcesso && isPast(new Date()) === false;
                         const isAvulso = empresa.tipo_cliente?.endsWith('_Avulso') ?? false;
+                        const isBlocked = dataFimAcesso === null && isAprovado;
                         
                         let statusBadge;
                         if (!isAprovado) {
                             statusBadge = <Badge variant="warning">Pendente</Badge>;
+                        } else if (isBlocked) {
+                            statusBadge = <Badge variant="destructive">Bloqueado</Badge>;
                         } else if (isAvulso) {
                             statusBadge = <Badge variant="secondary">Avulso</Badge>;
                         } else if (isAtivo) {
                             statusBadge = <Badge variant="default">Ativo</Badge>;
                         } else {
-                            statusBadge = <Badge variant="destructive">Inativo</Badge>;
+                            statusBadge = <Badge variant="destructive">Expirado</Badge>;
                         }
                         
                         const dataExpiracaoDisplay = dataFimAcesso ? format(dataFimAcesso, 'dd/MM/yyyy') : 'N/A';
 
                         return (
-                            <TableRow key={empresa.id} className={cn(!isAprovado && "bg-yellow-500/10")}>
+                            <TableRow key={empresa.id} className={cn(!isAprovado && "bg-yellow-500/10", isBlocked && "bg-red-500/10")}>
                                 <TableCell className="font-medium">{empresa.nome}</TableCell>
                                 <TableCell>{empresa.email}</TableCell>
                                 <TableCell className="text-sm text-muted-foreground">{empresa.plano_id || 'N/A'}</TableCell>
@@ -430,6 +454,19 @@ const ClientesPage = () => {
                                             className="h-8"
                                         >
                                             <CheckCircle className="h-4 w-4 mr-1" /> Aprovar
+                                        </Button>
+                                    )}
+                                    
+                                    {/* Botão de Desativar (Aparece se estiver Ativo ou Avulso e não bloqueado) */}
+                                    {(isAtivo || isAvulso) && !isBlocked && (
+                                        <Button 
+                                            variant="destructive" 
+                                            size="icon" 
+                                            onClick={() => handleDesativarCliente(empresa.id, empresa.nome)}
+                                            title="Desativar Acesso"
+                                            disabled={carregandoDados}
+                                        >
+                                            <PowerOff className="h-4 w-4" />
                                         </Button>
                                     )}
                                     

@@ -1,7 +1,7 @@
 import React from 'react';
 import { useSessao } from '@/hooks/use-sessao';
 import { useNavigate } from 'react-router-dom';
-import { Loader2, Package } from 'lucide-react';
+import { Loader2, Package, Phone } from 'lucide-react';
 import { ClienteProfile } from '@/types/usuario';
 import { Card, CardDescription, CardHeader, CardTitle, CardContent } from './ui/card';
 import { cn } from '@/lib/utils';
@@ -33,12 +33,19 @@ const LayoutPrincipal: React.FC<LayoutPrincipalProps> = ({ children }) => {
     return null;
   }
 
-  const isPendingClient = role === 'Cliente' && !(perfil as ClienteProfile)?.aprovado;
+  const isClient = role === 'Cliente';
   const clienteProfile = perfil as ClienteProfile;
   
-  // Lógica de Expiração: Se for Cliente, aprovado, e a data de fim de acesso for passada.
+  const isPendingClient = isClient && !(clienteProfile?.aprovado);
+  
   const dataFimAcesso = clienteProfile?.data_fim_acesso ? parseISO(clienteProfile.data_fim_acesso) : null;
-  const isAccessExpired = role === 'Cliente' && clienteProfile?.aprovado && dataFimAcesso && isPast(dataFimAcesso);
+  
+  // 1. Acesso Expirado: Cliente aprovado E dataFimAcesso existe E está no passado.
+  const isAccessExpired = isClient && clienteProfile?.aprovado && dataFimAcesso && isPast(dataFimAcesso);
+  
+  // 2. Acesso Bloqueado: Cliente aprovado E dataFimAcesso é NULL.
+  const isAccessBlocked = isClient && clienteProfile?.aprovado && dataFimAcesso === null;
+
 
   if (isPendingClient) {
     return (
@@ -65,25 +72,32 @@ const LayoutPrincipal: React.FC<LayoutPrincipalProps> = ({ children }) => {
     );
   }
   
-  if (isAccessExpired) {
+  if (isAccessExpired || isAccessBlocked) {
       return (
         <div className="flex flex-col min-h-screen bg-background">
           <Header />
           <main className="flex-1 p-4 md:p-8 overflow-y-auto flex items-center justify-center">
             <Card className="w-full max-w-lg text-center border-red-500">
               <CardHeader>
-                <CardTitle className="text-2xl text-destructive">Acesso Expirado</CardTitle>
+                <CardTitle className="text-2xl text-destructive">Acesso Bloqueado</CardTitle>
                 <CardDescription className="mt-2">
-                  Seu período de acesso (Trial ou Plano) terminou. Para continuar utilizando o sistema, por favor, renove sua assinatura.
+                  {isAccessBlocked 
+                    ? 'Seu acesso foi desativado pelo suporte. Entre em contato para reativar seu plano.'
+                    : 'Seu período de acesso (Trial ou Plano) terminou. Para continuar utilizando o sistema, por favor, renove sua assinatura.'
+                  }
                 </CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-4">
                   <Link to="/vendas">
                       <Button variant="default" className="w-full">
                           <Package className="w-4 h-4 mr-2" />
                           Renovar Assinatura
                       </Button>
                   </Link>
+                  <Button variant="outline" className="w-full">
+                      <Phone className="w-4 h-4 mr-2" />
+                      Contatar Suporte
+                  </Button>
               </CardContent>
             </Card>
           </main>
