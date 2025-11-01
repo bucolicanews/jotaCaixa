@@ -48,12 +48,16 @@ const TrialBanner: React.FC = () => {
         setDataFimAcesso(dataFim);
         setPlanoInfo(planoData as PlanoInfo);
         
-        // 2. Determinar se é Trial (Regra: Apenas se for 7 dias de trial E a data de fim for futura)
+        // 2. Determinar se é Trial (Regra: Apenas se for 7 dias de trial E a data de fim for futura E o acesso restante for curto)
         const isFutureAccess = isFuture(dataFim);
         const isSevenDayTrial = planoData.dias_trial === 7;
         
-        // O banner só aparece se for um trial de 7 dias E o acesso ainda não expirou.
-        setIsTrial(isSevenDayTrial && isFutureAccess);
+        // Se a data de fim de acesso for muito distante (ex: mais de 30 dias), não é um trial ativo.
+        const daysRemaining = differenceInDays(dataFim, new Date());
+        const isShortTermAccess = daysRemaining <= 30;
+        
+        // O banner só aparece se for um trial de 7 dias, o acesso ainda não expirou, E for um acesso de curto prazo.
+        setIsTrial(isSevenDayTrial && isFutureAccess && isShortTermAccess);
         setLoading(false);
 
     }, [isClient, clienteProfile]);
