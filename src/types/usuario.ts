@@ -24,6 +24,20 @@ export interface ClienteProfile {
   documento?: string | null;
   endereco_completo?: string | null;
   criado_em: string; // ADICIONADO
+  
+  // Campos cadastrais adicionados para tags de contrato (Erro 8)
+  cpf?: string | null;
+  rg?: string | null;
+  nome_mae?: string | null;
+  nome_pai?: string | null;
+  telefone?: string | null;
+  cep?: string | null;
+  endereco?: string | null;
+  numero?: string | null;
+  complemento?: string | null;
+  bairro?: string | null;
+  cidade?: string | null;
+  estado?: string | null;
 }
 
 export interface UsuarioProfile {
