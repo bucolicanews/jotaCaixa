@@ -15,53 +15,57 @@ export function usePrint() {
         return;
       }
 
-      // Estilos otimizados para impressão A4
+      // Estilos otimizados para impressão A4 em modo PAISAGEM
       const printStyles = `
         <style>
           @page {
-            size: A4;
-            margin: 15mm; /* Margens padrão A4 */
+            size: A4 landscape; /* FORÇA MODO PAISAGEM */
+            margin: 10mm; /* Margens reduzidas para maximizar o espaço */
           }
           body { 
             font-family: Arial, sans-serif; 
             margin: 0; 
             padding: 0; 
             color: #000; 
-            font-size: 10pt; /* Tamanho de fonte padrão para impressão */
+            font-size: 10pt; 
           }
           h1, h2, h3 { margin-top: 0; page-break-after: avoid; }
           .print-header { 
             border-bottom: 2px solid #000; 
             padding-bottom: 10px; 
-            margin-bottom: 20px; 
+            margin-bottom: 15px; /* Reduzido */
             page-break-after: avoid;
           }
           .print-section { 
-            margin-bottom: 20px; 
+            margin-bottom: 15px; /* Reduzido */
             padding: 0; 
-            page-break-inside: avoid; /* Evita quebra dentro de seções importantes */
+            page-break-inside: avoid; 
           }
           .print-table { 
             width: 100%; 
             border-collapse: collapse; 
-            margin-top: 10px; 
-            table-layout: fixed; /* Garante que a largura da coluna seja respeitada */
+            margin-top: 5px; /* Reduzido */
+            table-layout: fixed; 
           }
           .print-table th, .print-table td { 
             border: 1px solid #ccc; 
-            padding: 4px 8px; /* REDUZIDO O PADDING VERTICAL DE 6PX PARA 4PX */
+            padding: 3px 6px; /* REDUZIDO O PADDING PARA CABER MAIS CONTEÚDO */
             text-align: left; 
-            font-size: 9pt; 
-            word-wrap: break-word; /* Permite quebra de palavras longas */
+            font-size: 8pt; /* REDUZIDO O TAMANHO DA FONTE PARA CABER MAIS */
+            word-wrap: break-word; 
+            white-space: nowrap; /* Tenta evitar quebra de linha na célula */
+            overflow: hidden; /* Esconde o que não couber */
+            text-overflow: ellipsis; /* Adiciona reticências se o texto for cortado */
           }
           .print-table th { 
             background-color: #f0f0f0; 
             font-weight: bold;
+            white-space: nowrap; /* Garante que o cabeçalho não quebre */
           }
           .print-signatures { 
             display: flex; 
             justify-content: space-around; 
-            margin-top: 50px; 
+            margin-top: 40px; 
             page-break-before: avoid;
           }
           .print-signature-line { 
@@ -76,7 +80,7 @@ export function usePrint() {
           @media print {
             .print-table { page-break-inside: auto; }
             .print-table tr { page-break-inside: avoid; page-break-after: auto; }
-            .print-table thead { display: table-header-group; } /* Repete cabeçalho em novas páginas */
+            .print-table thead { display: table-header-group; } 
             .no-print { display: none; }
           }
         </style>
