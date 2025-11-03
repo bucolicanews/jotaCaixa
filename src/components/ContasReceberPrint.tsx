@@ -40,11 +40,14 @@ const ContasReceberPrint: React.FC<ContasReceberPrintProps> = ({ data, activeTab
             case 'ID Parcela':
             case 'ID Conta':
             case 'ID Recebimento':
-                return { width: '10%', fontSize: '8pt' };
+                // Reduzindo a largura para 8% para dar mais espaço a outras colunas
+                return { width: '8%', fontSize: '8pt' }; 
             case 'Cliente':
-                return { width: '15%' };
+                // Aumentando a largura
+                return { width: '18%' };
             case 'Descrição':
-                return { width: '25%' };
+                // Aumentando a largura
+                return { width: '30%' };
             case 'Nº Parcela':
                 return { width: '5%', textAlign: 'center' as const };
             case 'Valor Parcela':
@@ -54,7 +57,7 @@ const ContasReceberPrint: React.FC<ContasReceberPrintProps> = ({ data, activeTab
                 return { width: '10%', textAlign: 'right' as const };
             case 'Vencimento':
             case 'Data Recebimento':
-                return { width: '10%' };
+                return { width: '9%' };
             case 'Status':
             case 'Origem':
             case 'Forma Pagamento':
