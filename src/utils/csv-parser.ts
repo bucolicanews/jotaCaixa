@@ -12,8 +12,8 @@ export const parseCSV = (file: File): Promise<ContaCSV[]> => {
       header: true,
       skipEmptyLines: true,
       dynamicTyping: true,
-      // Usando ponto e vírgula como delimitador padrão para CSVs brasileiros
-      delimiter: ';', 
+      // Usando vírgula como delimitador para o arquivo fornecido
+      delimiter: ',', 
       complete: (results: ParseResult<any>) => {
         // Mapeamento para garantir que os campos esperados existam e estejam no formato correto
         const data = results.data.map((row: any) => ({
