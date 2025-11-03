@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, PlusCircle, Edit, Trash2, ListChecks, Eye } from 'lucide-react';
+import { Loader2, PlusCircle, Edit, Trash2, ListChecks, Eye, BadgeDollarSign } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
@@ -21,6 +21,7 @@ import { isToday, isPast, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 import { useSearchParams } from 'react-router-dom'; // Importando useSearchParams
+import RegistrarPagamentoDialog from '@/components/RegistrarPagamentoDialog'; // Importando o dialog de pagamento
 
 type ParcelaStatus = 'aberta' | 'parcial' | 'paga' | 'reprogramada' | 'cancelada';
 type BadgeVariant = 'success' | 'warning' | 'secondary' | 'destructive' | 'default' | 'info';
@@ -68,6 +69,10 @@ const ContasReceber = () => {
   const [dialogParcelasAberto, setDialogParcelasAberto] = useState(false);
   const [clienteNomeMap, setClienteNomeMap] = useState<Record<string, string>>({});
   
+  // Estados para o modal de pagamento
+  const [pagamentoDialogOpen, setPagamentoDialogOpen] = useState(false);
+  const [parcelaParaPagamento, setParcelaParaPagamento] = useState<any | null>(null); // Usamos 'any' temporariamente para incluir campos necessários
+
   // Filtros
   const [filtroGeral, setFiltroGeral] = useState('');
   const [filtroPeriodo, setFiltroPeriodo] = useState<DateRange | undefined>(undefined);
@@ -134,11 +139,11 @@ const ContasReceber = () => {
         // Sintético: Busca todas as colunas, incluindo cliente_id, mas sem join aninhado
         contasQuery = supabase.from('admin_contas_receber').select('*').eq('admin_id', empresaId).order('data_vencimento', { ascending: true });
         // Analítico: Busca a descrição e o cliente_id da conta sintética
-        parcelasQuery = supabase.from('admin_parcelas_receber').select('*, admin_contas_receber(descricao, cliente_id)').eq('admin_id', empresaId).order('data_vencimento', { ascending: true });
+        parcelasQuery = supabase.from('admin_parcelas_receber').select('*, admin_contas_receber(descricao, cliente_id, admin_id)').eq('admin_id', empresaId).order('data_vencimento', { ascending: true });
     } else if (empresaId) {
         // Cliente/Usuário: Busca nas tabelas normais
         contasQuery = supabase.from('contas_receber').select('*, clientes(*)').eq('empresa_id', empresaId).order('data_vencimento', { ascending: true });
-        parcelasQuery = supabase.from('parcelas_contas_receber').select('*, contas_receber(descricao, clientes(nome))').eq('empresa_id', empresaId).order('data_vencimento', { ascending: true });
+        parcelasQuery = supabase.from('parcelas_contas_receber').select('*, contas_receber(descricao, clientes(nome), empresa_id)').eq('empresa_id', empresaId).order('data_vencimento', { ascending: true });
     } else {
         // Sem ID de empresa (usuário não vinculado)
         setContas([]);
@@ -165,7 +170,7 @@ const ContasReceber = () => {
     // Supervisão: Busca todos os lançamentos onde empresa_id NÃO é o ID do Admin
     const [contasRes, parcelasRes] = await Promise.all([
       supabase.from('contas_receber').select('*, clientes(*)').not('empresa_id', 'eq', empresaId).order('data_vencimento', { ascending: true }),
-      supabase.from('parcelas_contas_receber').select('*, contas_receber(descricao, clientes(nome))').not('empresa_id', 'eq', empresaId).order('data_vencimento', { ascending: true })
+      supabase.from('parcelas_contas_receber').select('*, contas_receber(descricao, clientes(nome), empresa_id)').not('empresa_id', 'eq', empresaId).order('data_vencimento', { ascending: true })
     ]);
 
     if (contasRes.error) showError('Erro ao carregar contas de supervisão: ' + contasRes.error.message);
@@ -201,6 +206,12 @@ const ContasReceber = () => {
     setContaSelecionada(null);
     buscarDados();
   };
+  
+  const handlePagamentoCompleto = () => {
+    setPagamentoDialogOpen(false);
+    setParcelaParaPagamento(null);
+    buscarDados(); // Re-busca todos os dados após o pagamento
+  };
 
   const handleDelete = async (contaId: string) => {
     if (!window.confirm('Tem certeza que deseja excluir este conta e todas as suas parcelas? A ação não pode ser desfeita.')) return;
@@ -218,6 +229,26 @@ const ContasReceber = () => {
   const handleOpenParcelas = (conta: ContaReceber) => {
     setContaSelecionada(conta);
     setDialogParcelasAberto(true);
+  };
+  
+  const handleOpenPagamento = (parcela: any) => {
+    // Mapeia os campos necessários para o RegistrarPagamentoDialog
+    const isMyLaunch = isAdmin && activeTab === 'meus_lancamentos';
+    
+    const contaReceberData = isMyLaunch 
+        ? parcela.admin_contas_receber 
+        : parcela.contas_receber;
+        
+    const mappedParcela = {
+        id: parcela.id,
+        conta_receber_id: parcela.conta_receber_id,
+        empresa_id: isMyLaunch ? contaReceberData.admin_id : contaReceberData.empresa_id,
+        valor_parcela: parcela.valor_parcela,
+        valor_pago: parcela.valor_pago,
+    };
+    
+    setParcelaParaPagamento(mappedParcela);
+    setPagamentoDialogOpen(true);
   };
 
   const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -260,7 +291,9 @@ const ContasReceber = () => {
     let clienteNome = 'N/A';
     let descricao = 'N/A';
     
-    if (isAdmin && activeTab === 'meus_lancamentos') {
+    const isMyLaunch = isAdmin && activeTab === 'meus_lancamentos';
+    
+    if (isMyLaunch) {
         // Admin: Usa o mapa para buscar o nome do cliente
         const contaReceber = (p as any).admin_contas_receber;
         descricao = contaReceber?.descricao || 'N/A';
@@ -377,7 +410,7 @@ const ContasReceber = () => {
                 <Table>
                   <TableHeader><TableRow>
                     {isAdmin && activeTab === 'supervisao' && <TableHead>Empresa</TableHead>}
-                    <TableHead>Cliente</TableHead><TableHead>Descrição</TableHead><TableHead className="text-center">Nº Parcela</TableHead><TableHead>Vencimento</TableHead><TableHead>Valor da Parcela</TableHead><TableHead>Valor Pago</TableHead><TableHead>Status</TableHead>
+                    <TableHead>Cliente</TableHead><TableHead>Descrição</TableHead><TableHead className="text-center">Nº Parcela</TableHead><TableHead>Vencimento</TableHead><TableHead>Valor da Parcela</TableHead><TableHead>Valor Pago</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Ações</TableHead>
                   </TableRow></TableHeader>
                   <TableBody>
                     {parcelasFiltradas.length > 0 ? (
@@ -396,6 +429,8 @@ const ContasReceber = () => {
                         const empresaIdDisplay = isAdmin && activeTab === 'supervisao' 
                             ? (p as any).contas_receber?.empresa_id || 'N/A'
                             : (p as any).admin_contas_receber?.admin_id || 'N/A';
+                            
+                        const isPaidOrCancelled = p.status === 'paga' || p.status === 'cancelada';
 
                         return (
                           <TableRow key={p.id}>
@@ -407,12 +442,22 @@ const ContasReceber = () => {
                             <TableCell>{formatCurrency(p.valor_parcela)}</TableCell>
                             <TableCell className="font-medium">{formatCurrency(p.valor_pago || 0)}</TableCell>
                             <TableCell><Badge variant={getBadgeVariant(p.status, p.data_vencimento)}>{p.status}</Badge></TableCell>
+                            <TableCell className="text-right">
+                                <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    onClick={() => handleOpenPagamento(p)} 
+                                    disabled={isPaidOrCancelled || (isAdmin && activeTab === 'supervisao')}
+                                >
+                                    <BadgeDollarSign className="w-4 h-4" />
+                                </Button>
+                            </TableCell>
                           </TableRow>
                         );
                       })
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={isAdmin && activeTab === 'supervisao' ? 8 : 7} className="text-center h-24">
+                        <TableCell colSpan={isAdmin && activeTab === 'supervisao' ? 9 : 8} className="text-center h-24">
                           Nenhum resultado encontrado.
                         </TableCell>
                       </TableRow>
@@ -520,6 +565,13 @@ const ContasReceber = () => {
         open={dialogParcelasAberto}
         onOpenChange={setDialogParcelasAberto}
         onDataChange={buscarDados}
+      />
+      
+      <RegistrarPagamentoDialog
+        parcela={parcelaParaPagamento}
+        open={pagamentoDialogOpen}
+        onOpenChange={setPagamentoDialogOpen}
+        onSaveComplete={handlePagamentoCompleto}
       />
     </LayoutPrincipal>
   );
