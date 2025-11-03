@@ -21,33 +21,14 @@ const PlanoContasPage = () => {
   const [contaSelecionada, setContaSelecionada] = useState<PlanoContas | null>(null);
   const [dialogAberto, setDialogAberto] = useState(false);
 
-  const buscarProprietarioId = async (userId: string) => {
-    let ownerId: string | null = null;
-
-    if (role === 'Admin') {
-        ownerId = userId; // Admin usa seu próprio ID
-    } else if (role === 'Cliente') {
-        ownerId = (perfil as ClienteProfile)?.id || null;
-    } else if (role === 'Usuario') {
-        ownerId = (perfil as UsuarioProfile)?.cliente_id || null;
-    }
-    
-    if (!ownerId) {
-        showError('Não foi possível determinar o ID da empresa/proprietário.');
-        setCarregandoContas(false);
-        return;
-    }
-    
-    setProprietarioId(ownerId);
-  };
-
+  // 1. Função para buscar o Plano de Contas (agora com useCallback)
   const buscarPlanoContas = useCallback(async (id: string) => {
     setCarregandoContas(true);
     const { data, error } = await supabase
       .from('plano_contas')
       .select('*')
       .eq('proprietario_id', id)
-      .order('Conta', { ascending: true }); // Ordenando pelo novo nome da coluna
+      .order('Conta', { ascending: true });
 
     if (error) {
       showError('Erro ao carregar Plano de Contas: ' + error.message);
@@ -56,21 +37,37 @@ const PlanoContasPage = () => {
       setContas(data as PlanoContas[]);
     }
     setCarregandoContas(false);
-  }, [showError]);
+  }, []);
 
+  // 2. Efeito para determinar o Proprietário ID
   useEffect(() => {
     if (!carregandoSessao && usuario) {
-      buscarProprietarioId(usuario.id);
-    }
-  }, [carregandoSessao, usuario]);
+      let ownerId: string | null = null;
 
+      if (role === 'Admin') {
+          ownerId = usuario.id;
+      } else if (role === 'Cliente') {
+          ownerId = (perfil as ClienteProfile)?.id || null;
+      } else if (role === 'Usuario') {
+          ownerId = (perfil as UsuarioProfile)?.cliente_id || null;
+      }
+      
+      if (ownerId) {
+          setProprietarioId(ownerId);
+      } else {
+          setCarregandoContas(false); // Se não houver ID, para o carregamento
+      }
+    } else if (!carregandoSessao && !usuario) {
+        setCarregandoContas(false);
+    }
+  }, [carregandoSessao, usuario, perfil, role]);
+
+  // 3. Efeito para buscar as contas quando o Proprietário ID estiver definido
   useEffect(() => {
     if (proprietarioId) {
       buscarPlanoContas(proprietarioId);
-    } else if (!carregandoContas && !usuario) {
-      setCarregandoContas(false);
     }
-  }, [proprietarioId, usuario, carregandoContas, buscarPlanoContas]);
+  }, [proprietarioId, buscarPlanoContas]);
 
   const handleImportComplete = () => {
     if (proprietarioId) {
