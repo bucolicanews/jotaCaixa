@@ -15,23 +15,68 @@ export function usePrint() {
         return;
       }
 
-      // Estilos básicos para impressão (garantindo que o conteúdo seja legível)
+      // Estilos otimizados para impressão A4
       const printStyles = `
         <style>
-          body { font-family: Arial, sans-serif; margin: 0; padding: 20px; color: #000; }
-          h1, h2, h3 { margin-top: 0; }
-          .print-header { border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; }
-          .print-section { margin-bottom: 20px; border: 1px solid #ccc; padding: 15px; border-radius: 5px; }
-          .print-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-          .print-table th, .print-table td { border: 1px solid #ccc; padding: 8px; text-align: left; font-size: 12px; }
-          .print-table th { background-color: #f0f0f0; }
-          .print-signatures { display: flex; justify-content: space-around; margin-top: 50px; }
-          .print-signature-line { width: 40%; border-top: 1px solid #000; padding-top: 5px; text-align: center; font-size: 12px; }
+          @page {
+            size: A4;
+            margin: 15mm; /* Margens padrão A4 */
+          }
+          body { 
+            font-family: Arial, sans-serif; 
+            margin: 0; 
+            padding: 0; 
+            color: #000; 
+            font-size: 10pt; /* Tamanho de fonte padrão para impressão */
+          }
+          h1, h2, h3 { margin-top: 0; page-break-after: avoid; }
+          .print-header { 
+            border-bottom: 2px solid #000; 
+            padding-bottom: 10px; 
+            margin-bottom: 20px; 
+            page-break-after: avoid;
+          }
+          .print-section { 
+            margin-bottom: 20px; 
+            padding: 0; 
+            page-break-inside: avoid; /* Evita quebra dentro de seções importantes */
+          }
+          .print-table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin-top: 10px; 
+            table-layout: fixed; /* Garante que a largura da coluna seja respeitada */
+          }
+          .print-table th, .print-table td { 
+            border: 1px solid #ccc; 
+            padding: 6px 8px; /* Padding ajustado */
+            text-align: left; 
+            font-size: 9pt; 
+            word-wrap: break-word; /* Permite quebra de palavras longas */
+          }
+          .print-table th { 
+            background-color: #f0f0f0; 
+            font-weight: bold;
+          }
+          .print-signatures { 
+            display: flex; 
+            justify-content: space-around; 
+            margin-top: 50px; 
+            page-break-before: avoid;
+          }
+          .print-signature-line { 
+            width: 40%; 
+            border-top: 1px solid #000; 
+            padding-top: 5px; 
+            text-align: center; 
+            font-size: 9pt; 
+          }
+          
+          /* Regras de quebra de página para tabelas */
           @media print {
-            body { background-color: #fff; }
             .print-table { page-break-inside: auto; }
             .print-table tr { page-break-inside: avoid; page-break-after: auto; }
-            .print-table thead { display: table-header-group; }
+            .print-table thead { display: table-header-group; } /* Repete cabeçalho em novas páginas */
           }
         </style>
       `;

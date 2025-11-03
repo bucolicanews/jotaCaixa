@@ -30,8 +30,37 @@ const ContasReceberPrint: React.FC<ContasReceberPrintProps> = ({ data, activeTab
         return <div>Nenhum dado para imprimir.</div>;
     }
     
-    // Usa as chaves do primeiro objeto como cabeçalhos da tabela
     const headers = Object.keys(data[0]);
+    
+    // Mapeamento de largura de coluna para otimizar o A4
+    const getColumnStyle = (header: string) => {
+        switch (header) {
+            case 'ID Parcela':
+            case 'ID Conta':
+            case 'ID Recebimento':
+                return { width: '10%', fontSize: '8pt' };
+            case 'Cliente':
+                return { width: '15%' };
+            case 'Descrição':
+                return { width: '25%' };
+            case 'Nº Parcela':
+                return { width: '5%', textAlign: 'center' as const };
+            case 'Valor Parcela':
+            case 'Valor Pago':
+            case 'Valor Total':
+            case 'Valor Recebido':
+                return { width: '10%', textAlign: 'right' as const };
+            case 'Vencimento':
+            case 'Data Recebimento':
+                return { width: '10%' };
+            case 'Status':
+            case 'Origem':
+            case 'Forma Pagamento':
+                return { width: '7%' };
+            default:
+                return {};
+        }
+    };
 
     return (
         <div className="print-container">
@@ -47,7 +76,9 @@ const ContasReceberPrint: React.FC<ContasReceberPrintProps> = ({ data, activeTab
                     <thead>
                         <tr>
                             {headers.map(header => (
-                                <th key={header}>{header}</th>
+                                <th key={header} style={getColumnStyle(header)}>
+                                    {header}
+                                </th>
                             ))}
                         </tr>
                     </thead>
@@ -55,7 +86,9 @@ const ContasReceberPrint: React.FC<ContasReceberPrintProps> = ({ data, activeTab
                         {data.map((row, index) => (
                             <tr key={index}>
                                 {headers.map(header => (
-                                    <td key={header}>{row[header]}</td>
+                                    <td key={header} style={getColumnStyle(header)}>
+                                        {row[header]}
+                                    </td>
                                 ))}
                             </tr>
                         ))}

@@ -140,7 +140,7 @@ const FolhaPontoPrint: React.FC<FolhaPontoPrintProps> = ({
                             <th colSpan={2} style={{ width: '20%', textAlign: 'center' }}>Primeiro Turno</th>
                             <th colSpan={2} style={{ width: '20%', textAlign: 'center' }}>Segundo Turno</th>
                             <th rowSpan={2} style={{ width: '10%' }}>Total Dia</th>
-                            <th rowSpan={2} style={{ width: '24%' }}>Observações</th>
+                            <th rowSpan={2} style={{ width: '34%' }}>Observações</th>
                         </tr>
                         <tr>
                             <th style={{ width: '10%' }}>Entrada</th>
