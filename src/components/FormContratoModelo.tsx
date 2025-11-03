@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Textarea } from '@/components/ui/textarea';
-import { Loader2, Copy, Eye, X } from 'lucide-react';
+import { Loader2, Copy, Eye, X, Tag } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { ContratoModelo, ContratoTag } from '@/types/contratos';
@@ -16,6 +16,7 @@ import ModeloPreviewDialog from './ModeloPreviewDialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { useSessao } from '@/hooks/use-sessao';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
+import { cn } from '@/lib/utils';
 
 const formSchema = z.object({
   titulo: z.string().min(1, 'O título é obrigatório.'),
@@ -36,6 +37,7 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
   const [tagsAtivas, setTagsAtivas] = useState<ContratoTag[]>(TAGS_FINANCEIRAS_OBRIGATORIAS);
   const [carregandoTags, setCarregandoTags] = useState(true);
   const { role, perfil, usuario } = useSessao();
+  const textareaRef = useRef<HTMLTextAreaElement>(null); // Ref para o Textarea
   
   const isCliente = role === 'Cliente';
   const isAdmin = role === 'Admin';
@@ -48,7 +50,7 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
     return null;
   };
   
-  const ownerId = getOwnerId(); // ID que será usado para filtrar tags e salvar o modelo
+  const ownerId = getOwnerId();
 
   const buscarTagsAtivas = useCallback(async () => {
     setCarregandoTags(true);
@@ -160,6 +162,41 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
           showSuccess('Template limpo.');
       }
   };
+  
+  // --- Drag and Drop Handlers ---
+  
+  const handleDragStart = (e: React.DragEvent<HTMLDivElement>, tag: string) => {
+    e.dataTransfer.setData('text/plain', tag);
+  };
+  
+  const handleDrop = (e: React.DragEvent<HTMLTextAreaElement>) => {
+    e.preventDefault();
+    const tag = e.dataTransfer.getData('text/plain');
+    
+    if (tag && textareaRef.current) {
+      const textarea = textareaRef.current;
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const currentValue = form.getValues('conteudo_template');
+      
+      // Insere a tag na posição do cursor
+      const newValue = currentValue.substring(0, start) + tag + currentValue.substring(end);
+      
+      form.setValue('conteudo_template', newValue, { shouldDirty: true });
+      
+      // Move o cursor para o final da tag inserida
+      setTimeout(() => {
+        textarea.focus();
+        textarea.selectionStart = start + tag.length;
+        textarea.selectionEnd = start + tag.length;
+      }, 0);
+    }
+  };
+  
+  const handleDragOver = (e: React.DragEvent<HTMLTextAreaElement>) => {
+    e.preventDefault(); // Necessário para permitir o drop
+  };
+  // -----------------------------
 
   return (
     <>
@@ -210,9 +247,12 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
                               <FormLabel>Conteúdo do Template (Use tags)</FormLabel>
                               <FormControl>
                                   <Textarea 
+                                      ref={textareaRef} // Adicionando a ref
                                       placeholder="[CONTRATO] Pelo presente instrumento, o CONTRATANTE {{CLIENTE_NOME}}..." 
-                                      rows={15} 
+                                      rows={25} // Aumentando a altura
                                       {...field} 
+                                      onDrop={handleDrop} // Adicionando drop handler
+                                      onDragOver={handleDragOver} // Adicionando drag over handler
                                   />
                               </FormControl>
                               <FormMessage />
@@ -222,9 +262,9 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
               </div>
               
               {/* Coluna de Tags Padrão */}
-              <Card className="lg:col-span-1 max-h-[600px] overflow-y-auto">
+              <Card className="lg:col-span-1 max-h-[750px] overflow-y-auto"> {/* Aumentando a altura máxima */}
                   <CardHeader className="p-3 border-b">
-                      <CardTitle className="text-sm">Tags Ativas (Cópia Rápida)</CardTitle>
+                      <CardTitle className="text-sm">Tags Ativas (Arraste para o Template)</CardTitle>
                       <div className="flex space-x-2 mt-2">
                           <Button type="button" variant="outline" size="sm" onClick={handleCopyAllTags} disabled={tagsAtivas.length === 0}>
                               <Copy className="w-3 h-3 mr-1" /> Copiar Todas
@@ -239,7 +279,12 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
                           <div className="flex justify-center items-center h-20"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>
                       ) : (
                           tagsAtivas.map(tag => (
-                              <div key={tag.id} className="flex flex-col space-y-1 border-b pb-2 last:border-b-0">
+                              <div 
+                                  key={tag.id} 
+                                  className="flex flex-col space-y-1 border-b pb-2 last:border-b-0 cursor-grab active:cursor-grabbing"
+                                  draggable
+                                  onDragStart={(e) => handleDragStart(e, tag.nome_tag)}
+                              >
                                   <div className="flex justify-between items-center">
                                       <span className="font-mono text-xs font-semibold text-primary">{tag.nome_tag}</span>
                                       <Button 
@@ -252,7 +297,10 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
                                           <Copy className="w-3 h-3" />
                                       </Button>
                                   </div>
-                                  <p className="text-xs text-muted-foreground">{tag.descricao}</p>
+                                  <p className="text-xs text-muted-foreground flex items-center">
+                                      <Tag className="w-3 h-3 mr-1 text-muted-foreground" />
+                                      {tag.descricao}
+                                  </p>
                               </div>
                           ))
                       )}
