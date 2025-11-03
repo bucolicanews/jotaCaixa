@@ -130,7 +130,20 @@ const ContasReceber = () => {
     setClienteNomeMap(map);
   }, [isAdmin]);
 
-  const buscarMeusLancamentos = async () => {
+  const buscarDados = useCallback(async () => {
+    if (!carregandoSessao && usuario) {
+        if (isAdmin) {
+            await fetchClienteNames(); // Garante que os nomes dos clientes estejam carregados
+        }
+    }
+    
+    if (!empresaId && !isAdmin) {
+        setContas([]);
+        setParcelas([]);
+        setCarregandoDados(false);
+        return;
+    }
+    
     setCarregandoDados(true);
     
     let contasQuery;
@@ -138,16 +151,33 @@ const ContasReceber = () => {
     
     if (isAdmin) {
         // ADMIN: Busca nas tabelas admin_*
-        // Sintético: Busca todas as colunas, incluindo cliente_id, mas sem join aninhado
+        
+        let origemFiltro: 'assinatura_recorrente' | 'contrato' | undefined;
+        
+        if (activeTab === 'assinaturas') {
+            origemFiltro = 'assinatura_recorrente';
+        } else if (activeTab === 'contratos') {
+            origemFiltro = 'contrato';
+        }
+        
+        // 1. Busca de Contas Sintéticas (admin_contas_receber)
         contasQuery = supabase.from('admin_contas_receber').select('*').eq('admin_id', empresaId).order('data_vencimento', { ascending: true });
-        // Analítico: Busca a descrição e o cliente_id da conta sintética
-        parcelasQuery = supabase.from('admin_parcelas_receber').select('*, admin_contas_receber(descricao, cliente_id, admin_id)').eq('admin_id', empresaId).order('data_vencimento', { ascending: true });
+        if (origemFiltro) {
+            contasQuery = contasQuery.eq('origem', origemFiltro);
+        }
+        
+        // 2. Busca de Parcelas (admin_parcelas_receber)
+        // Para as parcelas, precisamos buscar todas e filtrar no frontend, pois o join é complexo
+        // ou buscar apenas as parcelas que pertencem às contas filtradas.
+        
+        // Vamos buscar todas as parcelas do Admin e filtrar no frontend para simplificar a lógica de estado.
+        parcelasQuery = supabase.from('admin_parcelas_receber').select('*, admin_contas_receber(descricao, cliente_id, admin_id, origem)').eq('admin_id', empresaId).order('data_vencimento', { ascending: true });
+        
     } else if (empresaId) {
         // Cliente/Usuário: Busca nas tabelas normais
         contasQuery = supabase.from('contas_receber').select('*, clientes(*)').eq('empresa_id', empresaId).order('data_vencimento', { ascending: true });
         parcelasQuery = supabase.from('parcelas_contas_receber').select('*, contas_receber(descricao, clientes(nome), empresa_id)').eq('empresa_id', empresaId).order('data_vencimento', { ascending: true });
     } else {
-        // Sem ID de empresa (usuário não vinculado)
         setContas([]);
         setParcelas([]);
         setCarregandoDados(false);
@@ -160,72 +190,28 @@ const ContasReceber = () => {
     else setContas(contasRes.data as any[]);
 
     if (parcelasRes.error) showError('Erro ao carregar parcelas: ' + parcelasRes.error.message);
-    else setParcelas(parcelasRes.data as any[]);
-    
-    setCarregandoDados(false);
-  };
-  
-  const buscarSupervisao = async () => {
-    if (!isAdmin) return;
-    setCarregandoDados(true);
-    
-    // Supervisão: Busca todos os lançamentos onde empresa_id NÃO é o ID do Admin
-    const [contasRes, parcelasRes] = await Promise.all([
-      supabase.from('contas_receber').select('*, clientes(*)').not('empresa_id', 'eq', empresaId).order('data_vencimento', { ascending: true }),
-      supabase.from('parcelas_contas_receber').select('*, contas_receber(descricao, clientes(nome), empresa_id)').not('empresa_id', 'eq', empresaId).order('data_vencimento', { ascending: true })
-    ]);
-
-    if (contasRes.error) showError('Erro ao carregar contas de supervisão: ' + contasRes.error.message);
-    else setContas(contasRes.data as any[]);
-
-    if (parcelasRes.error) showError('Erro ao carregar parcelas de supervisão: ' + parcelasRes.error.message);
-    else setParcelas(parcelasRes.data as any[]);
-    
-    setCarregandoDados(false);
-  };
-
-  const buscarDados = useCallback(() => {
-    if (!carregandoSessao && usuario) {
+    else {
+        let fetchedParcelas = parcelasRes.data as any[];
+        
+        // Filtro de origem para Admin (Analítico)
         if (isAdmin) {
-            fetchClienteNames(); // Busca nomes de clientes para o mapa
+            let origemFiltro: 'assinatura_recorrente' | 'contrato' | undefined;
             
-            // Lógica de busca para Admin baseada na aba ativa
             if (activeTab === 'assinaturas') {
-                // Assinaturas: Busca apenas lançamentos de recorrência do Admin
-                const fetchAssinaturas = async () => {
-                    setCarregandoDados(true);
-                    const [contasRes, parcelasRes] = await Promise.all([
-                        supabase.from('admin_contas_receber').select('*').eq('admin_id', empresaId).eq('origem', 'assinatura_recorrente').order('data_vencimento', { ascending: true }),
-                        supabase.from('admin_parcelas_receber').select('*, admin_contas_receber(descricao, cliente_id, admin_id)').eq('admin_id', empresaId).order('data_vencimento', { ascending: true }),
-                    ]);
-                    
-                    if (contasRes.error) showError('Erro ao carregar assinaturas: ' + contasRes.error.message);
-                    else setContas(contasRes.data as any[]);
-                    
-                    if (parcelasRes.error) showError('Erro ao carregar parcelas de assinaturas: ' + parcelasRes.error.message);
-                    else {
-                        // Filtra as parcelas para mostrar apenas as que pertencem às contas de recorrência
-                        const recorrenciaIds = (contasRes.data as any[])?.map(c => c.id) || [];
-                        const filteredParcelas = (parcelasRes.data as any[]).filter((p: any) => recorrenciaIds.includes(p.conta_receber_id));
-                        setParcelas(filteredParcelas);
-                    }
-                    setCarregandoDados(false);
-                };
-                fetchAssinaturas();
-                
+                origemFiltro = 'assinatura_recorrente';
             } else if (activeTab === 'contratos') {
-                // Contratos: Busca apenas lançamentos de contratos dos Clientes (Supervisão)
-                buscarSupervisao();
-                
-            } else {
-                // Lançamentos (Sintético) e Todas as Parcelas (Analítico) - Usam a busca padrão do Admin (Meus Lançamentos)
-                buscarMeusLancamentos();
+                origemFiltro = 'contrato';
             }
-        } else {
-            // Cliente/Usuário: Busca normal
-            buscarMeusLancamentos();
+            
+            if (origemFiltro) {
+                fetchedParcelas = fetchedParcelas.filter(p => p.admin_contas_receber?.origem === origemFiltro);
+            }
         }
+        
+        setParcelas(fetchedParcelas);
     }
+    
+    setCarregandoDados(false);
   }, [carregandoSessao, usuario, isAdmin, activeTab, empresaId, fetchClienteNames]);
 
   useEffect(() => {
@@ -247,7 +233,8 @@ const ContasReceber = () => {
   const handleDelete = async (contaId: string) => {
     if (!window.confirm('Tem certeza que deseja excluir este conta e todas as suas parcelas? A ação não pode ser desfeita.')) return;
     
-    const tabelaContasReceber = isAdmin && activeTab !== 'contratos' ? 'admin_contas_receber' : 'contas_receber';
+    // A tabela de destino depende se é Admin e qual aba está ativa
+    const tabelaContasReceber = isAdmin ? 'admin_contas_receber' : 'contas_receber';
     
     const { error } = await supabase.from(tabelaContasReceber).delete().eq('id', contaId);
     if (error) showError('Erro ao excluir conta: ' + error.message);
@@ -264,7 +251,7 @@ const ContasReceber = () => {
   
   const handleOpenPagamento = (parcela: any) => {
     // Mapeia os campos necessários para o RegistrarPagamentoDialog
-    const isMyLaunch = isAdmin && activeTab === 'assinaturas';
+    const isMyLaunch = isAdmin; // Se for Admin, sempre usa admin_*
     
     const contaReceberData = isMyLaunch 
         ? parcela.admin_contas_receber 
@@ -322,10 +309,10 @@ const ContasReceber = () => {
     let clienteNome = 'N/A';
     let descricao = 'N/A';
     
-    const isMyLaunch = isAdmin && activeTab === 'assinaturas';
+    const isMyLaunch = isAdmin;
     
     if (isMyLaunch) {
-        // Admin: Usa o mapa para buscar o nome do cliente
+        // Admin: Usa o mapa para buscar o nome do cliente e a descrição do join
         const contaReceber = (p as any).admin_contas_receber;
         descricao = contaReceber?.descricao || 'N/A';
         clienteNome = clienteNomeMap[contaReceber?.cliente_id] || 'N/A';
@@ -354,7 +341,7 @@ const ContasReceber = () => {
     let clienteNome = 'N/A';
     let descricao = c.descricao;
     
-    if (isAdmin && activeTab === 'assinaturas') {
+    if (isAdmin) {
         // Admin: Usa o mapa para buscar o nome do cliente
         clienteNome = clienteNomeMap[c.cliente_id] || 'N/A';
     } else {
@@ -456,7 +443,7 @@ const ContasReceber = () => {
                     {parcelasFiltradas.length > 0 ? (
                       parcelasFiltradas.map((p) => {
                         // Determina o nome do cliente e a descrição com base na aba ativa (Admin vs Cliente)
-                        const isMyLaunch = isAdmin && activeTab === 'assinaturas';
+                        const isMyLaunch = isAdmin;
                         
                         const contaReceber = isMyLaunch 
                             ? (p as any).admin_contas_receber 
@@ -545,7 +532,7 @@ const ContasReceber = () => {
                       
                       // Lógica de exibição do nome do cliente
                       let clienteNomeDisplay = 'N/A';
-                      if (isAdmin && activeTab === 'assinaturas') {
+                      if (isAdmin) {
                           // Admin: Usa o mapa para buscar o nome do cliente
                           clienteNomeDisplay = clienteNomeMap[conta.cliente_id] || 'N/A';
                       } else {
