@@ -63,6 +63,8 @@ interface AdminRecebimento {
     } | null;
 }
 
+type FiltroOrigem = 'todos' | 'contrato' | 'assinatura_recorrente' | 'manual';
+
 
 const ContasReceber = () => {
   const { usuario, perfil, role, carregando: carregandoSessao } = useSessao();
@@ -80,7 +82,8 @@ const ContasReceber = () => {
   const [filtroPeriodo, setFiltroPeriodo] = useState<DateRange | undefined>(undefined);
   const [clienteNomeMap, setClienteNomeMap] = useState<Record<string, string>>({});
   const [activeTab, setActiveTab] = useState('parcela_sintetica');
-  const [filtroStatus, setFiltroStatus] = useState<'todos' | 'quitado' | 'nao_quitado'>('todos'); // NOVO ESTADO DE FILTRO
+  const [filtroStatus, setFiltroStatus] = useState<'todos' | 'quitado' | 'nao_quitado'>('todos');
+  const [filtroOrigem, setFiltroOrigem] = useState<FiltroOrigem>('todos'); // NOVO ESTADO DE FILTRO DE ORIGEM
 
   const isAdmin = role === 'Admin';
   
@@ -297,35 +300,56 @@ const ContasReceber = () => {
   };
   
   const filterByStatus = (data: ContaReceberComProgresso[] | ExtendedParcelaDetalhada[], isSynthetic: boolean) => {
-    if (filtroStatus === 'todos') return data;
+    let filteredByStatus = data;
+    
+    if (filtroStatus !== 'todos') {
+        filteredByStatus = data.filter(item => {
+            let isPaid: boolean;
+            
+            if (isSynthetic) {
+                const conta = item as ContaReceberComProgresso;
+                const total = conta.parcelas_total ?? 0;
+                const pagas = conta.parcelas_pagas ?? 0;
+                isPaid = total > 0 && pagas === total;
+            } else {
+                const parcela = item as ExtendedParcelaDetalhada;
+                isPaid = parcela.status === 'paga';
+            }
 
-    return data.filter(item => {
-        let isPaid: boolean;
-        
-        if (isSynthetic) {
+            return filtroStatus === 'quitado' ? isPaid : !isPaid;
+        });
+    }
+    
+    // NOVO: Filtro por Origem (Apenas para Contas Sintéticas)
+    if (isSynthetic && filtroOrigem !== 'todos') {
+        filteredByStatus = filteredByStatus.filter(item => {
             const conta = item as ContaReceberComProgresso;
-            // Correção: Usar operador de coalescência nula (?? 0)
-            const total = conta.parcelas_total ?? 0;
-            const pagas = conta.parcelas_pagas ?? 0;
-            isPaid = total > 0 && pagas === total;
-        } else {
+            return conta.origem === filtroOrigem;
+        });
+    }
+    
+    // NOVO: Filtro por Origem (Para Parcelas Analíticas)
+    if (!isSynthetic && filtroOrigem !== 'todos') {
+        filteredByStatus = filteredByStatus.filter(item => {
             const parcela = item as ExtendedParcelaDetalhada;
-            isPaid = parcela.status === 'paga';
-        }
+            // A origem está aninhada dentro de contas_receber
+            const origem = parcela.contas_receber?.origem;
+            return origem === filtroOrigem;
+        });
+    }
 
-        return filtroStatus === 'quitado' ? isPaid : !isPaid;
-    });
+    return filteredByStatus;
   };
   
   const contasFiltradas = useMemo(() => {
     const dateFiltered = filterData(contas, 'data_vencimento') as ContaReceberComProgresso[];
     return filterByStatus(dateFiltered, true) as ContaReceberComProgresso[];
-  }, [contas, filtroPeriodo, filtroStatus]);
+  }, [contas, filtroPeriodo, filtroStatus, filtroOrigem]); // Adicionando filtroOrigem
 
   const parcelasFiltradas = useMemo(() => {
     const dateFiltered = filterData(parcelas, 'data_vencimento') as ExtendedParcelaDetalhada[];
     return filterByStatus(dateFiltered, false) as ExtendedParcelaDetalhada[];
-  }, [parcelas, filtroPeriodo, filtroStatus]);
+  }, [parcelas, filtroPeriodo, filtroStatus, filtroOrigem]); // Adicionando filtroOrigem
   
   const recebimentosFiltrados = useMemo(() => filterData(recebimentos, 'data_recebimento'), [recebimentos, filtroPeriodo]);
 
@@ -365,8 +389,10 @@ const ContasReceber = () => {
         recebimentosFiltrados={recebimentosFiltrados}
         clienteNomeMap={clienteNomeMap}
         isAdmin={isAdmin}
-        filtroStatus={filtroStatus} // PASSANDO O NOVO FILTRO
-        setFiltroStatus={setFiltroStatus} // PASSANDO O SETTER
+        filtroStatus={filtroStatus}
+        setFiltroStatus={setFiltroStatus}
+        filtroOrigem={filtroOrigem} // PASSANDO O NOVO FILTRO
+        setFiltroOrigem={setFiltroOrigem} // PASSANDO O SETTER
       />
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full mt-4">
@@ -392,11 +418,12 @@ const ContasReceber = () => {
                       <TableHead>Valor Total</TableHead>
                       <TableHead>Progresso</TableHead>
                       <TableHead className="hidden sm:table-cell">Status</TableHead>
+                      <TableHead className="hidden sm:table-cell">Origem</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {contasFiltradas.length === 0 ? (
-                        <TableRow><TableCell colSpan={7} className="text-center h-24">Nenhuma conta a receber encontrada no período.</TableCell></TableRow>
+                        <TableRow><TableCell colSpan={8} className="text-center h-24">Nenhuma conta a receber encontrada no período.</TableCell></TableRow>
                     ) : (
                         contasFiltradas.map((conta) => {
                             
@@ -425,6 +452,8 @@ const ContasReceber = () => {
                             }
                             
                             const progresso = total ? `${pagas}/${total}` : 'N/A';
+                            
+                            const origemDisplay = conta.origem === 'assinatura_recorrente' ? 'Assinatura' : (conta.origem === 'contrato' ? 'Contrato' : 'Manual');
 
                             return (
                                 <TableRow key={conta.id}>
@@ -442,6 +471,9 @@ const ContasReceber = () => {
                                     <TableCell className="text-sm text-muted-foreground">{progresso}</TableCell>
                                     <TableCell className="hidden sm:table-cell">
                                         <Badge variant={statusVariant}>{displayStatus}</Badge>
+                                    </TableCell>
+                                    <TableCell className="hidden sm:table-cell">
+                                        <Badge variant="secondary">{origemDisplay}</Badge>
                                     </TableCell>
                                 </TableRow>
                             );

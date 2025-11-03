@@ -24,6 +24,8 @@ interface ExtendedParcelaDetalhada extends ParcelaDetalhada {
     data_pagamento?: string | null;
 }
 
+type FiltroOrigem = 'todos' | 'contrato' | 'assinatura_recorrente' | 'manual';
+
 interface ContasReceberAcoesProps {
   activeTab: string;
   filtroPeriodo: DateRange | undefined;
@@ -36,9 +38,11 @@ interface ContasReceberAcoesProps {
   clienteNomeMap: Record<string, string>;
   isAdmin: boolean;
   
-  // NOVO FILTRO
+  // FILTROS
   filtroStatus: 'todos' | 'quitado' | 'nao_quitado';
   setFiltroStatus: (status: 'todos' | 'quitado' | 'nao_quitado') => void;
+  filtroOrigem: FiltroOrigem;
+  setFiltroOrigem: (origem: FiltroOrigem) => void;
 }
 
 const formatDate = (dateString: string) => new Date(dateString + 'T00:00:00').toLocaleDateString('pt-BR');
@@ -56,6 +60,8 @@ const ContasReceberAcoes: React.FC<ContasReceberAcoesProps> = ({
   clienteNomeMap,
   filtroStatus,
   setFiltroStatus,
+  filtroOrigem,
+  setFiltroOrigem,
 }) => {
   const [exportLoading, setExportLoading] = useState(false);
   const { printContent } = usePrint();
@@ -198,7 +204,21 @@ const ContasReceberAcoes: React.FC<ContasReceberAcoesProps> = ({
         </CardTitle>
         <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto">
           
-          {/* NOVO FILTRO DE STATUS */}
+          {/* FILTRO DE ORIGEM */}
+          <Select value={filtroOrigem} onValueChange={setFiltroOrigem}>
+              <SelectTrigger className="w-full sm:w-[180px]">
+                  <SelectValue placeholder="Filtrar Origem" />
+              </SelectTrigger>
+              <SelectContent>
+                  <SelectItem value="todos">Todas as Origens</SelectItem>
+                  <SelectItem value="contrato">Contrato</SelectItem>
+                  <SelectItem value="assinatura_recorrente">Assinatura</SelectItem>
+                  <SelectItem value="manual">Manual</SelectItem>
+              </SelectContent>
+          </Select>
+          {/* FIM FILTRO DE ORIGEM */}
+          
+          {/* FILTRO DE STATUS */}
           <Select value={filtroStatus} onValueChange={setFiltroStatus}>
               <SelectTrigger className="w-full sm:w-[180px]">
                   <SelectValue placeholder="Filtrar Status" />
@@ -209,7 +229,7 @@ const ContasReceberAcoes: React.FC<ContasReceberAcoesProps> = ({
                   <SelectItem value="nao_quitado">Não Quitado</SelectItem>
               </SelectContent>
           </Select>
-          {/* FIM NOVO FILTRO */}
+          {/* FIM FILTRO DE STATUS */}
           
           <DateRangePicker
             date={filtroPeriodo}
