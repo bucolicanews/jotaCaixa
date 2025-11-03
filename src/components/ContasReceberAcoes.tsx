@@ -76,8 +76,8 @@ const ContasReceberAcoes: React.FC<ContasReceberAcoesProps> = ({
           'Vencimento': formatDate(c.data_vencimento),
           'Status': c.status,
           'Origem': c.origem,
-          'Parcelas Pagas': c.parcelas_pagas,
-          'Parcelas Total': c.parcelas_total,
+          'Pagas': c.parcelas_pagas, // RENOMEADO
+          'Total': c.parcelas_total, // RENOMEADO
         };
       });
     } else if (activeTab === 'parcelas') {
