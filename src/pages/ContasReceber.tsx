@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,12 +12,11 @@ import { ContaReceber, ParcelaDetalhada } from '@/types/contas-receber';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import FormContasReceber from '@/components/FormContasReceber';
 import DetalhesParcelasDialog from '@/components/DetalhesParcelasDialog';
-import { Badge } from '@/components/ui/badge';
+import { Badge } => '@/components/ui/badge';
 import { DateRange } from 'react-day-picker';
-import { isToday, isPast, parseISO, format } from 'date-fns';
+import { isToday, isPast, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
-import { useSearchParams } from 'react-router-dom';
 import RegistrarPagamentoDialog from '@/components/RegistrarPagamentoDialog';
 import ContasReceberAcoes from '@/components/ContasReceberAcoes';
 
@@ -67,7 +66,7 @@ interface AdminRecebimento {
 
 const ContasReceber = () => {
   const { usuario, perfil, role, carregando: carregandoSessao } = useSessao();
-  const [searchParams] = useSearchParams();
+  // const [searchParams] = useSearchParams(); // Não utilizado
   
   const [contas, setContas] = useState<ContaReceberComProgresso[]>([]);
   const [parcelas, setParcelas] = useState<ExtendedParcelaDetalhada[]>([]);
@@ -93,6 +92,8 @@ const ContasReceber = () => {
   
   const ownerId = getOwnerId();
   
+  // Removendo fetchClienteNames pois não é usado diretamente no corpo do componente
+  /*
   const fetchClienteNames = useCallback(async (clienteIds: string[]) => {
     if (clienteIds.length === 0) return;
     
@@ -109,6 +110,7 @@ const ContasReceber = () => {
         setClienteNomeMap(map);
     }
   }, []);
+  */
 
   const buscarDados = useCallback(async () => {
     if (!ownerId) {
@@ -184,6 +186,22 @@ const ContasReceber = () => {
     
     if (isAdmin && recebimentosRes.data) {
         setRecebimentos(recebimentosRes.data as AdminRecebimento[]);
+        
+        // Atualiza o mapa de nomes de clientes para recebimentos
+        const clienteIds = recebimentosRes.data.map(r => r.cliente_id);
+        // Não chamo fetchClienteNames aqui, mas sim a lógica de mapeamento
+        const { data: clientesData } = await supabase
+            .from('clientes')
+            .select('id, nome')
+            .in('id', clienteIds);
+            
+        if (clientesData) {
+            const map = clientesData.reduce((acc, c) => {
+                acc[c.id] = c.nome;
+                return acc;
+            }, {} as Record<string, string>);
+            setClienteNomeMap(map);
+        }
     }
 
     setCarregandoDados(false);
@@ -206,7 +224,7 @@ const ContasReceber = () => {
     buscarDados();
   };
 
-  const handleEdit = (conta: ContaReceber) => {
+  const handleEdit = (_conta: ContaReceber) => {
     showError('Funcionalidade de edição de Contas a Receber ainda não implementada.');
     // TODO: Implementar Dialog/Form para Contas a Receber
   };

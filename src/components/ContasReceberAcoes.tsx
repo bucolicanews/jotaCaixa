@@ -49,7 +49,7 @@ const ContasReceberAcoes: React.FC<ContasReceberAcoesProps> = ({
   parcelasFiltradas,
   recebimentosFiltrados,
   clienteNomeMap,
-  isAdmin,
+  // isAdmin removido da desestruturação
 }) => {
   const [exportLoading, setExportLoading] = useState(false);
   const { printContent } = usePrint();
@@ -65,7 +65,7 @@ const ContasReceberAcoes: React.FC<ContasReceberAcoesProps> = ({
         'Cliente': c.clientes?.nome || 'N/A',
         'Descrição': c.descricao,
         'Vencimento': formatDate(c.data_vencimento),
-        'Valor Total': c.valor_total,
+        'Valor Total': formatCurrency(c.valor_total), // Usando formatCurrency
         'Progresso': `${c.parcelas_pagas}/${c.parcelas_total}`,
         'Status': c.status,
         'Origem': c.origem,
