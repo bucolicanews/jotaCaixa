@@ -14,7 +14,7 @@ import FormContasReceber from '@/components/FormContasReceber';
 import DetalhesParcelasDialog from '@/components/DetalhesParcelasDialog';
 import { Badge } from '@/components/ui/badge';
 import { DateRange } from 'react-day-picker';
-import { isToday, isPast, parseISO } from 'date-fns';
+import { isToday, isPast, parseISO, format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 import RegistrarPagamentoDialog from '@/components/RegistrarPagamentoDialog';
@@ -111,7 +111,7 @@ const ContasReceber = () => {
   const fetchClienteNames = useCallback(async (clienteIds: string[]) => {
     if (clienteIds.length === 0) return;
     
-    const { data } = await supabase
+    const { data } = supabase
         .from('clientes')
         .select('id, nome')
         .in('id', clienteIds);
@@ -206,10 +206,11 @@ const ContasReceber = () => {
         // Atualiza o mapa de nomes de clientes para recebimentos
         const clienteIds = recebimentosRes.data.map(r => r.cliente_id);
         
-        // 1. Buscar nomes dos clientes (tbl_clientes)
+        // 1. Buscar nomes dos clientes (clientes)
         const { data: clientesData } = await supabase
-            .from('tbl_clientes')
-            .select('id, nome');
+            .from('clientes')
+            .select('id, nome')
+            .in('id', clienteIds);
             
         if (clientesData) {
             const map = clientesData.reduce((acc, c) => {
@@ -270,8 +271,8 @@ const ContasReceber = () => {
     const isMyLaunch = isAdmin;
     
     const contaReceber = isMyLaunch 
-        ? (parcela as any).contas_receber
-        : (parcela as any).contas_receber;
+        ? (parcela as ExtendedParcelaDetalhada).contas_receber
+        : (parcela as ExtendedParcelaDetalhada).contas_receber;
         
     let clienteIdReal: string | undefined;
     
@@ -301,7 +302,8 @@ const ContasReceber = () => {
   // Função para formatar timestamp completo (ISO string)
   const formatTimestamp = (dateString: string) => {
     try {
-        return new Date(dateString).toLocaleDateString('pt-BR') + ' ' + new Date(dateString).toLocaleTimeString('pt-BR');
+        const date = parseISO(dateString);
+        return format(date, 'dd/MM/yyyy HH:mm:ss');
     } catch (e) {
         return 'Invalid Date';
     }
