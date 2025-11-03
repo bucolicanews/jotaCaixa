@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, Plus, FileText, Trash2, Edit } from 'lucide-react';
+import { Loader2, Plus, FileText, Trash2, Edit, Building2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
@@ -11,6 +11,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import FormContratoModelo from '@/components/FormContratoModelo';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 import ImportarModeloContrato from '@/components/ImportarModeloContrato';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { cn } from '@/lib/utils';
 
 const GerenciarModelos: React.FC = () => {
   const { role, perfil, usuario, carregando: carregandoSessao } = useSessao();
@@ -18,6 +20,7 @@ const GerenciarModelos: React.FC = () => {
   const [carregando, setCarregando] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [modeloSelecionado, setModeloSelecionado] = useState<ContratoModelo | null>(null);
+  const [activeTab, setActiveTab] = useState('meus_modelos');
 
   const isAdmin = role === 'Admin';
   const isCliente = role === 'Cliente';
@@ -33,7 +36,7 @@ const GerenciarModelos: React.FC = () => {
   const ownerId = getOwnerId();
 
   const buscarModelos = useCallback(async () => {
-    if (!ownerId) {
+    if (!ownerId && !isAdmin) {
         setModelos([]);
         setCarregando(false);
         return;
@@ -41,11 +44,18 @@ const GerenciarModelos: React.FC = () => {
     
     setCarregando(true);
     
-    const { data, error } = await supabase
+    let query = supabase
       .from('contrato_modelos')
       .select('*')
-      .eq('empresa_id', ownerId)
       .order('titulo', { ascending: true });
+      
+    // Se for Cliente, busca apenas os seus modelos (RLS já garante isso)
+    if (isCliente) {
+        query = query.eq('empresa_id', ownerId);
+    }
+    // Se for Admin, a RLS permite ver todos os modelos (seus e dos clientes)
+
+    const { data, error } = await query;
 
     if (error) {
       showError('Erro ao carregar modelos: ' + error.message);
@@ -54,13 +64,13 @@ const GerenciarModelos: React.FC = () => {
       setModelos(data as ContratoModelo[]);
     }
     setCarregando(false);
-  }, [ownerId]);
+  }, [ownerId, isAdmin, isCliente]);
 
   useEffect(() => {
-    if (!carregandoSessao && ownerId) {
+    if (!carregandoSessao && (isAdmin || ownerId)) {
       buscarModelos();
     }
-  }, [carregandoSessao, ownerId, buscarModelos]);
+  }, [carregandoSessao, isAdmin, ownerId, buscarModelos]);
   
   const handleSaveComplete = () => {
       setDialogOpen(false);
@@ -95,6 +105,50 @@ const GerenciarModelos: React.FC = () => {
       setModeloSelecionado(null);
       setDialogOpen(true);
   };
+  
+  const modelosFiltrados = useMemo(() => {
+      if (!isAdmin) {
+          // Cliente/Usuário só vê seus próprios modelos
+          return { meusModelos: modelos, modelosClientes: [] };
+      }
+      
+      // Admin: Separa modelos próprios (empresa_id = ownerId) e modelos de clientes (empresa_id != ownerId)
+      const meusModelos = modelos.filter(m => m.empresa_id === ownerId);
+      const modelosClientes = modelos.filter(m => m.empresa_id !== ownerId);
+      
+      return { meusModelos, modelosClientes };
+  }, [modelos, isAdmin, ownerId]);
+  
+  const modelosParaExibir = isAdmin && activeTab === 'modelos_clientes' 
+      ? modelosFiltrados.modelosClientes 
+      : modelosFiltrados.meusModelos;
+      
+  const isSupervisao = isAdmin && activeTab === 'modelos_clientes';
+
+  // Helper para renderizar a lista de modelos
+  const renderModelosList = (list: ContratoModelo[], isSupervisao: boolean) => (
+      <div className="space-y-4">
+          {list.map((modelo) => (
+              <div key={modelo.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-secondary/50 transition-colors">
+                  <div className="flex-1 min-w-0">
+                      <p className="font-semibold truncate">{modelo.titulo}</p>
+                      {isSupervisao && <p className="text-xs text-muted-foreground">Empresa ID: {modelo.empresa_id}</p>}
+                      <p className="text-sm text-muted-foreground">Última atualização: {new Date(modelo.criado_em).toLocaleDateString()}</p>
+                  </div>
+                  <div className="flex space-x-2 ml-4">
+                      {/* Admin pode editar/deletar modelos de clientes, mas vamos restringir a edição para evitar quebra de dados */}
+                      <Button variant="outline" size="icon" onClick={() => handleEdit(modelo)} disabled={isSupervisao} title={isSupervisao ? "Apenas visualização" : "Editar Modelo"}>
+                          <Edit className="w-4 h-4" />
+                      </Button>
+                      <Button variant="destructive" size="icon" onClick={() => handleDelete(modelo.id)} disabled={isSupervisao} title={isSupervisao ? "Apenas visualização" : "Excluir Modelo"}>
+                          <Trash2 className="w-4 h-4" />
+                      </Button>
+                  </div>
+              </div>
+          ))}
+      </div>
+  );
+
 
   if (carregandoSessao) {
     return (
@@ -106,7 +160,7 @@ const GerenciarModelos: React.FC = () => {
     );
   }
   
-  if (!ownerId) {
+  if (!ownerId && !isAdmin) {
       return (
           <LayoutPrincipal>
               <Card><CardContent className="p-6">Você não tem permissão para gerenciar modelos de contrato.</CardContent></Card>
@@ -140,7 +194,6 @@ const GerenciarModelos: React.FC = () => {
         </Dialog>
       </div>
       
-      {/* Ajuste aqui: Centralizando o componente de importação */}
       <div className="grid grid-cols-1 gap-6 mb-6">
           <div className="max-w-lg mx-auto w-full">
               <ImportarModeloContrato 
@@ -150,39 +203,43 @@ const GerenciarModelos: React.FC = () => {
           </div>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-xl">Modelos Cadastrados ({modelos.length})</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {carregando ? (
-            <div className="flex justify-center items-center h-32">
-              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        {isAdmin && (
+            <TabsList className="grid w-full grid-cols-2 mb-4">
+                <TabsTrigger value="meus_modelos">Meus Modelos ({modelosFiltrados.meusModelos.length})</TabsTrigger>
+                <TabsTrigger value="modelos_clientes">Modelos dos Clientes ({modelosFiltrados.modelosClientes.length})</TabsTrigger>
+            </TabsList>
+        )}
+        
+        {isAdmin && activeTab === 'modelos_clientes' && (
+            <div className="p-4 bg-yellow-100 dark:bg-yellow-900/20 border border-yellow-500 rounded-md mt-4 mb-4">
+                <p className="text-sm text-yellow-700 dark:text-yellow-300 font-semibold flex items-center">
+                    <Building2 className="w-4 h-4 mr-2" /> Modo Supervisão: Modelos de clientes não podem ser editados ou excluídos diretamente.
+                </p>
             </div>
-          ) : modelos.length === 0 ? (
-            <p className="text-center text-muted-foreground py-8">Nenhum modelo de contrato encontrado.</p>
-          ) : (
-            <div className="space-y-4">
-              {modelos.map((modelo) => (
-                <div key={modelo.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-secondary/50 transition-colors">
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold truncate">{modelo.titulo}</p>
-                    <p className="text-sm text-muted-foreground">Última atualização: {new Date(modelo.updated_at).toLocaleDateString()}</p>
-                  </div>
-                  <div className="flex space-x-2 ml-4">
-                    <Button variant="outline" size="icon" onClick={() => handleEdit(modelo)}>
-                      <Edit className="w-4 h-4" />
-                    </Button>
-                    <Button variant="destructive" size="icon" onClick={() => handleDelete(modelo.id)}>
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+        )}
+
+        <TabsContent value={isAdmin ? activeTab : 'meus_modelos'} className="mt-0">
+            <Card>
+                <CardHeader>
+                    <CardTitle className="text-xl">
+                        Modelos Cadastrados ({modelosParaExibir.length})
+                    </CardTitle>
+                </CardHeader>
+                <CardContent>
+                    {carregando ? (
+                        <div className="flex justify-center items-center h-32">
+                            <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                        </div>
+                    ) : modelosParaExibir.length === 0 ? (
+                        <p className="text-center text-muted-foreground py-8">Nenhum modelo de contrato encontrado.</p>
+                    ) : (
+                        renderModelosList(modelosParaExibir, isSupervisao)
+                    )}
+                </CardContent>
+            </Card>
+        </TabsContent>
+      </Tabs>
     </LayoutPrincipal>
   );
 };
