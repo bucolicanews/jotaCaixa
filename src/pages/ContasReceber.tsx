@@ -403,7 +403,23 @@ const ContasReceber = () => {
   
   const recebimentosFiltrados = recebimentos.filter(r => {
     const termoBusca = filtroGeral.toLowerCase();
+    const dataRecebimento = new Date(r.data_recebimento); // data_recebimento é TIMESTAMP WITH TIME ZONE
+
+    // 1. Filtro de Período (Data de Recebimento)
+    if (filtroPeriodo?.from) {
+      const from = filtroPeriodo.from;
+      const to = filtroPeriodo.to || from;
+      
+      // Ajusta 'to' para incluir o final do dia
+      const adjustedTo = new Date(to);
+      adjustedTo.setHours(23, 59, 59, 999);
+
+      if (dataRecebimento < from || dataRecebimento > adjustedTo) {
+        return false;
+      }
+    }
     
+    // 2. Filtro Geral (Texto)
     const clienteNome = clienteNomeMap[r.cliente_id] || 'N/A';
     const descricao = r.admin_parcelas_receber?.admin_contas_receber?.descricao || 'N/A';
     
@@ -575,8 +591,6 @@ const ContasReceber = () => {
                   </TableHeader>
                   <TableBody>
                     {contasFiltradas.map((conta) => {
-                      // Nota: A lógica de getBadgeVariant para contas sintéticas é simplificada,
-                      // pois o status 'recebida' é o equivalente a 'paga' para o sintético.
                       const statusVariant = getBadgeVariant(conta.status as ParcelaStatus, conta.data_vencimento);
                       
                       const statusColorClass = {
@@ -642,7 +656,23 @@ const ContasReceber = () => {
         {isAdmin && activeTab === 'recebimentos' && (
             <TabsContent value="recebimentos">
                 <Card>
-                    <CardHeader><CardTitle>Histórico de Parcelas Recebidas</CardTitle></CardHeader>
+                    <CardHeader>
+                        <CardTitle>Histórico de Parcelas Recebidas</CardTitle>
+                        <div className="flex flex-col md:flex-row gap-4 mt-4">
+                            <Input
+                                placeholder="Filtrar por cliente, descrição, valor..."
+                                value={filtroGeral}
+                                onChange={(e) => setFiltroGeral(e.target.value)}
+                                className="w-full md:max-w-xs"
+                            />
+                            <DateRangePicker
+                                date={filtroPeriodo}
+                                setDate={setFiltroPeriodo}
+                                className="w-full md:w-auto"
+                            />
+                            {/* O filtro de status não é necessário aqui, pois todos são pagos */}
+                        </div>
+                    </CardHeader>
                     <CardContent>
                         <div className="overflow-x-auto">
                             <Table>
