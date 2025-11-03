@@ -57,12 +57,28 @@ const getBadgeVariant = (status: ParcelaStatus, dataVencimento: string): BadgeVa
   return 'secondary'; // Fallback
 };
 
+// Tipo para o histórico de recebimentos (Admin)
+interface AdminRecebimento {
+    id: string;
+    data_recebimento: string;
+    valor_recebido: number;
+    forma_pagamento: string;
+    cliente_id: string;
+    admin_parcelas_receber: {
+        numero_parcela: number;
+        admin_contas_receber: {
+            descricao: string;
+        } | null;
+    } | null;
+}
+
 const ContasReceber = () => {
   const { usuario, perfil, role, carregando: carregandoSessao } = useSessao();
   const [searchParams] = useSearchParams(); // Hook para ler a URL
   
   const [contas, setContas] = useState<ContaReceber[]>([]);
   const [parcelas, setParcelas] = useState<ParcelaDetalhada[]>([]);
+  const [recebimentos, setRecebimentos] = useState<AdminRecebimento[]>([]); // Novo estado para recebimentos
   const [carregandoDados, setCarregandoDados] = useState(true);
   const [contaSelecionada, setContaSelecionada] = useState<ContaReceber | null>(null);
   const [dialogFormAberto, setDialogFormAberto] = useState(false);
@@ -79,12 +95,12 @@ const ContasReceber = () => {
   
   // Inicializa filtroStatus e activeTab com base na URL
   const initialStatus = searchParams.get('status') || 'todos';
-  const initialTab = initialStatus === 'pendente' ? 'parcelas' : 'lancamentos';
+  const initialTab = initialStatus === 'pendente' ? 'parcelas' : 'parcela_sintetica';
   
   const [filtroStatus, setFiltroStatus] = useState<string>(initialStatus); 
   const isAdmin = role === 'Admin';
   
-  // Renomeando as abas para Admin: 'assinaturas' e 'contratos'
+  // Abas atualizadas
   const [activeTab, setActiveTab] = useState(isAdmin ? 'assinaturas' : initialTab);
 
   // Efeito para forçar a aba correta se o filtro 'status' for passado na URL
@@ -140,6 +156,7 @@ const ContasReceber = () => {
     if (!empresaId && !isAdmin) {
         setContas([]);
         setParcelas([]);
+        setRecebimentos([]);
         setCarregandoDados(false);
         return;
     }
@@ -148,16 +165,20 @@ const ContasReceber = () => {
     
     let contasQuery;
     let parcelasQuery;
+    let recebimentosQuery;
     
     if (isAdmin) {
         // ADMIN: Busca nas tabelas admin_*
         
-        let origemFiltro: 'assinatura_recorrente' | 'contrato' | undefined;
+        let origemFiltro: 'assinatura_recorrente' | 'contrato' | 'manual' | undefined;
         
         if (activeTab === 'assinaturas') {
             origemFiltro = 'assinatura_recorrente';
-        } else if (activeTab === 'contratos') {
+        } else if (activeTab === 'contratos_clientes') {
             origemFiltro = 'contrato';
+        } else if (activeTab === 'parcela_sintetica') {
+            // Na aba 'Parcela Sintética', queremos ver todos os lançamentos sintéticos (manual, contrato, recorrente)
+            origemFiltro = undefined; 
         }
         
         // 1. Busca de Contas Sintéticas (admin_contas_receber)
@@ -166,12 +187,21 @@ const ContasReceber = () => {
             contasQuery = contasQuery.eq('origem', origemFiltro);
         }
         
-        // 2. Busca de Parcelas (admin_parcelas_receber)
-        // Para as parcelas, precisamos buscar todas e filtrar no frontend, pois o join é complexo
-        // ou buscar apenas as parcelas que pertencem às contas filtradas.
-        
-        // Vamos buscar todas as parcelas do Admin e filtrar no frontend para simplificar a lógica de estado.
+        // 2. Busca de Parcelas (admin_parcelas_receber) - Usado na aba 'Todas as Parcelas'
         parcelasQuery = supabase.from('admin_parcelas_receber').select('*, admin_contas_receber(descricao, cliente_id, admin_id, origem)').eq('admin_id', empresaId).order('data_vencimento', { ascending: true });
+        
+        // 3. Busca de Recebimentos (admin_recebimentos) - Usado na nova aba
+        recebimentosQuery = supabase.from('admin_recebimentos').select(`
+            id,
+            data_recebimento,
+            valor_recebido,
+            forma_pagamento,
+            cliente_id,
+            admin_parcelas_receber (
+                numero_parcela,
+                admin_contas_receber ( descricao )
+            )
+        `).eq('admin_id', empresaId).order('data_recebimento', { ascending: false });
         
     } else if (empresaId) {
         // Cliente/Usuário: Busca nas tabelas normais
@@ -180,11 +210,16 @@ const ContasReceber = () => {
     } else {
         setContas([]);
         setParcelas([]);
+        setRecebimentos([]);
         setCarregandoDados(false);
         return;
     }
 
-    const [contasRes, parcelasRes] = await Promise.all([contasQuery, parcelasQuery]);
+    const [contasRes, parcelasRes, recebimentosRes] = await Promise.all([
+        contasQuery, 
+        parcelasQuery, 
+        isAdmin ? recebimentosQuery : Promise.resolve({ data: [], error: null }) // Só busca recebimentos se for Admin
+    ]);
 
     if (contasRes.error) showError('Erro ao carregar contas: ' + contasRes.error.message);
     else setContas(contasRes.data as any[]);
@@ -193,22 +228,28 @@ const ContasReceber = () => {
     else {
         let fetchedParcelas = parcelasRes.data as any[];
         
-        // Filtro de origem para Admin (Analítico)
-        if (isAdmin) {
-            let origemFiltro: 'assinatura_recorrente' | 'contrato' | undefined;
-            
-            if (activeTab === 'assinaturas') {
-                origemFiltro = 'assinatura_recorrente';
-            } else if (activeTab === 'contratos') {
-                origemFiltro = 'contrato';
-            }
-            
-            if (origemFiltro) {
-                fetchedParcelas = fetchedParcelas.filter(p => p.admin_contas_receber?.origem === origemFiltro);
-            }
-        }
+        // Filtro de origem para Admin (Analítico) - Não aplicamos filtro de origem aqui, pois esta aba é 'Todas as Parcelas'
+        // O filtro de origem só se aplica à aba 'Parcela Sintética' (contas)
         
         setParcelas(fetchedParcelas);
+    }
+    
+    // Correção dos erros TS18048: Verifica se recebimentosRes existe antes de acessar
+    if (isAdmin && recebimentosRes) {
+        if (recebimentosRes.error) {
+            showError('Erro ao carregar recebimentos: ' + recebimentosRes.error.message);
+            setRecebimentos([]);
+        } else {
+            setRecebimentos(recebimentosRes.data as AdminRecebimento[]);
+        }
+    } else if (isAdmin) {
+        // Se isAdmin é true, mas recebimentosRes é undefined, algo deu errado na Promise.all
+        // Mas como a Promise.all garante que a terceira posição será um resultado (ou o fallback),
+        // esta condição só é atingida se recebimentosRes for o resultado do fallback (que tem error: null)
+        // No entanto, o fallback só ocorre se isAdmin for false.
+        // Para segurança, se isAdmin for true e recebimentosRes for undefined, tratamos como erro.
+        // Mas como a estrutura da Promise.all garante que recebimentosRes será um objeto de resultado se isAdmin for true,
+        // a lógica acima é suficiente.
     }
     
     setCarregandoDados(false);
@@ -356,6 +397,20 @@ const ContasReceber = () => {
       c.status.toLowerCase().includes(termoBusca)
     );
   });
+  
+  const recebimentosFiltrados = recebimentos.filter(r => {
+    const termoBusca = filtroGeral.toLowerCase();
+    
+    const clienteNome = clienteNomeMap[r.cliente_id] || 'N/A';
+    const descricao = r.admin_parcelas_receber?.admin_contas_receber?.descricao || 'N/A';
+    
+    return (
+        clienteNome.toLowerCase().includes(termoBusca) ||
+        descricao.toLowerCase().includes(termoBusca) ||
+        r.forma_pagamento.toLowerCase().includes(termoBusca) ||
+        formatCurrency(r.valor_recebido).includes(termoBusca)
+    );
+  });
 
   if (carregandoSessao || carregandoDados) {
     return <LayoutPrincipal><div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div></LayoutPrincipal>;
@@ -367,7 +422,7 @@ const ContasReceber = () => {
         <h1 className="text-2xl md:text-3xl font-bold">Contas a Receber</h1>
         <Dialog open={dialogFormAberto} onOpenChange={setDialogFormAberto}>
           <DialogTrigger asChild>
-            <Button onClick={() => setContaSelecionada(null)} className="w-full sm:w-auto" disabled={isAdmin && activeTab !== 'lancamentos'}>
+            <Button onClick={() => setContaSelecionada(null)} className="w-full sm:w-auto" disabled={isAdmin && activeTab !== 'parcela_sintetica'}>
               <PlusCircle className="w-4 h-4 mr-2" />
               Nova Conta
             </Button>
@@ -377,27 +432,28 @@ const ContasReceber = () => {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className={cn("grid w-full", isAdmin ? "grid-cols-4" : "grid-cols-2")}>
-          {isAdmin && <TabsTrigger value="assinaturas">Assinaturas (Stripe)</TabsTrigger>}
-          {isAdmin && <TabsTrigger value="contratos">Contratos (Clientes)</TabsTrigger>}
-          <TabsTrigger value="lancamentos">Lançamentos (Sintético)</TabsTrigger>
-          <TabsTrigger value="parcelas">Todas as Parcelas (Analítico)</TabsTrigger>
+        <TabsList className={cn("grid w-full", isAdmin ? "grid-cols-5" : "grid-cols-2")}>
+          {isAdmin && <TabsTrigger value="assinaturas">Assinaturas</TabsTrigger>}
+          {isAdmin && <TabsTrigger value="contratos_clientes">Contratos Clientes</TabsTrigger>}
+          <TabsTrigger value="parcela_sintetica">Parcela Sintética</TabsTrigger>
+          <TabsTrigger value="parcelas">Todas as Parcelas</TabsTrigger>
+          {isAdmin && <TabsTrigger value="recebimentos">Parcelas Recebidas</TabsTrigger>}
         </TabsList>
-        
-        {/* ABA DE CONTRATOS (APENAS ADMIN) */}
-        {isAdmin && activeTab === 'contratos' && (
-            <div className="p-4 bg-yellow-100 dark:bg-yellow-900/20 border border-yellow-500 rounded-md mt-4">
-                <p className="text-sm text-yellow-700 dark:text-yellow-300 font-semibold">
-                    Modo Contratos: Visualizando lançamentos de contratos de todas as empresas clientes.
-                </p>
-            </div>
-        )}
         
         {/* ABA DE ASSINATURAS (APENAS ADMIN) */}
         {isAdmin && activeTab === 'assinaturas' && (
             <div className="p-4 bg-blue-100 dark:bg-blue-900/20 border border-blue-500 rounded-md mt-4">
                 <p className="text-sm text-blue-700 dark:text-blue-300 font-semibold">
-                    Modo Assinaturas: Visualizando lançamentos de recorrência (Stripe) do Admin.
+                    Modo Assinaturas: Visualizando lançamentos de recorrência do Admin.
+                </p>
+            </div>
+        )}
+        
+        {/* ABA DE CONTRATOS (APENAS ADMIN) */}
+        {isAdmin && activeTab === 'contratos_clientes' && (
+            <div className="p-4 bg-yellow-100 dark:bg-yellow-900/20 border border-yellow-500 rounded-md mt-4">
+                <p className="text-sm text-yellow-700 dark:text-yellow-300 font-semibold">
+                    Modo Contratos: Visualizando lançamentos de contratos de todas as empresas clientes.
                 </p>
             </div>
         )}
@@ -436,7 +492,7 @@ const ContasReceber = () => {
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader><TableRow>
-                    {isAdmin && activeTab === 'contratos' && <TableHead>Empresa</TableHead>}
+                    {isAdmin && activeTab === 'contratos_clientes' && <TableHead>Empresa</TableHead>}
                     <TableHead>Cliente</TableHead><TableHead>Descrição</TableHead><TableHead className="text-center">Nº Parcela</TableHead><TableHead>Vencimento</TableHead><TableHead>Valor da Parcela</TableHead><TableHead>Valor Pago</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Ações</TableHead>
                   </TableRow></TableHeader>
                   <TableBody>
@@ -453,7 +509,7 @@ const ContasReceber = () => {
                         const clienteNome = isMyLaunch ? clienteNomeMap[clienteId] || 'N/A' : contaReceber?.clientes?.nome || 'N/A';
                         const descricao = contaReceber?.descricao || 'N/A';
                             
-                        const empresaIdDisplay = isAdmin && activeTab === 'contratos' 
+                        const empresaIdDisplay = isAdmin && activeTab === 'contratos_clientes' 
                             ? (p as any).contas_receber?.empresa_id || 'N/A'
                             : (p as any).admin_contas_receber?.admin_id || 'N/A';
                             
@@ -461,7 +517,7 @@ const ContasReceber = () => {
 
                         return (
                           <TableRow key={p.id}>
-                            {isAdmin && activeTab === 'contratos' && <TableCell className="text-sm text-muted-foreground">{empresaIdDisplay}</TableCell>}
+                            {isAdmin && activeTab === 'contratos_clientes' && <TableCell className="text-sm text-muted-foreground">{empresaIdDisplay}</TableCell>}
                             <TableCell>{clienteNome}</TableCell>
                             <TableCell>{descricao}</TableCell>
                             <TableCell className="text-center">{p.numero_parcela}</TableCell>
@@ -474,7 +530,7 @@ const ContasReceber = () => {
                                     variant="outline" 
                                     size="sm" 
                                     onClick={() => handleOpenPagamento(p)} 
-                                    disabled={isPaidOrCancelled || (isAdmin && activeTab === 'contratos')}
+                                    disabled={isPaidOrCancelled || (isAdmin && activeTab === 'contratos_clientes')}
                                 >
                                     <BadgeDollarSign className="w-4 h-4" />
                                 </Button>
@@ -484,7 +540,7 @@ const ContasReceber = () => {
                       })
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={isAdmin && activeTab === 'contratos' ? 9 : 8} className="text-center h-24">
+                        <TableCell colSpan={isAdmin && activeTab === 'contratos_clientes' ? 9 : 8} className="text-center h-24">
                           Nenhum resultado encontrado.
                         </TableCell>
                       </TableRow>
@@ -497,7 +553,7 @@ const ContasReceber = () => {
         </TabsContent>
         
         {/* ABA DE LANÇAMENTOS (SINTÉTICO) */}
-        <TabsContent value="lancamentos">
+        <TabsContent value="parcela_sintetica">
           <Card>
             <CardHeader><CardTitle>Resumo dos Lançamentos</CardTitle></CardHeader>
             <CardContent>
@@ -506,7 +562,7 @@ const ContasReceber = () => {
                   <TableHeader>
                     <TableRow>
                       <TableHead className="text-left">Ações</TableHead> 
-                      {isAdmin && activeTab === 'contratos' && <TableHead>Empresa</TableHead>}
+                      {isAdmin && activeTab === 'contratos_clientes' && <TableHead>Empresa</TableHead>}
                       <TableHead>Cliente</TableHead>
                       <TableHead>Descrição</TableHead>
                       <TableHead>Vencimento</TableHead>
@@ -528,7 +584,7 @@ const ContasReceber = () => {
                       }[statusVariant];
 
                       // Se estiver em modo supervisão, o Admin não pode editar/deletar
-                      const canEditOrDelete = !isAdmin || activeTab === 'lancamentos';
+                      const canEditOrDelete = !isAdmin || activeTab === 'parcela_sintetica' || activeTab === 'assinaturas';
                       
                       // Lógica de exibição do nome do cliente
                       let clienteNomeDisplay = 'N/A';
@@ -558,7 +614,7 @@ const ContasReceber = () => {
                             </div>
                           </TableCell>
                           
-                          {isAdmin && activeTab === 'contratos' && <TableCell className="text-sm text-muted-foreground">{(conta as any).empresa_id || 'N/A'}</TableCell>}
+                          {isAdmin && activeTab === 'contratos_clientes' && <TableCell className="text-sm text-muted-foreground">{(conta as any).empresa_id || 'N/A'}</TableCell>}
                           
                           <TableCell className="font-medium">
                             {clienteNomeDisplay}
@@ -582,9 +638,55 @@ const ContasReceber = () => {
           </Card>
         </TabsContent>
         
-        {/* Abas vazias para Admin, para manter a estrutura de 4 abas */}
+        {/* ABA DE RECEBIMENTOS (APENAS ADMIN) */}
+        {isAdmin && activeTab === 'recebimentos' && (
+            <TabsContent value="recebimentos">
+                <Card>
+                    <CardHeader><CardTitle>Histórico de Parcelas Recebidas</CardTitle></CardHeader>
+                    <CardContent>
+                        <div className="overflow-x-auto">
+                            <Table>
+                                <TableHeader><TableRow>
+                                    <TableHead>Data Recebimento</TableHead>
+                                    <TableHead>Cliente</TableHead>
+                                    <TableHead>Descrição</TableHead>
+                                    <TableHead>Forma Pagamento</TableHead>
+                                    <TableHead className="text-right">Valor Recebido</TableHead>
+                                </TableRow></TableHeader>
+                                <TableBody>
+                                    {recebimentosFiltrados.length > 0 ? (
+                                        recebimentosFiltrados.map((r) => {
+                                            const clienteNome = clienteNomeMap[r.cliente_id] || 'N/A';
+                                            const descricao = r.admin_parcelas_receber?.admin_contas_receber?.descricao || 'N/A';
+                                            
+                                            return (
+                                                <TableRow key={r.id}>
+                                                    <TableCell>{formatDate(r.data_recebimento)}</TableCell>
+                                                    <TableCell>{clienteNome}</TableCell>
+                                                    <TableCell>{descricao}</TableCell>
+                                                    <TableCell>{r.forma_pagamento}</TableCell>
+                                                    <TableCell className="text-right font-medium text-green-600">{formatCurrency(r.valor_recebido)}</TableCell>
+                                                </TableRow>
+                                            );
+                                        })
+                                    ) : (
+                                        <TableRow>
+                                            <TableCell colSpan={5} className="text-center h-24">
+                                                Nenhum recebimento encontrado.
+                                            </TableCell>
+                                        </TableRow>
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    </CardContent>
+                </Card>
+            </TabsContent>
+        )}
+        
+        {/* Abas vazias para Admin, para manter a estrutura de 5 abas */}
         {isAdmin && <TabsContent value="assinaturas" className="hidden"></TabsContent>}
-        {isAdmin && <TabsContent value="contratos" className="hidden"></TabsContent>}
+        {isAdmin && <TabsContent value="contratos_clientes" className="hidden"></TabsContent>}
       </Tabs>
 
       <DetalhesParcelasDialog
