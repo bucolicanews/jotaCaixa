@@ -74,7 +74,7 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Detalhes do Lançamento</DialogTitle>
             <DialogDescription><strong>{conta?.descricao}</strong> para o cliente <strong>{conta?.clientes?.nome}</strong></DialogDescription>
