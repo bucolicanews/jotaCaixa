@@ -169,6 +169,7 @@ const ContasReceber = () => {
           )
         `)
         .eq('admin_id', ownerId)
+        .not('cliente_id', 'is', null) // FILTRO ADICIONADO: Apenas recebimentos com cliente_id preenchido
         .order('data_recebimento', { ascending: false })
         : Promise.resolve({ data: [], error: null }),
     ]);
@@ -278,11 +279,9 @@ const ContasReceber = () => {
     let clienteIdReal: string | undefined;
     
     if (isMyLaunch) {
-        // Se for Admin, o cliente_id real está na conta sintética (admin_contas_receber)
         clienteIdReal = contaReceber?.cliente_id;
         
     } else {
-        // Se for Cliente, o cliente_id real está na conta sintética (contas_receber)
         clienteIdReal = contaReceber?.cliente_id;
     }
         
