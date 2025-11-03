@@ -91,7 +91,8 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
     if (isAdmin) {
         // ADMIN: Usa admin_recebimentos. O cliente_id deve ser o ID do cliente real (tbl_clientes)
         if (!parcela.cliente_id_real) {
-            showError('ID do cliente pagador não encontrado.');
+            // CORREÇÃO: Se for Admin e o cliente_id_real não veio, é um erro crítico.
+            showError('ID do cliente pagador não encontrado. Verifique a origem da conta.');
             return;
         }
         recebimentoBasePayload = { 

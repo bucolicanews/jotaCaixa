@@ -302,7 +302,15 @@ const ContasReceber = () => {
         : (parcela as any).contas_receber;
         
     // NOVO: Obtém o cliente_id real (ID da tbl_clientes)
-    const clienteIdReal = isMyLaunch ? contaReceber?.cliente_id : contaReceber?.clientes?.id;
+    let clienteIdReal: string | undefined;
+    
+    if (isMyLaunch) {
+        // Se for Admin, o cliente_id real está em admin_contas_receber.cliente_id
+        clienteIdReal = contaReceber?.cliente_id;
+    } else {
+        // Se for Cliente, o cliente_id real é o ID do cliente de CR (clientes.id)
+        clienteIdReal = contaReceber?.clientes?.id;
+    }
         
     const mappedParcela = {
         id: parcela.id,
@@ -318,8 +326,6 @@ const ContasReceber = () => {
   };
 
   const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
-  
-  // Função para formatar datas puras (YYYY-MM-DD)
   const formatDate = (dateString: string) => new Date(dateString + 'T00:00:00').toLocaleDateString('pt-BR');
   
   // Função para formatar timestamps (TIMESTAMP WITH TIME ZONE)
@@ -795,7 +801,7 @@ const ContasReceber = () => {
                                             
                                             return (
                                                 <TableRow key={r.id}>
-                                                    <TableCell>{formatTimestamp(r.data_recebimento)}</TableCell> {/* USANDO formatTimestamp */}
+                                                    <TableCell>{formatTimestamp(r.data_recebimento)}</TableCell>
                                                     <TableCell>{clienteNome}</TableCell>
                                                     <TableCell>{descricao}</TableCell>
                                                     <TableCell>{r.forma_pagamento}</TableCell>
