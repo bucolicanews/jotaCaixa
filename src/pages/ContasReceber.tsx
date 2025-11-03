@@ -68,6 +68,7 @@ interface AdminRecebimento {
         numero_parcela: number;
         admin_contas_receber: {
             descricao: string;
+            origem: ContaReceber['origem']; // Adicionando origem aqui
         } | null;
     } | null;
 }
@@ -177,13 +178,13 @@ const ContasReceber = () => {
     if (isAdmin) {
         // ADMIN: Busca nas tabelas admin_*
         
-        // 1. Busca de Contas Sintéticas (admin_contas_receber) - SEM FILTRO DE ORIGEM
+        // 1. Busca de Contas Sintéticas (admin_contas_receber)
         contasQuery = supabase.from('admin_contas_receber').select('*').eq('admin_id', empresaId).order('data_vencimento', { ascending: true });
         
-        // 2. Busca de Parcelas (admin_parcelas_receber) - Usado na aba 'Todas as Parcelas'
+        // 2. Busca de Parcelas (admin_parcelas_receber) - Inclui a origem
         parcelasQuery = supabase.from('admin_parcelas_receber').select('*, admin_contas_receber(descricao, cliente_id, admin_id, origem)').eq('admin_id', empresaId).order('data_vencimento', { ascending: true });
         
-        // 3. Busca de Recebimentos (admin_recebimentos) - Usado na nova aba
+        // 3. Busca de Recebimentos (admin_recebimentos) - Inclui a origem
         recebimentosQuery = supabase.from('admin_recebimentos').select(`
             id,
             data_recebimento,
@@ -192,14 +193,15 @@ const ContasReceber = () => {
             cliente_id,
             admin_parcelas_receber (
                 numero_parcela,
-                admin_contas_receber ( descricao )
+                admin_contas_receber ( descricao, origem )
             )
         `).eq('admin_id', empresaId).order('data_recebimento', { ascending: false });
         
     } else if (empresaId) {
         // Cliente/Usuário: Busca nas tabelas normais
         contasQuery = supabase.from('contas_receber').select('*, clientes(*)').eq('empresa_id', empresaId).order('data_vencimento', { ascending: true });
-        parcelasQuery = supabase.from('parcelas_contas_receber').select('*, contas_receber(descricao, clientes(nome), empresa_id)').eq('empresa_id', empresaId).order('data_vencimento', { ascending: true });
+        // Inclui a origem na query de parcelas
+        parcelasQuery = supabase.from('parcelas_contas_receber').select('*, contas_receber(descricao, clientes(nome), empresa_id, origem)').eq('empresa_id', empresaId).order('data_vencimento', { ascending: true });
     } else {
         setContas([]);
         setParcelas([]);
@@ -320,6 +322,25 @@ const ContasReceber = () => {
     const termoBusca = filtroGeral.toLowerCase();
     const dataVencimento = new Date(p.data_vencimento + 'T00:00:00');
 
+    // Lógica de acesso ao nome do cliente, descrição e ORIGEM
+    let clienteNome = 'N/A';
+    let descricao = 'N/A';
+    let origem: ContaReceber['origem'] | null = null;
+    
+    const isMyLaunch = isAdmin;
+    
+    if (isMyLaunch) {
+        const contaReceber = (p as any).admin_contas_receber;
+        descricao = contaReceber?.descricao || 'N/A';
+        clienteNome = clienteNomeMap[contaReceber?.cliente_id] || 'N/A';
+        origem = contaReceber?.origem || null;
+    } else {
+        const contaReceber = (p as any).contas_receber;
+        clienteNome = contaReceber?.clientes?.nome || 'N/A';
+        descricao = contaReceber?.descricao || 'N/A';
+        origem = contaReceber?.origem || null;
+    }
+
     // 1. Filtro de Período (Data de Vencimento)
     if (filtroPeriodo?.from) {
       const from = filtroPeriodo.from;
@@ -347,26 +368,21 @@ const ContasReceber = () => {
         return false;
       }
     }
-
-    // 3. Filtro Geral (Texto)
-    // Lógica de acesso ao nome do cliente e descrição
-    let clienteNome = 'N/A';
-    let descricao = 'N/A';
     
-    const isMyLaunch = isAdmin;
-    
-    if (isMyLaunch) {
-        // Admin: Usa o mapa para buscar o nome do cliente e a descrição do join
-        const contaReceber = (p as any).admin_contas_receber;
-        descricao = contaReceber?.descricao || 'N/A';
-        clienteNome = clienteNomeMap[contaReceber?.cliente_id] || 'N/A';
-    } else {
-        // Cliente/Supervisão: Acessa o nome do cliente e descrição
-        const contaReceber = (p as any).contas_receber;
-        clienteNome = contaReceber?.clientes?.nome || 'N/A';
-        descricao = contaReceber?.descricao || 'N/A';
+    // 3. Filtro de Origem (NOVO)
+    if (filtroOrigem !== 'todos') {
+        if (filtroOrigem === 'contrato' && origem !== 'contrato') {
+            return false;
+        }
+        if (filtroOrigem === 'plano' && origem !== 'assinatura_recorrente') {
+            return false;
+        }
+        if (filtroOrigem === 'manual' && origem !== 'manual') {
+            return false;
+        }
     }
 
+    // 4. Filtro Geral (Texto)
     return (
       clienteNome.toLowerCase().includes(termoBusca) ||
       descricao.toLowerCase().includes(termoBusca) ||
@@ -448,6 +464,9 @@ const ContasReceber = () => {
   const recebimentosFiltrados = recebimentos.filter(r => {
     const termoBusca = filtroGeral.toLowerCase();
     const dataRecebimento = new Date(r.data_recebimento); // data_recebimento é TIMESTAMP WITH TIME ZONE
+    
+    // Lógica de acesso à ORIGEM
+    const origem = r.admin_parcelas_receber?.admin_contas_receber?.origem || null;
 
     // 1. Filtro de Período (Data de Recebimento)
     if (filtroPeriodo?.from) {
@@ -463,7 +482,20 @@ const ContasReceber = () => {
       }
     }
     
-    // 2. Filtro Geral (Texto)
+    // 2. Filtro de Origem (NOVO)
+    if (filtroOrigem !== 'todos') {
+        if (filtroOrigem === 'contrato' && origem !== 'contrato') {
+            return false;
+        }
+        if (filtroOrigem === 'plano' && origem !== 'assinatura_recorrente') {
+            return false;
+        }
+        if (filtroOrigem === 'manual' && origem !== 'manual') {
+            return false;
+        }
+    }
+    
+    // 3. Filtro Geral (Texto)
     const clienteNome = clienteNomeMap[r.cliente_id] || 'N/A';
     const descricao = r.admin_parcelas_receber?.admin_contas_receber?.descricao || 'N/A';
     
@@ -529,6 +561,18 @@ const ContasReceber = () => {
                     <SelectItem value="aberta">Abertas / Reprogramadas</SelectItem>
                   </SelectContent>
                 </Select>
+                {/* FILTRO DE ORIGEM */}
+                <Select value={filtroOrigem} onValueChange={setFiltroOrigem}>
+                  <SelectTrigger className="w-full md:w-[180px]">
+                    <SelectValue placeholder="Filtrar por Origem" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todas as Origens</SelectItem>
+                    <SelectItem value="manual">Manual</SelectItem>
+                    <SelectItem value="contrato">Contrato</SelectItem>
+                    <SelectItem value="plano">Plano (Recorrente)</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </CardHeader>
             <CardContent>
@@ -550,13 +594,19 @@ const ContasReceber = () => {
                         const clienteId = isMyLaunch ? contaReceber?.cliente_id : contaReceber?.clientes?.id;
                         const clienteNome = isMyLaunch ? clienteNomeMap[clienteId] || 'N/A' : contaReceber?.clientes?.nome || 'N/A';
                         const descricao = contaReceber?.descricao || 'N/A';
+                        const origem = isMyLaunch ? contaReceber?.origem : (p as any).contas_receber?.origem;
                             
                         const isPaidOrCancelled = p.status === 'paga' || p.status === 'cancelada';
 
                         return (
                           <TableRow key={p.id}>
                             <TableCell>{clienteNome}</TableCell>
-                            <TableCell>{descricao}</TableCell>
+                            <TableCell>
+                                {descricao}
+                                <span className="block text-xs text-primary/80 mt-1 font-medium">
+                                    Origem: {origem === 'assinatura_recorrente' ? 'Plano' : origem?.charAt(0).toUpperCase() + origem?.slice(1)}
+                                </span>
+                            </TableCell>
                             <TableCell className="text-center">{p.numero_parcela}</TableCell>
                             <TableCell>{formatDate(p.data_vencimento)}</TableCell>
                             <TableCell>{formatCurrency(p.valor_parcela)}</TableCell>
@@ -741,7 +791,18 @@ const ContasReceber = () => {
                                 setDate={setFiltroPeriodo}
                                 className="w-full md:w-auto"
                             />
-                            {/* O filtro de status não é necessário aqui, pois todos são pagos */}
+                            {/* FILTRO DE ORIGEM */}
+                            <Select value={filtroOrigem} onValueChange={setFiltroOrigem}>
+                              <SelectTrigger className="w-full md:w-[180px]">
+                                <SelectValue placeholder="Filtrar por Origem" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="todos">Todas as Origens</SelectItem>
+                                <SelectItem value="manual">Manual</SelectItem>
+                                <SelectItem value="contrato">Contrato</SelectItem>
+                                <SelectItem value="plano">Plano (Recorrente)</SelectItem>
+                              </SelectContent>
+                            </Select>
                         </div>
                     </CardHeader>
                     <CardContent>
