@@ -83,7 +83,9 @@ const ContasReceber = () => {
   
   const [filtroStatus, setFiltroStatus] = useState<string>(initialStatus); 
   const isAdmin = role === 'Admin';
-  const [activeTab, setActiveTab] = useState(isAdmin ? 'meus_lancamentos' : initialTab);
+  
+  // Renomeando as abas para Admin: 'assinaturas' e 'contratos'
+  const [activeTab, setActiveTab] = useState(isAdmin ? 'assinaturas' : initialTab);
 
   // Efeito para forçar a aba correta se o filtro 'status' for passado na URL
   useEffect(() => {
@@ -186,12 +188,41 @@ const ContasReceber = () => {
     if (!carregandoSessao && usuario) {
         if (isAdmin) {
             fetchClienteNames(); // Busca nomes de clientes para o mapa
-            if (activeTab === 'supervisao') {
+            
+            // Lógica de busca para Admin baseada na aba ativa
+            if (activeTab === 'assinaturas') {
+                // Assinaturas: Busca apenas lançamentos de recorrência do Admin
+                const fetchAssinaturas = async () => {
+                    setCarregandoDados(true);
+                    const [contasRes, parcelasRes] = await Promise.all([
+                        supabase.from('admin_contas_receber').select('*').eq('admin_id', empresaId).eq('origem', 'assinatura_recorrente').order('data_vencimento', { ascending: true }),
+                        supabase.from('admin_parcelas_receber').select('*, admin_contas_receber(descricao, cliente_id, admin_id)').eq('admin_id', empresaId).order('data_vencimento', { ascending: true }),
+                    ]);
+                    
+                    if (contasRes.error) showError('Erro ao carregar assinaturas: ' + contasRes.error.message);
+                    else setContas(contasRes.data as any[]);
+                    
+                    if (parcelasRes.error) showError('Erro ao carregar parcelas de assinaturas: ' + parcelasRes.error.message);
+                    else {
+                        // Filtra as parcelas para mostrar apenas as que pertencem às contas de recorrência
+                        const recorrenciaIds = (contasRes.data as any[])?.map(c => c.id) || [];
+                        const filteredParcelas = (parcelasRes.data as any[]).filter((p: any) => recorrenciaIds.includes(p.conta_receber_id));
+                        setParcelas(filteredParcelas);
+                    }
+                    setCarregandoDados(false);
+                };
+                fetchAssinaturas();
+                
+            } else if (activeTab === 'contratos') {
+                // Contratos: Busca apenas lançamentos de contratos dos Clientes (Supervisão)
                 buscarSupervisao();
+                
             } else {
+                // Lançamentos (Sintético) e Todas as Parcelas (Analítico) - Usam a busca padrão do Admin (Meus Lançamentos)
                 buscarMeusLancamentos();
             }
         } else {
+            // Cliente/Usuário: Busca normal
             buscarMeusLancamentos();
         }
     }
@@ -216,7 +247,7 @@ const ContasReceber = () => {
   const handleDelete = async (contaId: string) => {
     if (!window.confirm('Tem certeza que deseja excluir este conta e todas as suas parcelas? A ação não pode ser desfeita.')) return;
     
-    const tabelaContasReceber = isAdmin ? 'admin_contas_receber' : 'contas_receber';
+    const tabelaContasReceber = isAdmin && activeTab !== 'contratos' ? 'admin_contas_receber' : 'contas_receber';
     
     const { error } = await supabase.from(tabelaContasReceber).delete().eq('id', contaId);
     if (error) showError('Erro ao excluir conta: ' + error.message);
@@ -233,7 +264,7 @@ const ContasReceber = () => {
   
   const handleOpenPagamento = (parcela: any) => {
     // Mapeia os campos necessários para o RegistrarPagamentoDialog
-    const isMyLaunch = isAdmin && activeTab === 'meus_lancamentos';
+    const isMyLaunch = isAdmin && activeTab === 'assinaturas';
     
     const contaReceberData = isMyLaunch 
         ? parcela.admin_contas_receber 
@@ -291,7 +322,7 @@ const ContasReceber = () => {
     let clienteNome = 'N/A';
     let descricao = 'N/A';
     
-    const isMyLaunch = isAdmin && activeTab === 'meus_lancamentos';
+    const isMyLaunch = isAdmin && activeTab === 'assinaturas';
     
     if (isMyLaunch) {
         // Admin: Usa o mapa para buscar o nome do cliente
@@ -323,7 +354,7 @@ const ContasReceber = () => {
     let clienteNome = 'N/A';
     let descricao = c.descricao;
     
-    if (isAdmin && activeTab === 'meus_lancamentos') {
+    if (isAdmin && activeTab === 'assinaturas') {
         // Admin: Usa o mapa para buscar o nome do cliente
         clienteNome = clienteNomeMap[c.cliente_id] || 'N/A';
     } else {
@@ -349,7 +380,7 @@ const ContasReceber = () => {
         <h1 className="text-2xl md:text-3xl font-bold">Contas a Receber</h1>
         <Dialog open={dialogFormAberto} onOpenChange={setDialogFormAberto}>
           <DialogTrigger asChild>
-            <Button onClick={() => setContaSelecionada(null)} className="w-full sm:w-auto" disabled={isAdmin && activeTab === 'supervisao'}>
+            <Button onClick={() => setContaSelecionada(null)} className="w-full sm:w-auto" disabled={isAdmin && activeTab !== 'lancamentos'}>
               <PlusCircle className="w-4 h-4 mr-2" />
               Nova Conta
             </Button>
@@ -360,17 +391,26 @@ const ContasReceber = () => {
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className={cn("grid w-full", isAdmin ? "grid-cols-4" : "grid-cols-2")}>
-          {isAdmin && <TabsTrigger value="meus_lancamentos">Meus Lançamentos</TabsTrigger>}
-          {isAdmin && <TabsTrigger value="supervisao">Supervisão</TabsTrigger>}
+          {isAdmin && <TabsTrigger value="assinaturas">Assinaturas (Stripe)</TabsTrigger>}
+          {isAdmin && <TabsTrigger value="contratos">Contratos (Clientes)</TabsTrigger>}
           <TabsTrigger value="lancamentos">Lançamentos (Sintético)</TabsTrigger>
           <TabsTrigger value="parcelas">Todas as Parcelas (Analítico)</TabsTrigger>
         </TabsList>
         
-        {/* ABA DE SUPERVISÃO (APENAS ADMIN) */}
-        {isAdmin && activeTab === 'supervisao' && (
+        {/* ABA DE CONTRATOS (APENAS ADMIN) */}
+        {isAdmin && activeTab === 'contratos' && (
             <div className="p-4 bg-yellow-100 dark:bg-yellow-900/20 border border-yellow-500 rounded-md mt-4">
                 <p className="text-sm text-yellow-700 dark:text-yellow-300 font-semibold">
-                    Modo Supervisão: Visualizando lançamentos de todas as empresas clientes.
+                    Modo Contratos: Visualizando lançamentos de contratos de todas as empresas clientes.
+                </p>
+            </div>
+        )}
+        
+        {/* ABA DE ASSINATURAS (APENAS ADMIN) */}
+        {isAdmin && activeTab === 'assinaturas' && (
+            <div className="p-4 bg-blue-100 dark:bg-blue-900/20 border border-blue-500 rounded-md mt-4">
+                <p className="text-sm text-blue-700 dark:text-blue-300 font-semibold">
+                    Modo Assinaturas: Visualizando lançamentos de recorrência (Stripe) do Admin.
                 </p>
             </div>
         )}
@@ -409,14 +449,14 @@ const ContasReceber = () => {
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader><TableRow>
-                    {isAdmin && activeTab === 'supervisao' && <TableHead>Empresa</TableHead>}
+                    {isAdmin && activeTab === 'contratos' && <TableHead>Empresa</TableHead>}
                     <TableHead>Cliente</TableHead><TableHead>Descrição</TableHead><TableHead className="text-center">Nº Parcela</TableHead><TableHead>Vencimento</TableHead><TableHead>Valor da Parcela</TableHead><TableHead>Valor Pago</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Ações</TableHead>
                   </TableRow></TableHeader>
                   <TableBody>
                     {parcelasFiltradas.length > 0 ? (
                       parcelasFiltradas.map((p) => {
                         // Determina o nome do cliente e a descrição com base na aba ativa (Admin vs Cliente)
-                        const isMyLaunch = isAdmin && activeTab === 'meus_lancamentos';
+                        const isMyLaunch = isAdmin && activeTab === 'assinaturas';
                         
                         const contaReceber = isMyLaunch 
                             ? (p as any).admin_contas_receber 
@@ -426,7 +466,7 @@ const ContasReceber = () => {
                         const clienteNome = isMyLaunch ? clienteNomeMap[clienteId] || 'N/A' : contaReceber?.clientes?.nome || 'N/A';
                         const descricao = contaReceber?.descricao || 'N/A';
                             
-                        const empresaIdDisplay = isAdmin && activeTab === 'supervisao' 
+                        const empresaIdDisplay = isAdmin && activeTab === 'contratos' 
                             ? (p as any).contas_receber?.empresa_id || 'N/A'
                             : (p as any).admin_contas_receber?.admin_id || 'N/A';
                             
@@ -434,7 +474,7 @@ const ContasReceber = () => {
 
                         return (
                           <TableRow key={p.id}>
-                            {isAdmin && activeTab === 'supervisao' && <TableCell className="text-sm text-muted-foreground">{empresaIdDisplay}</TableCell>}
+                            {isAdmin && activeTab === 'contratos' && <TableCell className="text-sm text-muted-foreground">{empresaIdDisplay}</TableCell>}
                             <TableCell>{clienteNome}</TableCell>
                             <TableCell>{descricao}</TableCell>
                             <TableCell className="text-center">{p.numero_parcela}</TableCell>
@@ -447,7 +487,7 @@ const ContasReceber = () => {
                                     variant="outline" 
                                     size="sm" 
                                     onClick={() => handleOpenPagamento(p)} 
-                                    disabled={isPaidOrCancelled || (isAdmin && activeTab === 'supervisao')}
+                                    disabled={isPaidOrCancelled || (isAdmin && activeTab === 'contratos')}
                                 >
                                     <BadgeDollarSign className="w-4 h-4" />
                                 </Button>
@@ -457,7 +497,7 @@ const ContasReceber = () => {
                       })
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={isAdmin && activeTab === 'supervisao' ? 9 : 8} className="text-center h-24">
+                        <TableCell colSpan={isAdmin && activeTab === 'contratos' ? 9 : 8} className="text-center h-24">
                           Nenhum resultado encontrado.
                         </TableCell>
                       </TableRow>
@@ -479,7 +519,7 @@ const ContasReceber = () => {
                   <TableHeader>
                     <TableRow>
                       <TableHead className="text-left">Ações</TableHead> 
-                      {isAdmin && activeTab === 'supervisao' && <TableHead>Empresa</TableHead>}
+                      {isAdmin && activeTab === 'contratos' && <TableHead>Empresa</TableHead>}
                       <TableHead>Cliente</TableHead>
                       <TableHead>Descrição</TableHead>
                       <TableHead>Vencimento</TableHead>
@@ -501,11 +541,11 @@ const ContasReceber = () => {
                       }[statusVariant];
 
                       // Se estiver em modo supervisão, o Admin não pode editar/deletar
-                      const canEditOrDelete = !isAdmin || activeTab === 'meus_lancamentos';
+                      const canEditOrDelete = !isAdmin || activeTab === 'lancamentos';
                       
                       // Lógica de exibição do nome do cliente
                       let clienteNomeDisplay = 'N/A';
-                      if (isAdmin && activeTab === 'meus_lancamentos') {
+                      if (isAdmin && activeTab === 'assinaturas') {
                           // Admin: Usa o mapa para buscar o nome do cliente
                           clienteNomeDisplay = clienteNomeMap[conta.cliente_id] || 'N/A';
                       } else {
@@ -531,7 +571,7 @@ const ContasReceber = () => {
                             </div>
                           </TableCell>
                           
-                          {isAdmin && activeTab === 'supervisao' && <TableCell className="text-sm text-muted-foreground">{(conta as any).empresa_id || 'N/A'}</TableCell>}
+                          {isAdmin && activeTab === 'contratos' && <TableCell className="text-sm text-muted-foreground">{(conta as any).empresa_id || 'N/A'}</TableCell>}
                           
                           <TableCell className="font-medium">
                             {clienteNomeDisplay}
@@ -556,8 +596,8 @@ const ContasReceber = () => {
         </TabsContent>
         
         {/* Abas vazias para Admin, para manter a estrutura de 4 abas */}
-        {isAdmin && <TabsContent value="meus_lancamentos" className="hidden"></TabsContent>}
-        {isAdmin && <TabsContent value="supervisao" className="hidden"></TabsContent>}
+        {isAdmin && <TabsContent value="assinaturas" className="hidden"></TabsContent>}
+        {isAdmin && <TabsContent value="contratos" className="hidden"></TabsContent>}
       </Tabs>
 
       <DetalhesParcelasDialog
