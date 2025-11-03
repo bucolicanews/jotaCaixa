@@ -16,7 +16,7 @@ import ModeloPreviewDialog from './ModeloPreviewDialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { useSessao } from '@/hooks/use-sessao';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
-import { cn } from '@/lib/utils';
+// import { cn } from '@/lib/utils'; // Removido: TS6133
 
 const formSchema = z.object({
   titulo: z.string().min(1, 'O título é obrigatório.'),
@@ -37,7 +37,8 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
   const [tagsAtivas, setTagsAtivas] = useState<ContratoTag[]>(TAGS_FINANCEIRAS_OBRIGATORIAS);
   const [carregandoTags, setCarregandoTags] = useState(true);
   const { role, perfil, usuario } = useSessao();
-  const textareaRef = useRef<HTMLTextAreaElement>(null); // Ref para o Textarea
+  // Tipagem explícita para MutableRefObject
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null); 
   
   const isCliente = role === 'Cliente';
   const isAdmin = role === 'Admin';
@@ -242,22 +243,32 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
                   <FormField
                       control={form.control}
                       name="conteudo_template"
-                      render={({ field }) => (
-                          <FormItem>
-                              <FormLabel>Conteúdo do Template (Use tags)</FormLabel>
-                              <FormControl>
-                                  <Textarea 
-                                      ref={textareaRef} // Adicionando a ref
-                                      placeholder="[CONTRATO] Pelo presente instrumento, o CONTRATANTE {{CLIENTE_NOME}}..." 
-                                      rows={25} // Aumentando a altura
-                                      {...field} 
-                                      onDrop={handleDrop} // Adicionando drop handler
-                                      onDragOver={handleDragOver} // Adicionando drag over handler
-                                  />
-                              </FormControl>
-                              <FormMessage />
-                          </FormItem>
-                      )}
+                      render={({ field: { ref: rhfRef, ...restField } }) => { // TS2783 Fix: Destructuring ref
+                          
+                          // Combina o ref do RHF com o ref customizado para manipulação do cursor
+                          const mergedRef = useCallback((element: HTMLTextAreaElement | null) => {
+                              rhfRef(element);
+                              // TS2540 Fix: A atribuição direta é permitida em MutableRefObject
+                              textareaRef.current = element; 
+                          }, [rhfRef]);
+                          
+                          return (
+                              <FormItem>
+                                  <FormLabel>Conteúdo do Template (Use tags)</FormLabel>
+                                  <FormControl>
+                                      <Textarea 
+                                          ref={mergedRef} // Usando o ref combinado
+                                          placeholder="[CONTRATO] Pelo presente instrumento, o CONTRATANTE {{CLIENTE_NOME}}..." 
+                                          rows={25} // Aumentando a altura
+                                          {...restField} // Passando o restante das props do field
+                                          onDrop={handleDrop} // Adicionando drop handler
+                                          onDragOver={handleDragOver} // Adicionando drag over handler
+                                      />
+                                  </FormControl>
+                                  <FormMessage />
+                              </FormItem>
+                          );
+                      }}
                   />
               </div>
               
