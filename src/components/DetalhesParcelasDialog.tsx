@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Loader2, BadgeDollarSign } from 'lucide-react';
@@ -8,6 +8,7 @@ import { showError } from '@/utils/toast';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import RegistrarPagamentoDialog from './RegistrarPagamentoDialog';
+import { useSessao } from '@/hooks/use-sessao'; // Importando useSessao
 
 interface Parcela {
   id: string;
@@ -28,16 +29,21 @@ interface DetalhesParcelasDialogProps {
 }
 
 const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, open, onOpenChange, onDataChange }) => {
+  const { role } = useSessao();
   const [parcelas, setParcelas] = useState<Parcela[]>([]);
   const [loading, setLoading] = useState(true);
   const [pagamentoDialogOpen, setPagamentoDialogOpen] = useState(false);
   const [parcelaSelecionada, setParcelaSelecionada] = useState<Parcela | null>(null);
 
-  const fetchParcelas = async () => {
+  const fetchParcelas = useCallback(async () => {
     if (!conta) return;
     setLoading(true);
+    
+    // Determina a tabela correta com base na role
+    const tabelaParcelas = role === 'Admin' ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
+    
     const { data, error } = await supabase
-      .from('parcelas_contas_receber')
+      .from(tabelaParcelas)
       .select('*')
       .eq('conta_receber_id', conta.id)
       .order('numero_parcela', { ascending: true });
@@ -49,13 +55,13 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
       setParcelas(data as Parcela[]);
     }
     setLoading(false);
-  };
+  }, [conta, role]); // Adicionando 'role' como dependência
 
   useEffect(() => {
     if (open) {
       fetchParcelas();
     }
-  }, [conta, open]);
+  }, [conta, open, fetchParcelas]); // Adicionando fetchParcelas como dependência
 
   const handleOpenPagamento = (parcela: Parcela) => {
     setParcelaSelecionada(parcela);
@@ -77,7 +83,7 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
         <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Detalhes do Lançamento</DialogTitle>
-            <DialogDescription><strong>{conta?.descricao}</strong> para o cliente <strong>{conta?.clientes?.nome}</strong></DialogDescription>
+            <DialogDescription><strong>{conta?.descricao}</strong> para o cliente <strong data-dyad-id="src\components\DetalhesParcelasDialog.tsx:104:100" data-dyad-name="strong">{conta?.clientes?.nome || 'N/A'}</strong></DialogDescription>
           </DialogHeader>
           {loading ? (
             <div className="flex justify-center items-center h-40"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
