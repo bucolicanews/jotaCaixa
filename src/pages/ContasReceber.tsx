@@ -306,7 +306,12 @@ const ContasReceber = () => {
     
     if (isMyLaunch) {
         // Se for Admin, o cliente_id real está em admin_contas_receber.cliente_id
-        clienteIdReal = contaReceber?.cliente_id;
+        // CORREÇÃO: Se a sub-query retornar um array (mesmo que de 1 item), precisamos acessar o primeiro elemento.
+        // No entanto, a query foi escrita para retornar um objeto aninhado. Vamos garantir que o acesso seja seguro.
+        
+        // Se for um array, pega o primeiro elemento. Se for um objeto, usa o objeto.
+        const contaData = Array.isArray(contaReceber) ? contaReceber[0] : contaReceber;
+        clienteIdReal = contaData?.cliente_id;
     } else {
         // Se for Cliente, o cliente_id real é o ID do cliente de CR (clientes.id)
         clienteIdReal = contaReceber?.clientes?.id;
