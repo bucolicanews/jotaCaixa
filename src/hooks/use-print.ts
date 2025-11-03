@@ -77,6 +77,7 @@ export function usePrint() {
             .print-table { page-break-inside: auto; }
             .print-table tr { page-break-inside: avoid; page-break-after: auto; }
             .print-table thead { display: table-header-group; } /* Repete cabeçalho em novas páginas */
+            .no-print { display: none; }
           }
         </style>
       `;
@@ -89,6 +90,10 @@ export function usePrint() {
             ${printStyles}
           </head>
           <body>
+            <div class="no-print" style="padding: 20px; text-align: center; background: #ffffe0; border: 1px solid #ccc;">
+                <p style="font-size: 14pt; color: #333;">Documento pronto para impressão. Use <strong>Ctrl+P</strong> (ou Cmd+P) para imprimir.</p>
+                <button onclick="window.print()" style="padding: 10px 20px; margin-top: 10px; cursor: pointer;">Imprimir Agora</button>
+            </div>
             ${contentHtml}
           </body>
         </html>
@@ -96,12 +101,6 @@ export function usePrint() {
       printWindow.document.close();
       printWindow.focus();
       
-      // Espera um breve momento para o conteúdo carregar antes de imprimir
-      setTimeout(() => {
-        printWindow.print();
-        printWindow.close();
-      }, 500);
-
     } catch (e) {
       console.error('Erro ao imprimir:', e);
       showError('Falha ao iniciar a impressão.');

@@ -179,10 +179,10 @@ const FolhaPontoPrint: React.FC<FolhaPontoPrintProps> = ({
                                 <tr key={diaString}>
                                     <td>{format(data, 'dd/MM')}</td>
                                     <td>{diaSemana}</td>
-                                    <td>{e1}</td>
-                                    <td>{s1}</td>
-                                    <td>{e2}</td>
-                                    <td>{s2}</td>
+                                    <td style={{ textAlign: 'center' }}>{e1}</td>
+                                    <td style={{ textAlign: 'center' }}>{s1}</td>
+                                    <td style={{ textAlign: 'center' }}>{e2}</td>
+                                    <td style={{ textAlign: 'center' }}>{s2}</td>
                                     <td>{totalDiaDisplay}</td>
                                     <td>{observacaoPrincipal}</td>
                                 </tr>

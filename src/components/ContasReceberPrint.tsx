@@ -15,6 +15,8 @@ const TAB_TITLES: Record<string, string> = {
     'recebimentos': 'Histórico de Parcelas Recebidas',
 };
 
+const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+
 const ContasReceberPrint: React.FC<ContasReceberPrintProps> = ({ data, activeTab, filtroPeriodo }) => {
     
     const getPeriodoDisplay = () => {
@@ -32,7 +34,7 @@ const ContasReceberPrint: React.FC<ContasReceberPrintProps> = ({ data, activeTab
     
     const headers = Object.keys(data[0]);
     
-    // Mapeamento de largura de coluna para otimizar o A4
+    // Mapeamento de largura de coluna e alinhamento
     const getColumnStyle = (header: string) => {
         switch (header) {
             case 'ID Parcela':
@@ -61,6 +63,31 @@ const ContasReceberPrint: React.FC<ContasReceberPrintProps> = ({ data, activeTab
                 return {};
         }
     };
+    
+    // Colunas que precisam de cálculo de total
+    const valueColumns = ['Valor Total', 'Valor Parcela', 'Valor Pago', 'Valor Recebido'];
+    
+    const totals: Record<string, number> = {};
+    
+    data.forEach(row => {
+        headers.forEach(header => {
+            if (valueColumns.includes(header)) {
+                // Converte o valor para número, tratando strings formatadas (se houver)
+                const rawValue = row[header];
+                let numericValue = 0;
+                
+                if (typeof rawValue === 'number') {
+                    numericValue = rawValue;
+                } else if (typeof rawValue === 'string') {
+                    // Tenta limpar a string (remove R$, pontos e substitui vírgula por ponto)
+                    const cleaned = rawValue.replace(/[R$\.]/g, '').replace(',', '.').trim();
+                    numericValue = parseFloat(cleaned) || 0;
+                }
+                
+                totals[header] = (totals[header] || 0) + numericValue;
+            }
+        });
+    });
 
     return (
         <div className="print-container">
@@ -85,13 +112,43 @@ const ContasReceberPrint: React.FC<ContasReceberPrintProps> = ({ data, activeTab
                     <tbody>
                         {data.map((row, index) => (
                             <tr key={index}>
-                                {headers.map(header => (
-                                    <td key={header} style={getColumnStyle(header)}>
-                                        {row[header]}
-                                    </td>
-                                ))}
+                                {headers.map(header => {
+                                    let displayValue = row[header];
+                                    const style = getColumnStyle(header);
+                                    
+                                    // Formata valores monetários para exibição
+                                    if (valueColumns.includes(header) && typeof row[header] === 'number') {
+                                        displayValue = formatCurrency(row[header]);
+                                    }
+                                    
+                                    return (
+                                        <td key={header} style={style}>
+                                            {displayValue}
+                                        </td>
+                                    );
+                                })}
                             </tr>
                         ))}
+                        
+                        {/* Linha de Totais */}
+                        {Object.keys(totals).length > 0 && (
+                            <tr style={{ fontWeight: 'bold', borderTop: '2px solid #000' }}>
+                                {headers.map(header => {
+                                    const style = getColumnStyle(header);
+                                    if (valueColumns.includes(header)) {
+                                        return (
+                                            <td key={header} style={{ ...style, backgroundColor: '#e0e0e0' }}>
+                                                {formatCurrency(totals[header])}
+                                            </td>
+                                        );
+                                    }
+                                    if (header === 'Cliente' || header === 'Descrição') {
+                                        return <td key={header} style={{ ...style, textAlign: 'left', backgroundColor: '#e0e0e0' }}>TOTAL GERAL</td>;
+                                    }
+                                    return <td key={header} style={{ ...style, backgroundColor: '#e0e0e0' }}></td>;
+                                })}
+                            </tr>
+                        )}
                     </tbody>
                 </table>
             </div>
