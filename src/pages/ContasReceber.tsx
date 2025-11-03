@@ -177,14 +177,19 @@ const ContasReceber = () => {
         } else if (activeTab === 'contratos_clientes') {
             origemFiltro = 'contrato';
         } else if (activeTab === 'parcela_sintetica') {
-            // Na aba 'Parcela Sintética', queremos ver todos os lançamentos sintéticos (manual, contrato, recorrente)
+            // Na aba 'Parcela Sintética', queremos ver lançamentos manuais e de recorrência,
+            // excluindo os de contrato (contrato_gerado_id IS NOT NULL)
             origemFiltro = undefined; 
         }
         
         // 1. Busca de Contas Sintéticas (admin_contas_receber)
         contasQuery = supabase.from('admin_contas_receber').select('*').eq('admin_id', empresaId).order('data_vencimento', { ascending: true });
+        
         if (origemFiltro) {
             contasQuery = contasQuery.eq('origem', origemFiltro);
+        } else if (activeTab === 'parcela_sintetica') {
+            // NOVO FILTRO: Exclui lançamentos de contrato (contrato_gerado_id IS NOT NULL)
+            contasQuery = contasQuery.is('contrato_gerado_id', null);
         }
         
         // 2. Busca de Parcelas (admin_parcelas_receber) - Usado na aba 'Todas as Parcelas'
@@ -227,14 +232,9 @@ const ContasReceber = () => {
     if (parcelasRes.error) showError('Erro ao carregar parcelas: ' + parcelasRes.error.message);
     else {
         let fetchedParcelas = parcelasRes.data as any[];
-        
-        // Filtro de origem para Admin (Analítico) - Não aplicamos filtro de origem aqui, pois esta aba é 'Todas as Parcelas'
-        // O filtro de origem só se aplica à aba 'Parcela Sintética' (contas)
-        
         setParcelas(fetchedParcelas);
     }
     
-    // Correção dos erros TS18048: Verifica se recebimentosRes existe antes de acessar
     if (isAdmin && recebimentosRes) {
         if (recebimentosRes.error) {
             showError('Erro ao carregar recebimentos: ' + recebimentosRes.error.message);
@@ -242,14 +242,6 @@ const ContasReceber = () => {
         } else {
             setRecebimentos(recebimentosRes.data as AdminRecebimento[]);
         }
-    } else if (isAdmin) {
-        // Se isAdmin é true, mas recebimentosRes é undefined, algo deu errado na Promise.all
-        // Mas como a Promise.all garante que a terceira posição será um resultado (ou o fallback),
-        // esta condição só é atingida se recebimentosRes for o resultado do fallback (que tem error: null)
-        // No entanto, o fallback só ocorre se isAdmin for false.
-        // Para segurança, se isAdmin for true e recebimentosRes for undefined, tratamos como erro.
-        // Mas como a estrutura da Promise.all garante que recebimentosRes será um objeto de resultado se isAdmin for true,
-        // a lógica acima é suficiente.
     }
     
     setCarregandoDados(false);
