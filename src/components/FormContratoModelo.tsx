@@ -262,14 +262,14 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
               </div>
               
               {/* Coluna de Tags Padrão */}
-              <Card className="lg:col-span-1 max-h-[750px] overflow-y-auto"> {/* Aumentando a altura máxima */}
+              <Card className="lg:col-span-1 max-h-[750px] overflow-y-auto">
                   <CardHeader className="p-3 border-b">
                       <CardTitle className="text-sm">Tags Ativas (Arraste para o Template)</CardTitle>
-                      <div className="flex space-x-2 mt-2">
-                          <Button type="button" variant="outline" size="sm" onClick={handleCopyAllTags} disabled={tagsAtivas.length === 0}>
+                      <div className="flex flex-wrap gap-2 mt-2"> {/* Adicionado flex-wrap e gap-2 */}
+                          <Button type="button" variant="outline" size="sm" onClick={handleCopyAllTags} disabled={tagsAtivas.length === 0} className="flex-1 min-w-[100px]">
                               <Copy className="w-3 h-3 mr-1" /> Copiar Todas
                           </Button>
-                          <Button type="button" variant="destructive" size="sm" onClick={handleClearTemplate}>
+                          <Button type="button" variant="destructive" size="sm" onClick={handleClearTemplate} className="flex-1 min-w-[100px]">
                               <X className="w-3 h-3 mr-1" /> Limpar Template
                           </Button>
                       </div>
