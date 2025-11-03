@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import FormContratoModelo from '@/components/FormContratoModelo';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 import ImportarModeloContrato from '@/components/ImportarModeloContrato';
+import { cn } from '@/lib/utils';
 
 const GerenciarModelos: React.FC = () => {
   const { role, perfil, usuario, carregando: carregandoSessao } = useSessao();
@@ -116,14 +117,16 @@ const GerenciarModelos: React.FC = () => {
 
   return (
     <LayoutPrincipal>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl md:text-3xl font-bold flex items-center">
+      <div className="flex flex-col items-center sm:flex-row sm:justify-between sm:items-start mb-6 gap-4">
+        <h1 className="text-2xl md:text-3xl font-bold flex items-center text-center sm:text-left">
           <FileText className="w-6 h-6 mr-2" /> Gerenciar Modelos de Contrato
         </h1>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
-            <Button onClick={handleNewModel}>
-              <Plus className="w-4 h-4 mr-2" /> Novo Modelo
+            <Button onClick={handleNewModel} className="w-full sm:w-auto mx-auto sm:mx-0">
+              <Plus className="w-4 h-4 mr-2 sm:mr-0" /> 
+              <span className="hidden sm:inline">Novo Modelo</span>
+              <span className="sm:hidden">Novo</span>
             </Button>
           </DialogTrigger>
           <DialogContent className="fixed inset-0 w-full h-full max-w-none sm:max-w-5xl sm:h-auto sm:max-h-[95vh] sm:rounded-lg sm:left-[50%] sm:top-[50%] sm:translate-x-[-50%] sm:translate-y-[-50%] overflow-y-auto">
