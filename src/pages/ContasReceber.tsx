@@ -205,11 +205,11 @@ const ContasReceber = () => {
         
         // Atualiza o mapa de nomes de clientes para recebimentos
         const clienteIds = recebimentosRes.data.map(r => r.cliente_id);
-        // Não chamo fetchClienteNames aqui, mas sim a lógica de mapeamento
+        
+        // 1. Buscar nomes dos clientes (tbl_clientes)
         const { data: clientesData } = await supabase
-            .from('clientes')
-            .select('id, nome')
-            .in('id', clienteIds);
+            .from('tbl_clientes')
+            .select('id, nome');
             
         if (clientesData) {
             const map = clientesData.reduce((acc, c) => {
@@ -297,6 +297,15 @@ const ContasReceber = () => {
 
   const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
   const formatDate = (dateString: string) => new Date(dateString + 'T00:00:00').toLocaleDateString('pt-BR');
+  
+  // Função para formatar timestamp completo (ISO string)
+  const formatTimestamp = (dateString: string) => {
+    try {
+        return new Date(dateString).toLocaleDateString('pt-BR') + ' ' + new Date(dateString).toLocaleTimeString('pt-BR');
+    } catch (e) {
+        return 'Invalid Date';
+    }
+  };
   
   // --- Filtros de Dados ---
   const filterData = (data: any[], dateKey: string) => {
@@ -612,13 +621,18 @@ const ContasReceber = () => {
                         <TableRow><TableCell colSpan={6} className="text-center h-24">Nenhum recebimento encontrado no período.</TableCell></TableRow>
                     ) : (
                         recebimentosFiltrados.map((r) => {
+                            // CORREÇÃO 1: Usar formatTimestamp para datas ISO
+                            const dataRecebimentoDisplay = formatTimestamp(r.data_recebimento);
+                            
+                            // CORREÇÃO 2: Usar clienteNomeMap que foi populado com tbl_clientes
                             const clienteNome = clienteNomeMap[r.cliente_id] || 'N/A';
+                            
                             const descricao = r.admin_parcelas_receber?.admin_contas_receber?.descricao || 'N/A';
                             const origem = r.admin_parcelas_receber?.admin_contas_receber?.origem || 'manual';
 
                             return (
                                 <TableRow key={r.id}>
-                                    <TableCell>{formatDate(r.data_recebimento)}</TableCell>
+                                    <TableCell>{dataRecebimentoDisplay}</TableCell>
                                     <TableCell className="font-medium">{clienteNome}</TableCell>
                                     <TableCell className="text-sm text-muted-foreground">{descricao}</TableCell>
                                     <TableCell className="font-semibold text-green-600">{formatCurrency(r.valor_recebido)}</TableCell>
