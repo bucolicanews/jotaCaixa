@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, FileSignature, ChevronLeft, Save, CalendarIcon, Eye } from 'lucide-react';
+import { Loader2, FileSignature, ChevronLeft, Save, CalendarIcon, Eye, Building2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
@@ -32,6 +32,11 @@ interface EmpresaLogada {
     endereco_completo?: string | null;
 }
 
+interface EmpresaContrato {
+    id: string;
+    nome: string;
+}
+
 const PreencherContrato: React.FC = () => {
   const { modeloId } = useParams<{ modeloId: string }>();
   const [searchParams] = useSearchParams();
@@ -43,6 +48,7 @@ const PreencherContrato: React.FC = () => {
   const [contratoInicial, setContratoInicial] = useState<ContratoGerado | null>(null);
   const [tags, setTags] = useState<ContratoTag[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [empresasContrato, setEmpresasContrato] = useState<EmpresaContrato[]>([]); // NOVO: Lista de empresas para o Admin
   const [empresaLogada, setEmpresaLogada] = useState<EmpresaLogada | null>(null);
   
   const [valoresTags, setValoresTags] = useState<Record<string, string>>({});
@@ -60,6 +66,9 @@ const PreencherContrato: React.FC = () => {
   const [clienteSelecionadoId, setClienteSelecionadoId] = useState<string>('');
   const [valorTotal, setValorTotal] = useState<number | ''>('');
   
+  // NOVO ESTADO: ID da empresa que será o 'owner' do contrato gerado
+  const [empresaContratoId, setEmpresaContratoId] = useState<string | null>(null); 
+  
   // Campos de Forma de Pagamento
   const [tipoLancamento, setTipoLancamento] = useState<TipoLancamento>('unico');
   const [dataVencimentoUnico, setDataVencimentoUnico] = useState<Date | undefined>(undefined);
@@ -71,21 +80,21 @@ const PreencherContrato: React.FC = () => {
   const isCliente = role === 'Cliente';
   const isEditing = !!contratoId;
   
-  // ID do proprietário (Admin ou Cliente)
-  const getOwnerId = () => {
+  // ID do proprietário logado (Admin ou Cliente)
+  const getOwnerIdLogado = () => {
     if (isAdmin) return usuario?.id || null;
     if (isCliente) return (perfil as ClienteProfile)?.id;
     if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id;
     return null;
   };
   
-  const ownerId = getOwnerId();
+  const ownerIdLogado = getOwnerIdLogado();
 
   const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
   const formatDate = (date: Date) => format(date, 'dd/MM/yyyy');
 
   const buscarDados = useCallback(async () => {
-    if (!modeloId || !ownerId) {
+    if (!modeloId || !ownerIdLogado) {
         setCarregandoDados(false);
         return;
     }
@@ -106,70 +115,60 @@ const PreencherContrato: React.FC = () => {
     }
     setModelo(modeloData as ContratoModelo);
     
-    // 2. Buscar Tags (apenas as do ownerId)
-    const { data: tagsData, error: tagsError } = await supabase
-        .from('contrato_tags')
-        .select('*')
-        .eq('empresa_id', ownerId)
-        .order('nome_tag');
-        
-    if (tagsError) {
-        showError('Erro ao carregar tags: ' + tagsError.message);
-        setTags([]);
-    } else {
-        setTags(tagsData as ContratoTag[]);
-    }
-    
-    // 3. Buscar Clientes (apenas os do ownerId)
+    // 2. Buscar Empresas para o Admin (se for Admin)
+    let finalEmpresaContratoId = ownerIdLogado;
     let fetchedClientes: Cliente[] = [];
-    if (ownerId) {
+    
+    if (isAdmin) {
         const { data: clientesData, error: clientesError } = await supabase
-            .from('clientes')
-            .select('*')
-            .eq('empresa_id', ownerId)
+            .from('tbl_clientes')
+            .select('id, nome')
+            .eq('aprovado', true)
             .order('nome');
             
         if (clientesError) {
-            showError('Erro ao carregar clientes: ' + clientesError.message);
+            showError('Erro ao carregar clientes para seleção: ' + clientesError.message);
         } else {
-            fetchedClientes = clientesData as Cliente[];
-            setClientes(fetchedClientes);
+            const adminOption: EmpresaContrato = { id: ownerIdLogado, nome: 'Meus Contratos (Admin)' };
+            const allClients = [adminOption, ...(clientesData as EmpresaContrato[])];
+            setEmpresasContrato(allClients);
+            finalEmpresaContratoId = allClients[0].id; // Define o primeiro como padrão
         }
     }
     
-    // 4. Buscar Dados da Empresa Logada (Cliente/Admin)
+    // 3. Buscar Dados da Empresa Logada (para preenchimento de tags {{EMPRESA_*}})
+    let currentEmpresaLogada: EmpresaLogada | null = null;
     if (isAdmin) {
-        const profile = perfil as ClienteProfile; // Admin usa o perfil de Admin, mas buscamos dados básicos
-        setEmpresaLogada({
+        const profile = perfil as ClienteProfile; 
+        currentEmpresaLogada = {
             nome: profile.nome,
             email: profile.email,
-            documento: null, // Admin não tem documento na tbl_admins
+            documento: null, 
             endereco_completo: null,
-        });
+        };
     } else if (isCliente) {
         const profile = perfil as ClienteProfile;
-        setEmpresaLogada({
+        currentEmpresaLogada = {
             nome: profile.nome,
             email: profile.email,
             documento: profile.documento,
             endereco_completo: profile.endereco_completo,
-        });
-    } else if (role === 'Usuario' && ownerId) {
-        // Se for usuário, busca os dados da empresa vinculada
-        const { data: empresaData } = await supabase.from('tbl_clientes').select('nome, email, documento, endereco_completo').eq('id', ownerId).single();
+        };
+    } else if (role === 'Usuario' && ownerIdLogado) {
+        const { data: empresaData } = await supabase.from('tbl_clientes').select('nome, email, documento, endereco_completo').eq('id', ownerIdLogado).single();
         if (empresaData) {
-            setEmpresaLogada(empresaData);
+            currentEmpresaLogada = empresaData;
         }
     }
+    setEmpresaLogada(currentEmpresaLogada);
     
-    // 5. Carregar Contrato Existente (se estiver editando)
+    // 4. Carregar Contrato Existente (se estiver editando)
     if (contratoId) {
         const { data: contratoData, error: contratoLoadError } = await supabase
             .from('contratos_gerados')
             .select('*')
             .eq('id', contratoId)
-            .eq('empresa_id', ownerId) // Garante que só pode editar o próprio contrato
-            .single();
+            .single(); // RLS garante que o Admin/Cliente só veja o que pode
             
         if (contratoLoadError) {
             showError('Contrato para edição não encontrado ou acesso negado.');
@@ -179,21 +178,23 @@ const PreencherContrato: React.FC = () => {
         
         const contrato = contratoData as ContratoGerado;
         setContratoInicial(contrato);
+        finalEmpresaContratoId = contrato.empresa_id; // Usa o ID da empresa do contrato
         
         // Preencher estados com dados do contrato
         setClienteSelecionadoId(contrato.cliente_id);
         setValorTotal(contrato.valor_total);
         setValoresTags(contrato.valores_tags_preenchidos || {});
         
-        // Determinar tipo de lançamento e datas
+        // Determinar tipo de lançamento e datas (Lógica de edição simplificada)
         const numParcelas = contrato.numero_parcelas;
         const valorTotalContrato = contrato.valor_total;
         
-        // Busca a primeira parcela para determinar o valor unitário e o tipo de lançamento
+        const tabelaParcelas = isAdmin && finalEmpresaContratoId === ownerIdLogado ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
+        
         const { data: primeiraParcela } = await supabase
-            .from(isAdmin ? 'admin_parcelas_receber' : 'parcelas_contas_receber')
+            .from(tabelaParcelas)
             .select('valor_parcela, data_vencimento')
-            .eq('conta_receber_id', contrato.id) // Assumindo que o ID do contrato é o ID da conta sintética (precisa ser ajustado se a FK for diferente)
+            .eq('conta_receber_id', contrato.id) 
             .order('numero_parcela', { ascending: true })
             .limit(1)
             .single();
@@ -204,16 +205,14 @@ const PreencherContrato: React.FC = () => {
             setNumeroParcelas(1);
             setValorTotal(valorTotalContrato);
         } else {
-            // Se o valor total for igual ao valor da primeira parcela * número de parcelas, é parcelado.
-            // Se for igual ao valor da primeira parcela, é repetido.
             const valorParcela = primeiraParcela?.valor_parcela || 0;
             
             if (Math.abs(valorTotalContrato - (valorParcela * numParcelas)) < 0.01) {
                 setTipoLancamento('parcelar');
-                setValorTotal(valorTotalContrato); // Valor total a parcelar
+                setValorTotal(valorTotalContrato); 
             } else {
                 setTipoLancamento('repetir');
-                setValorTotal(valorParcela); // Valor da parcela a repetir
+                setValorTotal(valorParcela); 
             }
             
             setNumeroParcelas(numParcelas);
@@ -221,24 +220,74 @@ const PreencherContrato: React.FC = () => {
             setIntervaloDias(contrato.dia_vencimento_parcela || 30);
         }
         
-        // Determinar o tipo de conteúdo salvo
         setTipoConteudo(contrato.valores_tags_preenchidos?.tipo_conteudo || 'html');
     } else {
         // Novo Contrato: Define o tipo de conteúdo do modelo
         const isHtmlContent = modeloData?.conteudo_template?.trim().startsWith('<') ?? true;
         setTipoConteudo(isHtmlContent ? 'html' : 'texto');
     }
-
+    
+    // 5. Buscar Clientes (apenas os do ownerId do contrato)
+    if (finalEmpresaContratoId) {
+        const { data: clientesData } = await supabase
+            .from('clientes')
+            .select('*')
+            .eq('empresa_id', finalEmpresaContratoId)
+            .order('nome');
+            
+        if (clientesData) {
+            fetchedClientes = clientesData as Cliente[];
+            setClientes(fetchedClientes);
+        }
+    }
+    
+    setEmpresaContratoId(finalEmpresaContratoId);
     setCarregandoDados(false);
-  }, [modeloId, ownerId, navigate, role, perfil, usuario, isAdmin, isCliente, contratoId]);
+  }, [modeloId, ownerIdLogado, navigate, role, perfil, usuario, isAdmin, isCliente, contratoId]);
+  
+  // Efeito para re-buscar clientes e tags quando a empresa do contrato muda (apenas Admin)
+  useEffect(() => {
+      if (isAdmin && empresaContratoId && !carregandoDados) {
+          const fetchDependentData = async () => {
+              // 1. Buscar Tags (apenas as do empresaContratoId)
+              const { data: tagsData } = await supabase
+                  .from('contrato_tags')
+                  .select('*')
+                  .eq('empresa_id', empresaContratoId)
+                  .order('nome_tag');
+                  
+              if (tagsData) {
+                  setTags(tagsData as ContratoTag[]);
+              }
+              
+              // 2. Buscar Clientes (apenas os do empresaContratoId)
+              const { data: clientesData } = await supabase
+                  .from('clientes')
+                  .select('*')
+                  .eq('empresa_id', empresaContratoId)
+                  .order('nome');
+                  
+              if (clientesData) {
+                  setClientes(clientesData as Cliente[]);
+              }
+              
+              // Resetar cliente selecionado se ele não pertencer à nova empresa
+              if (clienteSelecionadoId && !clientesData?.some(c => c.id === clienteSelecionadoId)) {
+                  setClienteSelecionadoId('');
+              }
+          };
+          fetchDependentData();
+      }
+  }, [isAdmin, empresaContratoId, carregandoDados]);
+
 
   useEffect(() => {
-    if (!carregandoSessao && (isAdmin || isCliente || (role === 'Usuario' && ownerId))) {
+    if (!carregandoSessao && (isAdmin || isCliente || (role === 'Usuario' && ownerIdLogado))) {
       buscarDados();
     } else if (!carregandoSessao && !isAdmin && !isCliente) {
         navigate('/painel', { replace: true });
     }
-  }, [carregandoSessao, isAdmin, isCliente, role, ownerId, buscarDados, navigate]);
+  }, [carregandoSessao, isAdmin, isCliente, role, ownerIdLogado, buscarDados, navigate]);
   
   // Efeito para preencher tags padrão automaticamente
   useEffect(() => {
@@ -262,7 +311,7 @@ const PreencherContrato: React.FC = () => {
         // Preenchimento das Tags Padrão
         TAGS_PADRAO.forEach(tag => {
             switch (tag.nome_tag) {
-                // EMPRESA
+                // EMPRESA (Sempre usa os dados da empresa logada, mesmo que o contrato seja para outro cliente)
                 case '{{EMPRESA_NOME}}':
                     newTags[tag.nome_tag] = empresaLogada?.nome || 'N/A';
                     break;
@@ -337,7 +386,7 @@ const PreencherContrato: React.FC = () => {
     };
     
     updateTags();
-  }, [clienteSelecionadoId, valorTotal, tipoLancamento, numeroParcelas, dataVencimentoUnico, dataPrimeiroVencimento, clientes, empresaLogada]);
+  }, [clienteSelecionadoId, valorTotal, tipoLancamento, numeroParcelas, dataVencimentoUnico, dataPrimeiroVencimento, clientes, empresaLogada, intervaloDias]);
 
 
   const handleTagChange = (tag: string, value: string) => {
@@ -350,12 +399,6 @@ const PreencherContrato: React.FC = () => {
         // Substitui a tag {{nome_tag}} pelo valor preenchido
         const regex = new RegExp(tag, 'g');
         conteudoRenderizado = conteudoRenderizado.replace(regex, tags[tag]);
-    }
-    
-    // Se for texto simples, converte quebras de linha para <br> para renderização HTML
-    if (tipoConteudo === 'texto') {
-        // Não fazemos a conversão aqui, pois o preview/print usa <pre>
-        // Apenas garantimos que o conteúdo seja o template puro com tags substituídas.
     }
     
     return conteudoRenderizado;
@@ -407,7 +450,7 @@ const PreencherContrato: React.FC = () => {
     const numParcelas = Number(numeroParcelas);
     
     // 1. Validação
-    if (!modelo || !clienteSelecionadoId || valorTotal === '' || !ownerId || valorNumerico <= 0) {
+    if (!modelo || !clienteSelecionadoId || valorTotal === '' || !empresaContratoId || valorNumerico <= 0) {
         showError('Preencha Cliente, Valor Total e Proprietário.');
         return;
     }
@@ -449,7 +492,6 @@ const PreencherContrato: React.FC = () => {
             throw new Error('Falha ao gerar parcelas. Verifique os dados de pagamento.');
         }
         
-        // O valor total do contrato é o valor total inserido, exceto se for 'repetir', onde é Valor * Nº Parcelas
         const valorFinalContrato = tipoLancamento === 'repetir' ? valorNumerico * numParcelas : valorNumerico;
         
         // 3. Renderizar o conteúdo final
@@ -459,20 +501,23 @@ const PreencherContrato: React.FC = () => {
         const contratoData = {
             modelo_id: modelo.id,
             cliente_id: clienteSelecionadoId,
-            empresa_id: ownerId, // ID do Admin/Cliente
+            empresa_id: empresaContratoId, // USANDO O ID DA EMPRESA SELECIONADA
             status: 'pendente_assinatura',
             valor_total: valorFinalContrato,
-            data_inicio: format(new Date(), 'yyyy-MM-dd'), // Data de criação do contrato
+            data_inicio: format(new Date(), 'yyyy-MM-dd'), 
             numero_parcelas: numParcelas,
-            dia_vencimento_parcela: tipoLancamento === 'unico' ? null : intervaloDias, // Usando intervaloDias aqui para simplificar o campo
-            valores_tags_preenchidos: { ...valoresTags, tipo_conteudo: tipoConteudo }, // SALVANDO O TIPO DE CONTEÚDO
+            dia_vencimento_parcela: tipoLancamento === 'unico' ? null : intervaloDias, 
+            valores_tags_preenchidos: { ...valoresTags, tipo_conteudo: tipoConteudo }, 
             conteudo_renderizado: conteudoRenderizado,
         };
         
         let contratoGeradoId: string;
         let contaReceberId: string | null = null;
-        let tabelaContasReceber: string;
-        let tabelaParcelasReceber: string;
+        
+        // Determina as tabelas de CR com base no owner do contrato
+        const isContractOwnerAdmin = empresaContratoId === ownerIdLogado && isAdmin;
+        const tabelaContasReceber = isContractOwnerAdmin ? 'admin_contas_receber' : 'contas_receber';
+        const tabelaParcelasReceber = isContractOwnerAdmin ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
         
         // --- LÓGICA DE EDIÇÃO ---
         if (isEditing && contratoInicial) {
@@ -485,10 +530,7 @@ const PreencherContrato: React.FC = () => {
             if (updateError) throw updateError;
             contratoGeradoId = contratoInicial.id;
             
-            // B. Buscar Conta a Receber Sintética existente (se houver)
-            tabelaContasReceber = isAdmin ? 'admin_contas_receber' : 'contas_receber';
-            tabelaParcelasReceber = isAdmin ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
-            
+            // B. Buscar Conta a Receber Sintética existente
             const { data: existingConta } = await supabase
                 .from(tabelaContasReceber)
                 .select('id')
@@ -522,17 +564,14 @@ const PreencherContrato: React.FC = () => {
         // 5. Inserir/Atualizar a Conta a Receber (Sintético) e Parcelas (Analítico)
         const clienteNome = clientes.find(c => c.id === clienteSelecionadoId)?.nome || 'Cliente Desconhecido';
         
-        tabelaContasReceber = isAdmin ? 'admin_contas_receber' : 'contas_receber';
-        tabelaParcelasReceber = isAdmin ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
-        
-        const baseData = isAdmin ? { admin_id: ownerId, cliente_id: clienteSelecionadoId } : { empresa_id: ownerId, cliente_id: clienteSelecionadoId };
+        const baseData = isContractOwnerAdmin ? { admin_id: empresaContratoId, cliente_id: clienteSelecionadoId } : { empresa_id: empresaContratoId, cliente_id: clienteSelecionadoId };
         
         const contaReceberPayload = {
             ...baseData,
             descricao: `Contrato: ${modelo.titulo} - ${clienteNome}`,
             valor_total: valorFinalContrato,
             data_emissao: format(new Date(), 'yyyy-MM-dd'),
-            data_vencimento: parcelasParaInserir[0].data_vencimento, // Primeiro vencimento
+            data_vencimento: parcelasParaInserir[0].data_vencimento, 
             tipo_receita: tipoLancamento === 'unico' ? 'única' : 'recorrente',
             status: 'aberta',
             origem: 'contrato',
@@ -540,14 +579,12 @@ const PreencherContrato: React.FC = () => {
         };
         
         if (contaReceberId) {
-            // Atualiza a conta sintética existente
             const { error: updateContaError } = await supabase
                 .from(tabelaContasReceber)
                 .update(contaReceberPayload)
                 .eq('id', contaReceberId);
             if (updateContaError) throw updateContaError;
         } else {
-            // Insere a nova conta sintética
             const { data: contaReceber, error: contaReceberError } = await supabase
                 .from(tabelaContasReceber)
                 .insert(contaReceberPayload)
@@ -562,7 +599,7 @@ const PreencherContrato: React.FC = () => {
         const parcelasComId = parcelasParaInserir.map(p => ({ 
             ...p, 
             conta_receber_id: contaReceberId, 
-            ...(isAdmin ? { admin_id: ownerId } : { empresa_id: ownerId })
+            ...(isContractOwnerAdmin ? { admin_id: empresaContratoId } : { empresa_id: empresaContratoId })
         }));
         
         const { error: parcelError } = await supabase
@@ -621,10 +658,32 @@ const PreencherContrato: React.FC = () => {
             <CardHeader><CardTitle className="text-xl">Dados Financeiros</CardTitle></CardHeader>
             <CardContent className="space-y-6">
                 
+                {/* Seleção de Empresa (Apenas Admin) */}
+                {isAdmin && (
+                    <div className="space-y-2">
+                        <Label htmlFor="empresa-contrato">Empresa Proprietária do Contrato</Label>
+                        <Select 
+                            value={empresaContratoId || ''} 
+                            onValueChange={setEmpresaContratoId}
+                            disabled={isEditing}
+                        >
+                            <SelectTrigger id="empresa-contrato">
+                                <Building2 className="w-4 h-4 mr-2 text-muted-foreground" />
+                                <SelectValue placeholder="Selecione a Empresa" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {empresasContrato.map(e => (
+                                    <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                )}
+                
                 {/* 1. Cliente */}
                 <div className="space-y-2">
                     <Label htmlFor="cliente">Cliente</Label>
-                    <Select value={clienteSelecionadoId} onValueChange={setClienteSelecionadoId} disabled={isEditing}>
+                    <Select value={clienteSelecionadoId} onValueChange={setClienteSelecionadoId} disabled={isEditing || !empresaContratoId}>
                         <SelectTrigger id="cliente">
                             <SelectValue placeholder="Selecione o Cliente" />
                         </SelectTrigger>
@@ -797,7 +856,7 @@ const PreencherContrato: React.FC = () => {
         onOpenChange={setPreviewOpen}
         conteudoHtml={conteudoPreview}
         titulo={modelo?.titulo || 'Prévia'}
-        isHtml={tipoConteudo === 'html'} // Passando o tipo de conteúdo
+        isHtml={tipoConteudo === 'html'} 
       />
     </LayoutPrincipal>
   );
