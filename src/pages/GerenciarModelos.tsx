@@ -138,8 +138,9 @@ const GerenciarModelos: React.FC = () => {
         </Dialog>
       </div>
       
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-          <div className="lg:col-span-1">
+      {/* Ajuste aqui: Centralizando o componente de importação */}
+      <div className="grid grid-cols-1 gap-6 mb-6">
+          <div className="max-w-lg mx-auto w-full">
               <ImportarModeloContrato 
                   empresaId={ownerId} 
                   onImportComplete={buscarModelos} 
