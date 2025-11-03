@@ -12,7 +12,6 @@ import FormContratoModelo from '@/components/FormContratoModelo';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 import ImportarModeloContrato from '@/components/ImportarModeloContrato';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { cn } from '@/lib/utils';
 
 const GerenciarModelos: React.FC = () => {
   const { role, perfil, usuario, carregando: carregandoSessao } = useSessao();
