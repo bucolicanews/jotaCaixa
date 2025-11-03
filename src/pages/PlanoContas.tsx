@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -21,20 +21,6 @@ const PlanoContasPage = () => {
   const [contaSelecionada, setContaSelecionada] = useState<PlanoContas | null>(null);
   const [dialogAberto, setDialogAberto] = useState(false);
 
-  useEffect(() => {
-    if (!carregandoSessao && usuario) {
-      buscarProprietarioId(usuario.id);
-    }
-  }, [carregandoSessao, usuario]);
-
-  useEffect(() => {
-    if (proprietarioId) {
-      buscarPlanoContas(proprietarioId);
-    } else if (!carregandoContas && !usuario) {
-      setCarregandoContas(false);
-    }
-  }, [proprietarioId, usuario, carregandoContas]);
-
   const buscarProprietarioId = async (userId: string) => {
     let ownerId: string | null = null;
 
@@ -55,7 +41,7 @@ const PlanoContasPage = () => {
     setProprietarioId(ownerId);
   };
 
-  const buscarPlanoContas = async (id: string) => {
+  const buscarPlanoContas = useCallback(async (id: string) => {
     setCarregandoContas(true);
     const { data, error } = await supabase
       .from('plano_contas')
@@ -70,7 +56,21 @@ const PlanoContasPage = () => {
       setContas(data as PlanoContas[]);
     }
     setCarregandoContas(false);
-  };
+  }, [showError]);
+
+  useEffect(() => {
+    if (!carregandoSessao && usuario) {
+      buscarProprietarioId(usuario.id);
+    }
+  }, [carregandoSessao, usuario]);
+
+  useEffect(() => {
+    if (proprietarioId) {
+      buscarPlanoContas(proprietarioId);
+    } else if (!carregandoContas && !usuario) {
+      setCarregandoContas(false);
+    }
+  }, [proprietarioId, usuario, carregandoContas, buscarPlanoContas]);
 
   const handleImportComplete = () => {
     if (proprietarioId) {
