@@ -179,7 +179,7 @@ const ContasReceber = () => {
         // 1. Busca de Contas Sintéticas (admin_contas_receber)
         contasQuery = supabase.from('admin_contas_receber').select('*').eq('admin_id', empresaId).order('data_vencimento', { ascending: true });
         
-        // 2. Busca de Parcelas (admin_parcelas_receber) - Inclui a origem e o cliente_id real
+        // 2. Busca de Parcelas (admin_parcelas_receber) - Inclui a origem, o cliente_id real e data_pagamento
         parcelasQuery = supabase.from('admin_parcelas_receber').select('*, admin_contas_receber(descricao, cliente_id, admin_id, origem)').eq('admin_id', empresaId).order('data_vencimento', { ascending: true });
         
         // 3. Busca de Recebimentos (admin_recebimentos) - Inclui a origem
@@ -198,7 +198,7 @@ const ContasReceber = () => {
     } else if (empresaId) {
         // Cliente/Usuário: Busca nas tabelas normais
         contasQuery = supabase.from('contas_receber').select('*, clientes(*)').eq('empresa_id', empresaId).order('data_vencimento', { ascending: true });
-        // Inclui a origem na query de parcelas
+        // Inclui a origem e data_pagamento na query de parcelas
         parcelasQuery = supabase.from('parcelas_contas_receber').select('*, contas_receber(descricao, clientes(nome), empresa_id, origem)').eq('empresa_id', empresaId).order('data_vencimento', { ascending: true });
     } else {
         setContas([]);
@@ -561,7 +561,7 @@ const ContasReceber = () => {
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader><TableRow>
-                    <TableHead>Cliente</TableHead><TableHead>Descrição</TableHead><TableHead className="text-center">Nº Parcela</TableHead><TableHead>Vencimento</TableHead><TableHead>Valor da Parcela</TableHead><TableHead>Valor Pago</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Ações</TableHead>
+                    <TableHead>Cliente</TableHead><TableHead>Descrição</TableHead><TableHead className="text-center">Nº Parcela</TableHead><TableHead>Vencimento</TableHead><TableHead>Valor da Parcela</TableHead><TableHead>Valor Pago</TableHead><TableHead>Status</TableHead><TableHead>Data Pagamento</TableHead><TableHead className="text-right">Ações</TableHead>
                   </TableRow></TableHeader>
                   <TableBody>
                     {parcelasFiltradas.length > 0 ? (
@@ -579,6 +579,9 @@ const ContasReceber = () => {
                         const origem = isMyLaunch ? contaReceber?.origem : (p as any).contas_receber?.origem;
                             
                         const isPaidOrCancelled = p.status === 'paga' || p.status === 'cancelada';
+                        
+                        // Data de pagamento (se existir)
+                        const dataPagamentoDisplay = p.data_pagamento ? formatDate(p.data_pagamento) : '-';
 
                         return (
                           <TableRow key={p.id}>
@@ -594,6 +597,7 @@ const ContasReceber = () => {
                             <TableCell>{formatCurrency(p.valor_parcela)}</TableCell>
                             <TableCell className="font-medium">{formatCurrency(p.valor_pago || 0)}</TableCell>
                             <TableCell><Badge variant={getBadgeVariant(p.status, p.data_vencimento)}>{p.status}</Badge></TableCell>
+                            <TableCell>{dataPagamentoDisplay}</TableCell> {/* NOVO CAMPO */}
                             <TableCell className="text-right">
                                 <Button 
                                     variant="outline" 
@@ -609,7 +613,7 @@ const ContasReceber = () => {
                       })
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={8} className="text-center h-24">
+                        <TableCell colSpan={9} className="text-center h-24">
                           Nenhum resultado encontrado.
                         </TableCell>
                       </TableRow>

@@ -96,8 +96,9 @@ const ContasReceberAcoes: React.FC<ContasReceberAcoesProps> = ({
           'Descrição': descricao,
           'Nº Parcela': p.numero_parcela,
           'Valor Parcela': p.valor_parcela,
-          'Vlr Pago': p.valor_pago || 0, // RENOMEADO AQUI
+          'Vlr Pago': p.valor_pago || 0,
           'Vencimento': formatDate(p.data_vencimento),
+          'Data Pagamento': p.data_pagamento ? formatDate(p.data_pagamento) : '-', // NOVO CAMPO
           'Status': p.status,
           'Origem': origem,
         };
