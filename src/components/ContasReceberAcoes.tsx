@@ -6,7 +6,7 @@ import { DateRangePicker } from '@/components/DateRangePicker';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Printer, FileText, FileDown, Filter, Loader2 } from 'lucide-react';
 import { ContaReceber, ParcelaDetalhada } from '@/types/contas-receber';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import Papa from 'papaparse';
 import { showError, showSuccess } from '@/utils/toast';
 import { usePrint } from '@/hooks/use-print';
@@ -38,8 +38,18 @@ interface ContasReceberAcoesProps {
   isAdmin: boolean;
 }
 
-// Removendo formatCurrency (TS6133)
+// Função para formatar datas puras (YYYY-MM-DD)
 const formatDate = (dateString: string) => new Date(dateString + 'T00:00:00').toLocaleDateString('pt-BR');
+
+// Função para formatar timestamps (TIMESTAMP WITH TIME ZONE)
+const formatTimestamp = (timestampString: string) => {
+    try {
+        const date = parseISO(timestampString);
+        return format(date, 'dd/MM/yyyy HH:mm');
+    } catch (e) {
+        return 'Data Inválida';
+    }
+};
 
 const ContasReceberAcoes: React.FC<ContasReceberAcoesProps> = ({
   activeTab,
@@ -98,7 +108,7 @@ const ContasReceberAcoes: React.FC<ContasReceberAcoesProps> = ({
           'Valor Parcela': p.valor_parcela,
           'Vlr Pago': p.valor_pago || 0,
           'Vencimento': formatDate(p.data_vencimento),
-          'Data Pagamento': p.data_pagamento ? formatDate(p.data_pagamento) : '-', // NOVO CAMPO
+          'Data Pagamento': p.data_pagamento ? formatDate(p.data_pagamento) : '-', // Data de pagamento da parcela
           'Status': p.status,
           'Origem': origem,
         };
@@ -112,7 +122,7 @@ const ContasReceberAcoes: React.FC<ContasReceberAcoesProps> = ({
 
         return {
           'ID Recebimento': r.id,
-          'Data Recebimento': format(new Date(r.data_recebimento), 'dd/MM/yyyy HH:mm'),
+          'Data Recebimento': formatTimestamp(r.data_recebimento), // USANDO formatTimestamp
           'Cliente': clienteNome,
           'Descrição': descricao,
           'Valor Recebido': r.valor_recebido,

@@ -14,7 +14,7 @@ import FormContasReceber from '@/components/FormContasReceber';
 import DetalhesParcelasDialog from '@/components/DetalhesParcelasDialog';
 import { Badge } from '@/components/ui/badge';
 import { DateRange } from 'react-day-picker';
-import { isToday, isPast, parseISO } from 'date-fns';
+import { isToday, isPast, parseISO, format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 import { useSearchParams } from 'react-router-dom';
@@ -318,7 +318,22 @@ const ContasReceber = () => {
   };
 
   const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+  
+  // Função para formatar datas puras (YYYY-MM-DD)
   const formatDate = (dateString: string) => new Date(dateString + 'T00:00:00').toLocaleDateString('pt-BR');
+  
+  // Função para formatar timestamps (TIMESTAMP WITH TIME ZONE)
+  const formatTimestamp = (timestampString: string) => {
+    try {
+        // Usa parseISO para interpretar corretamente o timestamp ISO
+        const date = parseISO(timestampString);
+        // Formata para DD/MM/YYYY HH:MM
+        return format(date, 'dd/MM/yyyy HH:mm');
+    } catch (e) {
+        return 'Data Inválida';
+    }
+  };
+
 
   const parcelasFiltradas = parcelas.filter(p => {
     const termoBusca = filtroGeral.toLowerCase();
@@ -465,7 +480,7 @@ const ContasReceber = () => {
   
   const recebimentosFiltrados = recebimentos.filter(r => {
     const termoBusca = filtroGeral.toLowerCase();
-    const dataRecebimento = new Date(r.data_recebimento); // data_recebimento é TIMESTAMP WITH TIME ZONE
+    const dataRecebimento = parseISO(r.data_recebimento); // data_recebimento é TIMESTAMP WITH TIME ZONE
     
     // Lógica de acesso à ORIGEM
     const origem = r.admin_parcelas_receber?.admin_contas_receber?.origem || null;
@@ -780,7 +795,7 @@ const ContasReceber = () => {
                                             
                                             return (
                                                 <TableRow key={r.id}>
-                                                    <TableCell>{formatDate(r.data_recebimento)}</TableCell>
+                                                    <TableCell>{formatTimestamp(r.data_recebimento)}</TableCell> {/* USANDO formatTimestamp */}
                                                     <TableCell>{clienteNome}</TableCell>
                                                     <TableCell>{descricao}</TableCell>
                                                     <TableCell>{r.forma_pagamento}</TableCell>
