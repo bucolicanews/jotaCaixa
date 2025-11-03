@@ -16,6 +16,7 @@ import FormFolgasFerias from './usuario-forms/FormFolgasFerias';
 import FormDadosCadastrais from './usuario-forms/FormDadosCadastrais';
 import FormDocumentos from './usuario-forms/FormDocumentos';
 import FormDadosContratuais from './usuario-forms/FormDadosContratuais';
+import { Form } from '@/components/ui/form';
 
 // Esquema de validação para os campos de URL (opcional)
 const urlSchema = z.string().url('URL inválida.').optional().or(z.literal(''));
@@ -91,7 +92,6 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
   const profileToEdit = perfilInicial as UsuarioProfile | ClienteProfile;
   
   const isLoggedUserAdmin = role === 'Admin';
-  const isEditingOwnClientProfile = isClient && role === 'Cliente';
   
   const [activeTab, setActiveTab] = useState('pessoal');
   const [tagRefreshKey] = useState(0); // Não usado aqui, mas mantido para compatibilidade futura
@@ -359,7 +359,7 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
                     control={form.control}
                     isSubmitting={form.formState.isSubmitting}
                     resourceId={perfilInicial.id}
-                    tagRefreshKey={tagRefreshKey}
+                    tagRefreshKey={0} // Não usado aqui, mas mantido para compatibilidade futura
                 />
             </TabsContent>
 

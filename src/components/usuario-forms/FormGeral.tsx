@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
 import { Permissao } from '@/config/permissoes';
-import { Loader2 } from 'lucide-react';
+// import { Loader2 } from 'lucide-react'; // Removed Loader2
 
 interface FormGeralProps {
   control: Control<any>;

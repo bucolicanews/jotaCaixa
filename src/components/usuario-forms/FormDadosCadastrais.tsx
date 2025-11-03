@@ -123,7 +123,7 @@ interface FormDadosCadastraisProps {
 }
 
 const FormDadosCadastrais: React.FC<FormDadosCadastraisProps> = ({ isSubmitting, resourceId, tagRefreshKey }) => {
-    const { control, watch } = useFormContext();
+    const { watch } = useFormContext();
     
     const isAddressLoading = watch('endereco') === 'Buscando...';
 
