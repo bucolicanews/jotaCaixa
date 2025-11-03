@@ -17,8 +17,8 @@ export const parseCSV = (file: File): Promise<ContaCSV[]> => {
         const data = results.data.map((row: any) => ({
           Conta: String(row.Conta || ''),
           'Código Reduzido': String(row['Código Reduzido'] || ''), // Novo campo
-          Descrição: String(row.Descrição || ''),
-          Analítica: (row.Analítica === 'Sim' ? 'Sim' : 'Não') as 'Sim' | 'Não',
+          Descrição: String(row.Descricao || ''), // Usando 'Descricao' do CSV
+          Analítica: (row.Analitica === 'Sim' ? 'Sim' : 'Não') as 'Sim' | 'Não', // Usando 'Analitica' do CSV
         })).filter((row: ContaCSV) => row.Conta && row.Descrição); // Filtra linhas sem dados essenciais
         
         resolve(data as ContaCSV[]);

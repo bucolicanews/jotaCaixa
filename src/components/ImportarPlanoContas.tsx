@@ -61,10 +61,10 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
       // Mapear dados para o formato do banco de dados
       const contasParaInserir = parsedData.map(conta => ({
         proprietario_id: proprietarioId,
-        codigo_conta: conta.Conta,
-        codigo_reduzido: conta['Código Reduzido'] || null, // NOVO CAMPO
-        nome_conta: conta.Descrição.trim(),
-        tipo: conta.Analítica === 'Sim' ? 'Analítica' : 'Sintética',
+        Conta: conta.Conta,
+        codigo_reduzido: conta['Código Reduzido'] || null,
+        Descricao: conta.Descrição.trim(),
+        Analitica: conta.Analítica,
       }));
 
       // 1. Limpar contas existentes para o proprietário

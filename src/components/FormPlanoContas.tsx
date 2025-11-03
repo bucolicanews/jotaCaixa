@@ -12,10 +12,10 @@ import { showError, showSuccess } from '@/utils/toast';
 import { PlanoContas } from '@/types/plano-contas';
 
 const formSchema = z.object({
-  codigo_conta: z.string().min(1, 'O código é obrigatório.'),
-  codigo_reduzido: z.string().optional().or(z.literal('')), // NOVO CAMPO
-  nome_conta: z.string().min(1, 'O nome é obrigatório.'),
-  tipo: z.enum(['Analítica', 'Sintética'], {
+  Conta: z.string().min(1, 'O código é obrigatório.'),
+  codigo_reduzido: z.string().optional().or(z.literal('')),
+  Descricao: z.string().min(1, 'A descrição é obrigatória.'),
+  Analitica: z.enum(['Sim', 'Não'], {
     required_error: 'O tipo é obrigatório.',
   }),
 });
@@ -23,7 +23,7 @@ const formSchema = z.object({
 type FormValues = z.infer<typeof formSchema>;
 
 interface FormPlanoContasProps {
-  proprietarioId: string; // RENOMEADO
+  proprietarioId: string;
   contaInicial?: PlanoContas | null;
   onSaveComplete: () => void;
 }
@@ -32,20 +32,20 @@ const FormPlanoContas: React.FC<FormPlanoContasProps> = ({ proprietarioId, conta
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      codigo_conta: contaInicial?.codigo_conta || '',
-      codigo_reduzido: contaInicial?.codigo_reduzido || '', // NOVO CAMPO
-      nome_conta: contaInicial?.nome_conta || '',
-      tipo: contaInicial?.tipo || 'Analítica',
+      Conta: contaInicial?.Conta || '',
+      codigo_reduzido: contaInicial?.codigo_reduzido || '',
+      Descricao: contaInicial?.Descricao || '',
+      Analitica: contaInicial?.Analitica || 'Não',
     },
   });
 
   const onSubmit = async (values: FormValues) => {
     const dataToSave = {
-      proprietario_id: proprietarioId, // RENOMEADO
-      codigo_conta: values.codigo_conta,
-      codigo_reduzido: values.codigo_reduzido || null, // NOVO CAMPO
-      nome_conta: values.nome_conta,
-      tipo: values.tipo,
+      proprietario_id: proprietarioId,
+      Conta: values.Conta,
+      codigo_reduzido: values.codigo_reduzido || null,
+      Descricao: values.Descricao,
+      Analitica: values.Analitica,
     };
 
     let error = null;
@@ -78,7 +78,7 @@ const FormPlanoContas: React.FC<FormPlanoContasProps> = ({ proprietarioId, conta
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
         <FormField
           control={form.control}
-          name="codigo_conta"
+          name="Conta"
           render={({ field }) => (
             <FormItem>
               <FormLabel>Código da Conta (Ex: 1.0.1.01.0101)</FormLabel>
@@ -104,10 +104,10 @@ const FormPlanoContas: React.FC<FormPlanoContasProps> = ({ proprietarioId, conta
         />
         <FormField
           control={form.control}
-          name="nome_conta"
+          name="Descricao"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Nome da Conta</FormLabel>
+              <FormLabel>Descrição</FormLabel>
               <FormControl>
                 <Input placeholder="Ex: Caixa Matriz" {...field} />
               </FormControl>
@@ -117,10 +117,10 @@ const FormPlanoContas: React.FC<FormPlanoContasProps> = ({ proprietarioId, conta
         />
         <FormField
           control={form.control}
-          name="tipo"
+          name="Analitica"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Tipo</FormLabel>
+              <FormLabel>Analítica (Permite Lançamentos)</FormLabel>
               <Select onValueChange={field.onChange} defaultValue={field.value}>
                 <FormControl>
                   <SelectTrigger>
@@ -128,8 +128,8 @@ const FormPlanoContas: React.FC<FormPlanoContasProps> = ({ proprietarioId, conta
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  <SelectItem value="Analítica">Analítica (Lançamentos)</SelectItem>
-                  <SelectItem value="Sintética">Sintética (Agrupamento)</SelectItem>
+                  <SelectItem value="Sim">Sim</SelectItem>
+                  <SelectItem value="Não">Não</SelectItem>
                 </SelectContent>
               </Select>
               <FormMessage />

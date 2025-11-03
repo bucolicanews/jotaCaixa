@@ -61,7 +61,7 @@ const PlanoContasPage = () => {
       .from('plano_contas')
       .select('*')
       .eq('proprietario_id', id)
-      .order('codigo_conta', { ascending: true });
+      .order('Conta', { ascending: true }); // Ordenando pelo novo nome da coluna
 
     if (error) {
       showError('Erro ao carregar Plano de Contas: ' + error.message);
@@ -169,10 +169,10 @@ const PlanoContasPage = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-[150px]">Código</TableHead>
+                    <TableHead className="w-[150px]">Conta</TableHead>
                     <TableHead className="w-[100px]">Cód. Reduzido</TableHead>
-                    <TableHead>Nome da Conta</TableHead>
-                    <TableHead className="w-[100px] text-center">Tipo</TableHead>
+                    <TableHead>Descrição</TableHead>
+                    <TableHead className="w-[100px] text-center">Analítica</TableHead>
                     <TableHead className="w-[100px] text-right">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -186,10 +186,10 @@ const PlanoContasPage = () => {
                   ) : (
                     contas.map((conta) => (
                       <TableRow key={conta.id}>
-                        <TableCell className="font-mono text-sm">{conta.codigo_conta}</TableCell>
+                        <TableCell className="font-mono text-sm">{conta.Conta}</TableCell>
                         <TableCell className="text-sm">{conta.codigo_reduzido || '-'}</TableCell>
-                        <TableCell>{conta.nome_conta}</TableCell>
-                        <TableCell className="text-center">{conta.tipo}</TableCell>
+                        <TableCell>{conta.Descricao}</TableCell>
+                        <TableCell className="text-center">{conta.Analitica}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end space-x-2">
                             <Button variant="ghost" size="sm" onClick={() => handleEdit(conta)}>
