@@ -49,7 +49,7 @@ export function usePrint() {
           }
           .print-table th, .print-table td { 
             border: 1px solid #ccc; 
-            padding: 6px 8px; /* Padding ajustado */
+            padding: 4px 8px; /* REDUZIDO O PADDING VERTICAL DE 6PX PARA 4PX */
             text-align: left; 
             font-size: 9pt; 
             word-wrap: break-word; /* Permite quebra de palavras longas */
