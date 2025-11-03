@@ -207,8 +207,9 @@ const ContasReceber = () => {
         const clienteIds = recebimentosRes.data.map(r => r.cliente_id);
         
         // 1. Buscar nomes dos clientes (clientes)
+        // O cliente_id em admin_recebimentos é o ID do cliente na tbl_clientes (Empresa do Sistema)
         const { data: clientesData } = await supabase
-            .from('clientes')
+            .from('tbl_clientes')
             .select('id, nome')
             .in('id', clienteIds);
             
@@ -277,9 +278,11 @@ const ContasReceber = () => {
     let clienteIdReal: string | undefined;
     
     if (isMyLaunch) {
+        // Se for Admin, o cliente_id real está na conta sintética (admin_contas_receber)
         clienteIdReal = contaReceber?.cliente_id;
         
     } else {
+        // Se for Cliente, o cliente_id real está na conta sintética (contas_receber)
         clienteIdReal = contaReceber?.cliente_id;
     }
         
