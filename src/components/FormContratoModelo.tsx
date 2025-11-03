@@ -45,7 +45,7 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
   
   // Determina o ID a ser usado na coluna empresa_id
   const getOwnerId = () => {
-    if (isAdmin) return usuario?.id || null; // Admin usa seu próprio ID
+    if (isAdmin) return usuario?.id || null;
     if (isCliente) return (perfil as ClienteProfile)?.id;
     if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id;
     return null;
@@ -217,7 +217,9 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
             )}
           />
           
+          {/* 1. Layout Principal: Empilha em mobile, 3 colunas em lg */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              {/* Coluna 1 & 2: Template e Tipo */}
               <div className="lg:col-span-2 space-y-4">
                   <FormField
                       control={form.control}
@@ -272,15 +274,16 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
                   />
               </div>
               
-              {/* Coluna de Tags Padrão */}
+              {/* Coluna 3: Tags Padrão */}
               <Card className="lg:col-span-1 max-h-[750px] overflow-y-auto">
                   <CardHeader className="p-3 border-b">
                       <CardTitle className="text-sm">Tags Ativas (Arraste para o Template)</CardTitle>
-                      <div className="flex flex-wrap gap-2 mt-2"> {/* Adicionado flex-wrap e gap-2 */}
-                          <Button type="button" variant="outline" size="sm" onClick={handleCopyAllTags} disabled={tagsAtivas.length === 0} className="flex-1 min-w-[100px]">
+                      {/* 2. Botões de Tags: Empilha em mobile */}
+                      <div className="flex flex-col sm:flex-row gap-2 mt-2"> 
+                          <Button type="button" variant="outline" size="sm" onClick={handleCopyAllTags} disabled={tagsAtivas.length === 0} className="w-full">
                               <Copy className="w-3 h-3 mr-1" /> Copiar Todas
                           </Button>
-                          <Button type="button" variant="destructive" size="sm" onClick={handleClearTemplate} className="flex-1 min-w-[100px]">
+                          <Button type="button" variant="destructive" size="sm" onClick={handleClearTemplate} className="w-full">
                               <X className="w-3 h-3 mr-1" /> Limpar Template
                           </Button>
                       </div>
@@ -319,18 +322,19 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
               </Card>
           </div>
           
-          <div className="flex space-x-4">
+          {/* 3. Botões de Ação (Rodapé): Empilha em mobile */}
+          <div className="flex flex-col sm:flex-row gap-4">
             <Button 
                 type="button" 
                 variant="outline" 
                 onClick={handlePreview} 
                 disabled={form.formState.isSubmitting || templateContent.length < 50}
-                className="flex-1"
+                className="flex-1 h-12"
             >
                 <Eye className="mr-2 h-4 w-4" />
                 Pré-visualizar Template
             </Button>
-            <Button type="submit" className="flex-1" disabled={form.formState.isSubmitting}>
+            <Button type="submit" className="flex-1 h-12" disabled={form.formState.isSubmitting}>
               {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {isEditing ? 'Salvar Alterações' : 'Criar Modelo'}
             </Button>
