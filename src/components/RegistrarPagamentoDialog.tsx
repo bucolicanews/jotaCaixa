@@ -14,11 +14,12 @@ import { format, addDays } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { useSessao } from '@/hooks/use-sessao'; // Importando useSessao
 
 interface ParcelaParaPagamento {
   id: string;
   conta_receber_id: string;
-  empresa_id: string;
+  empresa_id: string; // Este é o ID do Admin ou da Empresa Cliente
   valor_parcela: number;
   valor_pago: number;
 }
@@ -43,6 +44,16 @@ interface RegistrarPagamentoDialogProps {
 }
 
 const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ parcela, open, onOpenChange, onSaveComplete }) => {
+  const { role, usuario } = useSessao();
+  const isAdmin = role === 'Admin';
+  
+  // Determina as tabelas de destino
+  const tabelaRecebimentos = isAdmin ? 'admin_recebimentos' : 'recebimentos';
+  const tabelaParcelas = isAdmin ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
+  
+  // O ID do proprietário da conta (Admin ID ou Empresa ID)
+  const ownerId = isAdmin ? usuario?.id : parcela?.empresa_id;
+
   const saldoDevedor = parcela ? parcela.valor_parcela - (parcela.valor_pago || 0) : 0;
 
   const form = useForm<FormValues>({
@@ -63,20 +74,23 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
   const saldoRestante = saldoDevedor - valorRecebido;
 
   const onSubmit = async (values: FormValues) => {
-    if (!parcela) return;
+    if (!parcela || !ownerId) return;
 
     const valorRecebido = values.valor_recebido;
     const valorPagoAnterior = parcela.valor_pago || 0;
     const novoValorPagoTotal = valorPagoAnterior + valorRecebido;
     const saldoRestanteCalculado = parcela.valor_parcela - novoValorPagoTotal;
     const quitouComPagamentoAtual = novoValorPagoTotal >= parcela.valor_parcela;
+    
+    // Payload base para recebimentos (Admin usa admin_id, Cliente usa empresa_id)
+    const recebimentoBasePayload = isAdmin 
+        ? { parcela_id: parcela.id, admin_id: ownerId, valor_recebido: valorRecebido, cliente_id: parcela.conta_receber_id } // Cliente ID é o ID da conta sintética para Admin
+        : { parcela_id: parcela.id, empresa_id: ownerId, valor_recebido: valorRecebido };
 
     try {
       // 1. Registrar o recebimento
-      await supabase.from('recebimentos').insert({
-        parcela_id: parcela.id,
-        empresa_id: parcela.empresa_id,
-        valor_recebido: valorRecebido,
+      await supabase.from(tabelaRecebimentos).insert({
+        ...recebimentoBasePayload,
         data_recebimento: values.data_pagamento.toISOString(),
         forma_pagamento: values.forma_pagamento,
         tipo_recebimento: quitouComPagamentoAtual ? 'total' : 'parcial',
@@ -84,31 +98,33 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
 
       // 2. Lidar com a parcela original
       if (quitouComPagamentoAtual) {
-        await supabase.from('parcelas_contas_receber').update({
+        await supabase.from(tabelaParcelas).update({
           status: 'paga',
           valor_pago: novoValorPagoTotal,
           data_pagamento: values.data_pagamento.toISOString()
         }).eq('id', parcela.id);
       } else { // Pagamento parcial
         if (values.acao_saldo_restante === 'desconto') {
-          await supabase.from('parcelas_contas_receber').update({
+          await supabase.from(tabelaParcelas).update({
             status: 'paga',
             valor_pago: novoValorPagoTotal,
             data_pagamento: values.data_pagamento.toISOString(),
             observacao: `Recebido R$ ${valorRecebido.toFixed(2)} com R$ ${saldoRestanteCalculado.toFixed(2)} de desconto.`
           }).eq('id', parcela.id);
         } else if (values.acao_saldo_restante === 'reprogramar' || values.acao_saldo_restante === 'parcelar') {
-          await supabase.from('parcelas_contas_receber').update({
-            status: 'paga',
+          await supabase.from(tabelaParcelas).update({
+            status: 'paga', // Marca a parcela original como paga (quitada pelo valor recebido + saldo restante tratado)
             valor_pago: novoValorPagoTotal,
             data_pagamento: values.data_pagamento.toISOString(),
             observacao: `Recebido R$ ${valorRecebido.toFixed(2)}. Saldo de R$ ${saldoRestanteCalculado.toFixed(2)} ${values.acao_saldo_restante === 'reprogramar' ? 'reprogramado' : 'parcelado'}.`
           }).eq('id', parcela.id);
 
+          const baseParcelaPayload = isAdmin ? { admin_id: ownerId } : { empresa_id: ownerId };
+          
           if (values.acao_saldo_restante === 'reprogramar') {
-            await supabase.from('parcelas_contas_receber').insert({
+            await supabase.from(tabelaParcelas).insert({
               conta_receber_id: parcela.conta_receber_id,
-              empresa_id: parcela.empresa_id,
+              ...baseParcelaPayload,
               numero_parcela: 99,
               valor_parcela: saldoRestanteCalculado,
               data_vencimento: format(values.nova_data_vencimento!, 'yyyy-MM-dd'),
@@ -118,17 +134,17 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
             const valorNovaParcela = saldoRestanteCalculado / values.numero_novas_parcelas!;
             const novasParcelas = Array.from({ length: values.numero_novas_parcelas! }).map((_, i) => ({
               conta_receber_id: parcela.conta_receber_id,
-              empresa_id: parcela.empresa_id,
+              ...baseParcelaPayload,
               numero_parcela: 100 + i,
               valor_parcela: valorNovaParcela,
               data_vencimento: format(addDays(values.nova_data_vencimento!, i * values.intervalo_dias_novas_parcelas!), 'yyyy-MM-dd'),
               status: 'reprogramada',
             }));
-            await supabase.from('parcelas_contas_receber').insert(novasParcelas);
+            await supabase.from(tabelaParcelas).insert(novasParcelas);
           }
         } else {
             // Caso de pagamento parcial sem ação definida (apenas atualiza)
-            await supabase.from('parcelas_contas_receber').update({
+            await supabase.from(tabelaParcelas).update({
                 status: 'parcial',
                 valor_pago: novoValorPagoTotal,
             }).eq('id', parcela.id);
