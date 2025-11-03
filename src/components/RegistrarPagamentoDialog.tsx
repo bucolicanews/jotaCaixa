@@ -14,7 +14,7 @@ import { format, addDays } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { useSessao } from '@/hooks/use-sessao'; // Importando useSessao
+import { useSessao } from '@/hooks/use-sessao';
 
 interface ParcelaParaPagamento {
   id: string;
@@ -22,6 +22,7 @@ interface ParcelaParaPagamento {
   empresa_id: string; // Este é o ID do Admin ou da Empresa Cliente
   valor_parcela: number;
   valor_pago: number;
+  cliente_id_real?: string; // NOVO: ID do cliente real (tbl_clientes)
 }
 
 const formSchema = z.object({
@@ -48,6 +49,8 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
   const isAdmin = role === 'Admin';
   
   // Determina as tabelas de destino
+  // Se for Admin, ele sempre usa as tabelas admin_* para registrar recebimentos do sistema.
+  // Se for Cliente, ele usa as tabelas normais para registrar recebimentos de seus clientes.
   const tabelaRecebimentos = isAdmin ? 'admin_recebimentos' : 'recebimentos';
   const tabelaParcelas = isAdmin ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
   
@@ -82,10 +85,29 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
     const saldoRestanteCalculado = parcela.valor_parcela - novoValorPagoTotal;
     const quitouComPagamentoAtual = novoValorPagoTotal >= parcela.valor_parcela;
     
-    // Payload base para recebimentos (Admin usa admin_id, Cliente usa empresa_id)
-    const recebimentoBasePayload = isAdmin 
-        ? { parcela_id: parcela.id, admin_id: ownerId, valor_recebido: valorRecebido, cliente_id: parcela.conta_receber_id } // Cliente ID é o ID da conta sintética para Admin
-        : { parcela_id: parcela.id, empresa_id: ownerId, valor_recebido: valorRecebido };
+    // Payload base para recebimentos
+    let recebimentoBasePayload;
+    
+    if (isAdmin) {
+        // ADMIN: Usa admin_recebimentos. O cliente_id deve ser o ID do cliente real (tbl_clientes)
+        if (!parcela.cliente_id_real) {
+            showError('ID do cliente pagador não encontrado.');
+            return;
+        }
+        recebimentoBasePayload = { 
+            parcela_id: parcela.id, 
+            admin_id: ownerId, 
+            valor_recebido: valorRecebido, 
+            cliente_id: parcela.cliente_id_real // ID do cliente real (tbl_clientes)
+        };
+    } else {
+        // CLIENTE: Usa recebimentos. empresa_id é o ID do cliente logado.
+        recebimentoBasePayload = { 
+            parcela_id: parcela.id, 
+            empresa_id: ownerId, 
+            valor_recebido: valorRecebido 
+        };
+    }
 
     try {
       // 1. Registrar o recebimento

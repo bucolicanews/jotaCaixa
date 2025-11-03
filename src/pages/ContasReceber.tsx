@@ -179,7 +179,7 @@ const ContasReceber = () => {
         // 1. Busca de Contas Sintéticas (admin_contas_receber)
         contasQuery = supabase.from('admin_contas_receber').select('*').eq('admin_id', empresaId).order('data_vencimento', { ascending: true });
         
-        // 2. Busca de Parcelas (admin_parcelas_receber) - Inclui a origem
+        // 2. Busca de Parcelas (admin_parcelas_receber) - Inclui a origem e o cliente_id real
         parcelasQuery = supabase.from('admin_parcelas_receber').select('*, admin_contas_receber(descricao, cliente_id, admin_id, origem)').eq('admin_id', empresaId).order('data_vencimento', { ascending: true });
         
         // 3. Busca de Recebimentos (admin_recebimentos) - Inclui a origem
@@ -295,18 +295,22 @@ const ContasReceber = () => {
   
   const handleOpenPagamento = (parcela: any) => {
     // Mapeia os campos necessários para o RegistrarPagamentoDialog
-    const isMyLaunch = isAdmin; // Se for Admin, sempre usa admin_*
+    const isMyLaunch = isAdmin;
     
-    const contaReceberData = isMyLaunch 
-        ? parcela.admin_contas_receber 
-        : parcela.contas_receber;
+    const contaReceber = isMyLaunch 
+        ? (parcela as any).admin_contas_receber 
+        : (parcela as any).contas_receber;
+        
+    // NOVO: Obtém o cliente_id real (ID da tbl_clientes)
+    const clienteIdReal = isMyLaunch ? contaReceber?.cliente_id : contaReceber?.clientes?.id;
         
     const mappedParcela = {
         id: parcela.id,
         conta_receber_id: parcela.conta_receber_id,
-        empresa_id: isMyLaunch ? contaReceberData.admin_id : contaReceberData.empresa_id,
+        empresa_id: isMyLaunch ? contaReceber.admin_id : contaReceber.empresa_id,
         valor_parcela: parcela.valor_parcela,
         valor_pago: parcela.valor_pago,
+        cliente_id_real: clienteIdReal, // Passa o ID do cliente real
     };
     
     setParcelaParaPagamento(mappedParcela);
