@@ -15,3 +15,11 @@ export interface ContaCSV {
   Descrição: string; // Corrigido para o cabeçalho exato
   Analítica: 'Sim' | 'Não'; // Corrigido para o cabeçalho exato
 }
+
+// Interface para dados importados via JSON (mesmos campos finais)
+export interface ContaJSON {
+  Conta: string;
+  'Código reduzido': string;
+  Descrição: string;
+  Analítica: 'Sim' | 'Não';
+}

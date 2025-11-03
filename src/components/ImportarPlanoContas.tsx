@@ -4,10 +4,10 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Upload, Loader2 } from 'lucide-react';
 import { showSuccess, showError } from '@/utils/toast';
-import { parseCSV } from '@/utils/csv-parser';
+import { parseFile } from '@/utils/file-parser';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
-import { ContaCSV } from '@/types/plano-contas';
+import { ContaCSV, ContaJSON } from '@/types/plano-contas';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 
 interface ImportarPlanoContasProps {
@@ -36,7 +36,7 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
 
   const handleImport = async () => {
     if (!file) {
-      showError('Por favor, selecione um arquivo CSV.');
+      showError('Por favor, selecione um arquivo CSV ou JSON.');
       return;
     }
     
@@ -50,10 +50,11 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
     setLoading(true);
 
     try {
-      const parsedData: ContaCSV[] = await parseCSV(file);
+      // Usando a função unificada para parsear
+      const parsedData: (ContaCSV | ContaJSON)[] = await parseFile(file);
 
       if (parsedData.length === 0) {
-        showError('O arquivo CSV está vazio ou o formato está incorreto.');
+        showError('O arquivo está vazio ou o formato está incorreto. Verifique se os cabeçalhos estão corretos.');
         setLoading(false);
         return;
       }
@@ -62,9 +63,9 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
       const contasParaInserir = parsedData.map(conta => ({
         proprietario_id: proprietarioId,
         Conta: conta.Conta,
-        codigo_reduzido: conta['Código reduzido'] || null, // Mapeamento correto
-        Descricao: conta.Descrição.trim(), // Mapeamento correto
-        Analitica: conta.Analítica, // Mapeamento correto
+        codigo_reduzido: conta['Código reduzido'] || null,
+        Descricao: conta.Descrição.trim(),
+        Analitica: conta.Analítica,
       }));
 
       // 1. Limpar contas existentes para o proprietário
@@ -92,7 +93,7 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
 
     } catch (error) {
       console.error('Erro durante a importação:', error);
-      showError('Falha na importação. Verifique o console para detalhes.');
+      showError('Falha na importação: ' + (error as Error).message);
     } finally {
       setLoading(false);
     }
@@ -101,17 +102,17 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
   return (
     <Card className="w-full">
       <CardHeader>
-        <CardTitle className="text-xl">Importar Plano de Contas (CSV)</CardTitle>
+        <CardTitle className="text-xl">Importar Plano de Contas (CSV/JSON)</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-sm text-muted-foreground">
-          Selecione um arquivo CSV no formato: <code>Conta;Código reduzido;Descrição;Analítica</code>
+          Selecione um arquivo CSV (<code>Conta;Código reduzido;Descrição;Analítica</code>) ou JSON (array de objetos).
         </p>
         <div className="flex items-center space-x-2">
           <Input 
             id="csv-file" 
             type="file" 
-            accept=".csv" 
+            accept=".csv,.json" 
             onChange={handleFileChange} 
             className="flex-1"
             disabled={loading}
