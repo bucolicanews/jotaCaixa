@@ -2,12 +2,12 @@ import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { PlusCircle, FileSignature, Loader2, Eye, Edit } from 'lucide-react';
+import { PlusCircle, FileSignature, Loader2, Eye, Edit, Trash2 } from 'lucide-react';
 import { useSessao } from '@/hooks/use-sessao';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
-import { showError } from '@/utils/toast';
+import { showError, showSuccess } from '@/utils/toast';
 import { ContratoGerado } from '@/types/contratos';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -88,6 +88,55 @@ const Contratos = () => {
       navigate(`/contratos/preencher/${contrato.modelo_id}?contratoId=${contrato.id}`);
   };
   
+  const handleDeleteContract = async (contrato: ContratoGerado) => {
+    if (!window.confirm('Tem certeza que deseja excluir este contrato? Isso também excluirá as contas a receber geradas. Esta ação é irreversível.')) return;
+
+    setCarregandoContratos(true);
+    
+    try {
+        // 1. Determinar as tabelas de CR
+        const isContractOwnerAdmin = isAdmin && contrato.empresa_id === empresaId;
+        const tabelaContasReceber = isContractOwnerAdmin ? 'admin_contas_receber' : 'contas_receber';
+        
+        // 2. Buscar e deletar a Conta a Receber Sintética associada
+        const { data: contaReceber, error: fetchError } = await supabase
+            .from(tabelaContasReceber)
+            .select('id')
+            .eq('contrato_gerado_id', contrato.id)
+            .limit(1)
+            .single();
+            
+        if (fetchError && fetchError.code !== 'PGRST116') {
+            throw new Error('Erro ao buscar conta a receber associada: ' + fetchError.message);
+        }
+        
+        if (contaReceber) {
+            // Deletar a conta sintética (deve cascatear para as parcelas)
+            const { error: deleteCR } = await supabase
+                .from(tabelaContasReceber)
+                .delete()
+                .eq('id', contaReceber.id);
+            if (deleteCR) throw deleteCR;
+        }
+        
+        // 3. Deletar o Contrato Gerado
+        const { error: deleteContrato } = await supabase
+            .from('contratos_gerados')
+            .delete()
+            .eq('id', contrato.id);
+            
+        if (deleteContrato) throw deleteContrato;
+
+        showSuccess('Contrato e contas a receber associadas excluídos com sucesso.');
+        buscarContratos(); // Re-fetch the list
+    } catch (error: any) {
+        console.error('Erro ao deletar contrato:', error);
+        showError('Falha ao excluir contrato: ' + error.message);
+    } finally {
+        setCarregandoContratos(false);
+    }
+  };
+  
   const getStatusBadge = (status: ContratoGerado['status']) => {
       switch (status) {
           case 'pendente_assinatura': return <Badge variant="warning">Pendente Assinatura</Badge>;
@@ -161,14 +210,24 @@ const Contratos = () => {
                                 <TableCell className="text-right">
                                     <div className="flex justify-end space-x-2">
                                         {canEdit && isMyContract && (
-                                            <Button 
-                                                variant="ghost" 
-                                                size="icon" 
-                                                onClick={() => handleEditContract(c)}
-                                                title="Editar Contrato"
-                                            >
-                                                <Edit className="w-4 h-4" />
-                                            </Button>
+                                            <>
+                                                <Button 
+                                                    variant="ghost" 
+                                                    size="icon" 
+                                                    onClick={() => handleEditContract(c)}
+                                                    title="Editar Contrato"
+                                                >
+                                                    <Edit className="w-4 h-4" />
+                                                </Button>
+                                                <Button 
+                                                    variant="ghost" 
+                                                    size="icon" 
+                                                    onClick={() => handleDeleteContract(c)}
+                                                    title="Excluir Contrato"
+                                                >
+                                                    <Trash2 className="w-4 h-4 text-red-500" />
+                                                </Button>
+                                            </>
                                         )}
                                         <Button variant="ghost" size="sm" onClick={() => handleOpenAcoes(c)}>
                                             <Eye className="w-4 h-4 mr-2" /> Ver Ações
