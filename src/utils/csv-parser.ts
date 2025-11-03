@@ -12,8 +12,7 @@ export const parseCSV = (file: File): Promise<ContaCSV[]> => {
       header: true,
       skipEmptyLines: true,
       dynamicTyping: true,
-      // Usando vírgula como delimitador para o arquivo fornecido
-      delimiter: ',', 
+      // Removendo o delimitador fixo para que o PapaParse adivinhe automaticamente (vírgula, ponto e vírgula, etc.)
       complete: (results: ParseResult<any>) => {
         // Mapeamento para garantir que os campos esperados existam e estejam no formato correto
         const data = results.data.map((row: any) => ({
