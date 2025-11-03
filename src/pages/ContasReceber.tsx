@@ -350,7 +350,37 @@ const ContasReceber = () => {
   
   const contasFiltradas = contas.filter(c => {
     const termoBusca = filtroGeral.toLowerCase();
+    const dataVencimento = new Date(c.data_vencimento + 'T00:00:00');
     
+    // 1. Filtro de Período (Data de Vencimento)
+    if (filtroPeriodo?.from) {
+      const from = filtroPeriodo.from;
+      const to = filtroPeriodo.to || from;
+      
+      // Ajusta 'to' para incluir o final do dia
+      const adjustedTo = new Date(to);
+      adjustedTo.setHours(23, 59, 59, 999);
+
+      if (dataVencimento < from || dataVencimento > adjustedTo) {
+        return false;
+      }
+    }
+
+    // 2. Filtro de Status
+    if (filtroStatus !== 'todos') {
+      const status = c.status;
+      if (filtroStatus === 'pendente' && (status === 'recebida' || status === 'cancelada')) {
+        return false;
+      }
+      if (filtroStatus === 'paga' && status !== 'recebida') {
+        return false;
+      }
+      if (filtroStatus === 'aberta' && status !== 'aberta' && status !== 'parcial') {
+        return false;
+      }
+    }
+    
+    // 3. Filtro Geral (Texto)
     // Lógica de acesso ao nome do cliente e descrição
     let clienteNome = 'N/A';
     let descricao = c.descricao;
@@ -502,7 +532,34 @@ const ContasReceber = () => {
         {/* ABA DE LANÇAMENTOS (SINTÉTICO) */}
         <TabsContent value="parcela_sintetica">
           <Card>
-            <CardHeader><CardTitle>Resumo dos Lançamentos</CardTitle></CardHeader>
+            <CardHeader>
+              <CardTitle>Resumo dos Lançamentos</CardTitle>
+              {/* FILTROS ADICIONADOS AQUI */}
+              <div className="flex flex-col md:flex-row gap-4 mt-4">
+                <Input
+                  placeholder="Filtrar por cliente, descrição, valor..."
+                  value={filtroGeral}
+                  onChange={(e) => setFiltroGeral(e.target.value)}
+                  className="w-full md:max-w-xs"
+                />
+                <DateRangePicker
+                  date={filtroPeriodo}
+                  setDate={setFiltroPeriodo}
+                  className="w-full md:w-auto"
+                />
+                <Select value={filtroStatus} onValueChange={setFiltroStatus}>
+                  <SelectTrigger className="w-full md:w-[180px]">
+                    <SelectValue placeholder="Filtrar por Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos os Status</SelectItem>
+                    <SelectItem value="pendente">Em Aberto / Parcial</SelectItem>
+                    <SelectItem value="paga">Quitadas</SelectItem>
+                    <SelectItem value="aberta">Abertas / Reprogramadas</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
                 <Table>
@@ -518,6 +575,8 @@ const ContasReceber = () => {
                   </TableHeader>
                   <TableBody>
                     {contasFiltradas.map((conta) => {
+                      // Nota: A lógica de getBadgeVariant para contas sintéticas é simplificada,
+                      // pois o status 'recebida' é o equivalente a 'paga' para o sintético.
                       const statusVariant = getBadgeVariant(conta.status as ParcelaStatus, conta.data_vencimento);
                       
                       const statusColorClass = {
