@@ -185,9 +185,8 @@ const ContasReceber = () => {
             contasQuery = contasQuery.eq('origem', 'contrato');
             
         } else if (activeTab === 'parcela_sintetica') {
-            // FILTRO PARA PARCELA SINTÉTICA (Manuais + Recorrência/Assinaturas):
-            // Exclui apenas os lançamentos de contrato (contrato_gerado_id IS NOT NULL)
-            contasQuery = contasQuery.is('contrato_gerado_id', null);
+            // FILTRO REMOVIDO: Mostrar TODAS as contas sintéticas
+            // contasQuery = contasQuery.is('contrato_gerado_id', null);
         }
         
         // 2. Busca de Parcelas (admin_parcelas_receber) - Usado na aba 'Todas as Parcelas'
