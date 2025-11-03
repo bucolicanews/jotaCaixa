@@ -30,10 +30,10 @@ const PlanoContasPage = () => {
   useEffect(() => {
     if (proprietarioId) {
       buscarPlanoContas(proprietarioId);
-    } else if (!carregandoSessao && !usuario) {
+    } else if (!carregandoContas && !usuario) {
       setCarregandoContas(false);
     }
-  }, [proprietarioId, usuario, carregandoSessao]);
+  }, [proprietarioId, usuario, carregandoContas]);
 
   const buscarProprietarioId = async (userId: string) => {
     let ownerId: string | null = null;

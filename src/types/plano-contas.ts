@@ -1,10 +1,10 @@
 export interface PlanoContas {
   id: string;
   proprietario_id: string;
-  Conta: string; // Novo nome
-  Descricao: string; // Novo nome
+  Conta: string; // Código da Conta
+  Descricao: string; // Nome da Conta
   codigo_reduzido: string | null;
-  Analitica: 'Sim' | 'Não'; // Novo nome e tipo
+  Analitica: 'Sim' | 'Não'; // Sim ou Não
   criado_em: string;
   atualizado_em: string;
 }
