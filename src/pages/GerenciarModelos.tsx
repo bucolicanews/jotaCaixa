@@ -126,7 +126,7 @@ const GerenciarModelos: React.FC = () => {
               <Plus className="w-4 h-4 mr-2" /> Novo Modelo
             </Button>
           </DialogTrigger>
-          <DialogContent className="w-full max-w-full sm:max-w-5xl max-h-[95vh] overflow-y-auto">
+          <DialogContent className="fixed inset-0 w-full h-full max-w-none sm:max-w-5xl sm:h-auto sm:max-h-[95vh] sm:rounded-lg sm:left-[50%] sm:top-[50%] sm:translate-x-[-50%] sm:translate-y-[-50%] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{modeloSelecionado ? 'Editar Modelo' : 'Criar Novo Modelo'}</DialogTitle>
             </DialogHeader>
