@@ -2,7 +2,7 @@ import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { PlusCircle, FileSignature, Loader2, Tag, FileTextIcon, Eye, Edit } from 'lucide-react';
+import { PlusCircle, FileSignature, Loader2, Eye, Edit } from 'lucide-react';
 import { useSessao } from '@/hooks/use-sessao';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -24,20 +24,20 @@ const Contratos = () => {
   const [contratoSelecionado, setContratoSelecionado] = useState<ContratoGerado | null>(null);
   const [acoesDialogOpen, setAcoesDialogOpen] = useState(false);
 
-  const canManageModels = role === 'Admin' || role === 'Cliente';
   const canCreateContract = role === 'Admin' || role === 'Cliente';
   
   const isAdmin = role === 'Admin';
   const isCliente = role === 'Cliente';
   
-  const getOwnerId = () => {
-    if (isAdmin) return usuario?.id || null; // Admin usa seu próprio ID
+  // ID do proprietário (Admin ou Cliente)
+  const getEmpresaId = () => {
+    if (isAdmin) return usuario?.id || null;
     if (isCliente) return (perfil as ClienteProfile)?.id;
     if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id;
     return null;
   };
   
-  const empresaId = getOwnerId();
+  const empresaId = getEmpresaId();
   
   const [activeContratoTab, setActiveContratoTab] = useState(isAdmin ? 'meus_contratos' : 'pendentes');
 
@@ -104,8 +104,9 @@ const Contratos = () => {
       const meusContratos = contratos.filter(c => c.empresa_id === empresaId);
       const contratosClientes = contratos.filter(c => c.empresa_id !== empresaId);
       
-      const pendentes = contratos.filter(c => c.status === 'pendente_assinatura' || c.status === 'rascunho');
-      const ativos = contratos.filter(c => c.status === 'ativo' || c.status === 'concluido');
+      // Pendentes e Ativos agora filtram APENAS os contratos do empresaId
+      const pendentes = meusContratos.filter(c => c.status === 'pendente_assinatura' || c.status === 'rascunho');
+      const ativos = meusContratos.filter(c => c.status === 'ativo' || c.status === 'concluido');
       
       return { meusContratos, contratosClientes, pendentes, ativos };
   }, [contratos, empresaId]);
@@ -114,9 +115,9 @@ const Contratos = () => {
       if (isAdmin) {
           switch (activeContratoTab) {
               case 'meus_contratos': return contratosFiltrados.meusContratos;
-              case 'supervisao': return contratosFiltrados.contratosClientes;
-              case 'pendentes': return contratosFiltrados.pendentes;
-              case 'gerados': return contratosFiltrados.ativos;
+              case 'contratos_clientes': return contratosFiltrados.contratosClientes; // Renomeado
+              case 'pendentes': return contratosFiltrados.pendentes; // Apenas Admin
+              case 'gerados': return contratosFiltrados.ativos; // Apenas Admin
               default: return [];
           }
       } else {
@@ -191,7 +192,7 @@ const Contratos = () => {
         </h1>
         <div className="flex space-x-2 w-full sm:w-auto">
             <Link to="/contratos/novo">
-                <Button className="w-full sm:w-auto" disabled={!canCreateContract || (isAdmin && activeContratoTab === 'supervisao')}>
+                <Button className="w-full sm:w-auto" disabled={!canCreateContract || (isAdmin && activeContratoTab === 'contratos_clientes')}>
                     <PlusCircle className="w-4 h-4 mr-2" />
                     Novo Contrato
                 </Button>
@@ -202,14 +203,15 @@ const Contratos = () => {
       <Tabs value={activeContratoTab} onValueChange={setActiveContratoTab} className="w-full">
         <TabsList className={cn("grid w-full", isAdmin ? "grid-cols-4" : "grid-cols-3")}>
           {isAdmin && <TabsTrigger value="meus_contratos">Meus Contratos ({contratosFiltrados.meusContratos.length})</TabsTrigger>}
-          {isAdmin && <TabsTrigger value="supervisao">Supervisão ({contratosFiltrados.contratosClientes.length})</TabsTrigger>}
+          {isAdmin && <TabsTrigger value="contratos_clientes">Contratos de Clientes ({contratosFiltrados.contratosClientes.length})</TabsTrigger>}
+          {/* Pendentes e Ativos agora filtram apenas os contratos do empresaId */}
           <TabsTrigger value="pendentes">Pendentes ({contratosFiltrados.pendentes.length})</TabsTrigger>
           <TabsTrigger value="gerados">Ativos ({contratosFiltrados.ativos.length})</TabsTrigger>
-          {canManageModels && <TabsTrigger value="modelos">Modelos/Tags</TabsTrigger>}
+          {/* Removendo a aba Modelos/Tags */}
         </TabsList>
         
-        {/* ABA DE SUPERVISÃO (APENAS ADMIN) */}
-        {isAdmin && activeContratoTab === 'supervisao' && (
+        {/* ABA DE CONTRATOS DE CLIENTES (APENAS ADMIN) */}
+        {isAdmin && activeContratoTab === 'contratos_clientes' && (
             <div className="p-4 bg-yellow-100 dark:bg-yellow-900/20 border border-yellow-500 rounded-md mt-4">
                 <p className="text-sm text-yellow-700 dark:text-yellow-300 font-semibold">
                     Modo Supervisão: Visualizando contratos de todas as empresas clientes.
@@ -217,22 +219,22 @@ const Contratos = () => {
             </div>
         )}
         
-        {/* ABA DE CONTRATOS PENDENTES */}
+        {/* ABA DE CONTRATOS PENDENTES (Apenas do EmpresaId) */}
         <TabsContent value="pendentes" className="mt-4">
           <Card>
             <CardHeader><CardTitle className="text-xl">Contratos Pendentes de Assinatura</CardTitle></CardHeader>
             <CardContent>
-              {renderContratosTable(contratosParaExibir.filter(c => c.status === 'pendente_assinatura' || c.status === 'rascunho'), isAdmin && activeContratoTab === 'supervisao')}
+              {renderContratosTable(contratosParaExibir.filter(c => c.status === 'pendente_assinatura' || c.status === 'rascunho'), isAdmin && activeContratoTab === 'contratos_clientes')}
             </CardContent>
           </Card>
         </TabsContent>
         
-        {/* ABA DE CONTRATOS ATIVOS */}
+        {/* ABA DE CONTRATOS ATIVOS (Apenas do EmpresaId) */}
         <TabsContent value="gerados" className="mt-4">
           <Card>
             <CardHeader><CardTitle className="text-xl">Contratos Ativos e Concluídos</CardTitle></CardHeader>
             <CardContent>
-              {renderContratosTable(contratosParaExibir.filter(c => c.status === 'ativo' || c.status === 'concluido'), isAdmin && activeContratoTab === 'supervisao')}
+              {renderContratosTable(contratosParaExibir.filter(c => c.status === 'ativo' || c.status === 'concluido'), isAdmin && activeContratoTab === 'contratos_clientes')}
             </CardContent>
           </Card>
         </TabsContent>
@@ -249,9 +251,9 @@ const Contratos = () => {
             </TabsContent>
         )}
         
-        {/* ABA SUPERVISÃO (APENAS ADMIN) */}
-        {isAdmin && activeContratoTab === 'supervisao' && (
-            <TabsContent value="supervisao" className="mt-4">
+        {/* ABA CONTRATOS DE CLIENTES (APENAS ADMIN) */}
+        {isAdmin && activeContratoTab === 'contratos_clientes' && (
+            <TabsContent value="contratos_clientes" className="mt-4">
                 <Card>
                     <CardHeader><CardTitle className="text-xl">Contratos dos Clientes (Supervisão)</CardTitle></CardHeader>
                     <CardContent>
@@ -261,35 +263,6 @@ const Contratos = () => {
             </TabsContent>
         )}
         
-        {/* ABA DE MODELOS E TAGS */}
-        {canManageModels && (
-            <TabsContent value="modelos" className="mt-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <Link to="/contratos/tags">
-                        <Card className="hover:shadow-lg transition-shadow cursor-pointer">
-                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-lg font-medium">Gerenciar Tags</CardTitle>
-                                <Tag className="h-5 w-5 text-muted-foreground" />
-                            </CardHeader>
-                            <CardContent>
-                                <p className="text-sm text-muted-foreground">Crie e edite tags dinâmicas para seus contratos.</p>
-                            </CardContent>
-                        </Card>
-                    </Link>
-                    <Link to="/contratos/modelos">
-                        <Card className="hover:shadow-lg transition-shadow cursor-pointer">
-                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-lg font-medium">Gerenciar Modelos</CardTitle>
-                                <FileTextIcon className="h-5 w-5 text-muted-foreground" />
-                            </CardHeader>
-                            <CardContent>
-                                <p className="text-sm text-muted-foreground">Crie e edite templates de contrato.</p>
-                            </CardContent>
-                        </Card>
-                    </Link>
-                </div>
-            </TabsContent>
-        )}
       </Tabs>
       
       <ContratoAcoesDialog
