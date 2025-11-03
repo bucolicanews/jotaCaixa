@@ -254,25 +254,42 @@ const ContasReceber = () => {
     const isMyLaunch = isAdmin;
     
     const contaReceber = isMyLaunch 
-        ? (parcela as any).admin_contas_receber 
+        ? (parcela as any).contas_receber // Para Admin, o nome da relação é 'contas_receber' (que aponta para admin_contas_receber)
         : (parcela as any).contas_receber;
         
     let clienteIdReal: string | undefined;
     
     if (isMyLaunch) {
-        const contaData = Array.isArray(contaReceber) ? contaReceber[0] : contaReceber;
-        clienteIdReal = contaData?.cliente_id;
+        // Para Admin, a estrutura é: parcela.contas_receber.cliente_id
+        // Nota: A query de parcelas do Admin usa 'contas_receber' como alias para 'admin_contas_receber'
+        // E 'admin_contas_receber' tem o campo 'cliente_id' que aponta para 'clientes' (que é o ID do cliente CR)
+        // Mas precisamos do ID do cliente real (tbl_clientes) para o admin_recebimentos.
+        // No fluxo de Admin, a tabela admin_contas_receber tem o campo cliente_id que é o ID do cliente CR.
+        // O cliente CR (tabela 'clientes') tem o mesmo ID do cliente do sistema (tbl_clientes) se for um cliente do sistema.
+        // Vamos assumir que o cliente_id em admin_contas_receber é o ID do cliente pagador (tbl_clientes.id).
+        
+        // Se a query de parcelas do Admin for:
+        // .select(`*, contas_receber: admin_contas_receber (cliente_id)`)
+        // O resultado é: parcela.contas_receber.cliente_id
+        
+        // CORREÇÃO: A estrutura da query de parcelas do Admin é:
+        // .select(`*, contas_receber: ${tabelaContasReceber} (descricao, cliente_id, clientes ( nome ))`)
+        // O cliente_id está diretamente em contas_receber (que é admin_contas_receber)
+        
+        clienteIdReal = contaReceber?.cliente_id;
+        
     } else {
-        clienteIdReal = contaReceber?.clientes?.id;
+        // Para Cliente, a estrutura é: parcela.contas_receber.cliente_id
+        clienteIdReal = contaReceber?.cliente_id;
     }
         
     const mappedParcela = {
         id: parcela.id,
         conta_receber_id: parcela.conta_receber_id,
-        empresa_id: isMyLaunch ? ownerId : contaReceber.empresa_id,
+        empresa_id: ownerId, // O ownerId é o Admin ID ou o Cliente ID
         valor_parcela: parcela.valor_parcela,
         valor_pago: parcela.valor_pago,
-        cliente_id_real: clienteIdReal,
+        cliente_id_real: clienteIdReal, // ID do cliente pagador (tbl_clientes.id)
     };
     
     setParcelaParaPagamento(mappedParcela);
