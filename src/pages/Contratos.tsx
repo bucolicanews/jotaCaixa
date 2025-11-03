@@ -2,10 +2,10 @@ import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { PlusCircle, FileSignature, Loader2, Tag, FileTextIcon, Eye } from 'lucide-react';
+import { PlusCircle, FileSignature, Loader2, Tag, FileTextIcon, Eye, Edit } from 'lucide-react';
 import { useSessao } from '@/hooks/use-sessao';
 import { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { showError } from '@/utils/toast';
 import { ContratoGerado } from '@/types/contratos';
@@ -18,6 +18,7 @@ import { cn } from '@/lib/utils';
 
 const Contratos = () => {
   const { role, perfil, usuario, carregando: carregandoSessao } = useSessao();
+  const navigate = useNavigate();
   const [contratos, setContratos] = useState<ContratoGerado[]>([]);
   const [carregandoContratos, setCarregandoContratos] = useState(true);
   const [contratoSelecionado, setContratoSelecionado] = useState<ContratoGerado | null>(null);
@@ -107,6 +108,11 @@ const Contratos = () => {
       setAcoesDialogOpen(true);
   };
   
+  const handleEditContract = (contrato: ContratoGerado) => {
+      // Redireciona para a página de preenchimento, passando o ID do modelo e o ID do contrato para edição
+      navigate(`/contratos/preencher/${contrato.modelo_id}?contratoId=${contrato.id}`);
+  };
+  
   const getStatusBadge = (status: ContratoGerado['status']) => {
       switch (status) {
           case 'pendente_assinatura': return <Badge variant="warning">Pendente Assinatura</Badge>;
@@ -118,7 +124,7 @@ const Contratos = () => {
       }
   };
 
-  const contratosPendentes = contratos.filter(c => c.status === 'pendente_assinatura');
+  const contratosPendentes = contratos.filter(c => c.status === 'pendente_assinatura' || c.status === 'rascunho');
   const contratosAtivos = contratos.filter(c => c.status === 'ativo' || c.status === 'concluido');
 
   if (carregandoSessao || carregandoContratos) {
@@ -176,15 +182,25 @@ const Contratos = () => {
                     ) : (
                       contratosPendentes.map(c => (
                         <TableRow key={c.id}>
-                          {isAdmin && activeContratoTab === 'supervisao' && <TableCell className="text-sm text-muted-foreground">{(c as any).empresa_id || 'Admin'}</TableCell>}
+                          {isAdmin && activeContratoTab === 'supervisao' && <TableCell className="text-sm text-muted-foreground">{(c as any).empresa_id || 'N/A'}</TableCell>}
                           <TableCell className="font-medium">{(c as any).clientes?.nome || 'N/A'}</TableCell>
                           <TableCell>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(c.valor_total)}</TableCell>
                           <TableCell>{format(parseISO(c.criado_em), 'dd/MM/yyyy')}</TableCell>
                           <TableCell>{getStatusBadge(c.status)}</TableCell>
                           <TableCell className="text-right">
-                            <Button variant="ghost" size="sm" onClick={() => handleOpenAcoes(c)}>
-                                <Eye className="w-4 h-4 mr-2" /> Ver Ações
-                            </Button>
+                            <div className="flex justify-end space-x-2">
+                                <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    onClick={() => handleEditContract(c)}
+                                    title="Editar Contrato"
+                                >
+                                    <Edit className="w-4 h-4" />
+                                </Button>
+                                <Button variant="ghost" size="sm" onClick={() => handleOpenAcoes(c)}>
+                                    <Eye className="w-4 h-4 mr-2" /> Ver Ações
+                                </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))
@@ -213,7 +229,7 @@ const Contratos = () => {
                     ) : (
                       contratosAtivos.map(c => (
                         <TableRow key={c.id}>
-                          {isAdmin && activeContratoTab === 'supervisao' && <TableCell className="text-sm text-muted-foreground">{(c as any).empresa_id || 'Admin'}</TableCell>}
+                          {isAdmin && activeContratoTab === 'supervisao' && <TableCell className="text-sm text-muted-foreground">{(c as any).empresa_id || 'N/A'}</TableCell>}
                           <TableCell className="font-medium">{(c as any).clientes?.nome || 'N/A'}</TableCell>
                           <TableCell>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(c.valor_total)}</TableCell>
                           <TableCell>{format(parseISO(c.data_inicio), 'dd/MM/yyyy')}</TableCell>

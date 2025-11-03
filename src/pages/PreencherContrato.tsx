@@ -5,15 +5,15 @@ import { Loader2, FileSignature, ChevronLeft, Save, CalendarIcon, Eye } from 'lu
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
-import { ContratoModelo, ContratoTag } from '@/types/contratos';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { ContratoModelo, ContratoTag, ContratoGerado } from '@/types/contratos';
+import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Cliente } from '@/types/cliente';
-import { format, addDays } from 'date-fns';
+import { format, addDays, parseISO } from 'date-fns';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -34,10 +34,13 @@ interface EmpresaLogada {
 
 const PreencherContrato: React.FC = () => {
   const { modeloId } = useParams<{ modeloId: string }>();
+  const [searchParams] = useSearchParams();
+  const contratoId = searchParams.get('contratoId'); // ID do contrato para edição
   const navigate = useNavigate();
   const { role, perfil, usuario, carregando: carregandoSessao } = useSessao();
   
   const [modelo, setModelo] = useState<ContratoModelo | null>(null);
+  const [contratoInicial, setContratoInicial] = useState<ContratoGerado | null>(null);
   const [tags, setTags] = useState<ContratoTag[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [empresaLogada, setEmpresaLogada] = useState<EmpresaLogada | null>(null);
@@ -66,6 +69,7 @@ const PreencherContrato: React.FC = () => {
 
   const isAdmin = role === 'Admin';
   const isCliente = role === 'Cliente';
+  const isEditing = !!contratoId;
   
   // ID do proprietário (Admin ou Cliente)
   const getOwnerId = () => {
@@ -158,12 +162,75 @@ const PreencherContrato: React.FC = () => {
         }
     }
     
-    // 5. Determinar o tipo de conteúdo do modelo
-    const isHtmlContent = modeloData?.conteudo_template?.trim().startsWith('<') ?? true;
-    setTipoConteudo(isHtmlContent ? 'html' : 'texto');
+    // 5. Carregar Contrato Existente (se estiver editando)
+    if (contratoId) {
+        const { data: contratoData, error: contratoLoadError } = await supabase
+            .from('contratos_gerados')
+            .select('*')
+            .eq('id', contratoId)
+            .eq('empresa_id', ownerId) // Garante que só pode editar o próprio contrato
+            .single();
+            
+        if (contratoLoadError) {
+            showError('Contrato para edição não encontrado ou acesso negado.');
+            navigate('/contratos', { replace: true });
+            return;
+        }
+        
+        const contrato = contratoData as ContratoGerado;
+        setContratoInicial(contrato);
+        
+        // Preencher estados com dados do contrato
+        setClienteSelecionadoId(contrato.cliente_id);
+        setValorTotal(contrato.valor_total);
+        setValoresTags(contrato.valores_tags_preenchidos || {});
+        
+        // Determinar tipo de lançamento e datas
+        const numParcelas = contrato.numero_parcelas;
+        const valorTotalContrato = contrato.valor_total;
+        
+        // Busca a primeira parcela para determinar o valor unitário e o tipo de lançamento
+        const { data: primeiraParcela } = await supabase
+            .from(isAdmin ? 'admin_parcelas_receber' : 'parcelas_contas_receber')
+            .select('valor_parcela, data_vencimento')
+            .eq('conta_receber_id', contrato.id) // Assumindo que o ID do contrato é o ID da conta sintética (precisa ser ajustado se a FK for diferente)
+            .order('numero_parcela', { ascending: true })
+            .limit(1)
+            .single();
+            
+        if (numParcelas === 1) {
+            setTipoLancamento('unico');
+            setDataVencimentoUnico(primeiraParcela?.data_vencimento ? parseISO(primeiraParcela.data_vencimento) : undefined);
+            setNumeroParcelas(1);
+            setValorTotal(valorTotalContrato);
+        } else {
+            // Se o valor total for igual ao valor da primeira parcela * número de parcelas, é parcelado.
+            // Se for igual ao valor da primeira parcela, é repetido.
+            const valorParcela = primeiraParcela?.valor_parcela || 0;
+            
+            if (Math.abs(valorTotalContrato - (valorParcela * numParcelas)) < 0.01) {
+                setTipoLancamento('parcelar');
+                setValorTotal(valorTotalContrato); // Valor total a parcelar
+            } else {
+                setTipoLancamento('repetir');
+                setValorTotal(valorParcela); // Valor da parcela a repetir
+            }
+            
+            setNumeroParcelas(numParcelas);
+            setDataPrimeiroVencimento(primeiraParcela?.data_vencimento ? parseISO(primeiraParcela.data_vencimento) : undefined);
+            setIntervaloDias(contrato.dia_vencimento_parcela || 30);
+        }
+        
+        // Determinar o tipo de conteúdo salvo
+        setTipoConteudo(contrato.valores_tags_preenchidos?.tipo_conteudo || 'html');
+    } else {
+        // Novo Contrato: Define o tipo de conteúdo do modelo
+        const isHtmlContent = modeloData?.conteudo_template?.trim().startsWith('<') ?? true;
+        setTipoConteudo(isHtmlContent ? 'html' : 'texto');
+    }
 
     setCarregandoDados(false);
-  }, [modeloId, ownerId, navigate, role, perfil, usuario, isAdmin, isCliente]);
+  }, [modeloId, ownerId, navigate, role, perfil, usuario, isAdmin, isCliente, contratoId]);
 
   useEffect(() => {
     if (!carregandoSessao && (isAdmin || isCliente || (role === 'Usuario' && ownerId))) {
@@ -287,7 +354,8 @@ const PreencherContrato: React.FC = () => {
     
     // Se for texto simples, converte quebras de linha para <br> para renderização HTML
     if (tipoConteudo === 'texto') {
-        conteudoRenderizado = conteudoRenderizado.replace(/\n/g, '<br>');
+        // Não fazemos a conversão aqui, pois o preview/print usa <pre>
+        // Apenas garantimos que o conteúdo seja o template puro com tags substituídas.
     }
     
     return conteudoRenderizado;
@@ -387,7 +455,7 @@ const PreencherContrato: React.FC = () => {
         // 3. Renderizar o conteúdo final
         const conteudoRenderizado = renderizarConteudo(modelo.conteudo_template, valoresTags);
         
-        // 4. Inserir o Contrato Gerado
+        // 4. Preparar dados do Contrato Gerado
         const contratoData = {
             modelo_id: modelo.id,
             cliente_id: clienteSelecionadoId,
@@ -399,108 +467,111 @@ const PreencherContrato: React.FC = () => {
             dia_vencimento_parcela: tipoLancamento === 'unico' ? null : intervaloDias, // Usando intervaloDias aqui para simplificar o campo
             valores_tags_preenchidos: { ...valoresTags, tipo_conteudo: tipoConteudo }, // SALVANDO O TIPO DE CONTEÚDO
             conteudo_renderizado: conteudoRenderizado,
-            // link_assinatura_externo e documento_assinado_url serão preenchidos depois
         };
         
-        const { data: contratoGerado, error: contratoError } = await supabase
-            .from('contratos_gerados')
-            .insert(contratoData)
-            .select('id')
-            .single();
-            
-        if (contratoError) throw contratoError;
-        
-        const contratoGeradoId = contratoGerado.id;
-        
-        // 5. Inserir a Conta a Receber (Sintético) e Parcelas (Analítico)
-        const clienteNome = clientes.find(c => c.id === clienteSelecionadoId)?.nome || 'Cliente Desconhecido';
-        
-        let contaReceberId: string;
+        let contratoGeradoId: string;
+        let contaReceberId: string | null = null;
         let tabelaContasReceber: string;
         let tabelaParcelasReceber: string;
         
-        if (isAdmin) {
-            // ADMIN: Usa as novas tabelas admin_*
-            tabelaContasReceber = 'admin_contas_receber';
-            tabelaParcelasReceber = 'admin_parcelas_receber';
+        // --- LÓGICA DE EDIÇÃO ---
+        if (isEditing && contratoInicial) {
+            // A. Atualizar Contrato Gerado
+            const { error: updateError } = await supabase
+                .from('contratos_gerados')
+                .update(contratoData)
+                .eq('id', contratoInicial.id);
+                
+            if (updateError) throw updateError;
+            contratoGeradoId = contratoInicial.id;
             
-            const contaReceberDataAdmin = {
-                admin_id: ownerId, // Admin é o recebedor
-                cliente_id: clienteSelecionadoId, // Cliente é o pagador
-                descricao: `Contrato: ${modelo.titulo} - ${clienteNome}`,
-                valor_total: valorFinalContrato,
-                data_emissao: format(new Date(), 'yyyy-MM-dd'),
-                data_vencimento: parcelasParaInserir[0].data_vencimento, // Primeiro vencimento
-                tipo_receita: tipoLancamento === 'unico' ? 'única' : 'recorrente',
-                status: 'aberta',
-                origem: 'contrato',
-                contrato_gerado_id: contratoGeradoId,
-            };
+            // B. Buscar Conta a Receber Sintética existente (se houver)
+            tabelaContasReceber = isAdmin ? 'admin_contas_receber' : 'contas_receber';
+            tabelaParcelasReceber = isAdmin ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
             
-            const { data: contaReceber, error: contaReceberError } = await supabase
+            const { data: existingConta } = await supabase
                 .from(tabelaContasReceber)
-                .insert(contaReceberDataAdmin)
                 .select('id')
+                .eq('contrato_gerado_id', contratoGeradoId)
+                .limit(1)
                 .single();
                 
-            if (contaReceberError) throw contaReceberError;
-            contaReceberId = contaReceber.id;
-            
-            // Inserir Parcelas Admin
-            const parcelasComId = parcelasParaInserir.map(p => ({ 
-                ...p, 
-                conta_receber_id: contaReceberId, 
-                admin_id: ownerId // Admin é o proprietário da parcela
-            }));
-            
-            const { error: parcelError } = await supabase
-                .from(tabelaParcelasReceber)
-                .insert(parcelasComId);
+            if (existingConta) {
+                contaReceberId = existingConta.id;
                 
-            if (parcelError) throw parcelError;
+                // C. Deletar parcelas antigas
+                const { error: deleteParcelasError } = await supabase
+                    .from(tabelaParcelasReceber)
+                    .delete()
+                    .eq('conta_receber_id', contaReceberId);
+                if (deleteParcelasError) throw deleteParcelasError;
+            }
             
         } else {
-            // CLIENTE/USUÁRIO: Usa as tabelas normais (contas_receber)
-            tabelaContasReceber = 'contas_receber';
-            tabelaParcelasReceber = 'parcelas_contas_receber';
-            
-            const contaReceberDataCliente = {
-                cliente_id: clienteSelecionadoId,
-                empresa_id: ownerId, // Cliente/Empresa é o recebedor
-                descricao: `Contrato: ${modelo.titulo} - ${clienteNome}`,
-                valor_total: valorFinalContrato,
-                data_emissao: format(new Date(), 'yyyy-MM-dd'),
-                data_vencimento: parcelasParaInserir[0].data_vencimento, // Primeiro vencimento
-                tipo_receita: tipoLancamento === 'unico' ? 'única' : 'recorrente',
-                status: 'aberta',
-                origem: 'contrato',
-                contrato_gerado_id: contratoGeradoId,
-            };
-            
+            // --- LÓGICA DE INSERÇÃO ---
+            const { data: contratoGerado, error: contratoError } = await supabase
+                .from('contratos_gerados')
+                .insert(contratoData)
+                .select('id')
+                .single();
+                
+            if (contratoError) throw contratoError;
+            contratoGeradoId = contratoGerado.id;
+        }
+        
+        // 5. Inserir/Atualizar a Conta a Receber (Sintético) e Parcelas (Analítico)
+        const clienteNome = clientes.find(c => c.id === clienteSelecionadoId)?.nome || 'Cliente Desconhecido';
+        
+        tabelaContasReceber = isAdmin ? 'admin_contas_receber' : 'contas_receber';
+        tabelaParcelasReceber = isAdmin ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
+        
+        const baseData = isAdmin ? { admin_id: ownerId, cliente_id: clienteSelecionadoId } : { empresa_id: ownerId, cliente_id: clienteSelecionadoId };
+        
+        const contaReceberPayload = {
+            ...baseData,
+            descricao: `Contrato: ${modelo.titulo} - ${clienteNome}`,
+            valor_total: valorFinalContrato,
+            data_emissao: format(new Date(), 'yyyy-MM-dd'),
+            data_vencimento: parcelasParaInserir[0].data_vencimento, // Primeiro vencimento
+            tipo_receita: tipoLancamento === 'unico' ? 'única' : 'recorrente',
+            status: 'aberta',
+            origem: 'contrato',
+            contrato_gerado_id: contratoGeradoId,
+        };
+        
+        if (contaReceberId) {
+            // Atualiza a conta sintética existente
+            const { error: updateContaError } = await supabase
+                .from(tabelaContasReceber)
+                .update(contaReceberPayload)
+                .eq('id', contaReceberId);
+            if (updateContaError) throw updateContaError;
+        } else {
+            // Insere a nova conta sintética
             const { data: contaReceber, error: contaReceberError } = await supabase
                 .from(tabelaContasReceber)
-                .insert(contaReceberDataCliente)
+                .insert(contaReceberPayload)
                 .select('id')
                 .single();
                 
             if (contaReceberError) throw contaReceberError;
             contaReceberId = contaReceber.id;
-            
-            // Inserir Parcelas Cliente
-            const parcelasComId = parcelasParaInserir.map(p => ({ 
-                ...p, 
-                conta_receber_id: contaReceberId, 
-                empresa_id: ownerId // Cliente/Empresa é o proprietário da parcela
-            }));
-            
-            const { error: parcelError } = await supabase
-                .from(tabelaParcelasReceber)
-                .insert(parcelasComId);
-                
-            if (parcelError) throw parcelError;
         }
+        
+        // Inserir Parcelas
+        const parcelasComId = parcelasParaInserir.map(p => ({ 
+            ...p, 
+            conta_receber_id: contaReceberId, 
+            ...(isAdmin ? { admin_id: ownerId } : { empresa_id: ownerId })
+        }));
+        
+        const { error: parcelError } = await supabase
+            .from(tabelaParcelasReceber)
+            .insert(parcelasComId);
+            
+        if (parcelError) throw parcelError;
 
-        showSuccess('Contrato gerado e contas a receber criadas!');
+        showSuccess(`Contrato ${isEditing ? 'atualizado' : 'gerado'} e contas a receber ${isEditing ? 'reajustadas' : 'criadas'}!`);
         navigate('/contratos');
         
     } catch (error: any) {
@@ -539,7 +610,7 @@ const PreencherContrato: React.FC = () => {
             Voltar
         </Link>
         <h1 className="text-2xl md:text-3xl font-bold flex items-center">
-          <FileSignature className="w-6 h-6 mr-2" /> Preencher Contrato: {modelo.titulo}
+          <FileSignature className="w-6 h-6 mr-2" /> {isEditing ? 'Editar Contrato' : 'Preencher Contrato'}: {modelo.titulo}
         </h1>
       </div>
       
@@ -553,7 +624,7 @@ const PreencherContrato: React.FC = () => {
                 {/* 1. Cliente */}
                 <div className="space-y-2">
                     <Label htmlFor="cliente">Cliente</Label>
-                    <Select value={clienteSelecionadoId} onValueChange={setClienteSelecionadoId}>
+                    <Select value={clienteSelecionadoId} onValueChange={setClienteSelecionadoId} disabled={isEditing}>
                         <SelectTrigger id="cliente">
                             <SelectValue placeholder="Selecione o Cliente" />
                         </SelectTrigger>
@@ -572,6 +643,7 @@ const PreencherContrato: React.FC = () => {
                         value={tipoLancamento} 
                         onValueChange={(value: TipoLancamento) => setTipoLancamento(value)} 
                         className="flex space-x-4 pt-2"
+                        disabled={isEditing}
                     >
                         <div className="flex items-center space-x-2">
                             <RadioGroupItem value="unico" id="unico" />
@@ -629,6 +701,7 @@ const PreencherContrato: React.FC = () => {
                                 min="1"
                                 value={numeroParcelas}
                                 onChange={(e) => setNumeroParcelas(Number(e.target.value))}
+                                disabled={isEditing}
                             />
                         </div>
                         <div className="space-y-2">
@@ -640,6 +713,7 @@ const PreencherContrato: React.FC = () => {
                                 value={intervaloDias}
                                 onChange={(e) => setIntervaloDias(Number(e.target.value))}
                                 placeholder="30"
+                                disabled={isEditing}
                             />
                         </div>
                         <div className="space-y-2 col-span-2">
@@ -712,7 +786,7 @@ const PreencherContrato: React.FC = () => {
                 disabled={isSubmitting || !clienteSelecionadoId || valorTotal === ''}
             >
                 {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                Salvar e Gerar Contas a Receber
+                {isEditing ? 'Salvar Edição e Reajustar Contas' : 'Salvar e Gerar Contas a Receber'}
             </Button>
         </div>
         
