@@ -31,25 +31,6 @@ interface Parcela {
   status: 'aberta' | 'parcial' | 'paga' | 'reprogramada' | 'cancelada';
 }
 
-interface ContaReceberDetalhe {
-  descricao: string;
-}
-
-interface ParcelaFutura {
-  id: string;
-  data_vencimento: string;
-  valor_parcela: number;
-  numero_parcela: number;
-  status: 'aberta' | 'parcial' | 'paga' | 'reprogramada' | 'cancelada';
-  admin_contas_receber: ContaReceberDetalhe[] | null; 
-}
-
-interface ContasFuturasDialogProps {
-  clienteId: string;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}
-
 interface DetalhesParcelasDialogProps {
   conta: ContaReceber | null;
   open: boolean;

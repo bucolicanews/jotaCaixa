@@ -19,6 +19,7 @@ import { cn } from '@/lib/utils';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 import RegistrarPagamentoDialog from '@/components/RegistrarPagamentoDialog';
 import ContasReceberAcoes from '@/components/ContasReceberAcoes';
+import ContasReceberResumo from '@/components/ContasReceberResumo'; // NOVO IMPORT
 
 type ParcelaStatus = 'aberta' | 'parcial' | 'paga' | 'reprogramada' | 'cancelada';
 type BadgeVariant = 'success' | 'warning' | 'secondary' | 'destructive' | 'default' | 'info';
@@ -442,6 +443,15 @@ const ContasReceber = () => {
         filtroOrigem={filtroOrigem} // PASSANDO O NOVO FILTRO
         setFiltroOrigem={setFiltroOrigem} // PASSANDO O SETTER
       />
+      
+      {/* NOVO COMPONENTE DE RESUMO */}
+      <ContasReceberResumo
+        activeTab={activeTab}
+        contasFiltradas={contasFiltradas}
+        parcelasFiltradas={parcelasFiltradas}
+        recebimentosFiltrados={recebimentosFiltrados}
+      />
+      {/* FIM NOVO COMPONENTE DE RESUMO */}
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full mt-4">
         <TabsList className="grid w-full grid-cols-3">
