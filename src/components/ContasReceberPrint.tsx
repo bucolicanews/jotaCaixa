@@ -48,6 +48,7 @@ const ContasReceberPrint: React.FC<ContasReceberPrintProps> = ({ data, activeTab
             case 'Nº Parcela':
                 return { width: '5%', textAlign: 'center' as const };
             case 'Valor Parcela':
+            case 'Vlr Pago': // NOVO
             case 'Valor Total':
             case 'Valor Recebido':
                 return { width: '10%', textAlign: 'right' as const };
@@ -58,8 +59,8 @@ const ContasReceberPrint: React.FC<ContasReceberPrintProps> = ({ data, activeTab
             case 'Origem':
             case 'Forma Pagamento':
                 return { width: '7%' };
-            case 'Pagas': // NOVO
-            case 'Total': // NOVO
+            case 'Pagas':
+            case 'Total':
                 return { width: '4%', textAlign: 'center' as const };
             default:
                 return {};
@@ -67,14 +68,14 @@ const ContasReceberPrint: React.FC<ContasReceberPrintProps> = ({ data, activeTab
     };
     
     // Colunas que precisam de cálculo de total
-    const valueColumns = ['Valor Total', 'Valor Parcela', 'Valor Pago', 'Valor Recebido'];
+    const valueColumns = ['Valor Total', 'Valor Parcela', 'Vlr Pago', 'Valor Recebido']; // Atualizado para Vlr Pago
     
     const totals: Record<string, number> = {};
     
     data.forEach(row => {
         headers.forEach(header => {
             if (valueColumns.includes(header)) {
-                // Converte o valor para número, tratando strings formatadas (se houver)
+                // Usa o nome do cabeçalho curto para buscar o total
                 const rawValue = row[header];
                 let numericValue = 0;
                 

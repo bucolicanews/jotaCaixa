@@ -76,8 +76,8 @@ const ContasReceberAcoes: React.FC<ContasReceberAcoesProps> = ({
           'Vencimento': formatDate(c.data_vencimento),
           'Status': c.status,
           'Origem': c.origem,
-          'Pagas': c.parcelas_pagas, // RENOMEADO
-          'Total': c.parcelas_total, // RENOMEADO
+          'Pagas': c.parcelas_pagas,
+          'Total': c.parcelas_total,
         };
       });
     } else if (activeTab === 'parcelas') {
@@ -96,7 +96,7 @@ const ContasReceberAcoes: React.FC<ContasReceberAcoesProps> = ({
           'Descrição': descricao,
           'Nº Parcela': p.numero_parcela,
           'Valor Parcela': p.valor_parcela,
-          'Valor Pago': p.valor_pago || 0,
+          'Vlr Pago': p.valor_pago || 0, // RENOMEADO AQUI
           'Vencimento': formatDate(p.data_vencimento),
           'Status': p.status,
           'Origem': origem,
