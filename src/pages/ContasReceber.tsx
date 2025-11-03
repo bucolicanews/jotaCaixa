@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -25,8 +25,27 @@ type ParcelaStatus = 'aberta' | 'parcial' | 'paga' | 'reprogramada' | 'cancelada
 type BadgeVariant = 'success' | 'warning' | 'secondary' | 'destructive' | 'default' | 'info';
 
 const getBadgeVariant = (status: ParcelaStatus, dataVencimento: string): BadgeVariant => {
-// ... (função getBadgeVariant inalterada)
+  const vencimento = parseISO(dataVencimento + 'T00:00:00');
+
+  if (status === 'paga') return 'success';
+  if (status === 'cancelada') return 'destructive';
+  
+  if (isPast(vencimento) && !isToday(vencimento)) return 'destructive';
+  if (isToday(vencimento)) return 'warning';
+
+  return 'secondary';
 };
+
+// NOVO: Tipo para a parcela detalhada com data_pagamento
+interface ExtendedParcelaDetalhada extends ParcelaDetalhada {
+    data_pagamento?: string | null;
+}
+
+// Novo tipo para a conta sintética com progresso
+interface ContaReceberComProgresso extends ContaReceber {
+    parcelas_pagas?: number;
+    parcelas_total?: number;
+}
 
 // Tipo para o histórico de recebimentos (Admin)
 interface AdminRecebimento {
@@ -39,81 +58,452 @@ interface AdminRecebimento {
         numero_parcela: number;
         admin_contas_receber: {
             descricao: string;
-            origem: ContaReceber['origem']; // Adicionando origem aqui
+            origem: ContaReceber['origem'];
+            cliente_id: string; // Adicionado para extração
         } | null;
     } | null;
 }
 
-// NOVO: Tipo para a parcela detalhada com data_pagamento (para resolver TS2339)
-interface ExtendedParcelaDetalhada extends ParcelaDetalhada {
-    data_pagamento?: string | null;
-}
-
-// Novo tipo para a conta sintética com progresso
-interface ContaReceberComProgresso extends ContaReceber {
-    parcelas_pagas?: number;
-    parcelas_total?: number;
-}
 
 const ContasReceber = () => {
   const { usuario, perfil, role, carregando: carregandoSessao } = useSessao();
-  const [searchParams] = useSearchParams(); // Hook para ler a URL
+  const [searchParams] = useSearchParams();
   
   const [contas, setContas] = useState<ContaReceberComProgresso[]>([]);
-  const [parcelas, setParcelas] = useState<ExtendedParcelaDetalhada[]>([]); // USANDO TIPO ESTENDIDO
-  const [recebimentos, setRecebimentos] = useState<AdminRecebimento[]>([]); // Novo estado para recebimentos
-// ... (restante do estado inalterado)
+  const [parcelas, setParcelas] = useState<ExtendedParcelaDetalhada[]>([]);
+  const [recebimentos, setRecebimentos] = useState<AdminRecebimento[]>([]);
+  const [carregandoDados, setCarregandoDados] = useState(true);
+  const [dialogAberto, setDialogAberto] = useState(false);
+  const [contaSelecionada, setContaSelecionada] = useState<ContaReceber | null>(null);
+  const [parcelasDialogOpen, setParcelasDialogOpen] = useState(false);
+  const [pagamentoDialogOpen, setPagamentoDialogOpen] = useState(false);
+  const [parcelaParaPagamento, setParcelaParaPagamento] = useState<any>(null);
+  const [filtroPeriodo, setFiltroPeriodo] = useState<DateRange | undefined>(undefined);
+  const [clienteNomeMap, setClienteNomeMap] = useState<Record<string, string>>({});
+  const [activeTab, setActiveTab] = useState('parcela_sintetica');
 
-// ... (funções fetchClienteNames e buscarDados inalteradas, exceto pelo cast em buscarDados)
+  const isAdmin = role === 'Admin';
+  
+  const getOwnerId = () => {
+    if (isAdmin) return usuario?.id || null;
+    if (role === 'Cliente') return (perfil as ClienteProfile)?.id;
+    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id;
+    return null;
+  };
+  
+  const ownerId = getOwnerId();
+  
+  const fetchClienteNames = useCallback(async (clienteIds: string[]) => {
+    if (clienteIds.length === 0) return;
+    
+    const { data } = await supabase
+        .from('clientes')
+        .select('id, nome')
+        .in('id', clienteIds);
+        
+    if (data) {
+        const map = data.reduce((acc, c) => {
+            acc[c.id] = c.nome;
+            return acc;
+        }, {} as Record<string, string>);
+        setClienteNomeMap(map);
+    }
+  }, []);
+
+  const buscarDados = useCallback(async () => {
+    if (!ownerId) {
+        setCarregandoDados(false);
+        return;
+    }
+    
+    setCarregandoDados(true);
+    
+    const tabelaContasReceber = isAdmin ? 'admin_contas_receber' : 'contas_receber';
+    const tabelaParcelasReceber = isAdmin ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
+    const ownerKey = isAdmin ? 'admin_id' : 'empresa_id';
+    
+    const [contasRes, parcelasRes, recebimentosRes] = await Promise.all([
+      supabase
+        .from(tabelaContasReceber)
+        .select(`*, clientes(nome)`)
+        .eq(ownerKey, ownerId)
+        .order('data_vencimento', { ascending: true }),
+      
+      supabase
+        .from(tabelaParcelasReceber)
+        .select(`
+          *,
+          contas_receber: ${tabelaContasReceber} (
+            descricao,
+            cliente_id,
+            clientes ( nome )
+          )
+        `)
+        .eq(ownerKey, ownerId)
+        .order('data_vencimento', { ascending: true }),
+        
+      isAdmin ? supabase
+        .from('admin_recebimentos')
+        .select(`
+          *,
+          admin_parcelas_receber (
+            numero_parcela,
+            admin_contas_receber ( descricao, origem, cliente_id )
+          )
+        `)
+        .eq('admin_id', ownerId)
+        .order('data_recebimento', { ascending: false })
+        : Promise.resolve({ data: [], error: null }),
+    ]);
 
     if (contasRes.error) showError('Erro ao carregar contas: ' + contasRes.error.message);
     else {
         let fetchedContas = contasRes.data as ContaReceberComProgresso[];
-        let fetchedParcelas = parcelasRes.data as ExtendedParcelaDetalhada[]; // CAST PARA TIPO ESTENDIDO
+        let fetchedParcelas = parcelasRes.data as ExtendedParcelaDetalhada[];
         
         // --- Lógica para calcular progresso de pagamento ---
-// ... (lógica de progresso inalterada)
+        const parcelasPorConta = fetchedParcelas.reduce((acc, p) => {
+            acc[p.conta_receber_id] = acc[p.conta_receber_id] || [];
+            acc[p.conta_receber_id].push(p);
+            return acc;
+        }, {} as Record<string, ExtendedParcelaDetalhada[]>);
+        
+        fetchedContas = fetchedContas.map(conta => {
+            const parcelas = parcelasPorConta[conta.id] || [];
+            const pagas = parcelas.filter(p => p.status === 'paga').length;
+            return {
+                ...conta,
+                parcelas_pagas: pagas,
+                parcelas_total: parcelas.length,
+            };
+        });
         
         setContas(fetchedContas);
         setParcelas(fetchedParcelas);
     }
+    
+    if (isAdmin && recebimentosRes.data) {
+        setRecebimentos(recebimentosRes.data as AdminRecebimento[]);
+    }
 
-// ... (restante de buscarDados inalterado)
+    setCarregandoDados(false);
+  }, [ownerId, isAdmin]);
 
-// ... (funções handleSaveComplete, handlePagamentoCompleto, handleDelete, handleOpenParcelas inalteradas)
+  useEffect(() => {
+    if (!carregandoSessao && usuario) {
+      buscarDados();
+    }
+  }, [carregandoSessao, usuario, buscarDados]);
+
+  const handleSaveComplete = () => {
+    setDialogAberto(false);
+    setContaSelecionada(null);
+    buscarDados();
+  };
+  
+  const handlePagamentoCompleto = () => {
+    setPagamentoDialogOpen(false);
+    buscarDados();
+  };
+
+  const handleEdit = (conta: ContaReceber) => {
+    showError('Funcionalidade de edição de Contas a Receber ainda não implementada.');
+    // TODO: Implementar Dialog/Form para Contas a Receber
+  };
+
+  const handleDelete = async (contaId: string) => {
+    if (!window.confirm('Tem certeza que deseja excluir esta conta a receber e todas as suas parcelas?')) return;
+    
+    setCarregandoDados(true);
+    const tabelaContasReceber = isAdmin ? 'admin_contas_receber' : 'contas_receber';
+    
+    // A exclusão da conta sintética deve cascatear para as parcelas (RLS deve permitir)
+    const { error } = await supabase.from(tabelaContasReceber).delete().eq('id', contaId);
+    
+    if (error) showError('Erro ao excluir conta: ' + error.message);
+    else {
+      showSuccess('Conta excluída com sucesso.');
+      buscarDados();
+    }
+  };
+  
+  const handleOpenParcelas = (conta: ContaReceber) => {
+    setContaSelecionada(conta);
+    setParcelasDialogOpen(true);
+  };
   
   const handleOpenPagamento = (parcela: any) => {
-    // Mapeia os campos necessários para o RegistrarPagamentoDialog
     const isMyLaunch = isAdmin;
     
     const contaReceber = isMyLaunch 
         ? (parcela as any).admin_contas_receber 
         : (parcela as any).contas_receber;
         
-    // NOVO: Obtém o cliente_id real (ID da tbl_clientes)
     let clienteIdReal: string | undefined;
     
     if (isMyLaunch) {
-        // Se for Admin, o cliente_id real está em admin_contas_receber.cliente_id
-        // CORREÇÃO: Garantir que acessamos o objeto, mesmo que Supabase retorne um array de 1 item
         const contaData = Array.isArray(contaReceber) ? contaReceber[0] : contaReceber;
         clienteIdReal = contaData?.cliente_id;
     } else {
-        // Se for Cliente, o cliente_id real é o ID do cliente de CR (clientes.id)
         clienteIdReal = contaReceber?.clientes?.id;
     }
         
     const mappedParcela = {
         id: parcela.id,
         conta_receber_id: parcela.conta_receber_id,
-        empresa_id: isMyLaunch ? contaReceber.admin_id : contaReceber.empresa_id,
+        empresa_id: isMyLaunch ? ownerId : contaReceber.empresa_id,
         valor_parcela: parcela.valor_parcela,
         valor_pago: parcela.valor_pago,
-        cliente_id_real: clienteIdReal, // Passa o ID do cliente real
+        cliente_id_real: clienteIdReal,
     };
     
     setParcelaParaPagamento(mappedParcela);
     setPagamentoDialogOpen(true);
   };
 
-// ... (restante do arquivo inalterado, pois o uso de p.data_pagamento agora é válido)
+  const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+  const formatDate = (dateString: string) => new Date(dateString + 'T00:00:00').toLocaleDateString('pt-BR');
+  
+  // --- Filtros de Dados ---
+  const filterData = (data: any[], dateKey: string) => {
+    if (!filtroPeriodo?.from) return data;
+    
+    const start = filtroPeriodo.from;
+    const end = filtroPeriodo.to || new Date();
+    
+    return data.filter(item => {
+        const date = parseISO(item[dateKey] + 'T00:00:00');
+        return date >= start && date <= end;
+    });
+  };
+  
+  const contasFiltradas = useMemo(() => filterData(contas, 'data_vencimento'), [contas, filtroPeriodo]);
+  const parcelasFiltradas = useMemo(() => filterData(parcelas, 'data_vencimento'), [parcelas, filtroPeriodo]);
+  const recebimentosFiltrados = useMemo(() => filterData(recebimentos, 'data_recebimento'), [recebimentos, filtroPeriodo]);
+
+  if (carregandoSessao || carregandoDados) {
+    return <LayoutPrincipal><div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div></LayoutPrincipal>;
+  }
+
+  return (
+    <LayoutPrincipal>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+        <h1 className="text-2xl md:text-3xl font-bold">Contas a Receber</h1>
+        <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
+          <DialogTrigger asChild>
+            <Button onClick={() => setContaSelecionada(null)} className="w-full sm:w-auto">
+              <PlusCircle className="w-4 h-4 mr-2" />
+              Novo Lançamento
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>{contaSelecionada ? 'Editar Lançamento' : 'Novo Lançamento'}</DialogTitle>
+            </DialogHeader>
+            <FormContasReceber 
+              contaInicial={contaSelecionada}
+              onSaveComplete={handleSaveComplete}
+            />
+          </DialogContent>
+        </Dialog>
+      </div>
+      
+      <ContasReceberAcoes
+        activeTab={activeTab}
+        filtroPeriodo={filtroPeriodo}
+        setFiltroPeriodo={setFiltroPeriodo}
+        contasFiltradas={contasFiltradas}
+        parcelasFiltradas={parcelasFiltradas}
+        recebimentosFiltrados={recebimentosFiltrados}
+        clienteNomeMap={clienteNomeMap}
+        isAdmin={isAdmin}
+      />
+
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full mt-4">
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="parcela_sintetica">Resumo (Sintético)</TabsTrigger>
+          <TabsTrigger value="parcelas">Parcelas (Analítico)</TabsTrigger>
+          <TabsTrigger value="recebimentos">Recebimentos (Histórico)</TabsTrigger>
+        </TabsList>
+        
+        {/* ABA 1: RESUMO (SINTÉTICO) */}
+        <TabsContent value="parcela_sintetica" className="mt-4">
+          <Card>
+            <CardHeader><CardTitle>Lançamentos Sintéticos ({contasFiltradas.length})</CardTitle></CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[120px]">Ações</TableHead>
+                      <TableHead>Cliente</TableHead>
+                      <TableHead>Descrição</TableHead>
+                      <TableHead>Vencimento</TableHead>
+                      <TableHead>Valor Total</TableHead>
+                      <TableHead>Progresso</TableHead>
+                      <TableHead className="hidden sm:table-cell">Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {contasFiltradas.length === 0 ? (
+                        <TableRow><TableCell colSpan={7} className="text-center h-24">Nenhuma conta a receber encontrada no período.</TableCell></TableRow>
+                    ) : (
+                        contasFiltradas.map((conta) => {
+                            const statusVariant = getBadgeVariant(conta.status as ParcelaStatus, conta.data_vencimento);
+                            const progresso = conta.parcelas_total ? `${conta.parcelas_pagas}/${conta.parcelas_total}` : 'N/A';
+
+                            return (
+                                <TableRow key={conta.id}>
+                                    <TableCell className="text-left min-w-[120px]">
+                                        <div className="flex space-x-1">
+                                            <Button variant="ghost" size="icon" onClick={() => handleOpenParcelas(conta)} title="Ver Parcelas"><ListChecks className="h-4 w-4" /></Button>
+                                            <Button variant="ghost" size="icon" onClick={() => handleEdit(conta)} title="Editar Lançamento"><Edit className="h-4 w-4" /></Button>
+                                            <Button variant="ghost" size="icon" onClick={() => handleDelete(conta.id)} title="Excluir Lançamento"><Trash2 className="w-4 h-4 text-red-500" /></Button>
+                                        </div>
+                                    </TableCell>
+                                    <TableCell className="font-medium">{conta.clientes?.nome || 'N/A'}</TableCell>
+                                    <TableCell>{conta.descricao}</TableCell>
+                                    <TableCell>{formatDate(conta.data_vencimento)}</TableCell>
+                                    <TableCell className="font-semibold">{formatCurrency(conta.valor_total)}</TableCell>
+                                    <TableCell className="text-sm text-muted-foreground">{progresso}</TableCell>
+                                    <TableCell className="hidden sm:table-cell">
+                                        <Badge variant={statusVariant}>{conta.status}</Badge>
+                                    </TableCell>
+                                </TableRow>
+                            );
+                        })
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+        
+        {/* ABA 2: PARCELAS (ANALÍTICO) */}
+        <TabsContent value="parcelas" className="mt-4">
+          <Card>
+            <CardHeader><CardTitle>Parcelas Pendentes e Pagas ({parcelasFiltradas.length})</CardTitle></CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[120px]">Ações</TableHead>
+                      <TableHead>Cliente</TableHead>
+                      <TableHead>Descrição</TableHead>
+                      <TableHead>Nº</TableHead>
+                      <TableHead>Vencimento</TableHead>
+                      <TableHead>Valor</TableHead>
+                      <TableHead>Vlr Pago</TableHead>
+                      <TableHead>Data Pagamento</TableHead>
+                      <TableHead>Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {parcelasFiltradas.length === 0 ? (
+                        <TableRow><TableCell colSpan={9} className="text-center h-24">Nenhuma parcela encontrada no período.</TableCell></TableRow>
+                    ) : (
+                        parcelasFiltradas.map((p) => {
+                            const statusVariant = getBadgeVariant(p.status, p.data_vencimento);
+                            const isPaga = p.status === 'paga';
+                            const clienteNome = p.contas_receber?.clientes?.nome || 'N/A';
+                            const descricao = p.contas_receber?.descricao || 'N/A';
+
+                            return (
+                                <TableRow key={p.id} className={cn(isPaga && 'bg-green-500/10')}>
+                                    <TableCell className="text-left min-w-[120px]">
+                                        <Button 
+                                            variant="outline" 
+                                            size="sm" 
+                                            onClick={() => handleOpenPagamento(p)} 
+                                            disabled={isPaga}
+                                        >
+                                            <BadgeDollarSign className="w-4 h-4 mr-2" /> Pagar
+                                        </Button>
+                                    </TableCell>
+                                    <TableCell className="font-medium">{clienteNome}</TableCell>
+                                    <TableCell className="text-sm text-muted-foreground">{descricao}</TableCell>
+                                    <TableCell className="text-center">{p.numero_parcela}</TableCell>
+                                    <TableCell>{formatDate(p.data_vencimento)}</TableCell>
+                                    <TableCell>{formatCurrency(p.valor_parcela)}</TableCell>
+                                    <TableCell className={cn(isPaga && 'font-semibold text-green-600')}>{formatCurrency(p.valor_pago || 0)}</TableCell>
+                                    <TableCell>{p.data_pagamento ? formatDate(p.data_pagamento) : '-'}</TableCell>
+                                    <TableCell>
+                                        <Badge variant={statusVariant}>{p.status}</Badge>
+                                    </TableCell>
+                                </TableRow>
+                            );
+                        })
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+        
+        {/* ABA 3: RECEBIMENTOS (HISTÓRICO) */}
+        <TabsContent value="recebimentos" className="mt-4">
+          <Card>
+            <CardHeader><CardTitle>Histórico de Recebimentos ({recebimentosFiltrados.length})</CardTitle></CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Data Recebimento</TableHead>
+                      <TableHead>Cliente</TableHead>
+                      <TableHead>Descrição</TableHead>
+                      <TableHead>Valor Recebido</TableHead>
+                      <TableHead>Forma Pagamento</TableHead>
+                      <TableHead>Origem</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {recebimentosFiltrados.length === 0 ? (
+                        <TableRow><TableCell colSpan={6} className="text-center h-24">Nenhum recebimento encontrado no período.</TableCell></TableRow>
+                    ) : (
+                        recebimentosFiltrados.map((r) => {
+                            const clienteNome = clienteNomeMap[r.cliente_id] || 'N/A';
+                            const descricao = r.admin_parcelas_receber?.admin_contas_receber?.descricao || 'N/A';
+                            const origem = r.admin_parcelas_receber?.admin_contas_receber?.origem || 'manual';
+
+                            return (
+                                <TableRow key={r.id}>
+                                    <TableCell>{formatDate(r.data_recebimento)}</TableCell>
+                                    <TableCell className="font-medium">{clienteNome}</TableCell>
+                                    <TableCell className="text-sm text-muted-foreground">{descricao}</TableCell>
+                                    <TableCell className="font-semibold text-green-600">{formatCurrency(r.valor_recebido)}</TableCell>
+                                    <TableCell>{r.forma_pagamento}</TableCell>
+                                    <TableCell><Badge variant="secondary">{origem}</Badge></TableCell>
+                                </TableRow>
+                            );
+                        })
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+      
+      <DetalhesParcelasDialog
+        conta={contaSelecionada}
+        open={parcelasDialogOpen}
+        onOpenChange={setParcelasDialogOpen}
+        onDataChange={buscarDados}
+      />
+      
+      <RegistrarPagamentoDialog
+        parcela={parcelaParaPagamento}
+        open={pagamentoDialogOpen}
+        onOpenChange={setPagamentoDialogOpen}
+        onSaveComplete={handlePagamentoCompleto}
+      />
+    </LayoutPrincipal>
+  );
+};
+
+export default ContasReceber;

@@ -21,6 +21,7 @@ export interface ContaReceber {
 
 export interface Parcela {
   id: string;
+  conta_receber_id: string; // Adicionado
   numero_parcela: number;
   valor_parcela: number;
   valor_pago: number;

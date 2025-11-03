@@ -1,44 +1,189 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { DateRange } from 'react-day-picker';
 import { DateRangePicker } from '@/components/DateRangePicker';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Printer, FileText, FileDown, Filter, Loader2 } from 'lucide-react';
+import { Printer, FileDown, Filter, Loader2 } from 'lucide-react';
 import { ContaReceber, ParcelaDetalhada } from '@/types/contas-receber';
-import { format, parseISO } from 'date-fns';
+import { format } from 'date-fns';
 import Papa from 'papaparse';
 import { showError, showSuccess } from '@/utils/toast';
 import { usePrint } from '@/hooks/use-print';
 import ReactDOMServer from 'react-dom/server';
 import ContasReceberPrint from './ContasReceberPrint';
+import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 
-// Definindo o tipo ContaReceberComProgresso localmente para resolver TS2339
+// Definindo o tipo ContaReceberComProgresso localmente
 interface ContaReceberComProgresso extends ContaReceber {
     parcelas_pagas?: number;
     parcelas_total?: number;
 }
 
-// NOVO: Tipo para a parcela detalhada com data_pagamento (para resolver TS2339)
+// Tipo para a parcela detalhada com data_pagamento
 interface ExtendedParcelaDetalhada extends ParcelaDetalhada {
     data_pagamento?: string | null;
 }
 
 interface ContasReceberAcoesProps {
   activeTab: string;
-// ... (outras props inalteradas)
+  filtroPeriodo: DateRange | undefined;
+  setFiltroPeriodo: (date: DateRange | undefined) => void;
   
   // Dados filtrados para exportação/impressão
-  contasFiltradas: ContaReceberComProgresso[]; // Usando o tipo corrigido
-  parcelasFiltradas: ExtendedParcelaDetalhada[]; // USANDO TIPO ESTENDIDO
-  recebimentosFiltrados: any[]; // Usamos any para simplificar o tipo AdminRecebimento
+  contasFiltradas: ContaReceberComProgresso[];
+  parcelasFiltradas: ExtendedParcelaDetalhada[];
+  recebimentosFiltrados: any[];
   clienteNomeMap: Record<string, string>;
   isAdmin: boolean;
 }
 
-// ... (funções formatDate e formatTimestamp inalteradas)
+const formatDate = (dateString: string) => new Date(dateString + 'T00:00:00').toLocaleDateString('pt-BR');
+const formatTimestamp = (dateString: string) => new Date(dateString).toLocaleDateString('pt-BR') + ' ' + new Date(dateString).toLocaleTimeString('pt-BR');
+const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+
 
 const ContasReceberAcoes: React.FC<ContasReceberAcoesProps> = ({
-// ... (props desestruturadas inalteradas)
+  activeTab,
+  filtroPeriodo,
+  setFiltroPeriodo,
+  contasFiltradas,
+  parcelasFiltradas,
+  recebimentosFiltrados,
+  clienteNomeMap,
+  isAdmin,
 }) => {
-// ... (restante do componente inalterado)
+  const [exportLoading, setExportLoading] = useState(false);
+  const { printContent } = usePrint();
+
+  const getDataForExport = () => {
+    let data: any[] = [];
+    let headers: string[] = [];
+
+    if (activeTab === 'parcela_sintetica') {
+      headers = ['ID Conta', 'Cliente', 'Descrição', 'Vencimento', 'Valor Total', 'Progresso', 'Status', 'Origem'];
+      data = contasFiltradas.map(c => ({
+        'ID Conta': c.id,
+        'Cliente': c.clientes?.nome || 'N/A',
+        'Descrição': c.descricao,
+        'Vencimento': formatDate(c.data_vencimento),
+        'Valor Total': c.valor_total,
+        'Progresso': `${c.parcelas_pagas}/${c.parcelas_total}`,
+        'Status': c.status,
+        'Origem': c.origem,
+      }));
+    } else if (activeTab === 'parcelas') {
+      headers = ['ID Parcela', 'Cliente', 'Descrição', 'Nº Parcela', 'Vencimento', 'Valor Parcela', 'Vlr Pago', 'Data Pagamento', 'Status'];
+      data = parcelasFiltradas.map(p => ({
+        'ID Parcela': p.id,
+        'Cliente': p.contas_receber?.clientes?.nome || 'N/A',
+        'Descrição': p.contas_receber?.descricao || 'N/A',
+        'Nº Parcela': p.numero_parcela,
+        'Vencimento': formatDate(p.data_vencimento),
+        'Valor Parcela': p.valor_parcela,
+        'Vlr Pago': p.valor_pago || 0,
+        'Data Pagamento': p.data_pagamento ? formatDate(p.data_pagamento) : '-',
+        'Status': p.status,
+      }));
+    } else if (activeTab === 'recebimentos') {
+      headers = ['ID Recebimento', 'Data Recebimento', 'Cliente', 'Descrição', 'Valor Recebido', 'Forma Pagamento', 'Origem'];
+      data = recebimentosFiltrados.map(r => ({
+        'ID Recebimento': r.id,
+        'Data Recebimento': formatTimestamp(r.data_recebimento),
+        'Cliente': clienteNomeMap[r.cliente_id] || 'N/A',
+        'Descrição': r.admin_parcelas_receber?.admin_contas_receber?.descricao || 'N/A',
+        'Valor Recebido': r.valor_recebido,
+        'Forma Pagamento': r.forma_pagamento,
+        'Origem': r.admin_parcelas_receber?.admin_contas_receber?.origem || 'manual',
+      }));
+    }
+    
+    // Formata valores monetários para exportação (sem R$)
+    data = data.map(row => {
+        const newRow = { ...row };
+        for (const key in newRow) {
+            if (typeof newRow[key] === 'number' && (key.includes('Valor') || key.includes('Vlr'))) {
+                newRow[key] = newRow[key].toFixed(2).replace('.', ',');
+            }
+        }
+        return newRow;
+    });
+
+    return { data, headers };
+  };
+
+  const handleExportCSV = () => {
+    setExportLoading(true);
+    try {
+      const { data, headers } = getDataForExport();
+      
+      if (data.length === 0) {
+        showError('Nenhum dado para exportar.');
+        return;
+      }
+
+      const csv = Papa.unparse(data, {
+        header: true,
+        columns: headers,
+        delimiter: ';',
+      });
+
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `contas_receber_${activeTab}_${format(new Date(), 'yyyyMMdd')}.csv`);
+      link.click();
+      
+      showSuccess('Exportação CSV concluída!');
+    } catch (error) {
+      console.error('Erro ao exportar CSV:', error);
+      showError('Falha ao exportar dados.');
+    } finally {
+      setExportLoading(false);
+    }
+  };
+  
+  const handlePrint = () => {
+    const { data } = getDataForExport();
+    
+    if (data.length === 0) {
+        showError('Nenhum dado para imprimir.');
+        return;
+    }
+    
+    const printComponent = (
+        <ContasReceberPrint 
+            data={data} 
+            activeTab={activeTab} 
+            filtroPeriodo={filtroPeriodo} 
+        />
+    );
+
+    const htmlContent = ReactDOMServer.renderToStaticMarkup(printComponent);
+    printContent(htmlContent, `Relatório CR - ${activeTab}`);
+  };
+
+  return (
+    <Card className="mb-6">
+      <CardHeader className="flex flex-col md:flex-row items-start md:items-center justify-between space-y-4 md:space-y-0 pb-2">
+        <CardTitle className="text-lg flex items-center">
+          <Filter className="w-4 h-4 mr-2" /> Filtros e Ações
+        </CardTitle>
+        <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto">
+          <DateRangePicker
+            date={filtroPeriodo}
+            setDate={setFiltroPeriodo}
+          />
+          <Button onClick={handlePrint} variant="outline" className="w-full sm:w-auto">
+            <Printer className="w-4 h-4 mr-2" /> Imprimir
+          </Button>
+          <Button onClick={handleExportCSV} variant="secondary" className="w-full sm:w-auto" disabled={exportLoading}>
+            {exportLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="w-4 h-4 mr-2" />}
+            Exportar CSV
+          </Button>
+        </div>
+      </CardHeader>
+    </Card>
+  );
+};
+
+export default ContasReceberAcoes;
