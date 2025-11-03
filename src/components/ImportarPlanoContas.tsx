@@ -62,9 +62,9 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
       const contasParaInserir = parsedData.map(conta => ({
         proprietario_id: proprietarioId,
         Conta: conta.Conta,
-        codigo_reduzido: conta['Código Reduzido'] || null,
-        Descricao: conta.Descrição.trim(),
-        Analitica: conta.Analítica,
+        codigo_reduzido: conta['Código reduzido'] || null, // Mapeamento correto
+        Descricao: conta.Descrição.trim(), // Mapeamento correto
+        Analitica: conta.Analítica, // Mapeamento correto
       }));
 
       // 1. Limpar contas existentes para o proprietário
@@ -105,7 +105,7 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-sm text-muted-foreground">
-          Selecione um arquivo CSV no formato: <code>Conta;Código Reduzido;Descrição;Analítica</code>
+          Selecione um arquivo CSV no formato: <code>Conta;Código reduzido;Descrição;Analítica</code>
         </p>
         <div className="flex items-center space-x-2">
           <Input 

@@ -11,7 +11,7 @@ export interface PlanoContas {
 
 export interface ContaCSV {
   Conta: string;
-  'Código Reduzido': string;
-  Descrição: string;
-  Analítica: 'Sim' | 'Não';
+  'Código reduzido': string; // Corrigido para o cabeçalho exato
+  Descrição: string; // Corrigido para o cabeçalho exato
+  Analítica: 'Sim' | 'Não'; // Corrigido para o cabeçalho exato
 }
