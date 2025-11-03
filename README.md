@@ -2,7 +2,7 @@
 
 # PROXIMO PASSO
 
-- VERIFICAR CONTAS  APAGAR
+- VERIFICAR CONTAS APAGAR
 
 Este é um sistema de gestão financeira e RH multi-inquilino (multi-tenant) construído com React, TypeScript e Supabase.
 
@@ -92,5 +92,6 @@ A lógica de autenticação foi aprimorada para priorizar o evento `PASSWORD_REC
 
 *   **`src/components/CheckoutPlano.tsx`:** Gerencia a coleta de dados de adesão e a chamada para a Edge Function do Stripe.
 *   **`src/components/LayoutPrincipal.tsx`:** Implementa a lógica de bloqueio de acesso (`isAccessExpired` / `isAccessBlocked`) e exibe o `TrialBanner` e o `TrialButton` conforme o status do cliente.
+*   **`src/components/RegistrarPagamentoDialog.tsx`:** Corrigido para garantir que o Admin use o `cliente_id` correto (ID do pagador) ao registrar recebimentos na tabela `admin_recebimentos`.
 *   **`src/components/FormUsuario.tsx` / `src/components/FormCliente.tsx`:** Formulários de perfil que agora incluem campos de RH (salário, jornada, folgas) e a integração com o `useTagManager` para criar tags de contrato automaticamente.
 *   **`src/hooks/use-tag-manager.ts`:** Hook responsável por verificar e alternar a presença de tags de contrato na tabela `contrato_tags` com base nos campos do perfil do Cliente/Usuário.
