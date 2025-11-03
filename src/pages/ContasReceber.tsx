@@ -170,25 +170,25 @@ const ContasReceber = () => {
     if (isAdmin) {
         // ADMIN: Busca nas tabelas admin_*
         
-        let origemFiltro: 'assinatura_recorrente' | 'contrato' | 'manual' | undefined;
-        
-        if (activeTab === 'assinaturas') {
-            origemFiltro = 'assinatura_recorrente';
-        } else if (activeTab === 'contratos_clientes') {
-            origemFiltro = 'contrato';
-        } else if (activeTab === 'parcela_sintetica') {
-            // Na aba 'Parcela Sintética', queremos ver lançamentos manuais e de recorrência,
-            // excluindo os de contrato (contrato_gerado_id IS NOT NULL)
-            origemFiltro = undefined; 
-        }
-        
         // 1. Busca de Contas Sintéticas (admin_contas_receber)
         contasQuery = supabase.from('admin_contas_receber').select('*').eq('admin_id', empresaId).order('data_vencimento', { ascending: true });
         
-        if (origemFiltro) {
-            contasQuery = contasQuery.eq('origem', origemFiltro);
+        if (activeTab === 'assinaturas') {
+            // NOVO FILTRO PARA ASSINATURAS:
+            // 1. Deve ser do Admin logado (já feito)
+            // 2. Deve ter origem 'assinatura_recorrente'
+            // 3. Deve ter 'Plano' na descrição (usando filter)
+            // 4. Deve ter contrato_gerado_id IS NULL
+            contasQuery = contasQuery
+                .eq('origem', 'assinatura_recorrente')
+                .is('contrato_gerado_id', null)
+                .filter('descricao', 'ilike', '%Plano%'); // Filtra por 'Plano' na descrição
+            
+        } else if (activeTab === 'contratos_clientes') {
+            contasQuery = contasQuery.eq('origem', 'contrato');
+            
         } else if (activeTab === 'parcela_sintetica') {
-            // NOVO FILTRO: Exclui lançamentos de contrato (contrato_gerado_id IS NOT NULL)
+            // Lançamentos Manuais e de Recorrência (que não são de contrato)
             contasQuery = contasQuery.is('contrato_gerado_id', null);
         }
         
@@ -436,7 +436,7 @@ const ContasReceber = () => {
         {isAdmin && activeTab === 'assinaturas' && (
             <div className="p-4 bg-blue-100 dark:bg-blue-900/20 border border-blue-500 rounded-md mt-4">
                 <p className="text-sm text-blue-700 dark:text-blue-300 font-semibold">
-                    Modo Assinaturas: Visualizando lançamentos de recorrência do Admin.
+                    Modo Assinaturas: Visualizando lançamentos de recorrência do Admin (Contas com 'Plano' na descrição e sem vínculo com Contrato).
                 </p>
             </div>
         )}
