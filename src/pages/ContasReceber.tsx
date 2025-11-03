@@ -80,6 +80,7 @@ const ContasReceber = () => {
   const [filtroPeriodo, setFiltroPeriodo] = useState<DateRange | undefined>(undefined);
   const [clienteNomeMap, setClienteNomeMap] = useState<Record<string, string>>({});
   const [activeTab, setActiveTab] = useState('parcela_sintetica');
+  const [filtroStatus, setFiltroStatus] = useState<'todos' | 'quitado' | 'nao_quitado'>('todos'); // NOVO ESTADO DE FILTRO
 
   const isAdmin = role === 'Admin';
   
@@ -254,32 +255,15 @@ const ContasReceber = () => {
     const isMyLaunch = isAdmin;
     
     const contaReceber = isMyLaunch 
-        ? (parcela as any).contas_receber // Para Admin, o nome da relação é 'contas_receber' (que aponta para admin_contas_receber)
+        ? (parcela as any).contas_receber
         : (parcela as any).contas_receber;
         
     let clienteIdReal: string | undefined;
     
     if (isMyLaunch) {
-        // Para Admin, a estrutura é: parcela.contas_receber.cliente_id
-        // Nota: A query de parcelas do Admin usa 'contas_receber' como alias para 'admin_contas_receber'
-        // E 'admin_contas_receber' tem o campo 'cliente_id' que aponta para 'clientes' (que é o ID do cliente CR)
-        // Mas precisamos do ID do cliente real (tbl_clientes) para o admin_recebimentos.
-        // No fluxo de Admin, a tabela admin_contas_receber tem o campo cliente_id que é o ID do cliente CR.
-        // O cliente CR (tabela 'clientes') tem o mesmo ID do cliente do sistema (tbl_clientes) se for um cliente do sistema.
-        // Vamos assumir que o cliente_id em admin_contas_receber é o ID do cliente pagador (tbl_clientes.id).
-        
-        // Se a query de parcelas do Admin for:
-        // .select(`*, contas_receber: admin_contas_receber (cliente_id)`)
-        // O resultado é: parcela.contas_receber.cliente_id
-        
-        // CORREÇÃO: A estrutura da query de parcelas do Admin é:
-        // .select(`*, contas_receber: ${tabelaContasReceber} (descricao, cliente_id, clientes ( nome ))`)
-        // O cliente_id está diretamente em contas_receber (que é admin_contas_receber)
-        
         clienteIdReal = contaReceber?.cliente_id;
         
     } else {
-        // Para Cliente, a estrutura é: parcela.contas_receber.cliente_id
         clienteIdReal = contaReceber?.cliente_id;
     }
         
@@ -289,7 +273,7 @@ const ContasReceber = () => {
         empresa_id: ownerId, // O ownerId é o Admin ID ou o Cliente ID
         valor_parcela: parcela.valor_parcela,
         valor_pago: parcela.valor_pago,
-        cliente_id_real: clienteIdReal, // ID do cliente pagador (tbl_clientes.id)
+        cliente_id_real: clienteIdReal, // ID do cliente pagador (tbl_clientes)
     };
     
     setParcelaParaPagamento(mappedParcela);
@@ -312,8 +296,37 @@ const ContasReceber = () => {
     });
   };
   
-  const contasFiltradas = useMemo(() => filterData(contas, 'data_vencimento'), [contas, filtroPeriodo]);
-  const parcelasFiltradas = useMemo(() => filterData(parcelas, 'data_vencimento'), [parcelas, filtroPeriodo]);
+  const filterByStatus = (data: ContaReceberComProgresso[] | ExtendedParcelaDetalhada[], isSynthetic: boolean) => {
+    if (filtroStatus === 'todos') return data;
+
+    return data.filter(item => {
+        let isPaid: boolean;
+        
+        if (isSynthetic) {
+            const conta = item as ContaReceberComProgresso;
+            // Correção: Usar operador de coalescência nula (?? 0)
+            const total = conta.parcelas_total ?? 0;
+            const pagas = conta.parcelas_pagas ?? 0;
+            isPaid = total > 0 && pagas === total;
+        } else {
+            const parcela = item as ExtendedParcelaDetalhada;
+            isPaid = parcela.status === 'paga';
+        }
+
+        return filtroStatus === 'quitado' ? isPaid : !isPaid;
+    });
+  };
+  
+  const contasFiltradas = useMemo(() => {
+    const dateFiltered = filterData(contas, 'data_vencimento') as ContaReceberComProgresso[];
+    return filterByStatus(dateFiltered, true) as ContaReceberComProgresso[];
+  }, [contas, filtroPeriodo, filtroStatus]);
+
+  const parcelasFiltradas = useMemo(() => {
+    const dateFiltered = filterData(parcelas, 'data_vencimento') as ExtendedParcelaDetalhada[];
+    return filterByStatus(dateFiltered, false) as ExtendedParcelaDetalhada[];
+  }, [parcelas, filtroPeriodo, filtroStatus]);
+  
   const recebimentosFiltrados = useMemo(() => filterData(recebimentos, 'data_recebimento'), [recebimentos, filtroPeriodo]);
 
   if (carregandoSessao || carregandoDados) {
@@ -352,6 +365,8 @@ const ContasReceber = () => {
         recebimentosFiltrados={recebimentosFiltrados}
         clienteNomeMap={clienteNomeMap}
         isAdmin={isAdmin}
+        filtroStatus={filtroStatus} // PASSANDO O NOVO FILTRO
+        setFiltroStatus={setFiltroStatus} // PASSANDO O SETTER
       />
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full mt-4">
@@ -384,8 +399,32 @@ const ContasReceber = () => {
                         <TableRow><TableCell colSpan={7} className="text-center h-24">Nenhuma conta a receber encontrada no período.</TableCell></TableRow>
                     ) : (
                         contasFiltradas.map((conta) => {
-                            const statusVariant = getBadgeVariant(conta.status as ParcelaStatus, conta.data_vencimento);
-                            const progresso = conta.parcelas_total ? `${conta.parcelas_pagas}/${conta.parcelas_total}` : 'N/A';
+                            
+                            const total = conta.parcelas_total ?? 0;
+                            const pagas = conta.parcelas_pagas ?? 0;
+                            const isQuitada = total > 0 && pagas === total;
+                            let displayStatus: string;
+                            let statusVariant: BadgeVariant;
+
+                            if (isQuitada) {
+                                displayStatus = 'quitada';
+                                statusVariant = 'success'; // Highlight in green
+                            } else {
+                                // Lógica para aberta/atrasada/vence hoje
+                                const vencimento = parseISO(conta.data_vencimento + 'T00:00:00');
+                                if (isPast(vencimento) && !isToday(vencimento)) {
+                                    statusVariant = 'destructive';
+                                    displayStatus = 'atrasada';
+                                } else if (isToday(vencimento)) {
+                                    statusVariant = 'warning';
+                                    displayStatus = 'vence hoje';
+                                } else {
+                                    statusVariant = 'secondary';
+                                    displayStatus = 'aberta';
+                                }
+                            }
+                            
+                            const progresso = total ? `${pagas}/${total}` : 'N/A';
 
                             return (
                                 <TableRow key={conta.id}>
@@ -402,7 +441,7 @@ const ContasReceber = () => {
                                     <TableCell className="font-semibold">{formatCurrency(conta.valor_total)}</TableCell>
                                     <TableCell className="text-sm text-muted-foreground">{progresso}</TableCell>
                                     <TableCell className="hidden sm:table-cell">
-                                        <Badge variant={statusVariant}>{conta.status}</Badge>
+                                        <Badge variant={statusVariant}>{displayStatus}</Badge>
                                     </TableCell>
                                 </TableRow>
                             );

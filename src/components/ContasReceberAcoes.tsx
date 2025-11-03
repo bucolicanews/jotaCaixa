@@ -4,13 +4,14 @@ import { DateRange } from 'react-day-picker';
 import { DateRangePicker } from '@/components/DateRangePicker';
 import { Printer, FileDown, Filter, Loader2 } from 'lucide-react';
 import { ContaReceber, ParcelaDetalhada } from '@/types/contas-receber';
-import { format } from 'date-fns';
+import { format, isPast, isToday, parseISO } from 'date-fns';
 import Papa from 'papaparse';
 import { showError, showSuccess } from '@/utils/toast';
 import { usePrint } from '@/hooks/use-print';
 import ReactDOMServer from 'react-dom/server';
 import ContasReceberPrint from './ContasReceberPrint';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select'; // Import Select components
 
 // Definindo o tipo ContaReceberComProgresso localmente
 interface ContaReceberComProgresso extends ContaReceber {
@@ -34,6 +35,10 @@ interface ContasReceberAcoesProps {
   recebimentosFiltrados: any[];
   clienteNomeMap: Record<string, string>;
   isAdmin: boolean;
+  
+  // NOVO FILTRO
+  filtroStatus: 'todos' | 'quitado' | 'nao_quitado';
+  setFiltroStatus: (status: 'todos' | 'quitado' | 'nao_quitado') => void;
 }
 
 const formatDate = (dateString: string) => new Date(dateString + 'T00:00:00').toLocaleDateString('pt-BR');
@@ -49,7 +54,8 @@ const ContasReceberAcoes: React.FC<ContasReceberAcoesProps> = ({
   parcelasFiltradas,
   recebimentosFiltrados,
   clienteNomeMap,
-  // isAdmin removido da desestruturação
+  filtroStatus,
+  setFiltroStatus,
 }) => {
   const [exportLoading, setExportLoading] = useState(false);
   const { printContent } = usePrint();
@@ -60,16 +66,38 @@ const ContasReceberAcoes: React.FC<ContasReceberAcoesProps> = ({
 
     if (activeTab === 'parcela_sintetica') {
       headers = ['ID Conta', 'Cliente', 'Descrição', 'Vencimento', 'Valor Total', 'Progresso', 'Status', 'Origem'];
-      data = contasFiltradas.map(c => ({
-        'ID Conta': c.id,
-        'Cliente': c.clientes?.nome || 'N/A',
-        'Descrição': c.descricao,
-        'Vencimento': formatDate(c.data_vencimento),
-        'Valor Total': formatCurrency(c.valor_total), // Usando formatCurrency
-        'Progresso': `${c.parcelas_pagas}/${c.parcelas_total}`,
-        'Status': c.status,
-        'Origem': c.origem,
-      }));
+      data = contasFiltradas.map(c => {
+        // Correção: Usar operador de coalescência nula (?? 0)
+        const total = c.parcelas_total ?? 0;
+        const pagas = c.parcelas_pagas ?? 0;
+        
+        const isQuitada = total > 0 && pagas === total;
+        let displayStatus: string;
+        
+        if (isQuitada) {
+            displayStatus = 'quitada';
+        } else {
+            const vencimento = parseISO(c.data_vencimento + 'T00:00:00');
+            if (isPast(vencimento) && !isToday(vencimento)) {
+                displayStatus = 'atrasada';
+            } else if (isToday(vencimento)) {
+                displayStatus = 'vence hoje';
+            } else {
+                displayStatus = 'aberta';
+            }
+        }
+        
+        return {
+            'ID Conta': c.id,
+            'Cliente': c.clientes?.nome || 'N/A',
+            'Descrição': c.descricao,
+            'Vencimento': formatDate(c.data_vencimento),
+            'Valor Total': formatCurrency(c.valor_total), // Usando formatCurrency
+            'Progresso': `${pagas}/${total}`,
+            'Status': displayStatus, // Usando o status ajustado
+            'Origem': c.origem,
+        };
+      });
     } else if (activeTab === 'parcelas') {
       headers = ['ID Parcela', 'Cliente', 'Descrição', 'Nº Parcela', 'Vencimento', 'Valor Parcela', 'Vlr Pago', 'Data Pagamento', 'Status'];
       data = parcelasFiltradas.map(p => ({
@@ -169,6 +197,20 @@ const ContasReceberAcoes: React.FC<ContasReceberAcoesProps> = ({
           <Filter className="w-4 h-4 mr-2" /> Filtros e Ações
         </CardTitle>
         <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto">
+          
+          {/* NOVO FILTRO DE STATUS */}
+          <Select value={filtroStatus} onValueChange={setFiltroStatus}>
+              <SelectTrigger className="w-full sm:w-[180px]">
+                  <SelectValue placeholder="Filtrar Status" />
+              </SelectTrigger>
+              <SelectContent>
+                  <SelectItem value="todos">Todos os Status</SelectItem>
+                  <SelectItem value="quitado">Quitado</SelectItem>
+                  <SelectItem value="nao_quitado">Não Quitado</SelectItem>
+              </SelectContent>
+          </Select>
+          {/* FIM NOVO FILTRO */}
+          
           <DateRangePicker
             date={filtroPeriodo}
             setDate={setFiltroPeriodo}
