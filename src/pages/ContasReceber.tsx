@@ -72,11 +72,17 @@ interface AdminRecebimento {
     } | null;
 }
 
+// Novo tipo para a conta sintética com progresso
+interface ContaReceberComProgresso extends ContaReceber {
+    parcelas_pagas?: number;
+    parcelas_total?: number;
+}
+
 const ContasReceber = () => {
   const { usuario, perfil, role, carregando: carregandoSessao } = useSessao();
   const [searchParams] = useSearchParams(); // Hook para ler a URL
   
-  const [contas, setContas] = useState<ContaReceber[]>([]);
+  const [contas, setContas] = useState<ContaReceberComProgresso[]>([]);
   const [parcelas, setParcelas] = useState<ParcelaDetalhada[]>([]);
   const [recebimentos, setRecebimentos] = useState<AdminRecebimento[]>([]); // Novo estado para recebimentos
   const [carregandoDados, setCarregandoDados] = useState(true);
@@ -208,14 +214,37 @@ const ContasReceber = () => {
     ]);
 
     if (contasRes.error) showError('Erro ao carregar contas: ' + contasRes.error.message);
-    else setContas(contasRes.data as any[]);
-
-    if (parcelasRes.error) showError('Erro ao carregar parcelas: ' + parcelasRes.error.message);
     else {
+        let fetchedContas = contasRes.data as ContaReceberComProgresso[];
         let fetchedParcelas = parcelasRes.data as any[];
+        
+        // --- Lógica para calcular progresso de pagamento ---
+        const progressoMap: Record<string, { total: number, pagas: number }> = {};
+        
+        fetchedParcelas.forEach((p: ParcelaDetalhada & { conta_receber_id: string }) => {
+            // CORREÇÃO 1: Acessa conta_receber_id diretamente, que é garantido existir
+            const contaId = p.conta_receber_id; 
+            
+            if (!progressoMap[contaId]) {
+                progressoMap[contaId] = { total: 0, pagas: 0 };
+            }
+            progressoMap[contaId].total++;
+            if (p.status === 'paga') {
+                progressoMap[contaId].pagas++;
+            }
+        });
+        
+        // Adiciona o progresso às contas sintéticas
+        fetchedContas = fetchedContas.map(c => ({
+            ...c,
+            parcelas_total: progressoMap[c.id]?.total || 0,
+            parcelas_pagas: progressoMap[c.id]?.pagas || 0,
+        }));
+        
+        setContas(fetchedContas);
         setParcelas(fetchedParcelas);
     }
-    
+
     if (isAdmin && recebimentosRes) {
         if (recebimentosRes.error) {
             showError('Erro ao carregar recebimentos: ' + recebimentosRes.error.message);
@@ -614,6 +643,13 @@ const ContasReceber = () => {
                           // Cliente/Supervisão: Acessa o nome do cliente diretamente
                           clienteNomeDisplay = conta.clientes?.nome || 'N/A';
                       }
+                      
+                      // Progresso de pagamento
+                      // CORREÇÃO 2: Usar o operador de coalescência nula (?? 0) para garantir que o valor não seja undefined
+                      const totalParcelas = conta.parcelas_total ?? 0;
+                      const progresso = totalParcelas > 0 
+                          ? `${conta.parcelas_pagas}/${totalParcelas} pagas`
+                          : '';
 
 
                       return (
@@ -636,7 +672,12 @@ const ContasReceber = () => {
                               ({conta.status})
                             </span>
                           </TableCell>
-                          <TableCell>{conta.descricao}</TableCell>
+                          <TableCell>
+                            {conta.descricao}
+                            {progresso && (
+                                <span className="block text-xs text-muted-foreground mt-1">{progresso}</span>
+                            )}
+                          </TableCell>
                           <TableCell>{formatDate(conta.data_vencimento)}</TableCell>
                           <TableCell>{formatCurrency(conta.valor_total)}</TableCell>
                           <TableCell className="hidden sm:table-cell">
