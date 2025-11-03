@@ -42,23 +42,25 @@ const ContasReceberPrint: React.FC<ContasReceberPrintProps> = ({ data, activeTab
             case 'ID Recebimento':
                 return { width: '8%', fontSize: '8pt' }; 
             case 'Cliente':
-                return { width: '18%' };
+                return { width: '15%' };
             case 'Descrição':
-                return { width: '30%' };
+                return { width: '25%' };
             case 'Nº Parcela':
                 return { width: '5%', textAlign: 'center' as const };
             case 'Valor Parcela':
-            case 'Vlr Pago': // NOVO
+            case 'Vlr Pago':
             case 'Valor Total':
             case 'Valor Recebido':
-                return { width: '10%', textAlign: 'right' as const };
+                return { width: '8%', textAlign: 'right' as const };
             case 'Vencimento':
             case 'Data Recebimento':
-                return { width: '9%' };
+                return { width: '8%' };
             case 'Status':
             case 'Origem':
             case 'Forma Pagamento':
-                return { width: '7%' };
+                return { width: '6%' };
+            case 'Conta/Caixa': // NOVO
+                return { width: '8%' };
             case 'Pagas':
             case 'Total':
                 return { width: '4%', textAlign: 'center' as const };
@@ -68,7 +70,7 @@ const ContasReceberPrint: React.FC<ContasReceberPrintProps> = ({ data, activeTab
     };
     
     // Colunas que precisam de cálculo de total
-    const valueColumns = ['Valor Total', 'Valor Parcela', 'Vlr Pago', 'Valor Recebido']; // Atualizado para Vlr Pago
+    const valueColumns = ['Valor Total', 'Valor Parcela', 'Vlr Pago', 'Valor Recebido'];
     
     const totals: Record<string, number> = {};
     

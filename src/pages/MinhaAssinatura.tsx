@@ -22,6 +22,7 @@ interface Pagamento {
   valor: number;
   status: 'pago' | 'falha';
   descricao: string;
+  conta_destino: string; // NOVO CAMPO
 }
 
 // Tipo para a próxima cobrança (agora é uma parcela)
@@ -96,9 +97,11 @@ const MinhaAssinatura: React.FC = () => {
         data_recebimento,
         valor_recebido,
         forma_pagamento,
+        conta_id,
         admin_parcelas_receber (
           admin_contas_receber ( descricao )
-        )
+        ),
+        saldo_contas ( nome )
       `)
       .eq('cliente_id', clienteId) // Filtra pelo ID do cliente que pagou
       .order('data_recebimento', { ascending: false });
@@ -115,6 +118,7 @@ const MinhaAssinatura: React.FC = () => {
         descricao:
           r.admin_parcelas_receber?.admin_contas_receber?.descricao ||
           'Mensalidade Paga',
+        conta_destino: r.saldo_contas?.nome || 'N/A', // NOVO CAMPO
       }));
       setHistoricoPagamentos(historico);
     } else {
@@ -322,6 +326,7 @@ const MinhaAssinatura: React.FC = () => {
                 <TableRow>
                   <TableHead>Data Pagamento</TableHead>
                   <TableHead>Descrição</TableHead>
+                  <TableHead>Conta Destino</TableHead>
                   <TableHead className="text-right">Valor Pago</TableHead>
                   <TableHead className="text-center">Status</TableHead>
                 </TableRow>
@@ -332,6 +337,7 @@ const MinhaAssinatura: React.FC = () => {
                     <TableRow key={p.id}>
                       <TableCell>{format(parseISO(p.data), 'dd/MM/yyyy', { locale: ptBR })}</TableCell>
                       <TableCell>{p.descricao}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{p.conta_destino}</TableCell>
                       <TableCell className="text-right font-medium">{formatCurrency(p.valor)}</TableCell>
                       <TableCell className="text-center">
                         <Badge variant={p.status === 'pago' ? 'success' : 'destructive'}>
@@ -342,7 +348,7 @@ const MinhaAssinatura: React.FC = () => {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center py-4 text-muted-foreground">
+                    <TableCell colSpan={5} className="text-center py-4 text-muted-foreground">
                       Nenhum pagamento encontrado.
                     </TableCell>
                   </TableRow>

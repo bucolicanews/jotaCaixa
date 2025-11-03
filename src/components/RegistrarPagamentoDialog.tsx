@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -15,6 +15,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useSessao } from '@/hooks/use-sessao';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { SaldoConta } from '@/types/saldo-conta';
 
 interface ParcelaParaPagamento {
   id: string;
@@ -22,13 +24,14 @@ interface ParcelaParaPagamento {
   empresa_id: string; // Este é o ID do Admin ou da Empresa Cliente
   valor_parcela: number;
   valor_pago: number;
-  cliente_id: string | null; // NOVO: ID do cliente real (tbl_clientes)
+  cliente_id: string | null; // ID do cliente real (tbl_clientes)
 }
 
 const formSchema = z.object({
   valor_recebido: z.coerce.number().positive('O valor deve ser maior que zero.'),
   data_pagamento: z.date({ required_error: 'A data é obrigatória.' }),
   forma_pagamento: z.string().min(1, 'A forma de pagamento é obrigatória.'),
+  conta_id: z.string().uuid('Selecione a conta de destino.').nullable(), // NOVO CAMPO
   acao_saldo_restante: z.enum(['desconto', 'reprogramar', 'parcelar']).optional(),
   nova_data_vencimento: z.date().optional(),
   numero_novas_parcelas: z.coerce.number().int().min(2).optional(),
@@ -45,12 +48,13 @@ interface RegistrarPagamentoDialogProps {
 }
 
 const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ parcela, open, onOpenChange, onSaveComplete }) => {
-  const { role, usuario } = useSessao();
+  const { role, usuario, perfil } = useSessao();
   const isAdmin = role === 'Admin';
   
+  const [contasDestino, setContasDestino] = useState<SaldoConta[]>([]);
+  const [loadingContas, setLoadingContas] = useState(true);
+  
   // Determina as tabelas de destino
-  // Se for Admin, ele sempre usa as tabelas admin_* para registrar recebimentos do sistema.
-  // Se for Cliente, ele usa as tabelas normais para registrar recebimentos de seus clientes.
   const tabelaRecebimentos = isAdmin ? 'admin_recebimentos' : 'recebimentos';
   const tabelaParcelas = isAdmin ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
   
@@ -59,12 +63,42 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
 
   const saldoDevedor = parcela ? parcela.valor_parcela - (parcela.valor_pago || 0) : 0;
 
+  const fetchContasDestino = useCallback(async () => {
+    if (!ownerId) return;
+    setLoadingContas(true);
+    
+    const { data, error } = await supabase
+        .from('saldo_contas')
+        .select('*')
+        .eq('empresa_id', ownerId)
+        .order('nome');
+        
+    if (error) {
+        showError('Erro ao carregar Contas/Caixas: ' + error.message);
+        setContasDestino([]);
+    } else {
+        setContasDestino(data as SaldoConta[]);
+        // Se houver contas, define a primeira como padrão
+        if (data.length > 0) {
+            form.setValue('conta_id', data[0].id);
+        }
+    }
+    setLoadingContas(false);
+  }, [ownerId]);
+  
+  useEffect(() => {
+      if (open) {
+          fetchContasDestino();
+      }
+  }, [open, fetchContasDestino]);
+
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       valor_recebido: saldoDevedor,
       data_pagamento: new Date(),
       forma_pagamento: 'Pix',
+      conta_id: null, // Inicializa como null
       acao_saldo_restante: 'reprogramar',
       numero_novas_parcelas: 2,
       intervalo_dias_novas_parcelas: 30,
@@ -77,7 +111,10 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
   const saldoRestante = saldoDevedor - valorRecebido;
 
   const onSubmit = async (values: FormValues) => {
-    if (!parcela || !ownerId) return;
+    if (!parcela || !ownerId || !values.conta_id) {
+        showError('Dados incompletos ou conta de destino não selecionada.');
+        return;
+    }
 
     const valorRecebido = values.valor_recebido;
     const valorPagoAnterior = parcela.valor_pago || 0;
@@ -89,10 +126,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
     let recebimentoBasePayload;
     
     if (isAdmin) {
-        // ADMIN: Usa admin_recebimentos. O cliente_id deve ser o ID do cliente real (tbl_clientes)
-        // Se parcela.cliente_id for null (problema de integridade de dados), usamos o ID do Admin (parcela.empresa_id)
-        // para satisfazer a FK, embora isso seja um workaround para dados incorretos.
-        const clienteIdPagador = parcela.cliente_id || parcela.empresa_id; // Fallback para empresa_id (Admin ID)
+        const clienteIdPagador = parcela.cliente_id || parcela.empresa_id;
         
         if (!clienteIdPagador) {
             showError('ID do cliente pagador não encontrado.'); 
@@ -103,14 +137,15 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
             parcela_id: parcela.id, 
             admin_id: ownerId, 
             valor_recebido: valorRecebido, 
-            cliente_id: clienteIdPagador // ID do cliente pagador (tbl_clientes)
+            cliente_id: clienteIdPagador,
+            conta_id: values.conta_id, // NOVO CAMPO
         };
     } else {
-        // CLIENTE: Usa recebimentos. empresa_id é o ID do cliente logado.
         recebimentoBasePayload = { 
             parcela_id: parcela.id, 
             empresa_id: ownerId, 
-            valor_recebido: valorRecebido 
+            valor_recebido: valorRecebido,
+            conta_id: values.conta_id, // NOVO CAMPO
         };
     }
 
@@ -197,7 +232,30 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
               <FormField control={form.control} name="valor_recebido" render={({ field }) => (<FormItem><FormLabel>Valor Recebido</FormLabel><FormControl><Input type="number" step="0.01" {...field} /></FormControl><FormMessage /></FormItem>)} />
               <FormField control={form.control} name="data_pagamento" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Data</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "dd/MM/yy") : <span>Data</span>}<CalendarIcon className="ml-auto h-4 w-4 opacity-50" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus /></PopoverContent></Popover><FormMessage /></FormItem>)} />
             </div>
-            <FormField control={form.control} name="forma_pagamento" render={({ field }) => (<FormItem><FormLabel>Forma de Pagamento</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
+            
+            <div className="grid grid-cols-2 gap-4">
+                <FormField control={form.control} name="forma_pagamento" render={({ field }) => (<FormItem><FormLabel>Forma de Pagamento</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
+                <FormField control={form.control} name="conta_id" render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>Conta/Caixa de Destino</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value || undefined} disabled={loadingContas}>
+                            <FormControl>
+                                <SelectTrigger>
+                                    <SelectValue placeholder={loadingContas ? "Carregando Contas..." : "Selecione a conta"} />
+                                </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                                {contasDestino.map(c => (
+                                    <SelectItem key={c.id} value={c.id}>
+                                        {c.nome} ({c.tipo_saldo})
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <FormMessage />
+                    </FormItem>
+                )} />
+            </div>
             
             {isPagamentoParcial && (
               <div className="space-y-4 pt-4 border-t">

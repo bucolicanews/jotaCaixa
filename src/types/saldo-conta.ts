@@ -1,0 +1,18 @@
+export interface SaldoConta {
+  id: string;
+  empresa_id: string;
+  nome: string; // Nome da Conta/Caixa
+  conta_contabil_id: string | null; // Referência ao Plano de Contas
+  tipo_saldo: 'Credito' | 'Debito'; // Tipo de saldo (Ativo/Passivo)
+  saldo_inicial: number;
+  criado_em: string;
+  atualizado_em: string;
+}
+
+// Tipo para a conta com o nome do plano de contas
+export interface SaldoContaDetalhada extends SaldoConta {
+    plano_contas: {
+        Conta: string;
+        Descricao: string;
+    } | null;
+}

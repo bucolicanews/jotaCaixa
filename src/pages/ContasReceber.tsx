@@ -19,7 +19,7 @@ import { cn } from '@/lib/utils';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 import RegistrarPagamentoDialog from '@/components/RegistrarPagamentoDialog';
 import ContasReceberAcoes from '@/components/ContasReceberAcoes';
-import ContasReceberResumo from '@/components/ContasReceberResumo'; // NOVO IMPORT
+import ContasReceberResumo from '@/components/ContasReceberResumo';
 
 type ParcelaStatus = 'aberta' | 'parcial' | 'paga' | 'reprogramada' | 'cancelada';
 type BadgeVariant = 'success' | 'warning' | 'secondary' | 'destructive' | 'default' | 'info';
@@ -39,16 +39,15 @@ const getBadgeVariant = (status: ParcelaStatus, dataVencimento: string): BadgeVa
 // Type for the nested account data fetched within a parcel
 interface NestedContaReceber {
     descricao: string;
-    cliente_id: string | null; // <-- Allowing null here for robustness
+    cliente_id: string | null;
     origem: ContaReceber['origem'];
     clientes: { nome: string } | null;
 }
 
 // NOVO: Tipo para a parcela detalhada com data_pagamento
-// FIX 1: Sobrescrevendo 'contas_receber' para incluir 'origem' e garantir compatibilidade
 interface ExtendedParcelaDetalhada extends ParcelaDetalhada {
     data_pagamento?: string | null;
-    contas_receber: NestedContaReceber | null; // Sobrescrevendo a propriedade
+    contas_receber: NestedContaReceber | null;
 }
 
 // Novo tipo para a conta sintética com progresso
@@ -64,12 +63,14 @@ interface AdminRecebimento {
     valor_recebido: number;
     forma_pagamento: string;
     cliente_id: string;
+    conta_id: string; // NOVO CAMPO
+    saldo_contas: { nome: string } | null; // NOVO CAMPO
     admin_parcelas_receber: {
         numero_parcela: number;
         admin_contas_receber: {
             descricao: string;
             origem: ContaReceber['origem'];
-            cliente_id: string; // Adicionado para extração
+            cliente_id: string;
         } | null;
     } | null;
 }
@@ -79,7 +80,6 @@ type FiltroOrigem = 'todos' | 'contrato' | 'assinatura_recorrente' | 'manual';
 
 const ContasReceber = () => {
   const { usuario, perfil, role, carregando: carregandoSessao } = useSessao();
-  // const [searchParams] = useSearchParams(); // Não utilizado
   
   const [contas, setContas] = useState<ContaReceberComProgresso[]>([]);
   const [parcelas, setParcelas] = useState<ExtendedParcelaDetalhada[]>([]);
@@ -94,38 +94,18 @@ const ContasReceber = () => {
   const [clienteNomeMap, setClienteNomeMap] = useState<Record<string, string>>({});
   const [activeTab, setActiveTab] = useState('parcela_sintetica');
   const [filtroStatus, setFiltroStatus] = useState<'todos' | 'quitado' | 'nao_quitado'>('todos');
-  const [filtroOrigem, setFiltroOrigem] = useState<FiltroOrigem>('todos'); // NOVO ESTADO DE FILTRO DE ORIGEM
+  const [filtroOrigem, setFiltroOrigem] = useState<FiltroOrigem>('todos');
 
   const isAdmin = role === 'Admin';
   
   const getOwnerId = () => {
     if (isAdmin) return usuario?.id || null;
-    if (role === 'Cliente') return (perfil as ClienteProfile)?.id;
-    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id;
+    if (role === 'Cliente') return (perfil as ClienteProfile)?.id || null;
+    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id || null;
     return null;
   };
   
   const ownerId = getOwnerId();
-  
-  // Removendo fetchClienteNames pois não é usado diretamente no corpo do componente
-  /*
-  const fetchClienteNames = useCallback(async (clienteIds: string[]) => {
-    if (clienteIds.length === 0) return;
-    
-    const { data } = supabase
-        .from('clientes')
-        .select('id, nome')
-        .in('id', clienteIds);
-        
-    if (data) {
-        const map = data.reduce((acc, c) => {
-            acc[c.id] = c.nome;
-            return acc;
-        }, {} as Record<string, string>);
-        setClienteNomeMap(map);
-    }
-  }, []);
-  */
 
   const buscarDados = useCallback(async () => {
     if (!ownerId) {
@@ -164,13 +144,14 @@ const ContasReceber = () => {
         .from('admin_recebimentos')
         .select(`
           *,
+          saldo_contas ( nome ),
           admin_parcelas_receber (
             numero_parcela,
             admin_contas_receber ( descricao, origem, cliente_id )
           )
         `)
         .eq('admin_id', ownerId)
-        .not('cliente_id', 'is', null) // FILTRO ADICIONADO: Apenas recebimentos com cliente_id preenchido
+        .not('cliente_id', 'is', null)
         .order('data_recebimento', { ascending: false })
         : Promise.resolve({ data: [], error: null }),
     ]);
@@ -178,7 +159,6 @@ const ContasReceber = () => {
     if (contasRes.error) showError('Erro ao carregar contas: ' + contasRes.error.message);
     else {
         let fetchedContas = contasRes.data as ContaReceberComProgresso[];
-        // FIX 2: Usando 'as unknown as' para forçar a tipagem do array de parcelas
         let fetchedParcelas = parcelasRes.data as unknown as ExtendedParcelaDetalhada[];
         
         // --- Lógica para calcular progresso de pagamento ---
@@ -208,8 +188,7 @@ const ContasReceber = () => {
         // Atualiza o mapa de nomes de clientes para recebimentos
         const clienteIds = recebimentosRes.data.map(r => r.cliente_id);
         
-        // 1. Buscar nomes dos clientes (clientes)
-        // O cliente_id em admin_recebimentos é o ID do cliente na tbl_clientes (Empresa do Sistema)
+        // 1. Buscar nomes dos clientes (tbl_clientes)
         const { data: clientesData } = await supabase
             .from('tbl_clientes')
             .select('id, nome')
@@ -277,16 +256,15 @@ const ContasReceber = () => {
         ? (parcela as ExtendedParcelaDetalhada).contas_receber
         : (parcela as ExtendedParcelaDetalhada).contas_receber;
         
-    // Use nullish coalescing to ensure clienteId is string | null
     let clienteId: string | null = (contaReceber?.cliente_id as string | null) || null; 
         
     const mappedParcela = {
         id: parcela.id,
         conta_receber_id: parcela.conta_receber_id,
-        empresa_id: ownerId, // O ownerId é o Admin ID ou o Cliente ID
+        empresa_id: ownerId,
         valor_parcela: parcela.valor_parcela,
         valor_pago: parcela.valor_pago,
-        cliente_id: clienteId, // Usando cliente_id (pode ser null)
+        cliente_id: clienteId,
     };
     
     setParcelaParaPagamento(mappedParcela);
@@ -314,19 +292,15 @@ const ContasReceber = () => {
     const end = filtroPeriodo.to || new Date();
     
     return data.filter(item => {
-        // Verifica se a data é um timestamp completo (recebimentos) ou apenas data (vencimento)
         const dateString = item[dateKey];
         let date: Date;
         
         if (dateString.includes('T')) {
-            // É um timestamp ISO (como data_recebimento)
             date = parseISO(dateString);
         } else {
-            // É apenas uma data (como data_vencimento)
             date = parseISO(dateString + 'T00:00:00');
         }
         
-        // Compara apenas a parte da data (ignorando a hora)
         const itemDateOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate());
         const startDateOnly = new Date(start.getFullYear(), start.getMonth(), start.getDate());
         const endDateOnly = new Date(end.getFullYear(), end.getMonth(), end.getDate());
@@ -353,25 +327,22 @@ const ContasReceber = () => {
             }
 
             return filtroStatus === 'quitado' ? isPaid : !isPaid;
-        }) as any; // Asserção para 'any' para resolver TS2322
+        }) as any;
     }
     
-    // NOVO: Filtro por Origem (Apenas para Contas Sintéticas)
     if (isSynthetic && filtroOrigem !== 'todos') {
         filteredByStatus = filteredByStatus.filter(item => {
             const conta = item as ContaReceberComProgresso;
             return conta.origem === filtroOrigem;
-        }) as any; // Asserção para 'any' para resolver TS2322
+        }) as any;
     }
     
-    // NOVO: Filtro por Origem (Para Parcelas Analíticas)
     if (!isSynthetic && filtroOrigem !== 'todos') {
         filteredByStatus = filteredByStatus.filter(item => {
             const parcela = item as ExtendedParcelaDetalhada;
-            // A origem está aninhada dentro de contas_receber
             const origem = parcela.contas_receber?.origem;
             return origem === filtroOrigem;
-        }) as any; // Asserção para 'any' para resolver TS2322
+        }) as any;
     }
 
     return filteredByStatus;
@@ -380,27 +351,25 @@ const ContasReceber = () => {
   const contasFiltradas = useMemo(() => {
     const dateFiltered = filterData(contas, 'data_vencimento') as ContaReceberComProgresso[];
     return filterByStatus(dateFiltered, true) as ContaReceberComProgresso[];
-  }, [contas, filtroPeriodo, filtroStatus, filtroOrigem]); // Adicionando filtroOrigem
+  }, [contas, filtroPeriodo, filtroStatus, filtroOrigem]);
 
   const parcelasFiltradas = useMemo(() => {
     const dateFiltered = filterData(parcelas, 'data_vencimento') as ExtendedParcelaDetalhada[];
     return filterByStatus(dateFiltered, false) as ExtendedParcelaDetalhada[];
-  }, [parcelas, filtroPeriodo, filtroStatus, filtroOrigem]); // Adicionando filtroOrigem
+  }, [parcelas, filtroPeriodo, filtroStatus, filtroOrigem]);
   
   const recebimentosFiltrados = useMemo(() => {
-    let filtered = filterData(recebimentos, 'data_recebimento'); // Aplica filtro de data
+    let filtered = filterData(recebimentos, 'data_recebimento');
     
-    // Aplica filtro de Origem
     if (filtroOrigem !== 'todos') {
         filtered = filtered.filter(r => {
-            // r é AdminRecebimento
             const origem = r.admin_parcelas_receber?.admin_contas_receber?.origem;
             return origem === filtroOrigem;
         });
     }
     
     return filtered;
-  }, [recebimentos, filtroPeriodo, filtroOrigem]); // Adicionando filtroOrigem
+  }, [recebimentos, filtroPeriodo, filtroOrigem]);
 
   if (carregandoSessao || carregandoDados) {
     return <LayoutPrincipal><div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div></LayoutPrincipal>;
@@ -440,18 +409,16 @@ const ContasReceber = () => {
         isAdmin={isAdmin}
         filtroStatus={filtroStatus}
         setFiltroStatus={setFiltroStatus}
-        filtroOrigem={filtroOrigem} // PASSANDO O NOVO FILTRO
-        setFiltroOrigem={setFiltroOrigem} // PASSANDO O SETTER
+        filtroOrigem={filtroOrigem}
+        setFiltroOrigem={setFiltroOrigem}
       />
       
-      {/* NOVO COMPONENTE DE RESUMO */}
       <ContasReceberResumo
         activeTab={activeTab}
         contasFiltradas={contasFiltradas}
         parcelasFiltradas={parcelasFiltradas}
         recebimentosFiltrados={recebimentosFiltrados}
       />
-      {/* FIM NOVO COMPONENTE DE RESUMO */}
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full mt-4">
         <TabsList className="grid w-full grid-cols-3">
@@ -493,9 +460,8 @@ const ContasReceber = () => {
 
                             if (isQuitada) {
                                 displayStatus = 'quitada';
-                                statusVariant = 'success'; // Highlight in green
+                                statusVariant = 'success';
                             } else {
-                                // Lógica para aberta/atrasada/vence hoje
                                 const vencimento = parseISO(conta.data_vencimento + 'T00:00:00');
                                 if (isPast(vencimento) && !isToday(vencimento)) {
                                     statusVariant = 'destructive';
@@ -621,22 +587,20 @@ const ContasReceber = () => {
                       <TableHead>Descrição</TableHead>
                       <TableHead>Valor Recebido</TableHead>
                       <TableHead>Forma Pagamento</TableHead>
+                      <TableHead>Conta/Caixa</TableHead>
                       <TableHead>Origem</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {recebimentosFiltrados.length === 0 ? (
-                        <TableRow><TableCell colSpan={6} className="text-center h-24">Nenhum recebimento encontrado no período.</TableCell></TableRow>
+                        <TableRow><TableCell colSpan={7} className="text-center h-24">Nenhum recebimento encontrado no período.</TableCell></TableRow>
                     ) : (
                         recebimentosFiltrados.map((r) => {
-                            // CORREÇÃO 1: Usar formatTimestamp para datas ISO
                             const dataRecebimentoDisplay = formatTimestamp(r.data_recebimento);
-                            
-                            // CORREÇÃO 2: Usar clienteNomeMap que foi populado com tbl_clientes
                             const clienteNome = clienteNomeMap[r.cliente_id] || 'N/A';
-                            
                             const descricao = r.admin_parcelas_receber?.admin_contas_receber?.descricao || 'N/A';
                             const origem = r.admin_parcelas_receber?.admin_contas_receber?.origem || 'manual';
+                            const contaDestino = r.saldo_contas?.nome || 'N/A';
 
                             return (
                                 <TableRow key={r.id}>
@@ -645,6 +609,7 @@ const ContasReceber = () => {
                                     <TableCell className="text-sm text-muted-foreground">{descricao}</TableCell>
                                     <TableCell className="font-semibold text-green-600">{formatCurrency(r.valor_recebido)}</TableCell>
                                     <TableCell>{r.forma_pagamento}</TableCell>
+                                    <TableCell>{contaDestino}</TableCell>
                                     <TableCell><Badge variant="secondary">{origem}</Badge></TableCell>
                                 </TableRow>
                             );

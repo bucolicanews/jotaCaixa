@@ -11,7 +11,7 @@ import { usePrint } from '@/hooks/use-print';
 import ReactDOMServer from 'react-dom/server';
 import ContasReceberPrint from './ContasReceberPrint';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select'; // Import Select components
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 
 // Definindo o tipo ContaReceberComProgresso localmente
 interface ContaReceberComProgresso extends ContaReceber {
@@ -98,9 +98,9 @@ const ContasReceberAcoes: React.FC<ContasReceberAcoesProps> = ({
             'Cliente': c.clientes?.nome || 'N/A',
             'Descrição': c.descricao,
             'Vencimento': formatDate(c.data_vencimento),
-            'Valor Total': formatCurrency(c.valor_total), // Usando formatCurrency
+            'Valor Total': c.valor_total, // Mantém como número para cálculo de total
             'Progresso': `${pagas}/${total}`,
-            'Status': displayStatus, // Usando o status ajustado
+            'Status': displayStatus,
             'Origem': c.origem,
         };
       });
@@ -118,7 +118,7 @@ const ContasReceberAcoes: React.FC<ContasReceberAcoesProps> = ({
         'Status': p.status,
       }));
     } else if (activeTab === 'recebimentos') {
-      headers = ['ID Recebimento', 'Data Recebimento', 'Cliente', 'Descrição', 'Valor Recebido', 'Forma Pagamento', 'Origem'];
+      headers = ['ID Recebimento', 'Data Recebimento', 'Cliente', 'Descrição', 'Valor Recebido', 'Forma Pagamento', 'Conta/Caixa', 'Origem'];
       data = recebimentosFiltrados.map(r => ({
         'ID Recebimento': r.id,
         'Data Recebimento': formatTimestamp(r.data_recebimento),
@@ -126,6 +126,7 @@ const ContasReceberAcoes: React.FC<ContasReceberAcoesProps> = ({
         'Descrição': r.admin_parcelas_receber?.admin_contas_receber?.descricao || 'N/A',
         'Valor Recebido': r.valor_recebido,
         'Forma Pagamento': r.forma_pagamento,
+        'Conta/Caixa': r.saldo_contas?.nome || 'N/A', // NOVO CAMPO
         'Origem': r.admin_parcelas_receber?.admin_contas_receber?.origem || 'manual',
       }));
     }
