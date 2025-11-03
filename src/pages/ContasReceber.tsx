@@ -306,8 +306,24 @@ const ContasReceber = () => {
     const end = filtroPeriodo.to || new Date();
     
     return data.filter(item => {
-        const date = parseISO(item[dateKey] + 'T00:00:00');
-        return date >= start && date <= end;
+        // Verifica se a data é um timestamp completo (recebimentos) ou apenas data (vencimento)
+        const dateString = item[dateKey];
+        let date: Date;
+        
+        if (dateString.includes('T')) {
+            // É um timestamp ISO (como data_recebimento)
+            date = parseISO(dateString);
+        } else {
+            // É apenas uma data (como data_vencimento)
+            date = parseISO(dateString + 'T00:00:00');
+        }
+        
+        // Compara apenas a parte da data (ignorando a hora)
+        const itemDateOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+        const startDateOnly = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+        const endDateOnly = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+
+        return itemDateOnly >= startDateOnly && itemDateOnly <= endDateOnly;
     });
   };
   
@@ -360,11 +376,23 @@ const ContasReceber = () => {
 
   const parcelasFiltradas = useMemo(() => {
     const dateFiltered = filterData(parcelas, 'data_vencimento') as ExtendedParcelaDetalhada[];
-    // FIX 3: O erro TS2719 é resolvido pela correção do Erro 1, mas mantemos a asserção final para segurança.
     return filterByStatus(dateFiltered, false) as ExtendedParcelaDetalhada[];
   }, [parcelas, filtroPeriodo, filtroStatus, filtroOrigem]); // Adicionando filtroOrigem
   
-  const recebimentosFiltrados = useMemo(() => filterData(recebimentos, 'data_recebimento'), [recebimentos, filtroPeriodo]);
+  const recebimentosFiltrados = useMemo(() => {
+    let filtered = filterData(recebimentos, 'data_recebimento'); // Aplica filtro de data
+    
+    // Aplica filtro de Origem
+    if (filtroOrigem !== 'todos') {
+        filtered = filtered.filter(r => {
+            // r é AdminRecebimento
+            const origem = r.admin_parcelas_receber?.admin_contas_receber?.origem;
+            return origem === filtroOrigem;
+        });
+    }
+    
+    return filtered;
+  }, [recebimentos, filtroPeriodo, filtroOrigem]); // Adicionando filtroOrigem
 
   if (carregandoSessao || carregandoDados) {
     return <LayoutPrincipal><div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div></LayoutPrincipal>;
