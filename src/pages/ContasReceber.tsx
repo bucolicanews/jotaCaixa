@@ -12,7 +12,7 @@ import { ContaReceber, ParcelaDetalhada } from '@/types/contas-receber';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import FormContasReceber from '@/components/FormContasReceber';
 import DetalhesParcelasDialog from '@/components/DetalhesParcelasDialog';
-import { Badge } => '@/components/ui/badge';
+import { Badge } from '@/components/ui/badge';
 import { DateRange } from 'react-day-picker';
 import { isToday, isPast, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
