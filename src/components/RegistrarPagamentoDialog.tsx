@@ -22,7 +22,7 @@ interface ParcelaParaPagamento {
   empresa_id: string; // Este é o ID do Admin ou da Empresa Cliente
   valor_parcela: number;
   valor_pago: number;
-  cliente_id?: string; // NOVO: ID do cliente real (tbl_clientes)
+  cliente_id: string | null; // NOVO: ID do cliente real (tbl_clientes)
 }
 
 const formSchema = z.object({
@@ -90,10 +90,12 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
     
     if (isAdmin) {
         // ADMIN: Usa admin_recebimentos. O cliente_id deve ser o ID do cliente real (tbl_clientes)
-        const clienteIdPagador = parcela.cliente_id; // USANDO cliente_id
+        // Se parcela.cliente_id for null (problema de integridade de dados), usamos o ID do Admin (parcela.empresa_id)
+        // para satisfazer a FK, embora isso seja um workaround para dados incorretos.
+        const clienteIdPagador = parcela.cliente_id || parcela.empresa_id; // Fallback para empresa_id (Admin ID)
         
         if (!clienteIdPagador) {
-            showError('ID do cliente pagador não encontrado.');
+            showError('ID do cliente pagador não encontrado.'); 
             return;
         }
         

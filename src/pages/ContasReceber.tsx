@@ -38,7 +38,7 @@ const getBadgeVariant = (status: ParcelaStatus, dataVencimento: string): BadgeVa
 // Type for the nested account data fetched within a parcel
 interface NestedContaReceber {
     descricao: string;
-    cliente_id: string;
+    cliente_id: string | null; // <-- Allowing null here for robustness
     origem: ContaReceber['origem'];
     clientes: { nome: string } | null;
 }
@@ -276,16 +276,8 @@ const ContasReceber = () => {
         ? (parcela as ExtendedParcelaDetalhada).contas_receber
         : (parcela as ExtendedParcelaDetalhada).contas_receber;
         
-    let clienteId: string | undefined; // Renomeado de clienteIdReal para clienteId
-    
-    if (isMyLaunch) {
-        // Se for Admin, o cliente_id real está na conta sintética (admin_contas_receber)
-        clienteId = contaReceber?.cliente_id;
-        
-    } else {
-        // Se for Cliente, o cliente_id real está na conta sintética (contas_receber)
-        clienteId = contaReceber?.cliente_id;
-    }
+    // Use nullish coalescing to ensure clienteId is string | null
+    let clienteId: string | null = (contaReceber?.cliente_id as string | null) || null; 
         
     const mappedParcela = {
         id: parcela.id,
@@ -293,7 +285,7 @@ const ContasReceber = () => {
         empresa_id: ownerId, // O ownerId é o Admin ID ou o Cliente ID
         valor_parcela: parcela.valor_parcela,
         valor_pago: parcela.valor_pago,
-        cliente_id: clienteId, // Usando cliente_id
+        cliente_id: clienteId, // Usando cliente_id (pode ser null)
     };
     
     setParcelaParaPagamento(mappedParcela);

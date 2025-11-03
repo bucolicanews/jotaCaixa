@@ -10,6 +10,16 @@ import { Badge } from './ui/badge';
 import RegistrarPagamentoDialog from './RegistrarPagamentoDialog';
 import { useSessao } from '@/hooks/use-sessao'; // Importando useSessao
 
+// Interface ParcelaParaPagamento copiada de RegistrarPagamentoDialog.tsx
+interface ParcelaParaPagamento {
+  id: string;
+  conta_receber_id: string;
+  empresa_id: string;
+  valor_parcela: number;
+  valor_pago: number;
+  cliente_id: string | null;
+}
+
 interface Parcela {
   id: string;
   conta_receber_id: string;
@@ -19,6 +29,25 @@ interface Parcela {
   valor_pago: number;
   data_vencimento: string;
   status: 'aberta' | 'parcial' | 'paga' | 'reprogramada' | 'cancelada';
+}
+
+interface ContaReceberDetalhe {
+  descricao: string;
+}
+
+interface ParcelaFutura {
+  id: string;
+  data_vencimento: string;
+  valor_parcela: number;
+  numero_parcela: number;
+  status: 'aberta' | 'parcial' | 'paga' | 'reprogramada' | 'cancelada';
+  admin_contas_receber: ContaReceberDetalhe[] | null; 
+}
+
+interface ContasFuturasDialogProps {
+  clienteId: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }
 
 interface DetalhesParcelasDialogProps {
@@ -33,7 +62,7 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
   const [parcelas, setParcelas] = useState<Parcela[]>([]);
   const [loading, setLoading] = useState(true);
   const [pagamentoDialogOpen, setPagamentoDialogOpen] = useState(false);
-  const [parcelaSelecionada, setParcelaSelecionada] = useState<Parcela | null>(null);
+  const [parcelaSelecionada, setParcelaSelecionada] = useState<ParcelaParaPagamento | null>(null);
 
   const fetchParcelas = useCallback(async () => {
     if (!conta) return;
@@ -64,7 +93,19 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
   }, [conta, open, fetchParcelas]); // Adicionando fetchParcelas como dependência
 
   const handleOpenPagamento = (parcela: Parcela) => {
-    setParcelaSelecionada(parcela);
+    if (!conta) return;
+    
+    // Mapeamento para ParcelaParaPagamento, injetando cliente_id da conta pai
+    const mappedParcela: ParcelaParaPagamento = {
+        id: parcela.id,
+        conta_receber_id: parcela.conta_receber_id,
+        empresa_id: parcela.empresa_id,
+        valor_parcela: parcela.valor_parcela,
+        valor_pago: parcela.valor_pago,
+        cliente_id: conta.cliente_id, // <-- Injetando o cliente_id da ContaReceber
+    };
+    
+    setParcelaSelecionada(mappedParcela);
     setPagamentoDialogOpen(true);
   };
 
