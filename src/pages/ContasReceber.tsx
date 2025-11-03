@@ -15,13 +15,13 @@ import DetalhesParcelasDialog from '@/components/DetalhesParcelasDialog';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { DateRange } from 'react-day-picker';
-import { DateRangePicker } from '@/components/DateRangePicker';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { isToday, isPast, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 import { useSearchParams } from 'react-router-dom'; // Importando useSearchParams
 import RegistrarPagamentoDialog from '@/components/RegistrarPagamentoDialog'; // Importando o dialog de pagamento
+import ContasReceberAcoes from '@/components/ContasReceberAcoes'; // NOVO COMPONENTE
 
 type ParcelaStatus = 'aberta' | 'parcial' | 'paga' | 'reprogramada' | 'cancelada';
 type BadgeVariant = 'success' | 'warning' | 'secondary' | 'destructive' | 'default' | 'info';
@@ -538,42 +538,22 @@ const ContasReceber = () => {
           <Card>
             <CardHeader>
               <CardTitle>Detalhamento de Todas as Parcelas</CardTitle>
-              <div className="flex flex-col md:flex-row gap-4 mt-4">
-                <Input
-                  placeholder="Filtrar por cliente, descrição, valor..."
-                  value={filtroGeral}
-                  onChange={(e) => setFiltroGeral(e.target.value)}
-                  className="w-full md:max-w-xs"
-                />
-                <DateRangePicker
-                  date={filtroPeriodo}
-                  setDate={setFiltroPeriodo}
-                  className="w-full md:w-auto"
-                />
-                <Select value={filtroStatus} onValueChange={setFiltroStatus}>
-                  <SelectTrigger className="w-full md:w-[180px]">
-                    <SelectValue placeholder="Filtrar por Status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="todos">Todos os Status</SelectItem>
-                    <SelectItem value="pendente">Em Aberto / Parcial</SelectItem>
-                    <SelectItem value="paga">Quitadas</SelectItem>
-                    <SelectItem value="aberta">Abertas / Reprogramadas</SelectItem>
-                  </SelectContent>
-                </Select>
-                {/* FILTRO DE ORIGEM */}
-                <Select value={filtroOrigem} onValueChange={setFiltroOrigem}>
-                  <SelectTrigger className="w-full md:w-[180px]">
-                    <SelectValue placeholder="Filtrar por Origem" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="todos">Todas as Origens</SelectItem>
-                    <SelectItem value="manual">Manual</SelectItem>
-                    <SelectItem value="contrato">Contrato</SelectItem>
-                    <SelectItem value="plano">Plano (Recorrente)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              <ContasReceberAcoes
+                activeTab="parcelas"
+                filtroGeral={filtroGeral}
+                setFiltroGeral={setFiltroGeral}
+                filtroPeriodo={filtroPeriodo}
+                setFiltroPeriodo={setFiltroPeriodo}
+                filtroStatus={filtroStatus}
+                setFiltroStatus={setFiltroStatus}
+                filtroOrigem={filtroOrigem}
+                setFiltroOrigem={setFiltroOrigem}
+                contasFiltradas={contasFiltradas}
+                parcelasFiltradas={parcelasFiltradas}
+                recebimentosFiltrados={recebimentosFiltrados}
+                clienteNomeMap={clienteNomeMap}
+                isAdmin={isAdmin}
+              />
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
@@ -645,42 +625,22 @@ const ContasReceber = () => {
             <CardHeader>
               <CardTitle>Resumo dos Lançamentos</CardTitle>
               {/* FILTROS ADICIONADOS AQUI */}
-              <div className="flex flex-col md:flex-row gap-4 mt-4">
-                <Input
-                  placeholder="Filtrar por cliente, descrição, valor..."
-                  value={filtroGeral}
-                  onChange={(e) => setFiltroGeral(e.target.value)}
-                  className="w-full md:max-w-xs"
-                />
-                <DateRangePicker
-                  date={filtroPeriodo}
-                  setDate={setFiltroPeriodo}
-                  className="w-full md:w-auto"
-                />
-                <Select value={filtroStatus} onValueChange={setFiltroStatus}>
-                  <SelectTrigger className="w-full md:w-[180px]">
-                    <SelectValue placeholder="Filtrar por Status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="todos">Todos os Status</SelectItem>
-                    <SelectItem value="pendente">Em Aberto / Parcial</SelectItem>
-                    <SelectItem value="paga">Quitadas</SelectItem>
-                    <SelectItem value="aberta">Abertas / Reprogramadas</SelectItem>
-                  </SelectContent>
-                </Select>
-                {/* NOVO FILTRO DE ORIGEM */}
-                <Select value={filtroOrigem} onValueChange={setFiltroOrigem}>
-                  <SelectTrigger className="w-full md:w-[180px]">
-                    <SelectValue placeholder="Filtrar por Origem" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="todos">Todas as Origens</SelectItem>
-                    <SelectItem value="manual">Manual</SelectItem>
-                    <SelectItem value="contrato">Contrato</SelectItem>
-                    <SelectItem value="plano">Plano (Recorrente)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              <ContasReceberAcoes
+                activeTab="parcela_sintetica"
+                filtroGeral={filtroGeral}
+                setFiltroGeral={setFiltroGeral}
+                filtroPeriodo={filtroPeriodo}
+                setFiltroPeriodo={setFiltroPeriodo}
+                filtroStatus={filtroStatus}
+                setFiltroStatus={setFiltroStatus}
+                filtroOrigem={filtroOrigem}
+                setFiltroOrigem={setFiltroOrigem}
+                contasFiltradas={contasFiltradas}
+                parcelasFiltradas={parcelasFiltradas}
+                recebimentosFiltrados={recebimentosFiltrados}
+                clienteNomeMap={clienteNomeMap}
+                isAdmin={isAdmin}
+              />
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
@@ -779,31 +739,22 @@ const ContasReceber = () => {
                 <Card>
                     <CardHeader>
                         <CardTitle>Histórico de Parcelas Recebidas</CardTitle>
-                        <div className="flex flex-col md:flex-row gap-4 mt-4">
-                            <Input
-                                placeholder="Filtrar por cliente, descrição, valor..."
-                                value={filtroGeral}
-                                onChange={(e) => setFiltroGeral(e.target.value)}
-                                className="w-full md:max-w-xs"
-                            />
-                            <DateRangePicker
-                                date={filtroPeriodo}
-                                setDate={setFiltroPeriodo}
-                                className="w-full md:w-auto"
-                            />
-                            {/* FILTRO DE ORIGEM */}
-                            <Select value={filtroOrigem} onValueChange={setFiltroOrigem}>
-                              <SelectTrigger className="w-full md:w-[180px]">
-                                <SelectValue placeholder="Filtrar por Origem" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="todos">Todas as Origens</SelectItem>
-                                <SelectItem value="manual">Manual</SelectItem>
-                                <SelectItem value="contrato">Contrato</SelectItem>
-                                <SelectItem value="plano">Plano (Recorrente)</SelectItem>
-                              </SelectContent>
-                            </Select>
-                        </div>
+                        <ContasReceberAcoes
+                            activeTab="recebimentos"
+                            filtroGeral={filtroGeral}
+                            setFiltroGeral={setFiltroGeral}
+                            filtroPeriodo={filtroPeriodo}
+                            setFiltroPeriodo={setFiltroPeriodo}
+                            filtroStatus={filtroStatus}
+                            setFiltroStatus={setFiltroStatus}
+                            filtroOrigem={filtroOrigem}
+                            setFiltroOrigem={setFiltroOrigem}
+                            contasFiltradas={contasFiltradas}
+                            parcelasFiltradas={parcelasFiltradas}
+                            recebimentosFiltrados={recebimentosFiltrados}
+                            clienteNomeMap={clienteNomeMap}
+                            isAdmin={isAdmin}
+                        />
                     </CardHeader>
                     <CardContent>
                         <div className="overflow-x-auto">
