@@ -4,7 +4,7 @@ export interface ContaReceber {
   id: string;
   empresa_id: string;
   cliente_id: string;
-  origem: 'manual' | 'contrato';
+  origem: 'manual' | 'contrato' | 'assinatura_recorrente';
   descricao: string;
   valor_total: number;
   data_emissao: string;

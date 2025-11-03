@@ -98,7 +98,8 @@ const ContasReceber = () => {
   // Filtros
   const [filtroGeral, setFiltroGeral] = useState('');
   const [filtroPeriodo, setFiltroPeriodo] = useState<DateRange | undefined>(undefined);
-  
+  const [filtroOrigem, setFiltroOrigem] = useState('todos'); // NOVO ESTADO DE FILTRO
+
   // Inicializa filtroStatus e activeTab com base na URL
   const initialStatus = searchParams.get('status') || 'todos';
   const initialTab = initialStatus === 'pendente' ? 'parcelas' : 'parcela_sintetica';
@@ -409,7 +410,21 @@ const ContasReceber = () => {
       }
     }
     
-    // 3. Filtro Geral (Texto)
+    // 3. Filtro de Origem (NOVO)
+    if (filtroOrigem !== 'todos') {
+        const origem = c.origem;
+        if (filtroOrigem === 'contrato' && origem !== 'contrato') {
+            return false;
+        }
+        if (filtroOrigem === 'plano' && origem !== 'assinatura_recorrente') {
+            return false;
+        }
+        if (filtroOrigem === 'manual' && origem !== 'manual') {
+            return false;
+        }
+    }
+    
+    // 4. Filtro Geral (Texto)
     // Lógica de acesso ao nome do cliente e descrição
     let clienteNome = 'N/A';
     let descricao = c.descricao;
@@ -603,6 +618,18 @@ const ContasReceber = () => {
                     <SelectItem value="aberta">Abertas / Reprogramadas</SelectItem>
                   </SelectContent>
                 </Select>
+                {/* NOVO FILTRO DE ORIGEM */}
+                <Select value={filtroOrigem} onValueChange={setFiltroOrigem}>
+                  <SelectTrigger className="w-full md:w-[180px]">
+                    <SelectValue placeholder="Filtrar por Origem" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todas as Origens</SelectItem>
+                    <SelectItem value="manual">Manual</SelectItem>
+                    <SelectItem value="contrato">Contrato</SelectItem>
+                    <SelectItem value="plano">Plano (Recorrente)</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </CardHeader>
             <CardContent>
@@ -677,6 +704,9 @@ const ContasReceber = () => {
                             {progresso && (
                                 <span className="block text-xs text-muted-foreground mt-1">{progresso}</span>
                             )}
+                            <span className="block text-xs text-primary/80 mt-1 font-medium">
+                                Origem: {conta.origem === 'assinatura_recorrente' ? 'Plano' : conta.origem.charAt(0).toUpperCase() + conta.origem.slice(1)}
+                            </span>
                           </TableCell>
                           <TableCell>{formatDate(conta.data_vencimento)}</TableCell>
                           <TableCell>{formatCurrency(conta.valor_total)}</TableCell>
