@@ -174,21 +174,19 @@ const ContasReceber = () => {
         contasQuery = supabase.from('admin_contas_receber').select('*').eq('admin_id', empresaId).order('data_vencimento', { ascending: true });
         
         if (activeTab === 'assinaturas') {
-            // NOVO FILTRO PARA ASSINATURAS:
-            // 1. Deve ser do Admin logado (já feito)
-            // 2. Deve ter origem 'assinatura_recorrente'
-            // 3. Deve ter 'Plano' na descrição (usando filter)
-            // 4. Deve ter contrato_gerado_id IS NULL
+            // FILTRO ESTRITO PARA ASSINATURAS: origem = 'assinatura_recorrente' E descricao ILIKE '%Plano%' E contrato_gerado_id IS NULL
             contasQuery = contasQuery
                 .eq('origem', 'assinatura_recorrente')
                 .is('contrato_gerado_id', null)
-                .filter('descricao', 'ilike', '%Plano%'); // Filtra por 'Plano' na descrição
+                .filter('descricao', 'ilike', '%Plano%'); 
             
         } else if (activeTab === 'contratos_clientes') {
+            // FILTRO PARA CONTRATOS: origem = 'contrato'
             contasQuery = contasQuery.eq('origem', 'contrato');
             
         } else if (activeTab === 'parcela_sintetica') {
-            // Lançamentos Manuais e de Recorrência (que não são de contrato)
+            // FILTRO PARA PARCELA SINTÉTICA (Manuais + Recorrência/Assinaturas):
+            // Exclui apenas os lançamentos de contrato (contrato_gerado_id IS NOT NULL)
             contasQuery = contasQuery.is('contrato_gerado_id', null);
         }
         
