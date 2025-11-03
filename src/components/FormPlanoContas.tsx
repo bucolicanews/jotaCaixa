@@ -13,6 +13,7 @@ import { PlanoContas } from '@/types/plano-contas';
 
 const formSchema = z.object({
   codigo_conta: z.string().min(1, 'O código é obrigatório.'),
+  codigo_reduzido: z.string().optional().or(z.literal('')), // NOVO CAMPO
   nome_conta: z.string().min(1, 'O nome é obrigatório.'),
   tipo: z.enum(['Analítica', 'Sintética'], {
     required_error: 'O tipo é obrigatório.',
@@ -22,16 +23,17 @@ const formSchema = z.object({
 type FormValues = z.infer<typeof formSchema>;
 
 interface FormPlanoContasProps {
-  empresaId: string;
+  proprietarioId: string; // RENOMEADO
   contaInicial?: PlanoContas | null;
   onSaveComplete: () => void;
 }
 
-const FormPlanoContas: React.FC<FormPlanoContasProps> = ({ empresaId, contaInicial, onSaveComplete }) => {
+const FormPlanoContas: React.FC<FormPlanoContasProps> = ({ proprietarioId, contaInicial, onSaveComplete }) => {
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       codigo_conta: contaInicial?.codigo_conta || '',
+      codigo_reduzido: contaInicial?.codigo_reduzido || '', // NOVO CAMPO
       nome_conta: contaInicial?.nome_conta || '',
       tipo: contaInicial?.tipo || 'Analítica',
     },
@@ -39,8 +41,9 @@ const FormPlanoContas: React.FC<FormPlanoContasProps> = ({ empresaId, contaInici
 
   const onSubmit = async (values: FormValues) => {
     const dataToSave = {
-      empresa_id: empresaId,
+      proprietario_id: proprietarioId, // RENOMEADO
       codigo_conta: values.codigo_conta,
+      codigo_reduzido: values.codigo_reduzido || null, // NOVO CAMPO
       nome_conta: values.nome_conta,
       tipo: values.tipo,
     };
@@ -78,9 +81,22 @@ const FormPlanoContas: React.FC<FormPlanoContasProps> = ({ empresaId, contaInici
           name="codigo_conta"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Código da Conta</FormLabel>
+              <FormLabel>Código da Conta (Ex: 1.0.1.01.0101)</FormLabel>
               <FormControl>
                 <Input placeholder="Ex: 1.0.1.01.0101" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="codigo_reduzido"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Código Reduzido (Opcional)</FormLabel>
+              <FormControl>
+                <Input placeholder="Ex: 1010101" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>

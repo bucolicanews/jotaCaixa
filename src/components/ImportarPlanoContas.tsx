@@ -27,7 +27,7 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
     }
   };
 
-  const getEmpresaId = (): string | null => {
+  const getProprietarioId = (): string | null => {
     if (role === 'Admin') return usuario?.id || null;
     if (role === 'Cliente') return (perfil as ClienteProfile)?.id || null;
     if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id || null;
@@ -40,8 +40,8 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
       return;
     }
     
-    const empresaId = getEmpresaId();
-    if (!empresaId) {
+    const proprietarioId = getProprietarioId();
+    if (!proprietarioId) {
       showError('Usuário não autenticado ou sem empresa vinculada.');
       setLoading(false);
       return;
@@ -60,18 +60,18 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
 
       // Mapear dados para o formato do banco de dados
       const contasParaInserir = parsedData.map(conta => ({
-        empresa_id: empresaId,
+        proprietario_id: proprietarioId,
         codigo_conta: conta.Conta,
+        codigo_reduzido: conta['Código Reduzido'] || null, // NOVO CAMPO
         nome_conta: conta.Descrição.trim(),
         tipo: conta.Analítica === 'Sim' ? 'Analítica' : 'Sintética',
       }));
 
-      // 1. Limpar contas existentes para a empresa (opcional, mas comum em importação de plano de contas)
-      // Para evitar duplicatas e garantir que o plano importado seja o único.
+      // 1. Limpar contas existentes para o proprietário
       const { error: deleteError } = await supabase
         .from('plano_contas')
         .delete()
-        .eq('empresa_id', empresaId);
+        .eq('proprietario_id', proprietarioId);
 
       if (deleteError) {
         throw new Error('Erro ao limpar contas existentes: ' + deleteError.message);
@@ -105,7 +105,7 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-sm text-muted-foreground">
-          Selecione um arquivo CSV no formato: <code>Conta;Analítica;C.R.;Descrição;SPED ECD/ECF</code>
+          Selecione um arquivo CSV no formato: <code>Conta;Código Reduzido;Descrição;Analítica</code>
         </p>
         <div className="flex items-center space-x-2">
           <Input 
@@ -118,7 +118,7 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
           />
           <Button 
             onClick={handleImport} 
-            disabled={!file || loading || !getEmpresaId()}
+            disabled={!file || loading || !getProprietarioId()}
           >
             {loading ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />

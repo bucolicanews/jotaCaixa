@@ -13,13 +13,12 @@ export const parseCSV = (file: File): Promise<ContaCSV[]> => {
       skipEmptyLines: true,
       dynamicTyping: true,
       complete: (results: ParseResult<any>) => {
-        // O PapaParse pode retornar strings vazias ou nulls, garantimos que o tipo seja o esperado
+        // Mapeamento para garantir que os campos esperados existam e estejam no formato correto
         const data = results.data.map((row: any) => ({
           Conta: String(row.Conta || ''),
-          Analítica: (row.Analítica === 'Sim' ? 'Sim' : 'Não') as 'Sim' | 'Não',
-          'C.R.': String(row['C.R.'] || ''),
+          'Código Reduzido': String(row['Código Reduzido'] || ''), // Novo campo
           Descrição: String(row.Descrição || ''),
-          'SPED ECD/ECF': (row['SPED ECD/ECF'] === 'Sim' ? 'Sim' : 'Não') as 'Sim' | 'Não',
+          Analítica: (row.Analítica === 'Sim' ? 'Sim' : 'Não') as 'Sim' | 'Não',
         })).filter((row: ContaCSV) => row.Conta && row.Descrição); // Filtra linhas sem dados essenciais
         
         resolve(data as ContaCSV[]);

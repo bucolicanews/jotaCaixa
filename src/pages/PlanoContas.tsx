@@ -17,25 +17,25 @@ const PlanoContasPage = () => {
   const { usuario, perfil, role, carregando: carregandoSessao } = useSessao();
   const [contas, setContas] = useState<PlanoContas[]>([]);
   const [carregandoContas, setCarregandoContas] = useState(true);
-  const [empresaId, setEmpresaId] = useState<string | null>(null);
+  const [proprietarioId, setProprietarioId] = useState<string | null>(null);
   const [contaSelecionada, setContaSelecionada] = useState<PlanoContas | null>(null);
   const [dialogAberto, setDialogAberto] = useState(false);
 
   useEffect(() => {
     if (!carregandoSessao && usuario) {
-      buscarEmpresaId(usuario.id);
+      buscarProprietarioId(usuario.id);
     }
   }, [carregandoSessao, usuario]);
 
   useEffect(() => {
-    if (empresaId) {
-      buscarPlanoContas(empresaId);
+    if (proprietarioId) {
+      buscarPlanoContas(proprietarioId);
     } else if (!carregandoSessao && !usuario) {
       setCarregandoContas(false);
     }
-  }, [empresaId, usuario, carregandoSessao]);
+  }, [proprietarioId, usuario, carregandoSessao]);
 
-  const buscarEmpresaId = async (userId: string) => {
+  const buscarProprietarioId = async (userId: string) => {
     let ownerId: string | null = null;
 
     if (role === 'Admin') {
@@ -52,7 +52,7 @@ const PlanoContasPage = () => {
         return;
     }
     
-    setEmpresaId(ownerId);
+    setProprietarioId(ownerId);
   };
 
   const buscarPlanoContas = async (id: string) => {
@@ -60,7 +60,7 @@ const PlanoContasPage = () => {
     const { data, error } = await supabase
       .from('plano_contas')
       .select('*')
-      .eq('empresa_id', id)
+      .eq('proprietario_id', id)
       .order('codigo_conta', { ascending: true });
 
     if (error) {
@@ -73,16 +73,16 @@ const PlanoContasPage = () => {
   };
 
   const handleImportComplete = () => {
-    if (empresaId) {
-      buscarPlanoContas(empresaId);
+    if (proprietarioId) {
+      buscarPlanoContas(proprietarioId);
     }
   };
 
   const handleSaveComplete = () => {
     setDialogAberto(false);
     setContaSelecionada(null);
-    if (empresaId) {
-      buscarPlanoContas(empresaId);
+    if (proprietarioId) {
+      buscarPlanoContas(proprietarioId);
     }
   };
 
@@ -116,7 +116,7 @@ const PlanoContasPage = () => {
     );
   }
 
-  if (!empresaId) {
+  if (!proprietarioId) {
     return (
       <LayoutPrincipal>
         <Card>
@@ -124,7 +124,7 @@ const PlanoContasPage = () => {
             <CardTitle>Plano de Contas</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-red-500">Não foi possível carregar o ID da empresa. Verifique se o usuário está vinculado a uma empresa.</p>
+            <p className="text-red-500">Não foi possível carregar o ID da empresa/proprietário. Verifique se o usuário está vinculado.</p>
           </CardContent>
         </Card>
       </LayoutPrincipal>
@@ -148,7 +148,7 @@ const PlanoContasPage = () => {
                 <DialogTitle>{contaSelecionada ? 'Editar Conta' : 'Nova Conta'}</DialogTitle>
               </DialogHeader>
               <FormPlanoContas 
-                empresaId={empresaId}
+                proprietarioId={proprietarioId}
                 contaInicial={contaSelecionada}
                 onSaveComplete={handleSaveComplete}
               />
@@ -170,6 +170,7 @@ const PlanoContasPage = () => {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-[150px]">Código</TableHead>
+                    <TableHead className="w-[100px]">Cód. Reduzido</TableHead>
                     <TableHead>Nome da Conta</TableHead>
                     <TableHead className="w-[100px] text-center">Tipo</TableHead>
                     <TableHead className="w-[100px] text-right">Ações</TableHead>
@@ -178,7 +179,7 @@ const PlanoContasPage = () => {
                 <TableBody>
                   {contas.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={4} className="text-center py-4 text-muted-foreground">
+                      <TableCell colSpan={5} className="text-center py-4 text-muted-foreground">
                         Nenhuma conta cadastrada. Importe um CSV ou adicione manualmente.
                       </TableCell>
                     </TableRow>
@@ -186,6 +187,7 @@ const PlanoContasPage = () => {
                     contas.map((conta) => (
                       <TableRow key={conta.id}>
                         <TableCell className="font-mono text-sm">{conta.codigo_conta}</TableCell>
+                        <TableCell className="text-sm">{conta.codigo_reduzido || '-'}</TableCell>
                         <TableCell>{conta.nome_conta}</TableCell>
                         <TableCell className="text-center">{conta.tipo}</TableCell>
                         <TableCell className="text-right">
