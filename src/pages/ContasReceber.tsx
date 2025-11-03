@@ -276,13 +276,15 @@ const ContasReceber = () => {
         ? (parcela as ExtendedParcelaDetalhada).contas_receber
         : (parcela as ExtendedParcelaDetalhada).contas_receber;
         
-    let clienteIdReal: string | undefined;
+    let clienteId: string | undefined; // Renomeado de clienteIdReal para clienteId
     
     if (isMyLaunch) {
-        clienteIdReal = contaReceber?.cliente_id;
+        // Se for Admin, o cliente_id real está na conta sintética (admin_contas_receber)
+        clienteId = contaReceber?.cliente_id;
         
     } else {
-        clienteIdReal = contaReceber?.cliente_id;
+        // Se for Cliente, o cliente_id real está na conta sintética (contas_receber)
+        clienteId = contaReceber?.cliente_id;
     }
         
     const mappedParcela = {
@@ -291,7 +293,7 @@ const ContasReceber = () => {
         empresa_id: ownerId, // O ownerId é o Admin ID ou o Cliente ID
         valor_parcela: parcela.valor_parcela,
         valor_pago: parcela.valor_pago,
-        cliente_id_real: clienteIdReal, // ID do cliente pagador (tbl_clientes)
+        cliente_id: clienteId, // Usando cliente_id
     };
     
     setParcelaParaPagamento(mappedParcela);
