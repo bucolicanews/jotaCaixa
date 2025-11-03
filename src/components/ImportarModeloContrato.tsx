@@ -130,18 +130,19 @@ const ImportarModeloContrato: React.FC<ImportarModeloContratoProps> = ({ empresa
             />
         </div>
 
-        <div className="flex items-center space-x-2">
+        <div className="flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-2">
           <Input 
             id="modelo-file" 
             type="file" 
             accept=".txt,.html" 
             onChange={handleFileChange} 
-            className="flex-1"
+            className="flex-1 w-full"
             disabled={loading}
           />
           <Button 
             onClick={handleImport} 
             disabled={!file || loading || !titulo.trim()}
+            className="w-full sm:w-auto"
           >
             {loading ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
