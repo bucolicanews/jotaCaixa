@@ -12,13 +12,15 @@ export const parseCSV = (file: File): Promise<ContaCSV[]> => {
       header: true,
       skipEmptyLines: true,
       dynamicTyping: true,
+      // Usando ponto e vírgula como delimitador padrão para CSVs brasileiros
+      delimiter: ';', 
       complete: (results: ParseResult<any>) => {
         // Mapeamento para garantir que os campos esperados existam e estejam no formato correto
         const data = results.data.map((row: any) => ({
           Conta: String(row.Conta || ''),
           'Código Reduzido': String(row['Código Reduzido'] || ''), // Novo campo
-          Descrição: String(row.Descricao || ''), // Usando 'Descricao' do CSV
-          Analítica: (row.Analitica === 'Sim' ? 'Sim' : 'Não') as 'Sim' | 'Não', // Usando 'Analitica' do CSV
+          Descrição: String(row.Descrição || ''), // Usando 'Descrição' do CSV
+          Analítica: (row.Analítica === 'Sim' ? 'Sim' : 'Não') as 'Sim' | 'Não', // Usando 'Analítica' do CSV
         })).filter((row: ContaCSV) => row.Conta && row.Descrição); // Filtra linhas sem dados essenciais
         
         resolve(data as ContaCSV[]);
