@@ -13,15 +13,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import FormContasReceber from '@/components/FormContasReceber';
 import DetalhesParcelasDialog from '@/components/DetalhesParcelasDialog';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
 import { DateRange } from 'react-day-picker';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { isToday, isPast, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
-import { useSearchParams } from 'react-router-dom'; // Importando useSearchParams
-import RegistrarPagamentoDialog from '@/components/RegistrarPagamentoDialog'; // Importando o dialog de pagamento
-import ContasReceberAcoes from '@/components/ContasReceberAcoes'; // NOVO COMPONENTE
+import { useSearchParams } from 'react-router-dom';
+import RegistrarPagamentoDialog from '@/components/RegistrarPagamentoDialog';
+import ContasReceberAcoes from '@/components/ContasReceberAcoes';
 
 type ParcelaStatus = 'aberta' | 'parcial' | 'paga' | 'reprogramada' | 'cancelada';
 type BadgeVariant = 'success' | 'warning' | 'secondary' | 'destructive' | 'default' | 'info';
@@ -277,7 +275,7 @@ const ContasReceber = () => {
   };
 
   const handleDelete = async (contaId: string) => {
-    if (!window.confirm('Tem certeza que deseja excluir este conta e todas as suas parcelas? A ação não pode ser desfeita.')) return;
+    if (!window.confirm('Tem certeza que deseja excluir este conta e todas as suas parcelas? Ação não pode ser desfeita.')) return;
     
     // A tabela de destino depende se é Admin e qual aba está ativa
     const tabelaContasReceber = isAdmin ? 'admin_contas_receber' : 'contas_receber';

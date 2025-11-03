@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DateRange } from 'react-day-picker';
@@ -11,7 +11,13 @@ import Papa from 'papaparse';
 import { showError, showSuccess } from '@/utils/toast';
 import { usePrint } from '@/hooks/use-print';
 import ReactDOMServer from 'react-dom/server';
-import ContasReceberPrint from './ContasReceberPrint'; // Componente de impressão a ser criado
+import ContasReceberPrint from './ContasReceberPrint';
+
+// Definindo o tipo ContaReceberComProgresso localmente para resolver TS2339
+interface ContaReceberComProgresso extends ContaReceber {
+    parcelas_pagas?: number;
+    parcelas_total?: number;
+}
 
 interface ContasReceberAcoesProps {
   activeTab: string;
@@ -25,14 +31,14 @@ interface ContasReceberAcoesProps {
   setFiltroOrigem: (value: string) => void;
   
   // Dados filtrados para exportação/impressão
-  contasFiltradas: ContaReceber[];
+  contasFiltradas: ContaReceberComProgresso[]; // Usando o tipo corrigido
   parcelasFiltradas: ParcelaDetalhada[];
   recebimentosFiltrados: any[]; // Usamos any para simplificar o tipo AdminRecebimento
   clienteNomeMap: Record<string, string>;
   isAdmin: boolean;
 }
 
-const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+// Removendo formatCurrency (TS6133)
 const formatDate = (dateString: string) => new Date(dateString + 'T00:00:00').toLocaleDateString('pt-BR');
 
 const ContasReceberAcoes: React.FC<ContasReceberAcoesProps> = ({
@@ -117,7 +123,7 @@ const ContasReceberAcoes: React.FC<ContasReceberAcoesProps> = ({
     return { data, filename };
   };
 
-  const handleExport = (format: 'csv' | 'xlsx') => {
+  const handleExport = (formatType: 'csv' | 'xlsx') => {
     setIsExporting(true);
     const { data, filename } = getDataForExport();
 
@@ -127,18 +133,19 @@ const ContasReceberAcoes: React.FC<ContasReceberAcoesProps> = ({
       return;
     }
 
-    if (format === 'csv') {
+    if (formatType === 'csv') {
       const csv = Papa.unparse(data, { delimiter: ';', header: true });
       const blob = new Blob([`\ufeff${csv}`], { type: 'text/csv;charset=utf-8;' }); // Adiciona BOM para UTF-8
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${filename}_${format(new Date(), 'yyyyMMdd')}.csv`;
+      // Correção do erro TS2349: format deve ser chamado com Date ou number, não String
+      a.download = `${filename}_${format(new Date(), 'yyyyMMdd')}.csv`; 
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       showSuccess('Dados exportados para CSV!');
-    } else if (format === 'xlsx') {
+    } else if (formatType === 'xlsx') {
       // Simulação de exportação XLSX (requer biblioteca externa)
       showError('A exportação para XLSX requer bibliotecas adicionais. Exportando para CSV.');
       handleExport('csv');
