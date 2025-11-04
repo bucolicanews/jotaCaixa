@@ -39,6 +39,11 @@ Criação, gestão e preenchimento de contratos dinâmicos.
 *   **Gerenciamento de Modelos (`/contratos/modelos`):** Criação e importação de templates de contrato (HTML ou Texto Simples).
 *   **Geração de Contrato (`/contratos/preencher/:modeloId`):** Fluxo para selecionar um cliente, preencher tags customizadas e dados financeiros (valor, parcelamento), renderizar o contrato e gerar as Contas a Receber correspondentes.
 
+### 4. Módulo de Bancos / Caixas (`/bancos`)
+
+*   **Cálculo de Saldo Dinâmico:** O saldo atual de cada conta (`saldo_contas`) é calculado em tempo real, somando o `saldo_inicial` com todas as `Entradas` e subtraindo todas as `Saídas` registradas na tabela `lancamentos`.
+*   **Integração com CR:** O registro de recebimentos em Contas a Receber agora gera automaticamente um lançamento de `Entrada` na conta de destino selecionada, garantindo a apuração correta do saldo.
+
 ---
 
 ## 🗄️ Arquitetura do Banco de Dados (Supabase/PostgreSQL)
@@ -92,6 +97,6 @@ A lógica de autenticação foi aprimorada para priorizar o evento `PASSWORD_REC
 
 *   **`src/components/CheckoutPlano.tsx`:** Gerencia a coleta de dados de adesão e a chamada para a Edge Function do Stripe.
 *   **`src/components/LayoutPrincipal.tsx`:** Implementa a lógica de bloqueio de acesso (`isAccessExpired` / `isAccessBlocked`) e exibe o `TrialBanner` e o `TrialButton` conforme o status do cliente.
-*   **`src/components/RegistrarPagamentoDialog.tsx`:** Corrigido para garantir que o Admin use o `cliente_id` correto (ID do pagador) ao registrar recebimentos na tabela `admin_recebimentos`.
-*   **`src/components/FormUsuario.tsx` / `src/components/FormCliente.tsx`:** Formulários de perfil que agora incluem campos de RH (salário, jornada, folgas) e a integração com o `useTagManager` para criar tags de contrato automaticamente.
+*   **`src/components/RegistrarPagamentoDialog.tsx`:** Garante que o registro de recebimento gere um lançamento de `Entrada` na conta de saldo selecionada (`lancamentos` table).
+*   **`src/hooks/use-saldo-conta-calculado.ts`:** Novo hook que calcula o saldo atual das contas de caixa/banco (`saldo_contas`) com base nos lançamentos (`lancamentos`).
 *   **`src/hooks/use-tag-manager.ts`:** Hook responsável por verificar e alternar a presença de tags de contrato na tabela `contrato_tags` com base nos campos do perfil do Cliente/Usuário.
