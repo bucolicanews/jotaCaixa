@@ -1,4 +1,4 @@
-import { Cliente } from './cliente';
+// import { Cliente } from './cliente'; // REMOVIDO
 
 export interface ContaPagar {
   id: string;
