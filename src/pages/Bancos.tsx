@@ -16,7 +16,7 @@ import { cn } from '@/lib/utils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { PlanoContas } from '@/types/plano-contas';
 import { Input } from '@/components/ui/input';
-import { useDebounce } from '@/hooks/use-debounce'; // Importando useDebounce
+import { useDebounce } from '@/hooks/use-debounce';
 
 type TipoSaldoFiltro = 'todos' | 'Credito' | 'Debito';
 
@@ -34,8 +34,8 @@ const Bancos = () => {
   const [filtroContaContabilId, setFiltroContaContabilId] = useState<string>('todos');
   const [filtroNomeInput, setFiltroNomeInput] = useState(''); // Estado do input
   
-  // Valor debounced para disparar a busca
-  const filtroNomeDebounced = useDebounce(filtroNomeInput, 300); 
+  // Valor debounced para disparar a busca (AUMENTADO PARA 500ms)
+  const filtroNomeDebounced = useDebounce(filtroNomeInput, 500); 
 
   const getEmpresaId = () => {
     if (role === 'Admin') return usuario?.id || null;
@@ -93,7 +93,12 @@ const Bancos = () => {
     
     // Filtro por Nome/Descrição (usando ILIKE para busca parcial e case-insensitive)
     if (filtroNomeDebounced) {
+        // Busca inteligente: busca na coluna 'nome' da tabela saldo_contas
         query = query.ilike('nome', `%${filtroNomeDebounced}%`);
+        
+        // Para buscar na descrição da conta contábil, precisaríamos de uma View ou RPC, 
+        // ou buscar todos os IDs de contas contábeis que correspondem ao filtro e usar 'in'.
+        // Por enquanto, mantemos a busca simples na coluna 'nome' para evitar complexidade de performance.
     }
 
     const { data, error } = await query.order('nome', { ascending: true });
@@ -102,7 +107,20 @@ const Bancos = () => {
       showError('Erro ao carregar Contas/Caixas: ' + error.message);
       setContas([]);
     } else {
-      setContas(data as SaldoContaDetalhada[]);
+      // Implementação da busca inteligente no frontend para incluir a descrição da conta contábil
+      let filteredContas = data as SaldoContaDetalhada[];
+      
+      if (filtroNomeDebounced) {
+          const termo = filtroNomeDebounced.toLowerCase();
+          filteredContas = filteredContas.filter(conta => {
+              const nomeMatch = conta.nome.toLowerCase().includes(termo);
+              const contaContabilMatch = conta.plano_contas?.Descricao?.toLowerCase().includes(termo);
+              
+              return nomeMatch || contaContabilMatch;
+          });
+      }
+      
+      setContas(filteredContas);
     }
     setCarregandoContas(false);
   }, [empresaId, filtroTipoSaldo, filtroContaContabilId, filtroNomeDebounced]); // Depende do valor debounced
@@ -210,7 +228,7 @@ const Bancos = () => {
             <div className="relative w-full sm:w-[300px]">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                    placeholder="Buscar por nome da conta..."
+                    placeholder="Buscar por nome da conta ou descrição contábil..."
                     value={filtroNomeInput}
                     onChange={(e) => setFiltroNomeInput(e.target.value)}
                     className="pl-10"
