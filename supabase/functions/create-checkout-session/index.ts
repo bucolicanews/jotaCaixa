@@ -18,12 +18,12 @@ serve(async (req: Request) => {
 
     // 1️⃣ Ler o corpo da requisição
     const body = await req.json();
-    const { planoId, clienteId, email } = body;
+    const { planoId, clienteId, email, proprietarioId } = body;
 
-    console.log(`LOG 2: Received data: planoId=${planoId}, clienteId=${clienteId}, email=${email}`);
+    console.log(`LOG 2: Received data: planoId=${planoId}, clienteId=${clienteId}, email=${email}, proprietarioId=${proprietarioId}`);
 
-    if (!planoId || !clienteId || !email) {
-      return new Response(JSON.stringify({ error: 'Missing planoId, clienteId, or email' }), {
+    if (!planoId || !clienteId || !email || !proprietarioId) {
+      return new Response(JSON.stringify({ error: 'Missing planoId, clienteId, email, or proprietarioId' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -32,20 +32,20 @@ serve(async (req: Request) => {
     // 2️⃣ Inicializar Supabase Client (usa as variáveis padrão do Supabase)
     const supabase = createClient(
       (Deno.env.get('SUPABASE_URL') as any)!,
-      (Deno.env.get('SUPABASE_ANON_KEY') as any)!,
+      (Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') as any)!, // Usando a chave de serviço para buscar a configuração
       { auth: { persistSession: false } }
     );
 
-    // 3️⃣ Buscar a chave secreta Stripe (configuração do admin)
-    console.log('LOG 3: Fetching Stripe secret key...');
+    // 3️⃣ Buscar a chave secreta Stripe (configuração do proprietário)
+    console.log(`LOG 3: Fetching Stripe secret key for owner: ${proprietarioId}`);
     const { data: stripeConfig, error: configError } = await supabase
       .from('configuracoes_stripe')
       .select('stripe_secret_key')
-      .not('proprietario_id', 'is', null) // Fetch the admin's config
+      .eq('proprietario_id', proprietarioId)
       .limit(1)
       .single();
 
-    if (configError && configError.code !== 'PGRST116') {
+    if (configError) {
       console.error('❌ Database error fetching Stripe config:', configError);
       return new Response(JSON.stringify({ error: 'Database error fetching Stripe config.' }), {
         status: 500,
@@ -54,15 +54,15 @@ serve(async (req: Request) => {
     }
 
     if (!stripeConfig?.stripe_secret_key) {
-      console.error('❌ No Stripe secret key found in configuracoes_stripe.');
-      return new Response(JSON.stringify({ error: 'Stripe secret key not found. Admin must configure it.' }), {
+      console.error('❌ No Stripe secret key found for the specified owner.');
+      return new Response(JSON.stringify({ error: 'Stripe secret key not found for this plan owner.' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
     const stripeSecretKey = stripeConfig.stripe_secret_key;
-    console.log('LOG 4: Stripe secret key fetched. Starts with:', stripeSecretKey.slice(0, 8));
+    console.log('LOG 4: Stripe secret key fetched.');
 
     // 4️⃣ Buscar detalhes do plano
     console.log(`LOG 5: Fetching plan details for ID: ${planoId}`);
@@ -90,16 +90,15 @@ serve(async (req: Request) => {
 
     const unitAmount = Math.round(plano.preco_mensal * 100);
 
-    // 6️⃣ Corrigir URL base (em caso de ausência de referer)
+    // 6️⃣ Corrigir URL base
     const referer = req.headers.get('referer');
-    // Usando uma URL de fallback mais segura
     const baseUrl = referer || `https://${(Deno.env.get('SUPABASE_URL') as any)?.split('//')[1].split('.')[0]}.vercel.app/`; 
 
     console.log(`LOG 8: Creating Checkout Session. Base URL: ${baseUrl}`);
 
     // 7️⃣ Criar a sessão de checkout
     const session = await stripe.checkout.sessions.create({
-      mode: 'payment', // Alterado para pagamento único
+      mode: 'payment',
       payment_method_types: ['card'],
       line_items: [
         {
@@ -107,7 +106,6 @@ serve(async (req: Request) => {
             currency: 'brl',
             product_data: { name: plano.nome },
             unit_amount: unitAmount,
-            // Removido: recurring: { interval: 'month' },
           },
           quantity: 1,
         },

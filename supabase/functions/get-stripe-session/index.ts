@@ -15,32 +15,32 @@ serve(async (req: Request) => {
 
   try {
     const body = await req.json();
-    const { sessionId } = body;
+    const { sessionId, proprietarioId } = body;
 
-    if (!sessionId) {
-      return new Response(JSON.stringify({ error: 'Missing sessionId' }), {
+    if (!sessionId || !proprietarioId) {
+      return new Response(JSON.stringify({ error: 'Missing sessionId or proprietarioId' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    // Inicializar Supabase Client com SERVICE ROLE KEY para buscar a chave secreta
+    // Inicializar Supabase Client com SERVICE ROLE KEY
     const supabase = createClient(
       (Deno.env.get('SUPABASE_URL') as any)!,
       (Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') as any)!,
       { auth: { persistSession: false } }
     );
 
-    // Buscar a chave secreta Stripe
+    // Buscar a chave secreta Stripe do proprietário
     const { data: stripeConfig, error: configError } = await supabase
       .from('configuracoes_stripe')
       .select('stripe_secret_key')
-      .not('proprietario_id', 'is', null) // Fetch the admin's config
+      .eq('proprietario_id', proprietarioId)
       .limit(1)
       .single();
 
     if (configError || !stripeConfig?.stripe_secret_key) {
-      return new Response(JSON.stringify({ error: 'Stripe secret key not found.' }), {
+      return new Response(JSON.stringify({ error: 'Stripe secret key not found for this plan owner.' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });

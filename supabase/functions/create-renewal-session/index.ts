@@ -19,35 +19,35 @@ serve(async (req: Request) => {
 
     // 1️⃣ Ler o corpo da requisição
     const body = await req.json();
-    const { planoId, clienteId, email, contaPagarId, valorCobrado } = body; // NOVO: valorCobrado
+    const { planoId, clienteId, email, contaPagarId, valorCobrado, proprietarioId } = body;
 
-    console.log(`LOG 2: Received data: planoId=${planoId}, clienteId=${clienteId}, email=${email}, contaPagarId=${contaPagarId}, valorCobrado=${valorCobrado}`);
+    console.log(`LOG 2: Received data: planoId=${planoId}, clienteId=${clienteId}, email=${email}, contaPagarId=${contaPagarId}, valorCobrado=${valorCobrado}, proprietarioId=${proprietarioId}`);
 
-    if (!planoId || !clienteId || !email || !contaPagarId || valorCobrado === undefined || valorCobrado === null) {
-      return new Response(JSON.stringify({ error: 'Missing required fields (planoId, clienteId, email, contaPagarId, valorCobrado)' }), {
+    if (!planoId || !clienteId || !email || !contaPagarId || valorCobrado === undefined || valorCobrado === null || !proprietarioId) {
+      return new Response(JSON.stringify({ error: 'Missing required fields (planoId, clienteId, email, contaPagarId, valorCobrado, proprietarioId)' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    // 2️⃣ Inicializar Supabase Client com SERVICE ROLE KEY para BYPASS RLS
+    // 2️⃣ Inicializar Supabase Client com SERVICE ROLE KEY
     const supabase = createClient(
       (Deno.env.get('SUPABASE_URL') as any)!,
-      (Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') as any)!, // <-- USING SERVICE ROLE KEY
+      (Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') as any)!,
       { auth: { persistSession: false } }
     );
 
-    // 3️⃣ Buscar a chave secreta Stripe
+    // 3️⃣ Buscar a chave secreta Stripe do proprietário
     const { data: stripeConfig, error: configError } = await supabase
       .from('configuracoes_stripe')
       .select('stripe_secret_key')
-      .not('proprietario_id', 'is', null) // Fetch the admin's config
+      .eq('proprietario_id', proprietarioId)
       .limit(1)
       .single();
 
     if (configError || !stripeConfig?.stripe_secret_key) {
-      console.error('❌ No Stripe secret key found.');
-      return new Response(JSON.stringify({ error: 'Stripe secret key not found. Admin must configure it.' }), {
+      console.error('❌ No Stripe secret key found for the specified owner.');
+      return new Response(JSON.stringify({ error: 'Stripe secret key not found for this plan owner.' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -55,7 +55,7 @@ serve(async (req: Request) => {
 
     const stripeSecretKey = stripeConfig.stripe_secret_key;
 
-    // 4️⃣ Buscar detalhes do plano (apenas nome)
+    // 4️⃣ Buscar detalhes do plano
     const { data: planoRes, error: planoError } = await supabase
         .from('planos')
         .select('nome')
@@ -70,7 +70,6 @@ serve(async (req: Request) => {
       });
     }
     
-    // Usamos o valorCobrado passado pelo frontend
     const unitAmount = Math.round(valorCobrado * 100);
 
     // 5️⃣ Inicializar Stripe
@@ -79,7 +78,6 @@ serve(async (req: Request) => {
     });
 
     const referer = req.headers.get('referer');
-    // Usando a URL base do projeto Supabase como fallback seguro
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const projectId = supabaseUrl ? supabaseUrl.split('//')[1].split('.')[0] : 'jqoirlswewggyppgvgnv';
     const baseUrl = referer || `https://${projectId}.vercel.app/`; 
@@ -100,10 +98,9 @@ serve(async (req: Request) => {
           quantity: 1,
         },
       ],
-      // Redireciona para o handler de sucesso de renovação
       success_url: `${baseUrl}minha-assinatura?renewal=success&session_id={CHECKOUT_SESSION_ID}&cp_id=${contaPagarId}`,
       cancel_url: `${baseUrl}minha-assinatura?renewal=canceled`,
-      metadata: { clienteId, planoId, contaPagarId, valorCobrado: valorCobrado.toString() }, // Passa o valor cobrado no metadata
+      metadata: { clienteId, planoId, contaPagarId, valorCobrado: valorCobrado.toString() },
       customer_email: email,
     });
 

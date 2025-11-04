@@ -36,7 +36,13 @@ interface ProximaCobranca {
 const MinhaAssinatura: React.FC = () => {
   const { perfil, role, carregando } = useSessao();
   const navigate = useNavigate();
-  const { loading: loadingStripe } = useStripeConfig();
+  
+  const isClient = role === 'Cliente';
+  const clienteProfile = perfil as ClienteProfile;
+  const clienteId = clienteProfile?.id;
+  const adminId = clienteProfile?.admin_id;
+
+  const { loading: loadingStripe } = useStripeConfig(adminId);
   
   const [planoAtual, setPlanoAtual] = useState<Plano | null>(null);
   const [carregandoPlano, setCarregandoPlano] = useState(true);
@@ -46,10 +52,6 @@ const MinhaAssinatura: React.FC = () => {
   
   // Estado do novo modal
   const [contasFuturasOpen, setContasFuturasOpen] = useState(false);
-
-  const isClient = role === 'Cliente';
-  const clienteProfile = perfil as ClienteProfile;
-  const clienteId = clienteProfile?.id;
 
   const fetchDadosAssinatura = useCallback(async () => {
     if (!isClient || !clienteId || !clienteProfile?.plano_id) {
@@ -86,7 +88,7 @@ const MinhaAssinatura: React.FC = () => {
         .single();
         
     const contaRecorrenciaId = ultimoRegistro?.id;
-    const adminId = ultimoRegistro?.admin_id;
+    const fetchedAdminId = ultimoRegistro?.admin_id;
 
 
     // 3️⃣ Buscar histórico de pagamentos (admin_recebimentos)
@@ -126,11 +128,11 @@ const MinhaAssinatura: React.FC = () => {
     }
 
     // 4️⃣ Buscar próxima cobrança pendente (admin_parcelas_receber)
-    if (contaRecorrenciaId && adminId) {
+    if (contaRecorrenciaId && fetchedAdminId) {
         const { data: parcelasPendentes, error: parcelasError } = await supabase
           .from('admin_parcelas_receber')
           .select('id, data_vencimento, valor_parcela, numero_parcela')
-          .eq('admin_id', adminId) 
+          .eq('admin_id', fetchedAdminId) 
           .eq('conta_receber_id', contaRecorrenciaId) 
           .in('status', ['aberta', 'reprogramada', 'parcial'])
           .order('data_vencimento', { ascending: true })

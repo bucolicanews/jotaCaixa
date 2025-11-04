@@ -11,6 +11,7 @@ import { useNavigate } from 'react-router-dom';
 import { format, addDays } from 'date-fns';
 import { useStripeConfig } from '@/hooks/use-stripe-config';
 import { useSessao } from '@/hooks/use-sessao';
+import { ClienteProfile } from '@/types/usuario';
 
 interface CheckoutPlanoProps {
   plano: Plano;
@@ -26,8 +27,16 @@ const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano, isUpgrade = false,
   const [isRegistered, setIsRegistered] = useState(false);
   const navigate = useNavigate();
   
-  const { stripePromise, loading: loadingStripe } = useStripeConfig();
-  const { usuario, carregando: carregandoSessao, refetch } = useSessao();
+  const { usuario, perfil, role, carregando: carregandoSessao, refetch } = useSessao();
+  
+  // Determina o proprietário das chaves Stripe
+  const proprietarioId = React.useMemo(() => {
+    if (role === 'Admin') return usuario?.id;
+    if (role === 'Cliente') return (perfil as ClienteProfile)?.admin_id;
+    return null;
+  }, [role, usuario, perfil]);
+
+  const { loading: loadingStripe } = useStripeConfig(proprietarioId);
 
   const handleAdesao = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -83,8 +92,13 @@ const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano, isUpgrade = false,
   };
   
   const handleCheckout = async (emailCliente?: string, clienteId?: string) => {
-    if (loadingStripe || !stripePromise) {
+    if (loadingStripe) {
         showError('Sistema de pagamento ainda não carregado.');
+        return;
+    }
+    
+    if (!proprietarioId) {
+        showError('Configuração de pagamento do administrador não encontrada.');
         return;
     }
     
@@ -130,6 +144,7 @@ const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano, isUpgrade = false,
                 email: finalEmail,
                 contaPagarId: contaPagarId, // Passa o ID da conta a pagar
                 valorCobrado: valorParaCheckout, // Passa o valor real a ser cobrado
+                proprietarioId: proprietarioId, // Passa o ID do dono das chaves
             };
         } else {
             // Fluxo de Adesão (usa a Edge Function de adesão)
@@ -138,6 +153,7 @@ const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano, isUpgrade = false,
                 planoId: plano.id,
                 clienteId: finalClienteId,
                 email: finalEmail,
+                proprietarioId: proprietarioId, // Passa o ID do dono das chaves
             };
         }
 
@@ -152,10 +168,10 @@ const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano, isUpgrade = false,
         window.location.href = url;
         
     } catch (error: any) {
-        console.error('Erro no checkout:', error);
-        showError('Falha ao iniciar o checkout: ' + (error.message || 'Erro desconhecido.'));
+      console.error('Erro no checkout:', error);
+      showError('Falha ao iniciar o checkout: ' + (error.message || 'Erro desconhecido.'));
     } finally {
-        setIsSubmitting(false);
+      setIsSubmitting(false);
     }
   };
   

@@ -9,63 +9,71 @@ interface StripeConfig {
   loading: boolean;
 }
 
-// Variável global para armazenar a promessa do Stripe
-let stripePromiseCache: Promise<Stripe | null> | null = null;
-let publishableKeyCache: string | null = null;
+// Cache para evitar recarregar o Stripe para o mesmo proprietário
+const stripePromiseCache: Record<string, Promise<Stripe | null>> = {};
+const keyCache: Record<string, string> = {};
 
 /**
- * Hook para carregar a chave publicável do Stripe e inicializar o objeto Stripe.
- * Assume que a chave é global (empresa_id IS NULL) e gerenciada pelo Admin.
+ * Hook que carrega a chave publicável do Stripe com base no `proprietario_id`.
  */
-export function useStripeConfig(): StripeConfig {
+export function useStripeConfig(proprietarioId: string | null): StripeConfig {
   const [loading, setLoading] = useState(true);
-  const [key, setKey] = useState<string | null>(publishableKeyCache);
-  const [promise, setPromise] = useState<Promise<Stripe | null> | null>(stripePromiseCache);
+  const [publishableKey, setPublishableKey] = useState<string | null>(null);
+  const [stripePromise, setStripePromise] = useState<Promise<Stripe | null> | null>(null);
 
   useEffect(() => {
-    if (key && promise) {
+    if (!proprietarioId) {
+      // Não mostra erro imediatamente, espera o ID ser carregado
       setLoading(false);
       return;
     }
 
-    const fetchConfig = async () => {
+    // Verifica o cache primeiro
+    if (proprietarioId in keyCache && proprietarioId in stripePromiseCache) {
+      setPublishableKey(keyCache[proprietarioId]);
+      setStripePromise(stripePromiseCache[proprietarioId]);
+      setLoading(false);
+      return;
+    }
+
+    const fetchStripeKey = async () => {
       setLoading(true);
       try {
-        // Busca a chave publicável do admin (proprietario_id IS NOT NULL)
         const { data, error } = await supabase
           .from('configuracoes_stripe')
           .select('stripe_publishable_key')
-          .not('proprietario_id', 'is', null) // Fetch the admin's config
-          .limit(1)
+          .eq('proprietario_id', proprietarioId)
           .single();
 
-        if (error || !data) {
-          showError('Falha ao carregar a chave do Stripe. Verifique as configurações.');
+        if (error || !data?.stripe_publishable_key) {
+          console.error('Erro ao buscar chave publicável do Stripe:', error);
+          showError('Falha ao carregar a configuração de pagamento.');
           setLoading(false);
           return;
         }
 
-        const publishableKey = data.stripe_publishable_key;
-        publishableKeyCache = publishableKey;
-        setKey(publishableKey);
+        const key = data.stripe_publishable_key;
+        keyCache[proprietarioId] = key;
+        setPublishableKey(key);
 
-        // Inicializa o Stripe e armazena a promessa
-        const stripePromise = loadStripe(publishableKey);
-        stripePromiseCache = stripePromise;
-        setPromise(stripePromise);
-        
+        const promise = loadStripe(key);
+        stripePromiseCache[proprietarioId] = promise;
+        setStripePromise(promise);
+
       } catch (e) {
-        console.error('Erro ao inicializar Stripe:', e);
-        showError('Erro crítico ao carregar o sistema de pagamento.');
+        console.error('Erro crítico ao inicializar Stripe:', e);
+        showError('Erro crítico ao conectar ao sistema de pagamento.');
       } finally {
         setLoading(false);
       }
     };
 
-    if (!key) {
-      fetchConfig();
-    }
-  }, [key, promise]);
+    fetchStripeKey();
+  }, [proprietarioId]);
 
-  return { stripePromise: promise, publishableKey: key, loading };
+  return {
+    stripePromise,
+    publishableKey,
+    loading,
+  };
 }
