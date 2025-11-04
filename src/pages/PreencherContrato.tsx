@@ -215,45 +215,47 @@ const PreencherContrato: React.FC = () => {
     
     let combinedClients: Cliente[] = [];
     if (finalEmpresaContratoId) {
-        const { data: clientesCRData } = await supabase
-            .from('clientes')
-            .select('*')
-            .eq('empresa_id', finalEmpresaContratoId);
-        if (clientesCRData) {
-            combinedClients.push(...(clientesCRData as Cliente[]));
-        }
-
         if (isAdmin && finalEmpresaContratoId === ownerIdLogado) {
-            const { data: systemClientsData } = await supabase
+            // Admin criando um contrato para si mesmo. O cliente DEVE ser uma empresa do sistema (tbl_clientes).
+            const { data: systemClientsData, error: systemClientsError } = await supabase
                 .from('tbl_clientes')
                 .select('*')
                 .eq('aprovado', true);
-            if (systemClientsData) {
-                systemClientsData.forEach(sc => {
-                    if (!combinedClients.some(fc => fc.id === sc.id)) {
-                        const mappedClient: Cliente = {
-                            id: sc.id,
-                            empresa_id: ownerIdLogado,
-                            nome: sc.nome,
-                            razao_social: sc.nome,
-                            nome_fantasia: sc.nome,
-                            documento: sc.documento || null,
-                            email: sc.email || null,
-                            telefone: sc.telefone || null,
-                            telefone_fixo: null,
-                            cep: sc.cep || null,
-                            endereco: sc.endereco || null,
-                            numero: sc.numero || null,
-                            complemento: sc.complemento || null,
-                            bairro: sc.bairro || null,
-                            cidade: sc.cidade || null,
-                            estado: sc.estado || null,
-                            created_at: sc.criado_em,
-                            updated_at: sc.criado_em,
-                        };
-                        combinedClients.push(mappedClient);
-                    }
-                });
+            if (systemClientsError) {
+                showError('Erro ao carregar clientes do sistema: ' + systemClientsError.message);
+            } else if (systemClientsData) {
+                combinedClients = systemClientsData.map(sc => ({
+                    id: sc.id,
+                    empresa_id: ownerIdLogado,
+                    nome: sc.nome,
+                    razao_social: sc.nome,
+                    nome_fantasia: sc.nome,
+                    documento: sc.documento || null,
+                    email: sc.email || null,
+                    telefone: sc.telefone || null,
+                    telefone_fixo: null,
+                    cep: sc.cep || null,
+                    endereco: sc.endereco || null,
+                    numero: sc.numero || null,
+                    complemento: sc.complemento || null,
+                    bairro: sc.bairro || null,
+                    cidade: sc.cidade || null,
+                    estado: sc.estado || null,
+                    created_at: sc.criado_em,
+                    updated_at: sc.criado_em,
+                }));
+            }
+        } else {
+            // Cliente criando um contrato, ou Admin criando para um cliente.
+            // O cliente DEVE ser da lista de CR (public.clientes).
+            const { data: clientesCRData, error: clientesCRError } = await supabase
+                .from('clientes')
+                .select('*')
+                .eq('empresa_id', finalEmpresaContratoId);
+            if (clientesCRError) {
+                showError('Erro ao carregar clientes de CR: ' + clientesCRError.message);
+            } else if (clientesCRData) {
+                combinedClients.push(...(clientesCRData as Cliente[]));
             }
         }
     }
@@ -485,23 +487,24 @@ const PreencherContrato: React.FC = () => {
         const clienteSelecionado = clientes.find(c => c.id === clienteSelecionadoId);
         if (!clienteSelecionado) throw new Error('Cliente selecionado não foi encontrado na lista.');
 
-        const clienteDataParaUpsert = {
-            id: clienteSelecionado.id,
-            empresa_id: empresaContratoId,
-            nome: clienteSelecionado.nome,
-            razao_social: clienteSelecionado.razao_social,
-            nome_fantasia: clienteSelecionado.nome_fantasia,
-            documento: clienteSelecionado.documento,
-            email: clienteSelecionado.email,
-            telefone: clienteSelecionado.telefone,
-        };
+        const isContractOwnerAdmin = empresaContratoId === ownerIdLogado && isAdmin;
 
-        const { error: upsertError } = await supabase
-            .from('clientes')
-            .upsert(clienteDataParaUpsert, { onConflict: 'id' });
+        // CORREÇÃO: Se for Admin, garantir que o cliente (de tbl_clientes) também exista na tabela 'clientes'
+        if (isContractOwnerAdmin) {
+            const clienteDataParaUpsert = {
+                id: clienteSelecionado.id,
+                empresa_id: empresaContratoId,
+                nome: clienteSelecionado.nome,
+                documento: clienteSelecionado.documento,
+                email: clienteSelecionado.email,
+            };
+            const { error: upsertError } = await supabase
+                .from('clientes')
+                .upsert(clienteDataParaUpsert, { onConflict: 'id' });
 
-        if (upsertError) {
-            throw new Error('Falha ao garantir a existência do cliente no CR: ' + upsertError.message);
+            if (upsertError) {
+                throw new Error('Falha ao garantir a existência do cliente na tabela CR do admin: ' + upsertError.message);
+            }
         }
 
         const parcelasParaInserir = gerarParcelas(
@@ -537,7 +540,6 @@ const PreencherContrato: React.FC = () => {
         let contratoGeradoId: string;
         let contaReceberId: string | null = null;
         
-        const isContractOwnerAdmin = empresaContratoId === ownerIdLogado && isAdmin;
         const tabelaContasReceber = isContractOwnerAdmin ? 'admin_contas_receber' : 'contas_receber';
         const tabelaParcelasReceber = isContractOwnerAdmin ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
         
