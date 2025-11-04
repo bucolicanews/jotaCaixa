@@ -197,17 +197,15 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
 
     try {
       // 1. Registrar o recebimento
-      const { data: recebimentoData, error: recebimentoError } = await supabase.from(tabelaRecebimentos).insert({
+      const { error: recebimentoError } = await supabase.from(tabelaRecebimentos).insert({
         ...recebimentoBasePayload,
         data_recebimento: values.data_pagamento.toISOString(),
         forma_pagamento: values.forma_pagamento,
         tipo_recebimento: quitouComPagamentoAtual ? 'total' : 'parcial',
-      }).select('id').single();
+      });
       
       if (recebimentoError) throw recebimentoError;
       
-      // const recebimentoId = recebimentoData.id; // Removido TS6133
-
       // 2. Lidar com a parcela original
       if (quitouComPagamentoAtual) {
         // Se quitou, atualiza a parcela para paga

@@ -22,9 +22,9 @@ import useSaldoContaCalculado from '@/hooks/use-saldo-conta-calculado'; // NOVO 
 type TipoSaldoFiltro = 'todos' | 'Credito' | 'Debito';
 
 // Tipo auxiliar para o saldo calculado
-interface SaldoCalculado extends SaldoContaDetalhada {
-    saldo_atual: number;
-}
+// interface SaldoCalculado extends SaldoContaDetalhada { // <-- REMOVIDO
+//     saldo_atual: number;
+// }
 
 const Bancos = () => {
   const { usuario, perfil, role, carregando: carregandoSessao } = useSessao();
