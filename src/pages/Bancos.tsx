@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, PlusCircle, Edit, Trash2, Banknote, Wallet, CreditCard, Filter, Search, ArrowUpCircle, ArrowDownCircle } from 'lucide-react';
+import { Loader2, PlusCircle, Edit, Trash2, Banknote, Wallet, CreditCard, Filter, Search, ArrowUpCircle, ArrowDownCircle, Eye } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
@@ -17,7 +17,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { PlanoContas } from '@/types/plano-contas';
 import { Input } from '@/components/ui/input';
 import { useDebounce } from '@/hooks/use-debounce';
-import useSaldoContaCalculado from '@/hooks/use-saldo-conta-calculado'; // NOVO HOOK
+import useSaldoContaCalculado from '@/hooks/use-saldo-conta-calculado';
+import DetalhesLancamentosDialog from '@/components/DetalhesLancamentosDialog';
 
 type TipoSaldoFiltro = 'todos' | 'Credito' | 'Debito' | 'Receita' | 'Despesa';
 
@@ -27,6 +28,9 @@ const Bancos = () => {
   const [loadingContasContabeis, setLoadingContasContabeis] = useState(true);
   const [contaSelecionada, setContaSelecionada] = useState<SaldoContaDetalhada | null>(null);
   const [dialogAberto, setDialogAberto] = useState(false);
+  
+  // State for details dialog
+  const [detalhesDialog, setDetalhesDialog] = useState<{ open: boolean, conta: SaldoContaDetalhada | null }>({ open: false, conta: null });
   
   // Filtros
   const [filtroTipoSaldo, setFiltroTipoSaldo] = useState<TipoSaldoFiltro>('todos');
@@ -43,7 +47,6 @@ const Bancos = () => {
   
   const empresaId = getEmpresaId();
   
-  // NOVO: Usando o hook de cálculo de saldo
   const { contas, totalSaldo, carregando: carregandoSaldos, refetch: refetchSaldos } = useSaldoContaCalculado(
       filtroTipoSaldo, 
       filtroContaContabilId, 
@@ -76,17 +79,19 @@ const Bancos = () => {
     }
   }, [carregandoSessao, empresaId, fetchContasContabeis]);
   
-  // O refetchSaldos é chamado automaticamente pelo hook useSaldoContaCalculado quando os filtros mudam.
-
   const handleSaveComplete = () => {
     setDialogAberto(false);
     setContaSelecionada(null);
-    refetchSaldos(); // Força a atualização do saldo
+    refetchSaldos();
   };
 
   const handleEdit = (conta: SaldoContaDetalhada) => {
     setContaSelecionada(conta);
     setDialogAberto(true);
+  };
+
+  const handleOpenDetalhes = (conta: SaldoContaDetalhada) => {
+    setDetalhesDialog({ open: true, conta });
   };
 
   const handleDelete = async (id: string) => {
@@ -101,7 +106,7 @@ const Bancos = () => {
       showError('Erro ao excluir conta: ' + error.message);
     } else {
       showSuccess('Conta excluída com sucesso.');
-      refetchSaldos(); // Força a atualização do saldo
+      refetchSaldos();
     }
   };
   
@@ -125,7 +130,6 @@ const Bancos = () => {
     );
   }
   
-  // Helper para exibir a natureza correta
   const getNaturezaDisplay = (tipo: 'Credito' | 'Debito' | 'Receita' | 'Despesa') => {
       if (tipo === 'Debito') return { label: 'Débito (Ativo)', icon: <Wallet className="w-4 h-4 mr-2 text-green-600" />, variant: 'success' as const };
       if (tipo === 'Receita') return { label: 'Receita', icon: <ArrowUpCircle className="w-4 h-4 mr-2 text-blue-600" />, variant: 'default' as const };
@@ -158,13 +162,11 @@ const Bancos = () => {
         </Dialog>
       </div>
       
-      {/* FILTROS */}
       <Card className="mb-6">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-lg flex items-center"><Filter className="w-4 h-4 mr-2" /> Filtros</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col sm:flex-row gap-4">
-            {/* Filtro por Nome/Descrição */}
             <div className="relative w-full sm:w-[300px]">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -175,7 +177,6 @@ const Bancos = () => {
                 />
             </div>
             
-            {/* Filtro por Natureza */}
             <Select value={filtroTipoSaldo} onValueChange={(v) => setFiltroTipoSaldo(v as TipoSaldoFiltro)}>
                 <SelectTrigger className="w-full sm:w-[200px]">
                     <SelectValue placeholder="Filtrar por Natureza" />
@@ -189,7 +190,6 @@ const Bancos = () => {
                 </SelectContent>
             </Select>
             
-            {/* Filtro por Conta Contábil */}
             <Select 
                 value={filtroContaContabilId} 
                 onValueChange={setFiltroContaContabilId} 
@@ -221,7 +221,7 @@ const Bancos = () => {
                                 <TableHead className="w-[150px]">Nome</TableHead>
                                 <TableHead className="w-[100px]">Natureza</TableHead>
                                 <TableHead>Conta Contábil</TableHead>
-                                <TableHead className="w-[150px] text-right">Saldo Atual</TableHead> {/* ALTERADO */}
+                                <TableHead className="w-[150px] text-right">Saldo Atual</TableHead>
                                 <TableHead className="w-[100px] text-right">Ações</TableHead>
                             </TableRow>
                         </TableHeader>
@@ -250,14 +250,17 @@ const Bancos = () => {
                                                 {conta.plano_contas?.Conta} - {conta.plano_contas?.Descricao || 'N/A'}
                                             </TableCell>
                                             <TableCell className={cn("text-right font-semibold", conta.saldo_atual >= 0 ? 'text-green-600' : 'text-red-600')}>
-                                                {formatCurrency(conta.saldo_atual)} {/* ALTERADO */}
+                                                {formatCurrency(conta.saldo_atual)}
                                             </TableCell>
                                             <TableCell className="text-right">
-                                                <div className="flex justify-end space-x-2">
-                                                    <Button variant="ghost" size="sm" onClick={() => handleEdit(conta)}>
+                                                <div className="flex justify-end space-x-1">
+                                                    <Button variant="ghost" size="icon" onClick={() => handleOpenDetalhes(conta)} title="Ver Detalhes">
+                                                        <Eye className="w-4 h-4" />
+                                                    </Button>
+                                                    <Button variant="ghost" size="icon" onClick={() => handleEdit(conta)} title="Editar Conta">
                                                         <Edit className="w-4 h-4" />
                                                     </Button>
-                                                    <Button variant="ghost" size="sm" onClick={() => handleDelete(conta.id)}>
+                                                    <Button variant="ghost" size="icon" onClick={() => handleDelete(conta.id)} title="Excluir Conta">
                                                         <Trash2 className="w-4 h-4 text-red-500" />
                                                     </Button>
                                                 </div>
@@ -282,6 +285,12 @@ const Bancos = () => {
             </CardContent>
         </Card>
       </div>
+
+      <DetalhesLancamentosDialog
+        conta={detalhesDialog.conta}
+        open={detalhesDialog.open}
+        onOpenChange={(open) => setDetalhesDialog({ open, conta: null })}
+      />
     </LayoutPrincipal>
   );
 };
