@@ -48,7 +48,7 @@ interface RegistrarPagamentoDialogProps {
 }
 
 const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ parcela, open, onOpenChange, onSaveComplete }) => {
-  const { role, usuario, perfil } = useSessao();
+  const { role, usuario } = useSessao();
   const isAdmin = role === 'Admin';
   
   const [contasDestino, setContasDestino] = useState<SaldoConta[]>([]);
@@ -74,7 +74,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
         .order('nome');
         
     if (error) {
-        showError('Erro ao carregar Contas/Caixas: ' + error.message);
+            showError('Erro ao carregar Contas/Caixas: ' + error.message);
         setContasDestino([]);
     } else {
         setContasDestino(data as SaldoConta[]);
@@ -155,7 +155,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
         ...recebimentoBasePayload,
         data_recebimento: values.data_pagamento.toISOString(),
         forma_pagamento: values.forma_pagamento,
-        tipo_recebimento: quitouComPagamentoAtual ? 'total' : 'parcial',
+        tipo_recebimento: quitouComPagamentoAtual ? 'total' : 'parcial', // CORRIGIDO
       });
 
       // 2. Lidar com a parcela original

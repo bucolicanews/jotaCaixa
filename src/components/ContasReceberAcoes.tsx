@@ -47,8 +47,7 @@ interface ContasReceberAcoesProps {
 
 const formatDate = (dateString: string) => new Date(dateString + 'T00:00:00').toLocaleDateString('pt-BR');
 const formatTimestamp = (dateString: string) => new Date(dateString).toLocaleDateString('pt-BR') + ' ' + new Date(dateString).toLocaleTimeString('pt-BR');
-const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
-
+// const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value); // Removido
 
 const ContasReceberAcoes: React.FC<ContasReceberAcoesProps> = ({
   activeTab,

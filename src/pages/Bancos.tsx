@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, PlusCircle, Edit, Trash2, Banknote, Wallet, CreditCard } from 'lucide-react';
+import { Loader2, PlusCircle, Edit, Trash2, Banknote, Wallet, CreditCard, Filter } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
@@ -13,13 +13,23 @@ import FormSaldoConta from '@/components/FormSaldoConta';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { PlanoContas } from '@/types/plano-contas';
+
+type TipoSaldoFiltro = 'todos' | 'Credito' | 'Debito';
 
 const Bancos = () => {
   const { usuario, perfil, role, carregando: carregandoSessao } = useSessao();
   const [contas, setContas] = useState<SaldoContaDetalhada[]>([]);
+  const [contasContabeis, setContasContabeis] = useState<PlanoContas[]>([]);
   const [carregandoContas, setCarregandoContas] = useState(true);
+  const [loadingContasContabeis, setLoadingContasContabeis] = useState(true);
   const [contaSelecionada, setContaSelecionada] = useState<SaldoContaDetalhada | null>(null);
   const [dialogAberto, setDialogAberto] = useState(false);
+  
+  // Filtros
+  const [filtroTipoSaldo, setFiltroTipoSaldo] = useState<TipoSaldoFiltro>('todos');
+  const [filtroContaContabilId, setFiltroContaContabilId] = useState<string>('todos');
 
   const getEmpresaId = () => {
     if (role === 'Admin') return usuario?.id || null;
@@ -30,6 +40,26 @@ const Bancos = () => {
   
   const empresaId = getEmpresaId();
 
+  const fetchContasContabeis = useCallback(async () => {
+    if (!empresaId) return;
+    setLoadingContasContabeis(true);
+    
+    const { data, error } = await supabase
+        .from('plano_contas')
+        .select('id, Conta, Descricao, Analitica')
+        .eq('proprietario_id', empresaId)
+        .eq('Analitica', 'Sim') // Apenas contas analíticas
+        .order('Conta');
+        
+    if (error) {
+        showError('Erro ao carregar Plano de Contas: ' + error.message);
+        setContasContabeis([]);
+    } else {
+        setContasContabeis(data as PlanoContas[]);
+    }
+    setLoadingContasContabeis(false);
+  }, [empresaId]);
+
   const buscarContas = useCallback(async () => {
     if (!empresaId) {
         setCarregandoContas(false);
@@ -38,14 +68,24 @@ const Bancos = () => {
     
     setCarregandoContas(true);
     
-    const { data, error } = await supabase
+    let query = supabase
       .from('saldo_contas')
       .select(`
         *,
         plano_contas ( Conta, Descricao )
       `)
-      .eq('empresa_id', empresaId)
-      .order('nome', { ascending: true });
+      .eq('empresa_id', empresaId);
+      
+    // Aplicar Filtros
+    if (filtroTipoSaldo !== 'todos') {
+        query = query.eq('tipo_saldo', filtroTipoSaldo);
+    }
+    
+    if (filtroContaContabilId !== 'todos') {
+        query = query.eq('conta_contabil_id', filtroContaContabilId);
+    }
+
+    const { data, error } = await query.order('nome', { ascending: true });
 
     if (error) {
       showError('Erro ao carregar Contas/Caixas: ' + error.message);
@@ -54,8 +94,14 @@ const Bancos = () => {
       setContas(data as SaldoContaDetalhada[]);
     }
     setCarregandoContas(false);
-  }, [empresaId]);
+  }, [empresaId, filtroTipoSaldo, filtroContaContabilId]);
 
+  useEffect(() => {
+    if (!carregandoSessao && empresaId) {
+      fetchContasContabeis();
+    }
+  }, [carregandoSessao, empresaId, fetchContasContabeis]);
+  
   useEffect(() => {
     if (!carregandoSessao && empresaId) {
       buscarContas();
@@ -141,6 +187,45 @@ const Bancos = () => {
           </DialogContent>
         </Dialog>
       </div>
+      
+      {/* FILTROS */}
+      <Card className="mb-6">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-lg flex items-center"><Filter className="w-4 h-4 mr-2" /> Filtros</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col sm:flex-row gap-4">
+            {/* Filtro por Natureza */}
+            <Select value={filtroTipoSaldo} onValueChange={(v) => setFiltroTipoSaldo(v as TipoSaldoFiltro)}>
+                <SelectTrigger className="w-full sm:w-[200px]">
+                    <SelectValue placeholder="Filtrar por Natureza" />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="todos">Todas as Naturezas</SelectItem>
+                    <SelectItem value="Debito">Débito (Ativo)</SelectItem>
+                    <SelectItem value="Credito">Crédito (Passivo)</SelectItem>
+                </SelectContent>
+            </Select>
+            
+            {/* Filtro por Conta Contábil */}
+            <Select 
+                value={filtroContaContabilId} 
+                onValueChange={setFiltroContaContabilId} 
+                disabled={loadingContasContabeis}
+            >
+                <SelectTrigger className="w-full sm:w-[300px]">
+                    <SelectValue placeholder={loadingContasContabeis ? "Carregando Contas Contábeis..." : "Filtrar por Conta Contábil"} />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="todos">Todas as Contas Contábeis</SelectItem>
+                    {contasContabeis.map(c => (
+                        <SelectItem key={c.id} value={c.id}>
+                            {c.Conta} - {c.Descricao}
+                        </SelectItem>
+                    ))}
+                </SelectContent>
+            </Select>
+        </CardContent>
+      </Card>
       
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
         <Card className="md:col-span-2">
