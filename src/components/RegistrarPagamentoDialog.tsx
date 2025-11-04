@@ -53,6 +53,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
   
   const [contasDestino, setContasDestino] = useState<SaldoConta[]>([]);
   const [loadingContas, setLoadingContas] = useState(true);
+  const [mapeamentoContabil, setMapeamentoContabil] = useState<Record<string, string | null>>({});
   
   // Determina as tabelas de destino
   const tabelaRecebimentos = isAdmin ? 'admin_recebimentos' : 'recebimentos';
@@ -86,11 +87,34 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
     setLoadingContas(false);
   }, [ownerId]);
   
+  const fetchMapeamentoContabil = useCallback(async () => {
+    if (!isAdmin || !ownerId) return;
+    
+    const { data, error } = await supabase
+        .from('configuracao_contas_receber')
+        .select('tipo_registro, conta_contabil_id')
+        .eq('proprietario_id', ownerId);
+        
+    if (error) {
+        console.error('Erro ao buscar mapeamento contábil:', error);
+        setMapeamentoContabil({});
+    } else {
+        const map = (data as { tipo_registro: string, conta_contabil_id: string | null }[]).reduce((acc, item) => {
+            acc[item.tipo_registro] = item.conta_contabil_id;
+            return acc;
+        }, {} as Record<string, string | null>);
+        setMapeamentoContabil(map);
+    }
+  }, [isAdmin, ownerId]);
+  
   useEffect(() => {
       if (open) {
           fetchContasDestino();
+          if (isAdmin) {
+              fetchMapeamentoContabil();
+          }
       }
-  }, [open, fetchContasDestino]);
+  }, [open, fetchContasDestino, fetchMapeamentoContabil, isAdmin]);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -122,6 +146,11 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
     const saldoRestanteCalculado = parcela.valor_parcela - novoValorPagoTotal;
     const quitouComPagamentoAtual = novoValorPagoTotal >= parcela.valor_parcela;
     
+    // Contas Contábeis Mapeadas
+    const contaRecebimento = isAdmin ? mapeamentoContabil['recebimento'] : null;
+    // const contaDesconto = isAdmin ? mapeamentoContabil['desconto'] : null; // Removido
+    const contaParcela = isAdmin ? mapeamentoContabil['parcela'] : null;
+    
     // Payload base para recebimentos
     let recebimentoBasePayload;
     
@@ -138,14 +167,16 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
             admin_id: ownerId, 
             valor_recebido: valorRecebido, 
             cliente_id: clienteIdPagador,
-            conta_id: values.conta_id, // NOVO CAMPO
+            conta_id: values.conta_id,
+            id_conta_contabil: contaRecebimento, // NOVO: Mapeamento para Recebimento
         };
     } else {
         recebimentoBasePayload = { 
             parcela_id: parcela.id, 
             empresa_id: ownerId, 
             valor_recebido: valorRecebido,
-            conta_id: values.conta_id, // NOVO CAMPO
+            conta_id: values.conta_id,
+            // id_conta_contabil não é necessário para Cliente/Usuário
         };
     }
 
@@ -155,33 +186,43 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
         ...recebimentoBasePayload,
         data_recebimento: values.data_pagamento.toISOString(),
         forma_pagamento: values.forma_pagamento,
-        tipo_recebimento: quitouComPagamentoAtual ? 'total' : 'parcial', // CORRIGIDO
+        tipo_recebimento: quitouComPagamentoAtual ? 'total' : 'parcial',
       });
 
       // 2. Lidar com a parcela original
       if (quitouComPagamentoAtual) {
+        // Se quitou, atualiza a parcela para paga
         await supabase.from(tabelaParcelas).update({
           status: 'paga',
           valor_pago: novoValorPagoTotal,
-          data_pagamento: values.data_pagamento.toISOString()
+          data_pagamento: values.data_pagamento.toISOString(),
+          ...(isAdmin && { id_conta_contabil: contaParcela }) // NOVO: Mapeamento para Parcela
         }).eq('id', parcela.id);
       } else { // Pagamento parcial
         if (values.acao_saldo_restante === 'desconto') {
+          // Se for desconto, a parcela é marcada como paga, e o saldo restante é o desconto
           await supabase.from(tabelaParcelas).update({
             status: 'paga',
             valor_pago: novoValorPagoTotal,
             data_pagamento: values.data_pagamento.toISOString(),
-            observacao: `Recebido R$ ${valorRecebido.toFixed(2)} com R$ ${saldoRestanteCalculado.toFixed(2)} de desconto.`
+            observacao: `Recebido R$ ${valorRecebido.toFixed(2)} com R$ ${saldoRestanteCalculado.toFixed(2)} de desconto.`,
+            ...(isAdmin && { id_conta_contabil: contaParcela }) // NOVO: Mapeamento para Parcela
           }).eq('id', parcela.id);
+          
+          // O desconto em si não é um registro de recebimento, mas sim um lançamento contábil (que não fazemos aqui)
+          // A coluna id_conta_contabil no recebimento não é usada para o desconto, mas sim para o valor recebido.
+          
         } else if (values.acao_saldo_restante === 'reprogramar' || values.acao_saldo_restante === 'parcelar') {
+          // Marca a parcela original como paga (quitada pelo valor recebido + saldo restante tratado)
           await supabase.from(tabelaParcelas).update({
-            status: 'paga', // Marca a parcela original como paga (quitada pelo valor recebido + saldo restante tratado)
+            status: 'paga', 
             valor_pago: novoValorPagoTotal,
             data_pagamento: values.data_pagamento.toISOString(),
-            observacao: `Recebido R$ ${valorRecebido.toFixed(2)}. Saldo de R$ ${saldoRestanteCalculado.toFixed(2)} ${values.acao_saldo_restante === 'reprogramar' ? 'reprogramado' : 'parcelado'}.`
+            observacao: `Recebido R$ ${valorRecebido.toFixed(2)}. Saldo de R$ ${saldoRestanteCalculado.toFixed(2)} ${values.acao_saldo_restante === 'reprogramar' ? 'reprogramado' : 'parcelado'}.`,
+            ...(isAdmin && { id_conta_contabil: contaParcela }) // NOVO: Mapeamento para Parcela
           }).eq('id', parcela.id);
 
-          const baseParcelaPayload = isAdmin ? { admin_id: ownerId } : { empresa_id: ownerId };
+          const baseParcelaPayload = isAdmin ? { admin_id: ownerId, id_conta_contabil: contaParcela } : { empresa_id: ownerId };
           
           if (values.acao_saldo_restante === 'reprogramar') {
             await supabase.from(tabelaParcelas).insert({
@@ -209,6 +250,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
             await supabase.from(tabelaParcelas).update({
                 status: 'parcial',
                 valor_pago: novoValorPagoTotal,
+                ...(isAdmin && { id_conta_contabil: contaParcela }) // NOVO: Mapeamento para Parcela
             }).eq('id', parcela.id);
         }
       }

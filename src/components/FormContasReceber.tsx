@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -61,6 +61,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
   const { perfil, role } = useSessao();
   const [clientes, setClientes] = useState<ClienteCombinado[]>([]);
   const [loadingClientes, setLoadingClientes] = useState(true);
+  const [mapeamentoContabil, setMapeamentoContabil] = useState<Record<string, string | null>>({});
   const isEditing = !!contaInicial;
 
   const getOwnerId = () => {
@@ -70,6 +71,27 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
   };
   
   const ownerId = getOwnerId();
+  const isAdmin = role === 'Admin';
+
+  const fetchMapeamentoContabil = useCallback(async () => {
+    if (!isAdmin || !ownerId) return;
+    
+    const { data, error } = await supabase
+        .from('configuracao_contas_receber')
+        .select('tipo_registro, conta_contabil_id')
+        .eq('proprietario_id', ownerId);
+        
+    if (error) {
+        console.error('Erro ao buscar mapeamento contábil:', error);
+        setMapeamentoContabil({});
+    } else {
+        const map = (data as { tipo_registro: string, conta_contabil_id: string | null }[]).reduce((acc, item) => {
+            acc[item.tipo_registro] = item.conta_contabil_id;
+            return acc;
+        }, {} as Record<string, string | null>);
+        setMapeamentoContabil(map);
+    }
+  }, [isAdmin, ownerId]);
 
   useEffect(() => {
     const fetchClientes = async () => {
@@ -115,8 +137,12 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
       setClientes(combinedClients);
       setLoadingClientes(false);
     };
+    
     fetchClientes();
-  }, [perfil, role, ownerId]);
+    if (isAdmin) {
+        fetchMapeamentoContabil();
+    }
+  }, [perfil, role, ownerId, isAdmin, fetchMapeamentoContabil]);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -136,6 +162,10 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
   const onSubmit = async (values: FormValues) => {
     const ownerId = getOwnerId();
     if (!ownerId) { showError('ID da empresa/admin não pôde ser determinado.'); return; }
+    
+    // Contas Contábeis Mapeadas (apenas Admin)
+    const contaAReceber = isAdmin ? mapeamentoContabil['a_receber'] : null;
+    const contaParcela = isAdmin ? mapeamentoContabil['parcela'] : null;
     
     try {
       // 0. GARANTIR QUE O CLIENTE EXISTA NA TABELA 'clientes' (para FK)
@@ -174,10 +204,10 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
       }
       
       let contaReceberId: string;
-      let tabelaContasReceber = role === 'Admin' ? 'admin_contas_receber' : 'contas_receber';
-      let tabelaParcelasReceber = role === 'Admin' ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
+      let tabelaContasReceber = isAdmin ? 'admin_contas_receber' : 'contas_receber';
+      let tabelaParcelasReceber = isAdmin ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
       
-      const baseData = role === 'Admin' ? { admin_id: ownerId, cliente_id: values.cliente_id } : { empresa_id: ownerId, cliente_id: values.cliente_id };
+      const baseData = isAdmin ? { admin_id: ownerId, cliente_id: values.cliente_id, id_conta_contabil: contaAReceber } : { empresa_id: ownerId, cliente_id: values.cliente_id };
       
       const contaReceberPayload = {
           ...baseData,
@@ -206,7 +236,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
       const parcelasComId = parcelasParaInserir.map(p => ({ 
           ...p, 
           conta_receber_id: contaReceberId, 
-          ...(role === 'Admin' ? { admin_id: ownerId } : { empresa_id: ownerId })
+          ...(isAdmin ? { admin_id: ownerId, id_conta_contabil: contaParcela } : { empresa_id: ownerId })
       }));
       
       const { error: parcelError } = await supabase.from(tabelaParcelasReceber).insert(parcelasComId);

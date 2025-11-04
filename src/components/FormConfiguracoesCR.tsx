@@ -30,12 +30,6 @@ const formSchema = z.object({
 
 type FormValues = z.infer<typeof formSchema>;
 
-interface ConfiguracaoCR {
-    id: string;
-    tipo_registro: string;
-    conta_contabil_id: string;
-}
-
 const FormConfiguracoesCR: React.FC = () => {
   const { role, usuario, carregando: carregandoSessao } = useSessao();
   const [loadingData, setLoadingData] = useState(true);
