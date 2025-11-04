@@ -148,7 +148,6 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
     
     // Contas Contábeis Mapeadas
     const contaRecebimento = isAdmin ? mapeamentoContabil['recebimento'] : null;
-    // const contaDesconto = isAdmin ? mapeamentoContabil['desconto'] : null; // Removido
     const contaParcela = isAdmin ? mapeamentoContabil['parcela'] : null;
     
     // Payload base para recebimentos
@@ -182,12 +181,16 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
 
     try {
       // 1. Registrar o recebimento
-      await supabase.from(tabelaRecebimentos).insert({
+      const { data: recebimentoData, error: recebimentoError } = await supabase.from(tabelaRecebimentos).insert({
         ...recebimentoBasePayload,
         data_recebimento: values.data_pagamento.toISOString(),
         forma_pagamento: values.forma_pagamento,
         tipo_recebimento: quitouComPagamentoAtual ? 'total' : 'parcial',
-      });
+      }).select('id').single();
+      
+      if (recebimentoError) throw recebimentoError;
+      
+      const recebimentoId = recebimentoData.id;
 
       // 2. Lidar com a parcela original
       if (quitouComPagamentoAtual) {
@@ -208,9 +211,6 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
             observacao: `Recebido R$ ${valorRecebido.toFixed(2)} com R$ ${saldoRestanteCalculado.toFixed(2)} de desconto.`,
             ...(isAdmin && { id_conta_contabil: contaParcela }) // NOVO: Mapeamento para Parcela
           }).eq('id', parcela.id);
-          
-          // O desconto em si não é um registro de recebimento, mas sim um lançamento contábil (que não fazemos aqui)
-          // A coluna id_conta_contabil no recebimento não é usada para o desconto, mas sim para o valor recebido.
           
         } else if (values.acao_saldo_restante === 'reprogramar' || values.acao_saldo_restante === 'parcelar') {
           // Marca a parcela original como paga (quitada pelo valor recebido + saldo restante tratado)
@@ -254,6 +254,26 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
             }).eq('id', parcela.id);
         }
       }
+      
+      // 3. Registrar o Lançamento na conta de Saldo (Movimentação de Caixa/Banco)
+      // O tipo é 'Entrada' porque é um Recebimento
+      const lancamentoPayload = {
+          empresa_id: ownerId, // ID do Admin/Empresa
+          data_movimentacao: values.data_pagamento.toISOString(),
+          descricao: `Recebimento Parcela ${parcela.id} - ${values.forma_pagamento}`,
+          valor: valorRecebido,
+          tipo: 'Entrada',
+          conta_bancaria_id: values.conta_id, // ID da conta de saldo
+          conta_contabil_id: contaRecebimento, // Conta contábil do recebimento (Admin)
+          origem_tabela: tabelaRecebimentos,
+          origem_id: recebimentoId,
+      };
+      
+      // Nota: A tabela 'lancamentos' no esquema tem 'empresa_id' e 'conta_bancaria_id'.
+      // Para o Admin, 'empresa_id' é o ID do Admin. Para o Cliente, 'empresa_id' é o ID do Cliente.
+      await supabase.from('lancamentos').insert(lancamentoPayload);
+
+
       showSuccess('Pagamento registrado com sucesso!');
       onSaveComplete();
     } catch (error: any) {
