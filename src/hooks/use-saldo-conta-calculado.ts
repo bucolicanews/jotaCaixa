@@ -16,7 +16,7 @@ interface SaldoContaCalculadoHook {
   refetch: () => void;
 }
 
-const useSaldoContaCalculado = (filtroTipoSaldo: 'todos' | 'Credito' | 'Debito', filtroContaContabilId: string, filtroNomeDebounced: string): SaldoContaCalculadoHook => {
+const useSaldoContaCalculado = (filtroTipoSaldo: 'todos' | 'Credito' | 'Debito' | 'Receita' | 'Despesa', filtroContaContabilId: string, filtroNomeDebounced: string): SaldoContaCalculadoHook => {
   const { usuario, perfil, role, carregando: carregandoSessao } = useSessao();
   const [contas, setContas] = useState<SaldoCalculado[]>([]);
   const [carregando, setCarregando] = useState(true);

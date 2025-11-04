@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, PlusCircle, Edit, Trash2, Banknote, Wallet, CreditCard, Filter, Search } from 'lucide-react';
+import { Loader2, PlusCircle, Edit, Trash2, Banknote, Wallet, CreditCard, Filter, Search, ArrowUpCircle, ArrowDownCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
@@ -19,12 +19,7 @@ import { Input } from '@/components/ui/input';
 import { useDebounce } from '@/hooks/use-debounce';
 import useSaldoContaCalculado from '@/hooks/use-saldo-conta-calculado'; // NOVO HOOK
 
-type TipoSaldoFiltro = 'todos' | 'Credito' | 'Debito';
-
-// Tipo auxiliar para o saldo calculado
-// interface SaldoCalculado extends SaldoContaDetalhada { // <-- REMOVIDO
-//     saldo_atual: number;
-// }
+type TipoSaldoFiltro = 'todos' | 'Credito' | 'Debito' | 'Receita' | 'Despesa';
 
 const Bancos = () => {
   const { usuario, perfil, role, carregando: carregandoSessao } = useSessao();
@@ -131,8 +126,10 @@ const Bancos = () => {
   }
   
   // Helper para exibir a natureza correta
-  const getNaturezaDisplay = (tipo: 'Credito' | 'Debito') => {
+  const getNaturezaDisplay = (tipo: 'Credito' | 'Debito' | 'Receita' | 'Despesa') => {
       if (tipo === 'Debito') return { label: 'Débito (Ativo)', icon: <Wallet className="w-4 h-4 mr-2 text-green-600" />, variant: 'success' as const };
+      if (tipo === 'Receita') return { label: 'Receita', icon: <ArrowUpCircle className="w-4 h-4 mr-2 text-blue-600" />, variant: 'default' as const };
+      if (tipo === 'Despesa') return { label: 'Despesa', icon: <ArrowDownCircle className="w-4 h-4 mr-2 text-orange-600" />, variant: 'warning' as const };
       return { label: 'Crédito (Passivo)', icon: <CreditCard className="w-4 h-4 mr-2 text-red-600" />, variant: 'destructive' as const };
   };
 
@@ -187,6 +184,8 @@ const Bancos = () => {
                     <SelectItem value="todos">Todas as Naturezas</SelectItem>
                     <SelectItem value="Debito">Débito (Ativo)</SelectItem>
                     <SelectItem value="Credito">Crédito (Passivo)</SelectItem>
+                    <SelectItem value="Receita">Receita</SelectItem>
+                    <SelectItem value="Despesa">Despesa</SelectItem>
                 </SelectContent>
             </Select>
             

@@ -16,7 +16,7 @@ import { PlanoContas } from '@/types/plano-contas';
 
 const formSchema = z.object({
   nome: z.string().min(1, 'O nome é obrigatório.'),
-  tipo_saldo: z.enum(['Credito', 'Debito'], {
+  tipo_saldo: z.enum(['Credito', 'Debito', 'Receita', 'Despesa'], {
     required_error: 'O tipo de saldo é obrigatório.',
   }),
   conta_contabil_id: z.string().uuid('Selecione uma conta contábil válida.').nullable(),
@@ -149,9 +149,10 @@ const FormSaldoConta: React.FC<FormSaldoContaProps> = ({ contaInicial, onSaveCom
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  {/* CORRIGIDO: Débito (Ativo) e Crédito (Passivo) */}
                   <SelectItem value="Debito">Débito (Ativo)</SelectItem>
                   <SelectItem value="Credito">Crédito (Passivo)</SelectItem>
+                  <SelectItem value="Receita">Receita</SelectItem>
+                  <SelectItem value="Despesa">Despesa</SelectItem>
                 </SelectContent>
               </Select>
               <FormMessage />
