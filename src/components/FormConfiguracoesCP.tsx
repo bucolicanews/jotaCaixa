@@ -1,0 +1,197 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
+import { Button } from '@/components/ui/button';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Loader2 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { showError, showSuccess } from '@/utils/toast';
+import { useSessao } from '@/hooks/use-sessao';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { PlanoContas } from '@/types/plano-contas';
+import { Separator } from './ui/separator';
+
+// Tipos de registro que precisam de mapeamento contábil para CP
+const TIPOS_REGISTRO = [
+  { key: 'a_pagar', label: 'Contas a Pagar (Sintético)' },
+  { key: 'parcela_pagar', label: 'Parcelas a Pagar (Analítico)' },
+  { key: 'pagamento', label: 'Pagamentos (Saída)' },
+  { key: 'desconto_obtido', label: 'Descontos Obtidos (Receita)' },
+];
+
+// Esquema dinâmico para garantir que todos os campos estejam presentes
+const formSchema = z.object({
+  a_pagar: z.string().uuid('Conta inválida para Contas a Pagar.').nullable(),
+  parcela_pagar: z.string().uuid('Conta inválida para Parcelas a Pagar.').nullable(),
+  pagamento: z.string().uuid('Conta inválida para Pagamentos.').nullable(),
+  desconto_obtido: z.string().uuid('Conta inválida para Descontos Obtidos.').nullable(),
+});
+
+type FormValues = z.infer<typeof formSchema>;
+
+const FormConfiguracoesCP: React.FC = () => {
+  const { role, usuario, carregando: carregandoSessao } = useSessao();
+  const [loadingData, setLoadingData] = useState(true);
+  const [contasContabeis, setContasContabeis] = useState<PlanoContas[]>([]);
+  const [loadingContas, setLoadingContas] = useState(true);
+  
+  const isAdmin = role === 'Admin';
+  const adminId = usuario?.id;
+
+  const form = useForm<FormValues>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      a_pagar: null,
+      parcela_pagar: null,
+      pagamento: null,
+      desconto_obtido: null,
+    },
+  });
+  
+  const fetchContasContabeis = useCallback(async () => {
+    if (!adminId) return;
+    setLoadingContas(true);
+    
+    // Busca apenas contas analíticas do Admin
+    const { data, error } = await supabase
+        .from('plano_contas')
+        .select('id, Conta, Descricao, Analitica')
+        .eq('proprietario_id', adminId)
+        .eq('Analitica', 'Sim')
+        .order('Conta');
+        
+    if (error) {
+        showError('Erro ao carregar Plano de Contas: ' + error.message);
+        setContasContabeis([]);
+    } else {
+        setContasContabeis(data as PlanoContas[]);
+    }
+    setLoadingContas(false);
+  }, [adminId]);
+
+  const fetchConfig = useCallback(async () => {
+    if (!isAdmin || !adminId) {
+      setLoadingData(false);
+      return;
+    }
+    
+    setLoadingData(true);
+    
+    const { data, error } = await supabase
+      .from('configuracao_contas_pagar')
+      .select('tipo_registro, conta_contabil_id')
+      .eq('proprietario_id', adminId);
+
+    if (error) {
+      showError('Erro ao carregar configurações de CP: ' + error.message);
+    } else if (data) {
+      const mappedData = data.reduce((acc, item) => {
+        acc[item.tipo_registro as keyof FormValues] = item.conta_contabil_id;
+        return acc;
+      }, {} as Partial<FormValues>);
+      
+      form.reset(mappedData);
+    }
+    setLoadingData(false);
+  }, [isAdmin, adminId, form]);
+
+  useEffect(() => {
+    if (!carregandoSessao && isAdmin) {
+      fetchContasContabeis();
+      fetchConfig();
+    }
+  }, [carregandoSessao, isAdmin, fetchConfig, fetchContasContabeis]);
+
+  const onSubmit = async (values: FormValues) => {
+    if (!isAdmin || !adminId) {
+      showError('Apenas administradores podem salvar esta configuração.');
+      return;
+    }
+    
+    const dataToUpsert = TIPOS_REGISTRO.map(tipo => ({
+        proprietario_id: adminId,
+        tipo_registro: tipo.key,
+        conta_contabil_id: values[tipo.key as keyof FormValues] || null,
+    }));
+
+    try {
+      const { error } = await supabase
+        .from('configuracao_contas_pagar')
+        .upsert(dataToUpsert, { onConflict: 'proprietario_id, tipo_registro' });
+
+      if (error) throw error;
+
+      showSuccess('Configurações de Contas a Pagar salvas com sucesso!');
+      fetchConfig();
+    } catch (error: any) {
+      showError(`Falha ao salvar configurações: ${error.message}`);
+    }
+  };
+
+  if (!isAdmin) {
+    return <p className="text-red-500">Acesso negado. Apenas administradores podem gerenciar esta configuração.</p>;
+  }
+
+  if (loadingData || loadingContas) {
+    return <div className="flex justify-center items-center h-20"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>;
+  }
+  
+  const contasDisponiveis = contasContabeis.map(c => ({
+      id: c.id,
+      display: `${c.Conta} - ${c.Descricao}`,
+  }));
+
+  return (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        <p className="text-sm text-muted-foreground">
+            Mapeie cada tipo de transação de Contas a Pagar para a conta contábil analítica correspondente.
+        </p>
+        
+        <Separator />
+        
+        <div className="space-y-4">
+            {TIPOS_REGISTRO.map(tipo => (
+                <FormField
+                    key={tipo.key}
+                    control={form.control}
+                    name={tipo.key as keyof FormValues}
+                    render={({ field }) => (
+                        <FormItem>
+                            <FormLabel>{tipo.label}</FormLabel>
+                            <Select 
+                                onValueChange={field.onChange} 
+                                value={field.value || undefined}
+                            >
+                                <FormControl>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Selecione a conta contábil analítica" />
+                                    </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                    <SelectItem value={null as any}>Nenhum (Não Mapear)</SelectItem>
+                                    {contasDisponiveis.map(c => (
+                                        <SelectItem key={c.id} value={c.id}>
+                                            {c.display}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            <FormMessage />
+                        </FormItem>
+                    )}
+                />
+            ))}
+        </div>
+        
+        <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
+          {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          Salvar Mapeamento Contábil
+        </Button>
+      </form>
+    </Form>
+  );
+};
+
+export default FormConfiguracoesCP;
