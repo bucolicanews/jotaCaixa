@@ -65,6 +65,7 @@ export interface ContaPagarComProgresso extends AdminContaPagar {
 
 export interface ExtendedParcelaPagar extends AdminParcelaPagar {
     admin_contas_pagar: {
+        fornecedor: string; // Adicionado para corrigir TS2339
         descricao: string;
         origem: AdminContaPagar['origem'];
     } | null;

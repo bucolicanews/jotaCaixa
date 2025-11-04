@@ -1,126 +1,141 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, BadgeDollarSign } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { formatCurrency, formatarData } from '@/utils/formatters';
+import { AdminContaPagar, AdminParcelaPagar, ExtendedParcelaPagar } from '@/types/contas-pagar';
 import { supabase } from '@/integrations/supabase/client';
 import { showError } from '@/utils/toast';
-import { Button } from './ui/button';
-import { Badge } from './ui/badge';
 import { useSessao } from '@/hooks/use-sessao';
-import { AdminContaPagar, AdminParcelaPagar } from '@/types/contas-pagar';
+import { getBadgeVariant } from '@/utils/badge-variants';
+import { format } from 'date-fns';
+import { Badge } from './ui/badge';
+import { CheckCircle, XCircle, Clock, Repeat, DollarSign } from 'lucide-react';
 import RegistrarPagamentoCPDialog from './RegistrarPagamentoCPDialog';
 
-interface ParcelaParaPagamento extends AdminParcelaPagar {
-  fornecedor: string;
-}
-
 interface DetalhesParcelasCPDialogProps {
-  conta: AdminContaPagar | null;
+  conta: AdminContaPagar;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onDataChange: () => void;
 }
 
 const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ conta, open, onOpenChange, onDataChange }) => {
-  const { role } = useSessao();
-  const [parcelas, setParcelas] = useState<AdminParcelaPagar[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [pagamentoDialogOpen, setPagamentoDialogOpen] = useState(false);
-  const [parcelaSelecionada, setParcelaSelecionada] = useState<ParcelaParaPagamento | null>(null);
+  const { usuario } = useSessao();
+  const [parcelas, setParcelas] = useState<ExtendedParcelaPagar[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [pagamentoDialog, setPagamentoDialog] = useState<{ open: boolean, parcela: (AdminParcelaPagar & { fornecedor: string }) | null }>({ open: false, parcela: null });
 
   const fetchParcelas = useCallback(async () => {
-    if (!conta) return;
+    if (!usuario?.id) return;
     setLoading(true);
     
-    // Admin sempre usa admin_parcelas_pagar
-    const tabelaParcelas = 'admin_parcelas_pagar';
-    
     const { data, error } = await supabase
-      .from(tabelaParcelas)
-      .select('*')
-      .eq('conta_pagar_id', conta.id)
-      .order('numero_parcela', { ascending: true });
-
+        .from('admin_parcelas_pagar')
+        .select(`
+            *,
+            admin_contas_pagar ( fornecedor, descricao, origem )
+        `)
+        .eq('conta_pagar_id', conta.id)
+        .order('numero_parcela', { ascending: true });
+        
     if (error) {
-      showError('Erro ao carregar parcelas: ' + error.message);
-      setParcelas([]);
+        showError('Erro ao carregar parcelas: ' + error.message);
+        setParcelas([]);
     } else {
-      setParcelas(data as AdminParcelaPagar[]);
+        setParcelas(data as ExtendedParcelaPagar[]);
     }
     setLoading(false);
-  }, [conta]);
-
+  }, [conta.id, usuario?.id]);
+  
   useEffect(() => {
     if (open) {
-      fetchParcelas();
+        fetchParcelas();
     }
-  }, [conta, open, fetchParcelas]);
-
-  const handleOpenPagamento = (parcela: AdminParcelaPagar) => {
-    if (!conta) return;
-    
-    const mappedParcela: ParcelaParaPagamento = {
+  }, [open, fetchParcelas]);
+  
+  const handleOpenPagamento = (parcela: ExtendedParcelaPagar) => {
+    const mappedParcela = {
         ...parcela,
-        fornecedor: conta.fornecedor, // Injetando o fornecedor
+        fornecedor: parcela.admin_contas_pagar?.fornecedor || conta.fornecedor,
     };
-    
-    setParcelaSelecionada(mappedParcela);
-    setPagamentoDialogOpen(true);
+    setPagamentoDialog({ open: true, parcela: mappedParcela });
   };
-
-  const handlePagamentoCompleto = () => {
-    setPagamentoDialogOpen(false);
-    fetchParcelas(); // Re-busca as parcelas deste dialog
-    onDataChange(); // Avisa a página principal para re-buscar tudo
+  
+  const handlePagamentoComplete = () => {
+    setPagamentoDialog({ open: false, parcela: null });
+    fetchParcelas();
+    onDataChange(); // Notifica a página pai para recarregar o sintético
   };
-
-  const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
-  const formatDate = (dateString: string) => new Date(dateString + 'T00:00:00').toLocaleDateString('pt-BR');
 
   return (
-    <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Detalhes do Lançamento</DialogTitle>
-            <DialogDescription><strong>{conta?.descricao}</strong> para o fornecedor <strong>{conta?.fornecedor || 'N/A'}</strong></DialogDescription>
-          </DialogHeader>
-          {loading ? (
-            <div className="flex justify-center items-center h-40"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
-          ) : (
-            <div className="mt-4">
-              <h3 className="font-semibold mb-2">Parcelas</h3>
-              <div className="border rounded-md">
-                <Table>
-                  <TableHeader><TableRow><TableHead className="w-[80px]">Parcela</TableHead><TableHead>Vencimento</TableHead><TableHead>Valor</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader>
-                  <TableBody>
-                    {parcelas.map((p) => (
-                      <TableRow key={p.id}>
-                        <TableCell className="font-medium">{p.numero_parcela}</TableCell>
-                        <TableCell>{formatDate(p.data_vencimento)}</TableCell>
-                        <TableCell>{formatCurrency(p.valor_parcela)}</TableCell>
-                        <TableCell><Badge variant={p.status === 'paga' ? 'default' : 'secondary'}>{p.status}</Badge></TableCell>
-                        <TableCell className="text-right">
-                          <Button variant="outline" size="sm" onClick={() => handleOpenPagamento(p)} disabled={p.status === 'paga' || p.status === 'cancelada'}>
-                            <BadgeDollarSign className="w-4 h-4 mr-2" />Registrar Pagamento
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-      <RegistrarPagamentoCPDialog
-        parcela={parcelaSelecionada}
-        open={pagamentoDialogOpen}
-        onOpenChange={setPagamentoDialogOpen}
-        onSaveComplete={handlePagamentoCompleto}
-      />
-    </>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-4xl">
+        <DialogHeader>
+          <DialogTitle>Detalhes das Parcelas - {conta.fornecedor}</DialogTitle>
+          <DialogDescription>
+            {conta.descricao} | Valor Total: {formatCurrency(conta.valor_total)}
+          </DialogDescription>
+        </DialogHeader>
+        
+        <div className="overflow-x-auto">
+            <Table>
+                <TableHeader>
+                    <TableRow>
+                        <TableHead>Nº</TableHead>
+                        <TableHead>Vencimento</TableHead>
+                        <TableHead className="text-right">Valor</TableHead>
+                        <TableHead className="text-right">Pago</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="text-right">Ações</TableHead>
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
+                    {loading ? (
+                        <TableRow><TableCell colSpan={6} className="text-center">Carregando...</TableCell></TableRow>
+                    ) : parcelas.length === 0 ? (
+                        <TableRow><TableCell colSpan={6} className="text-center">Nenhuma parcela encontrada.</TableCell></TableRow>
+                    ) : (
+                        parcelas.map((p) => {
+                            const statusVariant = getBadgeVariant(p.status, p.data_vencimento);
+                            const isPaga = p.status === 'paga';
+                            
+                            return (
+                                <TableRow key={p.id}>
+                                    <TableCell>{p.numero_parcela}</TableCell>
+                                    <TableCell>{formatarData(p.data_vencimento)}</TableCell>
+                                    <TableCell className="text-right">{formatCurrency(p.valor_parcela)}</TableCell>
+                                    <TableCell className="text-right">{formatCurrency(p.valor_pago || 0)}</TableCell>
+                                    <TableCell>
+                                        <Badge variant={statusVariant}>
+                                            {p.status}
+                                        </Badge>
+                                    </TableCell>
+                                    <TableCell className="text-right">
+                                        {!isPaga && (
+                                            <Button size="sm" onClick={() => handleOpenPagamento(p)}>
+                                                <DollarSign className="w-4 h-4" /> Pagar
+                                            </Button>
+                                        )}
+                                    </TableCell>
+                                </TableRow>
+                            );
+                        })
+                    )}
+                </TableBody>
+            </Table>
+        </div>
+        
+        {pagamentoDialog.parcela && (
+            <RegistrarPagamentoCPDialog
+                open={pagamentoDialog.open}
+                onOpenChange={(open) => setPagamentoDialog({ open, parcela: null })}
+                parcela={pagamentoDialog.parcela}
+                onSaveComplete={handlePagamentoComplete}
+            />
+        )}
+      </DialogContent>
+    </Dialog>
   );
 };
 

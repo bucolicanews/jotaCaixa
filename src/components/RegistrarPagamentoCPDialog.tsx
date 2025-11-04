@@ -155,7 +155,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
     // Contas Contábeis Mapeadas
     const contaPagamento = mapeamentoContabil['pagamento'];
     const contaParcelaPagar = mapeamentoContabil['parcela_pagar'];
-    const contaDescontoObtido = mapeamentoContabil['desconto_obtido'];
+    // const contaDescontoObtido = mapeamentoContabil['desconto_obtido']; // REMOVIDO (Erro 1)
 
     try {
       // 1. Registrar o pagamento (admin_pagamentos)
