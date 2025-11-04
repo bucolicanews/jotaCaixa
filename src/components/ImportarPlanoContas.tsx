@@ -50,7 +50,7 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
     setLoading(true);
 
     try {
-      // Chamada para parseFile sem o segundo argumento (isExtrato), mantendo o comportamento de Plano de Contas
+      // Usando a função unificada para parsear
       const parsedData: (ContaCSV | ContaJSON)[] = await parseFile(file);
 
       if (parsedData.length === 0) {

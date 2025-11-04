@@ -1,15 +1,5 @@
 import { Cliente } from './cliente';
 
-export interface ParcelaParaPagamento {
-  id: string;
-  conta_receber_id: string;
-  empresa_id: string;
-  valor_parcela: number;
-  valor_pago: number;
-  cliente_id: string | null;
-  numero_parcela: number;
-}
-
 export interface ContaReceber {
   id: string;
   empresa_id: string;
@@ -59,7 +49,6 @@ export interface ExtendedParcelaDetalhada extends ParcelaDetalhada {
     contas_receber: {
         descricao: string;
         cliente_id: string | null;
-        empresa_id: string; // ADICIONADO
         origem: ContaReceber['origem'];
         clientes: { nome: string } | null;
     } | null;

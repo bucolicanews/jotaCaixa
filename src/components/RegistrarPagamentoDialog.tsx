@@ -1,235 +1,367 @@
-import React, { Dispatch, SetStateAction } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { CalendarIcon, Loader2 } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { format, addDays } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
-import { ParcelaParaPagamento } from '@/types/contas-receber';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
-import { Button } from './ui/button';
-import { Loader2, CreditCard } from 'lucide-react';
-import { Input } from './ui/input';
-import { Label } from './ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { SaldoContaDetalhada } from '@/types/saldo-conta';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useSessao } from '@/hooks/use-sessao';
-import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { SaldoConta } from '@/types/saldo-conta';
+
+interface ParcelaParaPagamento {
+  id: string;
+  conta_receber_id: string;
+  empresa_id: string; // Este é o ID do Admin ou da Empresa Cliente
+  valor_parcela: number;
+  valor_pago: number;
+  cliente_id: string | null; // ID do cliente real (tbl_clientes)
+}
+
+const formSchema = z.object({
+  valor_recebido: z.coerce.number().positive('O valor deve ser maior que zero.'),
+  data_pagamento: z.date({ required_error: 'A data é obrigatória.' }),
+  forma_pagamento: z.string().min(1, 'A forma de pagamento é obrigatória.'),
+  conta_id: z.string().uuid('Selecione a conta de destino.').nullable(), // NOVO CAMPO
+  acao_saldo_restante: z.enum(['desconto', 'reprogramar', 'parcelar']).optional(),
+  nova_data_vencimento: z.date().optional(),
+  numero_novas_parcelas: z.coerce.number().int().min(2).optional(),
+  intervalo_dias_novas_parcelas: z.coerce.number().int().min(1).optional(),
+});
+
+type FormValues = z.infer<typeof formSchema>;
 
 interface RegistrarPagamentoDialogProps {
-    parcela: ParcelaParaPagamento | null;
-    open: boolean;
-    onOpenChange: Dispatch<SetStateAction<boolean>>;
-    onSaveComplete: () => void;
+  parcela: ParcelaParaPagamento | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSaveComplete: () => void;
 }
 
 const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ parcela, open, onOpenChange, onSaveComplete }) => {
-    const { role, perfil, usuario } = useSessao();
-    const [loading, setLoading] = React.useState(false);
-    const [valorRecebido, setValorRecebido] = React.useState<number>(0);
-    const [formaPagamento, setFormaPagamento] = React.useState('Pix');
-    const [contaDestinoId, setContaDestinoId] = React.useState<string | null>(null);
-    const [contasSaldo, setContasSaldo] = React.useState<SaldoContaDetalhada[]>([]);
-    
-    const isMyLaunch = role === 'Admin';
-    
-    const getOwnerId = () => {
-        if (role === 'Admin') return usuario?.id || null;
-        if (role === 'Cliente') return (perfil as ClienteProfile)?.id || null;
-        if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id || null;
-        return null;
-    };
-    
-    const ownerId = getOwnerId();
+  const { role, usuario } = useSessao();
+  const isAdmin = role === 'Admin';
+  
+  const [contasDestino, setContasDestino] = useState<SaldoConta[]>([]);
+  const [loadingContas, setLoadingContas] = useState(true);
+  const [mapeamentoContabil, setMapeamentoContabil] = useState<Record<string, string | null>>({});
+  
+  // Determina as tabelas de destino
+  const tabelaRecebimentos = isAdmin ? 'admin_recebimentos' : 'recebimentos';
+  const tabelaParcelas = isAdmin ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
+  
+  // O ID do proprietário da conta (Admin ID ou Empresa ID)
+  const ownerId = isAdmin ? usuario?.id : parcela?.empresa_id;
 
-    React.useEffect(() => {
-        if (parcela) {
-            setValorRecebido(parcela.valor_parcela - parcela.valor_pago);
-        }
-    }, [parcela]);
+  const saldoDevedor = parcela ? parcela.valor_parcela - (parcela.valor_pago || 0) : 0;
+
+  // 1. Definição do formulário (movida para o início)
+  const form = useForm<FormValues>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      valor_recebido: saldoDevedor,
+      data_pagamento: new Date(),
+      forma_pagamento: 'Pix',
+      conta_id: null, // Inicializa como null
+      acao_saldo_restante: 'reprogramar',
+      numero_novas_parcelas: 2,
+      intervalo_dias_novas_parcelas: 30,
+    },
+  });
+  
+  // Desestruturando setValue para usar nas funções de callback
+  const { setValue } = form;
+
+  const fetchContasDestino = useCallback(async () => {
+    if (!ownerId) return;
+    setLoadingContas(true);
     
-    const fetchContasSaldo = React.useCallback(async () => {
-        if (!ownerId) return;
+    // Busca saldo_contas e faz JOIN com plano_contas para filtrar
+    const { data, error } = await supabase
+        .from('saldo_contas')
+        .select(`
+            *,
+            plano_contas ( is_conta_saldo )
+        `)
+        .eq('empresa_id', ownerId)
+        .order('nome');
         
-        const { data, error } = await supabase
-            .from('saldo_contas')
-            .select('*, plano_contas ( Conta, Descricao )')
-            .eq('empresa_id', ownerId)
-            .order('nome');
+    if (error) {
+        showError('Erro ao carregar Contas/Caixas: ' + error.message);
+        setContasDestino([]);
+    } else {
+        // Filtra no frontend para garantir que apenas contas com is_conta_saldo = true sejam exibidas
+        const filteredData = (data as any[])
+            .filter(c => c.plano_contas?.is_conta_saldo === true)
+            .map(c => ({ ...c, plano_contas: undefined })) as SaldoConta[]; // Remove o join para manter o tipo SaldoConta
             
-        if (error) {
-            showError('Erro ao carregar contas de saldo: ' + error.message);
-            setContasSaldo([]);
+        setContasDestino(filteredData);
+        
+        // Se houver contas, define a primeira como padrão
+        if (filteredData.length > 0) {
+            setValue('conta_id', filteredData[0].id);
         } else {
-            setContasSaldo(data as SaldoContaDetalhada[]);
-            if (data.length > 0 && !contaDestinoId) {
-                setContaDestinoId(data[0].id);
-            }
+            setValue('conta_id', null);
         }
-    }, [ownerId, contaDestinoId]);
+    }
+    setLoadingContas(false);
+  }, [ownerId, setValue]); // Corrigido: usando setValue como dependência
+  
+  const fetchMapeamentoContabil = useCallback(async () => {
+    if (!isAdmin || !ownerId) return;
     
-    React.useEffect(() => {
-        if (open) {
-            fetchContasSaldo();
-        }
-    }, [open, fetchContasSaldo]);
+    const { data, error } = await supabase
+        .from('configuracao_contas_receber')
+        .select('tipo_registro, conta_contabil_id')
+        .eq('proprietario_id', ownerId);
+        
+    if (error) {
+        console.error('Erro ao buscar mapeamento contábil:', error);
+        setMapeamentoContabil({});
+    } else {
+        const map = (data as { tipo_registro: string, conta_contabil_id: string | null }[]).reduce((acc, item) => {
+            acc[item.tipo_registro] = item.conta_contabil_id;
+            return acc;
+        }, {} as Record<string, string | null>);
+        setMapeamentoContabil(map);
+    }
+  }, [isAdmin, ownerId]);
+  
+  useEffect(() => {
+      if (open) {
+          fetchContasDestino();
+          if (isAdmin) {
+              fetchMapeamentoContabil();
+          }
+      }
+  }, [open, fetchContasDestino, fetchMapeamentoContabil, isAdmin]);
 
-    const handleRegistro = async () => {
-        if (!parcela || !ownerId || !contaDestinoId) {
-            showError('Dados incompletos para registro.');
+  const valorRecebido = form.watch('valor_recebido');
+  const acaoSaldoRestante = form.watch('acao_saldo_restante');
+  const isPagamentoParcial = valorRecebido > 0 && valorRecebido < saldoDevedor;
+  const saldoRestante = saldoDevedor - valorRecebido;
+
+  const onSubmit = async (values: FormValues) => {
+    if (!parcela || !ownerId || !values.conta_id) {
+        showError('Dados incompletos ou conta de destino não selecionada.');
+        return;
+    }
+
+    const valorRecebido = values.valor_recebido;
+    const valorPagoAnterior = parcela.valor_pago || 0;
+    const novoValorPagoTotal = valorPagoAnterior + valorRecebido;
+    const saldoRestanteCalculado = parcela.valor_parcela - novoValorPagoTotal;
+    const quitouComPagamentoAtual = novoValorPagoTotal >= parcela.valor_parcela;
+    
+    // Contas Contábeis Mapeadas
+    const contaRecebimento = isAdmin ? mapeamentoContabil['recebimento'] : null;
+    const contaParcela = isAdmin ? mapeamentoContabil['parcela'] : null;
+    
+    // Payload base para recebimentos
+    let recebimentoBasePayload;
+    
+    if (isAdmin) {
+        const clienteIdPagador = parcela.cliente_id || parcela.empresa_id;
+        
+        if (!clienteIdPagador) {
+            showError('ID do cliente pagador não encontrado.'); 
             return;
         }
-        if (valorRecebido <= 0) {
-            showError('O valor recebido deve ser positivo.');
-            return;
-        }
-
-        setLoading(true);
         
-        const valorRestante = parcela.valor_parcela - parcela.valor_pago;
-        const tipoRecebimento = valorRecebido >= valorRestante ? 'total' : 'parcial';
-        const valorDesconto = valorRecebido < valorRestante ? valorRestante - valorRecebido : 0;
-        
-        try {
-            // 1. Registrar o Recebimento (admin_recebimentos ou recebimentos)
-            const tabelaRecebimentos = isMyLaunch ? 'admin_recebimentos' : 'recebimentos';
-            const ownerKey = isMyLaunch ? 'admin_id' : 'empresa_id';
-            
-            const recebimentoPayload = {
-                [ownerKey]: ownerId,
-                parcela_id: parcela.id,
-                valor_recebido: valorRecebido,
-                tipo_recebimento: tipoRecebimento,
-                desconto_aplicado: valorDesconto,
-                forma_pagamento: formaPagamento,
-                cliente_id: parcela.cliente_id, // ID do cliente que pagou (tbl_clientes)
-                conta_id: contaDestinoId, // ID da conta de saldo (saldo_contas)
-            };
-            
-            const { error: recebimentoError, data: recebimentoData } = await supabase
-                .from(tabelaRecebimentos)
-                .insert(recebimentoPayload)
-                .select('id')
-                .single();
-            
-            if (recebimentoError) throw recebimentoError;
-            
-            // 2. Atualizar a Parcela (status e valor_pago)
-            const tabelaParcelas = isMyLaunch ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
-            const novoValorPago = parcela.valor_pago + valorRecebido;
-            const novoStatus = novoValorPago >= parcela.valor_parcela ? 'paga' : 'parcial';
-            
-            const { error: parcelaError } = await supabase
-                .from(tabelaParcelas)
-                .update({ 
-                    valor_pago: novoValorPago, 
-                    status: novoStatus,
-                    data_pagamento: novoStatus === 'paga' ? new Date().toISOString().split('T')[0] : null,
-                })
-                .eq('id', parcela.id);
-                
-            if (parcelaError) throw parcelaError;
-            
-            // 3. Registrar Lançamento de Entrada na conta de saldo (tabela lancamentos)
-            const lancamentoPayload = {
-                empresa_id: ownerId,
-                data_movimentacao: new Date().toISOString().split('T')[0],
-                descricao: `Recebimento Parcela #${parcela.numero_parcela} - ${parcela.id}`,
-                valor: valorRecebido,
-                tipo: 'Entrada',
-                conta_bancaria_id: contaDestinoId,
-                // TODO: Adicionar conta_contabil_id (do plano de contas da parcela)
-                conciliado: true, // Marca como conciliado automaticamente
-                origem: 'recebimento_cr',
-                documento: recebimentoData.id, // Referência ao ID do recebimento
-            };
-            
-            const { error: lancamentoError } = await supabase
-                .from('lancamentos')
-                .insert(lancamentoPayload);
-                
-            if (lancamentoError) throw lancamentoError;
+        recebimentoBasePayload = { 
+            parcela_id: parcela.id, 
+            admin_id: ownerId, 
+            valor_recebido: valorRecebido, 
+            cliente_id: clienteIdPagador,
+            conta_id: values.conta_id,
+            id_conta_contabil: contaRecebimento, // NOVO: Mapeamento para Recebimento
+        };
+    } else {
+        recebimentoBasePayload = { 
+            parcela_id: parcela.id, 
+            empresa_id: ownerId, 
+            valor_recebido: valorRecebido,
+            conta_id: values.conta_id,
+            // id_conta_contabil não é necessário para Cliente/Usuário
+        };
+    }
 
-            showSuccess('Pagamento registrado com sucesso!');
-            onOpenChange(false);
-            onSaveComplete();
+    try {
+      // 1. Registrar o recebimento
+      const { data: recebimentoData, error: recebimentoError } = await supabase.from(tabelaRecebimentos).insert({
+        ...recebimentoBasePayload,
+        data_recebimento: values.data_pagamento.toISOString(),
+        forma_pagamento: values.forma_pagamento,
+        tipo_recebimento: quitouComPagamentoAtual ? 'total' : 'parcial',
+      }).select('id').single();
+      
+      if (recebimentoError) throw recebimentoError;
+      
+      // const recebimentoId = recebimentoData.id; // Removido TS6133
 
-        } catch (error: any) {
-            console.error('Erro ao registrar pagamento:', error);
-            showError('Falha ao registrar pagamento: ' + error.message);
-        } finally {
-            setLoading(false);
+      // 2. Lidar com a parcela original
+      if (quitouComPagamentoAtual) {
+        // Se quitou, atualiza a parcela para paga
+        await supabase.from(tabelaParcelas).update({
+          status: 'paga',
+          valor_pago: novoValorPagoTotal,
+          data_pagamento: values.data_pagamento.toISOString(),
+          ...(isAdmin && { id_conta_contabil: contaParcela }) // NOVO: Mapeamento para Parcela
+        }).eq('id', parcela.id);
+      } else { // Pagamento parcial
+        if (values.acao_saldo_restante === 'desconto') {
+          // Se for desconto, a parcela é marcada como paga, e o saldo restante é o desconto
+          await supabase.from(tabelaParcelas).update({
+            status: 'paga',
+            valor_pago: novoValorPagoTotal,
+            data_pagamento: values.data_pagamento.toISOString(),
+            observacao: `Recebido R$ ${valorRecebido.toFixed(2)} com R$ ${saldoRestanteCalculado.toFixed(2)} de desconto.`,
+            ...(isAdmin && { id_conta_contabil: contaParcela }) // NOVO: Mapeamento para Parcela
+          }).eq('id', parcela.id);
+          
+        } else if (values.acao_saldo_restante === 'reprogramar' || values.acao_saldo_restante === 'parcelar') {
+          // Marca a parcela original como paga (quitada pelo valor recebido + saldo restante tratado)
+          await supabase.from(tabelaParcelas).update({
+            status: 'paga', 
+            valor_pago: novoValorPagoTotal,
+            data_pagamento: values.data_pagamento.toISOString(),
+            observacao: `Recebido R$ ${valorRecebido.toFixed(2)}. Saldo de R$ ${saldoRestanteCalculado.toFixed(2)} ${values.acao_saldo_restante === 'reprogramar' ? 'reprogramado' : 'parcelado'}.`,
+            ...(isAdmin && { id_conta_contabil: contaParcela }) // NOVO: Mapeamento para Parcela
+          }).eq('id', parcela.id);
+
+          const baseParcelaPayload = isAdmin ? { admin_id: ownerId, id_conta_contabil: contaParcela } : { empresa_id: ownerId };
+          
+          if (values.acao_saldo_restante === 'reprogramar') {
+            await supabase.from(tabelaParcelas).insert({
+              conta_receber_id: parcela.conta_receber_id,
+              ...baseParcelaPayload,
+              numero_parcela: 99,
+              valor_parcela: saldoRestanteCalculado,
+              data_vencimento: format(values.nova_data_vencimento!, 'yyyy-MM-dd'),
+              status: 'reprogramada'
+            });
+          } else { // Parcelar
+            const valorNovaParcela = saldoRestanteCalculado / values.numero_novas_parcelas!;
+            const novasParcelas = Array.from({ length: values.numero_novas_parcelas! }).map((_, i) => ({
+              conta_receber_id: parcela.conta_receber_id,
+              ...baseParcelaPayload,
+              numero_parcela: 100 + i,
+              valor_parcela: valorNovaParcela,
+              data_vencimento: format(addDays(values.nova_data_vencimento!, i * values.intervalo_dias_novas_parcelas!), 'yyyy-MM-dd'),
+              status: 'reprogramada',
+            }));
+            await supabase.from(tabelaParcelas).insert(novasParcelas);
+          }
+        } else {
+            // Caso de pagamento parcial sem ação definida (apenas atualiza)
+            await supabase.from(tabelaParcelas).update({
+                status: 'parcial',
+                valor_pago: novoValorPagoTotal,
+                ...(isAdmin && { id_conta_contabil: contaParcela }) // NOVO: Mapeamento para Parcela
+            }).eq('id', parcela.id);
         }
-    };
+      }
+      
+      // 3. Registrar o Lançamento na conta de Saldo (Movimentação de Caixa/Banco)
+      // O tipo é 'Entrada' porque é um Recebimento
+      const lancamentoPayload = {
+          empresa_id: ownerId, // ID do Admin/Empresa
+          data_movimentacao: values.data_pagamento.toISOString(),
+          descricao: `Recebimento Parcela ${parcela.id} - ${values.forma_pagamento}`,
+          valor: valorRecebido,
+          tipo: 'Entrada',
+          conta_bancaria_id: values.conta_id, // ID da conta de saldo
+          conta_contabil_id: contaRecebimento, // Conta contábil do recebimento (Admin)
+      };
+      
+      await supabase.from('lancamentos').insert(lancamentoPayload);
 
-    if (!parcela) return null;
-    
-    const valorRestante = parcela.valor_parcela - parcela.valor_pago;
-    const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
-    return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-[425px]">
-                <DialogHeader>
-                    <DialogTitle>Registrar Pagamento</DialogTitle>
-                </DialogHeader>
-                
-                <div className="space-y-4 py-4">
-                    <div className="p-3 bg-secondary rounded-md space-y-1">
-                        <p className="text-sm font-medium">Parcela ID: <span className="font-mono text-xs">{parcela.id}</span></p>
-                        <p className="text-sm font-medium">Valor Total: {formatCurrency(parcela.valor_parcela)}</p>
-                        <p className="text-sm font-medium text-red-500">Valor Pendente: {formatCurrency(valorRestante)}</p>
-                    </div>
-                    
-                    <div className="space-y-2">
-                        <Label htmlFor="valor-recebido">Valor Recebido</Label>
-                        <Input
-                            id="valor-recebido"
-                            type="number"
-                            step="0.01"
-                            value={valorRecebido}
-                            onChange={(e) => setValorRecebido(Number(e.target.value))}
-                            disabled={loading}
-                        />
-                    </div>
-                    
-                    <div className="space-y-2">
-                        <Label htmlFor="forma-pagamento">Forma de Pagamento</Label>
-                        <Select value={formaPagamento} onValueChange={setFormaPagamento} disabled={loading}>
-                            <SelectTrigger id="forma-pagamento">
-                                <SelectValue placeholder="Selecione a forma" />
-                            </SelectTrigger>
+      showSuccess('Pagamento registrado com sucesso!');
+      onSaveComplete();
+    } catch (error: any) {
+      showError(`Falha ao registrar pagamento: ${error.message}`);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Registrar Pagamento</DialogTitle>
+          <DialogDescription>Saldo devedor da parcela: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(saldoDevedor)}</DialogDescription>
+        </DialogHeader>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <FormField control={form.control} name="valor_recebido" render={({ field }) => (<FormItem><FormLabel>Valor Recebido</FormLabel><FormControl><Input type="number" step="0.01" {...field} /></FormControl><FormMessage /></FormItem>)} />
+              <FormField control={form.control} name="data_pagamento" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Data</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "dd/MM/yy") : <span>Data</span>}<CalendarIcon className="ml-auto h-4 w-4 opacity-50" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus /></PopoverContent></Popover><FormMessage /></FormItem>)} />
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+                <FormField control={form.control} name="forma_pagamento" render={({ field }) => (<FormItem><FormLabel>Forma de Pagamento</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
+                <FormField control={form.control} name="conta_id" render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>Conta/Caixa de Destino</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value || undefined} disabled={loadingContas}>
+                            <FormControl>
+                                <SelectTrigger>
+                                    <SelectValue placeholder={loadingContas ? "Carregando Contas..." : "Selecione a conta"} />
+                                </SelectTrigger>
+                            </FormControl>
                             <SelectContent>
-                                <SelectItem value="Pix">Pix</SelectItem>
-                                <SelectItem value="Boleto">Boleto</SelectItem>
-                                <SelectItem value="Cartao">Cartão</SelectItem>
-                                <SelectItem value="Transferencia">Transferência</SelectItem>
-                                <SelectItem value="Dinheiro">Dinheiro</SelectItem>
+                                {contasDestino.length === 0 ? (
+                                    <SelectItem value="disabled" disabled>Nenhuma conta de saldo disponível.</SelectItem>
+                                ) : (
+                                    contasDestino.map(c => (
+                                        <SelectItem key={c.id} value={c.id}>
+                                            {c.nome} ({c.tipo_saldo})
+                                        </SelectItem>
+                                    ))
+                                )}
                             </SelectContent>
                         </Select>
-                    </div>
-                    
-                    <div className="space-y-2">
-                        <Label htmlFor="conta-destino">Conta de Destino (Caixa/Banco)</Label>
-                        <Select value={contaDestinoId || ''} onValueChange={setContaDestinoId} disabled={loading || contasSaldo.length === 0}>
-                            <SelectTrigger id="conta-destino">
-                                <SelectValue placeholder="Selecione a conta de saldo" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {contasSaldo.map(c => (
-                                    <SelectItem key={c.id} value={c.id}>
-                                        {c.nome} ({c.plano_contas?.Conta})
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                        {contasSaldo.length === 0 && <p className="text-xs text-red-500">Nenhuma conta de saldo cadastrada.</p>}
-                    </div>
-                </div>
-
-                <Button onClick={handleRegistro} className="w-full" disabled={loading || valorRecebido <= 0 || !contaDestinoId}>
-                    {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CreditCard className="mr-2 h-4 w-4" />}
-                    Confirmar Recebimento
-                </Button>
-            </DialogContent>
-        </Dialog>
-    );
+                        <FormMessage />
+                        {contasDestino.length === 0 && (
+                            <p className="text-sm text-red-500">
+                                Nenhuma conta de saldo encontrada. Crie uma em <a href="/bancos" className="underline">Bancos / Caixas</a>.
+                            </p>
+                        )}
+                    </FormItem>
+                )} />
+            </div>
+            
+            {isPagamentoParcial && (
+              <div className="space-y-4 pt-4 border-t">
+                <h3 className="font-semibold text-destructive">Saldo restante: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(saldoRestante)}</h3>
+                <FormField control={form.control} name="acao_saldo_restante" render={({ field }) => (
+                  <FormItem><FormLabel>O que fazer com o saldo restante?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="space-y-2"><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="desconto" /></FormControl><FormLabel className="font-normal">Conceder Desconto (Perdoar)</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="reprogramar" /></FormControl><FormLabel className="font-normal">Reprogramar Saldo</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="parcelar" /></FormControl><FormLabel className="font-normal">Parcelar Saldo</FormLabel></FormItem></RadioGroup></FormControl></FormItem>
+                )} />
+                {acaoSaldoRestante === 'reprogramar' && <FormField control={form.control} name="nova_data_vencimento" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Nova Data de Vencimento</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "PPP") : <span>Escolha a data</span>}<CalendarIcon className="ml-auto h-4 w-4 opacity-50" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus /></PopoverContent></Popover><FormMessage /></FormItem>)} />}
+                {acaoSaldoRestante === 'parcelar' && (
+                  <div className="grid grid-cols-3 gap-4 items-end">
+                    <FormField control={form.control} name="numero_novas_parcelas" render={({ field }) => (<FormItem><FormLabel>Nº Parcelas</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                    <FormField control={form.control} name="intervalo_dias_novas_parcelas" render={({ field }) => (<FormItem><FormLabel>Intervalo</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                    <FormField control={form.control} name="nova_data_vencimento" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>1º Venc.</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "dd/MM/yy") : <span>Data</span>}<CalendarIcon className="ml-auto h-4 w-4 opacity-50" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus /></PopoverContent></Popover><FormMessage /></FormItem>)} />
+                  </div>
+                )}
+              </div>
+            )}
+            <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}><Loader2 className={cn("mr-2 h-4 w-4 animate-spin", !form.formState.isSubmitting && "hidden")} />Confirmar Recebimento</Button>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  );
 };
 
 export default RegistrarPagamentoDialog;
