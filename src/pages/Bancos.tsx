@@ -110,6 +110,12 @@ const Bancos = () => {
       </LayoutPrincipal>
     );
   }
+  
+  // Helper para exibir a natureza correta
+  const getNaturezaDisplay = (tipo: 'Credito' | 'Debito') => {
+      if (tipo === 'Debito') return { label: 'Débito (Ativo)', icon: <Wallet className="w-4 h-4 mr-2 text-green-600" />, variant: 'success' as const };
+      return { label: 'Crédito (Passivo)', icon: <CreditCard className="w-4 h-4 mr-2 text-red-600" />, variant: 'destructive' as const };
+  };
 
   return (
     <LayoutPrincipal>
@@ -159,35 +165,38 @@ const Bancos = () => {
                                     </TableCell>
                                 </TableRow>
                             ) : (
-                                contas.map((conta) => (
-                                    <TableRow key={conta.id}>
-                                        <TableCell className="font-medium flex items-center">
-                                            {conta.tipo_saldo === 'Credito' ? <Wallet className="w-4 h-4 mr-2 text-green-600" /> : <CreditCard className="w-4 h-4 mr-2 text-red-600" />}
-                                            {conta.nome}
-                                        </TableCell>
-                                        <TableCell>
-                                            <Badge variant={conta.tipo_saldo === 'Credito' ? 'success' : 'destructive'}>
-                                                {conta.tipo_saldo}
-                                            </Badge>
-                                        </TableCell>
-                                        <TableCell className="text-sm text-muted-foreground">
-                                            {conta.plano_contas?.Conta} - {conta.plano_contas?.Descricao || 'N/A'}
-                                        </TableCell>
-                                        <TableCell className={cn("text-right font-semibold", conta.saldo_inicial >= 0 ? 'text-green-600' : 'text-red-600')}>
-                                            {formatCurrency(conta.saldo_inicial)}
-                                        </TableCell>
-                                        <TableCell className="text-right">
-                                            <div className="flex justify-end space-x-2">
-                                                <Button variant="ghost" size="sm" onClick={() => handleEdit(conta)}>
-                                                    <Edit className="w-4 h-4" />
-                                                </Button>
-                                                <Button variant="ghost" size="sm" onClick={() => handleDelete(conta.id)}>
-                                                    <Trash2 className="w-4 h-4 text-red-500" />
-                                                </Button>
-                                            </div>
-                                        </TableCell>
-                                    </TableRow>
-                                ))
+                                contas.map((conta) => {
+                                    const natureza = getNaturezaDisplay(conta.tipo_saldo);
+                                    return (
+                                        <TableRow key={conta.id}>
+                                            <TableCell className="font-medium flex items-center">
+                                                {natureza.icon}
+                                                {conta.nome}
+                                            </TableCell>
+                                            <TableCell>
+                                                <Badge variant={natureza.variant}>
+                                                    {natureza.label}
+                                                </Badge>
+                                            </TableCell>
+                                            <TableCell className="text-sm text-muted-foreground">
+                                                {conta.plano_contas?.Conta} - {conta.plano_contas?.Descricao || 'N/A'}
+                                            </TableCell>
+                                            <TableCell className={cn("text-right font-semibold", conta.saldo_inicial >= 0 ? 'text-green-600' : 'text-red-600')}>
+                                                {formatCurrency(conta.saldo_inicial)}
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                <div className="flex justify-end space-x-2">
+                                                    <Button variant="ghost" size="sm" onClick={() => handleEdit(conta)}>
+                                                        <Edit className="w-4 h-4" />
+                                                    </Button>
+                                                    <Button variant="ghost" size="sm" onClick={() => handleDelete(conta.id)}>
+                                                        <Trash2 className="w-4 h-4 text-red-500" />
+                                                    </Button>
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    );
+                                })
                             )}
                         </TableBody>
                     </Table>

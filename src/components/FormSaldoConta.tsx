@@ -148,8 +148,9 @@ const FormSaldoConta: React.FC<FormSaldoContaProps> = ({ contaInicial, onSaveCom
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  <SelectItem value="Credito">Crédito (Ativo)</SelectItem>
-                  <SelectItem value="Debito">Débito (Passivo)</SelectItem>
+                  {/* CORRIGIDO: Débito (Ativo) e Crédito (Passivo) */}
+                  <SelectItem value="Debito">Débito (Ativo)</SelectItem>
+                  <SelectItem value="Credito">Crédito (Passivo)</SelectItem>
                 </SelectContent>
               </Select>
               <FormMessage />
