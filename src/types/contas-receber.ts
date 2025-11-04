@@ -7,7 +7,7 @@ export interface ParcelaParaPagamento {
   valor_parcela: number;
   valor_pago: number;
   cliente_id: string | null;
-  numero_parcela: number; // ADICIONADO
+  numero_parcela: number;
 }
 
 export interface ContaReceber {
@@ -59,6 +59,7 @@ export interface ExtendedParcelaDetalhada extends ParcelaDetalhada {
     contas_receber: {
         descricao: string;
         cliente_id: string | null;
+        empresa_id: string; // ADICIONADO
         origem: ContaReceber['origem'];
         clientes: { nome: string } | null;
     } | null;
