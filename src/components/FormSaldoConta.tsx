@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -13,15 +13,11 @@ import { useSessao } from '@/hooks/use-sessao';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 import { SaldoConta } from '@/types/saldo-conta';
 import { PlanoContas } from '@/types/plano-contas';
-import { NATUREZA_PREFIXO_MAP } from '@/config/contas-mapa';
 
 const formSchema = z.object({
   nome: z.string().min(1, 'O nome é obrigatório.'),
   tipo_saldo: z.enum(['Credito', 'Debito'], {
     required_error: 'O tipo de saldo é obrigatório.',
-  }),
-  natureza_contabil: z.enum(['Ativo', 'Passivo', 'Receita', 'Despesa'], {
-    required_error: 'A natureza contábil é obrigatória.',
   }),
   conta_contabil_id: z.string().uuid('Selecione uma conta contábil válida.').nullable(),
   saldo_inicial: z.coerce.number().optional().default(0),
@@ -37,7 +33,7 @@ interface FormSaldoContaProps {
 const FormSaldoConta: React.FC<FormSaldoContaProps> = ({ contaInicial, onSaveComplete }) => {
   const { usuario, perfil, role } = useSessao();
   const isEditing = !!contaInicial;
-  const [todasContasContabeis, setTodasContasContabeis] = useState<PlanoContas[]>([]);
+  const [contasContabeis, setContasContabeis] = useState<PlanoContas[]>([]);
   const [loadingContas, setLoadingContas] = useState(true);
 
   const getEmpresaId = () => {
@@ -53,19 +49,19 @@ const FormSaldoConta: React.FC<FormSaldoContaProps> = ({ contaInicial, onSaveCom
     if (!empresaId) return;
     setLoadingContas(true);
     
-    // Busca TODAS as contas analíticas que podem ser contas de saldo
     const { data, error } = await supabase
         .from('plano_contas')
-        .select('id, Conta, Descricao, Analitica, is_conta_saldo')
+        .select('id, Conta, Descricao, Analitica, is_conta_saldo') // Incluindo is_conta_saldo
         .eq('proprietario_id', empresaId)
-        .eq('Analitica', 'Sim')
+        .eq('Analitica', 'Sim') // Apenas contas analíticas
+        .eq('is_conta_saldo', true) // FILTRO PRINCIPAL: Apenas contas marcadas como saldo
         .order('Conta');
         
     if (error) {
         showError('Erro ao carregar Plano de Contas: ' + error.message);
-        setTodasContasContabeis([]);
+        setContasContabeis([]);
     } else {
-        setTodasContasContabeis(data as PlanoContas[]);
+        setContasContabeis(data as PlanoContas[]);
     }
     setLoadingContas(false);
   }, [empresaId]);
@@ -78,43 +74,11 @@ const FormSaldoConta: React.FC<FormSaldoContaProps> = ({ contaInicial, onSaveCom
     resolver: zodResolver(formSchema),
     defaultValues: {
       nome: contaInicial?.nome || '',
-      tipo_saldo: contaInicial?.tipo_saldo || 'Debito',
-      natureza_contabil: contaInicial?.natureza_contabil || 'Ativo',
+      tipo_saldo: contaInicial?.tipo_saldo || 'Credito',
       conta_contabil_id: contaInicial?.conta_contabil_id || null,
       saldo_inicial: contaInicial?.saldo_inicial || 0,
     },
   });
-  
-  const naturezaSelecionada = form.watch('natureza_contabil');
-
-  // Filtra as contas contábeis com base na natureza selecionada
-  const contasFiltradas = useMemo(() => {
-    const prefixo = NATUREZA_PREFIXO_MAP[naturezaSelecionada];
-    
-    // Se a natureza for Ativo ou Passivo, filtra apenas as contas marcadas como is_conta_saldo
-    if (naturezaSelecionada === 'Ativo' || naturezaSelecionada === 'Passivo') {
-        return todasContasContabeis
-            .filter(c => c.is_conta_saldo === true && c.Conta.startsWith(prefixo))
-            .sort((a, b) => a.Conta.localeCompare(b.Conta));
-    }
-    
-    // Para Receita e Despesa, filtra todas as contas analíticas com o prefixo correspondente
-    return todasContasContabeis
-        .filter(c => c.Conta.startsWith(prefixo))
-        .sort((a, b) => a.Conta.localeCompare(b.Conta));
-        
-  }, [naturezaSelecionada, todasContasContabeis]);
-  
-  // Efeito para resetar a conta contábil se a natureza mudar e a conta anterior não for mais válida
-  useEffect(() => {
-      if (contaInicial && contaInicial.natureza_contabil !== naturezaSelecionada) {
-          form.setValue('conta_contabil_id', null);
-      } else if (!contaInicial && contasFiltradas.length > 0) {
-          // Se for nova conta e houver filtros, define a primeira como padrão
-          form.setValue('conta_contabil_id', contasFiltradas[0].id);
-      }
-  }, [naturezaSelecionada, contasFiltradas, contaInicial, form]);
-
 
   const onSubmit = async (values: FormValues) => {
     if (!empresaId) {
@@ -122,17 +86,10 @@ const FormSaldoConta: React.FC<FormSaldoContaProps> = ({ contaInicial, onSaveCom
       return;
     }
     
-    // Validação final: Garante que a conta contábil foi selecionada
-    if (!values.conta_contabil_id) {
-        showError('Selecione uma Conta Contábil válida para a natureza escolhida.');
-        return;
-    }
-    
     const dataToSave = {
       empresa_id: empresaId,
       nome: values.nome,
       tipo_saldo: values.tipo_saldo,
-      natureza_contabil: values.natureza_contabil,
       saldo_inicial: values.saldo_inicial,
       conta_contabil_id: values.conta_contabil_id,
     };
@@ -179,52 +136,28 @@ const FormSaldoConta: React.FC<FormSaldoContaProps> = ({ contaInicial, onSaveCom
           )}
         />
         
-        <div className="grid grid-cols-2 gap-4">
-            <FormField
-              control={form.control}
-              name="natureza_contabil"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Natureza Contábil (DRE/BP)</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione a natureza" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="Ativo">Ativo</SelectItem>
-                      <SelectItem value="Passivo">Passivo</SelectItem>
-                      <SelectItem value="Receita">Receita</SelectItem>
-                      <SelectItem value="Despesa">Despesa</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="tipo_saldo"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Tipo de Saldo (Débito/Crédito)</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione o tipo" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="Debito">Débito</SelectItem>
-                      <SelectItem value="Credito">Crédito</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-        </div>
+        <FormField
+          control={form.control}
+          name="tipo_saldo"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Tipo de Saldo (Natureza)</FormLabel>
+              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione o tipo" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {/* CORRIGIDO: Débito (Ativo) e Crédito (Passivo) */}
+                  <SelectItem value="Debito">Débito (Ativo)</SelectItem>
+                  <SelectItem value="Credito">Crédito (Passivo)</SelectItem>
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
         
         <FormField
           control={form.control}
@@ -232,21 +165,17 @@ const FormSaldoConta: React.FC<FormSaldoContaProps> = ({ contaInicial, onSaveCom
           render={({ field }) => (
             <FormItem>
               <FormLabel>Conta Contábil (Plano de Contas)</FormLabel>
-              <Select 
-                onValueChange={field.onChange} 
-                value={field.value || undefined}
-                disabled={loadingContas || contasFiltradas.length === 0}
-              >
+              <Select onValueChange={field.onChange} defaultValue={field.value || undefined} disabled={loadingContas}>
                 <FormControl>
                   <SelectTrigger>
                     <SelectValue placeholder={loadingContas ? "Carregando Contas Contábeis..." : "Selecione a conta analítica"} />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                    {contasFiltradas.length === 0 ? (
-                        <SelectItem value="disabled" disabled>Nenhuma conta analítica encontrada para {naturezaSelecionada}.</SelectItem>
+                    {contasContabeis.length === 0 ? (
+                        <SelectItem value="disabled" disabled>Nenhuma conta de saldo marcada no Plano de Contas.</SelectItem>
                     ) : (
-                        contasFiltradas.map(c => (
+                        contasContabeis.map(c => (
                             <SelectItem key={c.id} value={c.id}>
                                 {c.Conta} - {c.Descricao}
                             </SelectItem>
@@ -255,12 +184,9 @@ const FormSaldoConta: React.FC<FormSaldoContaProps> = ({ contaInicial, onSaveCom
                 </SelectContent>
               </Select>
               <FormMessage />
-              {naturezaSelecionada && contasFiltradas.length === 0 && (
+              {contasContabeis.length === 0 && (
                   <p className="text-sm text-red-500">
-                      Verifique se existem contas analíticas com o prefixo {NATUREZA_PREFIXO_MAP[naturezaSelecionada]} no seu Plano de Contas.
-                      { (naturezaSelecionada === 'Ativo' || naturezaSelecionada === 'Passivo') && 
-                        ' (Apenas contas marcadas como "Conta de Saldo" são exibidas para Ativo/Passivo).'
-                      }
+                      Nenhuma conta contábil marcada como "Conta de Saldo". Marque as contas em <a href="/plano-contas" className="underline">Plano de Contas</a>.
                   </p>
               )}
             </FormItem>
@@ -281,7 +207,7 @@ const FormSaldoConta: React.FC<FormSaldoContaProps> = ({ contaInicial, onSaveCom
           )}
         />
         
-        <Button type="submit" className="w-full" disabled={form.formState.isSubmitting || !form.watch('conta_contabil_id')}>
+        <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
           {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Salvar Conta
         </Button>
