@@ -3,7 +3,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useSessao } from '@/hooks/use-sessao';
 import FormConfiguracoesStripe from '@/components/FormConfiguracoesStripe';
-import { Key, Settings } from 'lucide-react';
+import FormConfiguracoesCR from '@/components/FormConfiguracoesCR';
+import { Key, Settings, DollarSign } from 'lucide-react';
 
 const Configuracoes = () => {
   const { role } = useSessao();
@@ -15,9 +16,10 @@ const Configuracoes = () => {
         <Settings className="w-6 h-6 mr-2" /> Configurações
       </h1>
       
-      <Tabs defaultValue={isAdmin ? "stripe" : "geral"} className="w-full">
+      <Tabs defaultValue={isAdmin ? "cr" : "geral"} className="w-full">
         <TabsList className="grid w-full grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
           <TabsTrigger value="geral">Geral</TabsTrigger>
+          {isAdmin && <TabsTrigger value="cr" className="flex items-center"><DollarSign className="w-4 h-4 mr-1" /> Contas a Receber</TabsTrigger>}
           {isAdmin && <TabsTrigger value="stripe" className="flex items-center"><Key className="w-4 h-4 mr-1" /> Stripe</TabsTrigger>}
           <TabsTrigger value="usuarios">Usuários</TabsTrigger>
           <TabsTrigger value="tributarias">Tributárias</TabsTrigger>
@@ -34,6 +36,17 @@ const Configuracoes = () => {
             </CardContent>
           </Card>
         </TabsContent>
+        
+        {isAdmin && (
+          <TabsContent value="cr" className="mt-4">
+            <Card>
+              <CardHeader><CardTitle>Mapeamento Contábil de Contas a Receber</CardTitle></CardHeader>
+              <CardContent>
+                <FormConfiguracoesCR />
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
         
         {isAdmin && (
           <TabsContent value="stripe" className="mt-4">
