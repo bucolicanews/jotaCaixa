@@ -17,6 +17,7 @@ import ContasPagarHeader from '@/components/contas-pagar/ContasPagarHeader';
 import SinteticoTab from '@/components/contas-pagar/SinteticoTab';
 import ParcelasTab from '@/components/contas-pagar/ParcelasTab';
 import PagamentosTab from '@/components/contas-pagar/PagamentosTab';
+import LayoutPrincipal from '@/components/LayoutPrincipal'; // Importando LayoutPrincipal
 
 // O tipo ContaStatus foi movido para utils/badge-variants.ts ou é inferido nos componentes filhos.
 
@@ -243,95 +244,97 @@ const ContasPagar: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-3xl font-bold">Contas a Pagar {isSupervisao && '(Admin)'}</h1>
+    <LayoutPrincipal>
+      <div className="space-y-6">
+        <h1 className="text-3xl font-bold">Contas a Pagar {isSupervisao && '(Admin)'}</h1>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="sintetico">Sintético</TabsTrigger>
-          {isSupervisao && <TabsTrigger value="parcelas">Parcelas</TabsTrigger>}
-          {isSupervisao && <TabsTrigger value="pagamentos">Pagamentos</TabsTrigger>}
-        </TabsList>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+          <TabsList>
+            <TabsTrigger value="sintetico">Sintético</TabsTrigger>
+            {isSupervisao && <TabsTrigger value="parcelas">Parcelas</TabsTrigger>}
+            {isSupervisao && <TabsTrigger value="pagamentos">Pagamentos</TabsTrigger>}
+          </TabsList>
 
-        <ContasPagarHeader
-            isSupervisao={isSupervisao}
-            filtroOrigem={filtroOrigem}
-            setFiltroOrigem={setFiltroOrigem}
-            filtroStatus={filtroStatus}
-            setFiltroStatus={setFiltroStatus}
-            filtroPeriodo={filtroPeriodo}
-            setFiltroPeriodo={setFiltroPeriodo}
-            handleOpenForm={handleOpenForm}
-            totalSintetico={totalSintetico}
+          <ContasPagarHeader
+              isSupervisao={isSupervisao}
+              filtroOrigem={filtroOrigem}
+              setFiltroOrigem={setFiltroOrigem}
+              filtroStatus={filtroStatus}
+              setFiltroStatus={setFiltroStatus}
+              filtroPeriodo={filtroPeriodo}
+              setFiltroPeriodo={setFiltroPeriodo}
+              handleOpenForm={handleOpenForm}
+              totalSintetico={totalSintetico}
+          />
+
+          <TabsContent value="sintetico" className="space-y-4">
+              <SinteticoTab
+                  loading={loading}
+                  contas={contas}
+                  isSupervisao={isSupervisao}
+                  handleOpenDetalhes={handleOpenDetalhes}
+                  handleOpenForm={handleOpenForm}
+                  handleDelete={handleDelete}
+                  formatarData={formatarData}
+                  formatCurrency={formatCurrency}
+                  getBadgeVariant={getBadgeVariant as any} // Cast necessário devido à tipagem expandida localmente
+              />
+          </TabsContent>
+
+          {isSupervisao && (
+              <TabsContent value="parcelas" className="space-y-4">
+                  <ParcelasTab
+                      loading={loading}
+                      parcelas={parcelas}
+                      totalParcelas={totalParcelas}
+                      handleOpenPagamento={handleOpenPagamento}
+                      formatarData={formatarData}
+                      formatCurrency={formatCurrency}
+                      formatarOrigem={formatarOrigem}
+                      getBadgeVariant={getBadgeVariant as any} // Cast necessário
+                  />
+              </TabsContent>
+          )}
+          
+          {isSupervisao && (
+              <TabsContent value="pagamentos" className="space-y-4">
+                  <PagamentosTab
+                      loading={loading}
+                      pagamentos={pagamentos}
+                      totalPagamentos={totalPagamentos}
+                      formatarData={formatarData}
+                      formatCurrency={formatCurrency}
+                  />
+              </TabsContent>
+          )}
+        </Tabs>
+
+        <FormContasPagarDialog 
+          open={formDialog.open} 
+          onOpenChange={(open: boolean) => setFormDialog({ open, conta: null })}
+          contaInicial={formDialog.conta}
+          onSaveComplete={() => { setFormDialog({ open: false, conta: null }); fetchContas(); }}
         />
-
-        <TabsContent value="sintetico" className="space-y-4">
-            <SinteticoTab
-                loading={loading}
-                contas={contas}
-                isSupervisao={isSupervisao}
-                handleOpenDetalhes={handleOpenDetalhes}
-                handleOpenForm={handleOpenForm}
-                handleDelete={handleDelete}
-                formatarData={formatarData}
-                formatCurrency={formatCurrency}
-                getBadgeVariant={getBadgeVariant as any} // Cast necessário devido à tipagem expandida localmente
-            />
-        </TabsContent>
-
-        {isSupervisao && (
-            <TabsContent value="parcelas" className="space-y-4">
-                <ParcelasTab
-                    loading={loading}
-                    parcelas={parcelas}
-                    totalParcelas={totalParcelas}
-                    handleOpenPagamento={handleOpenPagamento}
-                    formatarData={formatarData}
-                    formatCurrency={formatCurrency}
-                    formatarOrigem={formatarOrigem}
-                    getBadgeVariant={getBadgeVariant as any} // Cast necessário
-                />
-            </TabsContent>
+        
+        {detalhesDialog.conta && (
+          <DetalhesParcelasCPDialog
+              open={detalhesDialog.open}
+              onOpenChange={(open: boolean) => setDetalhesDialog({ open, conta: null })}
+              conta={detalhesDialog.conta}
+              onDataChange={() => { fetchContas(); fetchParcelas(); }}
+          />
         )}
         
-        {isSupervisao && (
-            <TabsContent value="pagamentos" className="space-y-4">
-                <PagamentosTab
-                    loading={loading}
-                    pagamentos={pagamentos}
-                    totalPagamentos={totalPagamentos}
-                    formatarData={formatarData}
-                    formatCurrency={formatCurrency}
-                />
-            </TabsContent>
+        {pagamentoDialog.parcela && (
+          <RegistrarPagamentoCPDialog
+              open={pagamentoDialog.open}
+              onOpenChange={(open: boolean) => setPagamentoDialog({ open, parcela: null })}
+              parcela={pagamentoDialog.parcela}
+              onSaveComplete={() => { fetchParcelas(); fetchPagamentos(); }}
+          />
         )}
-      </Tabs>
-
-      <FormContasPagarDialog 
-        open={formDialog.open} 
-        onOpenChange={(open: boolean) => setFormDialog({ open, conta: null })}
-        contaInicial={formDialog.conta}
-        onSaveComplete={() => { setFormDialog({ open: false, conta: null }); fetchContas(); }}
-      />
-      
-      {detalhesDialog.conta && (
-        <DetalhesParcelasCPDialog
-            open={detalhesDialog.open}
-            onOpenChange={(open: boolean) => setDetalhesDialog({ open, conta: null })}
-            conta={detalhesDialog.conta}
-            onDataChange={() => { fetchContas(); fetchParcelas(); }}
-        />
-      )}
-      
-      {pagamentoDialog.parcela && (
-        <RegistrarPagamentoCPDialog
-            open={pagamentoDialog.open}
-            onOpenChange={(open: boolean) => setPagamentoDialog({ open, parcela: null })}
-            parcela={pagamentoDialog.parcela}
-            onSaveComplete={() => { fetchParcelas(); fetchPagamentos(); }}
-        />
-      )}
-    </div>
+      </div>
+    </LayoutPrincipal>
   );
 };
 
