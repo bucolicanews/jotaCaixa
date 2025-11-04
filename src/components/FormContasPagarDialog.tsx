@@ -1,6 +1,7 @@
 import React from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ContaPagarComProgresso } from '@/types/contas-pagar';
+import FormContasPagar from './FormContasPagar';
 
 interface FormContasPagarDialogProps {
     open: boolean;
@@ -9,16 +10,17 @@ interface FormContasPagarDialogProps {
     onSaveComplete: () => void;
 }
 
-const FormContasPagarDialog: React.FC<FormContasPagarDialogProps> = ({ open, onOpenChange, contaInicial }) => {
-    // Lógica de formulário omitida para placeholder
+const FormContasPagarDialog: React.FC<FormContasPagarDialogProps> = ({ open, onOpenChange, contaInicial, onSaveComplete }) => {
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent>
+            <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
-                    <DialogTitle>{contaInicial ? 'Editar' : 'Novo'} Lançamento</DialogTitle>
+                    <DialogTitle>{contaInicial ? 'Editar' : 'Novo'} Lançamento a Pagar</DialogTitle>
                 </DialogHeader>
-                {/* Conteúdo do formulário aqui */}
-                <p>Formulário de Contas a Pagar (Placeholder)</p>
+                <FormContasPagar
+                    contaInicial={contaInicial}
+                    onSaveComplete={onSaveComplete}
+                />
             </DialogContent>
         </Dialog>
     );
