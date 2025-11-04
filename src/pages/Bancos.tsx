@@ -15,7 +15,8 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { PlanoContas } from '@/types/plano-contas';
-import { Input } from '@/components/ui/input'; // Importando Input
+import { Input } from '@/components/ui/input';
+import { useDebounce } from '@/hooks/use-debounce'; // Importando useDebounce
 
 type TipoSaldoFiltro = 'todos' | 'Credito' | 'Debito';
 
@@ -31,7 +32,10 @@ const Bancos = () => {
   // Filtros
   const [filtroTipoSaldo, setFiltroTipoSaldo] = useState<TipoSaldoFiltro>('todos');
   const [filtroContaContabilId, setFiltroContaContabilId] = useState<string>('todos');
-  const [filtroNome, setFiltroNome] = useState(''); // NOVO ESTADO DE FILTRO
+  const [filtroNomeInput, setFiltroNomeInput] = useState(''); // Estado do input
+  
+  // Valor debounced para disparar a busca
+  const filtroNomeDebounced = useDebounce(filtroNomeInput, 300); 
 
   const getEmpresaId = () => {
     if (role === 'Admin') return usuario?.id || null;
@@ -88,8 +92,8 @@ const Bancos = () => {
     }
     
     // Filtro por Nome/Descrição (usando ILIKE para busca parcial e case-insensitive)
-    if (filtroNome) {
-        query = query.ilike('nome', `%${filtroNome}%`);
+    if (filtroNomeDebounced) {
+        query = query.ilike('nome', `%${filtroNomeDebounced}%`);
     }
 
     const { data, error } = await query.order('nome', { ascending: true });
@@ -101,7 +105,7 @@ const Bancos = () => {
       setContas(data as SaldoContaDetalhada[]);
     }
     setCarregandoContas(false);
-  }, [empresaId, filtroTipoSaldo, filtroContaContabilId, filtroNome]); // Adicionando filtroNome
+  }, [empresaId, filtroTipoSaldo, filtroContaContabilId, filtroNomeDebounced]); // Depende do valor debounced
 
   useEffect(() => {
     if (!carregandoSessao && empresaId) {
@@ -109,6 +113,7 @@ const Bancos = () => {
     }
   }, [carregandoSessao, empresaId, fetchContasContabeis]);
   
+  // Efeito que dispara a busca quando os filtros (incluindo o debounced) mudam
   useEffect(() => {
     if (!carregandoSessao && empresaId) {
       buscarContas();
@@ -206,8 +211,8 @@ const Bancos = () => {
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                     placeholder="Buscar por nome da conta..."
-                    value={filtroNome}
-                    onChange={(e) => setFiltroNome(e.target.value)}
+                    value={filtroNomeInput}
+                    onChange={(e) => setFiltroNomeInput(e.target.value)}
                     className="pl-10"
                 />
             </div>
