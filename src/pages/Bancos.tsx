@@ -1,5 +1,4 @@
 import LayoutPrincipal from '@/components/LayoutPrincipal';
-import React from 'react';
 
 const Bancos = () => {
     // Conteúdo do componente Bancos
