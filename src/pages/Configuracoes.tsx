@@ -18,7 +18,7 @@ const Configuracoes = () => {
       </h1>
       
       <Tabs defaultValue={isAdmin ? "cr" : "geral"} className="w-full">
-        <TabsList className="grid w-full grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+        <TabsList className="flex flex-wrap h-auto justify-start">
           <TabsTrigger value="geral">Geral</TabsTrigger>
           {isAdmin && <TabsTrigger value="cr" className="flex items-center"><DollarSign className="w-4 h-4 mr-1" /> Contas a Receber</TabsTrigger>}
           {isAdmin && <TabsTrigger value="cp" className="flex items-center"><ArrowDownCircle className="w-4 h-4 mr-1" /> Contas a Pagar</TabsTrigger>}
