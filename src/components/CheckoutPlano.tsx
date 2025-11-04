@@ -31,8 +31,8 @@ const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano, isUpgrade = false,
   
   // Determina o proprietário das chaves Stripe
   const proprietarioId = React.useMemo(() => {
-    if (role === 'Admin') return usuario?.id;
-    if (role === 'Cliente') return (perfil as ClienteProfile)?.admin_id;
+    if (role === 'Admin') return usuario?.id || null;
+    if (role === 'Cliente') return (perfil as ClienteProfile)?.admin_id || null;
     return null;
   }, [role, usuario, perfil]);
 

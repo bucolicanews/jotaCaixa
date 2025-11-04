@@ -42,7 +42,7 @@ const MinhaAssinatura: React.FC = () => {
   const clienteId = clienteProfile?.id;
   const adminId = clienteProfile?.admin_id;
 
-  const { loading: loadingStripe } = useStripeConfig(adminId);
+  const { loading: loadingStripe } = useStripeConfig(adminId || null);
   
   const [planoAtual, setPlanoAtual] = useState<Plano | null>(null);
   const [carregandoPlano, setCarregandoPlano] = useState(true);
