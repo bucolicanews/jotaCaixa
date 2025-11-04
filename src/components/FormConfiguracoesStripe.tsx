@@ -61,18 +61,18 @@ const FormConfiguracoesStripe: React.FC = () => {
   }, [adminId]);
 
   const fetchConfig = useCallback(async () => {
-    if (!isAdmin) {
+    if (!isAdmin || !adminId) {
       setLoadingData(false);
       return;
     }
     
     setLoadingData(true);
     
-    // Busca a configuração global (proprietario_id IS NULL)
+    // Busca a configuração vinculada ao ID do Admin logado (proprietario_id = adminId)
     const { data, error } = await supabase
       .from('configuracoes_stripe')
       .select('id, stripe_publishable_key, stripe_secret_key, conta_sintetica_id')
-      .is('proprietario_id', null)
+      .eq('proprietario_id', adminId) // <-- CORREÇÃO: Busca pelo ID do Admin
       .limit(1)
       .single();
 
@@ -81,16 +81,13 @@ const FormConfiguracoesStripe: React.FC = () => {
     } else if (data) {
       setExistingId(data.id);
       
-      // Usando form.reset para preencher os valores existentes
       form.reset({
         stripe_publishable_key: data.stripe_publishable_key || '',
         stripe_secret_key: data.stripe_secret_key || '',
-        // O Select precisa de uma string ou undefined, não null
         conta_sintetica_id: data.conta_sintetica_id || undefined, 
       });
     } else {
       setExistingId(null);
-      // Se não houver dados, reseta para os defaults (vazios)
       form.reset({
         stripe_publishable_key: '',
         stripe_secret_key: '',
@@ -98,7 +95,7 @@ const FormConfiguracoesStripe: React.FC = () => {
       });
     }
     setLoadingData(false);
-  }, [isAdmin, form]);
+  }, [isAdmin, adminId, form]);
 
   useEffect(() => {
     if (!carregandoSessao && isAdmin) {
@@ -113,6 +110,11 @@ const FormConfiguracoesStripe: React.FC = () => {
       return;
     }
     
+    if (!adminId) {
+        showError('ID do administrador não encontrado.');
+        return;
+    }
+    
     if (!values.conta_sintetica_id) {
         showError('Selecione a Conta Contábil Sintética de destino.');
         return;
@@ -122,7 +124,7 @@ const FormConfiguracoesStripe: React.FC = () => {
       stripe_publishable_key: values.stripe_publishable_key,
       stripe_secret_key: values.stripe_secret_key,
       conta_sintetica_id: values.conta_sintetica_id,
-      proprietario_id: null, // Chave global
+      proprietario_id: adminId, // Salva com o ID do Admin
     };
 
     try {
@@ -196,7 +198,6 @@ const FormConfiguracoesStripe: React.FC = () => {
               <FormLabel>Conta Contábil de Recebimento (Stripe)</FormLabel>
               <Select 
                 onValueChange={field.onChange} 
-                // Garante que o valor do Select seja uma string ou undefined
                 value={field.value || undefined}
               >
                 <FormControl>
