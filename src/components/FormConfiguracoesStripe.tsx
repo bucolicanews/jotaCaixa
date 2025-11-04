@@ -80,13 +80,22 @@ const FormConfiguracoesStripe: React.FC = () => {
       showError('Erro ao carregar configurações do Stripe: ' + error.message);
     } else if (data) {
       setExistingId(data.id);
+      
+      // Usando form.reset para preencher os valores existentes
       form.reset({
         stripe_publishable_key: data.stripe_publishable_key || '',
         stripe_secret_key: data.stripe_secret_key || '',
-        conta_sintetica_id: data.conta_sintetica_id || null,
+        // O Select precisa de uma string ou undefined, não null
+        conta_sintetica_id: data.conta_sintetica_id || undefined, 
       });
     } else {
       setExistingId(null);
+      // Se não houver dados, reseta para os defaults (vazios)
+      form.reset({
+        stripe_publishable_key: '',
+        stripe_secret_key: '',
+        conta_sintetica_id: undefined,
+      });
     }
     setLoadingData(false);
   }, [isAdmin, form]);
@@ -159,7 +168,7 @@ const FormConfiguracoesStripe: React.FC = () => {
             <FormItem>
               <FormLabel>Chave Publicável (pk_test_...)</FormLabel>
               <FormControl>
-                <Input placeholder="pk_test_..." {...field} />
+                <Input placeholder="pk_test_..." {...field} value={field.value || ''} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -172,7 +181,7 @@ const FormConfiguracoesStripe: React.FC = () => {
             <FormItem>
               <FormLabel>Chave Secreta (sk_test_...)</FormLabel>
               <FormControl>
-                <Input placeholder="sk_test_..." {...field} />
+                <Input placeholder="sk_test_..." {...field} value={field.value || ''} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -185,7 +194,11 @@ const FormConfiguracoesStripe: React.FC = () => {
           render={({ field }) => (
             <FormItem>
               <FormLabel>Conta Contábil de Recebimento (Stripe)</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value || undefined}>
+              <Select 
+                onValueChange={field.onChange} 
+                // Garante que o valor do Select seja uma string ou undefined
+                value={field.value || undefined}
+              >
                 <FormControl>
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione a conta analítica de destino" />
