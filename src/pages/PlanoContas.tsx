@@ -3,15 +3,18 @@ import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Edit, Trash2, PlusCircle } from 'lucide-react';
+import { Loader2, Edit, Trash2, PlusCircle, Filter, Search } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
-import { showError } from '@/utils/toast';
+import { showError, showSuccess } from '@/utils/toast';
 import { PlanoContas } from '@/types/plano-contas';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import FormPlanoContas from '@/components/FormPlanoContas';
 import ImportarPlanoContas from '@/components/ImportarPlanoContas';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useDebounce } from '@/hooks/use-debounce';
 
 const PlanoContasPage = () => {
   const { usuario, perfil, role, carregando: carregandoSessao } = useSessao();
@@ -21,14 +24,45 @@ const PlanoContasPage = () => {
   const [contaSelecionada, setContaSelecionada] = useState<PlanoContas | null>(null);
   const [dialogAberto, setDialogAberto] = useState(false);
 
-  // 1. Função para buscar o Plano de Contas (agora com useCallback)
+  // Estados dos filtros
+  const [filtroTexto, setFiltroTexto] = useState('');
+  const filtroTextoDebounced = useDebounce(filtroTexto, 500);
+  const [filtroTipoConta, setFiltroTipoConta] = useState('todos');
+  const [filtroAnalitica, setFiltroAnalitica] = useState('todos');
+
   const buscarPlanoContas = useCallback(async (id: string) => {
     setCarregandoContas(true);
-    const { data, error } = await supabase
+    let query = supabase
       .from('plano_contas')
       .select('*')
-      .eq('proprietario_id', id)
-      .order('Conta', { ascending: true });
+      .eq('proprietario_id', id);
+
+    // Aplicar filtro de texto
+    if (filtroTextoDebounced) {
+      const searchTerm = `%${filtroTextoDebounced}%`;
+      query = query.or(
+        `Conta.ilike.${searchTerm},codigo_reduzido.ilike.${searchTerm},Descricao.ilike.${searchTerm}`
+      );
+    }
+
+    // Aplicar filtro de tipo de conta
+    if (filtroTipoConta !== 'todos') {
+      let prefix = '';
+      if (filtroTipoConta === 'ativo') prefix = '1';
+      if (filtroTipoConta === 'passivo') prefix = '2';
+      if (filtroTipoConta === 'receita') prefix = '3';
+      if (filtroTipoConta === 'despesa') prefix = '4';
+      query = query.like('Conta', `${prefix}.%`);
+    }
+
+    // Aplicar filtro de analítica
+    if (filtroAnalitica !== 'todos') {
+      query = query.eq('Analitica', filtroAnalitica);
+    }
+
+    query = query.order('Conta', { ascending: true });
+
+    const { data, error } = await query;
 
     if (error) {
       showError('Erro ao carregar Plano de Contas: ' + error.message);
@@ -37,9 +71,8 @@ const PlanoContasPage = () => {
       setContas(data as PlanoContas[]);
     }
     setCarregandoContas(false);
-  }, []);
+  }, [proprietarioId, filtroTextoDebounced, filtroTipoConta, filtroAnalitica]);
 
-  // 2. Efeito para determinar o Proprietário ID
   useEffect(() => {
     if (!carregandoSessao && usuario) {
       let ownerId: string | null = null;
@@ -55,14 +88,13 @@ const PlanoContasPage = () => {
       if (ownerId) {
           setProprietarioId(ownerId);
       } else {
-          setCarregandoContas(false); // Se não houver ID, para o carregamento
+          setCarregandoContas(false);
       }
     } else if (!carregandoSessao && !usuario) {
         setCarregandoContas(false);
     }
   }, [carregandoSessao, usuario, perfil, role]);
 
-  // 3. Efeito para buscar as contas quando o Proprietário ID estiver definido
   useEffect(() => {
     if (proprietarioId) {
       buscarPlanoContas(proprietarioId);
@@ -99,11 +131,12 @@ const PlanoContasPage = () => {
     if (error) {
       showError('Erro ao excluir conta: ' + error.message);
     } else {
-      handleImportComplete(); // Rebusca a lista
+      showSuccess('Conta excluída com sucesso.');
+      handleImportComplete();
     }
   };
 
-  if (carregandoSessao || carregandoContas) {
+  if (carregandoSessao) {
     return (
       <LayoutPrincipal>
         <div className="flex justify-center items-center h-64">
@@ -159,6 +192,45 @@ const PlanoContasPage = () => {
 
         <Card>
           <CardHeader>
+            <CardTitle className="text-lg flex items-center"><Filter className="w-4 h-4 mr-2" /> Filtros</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col sm:flex-row gap-4">
+            <div className="relative w-full sm:w-[300px]">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar por conta, código ou descrição..."
+                value={filtroTexto}
+                onChange={(e) => setFiltroTexto(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+            <Select value={filtroTipoConta} onValueChange={setFiltroTipoConta}>
+              <SelectTrigger className="w-full sm:w-[200px]">
+                <SelectValue placeholder="Filtrar por Tipo" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos os Tipos</SelectItem>
+                <SelectItem value="ativo">Ativo (Inicia com 1)</SelectItem>
+                <SelectItem value="passivo">Passivo (Inicia com 2)</SelectItem>
+                <SelectItem value="receita">Receita (Inicia com 3)</SelectItem>
+                <SelectItem value="despesa">Despesa (Inicia com 4)</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={filtroAnalitica} onValueChange={setFiltroAnalitica}>
+              <SelectTrigger className="w-full sm:w-[200px]">
+                <SelectValue placeholder="Filtrar por Analítica" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todas (Analítica)</SelectItem>
+                <SelectItem value="Sim">Sim</SelectItem>
+                <SelectItem value="Não">Não</SelectItem>
+              </SelectContent>
+            </Select>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
             <CardTitle className="text-xl">Contas Cadastradas ({contas.length})</CardTitle>
           </CardHeader>
           <CardContent>
@@ -174,10 +246,16 @@ const PlanoContasPage = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {contas.length === 0 ? (
+                  {carregandoContas ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center py-8">
+                        <Loader2 className="h-6 w-6 animate-spin mx-auto text-primary" />
+                      </TableCell>
+                    </TableRow>
+                  ) : contas.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={5} className="text-center py-4 text-muted-foreground">
-                        Nenhuma conta cadastrada. Importe um CSV ou adicione manualmente.
+                        Nenhuma conta encontrada com os filtros aplicados.
                       </TableCell>
                     </TableRow>
                   ) : (
