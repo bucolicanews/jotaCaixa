@@ -4,6 +4,7 @@ export interface SaldoConta {
   nome: string; // Nome da Conta/Caixa
   conta_contabil_id: string | null; // Referência ao Plano de Contas
   tipo_saldo: 'Credito' | 'Debito'; // Tipo de saldo (Ativo/Passivo)
+  natureza_contabil: 'Ativo' | 'Passivo' | 'Receita' | 'Despesa'; // NOVO CAMPO
   saldo_inicial: number;
   criado_em: string;
   atualizado_em: string;

@@ -19,6 +19,9 @@ const formSchema = z.object({
   tipo_saldo: z.enum(['Credito', 'Debito'], {
     required_error: 'O tipo de saldo é obrigatório.',
   }),
+  natureza_contabil: z.enum(['Ativo', 'Passivo', 'Receita', 'Despesa'], { // NOVO CAMPO
+    required_error: 'A natureza contábil é obrigatória.',
+  }),
   conta_contabil_id: z.string().uuid('Selecione uma conta contábil válida.').nullable(),
   saldo_inicial: z.coerce.number().optional().default(0),
 });
@@ -51,10 +54,10 @@ const FormSaldoConta: React.FC<FormSaldoContaProps> = ({ contaInicial, onSaveCom
     
     const { data, error } = await supabase
         .from('plano_contas')
-        .select('id, Conta, Descricao, Analitica, is_conta_saldo') // Incluindo is_conta_saldo
+        .select('id, Conta, Descricao, Analitica, is_conta_saldo')
         .eq('proprietario_id', empresaId)
-        .eq('Analitica', 'Sim') // Apenas contas analíticas
-        .eq('is_conta_saldo', true) // FILTRO PRINCIPAL: Apenas contas marcadas como saldo
+        .eq('Analitica', 'Sim')
+        .eq('is_conta_saldo', true)
         .order('Conta');
         
     if (error) {
@@ -74,7 +77,8 @@ const FormSaldoConta: React.FC<FormSaldoContaProps> = ({ contaInicial, onSaveCom
     resolver: zodResolver(formSchema),
     defaultValues: {
       nome: contaInicial?.nome || '',
-      tipo_saldo: contaInicial?.tipo_saldo || 'Credito',
+      tipo_saldo: contaInicial?.tipo_saldo || 'Debito', // Padrão para Débito (Ativo)
+      natureza_contabil: contaInicial?.natureza_contabil || 'Ativo', // Valor inicial do novo campo
       conta_contabil_id: contaInicial?.conta_contabil_id || null,
       saldo_inicial: contaInicial?.saldo_inicial || 0,
     },
@@ -90,6 +94,7 @@ const FormSaldoConta: React.FC<FormSaldoContaProps> = ({ contaInicial, onSaveCom
       empresa_id: empresaId,
       nome: values.nome,
       tipo_saldo: values.tipo_saldo,
+      natureza_contabil: values.natureza_contabil, // Salvando o novo campo
       saldo_inicial: values.saldo_inicial,
       conta_contabil_id: values.conta_contabil_id,
     };
@@ -136,28 +141,52 @@ const FormSaldoConta: React.FC<FormSaldoContaProps> = ({ contaInicial, onSaveCom
           )}
         />
         
-        <FormField
-          control={form.control}
-          name="tipo_saldo"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Tipo de Saldo (Natureza)</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value}>
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione o tipo" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {/* CORRIGIDO: Débito (Ativo) e Crédito (Passivo) */}
-                  <SelectItem value="Debito">Débito (Ativo)</SelectItem>
-                  <SelectItem value="Credito">Crédito (Passivo)</SelectItem>
-                </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+        <div className="grid grid-cols-2 gap-4">
+            <FormField
+              control={form.control}
+              name="natureza_contabil"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Natureza Contábil (DRE/BP)</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione a natureza" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="Ativo">Ativo</SelectItem>
+                      <SelectItem value="Passivo">Passivo</SelectItem>
+                      <SelectItem value="Receita">Receita</SelectItem>
+                      <SelectItem value="Despesa">Despesa</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="tipo_saldo"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Tipo de Saldo (Débito/Crédito)</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione o tipo" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="Debito">Débito</SelectItem>
+                      <SelectItem value="Credito">Crédito</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+        </div>
         
         <FormField
           control={form.control}

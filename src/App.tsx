@@ -10,7 +10,7 @@ import Login from "./pages/Login";
 import Painel from "./pages/Painel";
 import ContasPagar from "./pages/ContasPagar";
 import ContasReceber from "./pages/ContasReceber";
-import Bancos from "./pages/Bancos";
+import ContaSaldo from "./pages/ContaSaldo";
 import Conciliacao from "./pages/Conciliacao";
 import Importar from "./pages/Importar";
 import Relatorios from "./pages/Relatorios";
@@ -207,7 +207,7 @@ const App = () => (
             <Route path="/contas-pagar" element={<ContasPagar />} />
             <Route path="/contas-receber" element={<ContasReceber />} />
             <Route path="/clientes" element={<ClientesPage />} />
-            <Route path="/bancos" element={<Bancos />} />
+            <Route path="/conta_saldo" element={<ContaSaldo />} />
             <Route path="/conciliacao" element={<Conciliacao />} />
             <Route path="/importar" element={<Importar />} />
             <Route path="/relatorios" element={<Relatorios />} />
