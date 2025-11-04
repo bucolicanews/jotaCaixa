@@ -5,6 +5,7 @@ export interface PlanoContas {
   Descricao: string; // Nome da Conta
   codigo_reduzido: string | null;
   Analitica: 'Sim' | 'Não'; // Sim ou Não
+  is_conta_saldo: boolean; // NOVO CAMPO
   criado_em: string;
   atualizado_em: string;
 }

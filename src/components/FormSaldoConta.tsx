@@ -51,9 +51,10 @@ const FormSaldoConta: React.FC<FormSaldoContaProps> = ({ contaInicial, onSaveCom
     
     const { data, error } = await supabase
         .from('plano_contas')
-        .select('id, Conta, Descricao, Analitica')
+        .select('id, Conta, Descricao, Analitica, is_conta_saldo') // Incluindo is_conta_saldo
         .eq('proprietario_id', empresaId)
         .eq('Analitica', 'Sim') // Apenas contas analíticas
+        .eq('is_conta_saldo', true) // FILTRO PRINCIPAL: Apenas contas marcadas como saldo
         .order('Conta');
         
     if (error) {
@@ -167,18 +168,27 @@ const FormSaldoConta: React.FC<FormSaldoContaProps> = ({ contaInicial, onSaveCom
               <Select onValueChange={field.onChange} defaultValue={field.value || undefined} disabled={loadingContas}>
                 <FormControl>
                   <SelectTrigger>
-                    <SelectValue placeholder={loadingContas ? "Carregando Plano de Contas..." : "Selecione a conta analítica"} />
+                    <SelectValue placeholder={loadingContas ? "Carregando Contas Contábeis..." : "Selecione a conta analítica"} />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                    {contasContabeis.map(c => (
-                        <SelectItem key={c.id} value={c.id}>
-                            {c.Conta} - {c.Descricao}
-                        </SelectItem>
-                    ))}
+                    {contasContabeis.length === 0 ? (
+                        <SelectItem value="disabled" disabled>Nenhuma conta de saldo marcada no Plano de Contas.</SelectItem>
+                    ) : (
+                        contasContabeis.map(c => (
+                            <SelectItem key={c.id} value={c.id}>
+                                {c.Conta} - {c.Descricao}
+                            </SelectItem>
+                        ))
+                    )}
                 </SelectContent>
               </Select>
               <FormMessage />
+              {contasContabeis.length === 0 && (
+                  <p className="text-sm text-red-500">
+                      Nenhuma conta contábil marcada como "Conta de Saldo". Marque as contas em <a href="/plano-contas" className="underline">Plano de Contas</a>.
+                  </p>
+              )}
             </FormItem>
           )}
         />
