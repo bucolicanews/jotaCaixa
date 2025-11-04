@@ -6,7 +6,12 @@ import { DateRangePicker } from '@/components/DateRangePicker';
 import { DateRange } from 'react-day-picker';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatCurrency } from '@/utils/formatters';
-import { ContaPagarComProgresso } from '@/types/contas-pagar';
+import { ContaPagar, ContaPagarComProgresso, ExtendedParcelaPagar } from '@/types/contas-pagar';
+import { usePrint } from '@/hooks/use-print';
+import ReactDOMServer from 'react-dom/server';
+import ContasPagarPrint from './ContasPagarPrint';
+import { showError } from '@/utils/toast';
+import { format as formatDateFns } from 'date-fns';
 
 interface ContasPagarHeaderProps {
     isSupervisao: boolean;
@@ -18,6 +23,11 @@ interface ContasPagarHeaderProps {
     setFiltroPeriodo: (range: DateRange | undefined) => void;
     handleOpenForm: (conta?: ContaPagarComProgresso | null) => void;
     totalSintetico: number;
+    // New props for printing
+    contas: (ContaPagar | ContaPagarComProgresso)[];
+    parcelas: ExtendedParcelaPagar[];
+    pagamentos: any[];
+    activeTab: string;
 }
 
 const ContasPagarHeader: React.FC<ContasPagarHeaderProps> = ({
@@ -30,7 +40,74 @@ const ContasPagarHeader: React.FC<ContasPagarHeaderProps> = ({
     setFiltroPeriodo,
     handleOpenForm,
     totalSintetico,
+    contas,
+    parcelas,
+    pagamentos,
+    activeTab,
 }) => {
+    const { printContent } = usePrint();
+
+    const getDataForPrint = () => {
+        let data: any[] = [];
+        let headers: string[] = [];
+
+        if (activeTab === 'sintetico') {
+            headers = ['ID Conta', 'Fornecedor', 'Descrição', 'Vencimento', 'Valor Total', 'Progresso', 'Status', 'Origem'];
+            data = (contas as ContaPagarComProgresso[]).map(c => ({
+                'ID Conta': c.id,
+                'Fornecedor': c.fornecedor,
+                'Descrição': c.descricao,
+                'Vencimento': formatDateFns(new Date(c.data_vencimento + 'T00:00:00'), 'dd/MM/yyyy'),
+                'Valor Total': c.valor_total,
+                'Progresso': `${c.parcelas_pagas || 0}/${c.parcelas_total || 0}`,
+                'Status': c.status,
+                'Origem': c.origem,
+            }));
+        } else if (activeTab === 'parcelas') {
+            headers = ['ID Parcela', 'Fornecedor', 'Descrição', 'Nº Parcela', 'Vencimento', 'Valor Parcela', 'Vlr Pago', 'Status'];
+            data = parcelas.map(p => ({
+                'ID Parcela': p.id,
+                'Fornecedor': p.admin_contas_pagar?.fornecedor || 'N/A',
+                'Descrição': p.admin_contas_pagar?.descricao || 'N/A',
+                'Nº Parcela': p.numero_parcela,
+                'Vencimento': formatDateFns(new Date(p.data_vencimento + 'T00:00:00'), 'dd/MM/yyyy'),
+                'Valor Parcela': p.valor_parcela,
+                'Vlr Pago': p.valor_pago || 0,
+                'Status': p.status,
+            }));
+        } else if (activeTab === 'pagamentos') {
+            headers = ['ID Pagamento', 'Data Pagamento', 'Fornecedor', 'Descrição', 'Valor Pago', 'Conta Origem'];
+            data = pagamentos.map(p => ({
+                'ID Pagamento': p.id,
+                'Data Pagamento': formatDateFns(new Date(p.data_pagamento), 'dd/MM/yyyy HH:mm'),
+                'Fornecedor': p.admin_parcelas_pagar?.admin_contas_pagar?.fornecedor || 'N/A',
+                'Descrição': p.admin_parcelas_pagar?.admin_contas_pagar?.descricao || 'N/A',
+                'Valor Pago': p.valor_pago,
+                'Conta Origem': p.saldo_contas?.nome || 'N/A',
+            }));
+        }
+        return { data, headers };
+    };
+
+    const handlePrint = () => {
+        const { data } = getDataForPrint();
+        if (data.length === 0) {
+            showError('Nenhum dado para imprimir.');
+            return;
+        }
+        
+        const printComponent = (
+            <ContasPagarPrint 
+                data={data} 
+                activeTab={activeTab} 
+                filtroPeriodo={filtroPeriodo} 
+            />
+        );
+
+        const htmlContent = ReactDOMServer.renderToStaticMarkup(printComponent);
+        printContent(htmlContent, `Relatório CP - ${activeTab}`);
+    };
+
     return (
         <>
             <Card>
@@ -57,7 +134,7 @@ const ContasPagarHeader: React.FC<ContasPagarHeaderProps> = ({
                             </SelectContent>
                         </Select>
                         <DateRangePicker date={filtroPeriodo} setDate={setFiltroPeriodo} />
-                        <Button variant="outline" className="w-full sm:w-auto"><Printer className="w-4 h-4 mr-2" /> Imprimir</Button>
+                        <Button onClick={handlePrint} variant="outline" className="w-full sm:w-auto"><Printer className="w-4 h-4 mr-2" /> Imprimir</Button>
                         <Button onClick={() => handleOpenForm()} className="w-full sm:w-auto"><Plus className="w-4 h-4 mr-2" /> Novo Lançamento</Button>
                     </div>
                 </CardHeader>

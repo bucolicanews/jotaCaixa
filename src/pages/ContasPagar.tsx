@@ -265,6 +265,10 @@ const ContasPagar: React.FC = () => {
               setFiltroPeriodo={setFiltroPeriodo}
               handleOpenForm={handleOpenForm}
               totalSintetico={totalSintetico}
+              contas={contas}
+              parcelas={parcelas}
+              pagamentos={pagamentos}
+              activeTab={activeTab}
           />
 
           <TabsContent value="sintetico" className="space-y-4">
