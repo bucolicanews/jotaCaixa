@@ -17,7 +17,7 @@ interface ConfiguracaoComConta extends ConfiguracaoConciliacao {
     } | null;
 }
 
-const GerenciarConfiguracoesBanco: React.FC = () => {
+const GerenciarConfiguracoesConciliacao: React.FC = () => {
   const { perfil, role, usuario, carregando: carregandoSessao } = useSessao();
   const [configs, setConfigs] = useState<ConfiguracaoComConta[]>([]);
   const [carregando, setCarregando] = useState(true);
@@ -169,4 +169,4 @@ const GerenciarConfiguracoesBanco: React.FC = () => {
   );
 };
 
-export default GerenciarConfiguracoesBanco;
+export default GerenciarConfiguracoesConciliacao;

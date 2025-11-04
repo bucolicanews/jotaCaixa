@@ -5,76 +5,70 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Upload, Banknote, CheckCircle2, XCircle, Filter, DollarSign } from 'lucide-react';
+import { Loader2, Upload, Banknote, CheckCircle2, XCircle, Filter } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
-import { ConfiguracaoBanco, ExtratoRow } from '@/types/conciliacao';
+import { ConfiguracaoConciliacao, ExtratoRow } from '@/types/conciliacao';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 import Papa from 'papaparse';
-import { SaldoContaDetalhada } from '@/types/saldo-conta';
 import { cn } from '@/lib/utils';
+import { Badge } from '@/components/ui/badge'; 
 
-// Campos internos que podem ser mapeados
-const CAMPOS_INTERNOS = [
-    { key: 'data_movimentacao', label: 'Data da Movimentação' },
-    { key: 'descricao', label: 'Descrição/Transação' },
-    { key: 'identificacao', label: 'Identificação/Favorecido' },
-    { key: 'valor', label: 'Valor' },
-];
+// Tipo que inclui o nome da conta de saldo para exibição
+interface ConfiguracaoComConta extends ConfiguracaoConciliacao {
+    saldo_contas: {
+        nome: string;
+    } | null;
+}
 
 const Conciliacao = () => {
   const { perfil, role, usuario, carregando: carregandoSessao } = useSessao();
-  const [configsBanco, setConfigsBanco] = useState<ConfiguracaoBanco[]>([]);
-  const [contasSaldo, setContasSaldo] = useState<SaldoContaDetalhada[]>([]);
+  const [configsConciliacao, setConfigsConciliacao] = useState<ConfiguracaoComConta[]>([]);
   const [carregandoConfigs, setCarregandoConfigs] = useState(true);
   
   const [configSelecionadaId, setConfigSelecionadaId] = useState<string>('');
-  const [contaSaldoSelecionadaId, setContaSaldoSelecionadaId] = useState<string>('');
   const [extratoFile, setExtratoFile] = useState<File | null>(null);
   const [extratoData, setExtratoData] = useState<ExtratoRow[]>([]);
   const [processando, setProcessando] = useState(false);
 
-  const getEmpresaId = () => {
+  const getProprietarioId = () => {
     if (role === 'Admin') return usuario?.id || null;
     if (role === 'Cliente') return (perfil as ClienteProfile)?.id || null;
     if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id || null;
     return null;
   };
   
-  const empresaId = getEmpresaId();
-  const configSelecionada = useMemo(() => configsBanco.find(c => c.id === configSelecionadaId), [configsBanco, configSelecionadaId]);
+  const proprietarioId = getProprietarioId();
+  const configSelecionada = useMemo(() => configsConciliacao.find(c => c.id === configSelecionadaId), [configsConciliacao, configSelecionadaId]);
+  const contaSaldoAssociada = configSelecionada?.saldo_contas?.nome || 'N/A';
 
   const buscarDadosIniciais = useCallback(async () => {
-    if (!empresaId) {
+    if (!proprietarioId) {
         setCarregandoConfigs(false);
         return;
     }
     
     setCarregandoConfigs(true);
     
-    const [configsRes, contasRes] = await Promise.all([
-        supabase.from('configuracoes_banco').select('*').eq('empresa_id', empresaId).order('nome_banco'),
-        supabase.from('saldo_contas').select('*, plano_contas ( is_conta_saldo )').eq('empresa_id', empresaId).order('nome'),
-    ]);
+    // Buscar configurações de conciliação, incluindo o nome da conta de saldo
+    const { data: configsRes, error: configsError } = await supabase
+        .from('configuracao_conciliacao')
+        .select('*, saldo_contas ( nome )')
+        .eq('proprietario_id', proprietarioId)
+        .order('nome_configuracao');
 
-    if (configsRes.error) showError('Erro ao carregar configurações de banco: ' + configsRes.error.message);
-    else setConfigsBanco(configsRes.data as ConfiguracaoBanco[]);
+    if (configsError) showError('Erro ao carregar configurações de conciliação: ' + configsError.message);
+    else setConfigsConciliacao(configsRes as ConfiguracaoComConta[]);
     
-    if (contasRes.error) showError('Erro ao carregar contas de saldo: ' + contasRes.error.message);
-    else {
-        const filteredContas = (contasRes.data as any[]).filter(c => c.plano_contas?.is_conta_saldo === true);
-        setContasSaldo(filteredContas as SaldoContaDetalhada[]);
-    }
-
     setCarregandoConfigs(false);
-  }, [empresaId]);
+  }, [proprietarioId]);
 
   useEffect(() => {
-    if (!carregandoSessao && empresaId) {
+    if (!carregandoSessao && proprietarioId) {
       buscarDadosIniciais();
     }
-  }, [carregandoSessao, empresaId, buscarDadosIniciais]);
+  }, [carregandoSessao, proprietarioId, buscarDadosIniciais]);
   
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files[0]) {
@@ -87,7 +81,7 @@ const Conciliacao = () => {
   
   const parseExtrato = async () => {
     if (!extratoFile || !configSelecionada) {
-        showError('Selecione o banco e o arquivo de extrato.');
+        showError('Selecione uma configuração de conciliação e o arquivo de extrato.');
         return;
     }
     
@@ -99,7 +93,7 @@ const Conciliacao = () => {
             Papa.parse(extratoFile, {
                 header: true,
                 skipEmptyLines: true,
-                dynamicTyping: false, // Manter como string para manipulação de valor
+                dynamicTyping: false,
                 complete: resolve,
                 error: reject,
             });
@@ -150,7 +144,7 @@ const Conciliacao = () => {
         });
         
         setExtratoData(rows);
-        showSuccess(`Extrato de ${configSelecionada.nome_banco} processado com ${rows.length} linhas.`);
+        showSuccess(`Extrato processado com ${rows.length} linhas para a conta ${contaSaldoAssociada}.`);
 
     } catch (error: any) {
         console.error('Erro ao processar extrato:', error);
@@ -162,12 +156,12 @@ const Conciliacao = () => {
   
   // --- Lógica de Conciliação (Placeholder) ---
   
-  const handleConciliar = (rowId: string) => {
+  const handleConciliar = (_rowId: string) => {
       // TODO: Implementar a lógica de conciliação real
       showError('Funcionalidade de conciliação ainda não implementada.');
   };
   
-  const handleLancarManualmente = (row: ExtratoRow) => {
+  const handleLancarManualmente = (_row: ExtratoRow) => {
       // TODO: Implementar a lógica de lançamento manual
       showError('Funcionalidade de lançamento manual ainda não implementada.');
   };
@@ -176,7 +170,7 @@ const Conciliacao = () => {
     return <LayoutPrincipal><div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div></LayoutPrincipal>;
   }
   
-  if (!empresaId) {
+  if (!proprietarioId) {
       return <LayoutPrincipal><Card><CardContent className="p-6 text-red-500">Você não está vinculado a uma empresa para conciliar.</CardContent></Card></LayoutPrincipal>;
   }
 
@@ -190,42 +184,36 @@ const Conciliacao = () => {
         <CardHeader><CardTitle className="text-xl">1. Importar Extrato</CardTitle></CardHeader>
         <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {/* Seleção de Banco */}
-                <div className="space-y-2">
-                    <label className="font-medium text-sm">Banco (Formato de Arquivo)</label>
-                    <Select value={configSelecionadaId} onValueChange={setConfigSelecionadaId} disabled={configsBanco.length === 0 || processando}>
+                {/* Seleção de Configuração */}
+                <div className="space-y-2 col-span-1 md:col-span-2">
+                    <label className="font-medium text-sm">Configuração de Conciliação (Banco/Formato)</label>
+                    <Select value={configSelecionadaId} onValueChange={setConfigSelecionadaId} disabled={configsConciliacao.length === 0 || processando}>
                         <SelectTrigger>
                             <Banknote className="w-4 h-4 mr-2" />
-                            <SelectValue placeholder="Selecione o Banco" />
+                            <SelectValue placeholder="Selecione a Configuração de Extrato" />
                         </SelectTrigger>
                         <SelectContent>
-                            {configsBanco.map(c => (
-                                <SelectItem key={c.id} value={c.id}>{c.nome_banco}</SelectItem>
+                            {configsConciliacao.map(c => (
+                                <SelectItem key={c.id} value={c.id}>{c.nome_configuracao} ({c.saldo_contas?.nome || 'Conta Inválida'})</SelectItem>
                             ))}
                         </SelectContent>
                     </Select>
-                    {configsBanco.length === 0 && <p className="text-xs text-red-500">Cadastre um formato em Configurações &gt; Bancos.</p>}
+                    {configsConciliacao.length === 0 && <p className="text-xs text-red-500">Cadastre um formato em Configurações &gt; Bancos.</p>}
                 </div>
                 
-                {/* Seleção de Conta de Saldo */}
+                {/* Conta de Saldo Associada (Display) */}
                 <div className="space-y-2">
-                    <label className="font-medium text-sm">Conta de Saldo (Destino)</label>
-                    <Select value={contaSaldoSelecionadaId} onValueChange={setContaSaldoSelecionadaId} disabled={contasSaldo.length === 0 || processando}>
-                        <SelectTrigger>
-                            <DollarSign className="w-4 h-4 mr-2" />
-                            <SelectValue placeholder="Selecione a Conta/Caixa" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {contasSaldo.map(c => (
-                                <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                    {contasSaldo.length === 0 && <p className="text-xs text-red-500">Cadastre uma conta em Bancos / Caixas.</p>}
+                    <label className="font-medium text-sm">Conta de Saldo Associada</label>
+                    <Input 
+                        value={contaSaldoAssociada} 
+                        readOnly 
+                        disabled 
+                        className="bg-gray-100 dark:bg-gray-800"
+                    />
                 </div>
                 
                 {/* Upload e Processamento */}
-                <div className="space-y-2">
+                <div className="space-y-2 col-span-3">
                     <label className="font-medium text-sm">Arquivo de Extrato (.csv)</label>
                     <div className="flex space-x-2">
                         <Input 
@@ -237,10 +225,11 @@ const Conciliacao = () => {
                         />
                         <Button 
                             onClick={parseExtrato} 
-                            disabled={!extratoFile || !configSelecionadaId || !contaSaldoSelecionadaId || processando}
-                            size="icon"
+                            disabled={!extratoFile || !configSelecionadaId || processando}
+                            size="default"
                         >
-                            {processando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                            {processando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4 mr-2" />}
+                            Processar Extrato
                         </Button>
                     </div>
                 </div>
@@ -282,7 +271,7 @@ const Conciliacao = () => {
                                         {row.conciliado ? (
                                             <Badge variant="success" className="flex items-center justify-center"><CheckCircle2 className="w-3 h-3 mr-1" /> Conciliado</Badge>
                                         ) : (
-                                            <Badge variant="warning" className="flex items-center justify-center"><XCircle className="w-3 h-3 mr-1" /> Pendente</Badge>
+                                            <Badge variant="secondary" className="flex items-center justify-center"><XCircle className="w-3 h-3 mr-1" /> Pendente</Badge>
                                         )}
                                     </TableCell>
                                     <TableCell className="text-right">

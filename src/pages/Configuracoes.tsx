@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useSessao } from '@/hooks/use-sessao';
 import FormConfiguracoesStripe from '@/components/FormConfiguracoesStripe';
 import FormConfiguracoesCR from '@/components/FormConfiguracoesCR';
-import GerenciarConfiguracoesBanco from '@/components/GerenciarConfiguracoesBanco';
+import GerenciarConfiguracoesConciliacao from '@/components/GerenciarConfiguracoesConciliacao'; // NOVO COMPONENTE
 import { Key, Settings, DollarSign, Banknote } from 'lucide-react';
 
 const Configuracoes = () => {
@@ -65,7 +65,7 @@ const Configuracoes = () => {
           <Card>
             <CardHeader><CardTitle>Configurações de Importação de Extratos</CardTitle></CardHeader>
             <CardContent>
-              <GerenciarConfiguracoesBanco />
+              <GerenciarConfiguracoesConciliacao /> {/* USANDO O NOVO COMPONENTE */}
             </CardContent>
           </Card>
         </TabsContent>

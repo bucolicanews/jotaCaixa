@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -12,18 +12,12 @@ import { useSessao } from '@/hooks/use-sessao';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 import { ConfiguracaoConciliacao } from '@/types/conciliacao';
 import { Separator } from './ui/separator';
-
-// Campos internos que podem ser mapeados
-const CAMPOS_INTERNOS = [
-    { key: 'data_movimentacao', label: 'Data da Movimentação' },
-    { key: 'descricao', label: 'Descrição/Transação' },
-    { key: 'identificacao', label: 'Identificação/Favorecido' },
-    { key: 'valor', label: 'Valor' },
-    // O tipo (Entrada/Saída) é tratado separadamente
-];
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { SaldoContaDetalhada } from '@/types/saldo-conta';
 
 const formSchema = z.object({
-  nome_banco: z.string().min(1, 'O nome do banco é obrigatório.'),
+  nome_configuracao: z.string().min(1, 'O nome da configuração é obrigatório.'),
+  id_saldo_contas: z.string().min(1, 'A conta de saldo é obrigatória.'),
   coluna_data: z.string().min(1, 'Mapeamento de Data é obrigatório.'),
   coluna_descricao: z.string().min(1, 'Mapeamento de Descrição é obrigatório.'),
   coluna_identificacao: z.string().min(1, 'Mapeamento de Identificação é obrigatório.'),
@@ -35,28 +29,31 @@ const formSchema = z.object({
 
 type FormValues = z.infer<typeof formSchema>;
 
-interface FormConfiguracaoBancoProps {
+interface FormConfiguracaoConciliacaoProps {
   configInicial?: ConfiguracaoConciliacao | null;
   onSaveComplete: () => void;
 }
 
-const FormConfiguracaoBanco: React.FC<FormConfiguracaoBancoProps> = ({ configInicial, onSaveComplete }) => {
+const FormConfiguracaoConciliacao: React.FC<FormConfiguracaoConciliacaoProps> = ({ configInicial, onSaveComplete }) => {
   const { perfil, role, usuario } = useSessao();
+  const [contasSaldo, setContasSaldo] = useState<SaldoContaDetalhada[]>([]);
+  const [carregandoContas, setCarregandoContas] = useState(true);
   const isEditing = !!configInicial;
 
-  const getEmpresaId = () => {
+  const getProprietarioId = () => {
     if (role === 'Admin') return usuario?.id || null;
     if (role === 'Cliente') return (perfil as ClienteProfile)?.id || null;
     if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id || null;
     return null;
   };
   
-  const empresaId = getEmpresaId();
+  const proprietarioId = getProprietarioId();
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      nome_banco: configInicial?.nome_configuracao || '',
+      nome_configuracao: configInicial?.nome_configuracao || '',
+      id_saldo_contas: configInicial?.id_saldo_contas || '',
       coluna_data: configInicial?.mapeamento['Data'] || '',
       coluna_descricao: configInicial?.mapeamento['Descrição'] || '',
       coluna_identificacao: configInicial?.mapeamento['Identificação'] || '',
@@ -65,10 +62,35 @@ const FormConfiguracaoBanco: React.FC<FormConfiguracaoBancoProps> = ({ configIni
       valor_credito: configInicial?.valor_credito || '',
     },
   });
+  
+  const buscarContasSaldo = useCallback(async () => {
+    if (!proprietarioId) return;
+    setCarregandoContas(true);
+    
+    // Buscar apenas contas que são contas de saldo (Bancos/Caixas)
+    const { data, error } = await supabase
+        .from('saldo_contas')
+        .select('*, plano_contas ( is_conta_saldo )')
+        .eq('proprietario_id', proprietarioId)
+        .order('nome');
+        
+    if (error) {
+        showError('Erro ao carregar contas de saldo: ' + error.message);
+    } else {
+        const filteredContas = (data as any[]).filter(c => c.plano_contas?.is_conta_saldo === true);
+        setContasSaldo(filteredContas as SaldoContaDetalhada[]);
+    }
+    setCarregandoContas(false);
+  }, [proprietarioId]);
+
+  useEffect(() => {
+    buscarContasSaldo();
+  }, [buscarContasSaldo]);
+
 
   const onSubmit = async (values: FormValues) => {
-    if (!empresaId) {
-      showError('ID da empresa não encontrado. Não é possível salvar.');
+    if (!proprietarioId) {
+      showError('ID do proprietário não encontrado. Não é possível salvar.');
       return;
     }
     
@@ -80,8 +102,9 @@ const FormConfiguracaoBanco: React.FC<FormConfiguracaoBancoProps> = ({ configIni
     };
 
     const dataToSave = {
-      empresa_id: empresaId,
-      nome_banco: values.nome_banco,
+      proprietario_id: proprietarioId,
+      id_saldo_contas: values.id_saldo_contas,
+      nome_configuracao: values.nome_configuracao,
       mapeamento: mapeamentoFinal,
       coluna_tipo_transacao: values.coluna_tipo_transacao || null,
       valor_credito: values.valor_credito || null,
@@ -103,9 +126,14 @@ const FormConfiguracaoBanco: React.FC<FormConfiguracaoBancoProps> = ({ configIni
     }
 
     if (error) {
-      showError(`Falha ao salvar configuração: ${error.message}`);
+      // O erro 23505 é a violação da restrição UNIQUE (id_saldo_contas)
+      if (error.code === '23505') {
+          showError('Falha ao salvar: Já existe uma configuração de conciliação cadastrada para esta Conta de Saldo.');
+      } else {
+          showError(`Falha ao salvar configuração: ${error.message}`);
+      }
     } else {
-      showSuccess(`Configuração do banco ${values.nome_banco} salva com sucesso!`);
+      showSuccess(`Configuração ${values.nome_configuracao} salva com sucesso!`);
       onSaveComplete();
     }
   };
@@ -115,14 +143,40 @@ const FormConfiguracaoBanco: React.FC<FormConfiguracaoBancoProps> = ({ configIni
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
         <FormField
           control={form.control}
-          name="nome_banco"
+          name="nome_configuracao"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Nome do Banco</FormLabel>
+              <FormLabel>Nome da Configuração (Ex: Cora - Extrato Mensal)</FormLabel>
               <FormControl>
                 <Input placeholder="Ex: Cora, Banco do Brasil, Itaú" {...field} />
               </FormControl>
               <FormMessage />
+            </FormItem>
+          )}
+        />
+        
+        <FormField
+          control={form.control}
+          name="id_saldo_contas"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Conta de Saldo Interna (Bancos/Caixas)</FormLabel>
+              <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isEditing || carregandoContas}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione a conta de saldo" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {contasSaldo.map(conta => (
+                    <SelectItem key={conta.id} value={conta.id}>
+                      {conta.nome}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormMessage />
+              {isEditing && <p className="text-xs text-muted-foreground">A conta de saldo não pode ser alterada após a criação.</p>}
             </FormItem>
           )}
         />
@@ -151,7 +205,7 @@ const FormConfiguracaoBanco: React.FC<FormConfiguracaoBancoProps> = ({ configIni
             <FormField control={form.control} name="valor_credito" render={({ field }) => (<FormItem><FormLabel>Valor na Coluna que Indica CRÉDITO</FormLabel><FormControl><Input placeholder="Ex: CRÉDITO" {...field} /></FormControl><FormMessage /></FormItem>)} />
         </div>
 
-        <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
+        <Button type="submit" className="w-full" disabled={form.formState.isSubmitting || carregandoContas}>
           {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Salvar Configuração
         </Button>
@@ -160,4 +214,4 @@ const FormConfiguracaoBanco: React.FC<FormConfiguracaoBancoProps> = ({ configIni
   );
 };
 
-export default FormConfiguracaoBanco;
+export default FormConfiguracaoConciliacao;
