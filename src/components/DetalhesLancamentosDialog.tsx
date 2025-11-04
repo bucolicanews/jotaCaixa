@@ -1,13 +1,15 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, ArrowUpCircle, ArrowDownCircle } from 'lucide-react';
+import { Loader2, ArrowUpCircle, ArrowDownCircle, Printer } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError } from '@/utils/toast';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Badge } from './ui/badge';
 import { cn } from '@/lib/utils';
+import { Button } from './ui/button';
+import { usePrint } from '@/hooks/use-print';
 
 interface Lancamento {
   id: string;
@@ -29,6 +31,7 @@ const formatDate = (dateString: string) => format(parseISO(dateString), 'dd/MM/y
 const DetalhesLancamentosDialog: React.FC<DetalhesLancamentosDialogProps> = ({ conta, open, onOpenChange }) => {
   const [lancamentos, setLancamentos] = useState<Lancamento[]>([]);
   const [loading, setLoading] = useState(true);
+  const { printContent } = usePrint();
 
   const fetchLancamentos = useCallback(async () => {
     if (!conta) return;
@@ -57,6 +60,50 @@ const DetalhesLancamentosDialog: React.FC<DetalhesLancamentosDialogProps> = ({ c
 
   const totalEntradas = lancamentos.filter(l => l.tipo === 'Entrada').reduce((sum, l) => sum + l.valor, 0);
   const totalSaidas = lancamentos.filter(l => l.tipo === 'Saida').reduce((sum, l) => sum + l.valor, 0);
+
+  const handlePrint = () => {
+    if (!conta || lancamentos.length === 0) {
+      showError("Não há dados para imprimir.");
+      return;
+    }
+
+    const printHtml = `
+      <div class="print-header">
+        <h1>Extrato da Conta: ${conta.nome}</h1>
+        <p>Gerado em: ${format(new Date(), 'dd/MM/yyyy HH:mm', { locale: ptBR })}</p>
+      </div>
+      <div class="print-section">
+        <h2 style="font-size: 14px; font-weight: bold;">Resumo</h2>
+        <p>Total de Entradas: ${formatCurrency(totalEntradas)}</p>
+        <p>Total de Saídas: ${formatCurrency(totalSaidas)}</p>
+      </div>
+      <div class="print-section">
+        <h2 style="font-size: 14px; font-weight: bold;">Lançamentos</h2>
+        <table class="print-table">
+          <thead>
+            <tr>
+              <th>Data</th>
+              <th>Descrição</th>
+              <th>Tipo</th>
+              <th style="text-align: right;">Valor</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${lancamentos.map(l => `
+              <tr>
+                <td>${formatDate(l.data_movimentacao)}</td>
+                <td>${l.descricao}</td>
+                <td>${l.tipo}</td>
+                <td style="text-align: right; color: ${l.tipo === 'Entrada' ? 'green' : 'red'};">${formatCurrency(l.valor)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+
+    printContent(printHtml, `Extrato - ${conta.nome}`);
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -117,6 +164,14 @@ const DetalhesLancamentosDialog: React.FC<DetalhesLancamentosDialogProps> = ({ c
                   )}
                 </TableBody>
               </Table>
+            </div>
+            <div className="flex justify-end space-x-2 pt-4 border-t">
+                <Button onClick={handlePrint} variant="outline">
+                    <Printer className="w-4 h-4 mr-2" /> Imprimir Extrato
+                </Button>
+                <Button onClick={() => onOpenChange(false)} variant="secondary">
+                    Fechar
+                </Button>
             </div>
           </>
         )}
