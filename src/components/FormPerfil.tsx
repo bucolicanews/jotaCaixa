@@ -89,6 +89,8 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
     
   const isClient = 'limite_usuarios' in perfilInicial;
   const isUser = 'cliente_id' in perfilInicial;
+  const isAdminProfile = role === 'Admin'; // Novo: Verifica se o perfil logado é Admin
+  
   const profileToEdit = perfilInicial as UsuarioProfile | ClienteProfile;
   
   const isLoggedUserAdmin = role === 'Admin';
@@ -263,6 +265,24 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
 
         const { error } = await supabase.from('tbl_usuarios').update(dataToUpdate).eq('id', perfilInicial.id);
         if (error) throw error;
+      } else if (isAdminProfile) {
+        // Edição de Admin (Apenas nome e dados cadastrais)
+        
+        dataToUpdate.cpf = values.cpf || null;
+        dataToUpdate.rg = values.rg || null;
+        dataToUpdate.nome_mae = values.nome_mae || null;
+        dataToUpdate.nome_pai = values.nome_pai || null;
+        dataToUpdate.telefone = values.telefone || null;
+        dataToUpdate.cep = values.cep || null;
+        dataToUpdate.endereco = values.endereco || null;
+        dataToUpdate.numero = values.numero || null;
+        dataToUpdate.complemento = values.complemento || null;
+        dataToUpdate.bairro = values.bairro || null;
+        dataToUpdate.cidade = values.cidade || null;
+        dataToUpdate.estado = values.estado || null;
+        
+        const { error } = await supabase.from('tbl_admins').update(dataToUpdate).eq('id', perfilInicial.id);
+        if (error) throw error;
       }
       
       showSuccess('Perfil atualizado com sucesso!');
@@ -279,32 +299,59 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
   
   const formMethods = form;
 
-  if (isClient) {
-    // Renderização para Cliente (Empresa)
+  if (isClient || isAdminProfile) {
+    // Renderização para Cliente (Empresa) ou Admin
     return (
       <FormProvider {...formMethods}>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormGeral
-                control={form.control}
-                isEditing={true}
-                isUserScope={false}
-                isSubmitting={form.formState.isSubmitting}
-                criadorRole={role!}
-                permissoesVisiveis={PERMISSOES_DISPONIVEIS.filter(p => p.key !== 'ponto_eletronico' && p.key !== 'visualizar_proprio_ponto')}
-                handleSelectAll={handleSelectAll}
-            />
-            
-            <h3 className="font-semibold text-lg mt-6 border-t pt-4">Dados Cadastrais (Tags de Contrato)</h3>
-            <p className="text-sm text-muted-foreground mb-4">Estes campos são usados para preencher tags dinâmicas em contratos.</p>
-            
-            {/* Reutilizando FormDadosCadastrais para Cliente, mas com mapeamento de Cliente */}
-            <FormDadosCadastrais 
-                control={form.control}
-                isSubmitting={form.formState.isSubmitting}
-                resourceId={perfilInicial.id}
-                tagRefreshKey={tagRefreshKey}
-            />
+            <Tabs defaultValue="pessoal" className="w-full">
+                <TabsList className="flex flex-wrap justify-start w-full h-auto p-1">
+                    <TabsTrigger value="pessoal" className="flex-1 md:flex-none md:w-1/3">Geral</TabsTrigger>
+                    <TabsTrigger value="cadastrais" className="flex-1 md:flex-none md:w-1/3">Dados Cadastrais</TabsTrigger>
+                    {isClient && <TabsTrigger value="documentos" className="flex-1 md:flex-none md:w-1/3">Documentos</TabsTrigger>}
+                </TabsList>
+                
+                {/* TAB 1: GERAL */}
+                <TabsContent value="pessoal" className="mt-4 space-y-4 p-4">
+                    <FormGeral
+                        control={form.control}
+                        isEditing={true}
+                        isUserScope={false}
+                        isSubmitting={form.formState.isSubmitting}
+                        criadorRole={role!}
+                        permissoesVisiveis={PERMISSOES_DISPONIVEIS.filter(p => p.key !== 'ponto_eletronico' && p.key !== 'visualizar_proprio_ponto')}
+                        handleSelectAll={handleSelectAll}
+                    />
+                </TabsContent>
+                
+                {/* TAB 2: DADOS CADASTRAIS */}
+                <TabsContent value="cadastrais" className="mt-4 space-y-6 p-4">
+                    <h3 className="font-semibold text-lg">Dados Cadastrais (Tags de Contrato)</h3>
+                    <p className="text-sm text-muted-foreground mb-4">Estes campos são usados para preencher tags dinâmicas em contratos.</p>
+                    
+                    <FormDadosCadastrais 
+                        control={form.control}
+                        isSubmitting={form.formState.isSubmitting}
+                        resourceId={perfilInicial.id}
+                        tagRefreshKey={tagRefreshKey}
+                    />
+                </TabsContent>
+                
+                {/* TAB 3: DOCUMENTOS (Apenas Cliente) */}
+                {isClient && (
+                    <TabsContent value="documentos" className="mt-4 space-y-6 p-4">
+                        <h3 className="font-semibold text-lg">Documentos da Empresa</h3>
+                        <p className="text-sm text-muted-foreground mb-4">Anexe documentos importantes da sua empresa.</p>
+                        
+                        <FormDocumentos
+                            control={form.control}
+                            isSubmitting={form.formState.isSubmitting}
+                            resourceId={perfilInicial.id}
+                        />
+                    </TabsContent>
+                )}
+            </Tabs>
 
             <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
               {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

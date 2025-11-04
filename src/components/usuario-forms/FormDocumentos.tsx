@@ -9,6 +9,7 @@ import { Loader2, Upload, CheckCircle2, XCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { cn } from '@/lib/utils';
+import { useSessao } from '@/hooks/use-sessao';
 
 interface FormDocumentosProps {
   control: Control<any>;
@@ -17,8 +18,13 @@ interface FormDocumentosProps {
 }
 
 const FormDocumentos: React.FC<FormDocumentosProps> = ({ control, isSubmitting, resourceId }) => {
+  const { role } = useSessao();
   const [uploading, setUploading] = useState(false);
   const isSaving = isSubmitting || uploading;
+  
+  const isUserScope = role === 'Usuario';
+  const bucketName = isUserScope ? 'documentos-admissao' : 'documentos-empresa';
+  const folderName = isUserScope ? 'documentos' : 'empresa';
 
   const handleFileUpload = async (file: File, fieldName: string) => {
     if (!resourceId) {
@@ -30,10 +36,11 @@ const FormDocumentos: React.FC<FormDocumentosProps> = ({ control, isSubmitting, 
 
     try {
       const fileExt = file.name.split('.').pop();
-      const filePath = `${resourceId}/documentos/${fieldName}-${Date.now()}.${fileExt}`; 
+      // O caminho agora usa o nome do campo para garantir unicidade e o ID do recurso
+      const filePath = `${resourceId}/${folderName}/${fieldName}-${Date.now()}.${fileExt}`; 
       
       const { error: uploadError } = await supabase.storage
-        .from('documentos-admissao')
+        .from(bucketName)
         .upload(filePath, file, {
           cacheControl: '3600',
           upsert: true,
@@ -41,7 +48,7 @@ const FormDocumentos: React.FC<FormDocumentosProps> = ({ control, isSubmitting, 
 
       if (uploadError) throw uploadError;
 
-      const { data: publicUrlData } = supabase.storage.from('documentos-admissao').getPublicUrl(filePath);
+      const { data: publicUrlData } = supabase.storage.from(bucketName).getPublicUrl(filePath);
       
       // Atualiza o campo do formulário diretamente
       (control as any)._formValues[fieldName] = publicUrlData.publicUrl;
@@ -119,77 +126,106 @@ const FormDocumentos: React.FC<FormDocumentosProps> = ({ control, isSubmitting, 
       />
     );
   };
-
+  
+  // Se for escopo de Usuário (Funcionário)
+  if (isUserScope) {
+      return (
+        <div className="space-y-6">
+          <p className="text-sm text-muted-foreground">Anexos de documentos do funcionário.</p>
+          
+          {uploading && (
+              <div className="flex items-center justify-center p-4 bg-secondary rounded-md">
+                  <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                  <span className="font-medium">Fazendo upload...</span>
+              </div>
+          )}
+          
+          <Accordion type="multiple" className="w-full">
+              <AccordionItem value="pessoais">
+                  <AccordionTrigger className="font-semibold">Documentos Pessoais</AccordionTrigger>
+                  <AccordionContent className="space-y-4 p-2">
+                      {renderDocumentField('rg_url', 'Cópia do RG (Frente e Verso)', true)}
+                      {renderDocumentField('cpf_url', 'Cópia do CPF', true)}
+                      {renderDocumentField('ctps_url', 'Carteira de Trabalho (CTPS)', true)}
+                      {renderDocumentField('cartao_pis_url', 'Cartão do PIS', false)}
+                      {renderDocumentField('cnh_url', 'CNH (Se for motorista)', false)}
+                  </AccordionContent>
+              </AccordionItem>
+              <AccordionItem value="militares">
+                  <AccordionTrigger className="font-semibold">Obrigações Militares e Eleitorais</AccordionTrigger>
+                  <AccordionContent className="space-y-4 p-2">
+                      {renderDocumentField('titulo_eleitor_url', 'Título de Eleitor', false)}
+                      {renderDocumentField('reservista_url', 'Certidão de Reservista (Homens +18)', false)}
+                  </AccordionContent>
+              </AccordionItem>
+              <AccordionItem value="estado_civil">
+                  <AccordionTrigger className="font-semibold">Estado Civil e Filiação</AccordionTrigger>
+                  <AccordionContent className="space-y-4 p-2">
+                      {renderDocumentField('certidao_nascimento_url', 'Certidão de Nascimento (Solteiro)', false)}
+                      {renderDocumentField('certidao_casamento_url', 'Certidão de Casamento (Casado)', false)}
+                      <FormItem>
+                          <FormLabel>Certidões de Nascimento dos Filhos (Menores de 14)</FormLabel>
+                          <Input type="file" multiple disabled placeholder="Em breve" />
+                      </FormItem>
+                  </AccordionContent>
+              </AccordionItem>
+              <AccordionItem value="outros">
+                  <AccordionTrigger className="font-semibold">Outros Documentos</AccordionTrigger>
+                  <AccordionContent className="space-y-4 p-2">
+                      {renderDocumentField('comprovante_residencia_url', 'Comprovante de Residência', true)}
+                      {renderDocumentField('comprovante_escolaridade_url', 'Comprovante de Escolaridade', true)}
+                      {renderDocumentField('exame_admissional_url', 'Exame Médico Admissional', true)}
+                      {renderDocumentField('foto_3x4_url', 'Foto 3x4', true)}
+                      <FormField
+                          control={control}
+                          name="ja_admitido_anteriormente"
+                          render={({ field }) => (
+                              <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                                  <FormControl>
+                                      <Checkbox
+                                          checked={field.value}
+                                          onCheckedChange={field.onChange}
+                                          disabled={isSaving}
+                                      />
+                                  </FormControl>
+                                  <div className="space-y-1 leading-none">
+                                      <FormLabel>
+                                          Já foi admitido anteriormente?
+                                      </FormLabel>
+                                  </div>
+                              </FormItem>
+                          )}
+                      />
+                  </AccordionContent>
+              </AccordionItem>
+          </Accordion>
+        </div>
+      );
+  }
+  
+  // Se for escopo de Cliente (Empresa) ou Admin
   return (
     <div className="space-y-6">
-      <p className="text-sm text-muted-foreground">Anexos de documentos do funcionário.</p>
-      
-      {uploading && (
-          <div className="flex items-center justify-center p-4 bg-secondary rounded-md">
-              <Loader2 className="w-5 h-5 animate-spin mr-2" />
-              <span className="font-medium">Fazendo upload...</span>
-          </div>
-      )}
-      
-      <Accordion type="multiple" className="w-full">
-          <AccordionItem value="pessoais">
-              <AccordionTrigger className="font-semibold">Documentos Pessoais</AccordionTrigger>
-              <AccordionContent className="space-y-4 p-2">
-                  {renderDocumentField('rg_url', 'Cópia do RG (Frente e Verso)', true)}
-                  {renderDocumentField('cpf_url', 'Cópia do CPF', true)}
-                  {renderDocumentField('ctps_url', 'Carteira de Trabalho (CTPS)', true)}
-                  {renderDocumentField('cartao_pis_url', 'Cartão do PIS', false)}
-                  {renderDocumentField('cnh_url', 'CNH (Se for motorista)', false)}
-              </AccordionContent>
-          </AccordionItem>
-          <AccordionItem value="militares">
-              <AccordionTrigger className="font-semibold">Obrigações Militares e Eleitorais</AccordionTrigger>
-              <AccordionContent className="space-y-4 p-2">
-                  {renderDocumentField('titulo_eleitor_url', 'Título de Eleitor', false)}
-                  {renderDocumentField('reservista_url', 'Certidão de Reservista (Homens +18)', false)}
-              </AccordionContent>
-          </AccordionItem>
-          <AccordionItem value="estado_civil">
-              <AccordionTrigger className="font-semibold">Estado Civil e Filiação</AccordionTrigger>
-              <AccordionContent className="space-y-4 p-2">
-                  {renderDocumentField('certidao_nascimento_url', 'Certidão de Nascimento (Solteiro)', false)}
-                  {renderDocumentField('certidao_casamento_url', 'Certidão de Casamento (Casado)', false)}
-                  <FormItem>
-                      <FormLabel>Certidões de Nascimento dos Filhos (Menores de 14)</FormLabel>
-                      <Input type="file" multiple disabled placeholder="Em breve" />
-                  </FormItem>
-              </AccordionContent>
-          </AccordionItem>
-          <AccordionItem value="outros">
-              <AccordionTrigger className="font-semibold">Outros Documentos</AccordionTrigger>
-              <AccordionContent className="space-y-4 p-2">
-                  {renderDocumentField('comprovante_residencia_url', 'Comprovante de Residência', true)}
-                  {renderDocumentField('comprovante_escolaridade_url', 'Comprovante de Escolaridade', true)}
-                  {renderDocumentField('exame_admissional_url', 'Exame Médico Admissional', true)}
-                  {renderDocumentField('foto_3x4_url', 'Foto 3x4', true)}
-                  <FormField
-                      control={control}
-                      name="ja_admitido_anteriormente"
-                      render={({ field }) => (
-                          <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
-                              <FormControl>
-                                  <Checkbox
-                                      checked={field.value}
-                                      onCheckedChange={field.onChange}
-                                      disabled={isSaving}
-                                  />
-                              </FormControl>
-                              <div className="space-y-1 leading-none">
-                                  <FormLabel>
-                                      Já foi admitido anteriormente?
-                                  </FormLabel>
-                              </div>
-                          </FormItem>
-                      )}
-                  />
-              </AccordionContent>
-          </AccordionItem>
-      </Accordion>
+        <p className="text-sm text-muted-foreground">Anexos de documentos da empresa (CNPJ, Contrato Social, etc.).</p>
+        
+        {uploading && (
+            <div className="flex items-center justify-center p-4 bg-secondary rounded-md">
+                <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                <span className="font-medium">Fazendo upload...</span>
+            </div>
+        )}
+        
+        <Accordion type="multiple" className="w-full" defaultValue={['documentos_empresa']}>
+            <AccordionItem value="documentos_empresa">
+                <AccordionTrigger className="font-semibold">Documentos da Empresa</AccordionTrigger>
+                <AccordionContent className="space-y-4 p-2">
+                    {renderDocumentField('documento_cnpj_url', 'Cópia do CNPJ', false)}
+                    {renderDocumentField('contrato_social_url', 'Contrato Social/Estatuto', false)}
+                    {renderDocumentField('alvara_funcionamento_url', 'Alvará de Funcionamento', false)}
+                    {/* Adicione mais campos conforme necessário para a empresa */}
+                </AccordionContent>
+            </AccordionItem>
+        </Accordion>
     </div>
   );
 };
