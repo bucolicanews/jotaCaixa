@@ -16,6 +16,7 @@ const formSchema = z.object({
   stripe_publishable_key: z.string().min(1, 'A chave publicável é obrigatória.'),
   stripe_secret_key: z.string().min(1, 'A chave secreta é obrigatória.'),
   conta_sintetica_id: z.string().uuid('Selecione uma conta contábil válida.').nullable(),
+  conta_receber_id: z.string().uuid('Selecione uma conta contábil válida.').nullable(), // NOVO CAMPO
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -36,6 +37,7 @@ const FormConfiguracoesStripe: React.FC = () => {
       stripe_publishable_key: '',
       stripe_secret_key: '',
       conta_sintetica_id: null,
+      conta_receber_id: null, // Inicializa o novo campo
     },
   });
   
@@ -71,8 +73,8 @@ const FormConfiguracoesStripe: React.FC = () => {
     // Busca a configuração vinculada ao ID do Admin logado (proprietario_id = adminId)
     const { data, error } = await supabase
       .from('configuracoes_stripe')
-      .select('id, stripe_publishable_key, stripe_secret_key, conta_sintetica_id')
-      .eq('proprietario_id', adminId) // <-- CORREÇÃO: Busca pelo ID do Admin
+      .select('id, stripe_publishable_key, stripe_secret_key, conta_sintetica_id, conta_receber_id') // Inclui o novo campo
+      .eq('proprietario_id', adminId)
       .limit(1)
       .single();
 
@@ -85,6 +87,7 @@ const FormConfiguracoesStripe: React.FC = () => {
         stripe_publishable_key: data.stripe_publishable_key || '',
         stripe_secret_key: data.stripe_secret_key || '',
         conta_sintetica_id: data.conta_sintetica_id || undefined, 
+        conta_receber_id: data.conta_receber_id || undefined, // Carrega o novo campo
       });
     } else {
       setExistingId(null);
@@ -92,6 +95,7 @@ const FormConfiguracoesStripe: React.FC = () => {
         stripe_publishable_key: '',
         stripe_secret_key: '',
         conta_sintetica_id: undefined,
+        conta_receber_id: undefined, // Reseta o novo campo
       });
     }
     setLoadingData(false);
@@ -116,7 +120,12 @@ const FormConfiguracoesStripe: React.FC = () => {
     }
     
     if (!values.conta_sintetica_id) {
-        showError('Selecione a Conta Contábil Sintética de destino.');
+        showError('Selecione a Conta Contábil de Destino (Stripe/Banco).');
+        return;
+    }
+    
+    if (!values.conta_receber_id) {
+        showError('Selecione a Conta Contábil Parcelas a Receber.');
         return;
     }
     
@@ -124,7 +133,8 @@ const FormConfiguracoesStripe: React.FC = () => {
       stripe_publishable_key: values.stripe_publishable_key,
       stripe_secret_key: values.stripe_secret_key,
       conta_sintetica_id: values.conta_sintetica_id,
-      proprietario_id: adminId, // Salva com o ID do Admin
+      conta_receber_id: values.conta_receber_id, // Salva o novo campo
+      proprietario_id: adminId,
     };
 
     try {
@@ -195,7 +205,7 @@ const FormConfiguracoesStripe: React.FC = () => {
           name="conta_sintetica_id"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Conta Contábil de Recebimento (Stripe)</FormLabel>
+              <FormLabel>Conta Contábil de Destino (Stripe/Banco)</FormLabel>
               <Select 
                 onValueChange={field.onChange} 
                 value={field.value || undefined}
@@ -203,6 +213,34 @@ const FormConfiguracoesStripe: React.FC = () => {
                 <FormControl>
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione a conta analítica de destino" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                    {contasContabeis.map(c => (
+                        <SelectItem key={c.id} value={c.id}>
+                            {c.Conta} - {c.Descricao}
+                        </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        
+        <FormField
+          control={form.control}
+          name="conta_receber_id"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Conta Contábil Parcelas a Receber (Stripe)</FormLabel>
+              <Select 
+                onValueChange={field.onChange} 
+                value={field.value || undefined}
+              >
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione a conta analítica de parcelas" />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
