@@ -20,10 +20,10 @@ import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { ptBR } from 'date-fns/locale';
 import { TAGS_PADRAO } from '@/config/contrato-tags-padrao';
-import ContratoPreviewDialog from '@/components/ContratoPreviewDialog'; // Importando o novo componente
+import ContratoPreviewDialog from '@/components/ContratoPreviewDialog';
 
 type TipoLancamento = 'unico' | 'repetir' | 'parcelar';
-type TipoConteudo = 'html' | 'texto'; // Definindo o tipo
+type TipoConteudo = 'html' | 'texto';
 
 interface EmpresaLogada {
     nome: string;
@@ -40,7 +40,7 @@ interface EmpresaContrato {
 const PreencherContrato: React.FC = () => {
   const { modeloId } = useParams<{ modeloId: string }>();
   const [searchParams] = useSearchParams();
-  const contratoId = searchParams.get('contratoId'); // ID do contrato para edição
+  const contratoId = searchParams.get('contratoId');
   const navigate = useNavigate();
   const { role, perfil, usuario, carregando: carregandoSessao } = useSessao();
   
@@ -48,39 +48,33 @@ const PreencherContrato: React.FC = () => {
   const [contratoInicial, setContratoInicial] = useState<ContratoGerado | null>(null);
   const [tags, setTags] = useState<ContratoTag[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
-  const [empresasContrato, setEmpresasContrato] = useState<EmpresaContrato[]>([]); // NOVO: Lista de empresas para o Admin
+  const [empresasContrato, setEmpresasContrato] = useState<EmpresaContrato[]>([]);
   const [empresaLogada, setEmpresaLogada] = useState<EmpresaLogada | null>(null);
   
   const [valoresTags, setValoresTags] = useState<Record<string, string>>({});
   const [carregandoDados, setCarregandoDados] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  // Estados para a prévia
   const [previewOpen, setPreviewOpen] = useState(false);
   const [conteudoPreview, setConteudoPreview] = useState('');
   
-  // Novo estado para o tipo de conteúdo (assumindo HTML por padrão do modelo)
   const [tipoConteudo, setTipoConteudo] = useState<TipoConteudo>('html'); 
   
-  // Campos obrigatórios para o contrato
   const [clienteSelecionadoId, setClienteSelecionadoId] = useState<string>('');
   const [valorTotal, setValorTotal] = useState<number | ''>('');
   
-  // NOVO ESTADO: ID da empresa que será o 'owner' do contrato gerado
   const [empresaContratoId, setEmpresaContratoId] = useState<string | null>(null); 
   
-  // Campos de Forma de Pagamento
   const [tipoLancamento, setTipoLancamento] = useState<TipoLancamento>('unico');
   const [dataVencimentoUnico, setDataVencimentoUnico] = useState<Date | undefined>(undefined);
   const [numeroParcelas, setNumeroParcelas] = useState<number>(1);
   const [dataPrimeiroVencimento, setDataPrimeiroVencimento] = useState<Date | undefined>(undefined);
-  const [intervaloDias, setIntervaloDias] = useState<number>(30); // Usado para Repetir/Parcelar
+  const [intervaloDias, setIntervaloDias] = useState<number>(30);
 
   const isAdmin = role === 'Admin';
   const isCliente = role === 'Cliente';
   const isEditing = !!contratoId;
   
-  // ID do proprietário logado (Admin ou Cliente)
   const getOwnerIdLogado = () => {
     if (isAdmin) return usuario?.id || null;
     if (isCliente) return (perfil as ClienteProfile)?.id;
@@ -101,7 +95,6 @@ const PreencherContrato: React.FC = () => {
     
     setCarregandoDados(true);
     
-    // 1. Buscar Modelo
     const { data: modeloData, error: modeloError } = await supabase
         .from('contrato_modelos')
         .select('*')
@@ -115,9 +108,7 @@ const PreencherContrato: React.FC = () => {
     }
     setModelo(modeloData as ContratoModelo);
     
-    // 2. Buscar Empresas para o Admin (se for Admin)
     let finalEmpresaContratoId = ownerIdLogado;
-    let fetchedClientes: Cliente[] = [];
     
     if (isAdmin) {
         const { data: clientesData, error: clientesError } = await supabase
@@ -132,11 +123,10 @@ const PreencherContrato: React.FC = () => {
             const adminOption: EmpresaContrato = { id: ownerIdLogado, nome: 'Meus Contratos (Admin)' };
             const allClients = [adminOption, ...(clientesData as EmpresaContrato[])];
             setEmpresasContrato(allClients);
-            finalEmpresaContratoId = allClients[0].id; // Define o primeiro como padrão
+            finalEmpresaContratoId = allClients[0].id;
         }
     }
     
-    // 3. Buscar Dados da Empresa Logada (para preenchimento de tags {{EMPRESA_*}})
     let currentEmpresaLogada: EmpresaLogada | null = null;
     if (isAdmin) {
         const profile = perfil as ClienteProfile; 
@@ -162,13 +152,12 @@ const PreencherContrato: React.FC = () => {
     }
     setEmpresaLogada(currentEmpresaLogada);
     
-    // 4. Carregar Contrato Existente (se estiver editando)
     if (contratoId) {
         const { data: contratoData, error: contratoLoadError } = await supabase
             .from('contratos_gerados')
             .select('*')
             .eq('id', contratoId)
-            .single(); // RLS garante que o Admin/Cliente só veja o que pode
+            .single();
             
         if (contratoLoadError) {
             showError('Contrato para edição não encontrado ou acesso negado.');
@@ -178,14 +167,12 @@ const PreencherContrato: React.FC = () => {
         
         const contrato = contratoData as ContratoGerado;
         setContratoInicial(contrato);
-        finalEmpresaContratoId = contrato.empresa_id; // Usa o ID da empresa do contrato
+        finalEmpresaContratoId = contrato.empresa_id;
         
-        // Preencher estados com dados do contrato
         setClienteSelecionadoId(contrato.cliente_id);
         setValorTotal(contrato.valor_total);
         setValoresTags(contrato.valores_tags_preenchidos || {});
         
-        // Determinar tipo de lançamento e datas (Lógica de edição simplificada)
         const numParcelas = contrato.numero_parcelas;
         const valorTotalContrato = contrato.valor_total;
         
@@ -222,34 +209,64 @@ const PreencherContrato: React.FC = () => {
         
         setTipoConteudo(contrato.valores_tags_preenchidos?.tipo_conteudo || 'html');
     } else {
-        // Novo Contrato: Define o tipo de conteúdo do modelo
         const isHtmlContent = modeloData?.conteudo_template?.trim().startsWith('<') ?? true;
         setTipoConteudo(isHtmlContent ? 'html' : 'texto');
     }
     
-    // 5. Buscar Clientes (apenas os do ownerId do contrato)
+    let combinedClients: Cliente[] = [];
     if (finalEmpresaContratoId) {
-        const { data: clientesData } = await supabase
+        const { data: clientesCRData } = await supabase
             .from('clientes')
             .select('*')
-            .eq('empresa_id', finalEmpresaContratoId)
-            .order('nome');
-            
-        if (clientesData) {
-            fetchedClientes = clientesData as Cliente[];
-            setClientes(fetchedClientes);
+            .eq('empresa_id', finalEmpresaContratoId);
+        if (clientesCRData) {
+            combinedClients.push(...(clientesCRData as Cliente[]));
+        }
+
+        if (isAdmin && finalEmpresaContratoId === ownerIdLogado) {
+            const { data: systemClientsData } = await supabase
+                .from('tbl_clientes')
+                .select('*')
+                .eq('aprovado', true);
+            if (systemClientsData) {
+                systemClientsData.forEach(sc => {
+                    if (!combinedClients.some(fc => fc.id === sc.id)) {
+                        const mappedClient: Cliente = {
+                            id: sc.id,
+                            empresa_id: ownerIdLogado,
+                            nome: sc.nome,
+                            razao_social: sc.nome,
+                            nome_fantasia: sc.nome,
+                            documento: sc.documento || null,
+                            email: sc.email || null,
+                            telefone: sc.telefone || null,
+                            telefone_fixo: null,
+                            cep: sc.cep || null,
+                            endereco: sc.endereco || null,
+                            numero: sc.numero || null,
+                            complemento: sc.complemento || null,
+                            bairro: sc.bairro || null,
+                            cidade: sc.cidade || null,
+                            estado: sc.estado || null,
+                            created_at: sc.criado_em,
+                            updated_at: sc.criado_em,
+                        };
+                        combinedClients.push(mappedClient);
+                    }
+                });
+            }
         }
     }
+    combinedClients.sort((a, b) => a.nome.localeCompare(b.nome));
+    setClientes(combinedClients);
     
     setEmpresaContratoId(finalEmpresaContratoId);
     setCarregandoDados(false);
   }, [modeloId, ownerIdLogado, navigate, role, perfil, usuario, isAdmin, isCliente, contratoId]);
   
-  // Efeito para re-buscar clientes e tags quando a empresa do contrato muda (apenas Admin)
   useEffect(() => {
       if (isAdmin && empresaContratoId && !carregandoDados) {
           const fetchDependentData = async () => {
-              // 1. Buscar Tags (apenas as do empresaContratoId)
               const { data: tagsData } = await supabase
                   .from('contrato_tags')
                   .select('*')
@@ -260,7 +277,6 @@ const PreencherContrato: React.FC = () => {
                   setTags(tagsData as ContratoTag[]);
               }
               
-              // 2. Buscar Clientes (apenas os do empresaContratoId)
               const { data: clientesData } = await supabase
                   .from('clientes')
                   .select('*')
@@ -271,14 +287,13 @@ const PreencherContrato: React.FC = () => {
                   setClientes(clientesData as Cliente[]);
               }
               
-              // Resetar cliente selecionado se ele não pertencer à nova empresa
               if (clienteSelecionadoId && !clientesData?.some(c => c.id === clienteSelecionadoId)) {
                   setClienteSelecionadoId('');
               }
           };
           fetchDependentData();
       }
-  }, [isAdmin, empresaContratoId, carregandoDados]);
+  }, [isAdmin, empresaContratoId, carregandoDados, clienteSelecionadoId]);
 
 
   useEffect(() => {
@@ -289,7 +304,6 @@ const PreencherContrato: React.FC = () => {
     }
   }, [carregandoSessao, isAdmin, isCliente, role, ownerIdLogado, buscarDados, navigate]);
   
-  // Efeito para preencher tags padrão automaticamente
   useEffect(() => {
     const updateTags = () => {
         const newTags: Record<string, string> = {};
@@ -308,10 +322,8 @@ const PreencherContrato: React.FC = () => {
             primeiroVencimento = dataPrimeiroVencimento;
         }
 
-        // Preenchimento das Tags Padrão
         TAGS_PADRAO.forEach(tag => {
             switch (tag.nome_tag) {
-                // EMPRESA (Sempre usa os dados da empresa logada, mesmo que o contrato seja para outro cliente)
                 case '{{EMPRESA_NOME}}':
                     newTags[tag.nome_tag] = empresaLogada?.nome || 'N/A';
                     break;
@@ -324,8 +336,6 @@ const PreencherContrato: React.FC = () => {
                 case '{{EMPRESA_ENDERECO}}':
                     newTags[tag.nome_tag] = empresaLogada?.endereco_completo || 'N/A';
                     break;
-                    
-                // CLIENTE
                 case '{{CLIENTE_NOME}}':
                     newTags[tag.nome_tag] = cliente?.nome_fantasia || cliente?.nome || 'N/A';
                     break;
@@ -350,8 +360,6 @@ const PreencherContrato: React.FC = () => {
                 case '{{CLIENTE_ESTADO}}':
                     newTags[tag.nome_tag] = cliente?.estado || 'N/A';
                     break;
-                    
-                // FINANCEIRO
                 case '{{VALOR_TOTAL_CONTRATO}}':
                     newTags[tag.nome_tag] = formatCurrency(valorFinalContrato);
                     break;
@@ -368,13 +376,11 @@ const PreencherContrato: React.FC = () => {
                     newTags[tag.nome_tag] = formatDate(new Date());
                     break;
                 default:
-                    // Mantém o valor preenchido manualmente pelo usuário para tags customizadas
                     newTags[tag.nome_tag] = valoresTags[tag.nome_tag] || '';
                     break;
             }
         });
         
-        // Atualiza o estado de valoresTags, mantendo as tags customizadas
         setValoresTags(prev => {
             const customTags = Object.keys(prev).filter(key => !TAGS_PADRAO.some(t => t.nome_tag === key));
             const updatedTags = { ...newTags };
@@ -396,7 +402,6 @@ const PreencherContrato: React.FC = () => {
   const renderizarConteudo = (template: string, tags: Record<string, string>): string => {
     let conteudoRenderizado = template;
     for (const tag in tags) {
-        // Substitui a tag {{nome_tag}} pelo valor preenchido
         const regex = new RegExp(tag, 'g');
         conteudoRenderizado = conteudoRenderizado.replace(regex, tags[tag]);
     }
@@ -449,7 +454,6 @@ const PreencherContrato: React.FC = () => {
     const valorNumerico = Number(valorTotal);
     const numParcelas = Number(numeroParcelas);
     
-    // 1. Validação
     if (!modelo || !clienteSelecionadoId || valorTotal === '' || !empresaContratoId || valorNumerico <= 0) {
         showError('Preencha Cliente, Valor Total e Proprietário.');
         return;
@@ -478,7 +482,28 @@ const PreencherContrato: React.FC = () => {
     setIsSubmitting(true);
     
     try {
-        // 2. Gerar Parcelas
+        const clienteSelecionado = clientes.find(c => c.id === clienteSelecionadoId);
+        if (!clienteSelecionado) throw new Error('Cliente selecionado não foi encontrado na lista.');
+
+        const clienteDataParaUpsert = {
+            id: clienteSelecionado.id,
+            empresa_id: empresaContratoId,
+            nome: clienteSelecionado.nome,
+            razao_social: clienteSelecionado.razao_social,
+            nome_fantasia: clienteSelecionado.nome_fantasia,
+            documento: clienteSelecionado.documento,
+            email: clienteSelecionado.email,
+            telefone: clienteSelecionado.telefone,
+        };
+
+        const { error: upsertError } = await supabase
+            .from('clientes')
+            .upsert(clienteDataParaUpsert, { onConflict: 'id' });
+
+        if (upsertError) {
+            throw new Error('Falha ao garantir a existência do cliente no CR: ' + upsertError.message);
+        }
+
         const parcelasParaInserir = gerarParcelas(
             valorNumerico, 
             tipoLancamento, 
@@ -494,14 +519,12 @@ const PreencherContrato: React.FC = () => {
         
         const valorFinalContrato = tipoLancamento === 'repetir' ? valorNumerico * numParcelas : valorNumerico;
         
-        // 3. Renderizar o conteúdo final
         const conteudoRenderizado = renderizarConteudo(modelo.conteudo_template, valoresTags);
         
-        // 4. Preparar dados do Contrato Gerado
         const contratoData = {
             modelo_id: modelo.id,
             cliente_id: clienteSelecionadoId,
-            empresa_id: empresaContratoId, // USANDO O ID DA EMPRESA SELECIONADA
+            empresa_id: empresaContratoId,
             status: 'pendente_assinatura',
             valor_total: valorFinalContrato,
             data_inicio: format(new Date(), 'yyyy-MM-dd'), 
@@ -514,14 +537,11 @@ const PreencherContrato: React.FC = () => {
         let contratoGeradoId: string;
         let contaReceberId: string | null = null;
         
-        // Determina as tabelas de CR com base no owner do contrato
         const isContractOwnerAdmin = empresaContratoId === ownerIdLogado && isAdmin;
         const tabelaContasReceber = isContractOwnerAdmin ? 'admin_contas_receber' : 'contas_receber';
         const tabelaParcelasReceber = isContractOwnerAdmin ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
         
-        // --- LÓGICA DE EDIÇÃO ---
         if (isEditing && contratoInicial) {
-            // A. Atualizar Contrato Gerado
             const { error: updateError } = await supabase
                 .from('contratos_gerados')
                 .update(contratoData)
@@ -530,7 +550,6 @@ const PreencherContrato: React.FC = () => {
             if (updateError) throw updateError;
             contratoGeradoId = contratoInicial.id;
             
-            // B. Buscar Conta a Receber Sintética existente
             const { data: existingConta } = await supabase
                 .from(tabelaContasReceber)
                 .select('id')
@@ -541,7 +560,6 @@ const PreencherContrato: React.FC = () => {
             if (existingConta) {
                 contaReceberId = existingConta.id;
                 
-                // C. Deletar parcelas antigas
                 const { error: deleteParcelasError } = await supabase
                     .from(tabelaParcelasReceber)
                     .delete()
@@ -550,7 +568,6 @@ const PreencherContrato: React.FC = () => {
             }
             
         } else {
-            // --- LÓGICA DE INSERÇÃO ---
             const { data: contratoGerado, error: contratoError } = await supabase
                 .from('contratos_gerados')
                 .insert(contratoData)
@@ -561,7 +578,6 @@ const PreencherContrato: React.FC = () => {
             contratoGeradoId = contratoGerado.id;
         }
         
-        // 5. Inserir/Atualizar a Conta a Receber (Sintético) e Parcelas (Analítico)
         const clienteNome = clientes.find(c => c.id === clienteSelecionadoId)?.nome || 'Cliente Desconhecido';
         
         const baseData = isContractOwnerAdmin ? { admin_id: empresaContratoId, cliente_id: clienteSelecionadoId } : { empresa_id: empresaContratoId, cliente_id: clienteSelecionadoId };
@@ -595,7 +611,6 @@ const PreencherContrato: React.FC = () => {
             contaReceberId = contaReceber.id;
         }
         
-        // Inserir Parcelas
         const parcelasComId = parcelasParaInserir.map(p => ({ 
             ...p, 
             conta_receber_id: contaReceberId, 
@@ -636,7 +651,6 @@ const PreencherContrato: React.FC = () => {
   const isRepetirOuParcelar = tipoLancamento !== 'unico';
   const valorLabel = tipoLancamento === 'parcelar' ? 'Valor Total a Parcelar' : 'Valor da Parcela';
   
-  // Filtra tags customizadas (que não são padrão)
   const tagsCustomizadas = tags.filter(tag => !TAGS_PADRAO.some(t => t.nome_tag === tag.nome_tag));
 
   return (
@@ -653,12 +667,10 @@ const PreencherContrato: React.FC = () => {
       
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* Coluna 1: Dados Principais (Financeiro) */}
         <Card className="lg:col-span-1 h-fit">
             <CardHeader><CardTitle className="text-xl">Dados Financeiros</CardTitle></CardHeader>
             <CardContent className="space-y-6">
                 
-                {/* Seleção de Empresa (Apenas Admin) */}
                 {isAdmin && (
                     <div className="space-y-2">
                         <Label htmlFor="empresa-contrato">Empresa Proprietária do Contrato</Label>
@@ -680,7 +692,6 @@ const PreencherContrato: React.FC = () => {
                     </div>
                 )}
                 
-                {/* 1. Cliente */}
                 <div className="space-y-2">
                     <Label htmlFor="cliente">Cliente</Label>
                     <Select value={clienteSelecionadoId} onValueChange={setClienteSelecionadoId} disabled={isEditing || !empresaContratoId}>
@@ -695,7 +706,6 @@ const PreencherContrato: React.FC = () => {
                     </Select>
                 </div>
                 
-                {/* 2. Forma de Pagamento */}
                 <div className="space-y-4">
                     <Label className="font-semibold">Forma de Pagamento</Label>
                     <RadioGroup 
@@ -719,7 +729,6 @@ const PreencherContrato: React.FC = () => {
                     </RadioGroup>
                 </div>
 
-                {/* 3. Valor */}
                 <div className="space-y-2">
                     <Label htmlFor="valor-total">{valorLabel}</Label>
                     <Input 
@@ -732,7 +741,6 @@ const PreencherContrato: React.FC = () => {
                     />
                 </div>
 
-                {/* 4. Vencimento (Condicional) */}
                 {tipoLancamento === 'unico' && (
                     <div className="space-y-2">
                         <Label htmlFor="data-vencimento">Data de Vencimento</Label>
@@ -794,7 +802,6 @@ const PreencherContrato: React.FC = () => {
             </CardContent>
         </Card>
         
-        {/* Coluna 2: Preenchimento das Tags */}
         <Card className="lg:col-span-2">
             <CardHeader><CardTitle className="text-xl">2. Preenchimento das Tags Dinâmicas</CardTitle></CardHeader>
             <CardContent className="space-y-4">
@@ -828,7 +835,6 @@ const PreencherContrato: React.FC = () => {
             </CardContent>
         </Card>
         
-        {/* Botões de Ação */}
         <div className="lg:col-span-3 flex flex-col sm:flex-row gap-4">
             <Button 
                 onClick={handlePreview} 

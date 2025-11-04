@@ -141,7 +141,7 @@ const Bancos = () => {
     <LayoutPrincipal>
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
         <h1 className="text-2xl md:text-3xl font-bold flex items-center">
-            <Banknote className="w-6 h-6 mr-2" /> Bancos / Caixas
+            <Banknote className="w-6 h-6 mr-2" /> Contas e Saldos
         </h1>
         <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
           <DialogTrigger asChild>
