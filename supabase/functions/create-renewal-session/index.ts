@@ -41,7 +41,7 @@ serve(async (req: Request) => {
     const { data: stripeConfig, error: configError } = await supabase
       .from('configuracoes_stripe')
       .select('stripe_secret_key')
-      .is('empresa_id', null)
+      .not('proprietario_id', 'is', null) // Fetch the admin's config
       .limit(1)
       .single();
 

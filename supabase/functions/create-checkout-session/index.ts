@@ -36,12 +36,12 @@ serve(async (req: Request) => {
       { auth: { persistSession: false } }
     );
 
-    // 3️⃣ Buscar a chave secreta Stripe (configuração global)
+    // 3️⃣ Buscar a chave secreta Stripe (configuração do admin)
     console.log('LOG 3: Fetching Stripe secret key...');
     const { data: stripeConfig, error: configError } = await supabase
       .from('configuracoes_stripe')
       .select('stripe_secret_key')
-      .is('empresa_id', null)
+      .not('proprietario_id', 'is', null) // Fetch the admin's config
       .limit(1)
       .single();
 

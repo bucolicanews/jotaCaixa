@@ -31,11 +31,11 @@ export function useStripeConfig(): StripeConfig {
     const fetchConfig = async () => {
       setLoading(true);
       try {
-        // Busca a chave publicável global (empresa_id IS NULL)
+        // Busca a chave publicável do admin (proprietario_id IS NOT NULL)
         const { data, error } = await supabase
           .from('configuracoes_stripe')
           .select('stripe_publishable_key')
-          .is('empresa_id', null)
+          .not('proprietario_id', 'is', null) // Fetch the admin's config
           .limit(1)
           .single();
 
