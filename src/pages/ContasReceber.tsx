@@ -372,7 +372,6 @@ const ContasReceberPage: React.FC = () => {
                         <TabsContent value="contas">
                             <TabelaContasReceber
                                 contas={contasFiltradas}
-                                onOpenParcelas={handleOpenParcelasDialog}
                                 onEditConta={handleOpenContaDialog}
                             />
                         </TabsContent>

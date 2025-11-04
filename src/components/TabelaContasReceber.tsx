@@ -3,6 +3,7 @@ import { ContaReceberComProgresso, ContaReceber } from '@/types/contas-receber';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Edit } from 'lucide-react';
+import { formatCurrency, formatDate } from '@/utils/formatters';
 
 interface TabelaContasReceberProps {
     contas: ContaReceberComProgresso[];
@@ -37,8 +38,8 @@ const TabelaContasReceber: React.FC<TabelaContasReceberProps> = ({ contas, onEdi
                             <TableRow key={conta.id}>
                                 <TableCell>{conta.descricao}</TableCell>
                                 <TableCell>{conta.clientes?.nome || 'N/A'}</TableCell>
-                                <TableCell>{/* formatCurrency(conta.valor_total) */}</TableCell>
-                                <TableCell>{/* formatDate(conta.data_vencimento) */}</TableCell>
+                                <TableCell>{formatCurrency(conta.valor_total)}</TableCell>
+                                <TableCell>{formatDate(conta.data_vencimento)}</TableCell>
                                 <TableCell>{conta.status}</TableCell>
                                 <TableCell className="text-right space-x-2">
                                     <Button variant="ghost" size="sm" onClick={() => onEditConta(conta)}>

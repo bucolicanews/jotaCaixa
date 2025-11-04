@@ -1,6 +1,7 @@
 import React from 'react';
 import { AdminRecebimento } from '@/types/contas-receber';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { formatCurrency, formatDateTime } from '@/utils/formatters';
 
 interface TabelaRecebimentosProps {
     recebimentos: AdminRecebimento[];
@@ -29,8 +30,8 @@ const TabelaRecebimentos: React.FC<TabelaRecebimentosProps> = ({ recebimentos })
                     ) : (
                         recebimentos.map((rec) => (
                             <TableRow key={rec.id}>
-                                <TableCell>{/* formatDate(rec.data_recebimento) */}</TableCell>
-                                <TableCell>{/* formatCurrency(rec.valor_recebido) */}</TableCell>
+                                <TableCell>{formatDateTime(rec.data_recebimento)}</TableCell>
+                                <TableCell>{formatCurrency(rec.valor_recebido)}</TableCell>
                                 <TableCell>{rec.forma_pagamento}</TableCell>
                                 <TableCell>{rec.admin_parcelas_receber?.admin_contas_receber?.descricao || 'N/A'}</TableCell>
                             </TableRow>

@@ -3,6 +3,7 @@ import { ExtendedParcelaDetalhada } from '@/types/contas-receber';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Eye } from 'lucide-react';
+import { formatCurrency, formatDate } from '@/utils/formatters';
 
 interface TabelaParcelasReceberProps {
     parcelas: ExtendedParcelaDetalhada[];
@@ -38,8 +39,8 @@ const TabelaParcelasReceber: React.FC<TabelaParcelasReceberProps> = ({ parcelas,
                                 <TableCell>{parcela.numero_parcela}</TableCell>
                                 <TableCell>{parcela.contas_receber?.descricao || 'N/A'}</TableCell>
                                 <TableCell>{parcela.contas_receber?.clientes?.nome || 'N/A'}</TableCell>
-                                <TableCell>{/* formatCurrency(parcela.valor_parcela) */}</TableCell>
-                                <TableCell>{/* formatDate(parcela.data_vencimento) */}</TableCell>
+                                <TableCell>{formatCurrency(parcela.valor_parcela)}</TableCell>
+                                <TableCell>{formatDate(parcela.data_vencimento)}</TableCell>
                                 <TableCell>{parcela.status}</TableCell>
                                 <TableCell className="text-right">
                                     <Button variant="ghost" size="sm" onClick={() => onOpenParcela(parcela)}>
