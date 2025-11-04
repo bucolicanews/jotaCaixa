@@ -64,28 +64,57 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
 
   const saldoDevedor = parcela ? parcela.valor_parcela - (parcela.valor_pago || 0) : 0;
 
+  // 1. Definição do formulário (movida para o início)
+  const form = useForm<FormValues>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      valor_recebido: saldoDevedor,
+      data_pagamento: new Date(),
+      forma_pagamento: 'Pix',
+      conta_id: null, // Inicializa como null
+      acao_saldo_restante: 'reprogramar',
+      numero_novas_parcelas: 2,
+      intervalo_dias_novas_parcelas: 30,
+    },
+  });
+  
+  // Desestruturando setValue para usar nas funções de callback
+  const { setValue } = form;
+
   const fetchContasDestino = useCallback(async () => {
     if (!ownerId) return;
     setLoadingContas(true);
     
+    // Busca saldo_contas e faz JOIN com plano_contas para filtrar
     const { data, error } = await supabase
         .from('saldo_contas')
-        .select('*')
+        .select(`
+            *,
+            plano_contas ( is_conta_saldo )
+        `)
         .eq('empresa_id', ownerId)
         .order('nome');
         
     if (error) {
-            showError('Erro ao carregar Contas/Caixas: ' + error.message);
+        showError('Erro ao carregar Contas/Caixas: ' + error.message);
         setContasDestino([]);
     } else {
-        setContasDestino(data as SaldoConta[]);
+        // Filtra no frontend para garantir que apenas contas com is_conta_saldo = true sejam exibidas
+        const filteredData = (data as any[])
+            .filter(c => c.plano_contas?.is_conta_saldo === true)
+            .map(c => ({ ...c, plano_contas: undefined })) as SaldoConta[]; // Remove o join para manter o tipo SaldoConta
+            
+        setContasDestino(filteredData);
+        
         // Se houver contas, define a primeira como padrão
-        if (data.length > 0) {
-            form.setValue('conta_id', data[0].id);
+        if (filteredData.length > 0) {
+            setValue('conta_id', filteredData[0].id);
+        } else {
+            setValue('conta_id', null);
         }
     }
     setLoadingContas(false);
-  }, [ownerId]);
+  }, [ownerId, setValue]); // Corrigido: usando setValue como dependência
   
   const fetchMapeamentoContabil = useCallback(async () => {
     if (!isAdmin || !ownerId) return;
@@ -115,19 +144,6 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
           }
       }
   }, [open, fetchContasDestino, fetchMapeamentoContabil, isAdmin]);
-
-  const form = useForm<FormValues>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
-      valor_recebido: saldoDevedor,
-      data_pagamento: new Date(),
-      forma_pagamento: 'Pix',
-      conta_id: null, // Inicializa como null
-      acao_saldo_restante: 'reprogramar',
-      numero_novas_parcelas: 2,
-      intervalo_dias_novas_parcelas: 30,
-    },
-  });
 
   const valorRecebido = form.watch('valor_recebido');
   const acaoSaldoRestante = form.watch('acao_saldo_restante');
@@ -190,7 +206,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
       
       if (recebimentoError) throw recebimentoError;
       
-      const recebimentoId = recebimentoData.id;
+      // const recebimentoId = recebimentoData.id; // Removido TS6133
 
       // 2. Lidar com a parcela original
       if (quitouComPagamentoAtual) {
@@ -265,12 +281,8 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
           tipo: 'Entrada',
           conta_bancaria_id: values.conta_id, // ID da conta de saldo
           conta_contabil_id: contaRecebimento, // Conta contábil do recebimento (Admin)
-          origem_tabela: tabelaRecebimentos,
-          origem_id: recebimentoId,
       };
       
-      // Nota: A tabela 'lancamentos' no esquema tem 'empresa_id' e 'conta_bancaria_id'.
-      // Para o Admin, 'empresa_id' é o ID do Admin. Para o Cliente, 'empresa_id' é o ID do Cliente.
       await supabase.from('lancamentos').insert(lancamentoPayload);
 
 
@@ -307,14 +319,23 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
                                 </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                                {contasDestino.map(c => (
-                                    <SelectItem key={c.id} value={c.id}>
-                                        {c.nome} ({c.tipo_saldo})
-                                    </SelectItem>
-                                ))}
+                                {contasDestino.length === 0 ? (
+                                    <SelectItem value="disabled" disabled>Nenhuma conta de saldo disponível.</SelectItem>
+                                ) : (
+                                    contasDestino.map(c => (
+                                        <SelectItem key={c.id} value={c.id}>
+                                            {c.nome} ({c.tipo_saldo})
+                                        </SelectItem>
+                                    ))
+                                )}
                             </SelectContent>
                         </Select>
                         <FormMessage />
+                        {contasDestino.length === 0 && (
+                            <p className="text-sm text-red-500">
+                                Nenhuma conta de saldo encontrada. Crie uma em <a href="/bancos" className="underline">Bancos / Caixas</a>.
+                            </p>
+                        )}
                     </FormItem>
                 )} />
             </div>
