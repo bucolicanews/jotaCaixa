@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, PlusCircle, Edit, Trash2, Banknote, Wallet, CreditCard, Filter } from 'lucide-react';
+import { Loader2, PlusCircle, Edit, Trash2, Banknote, Wallet, CreditCard, Filter, Search } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
@@ -15,6 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { PlanoContas } from '@/types/plano-contas';
+import { Input } from '@/components/ui/input'; // Importando Input
 
 type TipoSaldoFiltro = 'todos' | 'Credito' | 'Debito';
 
@@ -30,6 +31,7 @@ const Bancos = () => {
   // Filtros
   const [filtroTipoSaldo, setFiltroTipoSaldo] = useState<TipoSaldoFiltro>('todos');
   const [filtroContaContabilId, setFiltroContaContabilId] = useState<string>('todos');
+  const [filtroNome, setFiltroNome] = useState(''); // NOVO ESTADO DE FILTRO
 
   const getEmpresaId = () => {
     if (role === 'Admin') return usuario?.id || null;
@@ -84,6 +86,11 @@ const Bancos = () => {
     if (filtroContaContabilId !== 'todos') {
         query = query.eq('conta_contabil_id', filtroContaContabilId);
     }
+    
+    // Filtro por Nome/Descrição (usando ILIKE para busca parcial e case-insensitive)
+    if (filtroNome) {
+        query = query.ilike('nome', `%${filtroNome}%`);
+    }
 
     const { data, error } = await query.order('nome', { ascending: true });
 
@@ -94,7 +101,7 @@ const Bancos = () => {
       setContas(data as SaldoContaDetalhada[]);
     }
     setCarregandoContas(false);
-  }, [empresaId, filtroTipoSaldo, filtroContaContabilId]);
+  }, [empresaId, filtroTipoSaldo, filtroContaContabilId, filtroNome]); // Adicionando filtroNome
 
   useEffect(() => {
     if (!carregandoSessao && empresaId) {
@@ -194,6 +201,17 @@ const Bancos = () => {
             <CardTitle className="text-lg flex items-center"><Filter className="w-4 h-4 mr-2" /> Filtros</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col sm:flex-row gap-4">
+            {/* Filtro por Nome/Descrição */}
+            <div className="relative w-full sm:w-[300px]">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                    placeholder="Buscar por nome da conta..."
+                    value={filtroNome}
+                    onChange={(e) => setFiltroNome(e.target.value)}
+                    className="pl-10"
+                />
+            </div>
+            
             {/* Filtro por Natureza */}
             <Select value={filtroTipoSaldo} onValueChange={(v) => setFiltroTipoSaldo(v as TipoSaldoFiltro)}>
                 <SelectTrigger className="w-full sm:w-[200px]">
