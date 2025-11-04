@@ -13,14 +13,7 @@ import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 import { ConfiguracaoConciliacao } from '@/types/conciliacao';
 import { Separator } from './ui/separator';
 
-// Campos internos que podem ser mapeados
-const CAMPOS_INTERNOS = [
-    { key: 'data_movimentacao', label: 'Data da Movimentação' },
-    { key: 'descricao', label: 'Descrição/Transação' },
-    { key: 'identificacao', label: 'Identificação/Favorecido' },
-    { key: 'valor', label: 'Valor' },
-    // O tipo (Entrada/Saída) é tratado separadamente
-];
+// Removido CAMPOS_INTERNOS
 
 const formSchema = z.object({
   nome_banco: z.string().min(1, 'O nome do banco é obrigatório.'),

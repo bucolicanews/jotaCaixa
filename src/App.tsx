@@ -5,7 +5,7 @@ import { SessionProvider } from "./contexts/SessionContext";
 // Páginas
 import Login from "./pages/Login";
 import AtualizarSenha from "./pages/AtualizarSenha";
-import Dashboard from "./pages/Dashboard";
+import Dashboard from "@/pages/Dashboard"; // Corrigido o caminho
 import Configuracoes from "./pages/Configuracoes";
 import ContasReceber from "./pages/ContasReceber";
 import Bancos from "./pages/Bancos";
@@ -17,7 +17,7 @@ import GerenciarTags from "./pages/GerenciarTags";
 import GerenciarModelos from "./pages/GerenciarModelos";
 import PreencherContrato from "./pages/PreencherContrato";
 import MinhaAssinatura from "./pages/MinhaAssinatura";
-import PaymentSuccessHandler from "./components/PaymentSuccessHandler";
+import PaymentSuccessHandler from "@/components/PaymentSuccessHandler"; // Corrigido o caminho
 
 function App() {
   return (
