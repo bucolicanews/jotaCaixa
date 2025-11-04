@@ -8,9 +8,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { showError } from '@/utils/toast';
 import { useSessao } from '@/hooks/use-sessao';
 import { getBadgeVariant } from '@/utils/badge-variants';
-import { format } from 'date-fns';
 import { Badge } from './ui/badge';
-import { CheckCircle, XCircle, Clock, Repeat, DollarSign } from 'lucide-react';
+import { DollarSign } from 'lucide-react';
 import RegistrarPagamentoCPDialog from './RegistrarPagamentoCPDialog';
 
 interface DetalhesParcelasCPDialogProps {
