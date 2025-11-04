@@ -17,14 +17,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { PlanoContas } from '@/types/plano-contas';
 import { Input } from '@/components/ui/input';
 import { useDebounce } from '@/hooks/use-debounce';
+import useSaldoContaCalculado from '@/hooks/use-saldo-conta-calculado'; // NOVO HOOK
 
 type TipoSaldoFiltro = 'todos' | 'Credito' | 'Debito';
 
+// Tipo auxiliar para o saldo calculado
+interface SaldoCalculado extends SaldoContaDetalhada {
+    saldo_atual: number;
+}
+
 const Bancos = () => {
   const { usuario, perfil, role, carregando: carregandoSessao } = useSessao();
-  const [contas, setContas] = useState<SaldoContaDetalhada[]>([]);
   const [contasContabeis, setContasContabeis] = useState<PlanoContas[]>([]);
-  const [carregandoContas, setCarregandoContas] = useState(true);
   const [loadingContasContabeis, setLoadingContasContabeis] = useState(true);
   const [contaSelecionada, setContaSelecionada] = useState<SaldoContaDetalhada | null>(null);
   const [dialogAberto, setDialogAberto] = useState(false);
@@ -32,9 +36,7 @@ const Bancos = () => {
   // Filtros
   const [filtroTipoSaldo, setFiltroTipoSaldo] = useState<TipoSaldoFiltro>('todos');
   const [filtroContaContabilId, setFiltroContaContabilId] = useState<string>('todos');
-  const [filtroNomeInput, setFiltroNomeInput] = useState(''); // Estado do input
-  
-  // Valor debounced para disparar a busca (AUMENTADO PARA 500ms)
+  const [filtroNomeInput, setFiltroNomeInput] = useState('');
   const filtroNomeDebounced = useDebounce(filtroNomeInput, 500); 
 
   const getEmpresaId = () => {
@@ -45,6 +47,13 @@ const Bancos = () => {
   };
   
   const empresaId = getEmpresaId();
+  
+  // NOVO: Usando o hook de cálculo de saldo
+  const { contas, totalSaldo, carregando: carregandoSaldos, refetch: refetchSaldos } = useSaldoContaCalculado(
+      filtroTipoSaldo, 
+      filtroContaContabilId, 
+      filtroNomeDebounced
+  );
 
   const fetchContasContabeis = useCallback(async () => {
     if (!empresaId) return;
@@ -54,7 +63,7 @@ const Bancos = () => {
         .from('plano_contas')
         .select('id, Conta, Descricao, Analitica')
         .eq('proprietario_id', empresaId)
-        .eq('Analitica', 'Sim') // Apenas contas analíticas
+        .eq('Analitica', 'Sim')
         .order('Conta');
         
     if (error) {
@@ -66,82 +75,18 @@ const Bancos = () => {
     setLoadingContasContabeis(false);
   }, [empresaId]);
 
-  const buscarContas = useCallback(async () => {
-    if (!empresaId) {
-        setCarregandoContas(false);
-        return;
-    }
-    
-    setCarregandoContas(true);
-    
-    let query = supabase
-      .from('saldo_contas')
-      .select(`
-        *,
-        plano_contas ( Conta, Descricao )
-      `)
-      .eq('empresa_id', empresaId);
-      
-    // Aplicar Filtros
-    if (filtroTipoSaldo !== 'todos') {
-        query = query.eq('tipo_saldo', filtroTipoSaldo);
-    }
-    
-    if (filtroContaContabilId !== 'todos') {
-        query = query.eq('conta_contabil_id', filtroContaContabilId);
-    }
-    
-    // Filtro por Nome/Descrição (usando ILIKE para busca parcial e case-insensitive)
-    if (filtroNomeDebounced) {
-        // Busca inteligente: busca na coluna 'nome' da tabela saldo_contas
-        query = query.ilike('nome', `%${filtroNomeDebounced}%`);
-        
-        // Para buscar na descrição da conta contábil, precisaríamos de uma View ou RPC, 
-        // ou buscar todos os IDs de contas contábeis que correspondem ao filtro e usar 'in'.
-        // Por enquanto, mantemos a busca simples na coluna 'nome' para evitar complexidade de performance.
-    }
-
-    const { data, error } = await query.order('nome', { ascending: true });
-
-    if (error) {
-      showError('Erro ao carregar Contas/Caixas: ' + error.message);
-      setContas([]);
-    } else {
-      // Implementação da busca inteligente no frontend para incluir a descrição da conta contábil
-      let filteredContas = data as SaldoContaDetalhada[];
-      
-      if (filtroNomeDebounced) {
-          const termo = filtroNomeDebounced.toLowerCase();
-          filteredContas = filteredContas.filter(conta => {
-              const nomeMatch = conta.nome.toLowerCase().includes(termo);
-              const contaContabilMatch = conta.plano_contas?.Descricao?.toLowerCase().includes(termo);
-              
-              return nomeMatch || contaContabilMatch;
-          });
-      }
-      
-      setContas(filteredContas);
-    }
-    setCarregandoContas(false);
-  }, [empresaId, filtroTipoSaldo, filtroContaContabilId, filtroNomeDebounced]); // Depende do valor debounced
-
   useEffect(() => {
     if (!carregandoSessao && empresaId) {
       fetchContasContabeis();
     }
   }, [carregandoSessao, empresaId, fetchContasContabeis]);
   
-  // Efeito que dispara a busca quando os filtros (incluindo o debounced) mudam
-  useEffect(() => {
-    if (!carregandoSessao && empresaId) {
-      buscarContas();
-    }
-  }, [carregandoSessao, empresaId, buscarContas]);
+  // O refetchSaldos é chamado automaticamente pelo hook useSaldoContaCalculado quando os filtros mudam.
 
   const handleSaveComplete = () => {
     setDialogAberto(false);
     setContaSelecionada(null);
-    buscarContas();
+    refetchSaldos(); // Força a atualização do saldo
   };
 
   const handleEdit = (conta: SaldoContaDetalhada) => {
@@ -161,15 +106,13 @@ const Bancos = () => {
       showError('Erro ao excluir conta: ' + error.message);
     } else {
       showSuccess('Conta excluída com sucesso.');
-      buscarContas();
+      refetchSaldos(); // Força a atualização do saldo
     }
   };
   
   const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
   
-  const totalSaldo = contas.reduce((sum, conta) => sum + conta.saldo_inicial, 0);
-
-  if (carregandoSessao || carregandoContas) {
+  if (carregandoSessao || carregandoSaldos) {
     return (
       <LayoutPrincipal>
         <div className="flex justify-center items-center h-64">
@@ -279,7 +222,7 @@ const Bancos = () => {
                                 <TableHead className="w-[150px]">Nome</TableHead>
                                 <TableHead className="w-[100px]">Natureza</TableHead>
                                 <TableHead>Conta Contábil</TableHead>
-                                <TableHead className="w-[150px] text-right">Saldo Inicial</TableHead>
+                                <TableHead className="w-[150px] text-right">Saldo Atual</TableHead> {/* ALTERADO */}
                                 <TableHead className="w-[100px] text-right">Ações</TableHead>
                             </TableRow>
                         </TableHeader>
@@ -307,8 +250,8 @@ const Bancos = () => {
                                             <TableCell className="text-sm text-muted-foreground">
                                                 {conta.plano_contas?.Conta} - {conta.plano_contas?.Descricao || 'N/A'}
                                             </TableCell>
-                                            <TableCell className={cn("text-right font-semibold", conta.saldo_inicial >= 0 ? 'text-green-600' : 'text-red-600')}>
-                                                {formatCurrency(conta.saldo_inicial)}
+                                            <TableCell className={cn("text-right font-semibold", conta.saldo_atual >= 0 ? 'text-green-600' : 'text-red-600')}>
+                                                {formatCurrency(conta.saldo_atual)} {/* ALTERADO */}
                                             </TableCell>
                                             <TableCell className="text-right">
                                                 <div className="flex justify-end space-x-2">
@@ -333,7 +276,7 @@ const Bancos = () => {
         <Card>
             <CardHeader><CardTitle className="text-xl">Resumo de Saldo</CardTitle></CardHeader>
             <CardContent>
-                <p className="text-sm text-muted-foreground">Soma dos saldos iniciais de todas as contas.</p>
+                <p className="text-sm text-muted-foreground">Soma dos saldos atuais de todas as contas.</p>
                 <p className={cn("text-3xl font-bold mt-2", totalSaldo >= 0 ? 'text-green-600' : 'text-red-600')}>
                     {formatCurrency(totalSaldo)}
                 </p>
