@@ -3,7 +3,7 @@ import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
-import { Plus, Filter, Search, Loader2, FileText, DollarSign, Calendar } from 'lucide-react';
+import { Plus, Filter, Search, Loader2, FileText, DollarSign, Calendar, Clock } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -399,7 +399,6 @@ const ContasReceberPage: React.FC = () => {
                 onSaveComplete={fetchContasReceber}
             />
             
-            {/* CORREÇÃO: Passando 'parcela' em vez de 'conta' */}
             <DetalhesParcelasDialog
                 parcela={parcelaSelecionada} 
                 open={parcelasDialogOpen}
