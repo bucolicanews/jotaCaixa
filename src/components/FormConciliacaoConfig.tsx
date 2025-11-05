@@ -10,6 +10,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { useSessao } from '@/hooks/use-sessao';
 import { ConfiguracaoConciliacao } from '@/types/conciliacao';
+import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 
 const formSchema = z.object({
   nome_configuracao: z.string().min(1, 'O nome é obrigatório.'),
@@ -29,7 +30,7 @@ interface FormConciliacaoConfigProps {
 }
 
 const FormConciliacaoConfig: React.FC<FormConciliacaoConfigProps> = ({ configInicial, idSaldoContas, onSaveComplete }) => {
-  const { usuario } = useSessao();
+  const { usuario, role, perfil } = useSessao();
   const isEditing = !!configInicial;
 
   const form = useForm<FormValues>({
@@ -44,14 +45,22 @@ const FormConciliacaoConfig: React.FC<FormConciliacaoConfigProps> = ({ configIni
     },
   });
 
+  const getOwnerId = () => {
+    if (role === 'Admin') return usuario?.id || null;
+    if (role === 'Cliente') return (perfil as ClienteProfile)?.id || null;
+    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id || null;
+    return null;
+  };
+
   const onSubmit = async (values: FormValues) => {
-    if (!usuario?.id) {
-      showError('Usuário não autenticado.');
+    const ownerId = getOwnerId();
+    if (!ownerId) {
+      showError('Proprietário da configuração não pôde ser determinado.');
       return;
     }
 
     const dataToSave = {
-      proprietario_id: usuario.id,
+      proprietario_id: ownerId,
       id_saldo_contas: idSaldoContas,
       nome_configuracao: values.nome_configuracao,
       mapeamento: {
