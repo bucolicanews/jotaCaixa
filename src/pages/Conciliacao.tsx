@@ -177,6 +177,7 @@ const Conciliacao = () => {
         return;
     }
     
+    // Cria o Set de chaves de unicidade (Data formatada, Descrição, Valor, Tipo)
     const existingSet = new Set(existingLancamentos.map(l => 
         `${format(new Date(l.data_movimentacao), 'yyyy-MM-dd')}|${l.descricao.toLowerCase().trim()}|${l.valor.toFixed(2)}|${l.tipo}`
     ));
@@ -200,8 +201,34 @@ const Conciliacao = () => {
           const tipo = (valor >= 0 ? 'Entrada' : 'Saida') as 'Entrada' | 'Saida';
           const dataMovimentacao = row[config.mapeamento.data];
           
+          // Garante que a data importada seja formatada para yyyy-MM-dd para a chave de unicidade
+          let formattedDate: string;
+          try {
+              // Tenta parsear a data do CSV (pode estar em dd/MM/yyyy ou yyyy-MM-dd)
+              const dateParts = dataMovimentacao.split(/[\/\-]/);
+              let dateObj: Date;
+              
+              if (dateParts.length === 3) {
+                  // Assume dd/MM/yyyy se o primeiro componente for <= 31
+                  if (Number(dateParts[0]) <= 31 && Number(dateParts[1]) <= 12) {
+                      dateObj = new Date(Number(dateParts[2]), Number(dateParts[1]) - 1, Number(dateParts[0]));
+                  } else {
+                      // Assume yyyy-MM-dd
+                      dateObj = new Date(Number(dateParts[0]), Number(dateParts[1]) - 1, Number(dateParts[2]));
+                  }
+              } else {
+                  // Fallback para new Date()
+                  dateObj = new Date(dataMovimentacao);
+              }
+              
+              formattedDate = format(dateObj, 'yyyy-MM-dd');
+          } catch (e) {
+              console.error('Falha ao formatar data do CSV:', dataMovimentacao, e);
+              formattedDate = dataMovimentacao; // Usa a string original como fallback
+          }
+          
           // Chave de unicidade para comparação
-          const uniqueKey = `${dataMovimentacao}|${String(row[config.mapeamento.descricao] || '').toLowerCase().trim()}|${Math.abs(valor).toFixed(2)}|${tipo}`;
+          const uniqueKey = `${formattedDate}|${String(row[config.mapeamento.descricao] || '').toLowerCase().trim()}|${Math.abs(valor).toFixed(2)}|${tipo}`;
           
           let isDuplicated = false;
           let motivoDuplicidade: string | null = null;
@@ -212,7 +239,7 @@ const Conciliacao = () => {
           }
 
           return {
-            data: dataMovimentacao,
+            data: dataMovimentacao, // Mantém a data original do CSV para exibição
             descricao: row[config.mapeamento.descricao],
             valor: valor,
             tipo: tipo,
