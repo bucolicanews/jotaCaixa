@@ -330,12 +330,13 @@ const Conciliacao = () => {
             extrato_json: transacoesParaSalvar,
         };
         
+        // Usando .insert() sem .select() para garantir que o objeto JSON seja salvo corretamente
         const { error: historicoError } = await supabase
             .from('conciliacoes')
             .insert(historicoPayload);
             
-        if (historicoError) console.error('Aviso: Falha ao salvar histórico de conciliação:', historicoError);
-        
+        if (historicoError) throw historicoError; // Lançar erro para notificar o usuário
+
         showSuccess(`${lancamentosPayload.length} lançamentos conciliados e salvos com sucesso!`);
         handleReset();
         fetchHistorico();
