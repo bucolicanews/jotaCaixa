@@ -31,9 +31,14 @@ export const formatDDMMYYYYToISO = (dateString: string): string | null => {
 };
 
 /**
- * Normaliza uma string para comparação (lowercase, trim, remove caracteres especiais).
+ * Normaliza uma string para comparação (lowercase, trim, remove acentos e caracteres especiais).
  */
 export const normalizeString = (str: string | null | undefined): string => {
     if (!str) return '';
-    return String(str).toLowerCase().trim().replace(/[^a-z0-9\s]/g, '');
+    
+    // 1. Remove acentos e diacríticos
+    const normalized = String(str).normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    
+    // 2. Converte para minúsculas, remove espaços extras e caracteres não alfanuméricos (exceto espaços)
+    return normalized.toLowerCase().trim().replace(/[^a-z0-9\s]/g, '');
 };
