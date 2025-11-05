@@ -35,7 +35,9 @@ const Conciliacao = () => {
   const [regras, setRegras] = useState<ConciliacaoRegra[]>([]);
   const [isSaving, setIsSaving] = useState(false);
 
-  const proprietarioDaConfiguracao = usuario?.id;
+  // CORREÇÃO: O proprietário da configuração deve ser o ID do cliente (empresa_id) da conta selecionada.
+  const contaSelecionada = contas.find(c => c.id === contaSelecionadaId);
+  const proprietarioDaConfiguracao = contaSelecionada?.empresa_id;
 
   const fetchContas = useCallback(async () => {
     if (!usuario?.id) return;
@@ -356,7 +358,7 @@ const Conciliacao = () => {
             <FormConciliacaoConfig 
               configInicial={configParaEditar}
               idSaldoContas={contaSelecionadaId} 
-              proprietarioId={proprietarioDaConfiguracao}
+              proprietarioId={proprietarioDaConfiguracao} // Agora passa o ID do cliente/empresa
               onSaveComplete={() => { setDialogOpen(false); fetchConfigs(); }} 
             />
           </DialogContent>
