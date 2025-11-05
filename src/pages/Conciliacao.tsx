@@ -8,7 +8,7 @@ import { ConfiguracaoConciliacao, TransacaoExtrato } from '@/types/conciliacao';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, Upload, List, Settings } from 'lucide-react';
+import { PlusCircle, Upload, List, Settings, Edit } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import FormConciliacaoConfig from '@/components/FormConciliacaoConfig';
 import { Input } from '@/components/ui/input';
@@ -24,9 +24,10 @@ const Conciliacao = () => {
   const [contas, setContas] = useState<SaldoConta[]>([]);
   const [configs, setConfigs] = useState<ConfiguracaoConciliacao[]>([]);
   const [contaSelecionadaId, setContaSelecionadaId] = useState<string | null>(null);
-  const [configSelecionadaId, setConfigSelecionadaId] = useState<string | null>(null);
+  const [configSelecionada, setConfigSelecionada] = useState<ConfiguracaoConciliacao | null>(null);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [configParaEditar, setConfigParaEditar] = useState<ConfiguracaoConciliacao | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [transacoes, setTransacoes] = useState<TransacaoExtrato[]>([]);
 
@@ -52,18 +53,15 @@ const Conciliacao = () => {
 
   useEffect(() => {
     fetchConfigs();
+    setConfigSelecionada(null); // Reseta a config selecionada ao trocar de conta
   }, [contaSelecionadaId, fetchConfigs]);
 
   const handleParseFile = () => {
-    if (!file || !configSelecionadaId) {
+    if (!file || !configSelecionada) {
       showError('Selecione um arquivo e uma configuração.');
       return;
     }
-    const config = configs.find(c => c.id === configSelecionadaId);
-    if (!config) {
-      showError('Configuração não encontrada.');
-      return;
-    }
+    const config = configSelecionada;
 
     Papa.parse(file, {
       header: true,
@@ -94,6 +92,11 @@ const Conciliacao = () => {
     });
   };
 
+  const handleOpenDialog = (config: ConfiguracaoConciliacao | null) => {
+    setConfigParaEditar(config);
+    setDialogOpen(true);
+  };
+
   const renderStep1 = () => (
     <Card>
       <CardHeader><CardTitle>Passo 1: Selecione a Conta Bancária</CardTitle></CardHeader>
@@ -113,13 +116,21 @@ const Conciliacao = () => {
         <CardDescription>Selecione ou crie um mapeamento para o formato do seu extrato CSV.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <Select onValueChange={setConfigSelecionadaId} value={configSelecionadaId || ''}>
+        <Select 
+          onValueChange={(id) => setConfigSelecionada(configs.find(c => c.id === id) || null)} 
+          value={configSelecionada?.id || ''}
+        >
           <SelectTrigger><SelectValue placeholder="Selecione uma configuração" /></SelectTrigger>
           <SelectContent>{configs.map(c => <SelectItem key={c.id} value={c.id}>{c.nome_configuracao}</SelectItem>)}</SelectContent>
         </Select>
-        <Button variant="outline" onClick={() => setDialogOpen(true)} className="w-full">
-          <PlusCircle className="w-4 h-4 mr-2" /> Nova Configuração
-        </Button>
+        <div className="flex space-x-2">
+          <Button variant="outline" onClick={() => handleOpenDialog(null)} className="w-full">
+            <PlusCircle className="w-4 h-4 mr-2" /> Nova
+          </Button>
+          <Button variant="secondary" onClick={() => handleOpenDialog(configSelecionada)} className="w-full" disabled={!configSelecionada}>
+            <Edit className="w-4 h-4 mr-2" /> Editar
+          </Button>
+        </div>
       </CardContent>
     </Card>
   );
@@ -168,19 +179,20 @@ const Conciliacao = () => {
     <LayoutPrincipal>
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl md:text-3xl font-bold">Conciliação Bancária</h1>
-        <Button variant="outline" onClick={() => { setContaSelecionadaId(null); setConfigSelecionadaId(null); setTransacoes([]); }}><Settings className="w-4 h-4 mr-2" /> Reiniciar</Button>
+        <Button variant="outline" onClick={() => { setContaSelecionadaId(null); setConfigSelecionada(null); setTransacoes([]); }}><Settings className="w-4 h-4 mr-2" /> Reiniciar</Button>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {renderStep1()}
         {contaSelecionadaId && renderStep2()}
-        {configSelecionadaId && renderStep3()}
+        {configSelecionada && renderStep3()}
         {transacoes.length > 0 && renderStep4()}
       </div>
       {contaSelecionadaId && (
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogContent>
-            <DialogHeader><DialogTitle>Nova Configuração de Mapeamento</DialogTitle></DialogHeader>
+            <DialogHeader><DialogTitle>{configParaEditar ? 'Editar' : 'Nova'} Configuração de Mapeamento</DialogTitle></DialogHeader>
             <FormConciliacaoConfig 
+              configInicial={configParaEditar}
               idSaldoContas={contaSelecionadaId} 
               proprietarioId={proprietarioDaConta}
               onSaveComplete={() => { setDialogOpen(false); fetchConfigs(); }} 
