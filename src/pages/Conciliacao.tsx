@@ -59,12 +59,13 @@ const Conciliacao = () => {
   const fetchContasContabeis = useCallback(async () => {
     if (!proprietarioDaConfiguracao || !contaSelecionada) return;
     
-    // Busca todas as contas analíticas do proprietário
+    // Busca apenas contas analíticas do proprietário que são marcadas como CONTA DE RESULTADO
     const { data, error } = await supabase
         .from('plano_contas')
-        .select('id, Conta, Descricao, Analitica, is_conta_saldo')
+        .select('id, Conta, Descricao, Analitica, is_conta_saldo, is_conta_resultado')
         .eq('proprietario_id', proprietarioDaConfiguracao)
         .eq('Analitica', 'Sim')
+        .eq('is_conta_resultado', true) // FILTRO PRINCIPAL: Apenas contas marcadas como Resultado
         .order('Conta');
         
     if (error) {
