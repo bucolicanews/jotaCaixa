@@ -161,6 +161,9 @@ const Conciliacao = () => {
     </Card>
   );
 
+  const contaSelecionada = contas.find(c => c.id === contaSelecionadaId);
+  const proprietarioDaConta = contaSelecionada?.empresa_id;
+
   return (
     <LayoutPrincipal>
       <div className="flex justify-between items-center mb-6">
@@ -177,7 +180,11 @@ const Conciliacao = () => {
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogContent>
             <DialogHeader><DialogTitle>Nova Configuração de Mapeamento</DialogTitle></DialogHeader>
-            <FormConciliacaoConfig idSaldoContas={contaSelecionadaId} onSaveComplete={() => { setDialogOpen(false); fetchConfigs(); }} />
+            <FormConciliacaoConfig 
+              idSaldoContas={contaSelecionadaId} 
+              proprietarioId={proprietarioDaConta}
+              onSaveComplete={() => { setDialogOpen(false); fetchConfigs(); }} 
+            />
           </DialogContent>
         </Dialog>
       )}
