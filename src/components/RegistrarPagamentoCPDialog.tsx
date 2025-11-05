@@ -46,6 +46,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
   const isAdmin = role === 'Admin';
   
   const [mapeamentoContabil, setMapeamentoContabil] = useState<Record<string, string | null>>({});
+  const [isInitialized, setIsInitialized] = useState(false); // State to prevent re-initialization loop
   
   const tabelaPagamentos = 'admin_pagamentos';
   const tabelaParcelas = 'admin_parcelas_pagar';
@@ -95,20 +96,30 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
     }
   }, [isAdmin, adminId]);
   
+  // Effect to fetch data and reset initialization state when dialog opens
   useEffect(() => {
       if (open) {
+          setIsInitialized(false); // Reset initialization on open
           refetchSaldos();
           if (isAdmin) {
               fetchMapeamentoContabil();
           }
-          // Reseta o formulário ao abrir
-          form.reset({
-              data_pagamento: new Date(),
-              forma_pagamento: 'Pix',
-              pagamentos: [{ conta_id: contasOrigem[0]?.id || '', valor_pago: saldoDevedor }]
-          });
       }
-  }, [open, isAdmin, refetchSaldos, fetchMapeamentoContabil, form, saldoDevedor, contasOrigem]);
+  }, [open, isAdmin, refetchSaldos, fetchMapeamentoContabil]);
+
+  // Effect to initialize the form once data is loaded
+  useEffect(() => {
+    if (open && !loadingContas && !isInitialized) {
+        form.reset({
+            data_pagamento: new Date(),
+            forma_pagamento: 'Pix',
+            pagamentos: contasOrigem.length > 0 
+                ? [{ conta_id: contasOrigem[0].id, valor_pago: saldoDevedor }]
+                : []
+        });
+        setIsInitialized(true); // Mark as initialized
+    }
+  }, [open, loadingContas, contasOrigem, saldoDevedor, isInitialized, form]);
 
   const onSubmit = async (values: FormValues) => {
     if (!parcela || !adminId) {
