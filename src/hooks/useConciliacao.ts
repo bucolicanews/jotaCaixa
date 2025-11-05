@@ -306,6 +306,28 @@ export function useConciliacao(): ConciliacaoHook {
         
         return data && data.length > 0;
     }, []);
+    
+    // NOVO: Função para buscar extratos existentes na nova tabela
+    const fetchExistingExtratos = useCallback(async (contaId: string, empresaId: string) => {
+        const { data, error } = await supabase
+            .from('extratos')
+            .select('data, descricao, valor, tipo')
+            .eq('empresa_id', empresaId)
+            .eq('id_saldo_contas', contaId);
+            
+        if (error) {
+            console.error('Erro ao buscar extratos existentes:', error);
+            return new Set<string>();
+        }
+        
+        // Cria um Set de chaves únicas (Data YYYY-MM-DD | Descrição Normalizada | Valor Absoluto (2 casas) | Tipo)
+        return new Set(data.map(e => {
+            const formattedDate = format(parseISO(e.data), 'yyyy-MM-dd');
+            const normalizedDesc = normalizeString(e.descricao);
+            return `${formattedDate}|${normalizedDesc}|${Math.abs(Number(e.valor)).toFixed(2)}|${e.tipo}`;
+        }));
+    }, []);
+
 
     const handleParseFile = useCallback(async () => {
         if (!file || !configSelecionada || !contaSelecionadaId || !proprietarioDaConfiguracao) {
@@ -326,7 +348,7 @@ export function useConciliacao(): ConciliacaoHook {
             return;
         }
         
-        // 2. Verificar Duplicidade de Conteúdo
+        // 2. Verificar Duplicidade de Conteúdo (do arquivo completo)
         const isDuplicatedContent = await checkFileDuplicity(contentHash, proprietarioDaConfiguracao);
         if (isDuplicatedContent) {
             showError(`O conteúdo deste extrato já foi importado anteriormente.`);
@@ -334,31 +356,10 @@ export function useConciliacao(): ConciliacaoHook {
             return;
         }
 
-        // 3. Buscar lançamentos existentes para a conta selecionada
-        const { data: existingLancamentos, error: lancamentoError } = await supabase
-            .from('lancamentos')
-            .select('data_movimentacao, descricao, valor, tipo')
-            .eq('conta_bancaria_id', contaSelecionadaId);
-            
-        if (lancamentoError) {
-            showError('Erro ao buscar lançamentos existentes: ' + lancamentoError.message);
-            setLoading(false);
-            return;
-        }
+        // 3. Buscar extratos existentes na nova tabela 'extratos'
+        const existingExtratosSet = await fetchExistingExtratos(contaSelecionadaId, proprietarioDaConfiguracao);
         
-        // Cria um Set de chaves únicas (Data YYYY-MM-DD | Descrição Normalizada | Valor Absoluto (2 casas) | Tipo)
-        const existingSet = new Set(existingLancamentos.map(l => {
-            // CORREÇÃO CRÍTICA: Garantir que a data seja tratada como YYYY-MM-DD, ignorando o fuso horário
-            // Se a data for salva como '2025-11-03', parseISO(l.data_movimentacao) funciona.
-            // Se for salva como '2025-11-03T00:00:00Z', format() pode mudar o dia.
-            // Usamos parseISO para garantir que a string seja interpretada corretamente.
-            const dateObj = parseISO(l.data_movimentacao);
-            const formattedDate = format(dateObj, 'yyyy-MM-dd');
-            
-            const normalizedDesc = normalizeString(l.descricao);
-            return `${formattedDate}|${normalizedDesc}|${Math.abs(Number(l.valor)).toFixed(2)}|${l.tipo}`;
-        }));
-
+        // 4. Processar o CSV
         Papa.parse(file, {
             header: true,
             skipEmptyLines: true,
@@ -391,15 +392,16 @@ export function useConciliacao(): ConciliacaoHook {
                     
                     const normalizedDesc = normalizeString(row[config.mapeamento.descricao]);
                     
-                    // Chave de comparação para a transação atual
+                    // Chave de comparação para a transação atual (usando a data formatada YYYY-MM-DD)
                     const uniqueKey = `${formattedDate}|${normalizedDesc}|${Math.abs(valor).toFixed(2)}|${tipo}`;
                     
                     let isDuplicated = false;
                     let motivoDuplicidade: string | null = null;
                     
-                    if (existingSet.has(uniqueKey)) {
+                    // Verifica duplicidade contra a tabela 'extratos'
+                    if (existingExtratosSet.has(uniqueKey)) {
                         isDuplicated = true;
-                        motivoDuplicidade = 'Transação já existe no histórico de lançamentos.';
+                        motivoDuplicidade = 'Transação já existe na tabela de extratos.';
                     }
 
                     return {
@@ -429,7 +431,7 @@ export function useConciliacao(): ConciliacaoHook {
             }
         });
         setLoading(false);
-    }, [file, configSelecionada, contaSelecionadaId, proprietarioDaConfiguracao, applyRegras, checkFileDuplicity]);
+    }, [file, configSelecionada, contaSelecionadaId, proprietarioDaConfiguracao, applyRegras, checkFileDuplicity, fetchExistingExtratos]);
 
     // --- Lógica de Salvamento ---
 
@@ -449,13 +451,13 @@ export function useConciliacao(): ConciliacaoHook {
         setIsSaving(true);
         
         try {
+            // Prepara o payload para a tabela 'lancamentos'
             const lancamentosPayload = transacoesParaSalvar.map(t => {
-                // Tenta formatar a data do CSV (DD/MM/YYYY) para YYYY-MM-DD
                 const formattedDate = formatDDMMYYYYToISO(t.data);
                 
                 return {
                     empresa_id: proprietarioDaConfiguracao,
-                    data_movimentacao: formattedDate || t.data, // Usa a data formatada ou a string original
+                    data_movimentacao: formattedDate || t.data,
                     descricao: t.descricao,
                     valor: Math.abs(t.valor),
                     tipo: t.tipo,
@@ -467,14 +469,38 @@ export function useConciliacao(): ConciliacaoHook {
                 };
             });
             
-            // 1. Inserir Lançamentos
+            // Prepara o payload para a tabela 'extratos' (para controle de duplicidade futura)
+            const extratosPayload = transacoesParaSalvar.map(t => {
+                const formattedDate = formatDDMMYYYYToISO(t.data);
+                
+                return {
+                    empresa_id: proprietarioDaConfiguracao,
+                    id_saldo_contas: contaSelecionadaId,
+                    data: formattedDate || t.data,
+                    descricao: t.descricao,
+                    valor: Math.abs(t.valor),
+                    tipo: t.tipo,
+                    identificacao: t.identificacao || null,
+                    conciliado: true,
+                    conta_contabil_id: t.conta_contabil_id,
+                };
+            });
+            
+            // 1. Inserir Lançamentos (Movimentação de Saldo)
             const { error: lancamentoError } = await supabase
                 .from('lancamentos')
                 .insert(lancamentosPayload);
                 
             if (lancamentoError) throw lancamentoError;
             
-            // 2. Inserir/Atualizar Regras de Mapeamento
+            // 2. Inserir Extratos (Controle de Duplicidade)
+            const { error: extratoError } = await supabase
+                .from('extratos')
+                .insert(extratosPayload);
+                
+            if (extratoError) throw extratoError;
+            
+            // 3. Inserir/Atualizar Regras de Mapeamento (se necessário)
             const regrasParaSalvar = transacoesParaSalvar
                 .filter(t => !t.conciliada)
                 .map(t => ({
@@ -492,7 +518,7 @@ export function useConciliacao(): ConciliacaoHook {
                 if (regraError) console.error('Aviso: Falha ao salvar regras de mapeamento:', regraError);
             }
             
-            // 3. Salvar o registro de conciliação (Histórico)
+            // 4. Salvar o registro de conciliação (Histórico)
             const fileContent = await file.text();
             const contentHash = calculateContentHash(fileContent);
             
