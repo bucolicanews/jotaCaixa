@@ -100,3 +100,4 @@ A lógica de autenticação foi aprimorada para priorizar o evento `PASSWORD_REC
 *   **`src/components/RegistrarPagamentoDialog.tsx`:** Garante que o registro de recebimento gere um lançamento de `Entrada` na conta de saldo selecionada (`lancamentos` table).
 *   **`src/hooks/use-saldo-conta-calculado.ts`:** Novo hook que calcula o saldo atual das contas de caixa/banco (`saldo_contas`) com base nos lançamentos (`lancamentos`).
 *   **`src/hooks/use-tag-manager.ts`:** Hook responsável por verificar e alternar a presença de tags de contrato na tabela `contrato_tags` com base nos campos do perfil do Cliente/Usuário.
+*   **`src/hooks/useConciliacao.ts`:** A lógica de prevenção de duplicidade de extratos bancários foi movida inteiramente para o frontend, permitindo a importação de múltiplas transações idênticas no mesmo dia, desde que não tenham sido salvas anteriormente na tabela `extratos`.
