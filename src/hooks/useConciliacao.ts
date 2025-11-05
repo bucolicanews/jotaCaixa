@@ -320,11 +320,12 @@ export function useConciliacao(): ConciliacaoHook {
             return new Set<string>();
         }
         
-        // Cria um Set de chaves únicas (Data YYYY-MM-DD | Descrição Normalizada | Valor Absoluto (2 casas) | Tipo)
+        // Cria um Set de chaves únicas (Data YYYY-MM-DD | Descrição Normalizada | Valor (com sinal, 2 casas) | Tipo)
         return new Set(data.map(e => {
             const formattedDate = format(parseISO(e.data), 'yyyy-MM-dd');
             const normalizedDesc = normalizeString(e.descricao);
-            return `${formattedDate}|${normalizedDesc}|${Math.abs(Number(e.valor)).toFixed(2)}|${e.tipo}`;
+            // Usamos o valor original (com sinal) para a verificação de unicidade
+            return `${formattedDate}|${normalizedDesc}|${Number(e.valor).toFixed(2)}|${e.tipo}`;
         }));
     }, []);
 
@@ -392,8 +393,8 @@ export function useConciliacao(): ConciliacaoHook {
                     
                     const normalizedDesc = normalizeString(row[config.mapeamento.descricao]);
                     
-                    // Chave de comparação para a transação atual (usando a data formatada YYYY-MM-DD)
-                    const uniqueKey = `${formattedDate}|${normalizedDesc}|${Math.abs(valor).toFixed(2)}|${tipo}`;
+                    // Chave de comparação para a transação atual (usando a data formatada YYYY-MM-DD e valor com sinal)
+                    const uniqueKey = `${formattedDate}|${normalizedDesc}|${Number(valor).toFixed(2)}|${tipo}`;
                     
                     let isDuplicated = false;
                     let motivoDuplicidade: string | null = null;
@@ -459,7 +460,7 @@ export function useConciliacao(): ConciliacaoHook {
                     empresa_id: proprietarioDaConfiguracao,
                     data_movimentacao: formattedDate || t.data,
                     descricao: t.descricao,
-                    valor: Math.abs(t.valor),
+                    valor: Math.abs(t.valor), // Valor absoluto para lancamentos
                     tipo: t.tipo,
                     conta_bancaria_id: contaSelecionadaId,
                     conta_contabil_id: t.conta_contabil_id,
@@ -478,7 +479,7 @@ export function useConciliacao(): ConciliacaoHook {
                     id_saldo_contas: contaSelecionadaId,
                     data: formattedDate || t.data,
                     descricao: t.descricao,
-                    valor: Math.abs(t.valor),
+                    valor: t.valor, // Valor original (com sinal) para extratos
                     tipo: t.tipo,
                     identificacao: t.identificacao || null,
                     conciliado: true,
