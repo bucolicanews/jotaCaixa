@@ -7,6 +7,7 @@ import { ConfiguracaoConciliacao, TransacaoExtrato, ConciliacaoRegra, Conciliaca
 import { PlanoContas } from '@/types/plano-contas';
 import Papa, { ParseResult } from 'papaparse';
 import { format } from 'date-fns';
+import { formatDDMMYYYYToISO, normalizeString } from '@/utils/formatters'; // Importando normalizeString
 
 interface ConciliacaoHook {
     // State
@@ -58,20 +59,6 @@ const calculateContentHash = (csvContent: string): string => {
     // Em um ambiente real, usaríamos uma biblioteca de hash (ex: crypto.subtle.digest).
     // Aqui, usamos uma concatenação simples como identificador de conteúdo.
     return dataContent.substring(0, 255); // Limita o tamanho do hash para o campo TEXT
-};
-
-// NOVO: Função auxiliar para formatar data DD/MM/YYYY para YYYY-MM-DD
-const formatDDMMYYYYToISO = (dateString: string): string | null => {
-    const parts = dateString.split(/[\/\-]/);
-    if (parts.length === 3) {
-        const [day, month, year] = parts.map(Number);
-        // Verifica se é um formato DD/MM/YYYY válido
-        if (day >= 1 && day <= 31 && month >= 1 && month <= 12 && year >= 1900) {
-            // Cria a data no formato YYYY-MM-DD
-            return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-        }
-    }
-    return null;
 };
 
 
@@ -359,10 +346,11 @@ export function useConciliacao(): ConciliacaoHook {
             return;
         }
         
-        // Cria um Set de chaves únicas (Data YYYY-MM-DD | Descrição | Valor Absoluto | Tipo)
+        // Cria um Set de chaves únicas (Data YYYY-MM-DD | Descrição Normalizada | Valor Absoluto (2 casas) | Tipo)
         const existingSet = new Set(existingLancamentos.map(l => {
             const formattedDate = format(new Date(l.data_movimentacao), 'yyyy-MM-dd');
-            return `${formattedDate}|${l.descricao.toLowerCase().trim()}|${Math.abs(l.valor).toFixed(2)}|${l.tipo}`;
+            const normalizedDesc = normalizeString(l.descricao);
+            return `${formattedDate}|${normalizedDesc}|${Math.abs(Number(l.valor)).toFixed(2)}|${l.tipo}`;
         }));
 
         Papa.parse(file, {
@@ -392,12 +380,13 @@ export function useConciliacao(): ConciliacaoHook {
                     
                     if (!formattedDate) {
                         console.error('Falha ao formatar data do CSV:', dataMovimentacao);
-                        // Se a formatação falhar, usa a string original (o que pode causar problemas na comparação)
                         formattedDate = dataMovimentacao; 
                     }
                     
+                    const normalizedDesc = normalizeString(row[config.mapeamento.descricao]);
+                    
                     // Chave de comparação para a transação atual
-                    const uniqueKey = `${formattedDate}|${String(row[config.mapeamento.descricao] || '').toLowerCase().trim()}|${Math.abs(valor).toFixed(2)}|${tipo}`;
+                    const uniqueKey = `${formattedDate}|${normalizedDesc}|${Math.abs(valor).toFixed(2)}|${tipo}`;
                     
                     let isDuplicated = false;
                     let motivoDuplicidade: string | null = null;

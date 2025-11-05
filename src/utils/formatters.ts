@@ -29,3 +29,11 @@ export const formatDDMMYYYYToISO = (dateString: string): string | null => {
     }
     return null;
 };
+
+/**
+ * Normaliza uma string para comparação (lowercase, trim, remove caracteres especiais).
+ */
+export const normalizeString = (str: string | null | undefined): string => {
+    if (!str) return '';
+    return String(str).toLowerCase().trim().replace(/[^a-z0-9\s]/g, '');
+};
