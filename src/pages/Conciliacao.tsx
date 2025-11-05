@@ -8,7 +8,7 @@ import { ConfiguracaoConciliacao, TransacaoExtrato, ConciliacaoRegra, Conciliaca
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, Upload, List, Settings, Edit, CheckCircle2, Save, ArrowUpCircle, ArrowDownCircle, Loader2, Check, History, Eye } from 'lucide-react';
+import { PlusCircle, Upload, List, Settings, Edit, CheckCircle2, Save, ArrowUpCircle, ArrowDownCircle, Loader2, Check, History, Eye, AlertTriangle } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import FormConciliacaoConfig from '@/components/FormConciliacaoConfig';
 import { Input } from '@/components/ui/input';
@@ -140,6 +140,9 @@ const Conciliacao = () => {
 
   const applyRegras = useCallback((rawTransacoes: TransacaoExtrato[]): TransacaoExtrato[] => {
     return rawTransacoes.map(t => {
+      // Se já foi marcada como duplicada, ignora a regra
+      if (t.isDuplicated) return t;
+      
       const regra = regras.find(r => 
         t.descricao.toLowerCase().includes(r.descricao_extrato.toLowerCase()) && r.tipo_lancamento === t.tipo
       );
@@ -151,12 +154,30 @@ const Conciliacao = () => {
     });
   }, [regras]);
 
-  const handleParseFile = () => {
-    if (!file || !configSelecionada) {
-      showError('Selecione um arquivo e uma configuração.');
+  const handleParseFile = async () => {
+    if (!file || !configSelecionada || !contaSelecionadaId || !proprietarioDaConfiguracao) {
+      showError('Selecione a conta, a configuração e o arquivo.');
       return;
     }
     const config = configSelecionada;
+    
+    setLoading(true);
+
+    // 1. Buscar lançamentos existentes para a conta selecionada
+    const { data: existingLancamentos, error: lancamentoError } = await supabase
+        .from('lancamentos')
+        .select('data_movimentacao, descricao, valor, tipo')
+        .eq('conta_bancaria_id', contaSelecionadaId);
+        
+    if (lancamentoError) {
+        showError('Erro ao buscar lançamentos existentes: ' + lancamentoError.message);
+        setLoading(false);
+        return;
+    }
+    
+    const existingSet = new Set(existingLancamentos.map(l => 
+        `${format(new Date(l.data_movimentacao), 'yyyy-MM-dd')}|${l.descricao.toLowerCase().trim()}|${l.valor.toFixed(2)}|${l.tipo}`
+    ));
 
     Papa.parse(file, {
       header: true,
@@ -173,27 +194,48 @@ const Conciliacao = () => {
           const identificacao = config.mapeamento.identificacao 
             ? String(row[config.mapeamento.identificacao] || '') 
             : undefined;
+            
+          const tipo = (valor >= 0 ? 'Entrada' : 'Saida') as 'Entrada' | 'Saida';
+          const dataMovimentacao = row[config.mapeamento.data];
+          
+          // Chave de unicidade para comparação
+          const uniqueKey = `${dataMovimentacao}|${String(row[config.mapeamento.descricao] || '').toLowerCase().trim()}|${Math.abs(valor).toFixed(2)}|${tipo}`;
+          
+          let isDuplicated = false;
+          let motivoDuplicidade: string | null = null;
+          
+          if (existingSet.has(uniqueKey)) {
+              isDuplicated = true;
+              motivoDuplicidade = 'Transação já existe no histórico de lançamentos.';
+          }
 
           return {
-            data: row[config.mapeamento.data],
+            data: dataMovimentacao,
             descricao: row[config.mapeamento.descricao],
             valor: valor,
-            tipo: (valor >= 0 ? 'Entrada' : 'Saida') as 'Entrada' | 'Saida',
+            tipo: tipo,
             identificacao: identificacao,
+            isDuplicated: isDuplicated,
+            motivoDuplicidade: motivoDuplicidade,
           };
         }).filter(t => t.data && t.descricao);
         
-        const transacoesMapeadas = applyRegras(rawTransacoes);
+        const transacoesValidas = rawTransacoes.filter(t => !t.isDuplicated);
+        const transacoesRejeitadas = rawTransacoes.filter(t => t.isDuplicated);
         
-        setTransacoes(transacoesMapeadas);
+        const transacoesMapeadas = applyRegras(transacoesValidas);
+        
+        setTransacoes([...transacoesMapeadas, ...transacoesRejeitadas]);
         setTransacoesSelecionadas([]);
         setContaContabilLote(null);
-        showSuccess(`${transacoesMapeadas.length} transações importadas. ${transacoesMapeadas.filter(t => t.conciliada).length} mapeadas automaticamente.`);
+        
+        showSuccess(`${transacoesValidas.length} transações válidas importadas. ${transacoesRejeitadas.length} duplicadas rejeitadas.`);
       },
       error: (err) => {
         showError('Erro ao processar o arquivo CSV: ' + err.message);
       }
     });
+    setLoading(false);
   };
 
   const handleOpenDialog = (config: ConfiguracaoConciliacao | null) => {
@@ -236,8 +278,13 @@ const Conciliacao = () => {
   };
   
   const handleSelectAll = (checked: boolean) => {
+      const validIndexes = transacoes
+          .map((t, i) => ({ t, i }))
+          .filter(({ t }) => !t.isDuplicated)
+          .map(({ i }) => i);
+          
       if (checked) {
-          setTransacoesSelecionadas(transacoes.map((_, i) => i));
+          setTransacoesSelecionadas(validIndexes);
       } else {
           setTransacoesSelecionadas([]);
       }
@@ -249,7 +296,7 @@ const Conciliacao = () => {
         return;
     }
     
-    const transacoesParaSalvar = transacoes.filter(t => t.conta_contabil_id);
+    const transacoesParaSalvar = transacoes.filter(t => t.conta_contabil_id && !t.isDuplicated);
     
     if (transacoesParaSalvar.length === 0) {
         showError('Nenhuma transação mapeada para salvar.');
@@ -301,7 +348,7 @@ const Conciliacao = () => {
         const historicoPayload = {
             empresa_id: proprietarioDaConfiguracao,
             usuario_id: usuario?.id,
-            id_saldo_contas: contaSelecionadaId, // Usando a coluna correta
+            id_saldo_contas: contaSelecionadaId,
             nome_arquivo: file.name,
             extrato_json: transacoesParaSalvar, // Salva apenas as transações que foram salvas como lançamentos
         };
@@ -326,7 +373,8 @@ const Conciliacao = () => {
     }
   };
 
-  const transacoesNaoConciliadas = useMemo(() => transacoes.filter(t => !t.conta_contabil_id), [transacoes]);
+  const transacoesNaoConciliadas = useMemo(() => transacoes.filter(t => !t.conta_contabil_id && !t.isDuplicated), [transacoes]);
+  const transacoesRejeitadas = useMemo(() => transacoes.filter(t => t.isDuplicated), [transacoes]);
 
   const renderStep1 = () => (
     <Card>
@@ -371,7 +419,7 @@ const Conciliacao = () => {
       <CardHeader><CardTitle>Passo 3: Importar Extrato</CardTitle></CardHeader>
       <CardContent className="flex items-center space-x-2">
         <Input type="file" accept=".csv" onChange={(e) => setFile(e.target.files?.[0] || null)} className="flex-1" />
-        <Button onClick={handleParseFile} disabled={!file}><Upload className="w-4 h-4 mr-2" /> Processar</Button>
+        <Button onClick={handleParseFile} disabled={!file || loading}><Upload className="w-4 h-4 mr-2" /> Processar</Button>
       </CardContent>
     </Card>
   );
@@ -380,6 +428,21 @@ const Conciliacao = () => {
     <Card className="col-span-1 md:col-span-3">
       <CardHeader><CardTitle className="flex items-center"><List className="w-5 h-5 mr-2" /> Transações Importadas do Extrato</CardTitle></CardHeader>
       <CardContent>
+        
+        {transacoesRejeitadas.length > 0 && (
+            <div className="p-3 bg-red-100 dark:bg-red-900/20 border border-red-500 rounded-md mb-4">
+                <h3 className="font-semibold text-red-700 dark:text-red-300 flex items-center mb-2">
+                    <AlertTriangle className="w-5 h-5 mr-2" /> {transacoesRejeitadas.length} Transações Rejeitadas (Duplicidade)
+                </h3>
+                <ul className="list-disc list-inside text-sm text-red-600 dark:text-red-400">
+                    {transacoesRejeitadas.map((t, i) => (
+                        <li key={i}>
+                            Linha {transacoes.indexOf(t) + 1}: {t.data} - {t.descricao} ({formatCurrency(Math.abs(t.valor))})
+                        </li>
+                    ))}
+                </ul>
+            </div>
+        )}
         
         <div className="flex flex-col md:flex-row items-center space-y-3 md:space-y-0 md:space-x-4 p-3 bg-secondary rounded-md mb-4">
             <div className="flex-1 w-full">
@@ -414,7 +477,7 @@ const Conciliacao = () => {
             <TableHeader><TableRow>
                 <TableHead className="w-[40px] text-center">
                     <Checkbox 
-                        checked={transacoesSelecionadas.length === transacoes.length && transacoes.length > 0}
+                        checked={transacoesSelecionadas.length === transacoes.filter(t => !t.isDuplicated).length && transacoes.filter(t => !t.isDuplicated).length > 0}
                         onCheckedChange={(checked) => handleSelectAll(!!checked)}
                         disabled={isSaving}
                     />
@@ -436,12 +499,12 @@ const Conciliacao = () => {
                     const isSelected = transacoesSelecionadas.includes(i);
                     
                     return (
-                        <TableRow key={i} className={cn(isMapeada ? 'bg-green-500/10' : 'bg-red-500/10', isSelected && 'bg-blue-100/50 dark:bg-blue-900/20')}>
+                        <TableRow key={i} className={cn(t.isDuplicated ? 'bg-red-500/30 opacity-60' : (isMapeada ? 'bg-green-500/10' : 'bg-red-500/10'), isSelected && 'bg-blue-100/50 dark:bg-blue-900/20')}>
                             <TableCell className="text-center">
                                 <Checkbox 
                                     checked={isSelected}
                                     onCheckedChange={(checked) => handleToggleSelection(i, !!checked)}
-                                    disabled={isSaving}
+                                    disabled={isSaving || t.isDuplicated}
                                 />
                             </TableCell>
                             <TableCell>{t.data}</TableCell>
@@ -455,7 +518,11 @@ const Conciliacao = () => {
                             </TableCell>
                             <TableCell className={cn("text-right font-semibold", t.tipo === 'Entrada' ? 'text-green-600' : 'text-red-600')}>{formatCurrency(Math.abs(t.valor))}</TableCell>
                             <TableCell>
-                                {isMapeada ? (
+                                {t.isDuplicated ? (
+                                    <span className="text-sm font-medium text-red-700 flex items-center">
+                                        <AlertTriangle className="w-4 h-4 mr-1" /> DUPLICADA
+                                    </span>
+                                ) : isMapeada ? (
                                     <span className="text-sm font-medium text-green-700 flex items-center">
                                         <CheckCircle2 className="w-4 h-4 mr-1" /> {contaContabil?.Conta} - {contaContabil?.Descricao}
                                     </span>
@@ -492,7 +559,7 @@ const Conciliacao = () => {
             </p>
             <Button 
                 onClick={handleSaveConciliacao} 
-                disabled={isSaving || transacoes.filter(t => t.conta_contabil_id).length === 0}
+                disabled={isSaving || transacoes.filter(t => t.conta_contabil_id && !t.isDuplicated).length === 0}
             >
                 {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                 Salvar Lançamentos Conciliados

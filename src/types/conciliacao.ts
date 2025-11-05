@@ -24,6 +24,8 @@ export interface TransacaoExtrato {
     identificacao?: string; // NOVO CAMPO
     conciliada?: boolean;
     conta_contabil_id?: string | null;
+    isDuplicated?: boolean; // NOVO: Indica se é duplicada
+    motivoDuplicidade?: string | null; // NOVO: Motivo da duplicidade
 }
 
 export interface ConciliacaoRegra {
