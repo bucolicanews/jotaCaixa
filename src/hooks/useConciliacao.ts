@@ -199,8 +199,8 @@ export function useConciliacao(): ConciliacaoHook {
     const handleSelectAccount = useCallback((id: string) => {
         setContaSelecionadaId(id);
         handleReset(true); // Mantém o ID da conta, mas limpa o resto
-        // O useEffect acima (que depende de contaSelecionadaId) irá chamar fetchConfigs
-    }, [handleReset]);
+        fetchConfigs(); // Garante que as configs sejam carregadas
+    }, [handleReset, fetchConfigs]);
 
     const handleSelectConfig = useCallback((id: string) => {
         setConfigSelecionada(configs.find(c => c.id === id) || null);
@@ -276,6 +276,23 @@ export function useConciliacao(): ConciliacaoHook {
 
     // --- Lógica de Processamento de Arquivo ---
 
+    const checkFileDuplicity = useCallback(async (fileName: string, empresaId: string): Promise<boolean> => {
+        const { data, error } = await supabase
+            .from('conciliacoes')
+            .select('id')
+            .eq('empresa_id', empresaId)
+            .eq('nome_arquivo', fileName)
+            .limit(1);
+            
+        if (error) {
+            console.error('Erro ao verificar duplicidade de arquivo:', error);
+            // Se houver erro, assumimos que não é duplicado para não bloquear o usuário
+            return false; 
+        }
+        
+        return data && data.length > 0;
+    }, []);
+
     const handleParseFile = useCallback(async () => {
         if (!file || !configSelecionada || !contaSelecionadaId || !proprietarioDaConfiguracao) {
             showError('Selecione a conta, a configuração e o arquivo.');
@@ -284,8 +301,16 @@ export function useConciliacao(): ConciliacaoHook {
         const config = configSelecionada;
         
         setLoading(true);
+        
+        // NOVO: 1. Verificar Duplicidade de Arquivo
+        const isDuplicatedFile = await checkFileDuplicity(file.name, proprietarioDaConfiguracao);
+        if (isDuplicatedFile) {
+            showError(`O arquivo "${file.name}" já foi importado anteriormente.`);
+            setLoading(false);
+            return;
+        }
 
-        // 1. Buscar lançamentos existentes para a conta selecionada
+        // 2. Buscar lançamentos existentes para a conta selecionada
         const { data: existingLancamentos, error: lancamentoError } = await supabase
             .from('lancamentos')
             .select('data_movimentacao, descricao, valor, tipo')
@@ -378,7 +403,7 @@ export function useConciliacao(): ConciliacaoHook {
             }
         });
         setLoading(false);
-    }, [file, configSelecionada, contaSelecionadaId, proprietarioDaConfiguracao, applyRegras]);
+    }, [file, configSelecionada, contaSelecionadaId, proprietarioDaConfiguracao, applyRegras, checkFileDuplicity]);
 
     // --- Lógica de Salvamento ---
 
