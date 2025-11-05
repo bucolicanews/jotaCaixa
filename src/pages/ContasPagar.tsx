@@ -334,7 +334,11 @@ const ContasPagar: React.FC = () => {
               open={pagamentoDialog.open}
               onOpenChange={(open: boolean) => setPagamentoDialog({ open, parcela: null })}
               parcela={pagamentoDialog.parcela}
-              onSaveComplete={() => { fetchParcelas(); fetchPagamentos(); }}
+              onSaveComplete={() => { 
+                setPagamentoDialog({ open: false, parcela: null });
+                fetchParcelas(); 
+                fetchPagamentos(); 
+              }}
           />
         )}
       </div>
