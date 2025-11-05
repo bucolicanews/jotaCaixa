@@ -30,7 +30,7 @@ interface ConciliacaoHook {
 
     // Handlers
     setActiveTab: (tab: string) => void;
-    handleReset: () => void;
+    handleReset: (keepAccountId?: boolean) => void;
     handleSelectAccount: (id: string) => void;
     handleSelectConfig: (id: string) => void;
     handleFileChange: (file: File | null) => void;
@@ -160,6 +160,7 @@ export function useConciliacao(): ConciliacaoHook {
     }, [contaSelecionadaId, fetchContasContabeis, fetchRegras]);
 
     useEffect(() => {
+        // Este efeito é importante para resetar configs quando a conta muda
         fetchConfigs();
         setConfigSelecionada(null);
     }, [contaSelecionadaId, fetchConfigs]);
@@ -181,10 +182,12 @@ export function useConciliacao(): ConciliacaoHook {
         });
     }, [regras]);
 
-    // --- Handlers de Estado (Movidos para cima) ---
+    // --- Handlers de Estado ---
 
-    const handleReset = useCallback(() => {
-        setContaSelecionadaId(null);
+    const handleReset = useCallback((keepAccountId: boolean = false) => {
+        if (!keepAccountId) {
+            setContaSelecionadaId(null);
+        }
         setConfigSelecionada(null);
         setTransacoes([]);
         setTransacoesSelecionadas([]);
@@ -195,7 +198,8 @@ export function useConciliacao(): ConciliacaoHook {
 
     const handleSelectAccount = useCallback((id: string) => {
         setContaSelecionadaId(id);
-        handleReset(); // Reseta o estado de conciliação ao mudar de conta
+        handleReset(true); // Mantém o ID da conta, mas limpa o resto
+        // O useEffect acima (que depende de contaSelecionadaId) irá chamar fetchConfigs
     }, [handleReset]);
 
     const handleSelectConfig = useCallback((id: string) => {
@@ -325,7 +329,7 @@ export function useConciliacao(): ConciliacaoHook {
                             if (Number(dateParts[0]) <= 31 && Number(dateParts[1]) <= 12) {
                                 dateObj = new Date(Number(dateParts[2]), Number(dateParts[1]) - 1, Number(dateParts[0]));
                             } else {
-                                dateObj = new Date(Number(dateParts[0]), Number(dateParts[1]) - 1, Number(dateParts[2]));
+                                dateObj = new Date(dataMovimentacao);
                             }
                         } else {
                             dateObj = new Date(dataMovimentacao);
