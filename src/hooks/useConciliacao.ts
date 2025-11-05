@@ -60,6 +60,21 @@ const calculateContentHash = (csvContent: string): string => {
     return dataContent.substring(0, 255); // Limita o tamanho do hash para o campo TEXT
 };
 
+// NOVO: Função auxiliar para formatar data DD/MM/YYYY para YYYY-MM-DD
+const formatDDMMYYYYToISO = (dateString: string): string | null => {
+    const parts = dateString.split(/[\/\-]/);
+    if (parts.length === 3) {
+        const [day, month, year] = parts.map(Number);
+        // Verifica se é um formato DD/MM/YYYY válido
+        if (day >= 1 && day <= 31 && month >= 1 && month <= 12 && year >= 1900) {
+            // Cria a data no formato YYYY-MM-DD
+            return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        }
+    }
+    return null;
+};
+
+
 export function useConciliacao(): ConciliacaoHook {
     const { usuario } = useSessao();
     
@@ -353,6 +368,7 @@ export function useConciliacao(): ConciliacaoHook {
         Papa.parse(file, {
             header: true,
             skipEmptyLines: true,
+            dynamicTyping: true,
             complete: (results: ParseResult<any>) => {
                 const rawTransacoes: TransacaoExtrato[] = results.data.map((row: any) => {
                     const valorStr = String(row[config.mapeamento.valor] || '0').replace(',', '.');
@@ -369,27 +385,15 @@ export function useConciliacao(): ConciliacaoHook {
                     const tipo = (valor >= 0 ? 'Entrada' : 'Saida') as 'Entrada' | 'Saida';
                     const dataMovimentacao = row[config.mapeamento.data];
                     
-                    let formattedDate: string;
-                    try {
-                        const dateParts = dataMovimentacao.split(/[\/\-]/);
-                        let dateObj: Date;
-                        
-                        if (dateParts.length === 3) {
-                            // Tenta DD/MM/YYYY ou MM/DD/YYYY
-                            if (Number(dateParts[0]) <= 31 && Number(dateParts[1]) <= 12) {
-                                // Assumindo DD/MM/YYYY para o Brasil
-                                dateObj = new Date(Number(dateParts[2]), Number(dateParts[1]) - 1, Number(dateParts[0]));
-                            } else {
-                                dateObj = new Date(dataMovimentacao);
-                            }
-                        } else {
-                            dateObj = new Date(dataMovimentacao);
-                        }
-                        
-                        formattedDate = format(dateObj, 'yyyy-MM-dd');
-                    } catch (e) {
-                        console.error('Falha ao formatar data do CSV:', dataMovimentacao, e);
-                        formattedDate = dataMovimentacao;
+                    let formattedDate: string | null = null;
+                    
+                    // Tenta formatar a data do CSV (DD/MM/YYYY) para YYYY-MM-DD
+                    formattedDate = formatDDMMYYYYToISO(dataMovimentacao);
+                    
+                    if (!formattedDate) {
+                        console.error('Falha ao formatar data do CSV:', dataMovimentacao);
+                        // Se a formatação falhar, usa a string original (o que pode causar problemas na comparação)
+                        formattedDate = dataMovimentacao; 
                     }
                     
                     // Chave de comparação para a transação atual
@@ -450,18 +454,23 @@ export function useConciliacao(): ConciliacaoHook {
         setIsSaving(true);
         
         try {
-            const lancamentosPayload = transacoesParaSalvar.map(t => ({
-                empresa_id: proprietarioDaConfiguracao,
-                data_movimentacao: t.data, 
-                descricao: t.descricao,
-                valor: Math.abs(t.valor),
-                tipo: t.tipo,
-                conta_bancaria_id: contaSelecionadaId,
-                conta_contabil_id: t.conta_contabil_id,
-                conciliado: true,
-                origem: 'conciliacao_extrato',
-                documento: t.identificacao || null,
-            }));
+            const lancamentosPayload = transacoesParaSalvar.map(t => {
+                // Tenta formatar a data do CSV (DD/MM/YYYY) para YYYY-MM-DD
+                const formattedDate = formatDDMMYYYYToISO(t.data);
+                
+                return {
+                    empresa_id: proprietarioDaConfiguracao,
+                    data_movimentacao: formattedDate || t.data, // Usa a data formatada ou a string original
+                    descricao: t.descricao,
+                    valor: Math.abs(t.valor),
+                    tipo: t.tipo,
+                    conta_bancaria_id: contaSelecionadaId,
+                    conta_contabil_id: t.conta_contabil_id,
+                    conciliado: true,
+                    origem: 'conciliacao_extrato',
+                    documento: t.identificacao || null,
+                };
+            });
             
             // 1. Inserir Lançamentos
             const { error: lancamentoError } = await supabase
