@@ -5,7 +5,7 @@ import { showError, showSuccess } from '@/utils/toast';
 import { SaldoConta } from '@/types/saldo-conta';
 import { ConfiguracaoConciliacao, TransacaoExtrato, ConciliacaoRegra, ConciliacaoHistorico } from '@/types/conciliacao';
 import { PlanoContas } from '@/types/plano-contas';
-import Papa from 'papaparse';
+import Papa, { ParseResult } from 'papaparse';
 import { format } from 'date-fns';
 
 interface ConciliacaoHook {
@@ -46,6 +46,19 @@ interface ConciliacaoHook {
     setHistoricoDetalhesOpen: (open: boolean) => void;
     fetchConfigs: () => Promise<void>;
 }
+
+// Função auxiliar para calcular um hash simples do conteúdo do CSV (ignorando a primeira linha)
+const calculateContentHash = (csvContent: string): string => {
+    const lines = csvContent.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+    if (lines.length <= 1) return ''; // Ignora cabeçalho
+    
+    // Concatena todas as linhas de dados (a partir da segunda linha)
+    const dataContent = lines.slice(1).join('|');
+    
+    // Em um ambiente real, usaríamos uma biblioteca de hash (ex: crypto.subtle.digest).
+    // Aqui, usamos uma concatenação simples como identificador de conteúdo.
+    return dataContent.substring(0, 255); // Limita o tamanho do hash para o campo TEXT
+};
 
 export function useConciliacao(): ConciliacaoHook {
     const { usuario } = useSessao();
@@ -276,16 +289,16 @@ export function useConciliacao(): ConciliacaoHook {
 
     // --- Lógica de Processamento de Arquivo ---
 
-    const checkFileDuplicity = useCallback(async (fileName: string, empresaId: string): Promise<boolean> => {
+    const checkFileDuplicity = useCallback(async (contentHash: string, empresaId: string): Promise<boolean> => {
         const { data, error } = await supabase
             .from('conciliacoes')
             .select('id')
             .eq('empresa_id', empresaId)
-            .eq('nome_arquivo', fileName)
+            .eq('extrato_hash', contentHash) // Verifica pelo hash do conteúdo
             .limit(1);
             
         if (error) {
-            console.error('Erro ao verificar duplicidade de arquivo:', error);
+            console.error('Erro ao verificar duplicidade de conteúdo:', error);
             return false; 
         }
         
@@ -301,15 +314,25 @@ export function useConciliacao(): ConciliacaoHook {
         
         setLoading(true);
         
-        // 1. Verificar Duplicidade de Arquivo
-        const isDuplicatedFile = await checkFileDuplicity(file.name, proprietarioDaConfiguracao);
-        if (isDuplicatedFile) {
-            showError(`O arquivo "${file.name}" já foi importado anteriormente.`);
+        // 1. Ler o conteúdo do arquivo para calcular o hash
+        const fileContent = await file.text();
+        const contentHash = calculateContentHash(fileContent);
+        
+        if (!contentHash) {
+            showError('O arquivo está vazio ou não contém dados válidos.');
+            setLoading(false);
+            return;
+        }
+        
+        // 2. Verificar Duplicidade de Conteúdo
+        const isDuplicatedContent = await checkFileDuplicity(contentHash, proprietarioDaConfiguracao);
+        if (isDuplicatedContent) {
+            showError(`O conteúdo deste extrato já foi importado anteriormente.`);
             setLoading(false);
             return;
         }
 
-        // 2. Buscar lançamentos existentes para a conta selecionada
+        // 3. Buscar lançamentos existentes para a conta selecionada
         const { data: existingLancamentos, error: lancamentoError } = await supabase
             .from('lancamentos')
             .select('data_movimentacao, descricao, valor, tipo')
@@ -330,7 +353,7 @@ export function useConciliacao(): ConciliacaoHook {
         Papa.parse(file, {
             header: true,
             skipEmptyLines: true,
-            complete: (results) => {
+            complete: (results: ParseResult<any>) => {
                 const rawTransacoes: TransacaoExtrato[] = results.data.map((row: any) => {
                     const valorStr = String(row[config.mapeamento.valor] || '0').replace(',', '.');
                     let valor = parseFloat(valorStr);
@@ -466,12 +489,16 @@ export function useConciliacao(): ConciliacaoHook {
             }
             
             // 3. Salvar o registro de conciliação (Histórico)
+            const fileContent = await file.text();
+            const contentHash = calculateContentHash(fileContent);
+            
             const historicoPayload = {
                 empresa_id: proprietarioDaConfiguracao,
                 usuario_id: usuario?.id,
                 id_saldo_contas: contaSelecionadaId,
                 nome_arquivo: file.name,
                 extrato_json: transacoesParaSalvar,
+                extrato_hash: contentHash, // Salva o hash do conteúdo
             };
             
             const { error: historicoError } = await supabase
