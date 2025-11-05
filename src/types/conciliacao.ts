@@ -20,4 +20,14 @@ export interface TransacaoExtrato {
     descricao: string;
     valor: number;
     tipo: 'Entrada' | 'Saida';
+    conciliada?: boolean; // Novo: Indica se já foi mapeada
+    conta_contabil_id?: string | null; // Novo: ID da conta mapeada
+}
+
+export interface ConciliacaoRegra {
+    id: string;
+    proprietario_id: string;
+    descricao_extrato: string;
+    conta_contabil_id: string;
+    tipo_lancamento: 'Entrada' | 'Saida';
 }

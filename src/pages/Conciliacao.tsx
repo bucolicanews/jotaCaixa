@@ -1,14 +1,14 @@
 import LayoutPrincipal from '@/components/LayoutPrincipal';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSessao } from '@/hooks/use-sessao';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { SaldoConta } from '@/types/saldo-conta';
-import { ConfiguracaoConciliacao, TransacaoExtrato } from '@/types/conciliacao';
+import { ConfiguracaoConciliacao, TransacaoExtrato, ConciliacaoRegra } from '@/types/conciliacao';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, Upload, List, Settings, Edit } from 'lucide-react';
+import { PlusCircle, Upload, List, Settings, Edit, CheckCircle2, Save, ArrowUpCircle, ArrowDownCircle, Loader2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import FormConciliacaoConfig from '@/components/FormConciliacaoConfig';
 import { Input } from '@/components/ui/input';
@@ -16,6 +16,7 @@ import Papa from 'papaparse';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { PlanoContas } from '@/types/plano-contas';
 
 const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
@@ -23,6 +24,7 @@ const Conciliacao = () => {
   const { usuario } = useSessao();
   const [contas, setContas] = useState<SaldoConta[]>([]);
   const [configs, setConfigs] = useState<ConfiguracaoConciliacao[]>([]);
+  const [contasContabeis, setContasContabeis] = useState<PlanoContas[]>([]);
   const [contaSelecionadaId, setContaSelecionadaId] = useState<string | null>(null);
   const [configSelecionada, setConfigSelecionada] = useState<ConfiguracaoConciliacao | null>(null);
   const [loading, setLoading] = useState(true);
@@ -30,6 +32,10 @@ const Conciliacao = () => {
   const [configParaEditar, setConfigParaEditar] = useState<ConfiguracaoConciliacao | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [transacoes, setTransacoes] = useState<TransacaoExtrato[]>([]);
+  const [regras, setRegras] = useState<ConciliacaoRegra[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const proprietarioDaConfiguracao = usuario?.id;
 
   const fetchContas = useCallback(async () => {
     if (!usuario?.id) return;
@@ -46,15 +52,52 @@ const Conciliacao = () => {
     if (error) showError('Erro ao carregar configurações: ' + error.message);
     else setConfigs(data as ConfiguracaoConciliacao[]);
   }, [contaSelecionadaId]);
+  
+  const fetchContasContabeis = useCallback(async () => {
+    if (!proprietarioDaConfiguracao) return;
+    const { data, error } = await supabase
+        .from('plano_contas')
+        .select('id, Conta, Descricao, Analitica')
+        .eq('proprietario_id', proprietarioDaConfiguracao)
+        .eq('Analitica', 'Sim')
+        .order('Conta');
+    if (error) showError('Erro ao carregar Plano de Contas: ' + error.message);
+    else setContasContabeis(data as PlanoContas[]);
+  }, [proprietarioDaConfiguracao]);
+  
+  const fetchRegras = useCallback(async () => {
+    if (!proprietarioDaConfiguracao) return;
+    const { data, error } = await supabase
+        .from('conciliacao_regras')
+        .select('*')
+        .eq('proprietario_id', proprietarioDaConfiguracao);
+    if (error) console.error('Erro ao carregar regras de conciliação:', error);
+    else setRegras(data as ConciliacaoRegra[]);
+  }, [proprietarioDaConfiguracao]);
 
   useEffect(() => {
     fetchContas();
-  }, [fetchContas]);
+    fetchContasContabeis();
+    fetchRegras();
+  }, [fetchContas, fetchContasContabeis, fetchRegras]);
 
   useEffect(() => {
     fetchConfigs();
-    setConfigSelecionada(null); // Reseta a config selecionada ao trocar de conta
+    setConfigSelecionada(null);
   }, [contaSelecionadaId, fetchConfigs]);
+
+  const applyRegras = useCallback((rawTransacoes: TransacaoExtrato[]): TransacaoExtrato[] => {
+    return rawTransacoes.map(t => {
+      const regra = regras.find(r => 
+        t.descricao.toLowerCase().includes(r.descricao_extrato.toLowerCase()) && r.tipo_lancamento === t.tipo
+      );
+      
+      if (regra) {
+        return { ...t, conciliada: true, conta_contabil_id: regra.conta_contabil_id };
+      }
+      return { ...t, conciliada: false, conta_contabil_id: null };
+    });
+  }, [regras]);
 
   const handleParseFile = () => {
     if (!file || !configSelecionada) {
@@ -67,7 +110,7 @@ const Conciliacao = () => {
       header: true,
       skipEmptyLines: true,
       complete: (results) => {
-        const parsedData: TransacaoExtrato[] = results.data.map((row: any) => {
+        const rawTransacoes: TransacaoExtrato[] = results.data.map((row: any) => {
           const valorStr = String(row[config.mapeamento.valor] || '0').replace(',', '.');
           let valor = parseFloat(valorStr);
           
@@ -83,8 +126,10 @@ const Conciliacao = () => {
           };
         }).filter(t => t.data && t.descricao);
         
-        setTransacoes(parsedData);
-        showSuccess(`${parsedData.length} transações importadas com sucesso!`);
+        const transacoesMapeadas = applyRegras(rawTransacoes);
+        
+        setTransacoes(transacoesMapeadas);
+        showSuccess(`${transacoesMapeadas.length} transações importadas. ${transacoesMapeadas.filter(t => t.conciliada).length} mapeadas automaticamente.`);
       },
       error: (err) => {
         showError('Erro ao processar o arquivo CSV: ' + err.message);
@@ -96,6 +141,78 @@ const Conciliacao = () => {
     setConfigParaEditar(config);
     setDialogOpen(true);
   };
+  
+  const handleContaContabilChange = (index: number, contaContabilId: string) => {
+    setTransacoes(prev => prev.map((t, i) => 
+      i === index ? { ...t, conta_contabil_id: contaContabilId } : t
+    ));
+  };
+  
+  const handleSaveConciliacao = async () => {
+    if (!contaSelecionadaId || !proprietarioDaConfiguracao) {
+        showError('Conta bancária ou proprietário não definidos.');
+        return;
+    }
+    
+    const transacoesParaSalvar = transacoes.filter(t => t.conta_contabil_id);
+    
+    if (transacoesParaSalvar.length === 0) {
+        showError('Nenhuma transação mapeada para salvar.');
+        return;
+    }
+    
+    setIsSaving(true);
+    
+    try {
+        const lancamentosPayload = transacoesParaSalvar.map(t => ({
+            empresa_id: proprietarioDaConfiguracao,
+            data_movimentacao: t.data,
+            descricao: t.descricao,
+            valor: Math.abs(t.valor),
+            tipo: t.tipo,
+            conta_bancaria_id: contaSelecionadaId,
+            conta_contabil_id: t.conta_contabil_id,
+            conciliado: true,
+            origem: 'conciliacao_extrato',
+        }));
+        
+        // 1. Inserir Lançamentos
+        const { error: lancamentoError } = await supabase
+            .from('lancamentos')
+            .insert(lancamentosPayload);
+            
+        if (lancamentoError) throw lancamentoError;
+        
+        // 2. Inserir/Atualizar Regras de Mapeamento (apenas para as transações que foram mapeadas manualmente)
+        const regrasParaSalvar = transacoesParaSalvar
+            .filter(t => !t.conciliada) // Apenas as que foram mapeadas manualmente agora
+            .map(t => ({
+                proprietario_id: proprietarioDaConfiguracao,
+                descricao_extrato: t.descricao,
+                conta_contabil_id: t.conta_contabil_id,
+                tipo_lancamento: t.tipo,
+            }));
+            
+        if (regrasParaSalvar.length > 0) {
+            const { error: regraError } = await supabase
+                .from('conciliacao_regras')
+                .upsert(regrasParaSalvar, { onConflict: 'proprietario_id, descricao_extrato, tipo_lancamento' });
+            
+            if (regraError) console.error('Aviso: Falha ao salvar regras de mapeamento:', regraError);
+        }
+        
+        showSuccess(`${lancamentosPayload.length} lançamentos conciliados e salvos com sucesso!`);
+        setTransacoes([]); // Limpa a lista após salvar
+        fetchRegras(); // Atualiza as regras
+        
+    } catch (error: any) {
+        showError('Falha ao salvar conciliação: ' + error.message);
+    } finally {
+        setIsSaving(false);
+    }
+  };
+
+  const transacoesNaoConciliadas = useMemo(() => transacoes.filter(t => !t.conciliada), [transacoes]);
 
   const renderStep1 = () => (
     <Card>
@@ -151,29 +268,73 @@ const Conciliacao = () => {
       <CardContent>
         <div className="overflow-y-auto max-h-[400px] border rounded-md">
           <Table>
-            <TableHeader><TableRow><TableHead>Data</TableHead><TableHead>Descrição</TableHead><TableHead>Tipo</TableHead><TableHead className="text-right">Valor</TableHead></TableRow></TableHeader>
+            <TableHeader><TableRow><TableHead>Data</TableHead><TableHead>Descrição</TableHead><TableHead>Tipo</TableHead><TableHead className="text-right">Valor</TableHead><TableHead className="w-[250px]">Conta Contábil</TableHead></TableRow></TableHeader>
             <TableBody>
               {transacoes.length === 0 ? (
-                <TableRow><TableCell colSpan={4} className="text-center h-24">Nenhuma transação importada.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={5} className="text-center h-24">Nenhuma transação importada.</TableCell></TableRow>
               ) : (
-                transacoes.map((t, i) => (
-                  <TableRow key={i}>
-                    <TableCell>{t.data}</TableCell>
-                    <TableCell>{t.descricao}</TableCell>
-                    <TableCell><Badge variant={t.tipo === 'Entrada' ? 'success' : 'destructive'}>{t.tipo}</Badge></TableCell>
-                    <TableCell className={cn("text-right font-semibold", t.tipo === 'Entrada' ? 'text-green-600' : 'text-red-600')}>{formatCurrency(t.valor)}</TableCell>
-                  </TableRow>
-                ))
+                transacoes.map((t, i) => {
+                    const isMapeada = !!t.conta_contabil_id;
+                    const contaContabil = contasContabeis.find(c => c.id === t.conta_contabil_id);
+                    
+                    return (
+                        <TableRow key={i} className={cn(isMapeada ? 'bg-green-500/10' : 'bg-red-500/10')}>
+                            <TableCell>{t.data}</TableCell>
+                            <TableCell>{t.descricao}</TableCell>
+                            <TableCell>
+                                <Badge variant={t.tipo === 'Entrada' ? 'success' : 'destructive'} className="flex items-center justify-center">
+                                    {t.tipo === 'Entrada' ? <ArrowUpCircle className="w-3 h-3 mr-1" /> : <ArrowDownCircle className="w-3 h-3 mr-1" />}
+                                    {t.tipo}
+                                </Badge>
+                            </TableCell>
+                            <TableCell className={cn("text-right font-semibold", t.tipo === 'Entrada' ? 'text-green-600' : 'text-red-600')}>{formatCurrency(Math.abs(t.valor))}</TableCell>
+                            <TableCell>
+                                {isMapeada ? (
+                                    <span className="text-sm font-medium text-green-700 flex items-center">
+                                        <CheckCircle2 className="w-4 h-4 mr-1" /> {contaContabil?.Conta} - {contaContabil?.Descricao}
+                                    </span>
+                                ) : (
+                                    <Select 
+                                        onValueChange={(id) => handleContaContabilChange(i, id)}
+                                        value={t.conta_contabil_id || undefined}
+                                        disabled={isSaving}
+                                    >
+                                        <SelectTrigger className="h-8 text-xs">
+                                            <SelectValue placeholder="Mapear para Conta Contábil" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {contasContabeis.map(c => (
+                                                <SelectItem key={c.id} value={c.id}>
+                                                    {c.Conta} - {c.Descricao}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                )}
+                            </TableCell>
+                        </TableRow>
+                    );
+                })
               )}
             </TableBody>
           </Table>
         </div>
+        
+        <div className="flex justify-between items-center pt-4 border-t">
+            <p className="text-sm text-muted-foreground">
+                {transacoesNaoConciliadas.length} transações pendentes de mapeamento.
+            </p>
+            <Button 
+                onClick={handleSaveConciliacao} 
+                disabled={isSaving || transacoes.filter(t => t.conta_contabil_id).length === 0}
+            >
+                {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                Salvar Lançamentos Conciliados
+            </Button>
+        </div>
       </CardContent>
     </Card>
   );
-
-  const contaSelecionada = contas.find(c => c.id === contaSelecionadaId);
-  const proprietarioDaConta = contaSelecionada?.empresa_id;
 
   return (
     <LayoutPrincipal>
@@ -185,8 +346,9 @@ const Conciliacao = () => {
         {renderStep1()}
         {contaSelecionadaId && renderStep2()}
         {configSelecionada && renderStep3()}
-        {transacoes.length > 0 && renderStep4()}
       </div>
+      {transacoes.length > 0 && renderStep4()}
+      
       {contaSelecionadaId && (
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogContent>
@@ -194,7 +356,7 @@ const Conciliacao = () => {
             <FormConciliacaoConfig 
               configInicial={configParaEditar}
               idSaldoContas={contaSelecionadaId} 
-              proprietarioId={proprietarioDaConta}
+              proprietarioId={proprietarioDaConfiguracao}
               onSaveComplete={() => { setDialogOpen(false); fetchConfigs(); }} 
             />
           </DialogContent>

@@ -12,9 +12,9 @@ import { ConfiguracaoConciliacao } from '@/types/conciliacao';
 
 const formSchema = z.object({
   nome_configuracao: z.string().min(1, 'O nome é obrigatório.'),
-  coluna_data: z.string().min(1, 'O nome da coluna de data é obrigatório.'),
-  coluna_descricao: z.string().min(1, 'O nome da coluna de descrição é obrigatório.'),
-  coluna_valor: z.string().min(1, 'O nome da coluna de valor é obrigatório.'),
+  coluna_data: z.string().min(1, 'O nome da coluna de data é obrigatória.'),
+  coluna_descricao: z.string().min(1, 'O nome da coluna de descrição é obrigatória.'),
+  coluna_valor: z.string().min(1, 'O nome da coluna de valor é obrigatória.'),
   coluna_tipo_transacao: z.string().optional(),
   valor_credito: z.string().optional(),
 });
