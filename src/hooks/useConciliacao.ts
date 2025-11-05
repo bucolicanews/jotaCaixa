@@ -286,7 +286,6 @@ export function useConciliacao(): ConciliacaoHook {
             
         if (error) {
             console.error('Erro ao verificar duplicidade de arquivo:', error);
-            // Se houver erro, assumimos que não é duplicado para não bloquear o usuário
             return false; 
         }
         
@@ -302,7 +301,7 @@ export function useConciliacao(): ConciliacaoHook {
         
         setLoading(true);
         
-        // NOVO: 1. Verificar Duplicidade de Arquivo
+        // 1. Verificar Duplicidade de Arquivo
         const isDuplicatedFile = await checkFileDuplicity(file.name, proprietarioDaConfiguracao);
         if (isDuplicatedFile) {
             showError(`O arquivo "${file.name}" já foi importado anteriormente.`);
@@ -322,9 +321,11 @@ export function useConciliacao(): ConciliacaoHook {
             return;
         }
         
-        const existingSet = new Set(existingLancamentos.map(l => 
-            `${format(new Date(l.data_movimentacao), 'yyyy-MM-dd')}|${l.descricao.toLowerCase().trim()}|${l.valor.toFixed(2)}|${l.tipo}`
-        ));
+        // Cria um Set de chaves únicas (Data YYYY-MM-DD | Descrição | Valor Absoluto | Tipo)
+        const existingSet = new Set(existingLancamentos.map(l => {
+            const formattedDate = format(new Date(l.data_movimentacao), 'yyyy-MM-dd');
+            return `${formattedDate}|${l.descricao.toLowerCase().trim()}|${Math.abs(l.valor).toFixed(2)}|${l.tipo}`;
+        }));
 
         Papa.parse(file, {
             header: true,
@@ -351,7 +352,9 @@ export function useConciliacao(): ConciliacaoHook {
                         let dateObj: Date;
                         
                         if (dateParts.length === 3) {
+                            // Tenta DD/MM/YYYY ou MM/DD/YYYY
                             if (Number(dateParts[0]) <= 31 && Number(dateParts[1]) <= 12) {
+                                // Assumindo DD/MM/YYYY para o Brasil
                                 dateObj = new Date(Number(dateParts[2]), Number(dateParts[1]) - 1, Number(dateParts[0]));
                             } else {
                                 dateObj = new Date(dataMovimentacao);
@@ -366,6 +369,7 @@ export function useConciliacao(): ConciliacaoHook {
                         formattedDate = dataMovimentacao;
                     }
                     
+                    // Chave de comparação para a transação atual
                     const uniqueKey = `${formattedDate}|${String(row[config.mapeamento.descricao] || '').toLowerCase().trim()}|${Math.abs(valor).toFixed(2)}|${tipo}`;
                     
                     let isDuplicated = false;
