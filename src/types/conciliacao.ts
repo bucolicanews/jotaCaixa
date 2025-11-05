@@ -33,3 +33,13 @@ export interface ConciliacaoRegra {
     conta_contabil_id: string;
     tipo_lancamento: 'Entrada' | 'Saida';
 }
+
+export interface ConciliacaoHistorico {
+    id: string;
+    empresa_id: string;
+    usuario_id: string;
+    nome_arquivo: string;
+    extrato_json: TransacaoExtrato[];
+    criado_em: string;
+    saldo_contas: { nome: string } | null;
+}
