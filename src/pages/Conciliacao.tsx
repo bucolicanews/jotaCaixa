@@ -254,6 +254,7 @@ const Conciliacao = () => {
         
         const transacoesMapeadas = applyRegras(transacoesValidas);
         
+        // Combina transações mapeadas e rejeitadas para exibição
         setTransacoes([...transacoesMapeadas, ...transacoesRejeitadas]);
         setTransacoesSelecionadas([]);
         setContaContabilLote(null);
@@ -273,6 +274,7 @@ const Conciliacao = () => {
         return;
     }
     
+    // Filtra apenas transações que foram mapeadas E não são duplicadas
     const transacoesParaSalvar = transacoes.filter(t => t.conta_contabil_id && !t.isDuplicated);
     
     if (transacoesParaSalvar.length === 0) {
@@ -285,7 +287,8 @@ const Conciliacao = () => {
     try {
         const lancamentosPayload = transacoesParaSalvar.map(t => ({
             empresa_id: proprietarioDaConfiguracao,
-            data_movimentacao: t.data,
+            // A data do CSV pode não ser ISO, mas o Supabase aceita 'yyyy-MM-dd'
+            data_movimentacao: t.data, 
             descricao: t.descricao,
             valor: Math.abs(t.valor),
             tipo: t.tipo,
@@ -321,21 +324,20 @@ const Conciliacao = () => {
             if (regraError) console.error('Aviso: Falha ao salvar regras de mapeamento:', regraError);
         }
         
-        // 3. Salvar o registro de conciliação (Histórico)
+        // 3. Salvar o registro de conciliação (Histórico) - SALVA APENAS AS TRANSAÇÕES SALVAS
         const historicoPayload = {
             empresa_id: proprietarioDaConfiguracao,
             usuario_id: usuario?.id,
             id_saldo_contas: contaSelecionadaId,
             nome_arquivo: file.name,
-            extrato_json: transacoesParaSalvar,
+            extrato_json: transacoesParaSalvar, // SALVA APENAS AS TRANSAÇÕES VÁLIDAS E MAPADAS
         };
         
-        // Usando .insert() sem .select() para garantir que o objeto JSON seja salvo corretamente
         const { error: historicoError } = await supabase
             .from('conciliacoes')
             .insert(historicoPayload);
             
-        if (historicoError) throw historicoError; // Lançar erro para notificar o usuário
+        if (historicoError) throw historicoError;
 
         showSuccess(`${lancamentosPayload.length} lançamentos conciliados e salvos com sucesso!`);
         handleReset();
