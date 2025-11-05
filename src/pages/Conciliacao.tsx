@@ -1,30 +1,26 @@
 import LayoutPrincipal from '@/components/LayoutPrincipal';
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useSessao } from '@/hooks/use-sessao';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { SaldoConta } from '@/types/saldo-conta';
 import { ConfiguracaoConciliacao, TransacaoExtrato, ConciliacaoRegra, ConciliacaoHistorico } from '@/types/conciliacao';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Button } from '@/components/ui/button';
-import { PlusCircle, Upload, List, Settings, Edit, CheckCircle2, Save, ArrowUpCircle, ArrowDownCircle, Loader2, Check, History, Eye, AlertTriangle } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import FormConciliacaoConfig from '@/components/FormConciliacaoConfig';
-import { Input } from '@/components/ui/input';
 import Papa from 'papaparse';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
-import { cn } from '@/lib/utils';
 import { PlanoContas } from '@/types/plano-contas';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
 import HistoricoConciliacaoDialog from '@/components/HistoricoConciliacaoDialog';
 
-const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
-const formatTimestamp = (dateString: string) => format(new Date(dateString), 'dd/MM/yyyy HH:mm', { locale: ptBR });
+// Componentes Modulares
+import ConciliacaoHeader from '@/components/conciliacao/ConciliacaoHeader';
+import Step1SelectAccount from '@/components/conciliacao/Step1SelectAccount';
+import Step2SelectConfig from '@/components/conciliacao/Step2SelectConfig';
+import Step3ImportFile from '@/components/conciliacao/Step3ImportFile';
+import Step4MappingTable from '@/components/conciliacao/Step4MappingTable';
+import HistoricoTab from '@/components/conciliacao/HistoricoTab';
 
 const Conciliacao = () => {
   const { usuario } = useSessao();
@@ -52,6 +48,8 @@ const Conciliacao = () => {
 
   const contaSelecionada = contas.find(c => c.id === contaSelecionadaId);
   const proprietarioDaConfiguracao = contaSelecionada?.empresa_id;
+
+  // --- Funções de Busca de Dados ---
 
   const fetchContas = useCallback(async () => {
     if (!usuario?.id) return;
@@ -121,6 +119,8 @@ const Conciliacao = () => {
     }
   }, [usuario]);
 
+  // --- Efeitos de Inicialização e Atualização ---
+
   useEffect(() => {
     fetchContas();
     fetchHistorico();
@@ -137,6 +137,8 @@ const Conciliacao = () => {
     fetchConfigs();
     setConfigSelecionada(null);
   }, [contaSelecionadaId, fetchConfigs]);
+
+  // --- Lógica de Mapeamento e Processamento ---
 
   const applyRegras = useCallback((rawTransacoes: TransacaoExtrato[]): TransacaoExtrato[] => {
     return rawTransacoes.map(t => {
@@ -238,58 +240,6 @@ const Conciliacao = () => {
     setLoading(false);
   };
 
-  const handleOpenDialog = (config: ConfiguracaoConciliacao | null) => {
-    setConfigParaEditar(config);
-    setDialogOpen(true);
-  };
-  
-  const handleContaContabilChange = (index: number, contaContabilId: string) => {
-    setTransacoes(prev => prev.map((t, i) => 
-      i === index ? { ...t, conta_contabil_id: contaContabilId, conciliada: true } : t
-    ));
-  };
-  
-  const handleToggleSelection = (index: number, checked: boolean) => {
-      setTransacoesSelecionadas(prev => {
-          if (checked) {
-              return [...prev, index];
-          } else {
-              return prev.filter(i => i !== index);
-          }
-      });
-  };
-  
-  const handleApplyLote = () => {
-      if (!contaContabilLote || transacoesSelecionadas.length === 0) {
-          showError('Selecione uma conta contábil e pelo menos uma transação.');
-          return;
-      }
-      
-      setTransacoes(prev => prev.map((t, i) => {
-          if (transacoesSelecionadas.includes(i)) {
-              return { ...t, conta_contabil_id: contaContabilLote, conciliada: true };
-          }
-          return t;
-      }));
-      
-      setTransacoesSelecionadas([]);
-      setContaContabilLote(null);
-      showSuccess(`${transacoesSelecionadas.length} transações mapeadas em lote.`);
-  };
-  
-  const handleSelectAll = (checked: boolean) => {
-      const validIndexes = transacoes
-          .map((t, i) => ({ t, i }))
-          .filter(({ t }) => !t.isDuplicated)
-          .map(({ i }) => i);
-          
-      if (checked) {
-          setTransacoesSelecionadas(validIndexes);
-      } else {
-          setTransacoesSelecionadas([]);
-      }
-  };
-  
   const handleSaveConciliacao = async () => {
     if (!contaSelecionadaId || !proprietarioDaConfiguracao || !file) {
         showError('Conta bancária, proprietário ou arquivo não definidos.');
@@ -350,7 +300,7 @@ const Conciliacao = () => {
             usuario_id: usuario?.id,
             id_saldo_contas: contaSelecionadaId,
             nome_arquivo: file.name,
-            extrato_json: transacoesParaSalvar, // Salva apenas as transações que foram salvas como lançamentos
+            extrato_json: transacoesParaSalvar,
         };
         
         const { error: historicoError } = await supabase
@@ -360,11 +310,8 @@ const Conciliacao = () => {
         if (historicoError) console.error('Aviso: Falha ao salvar histórico de conciliação:', historicoError);
         
         showSuccess(`${lancamentosPayload.length} lançamentos conciliados e salvos com sucesso!`);
-        setTransacoes([]);
-        setTransacoesSelecionadas([]);
-        setContaContabilLote(null);
-        fetchRegras();
-        fetchHistorico(); // Atualiza o histórico
+        handleReset();
+        fetchHistorico();
         
     } catch (error: any) {
         showError('Falha ao salvar conciliação: ' + error.message);
@@ -372,256 +319,113 @@ const Conciliacao = () => {
         setIsSaving(false);
     }
   };
-
-  const transacoesNaoConciliadas = useMemo(() => transacoes.filter(t => !t.conta_contabil_id && !t.isDuplicated), [transacoes]);
-  const transacoesRejeitadas = useMemo(() => transacoes.filter(t => t.isDuplicated), [transacoes]);
-
-  const renderStep1 = () => (
-    <Card>
-      <CardHeader><CardTitle>Passo 1: Selecione a Conta Bancária</CardTitle></CardHeader>
-      <CardContent>
-        <Select onValueChange={setContaSelecionadaId} disabled={loading}>
-          <SelectTrigger><SelectValue placeholder={loading ? "Carregando..." : "Selecione a conta para conciliar"} /></SelectTrigger>
-          <SelectContent>{contas.map(c => <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>)}</SelectContent>
-        </Select>
-      </CardContent>
-    </Card>
-  );
-
-  const renderStep2 = () => (
-    <Card>
-      <CardHeader>
-        <CardTitle>Passo 2: Configuração de Importação</CardTitle>
-        <CardDescription>Selecione ou crie um mapeamento para o formato do seu extrato CSV.</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <Select 
-          onValueChange={(id) => setConfigSelecionada(configs.find(c => c.id === id) || null)} 
-          value={configSelecionada?.id || ''}
-        >
-          <SelectTrigger><SelectValue placeholder="Selecione uma configuração" /></SelectTrigger>
-          <SelectContent>{configs.map(c => <SelectItem key={c.id} value={c.id}>{c.nome_configuracao}</SelectItem>)}</SelectContent>
-        </Select>
-        <div className="flex space-x-2">
-          <Button variant="outline" onClick={() => handleOpenDialog(null)} className="w-full">
-            <PlusCircle className="w-4 h-4 mr-2" /> Nova
-          </Button>
-          <Button variant="secondary" onClick={() => handleOpenDialog(configSelecionada)} className="w-full" disabled={!configSelecionada}>
-            <Edit className="w-4 h-4 mr-2" /> Editar
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
-  );
-
-  const renderStep3 = () => (
-    <Card>
-      <CardHeader><CardTitle>Passo 3: Importar Extrato</CardTitle></CardHeader>
-      <CardContent className="flex items-center space-x-2">
-        <Input type="file" accept=".csv" onChange={(e) => setFile(e.target.files?.[0] || null)} className="flex-1" />
-        <Button onClick={handleParseFile} disabled={!file || loading}><Upload className="w-4 h-4 mr-2" /> Processar</Button>
-      </CardContent>
-    </Card>
-  );
-
-  const renderStep4 = () => (
-    <Card className="col-span-1 md:col-span-3">
-      <CardHeader><CardTitle className="flex items-center"><List className="w-5 h-5 mr-2" /> Transações Importadas do Extrato</CardTitle></CardHeader>
-      <CardContent>
-        
-        {transacoesRejeitadas.length > 0 && (
-            <div className="p-3 bg-red-100 dark:bg-red-900/20 border border-red-500 rounded-md mb-4">
-                <h3 className="font-semibold text-red-700 dark:text-red-300 flex items-center mb-2">
-                    <AlertTriangle className="w-5 h-5 mr-2" /> {transacoesRejeitadas.length} Transações Rejeitadas (Duplicidade)
-                </h3>
-                <ul className="list-disc list-inside text-sm text-red-600 dark:text-red-400">
-                    {transacoesRejeitadas.map((t, i) => (
-                        <li key={i}>
-                            Linha {transacoes.indexOf(t) + 1}: {t.data} - {t.descricao} ({formatCurrency(Math.abs(t.valor))})
-                        </li>
-                    ))}
-                </ul>
-            </div>
-        )}
-        
-        <div className="flex flex-col md:flex-row items-center space-y-3 md:space-y-0 md:space-x-4 p-3 bg-secondary rounded-md mb-4">
-            <div className="flex-1 w-full">
-                <Select 
-                    onValueChange={setContaContabilLote}
-                    value={contaContabilLote || undefined}
-                    disabled={isSaving || transacoesSelecionadas.length === 0}
-                >
-                    <SelectTrigger className="h-10 text-sm">
-                        <SelectValue placeholder="Aplicar Conta Contábil em Lote" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        {contasContabeis.map(c => (
-                            <SelectItem key={c.id} value={c.id}>
-                                {c.Conta} - {c.Descricao}
-                            </SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-            </div>
-            <Button 
-                onClick={handleApplyLote} 
-                disabled={isSaving || !contaContabilLote || transacoesSelecionadas.length === 0}
-                className="w-full md:w-auto"
-            >
-                <Check className="w-4 h-4 mr-2" /> Aplicar ({transacoesSelecionadas.length})
-            </Button>
-        </div>
-        
-        <div className="overflow-y-auto max-h-[400px] border rounded-md">
-          <Table>
-            <TableHeader><TableRow>
-                <TableHead className="w-[40px] text-center">
-                    <Checkbox 
-                        checked={transacoesSelecionadas.length === transacoes.filter(t => !t.isDuplicated).length && transacoes.filter(t => !t.isDuplicated).length > 0}
-                        onCheckedChange={(checked) => handleSelectAll(!!checked)}
-                        disabled={isSaving}
-                    />
-                </TableHead>
-                <TableHead>Data</TableHead>
-                <TableHead>Descrição</TableHead>
-                <TableHead>Identificação</TableHead>
-                <TableHead>Tipo</TableHead>
-                <TableHead className="text-right">Valor</TableHead>
-                <TableHead className="w-[250px]">Conta Contábil</TableHead>
-            </TableRow></TableHeader>
-            <TableBody>
-              {transacoes.length === 0 ? (
-                <TableRow><TableCell colSpan={7} className="text-center h-24">Nenhuma transação importada.</TableCell></TableRow>
-              ) : (
-                transacoes.map((t, i) => {
-                    const isMapeada = !!t.conta_contabil_id;
-                    const contaContabil = contasContabeis.find(c => c.id === t.conta_contabil_id);
-                    const isSelected = transacoesSelecionadas.includes(i);
-                    
-                    return (
-                        <TableRow key={i} className={cn(t.isDuplicated ? 'bg-red-500/30 opacity-60' : (isMapeada ? 'bg-green-500/10' : 'bg-red-500/10'), isSelected && 'bg-blue-100/50 dark:bg-blue-900/20')}>
-                            <TableCell className="text-center">
-                                <Checkbox 
-                                    checked={isSelected}
-                                    onCheckedChange={(checked) => handleToggleSelection(i, !!checked)}
-                                    disabled={isSaving || t.isDuplicated}
-                                />
-                            </TableCell>
-                            <TableCell>{t.data}</TableCell>
-                            <TableCell>{t.descricao}</TableCell>
-                            <TableCell className="text-sm text-muted-foreground">{t.identificacao || '-'}</TableCell>
-                            <TableCell>
-                                <Badge variant={t.tipo === 'Entrada' ? 'success' : 'destructive'} className="flex items-center justify-center">
-                                    {t.tipo === 'Entrada' ? <ArrowUpCircle className="w-3 h-3 mr-1" /> : <ArrowDownCircle className="w-3 h-3 mr-1" />}
-                                    {t.tipo}
-                                </Badge>
-                            </TableCell>
-                            <TableCell className={cn("text-right font-semibold", t.tipo === 'Entrada' ? 'text-green-600' : 'text-red-600')}>{formatCurrency(Math.abs(t.valor))}</TableCell>
-                            <TableCell>
-                                {t.isDuplicated ? (
-                                    <span className="text-sm font-medium text-red-700 flex items-center">
-                                        <AlertTriangle className="w-4 h-4 mr-1" /> DUPLICADA
-                                    </span>
-                                ) : isMapeada ? (
-                                    <span className="text-sm font-medium text-green-700 flex items-center">
-                                        <CheckCircle2 className="w-4 h-4 mr-1" /> {contaContabil?.Conta} - {contaContabil?.Descricao}
-                                    </span>
-                                ) : (
-                                    <Select 
-                                        onValueChange={(id) => handleContaContabilChange(i, id)}
-                                        value={t.conta_contabil_id || undefined}
-                                        disabled={isSaving}
-                                    >
-                                        <SelectTrigger className="h-8 text-xs">
-                                            <SelectValue placeholder="Mapear para Conta Contábil" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {contasContabeis.map(c => (
-                                                <SelectItem key={c.id} value={c.id}>
-                                                    {c.Conta} - {c.Descricao}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                )}
-                            </TableCell>
-                        </TableRow>
-                    );
-                })
-              )}
-            </TableBody>
-          </Table>
-        </div>
-        
-        <div className="flex justify-between items-center pt-4 border-t">
-            <p className="text-sm text-muted-foreground">
-                {transacoesNaoConciliadas.length} transações pendentes de mapeamento.
-            </p>
-            <Button 
-                onClick={handleSaveConciliacao} 
-                disabled={isSaving || transacoes.filter(t => t.conta_contabil_id && !t.isDuplicated).length === 0}
-            >
-                {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                Salvar Lançamentos Conciliados
-            </Button>
-        </div>
-      </CardContent>
-    </Card>
-  );
   
-  const renderHistorico = () => (
-    <Card className="col-span-1 md:col-span-3">
-        <CardHeader>
-            <CardTitle className="flex items-center"><History className="w-5 h-5 mr-2" /> Histórico de Conciliações</CardTitle>
-            <CardDescription>Registros de extratos importados e conciliados.</CardDescription>
-        </CardHeader>
-        <CardContent>
-            <div className="overflow-x-auto">
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead>Data Conciliação</TableHead>
-                            <TableHead>Conta Bancária</TableHead>
-                            <TableHead>Nome do Arquivo</TableHead>
-                            <TableHead className="text-right">Transações Salvas</TableHead>
-                            <TableHead className="text-right">Ações</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {historico.length === 0 ? (
-                            <TableRow><TableCell colSpan={5} className="text-center h-24">Nenhum histórico encontrado.</TableCell></TableRow>
-                        ) : (
-                            historico.map(h => (
-                                <TableRow key={h.id}>
-                                    <TableCell>{formatTimestamp(h.criado_em)}</TableCell>
-                                    <TableCell className="font-medium">{h.saldo_contas?.nome || 'N/A'}</TableCell>
-                                    <TableCell className="font-mono text-sm">{h.nome_arquivo}</TableCell>
-                                    <TableCell className="text-right">{h.extrato_json?.length || 0}</TableCell>
-                                    <TableCell className="text-right">
-                                        <Button 
-                                            variant="outline" 
-                                            size="sm" 
-                                            onClick={() => { setHistoricoSelecionado(h); setHistoricoDetalhesOpen(true); }}
-                                        >
-                                            <Eye className="w-4 h-4 mr-2" /> Detalhes
-                                        </Button>
-                                    </TableCell>
-                                </TableRow>
-                            ))
-                        )}
-                    </TableBody>
-                </Table>
-            </div>
-        </CardContent>
-    </Card>
-  );
+  // --- Handlers de Estado ---
+
+  const handleReset = () => {
+    setContaSelecionadaId(null);
+    setConfigSelecionada(null);
+    setTransacoes([]);
+    setTransacoesSelecionadas([]);
+    setContaContabilLote(null);
+    setFile(null);
+    setActiveTab('conciliacao');
+  };
+
+  const handleSelectAccount = (id: string) => {
+    setContaSelecionadaId(id);
+    setTransacoes([]); // Limpa transações ao mudar de conta
+    setFile(null);
+  };
+
+  const handleSelectConfig = (id: string) => {
+    setConfigSelecionada(configs.find(c => c.id === id) || null);
+    setTransacoes([]); // Limpa transações ao mudar de config
+    setFile(null);
+  };
+
+  const handleOpenConfigDialog = (config: ConfiguracaoConciliacao | null) => {
+    setConfigParaEditar(config);
+    setDialogOpen(true);
+  };
+  
+  const handleConfigSaveComplete = () => {
+    setDialogOpen(false);
+    fetchConfigs();
+  };
+  
+  const handleFileChange = (newFile: File | null) => {
+      setFile(newFile);
+      setTransacoes([]);
+  };
+  
+  const handleContaContabilChange = (index: number, contaContabilId: string) => {
+    setTransacoes(prev => prev.map((t, i) => 
+      i === index ? { ...t, conta_contabil_id: contaContabilId, conciliada: true } : t
+    ));
+  };
+  
+  const handleToggleSelection = (index: number, checked: boolean) => {
+      setTransacoesSelecionadas(prev => {
+          if (checked) {
+              return [...prev, index];
+          } else {
+              return prev.filter(i => i !== index);
+          }
+      });
+  };
+  
+  const handleSelectAll = (checked: boolean) => {
+      const validIndexes = transacoes
+          .map((t, i) => ({ t, i }))
+          .filter(({ t }) => !t.isDuplicated)
+          .map(({ i }) => i);
+          
+      if (checked) {
+          setTransacoesSelecionadas(validIndexes);
+      } else {
+          setTransacoesSelecionadas([]);
+      }
+  };
+  
+  const handleApplyLote = () => {
+      if (!contaContabilLote || transacoesSelecionadas.length === 0) {
+          showError('Selecione uma conta contábil e pelo menos uma transação.');
+          return;
+      }
+      
+      setTransacoes(prev => prev.map((t, i) => {
+          if (transacoesSelecionadas.includes(i)) {
+              return { ...t, conta_contabil_id: contaContabilLote, conciliada: true };
+          }
+          return t;
+      }));
+      
+      setTransacoesSelecionadas([]);
+      setContaContabilLote(null);
+      showSuccess(`${transacoesSelecionadas.length} transações mapeadas em lote.`);
+  };
+  
+  const handleViewHistoricoDetails = (h: ConciliacaoHistorico) => {
+      setHistoricoSelecionado(h);
+      setHistoricoDetalhesOpen(true);
+  };
+
+  // --- Renderização ---
+
+  if (loading) {
+    return (
+      <LayoutPrincipal>
+        <div className="flex justify-center items-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </LayoutPrincipal>
+    );
+  }
 
   return (
     <LayoutPrincipal>
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl md:text-3xl font-bold">Conciliação Bancária</h1>
-        <Button variant="outline" onClick={() => { setContaSelecionadaId(null); setConfigSelecionada(null); setTransacoes([]); setActiveTab('conciliacao'); }}><Settings className="w-4 h-4 mr-2" /> Reiniciar</Button>
-      </div>
+      <ConciliacaoHeader onReset={handleReset} />
       
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full grid-cols-2">
@@ -631,15 +435,56 @@ const Conciliacao = () => {
         
         <TabsContent value="conciliacao" className="mt-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {renderStep1()}
-                {contaSelecionadaId && renderStep2()}
-                {configSelecionada && renderStep3()}
+                <Step1SelectAccount
+                    contas={contas}
+                    loading={loading}
+                    onSelectAccount={handleSelectAccount}
+                    contaSelecionadaId={contaSelecionadaId}
+                />
+                
+                {contaSelecionadaId && (
+                    <Step2SelectConfig
+                        configs={configs}
+                        configSelecionada={configSelecionada}
+                        onSelectConfig={handleSelectConfig}
+                        onOpenDialog={handleOpenConfigDialog}
+                    />
+                )}
+                
+                {configSelecionada && (
+                    <Step3ImportFile
+                        file={file}
+                        loading={loading}
+                        onFileChange={handleFileChange}
+                        onProcessFile={handleParseFile}
+                    />
+                )}
             </div>
-            {transacoes.length > 0 && renderStep4()}
+            
+            {transacoes.length > 0 && (
+                <div className="mt-6">
+                    <Step4MappingTable
+                        transacoes={transacoes}
+                        contasContabeis={contasContabeis}
+                        transacoesSelecionadas={transacoesSelecionadas}
+                        contaContabilLote={contaContabilLote}
+                        isSaving={isSaving}
+                        onToggleSelection={handleToggleSelection}
+                        onSelectAll={handleSelectAll}
+                        onContaContabilChange={handleContaContabilChange}
+                        onContaContabilLoteChange={setContaContabilLote}
+                        onApplyLote={handleApplyLote}
+                        onSaveConciliacao={handleSaveConciliacao}
+                    />
+                </div>
+            )}
         </TabsContent>
         
         <TabsContent value="historico" className="mt-4">
-            {renderHistorico()}
+            <HistoricoTab 
+                historico={historico}
+                onViewDetails={handleViewHistoricoDetails}
+            />
         </TabsContent>
       </Tabs>
       
@@ -651,7 +496,7 @@ const Conciliacao = () => {
               configInicial={configParaEditar}
               idSaldoContas={contaSelecionadaId} 
               proprietarioId={proprietarioDaConfiguracao}
-              onSaveComplete={() => { setDialogOpen(false); fetchConfigs(); }} 
+              onSaveComplete={handleConfigSaveComplete} 
             />
           </DialogContent>
         </Dialog>
