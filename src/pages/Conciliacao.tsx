@@ -8,7 +8,7 @@ import { ConfiguracaoConciliacao, TransacaoExtrato, ConciliacaoRegra } from '@/t
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, Upload, List, Settings, Edit, CheckCircle2, Save, ArrowUpCircle, ArrowDownCircle, Loader2 } from 'lucide-react';
+import { PlusCircle, Upload, List, Settings, Edit, CheckCircle2, Save, ArrowUpCircle, ArrowDownCircle, Loader2, Check } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import FormConciliacaoConfig from '@/components/FormConciliacaoConfig';
 import { Input } from '@/components/ui/input';
@@ -17,6 +17,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { PlanoContas } from '@/types/plano-contas';
+import { Checkbox } from '@/components/ui/checkbox'; // Importando Checkbox
 
 const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
@@ -34,6 +35,10 @@ const Conciliacao = () => {
   const [transacoes, setTransacoes] = useState<TransacaoExtrato[]>([]);
   const [regras, setRegras] = useState<ConciliacaoRegra[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+  
+  // NOVOS ESTADOS PARA SELEÇÃO MÚLTIPLA
+  const [transacoesSelecionadas, setTransacoesSelecionadas] = useState<number[]>([]);
+  const [contaContabilLote, setContaContabilLote] = useState<string | null>(null);
 
   // CORREÇÃO: O proprietário da configuração deve ser o ID do cliente (empresa_id) da conta selecionada.
   const contaSelecionada = contas.find(c => c.id === contaSelecionadaId);
@@ -156,6 +161,8 @@ const Conciliacao = () => {
         const transacoesMapeadas = applyRegras(rawTransacoes);
         
         setTransacoes(transacoesMapeadas);
+        setTransacoesSelecionadas([]); // Limpa a seleção ao importar
+        setContaContabilLote(null); // Limpa o seletor de lote
         showSuccess(`${transacoesMapeadas.length} transações importadas. ${transacoesMapeadas.filter(t => t.conciliada).length} mapeadas automaticamente.`);
       },
       error: (err) => {
@@ -171,8 +178,46 @@ const Conciliacao = () => {
   
   const handleContaContabilChange = (index: number, contaContabilId: string) => {
     setTransacoes(prev => prev.map((t, i) => 
-      i === index ? { ...t, conta_contabil_id: contaContabilId } : t
+      i === index ? { ...t, conta_contabil_id: contaContabilId, conciliada: true } : t
     ));
+  };
+  
+  // NOVO: Lógica para selecionar/desselecionar transação
+  const handleToggleSelection = (index: number, checked: boolean) => {
+      setTransacoesSelecionadas(prev => {
+          if (checked) {
+              return [...prev, index];
+          } else {
+              return prev.filter(i => i !== index);
+          }
+      });
+  };
+  
+  // NOVO: Lógica para aplicar conta contábil em lote
+  const handleApplyLote = () => {
+      if (!contaContabilLote || transacoesSelecionadas.length === 0) {
+          showError('Selecione uma conta contábil e pelo menos uma transação.');
+          return;
+      }
+      
+      setTransacoes(prev => prev.map((t, i) => {
+          if (transacoesSelecionadas.includes(i)) {
+              return { ...t, conta_contabil_id: contaContabilLote, conciliada: true };
+          }
+          return t;
+      }));
+      
+      setTransacoesSelecionadas([]);
+      setContaContabilLote(null);
+      showSuccess(`${transacoesSelecionadas.length} transações mapeadas em lote.`);
+  };
+  
+  const handleSelectAll = (checked: boolean) => {
+      if (checked) {
+          setTransacoesSelecionadas(transacoes.map((_, i) => i));
+      } else {
+          setTransacoesSelecionadas([]);
+      }
   };
   
   const handleSaveConciliacao = async () => {
@@ -231,6 +276,8 @@ const Conciliacao = () => {
         
         showSuccess(`${lancamentosPayload.length} lançamentos conciliados e salvos com sucesso!`);
         setTransacoes([]); // Limpa a lista após salvar
+        setTransacoesSelecionadas([]);
+        setContaContabilLote(null);
         fetchRegras(); // Atualiza as regras
         
     } catch (error: any) {
@@ -294,9 +341,46 @@ const Conciliacao = () => {
     <Card className="col-span-1 md:col-span-3">
       <CardHeader><CardTitle className="flex items-center"><List className="w-5 h-5 mr-2" /> Transações Importadas do Extrato</CardTitle></CardHeader>
       <CardContent>
+        
+        {/* NOVO: Ações em Lote */}
+        <div className="flex flex-col md:flex-row items-center space-y-3 md:space-y-0 md:space-x-4 p-3 bg-secondary rounded-md mb-4">
+            <div className="flex-1 w-full">
+                <Select 
+                    onValueChange={setContaContabilLote}
+                    value={contaContabilLote || undefined}
+                    disabled={isSaving || transacoesSelecionadas.length === 0}
+                >
+                    <SelectTrigger className="h-10 text-sm">
+                        <SelectValue placeholder="Aplicar Conta Contábil em Lote" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {contasContabeis.map(c => (
+                            <SelectItem key={c.id} value={c.id}>
+                                {c.Conta} - {c.Descricao}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            </div>
+            <Button 
+                onClick={handleApplyLote} 
+                disabled={isSaving || !contaContabilLote || transacoesSelecionadas.length === 0}
+                className="w-full md:w-auto"
+            >
+                <Check className="w-4 h-4 mr-2" /> Aplicar ({transacoesSelecionadas.length})
+            </Button>
+        </div>
+        
         <div className="overflow-y-auto max-h-[400px] border rounded-md">
           <Table>
             <TableHeader><TableRow>
+                <TableHead className="w-[40px] text-center">
+                    <Checkbox 
+                        checked={transacoesSelecionadas.length === transacoes.length}
+                        onCheckedChange={(checked) => handleSelectAll(!!checked)}
+                        disabled={isSaving}
+                    />
+                </TableHead>
                 <TableHead>Data</TableHead>
                 <TableHead>Descrição</TableHead>
                 <TableHead>Identificação</TableHead> {/* NOVO CABEÇALHO */}
@@ -306,14 +390,22 @@ const Conciliacao = () => {
             </TableRow></TableHeader>
             <TableBody>
               {transacoes.length === 0 ? (
-                <TableRow><TableCell colSpan={6} className="text-center h-24">Nenhuma transação importada.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={7} className="text-center h-24">Nenhuma transação importada.</TableCell></TableRow>
               ) : (
                 transacoes.map((t, i) => {
                     const isMapeada = !!t.conta_contabil_id;
                     const contaContabil = contasContabeis.find(c => c.id === t.conta_contabil_id);
+                    const isSelected = transacoesSelecionadas.includes(i);
                     
                     return (
-                        <TableRow key={i} className={cn(isMapeada ? 'bg-green-500/10' : 'bg-red-500/10')}>
+                        <TableRow key={i} className={cn(isMapeada ? 'bg-green-500/10' : 'bg-red-500/10', isSelected && 'bg-blue-100/50 dark:bg-blue-900/20')}>
+                            <TableCell className="text-center">
+                                <Checkbox 
+                                    checked={isSelected}
+                                    onCheckedChange={(checked) => handleToggleSelection(i, !!checked)}
+                                    disabled={isSaving}
+                                />
+                            </TableCell>
                             <TableCell>{t.data}</TableCell>
                             <TableCell>{t.descricao}</TableCell>
                             <TableCell className="text-sm text-muted-foreground">{t.identificacao || '-'}</TableCell> {/* NOVO CAMPO */}
