@@ -38,6 +38,7 @@ const Conciliacao = () => {
   const [transacoes, setTransacoes] = useState<TransacaoExtrato[]>([]);
   const [regras, setRegras] = useState<ConciliacaoRegra[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+  const [isDeletingHistorico, setIsDeletingHistorico] = useState(false); // NOVO ESTADO
   
   const [transacoesSelecionadas, setTransacoesSelecionadas] = useState<number[]>([]);
   const [contaContabilLote, setContaContabilLote] = useState<string | null>(null);
@@ -350,6 +351,28 @@ const Conciliacao = () => {
     }
   };
   
+  const handleDeleteHistorico = async () => {
+      if (!usuario?.id) return;
+      
+      setIsDeletingHistorico(true);
+      
+      try {
+          const { error } = await supabase
+              .from('conciliacoes')
+              .delete()
+              .eq('empresa_id', usuario.id);
+              
+          if (error) throw error;
+          
+          showSuccess(`Histórico de ${historico.length} conciliações removido com sucesso.`);
+          fetchHistorico();
+      } catch (error: any) {
+          showError('Falha ao limpar histórico: ' + error.message);
+      } finally {
+          setIsDeletingHistorico(false);
+      }
+  };
+  
   // --- Handlers de Estado ---
 
   const handleReset = () => {
@@ -514,6 +537,8 @@ const Conciliacao = () => {
             <HistoricoTab 
                 historico={historico}
                 onViewDetails={handleViewHistoricoDetails}
+                onDeleteAll={handleDeleteHistorico}
+                isDeleting={isDeletingHistorico}
             />
         </TabsContent>
       </Tabs>
