@@ -16,11 +16,10 @@ import { showError, showSuccess } from '@/utils/toast';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useSessao } from '@/hooks/use-sessao';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { SaldoConta } from '@/types/saldo-conta';
 import { AdminParcelaPagar } from '@/types/contas-pagar';
+import useSaldoContaCalculado from '@/hooks/use-saldo-conta-calculado'; // Importando o hook de saldo
 
 interface ParcelaParaPagamento extends AdminParcelaPagar {
-  // Adiciona campos necessários para o contexto
   fornecedor: string;
 }
 
@@ -28,7 +27,7 @@ const formSchema = z.object({
   valor_pago: z.coerce.number().positive('O valor deve ser maior que zero.'),
   data_pagamento: z.date({ required_error: 'A data é obrigatória.' }),
   forma_pagamento: z.string().min(1, 'A forma de pagamento é obrigatória.'),
-  conta_id: z.string().uuid('Selecione a conta de origem.').nullable(), // Conta de onde o dinheiro sai
+  conta_id: z.string().uuid('Selecione a conta de origem.').nullable(),
   acao_saldo_restante: z.enum(['desconto_obtido', 'reprogramar', 'parcelar']).optional(),
   nova_data_vencimento: z.date().optional(),
   numero_novas_parcelas: z.coerce.number().int().min(2).optional(),
@@ -48,15 +47,15 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
   const { role, usuario } = useSessao();
   const isAdmin = role === 'Admin';
   
-  const [contasOrigem, setContasOrigem] = useState<SaldoConta[]>([]);
-  const [loadingContas, setLoadingContas] = useState(true);
   const [mapeamentoContabil, setMapeamentoContabil] = useState<Record<string, string | null>>({});
   
-  // Determina as tabelas de destino
   const tabelaPagamentos = 'admin_pagamentos';
   const tabelaParcelas = 'admin_parcelas_pagar';
   
   const adminId = usuario?.id;
+
+  // Usando o hook para buscar contas com saldo calculado
+  const { contas: contasOrigem, carregando: loadingContas, refetch: refetchSaldos } = useSaldoContaCalculado('todos', 'todos', '');
 
   const saldoDevedor = parcela ? parcela.valor_parcela - (parcela.valor_pago || 0) : 0;
 
@@ -75,39 +74,6 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
   
   const { setValue } = form;
 
-  const fetchContasOrigem = useCallback(async () => {
-    if (!adminId) return;
-    setLoadingContas(true);
-    
-    // Busca contas de saldo do Admin
-    const { data, error } = await supabase
-        .from('saldo_contas')
-        .select(`
-            *,
-            plano_contas ( is_conta_saldo )
-        `)
-        .eq('empresa_id', adminId)
-        .order('nome');
-        
-    if (error) {
-        showError('Erro ao carregar Contas/Caixas: ' + error.message);
-        setContasOrigem([]);
-    } else {
-        const filteredData = (data as any[])
-            .filter(c => c.plano_contas?.is_conta_saldo === true)
-            .map(c => ({ ...c, plano_contas: undefined })) as SaldoConta[];
-            
-        setContasOrigem(filteredData);
-        
-        if (filteredData.length > 0) {
-            setValue('conta_id', filteredData[0].id);
-        } else {
-            setValue('conta_id', null);
-        }
-    }
-    setLoadingContas(false);
-  }, [adminId, setValue]);
-  
   const fetchMapeamentoContabil = useCallback(async () => {
     if (!isAdmin || !adminId) return;
     
@@ -130,10 +96,17 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
   
   useEffect(() => {
       if (open && isAdmin) {
-          fetchContasOrigem();
+          refetchSaldos(); // Recarrega os saldos ao abrir
           fetchMapeamentoContabil();
       }
-  }, [open, isAdmin, fetchContasOrigem, fetchMapeamentoContabil]);
+  }, [open, isAdmin, refetchSaldos, fetchMapeamentoContabil]);
+
+  // Define a primeira conta como padrão quando os dados carregam
+  useEffect(() => {
+    if (!loadingContas && contasOrigem.length > 0 && !form.getValues('conta_id')) {
+        setValue('conta_id', contasOrigem[0].id);
+    }
+  }, [loadingContas, contasOrigem, setValue, form]);
 
   const valorPago = form.watch('valor_pago');
   const acaoSaldoRestante = form.watch('acao_saldo_restante');
@@ -146,25 +119,34 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
         return;
     }
 
+    // --- VERIFICAÇÃO DE SALDO ---
+    const contaSelecionada = contasOrigem.find(c => c.id === values.conta_id);
+    if (!contaSelecionada) {
+        showError('Conta de origem não encontrada.');
+        return;
+    }
+    if (contaSelecionada.saldo_atual < values.valor_pago) {
+        showError(`Saldo insuficiente na conta "${contaSelecionada.nome}". Saldo atual: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(contaSelecionada.saldo_atual)}`);
+        return;
+    }
+    // --- FIM DA VERIFICAÇÃO ---
+
     const valorPagoAtual = values.valor_pago;
     const valorPagoAnterior = parcela.valor_pago || 0;
     const novoValorPagoTotal = valorPagoAnterior + valorPagoAtual;
     const saldoRestanteCalculado = parcela.valor_parcela - novoValorPagoTotal;
     const quitouComPagamentoAtual = novoValorPagoTotal >= parcela.valor_parcela;
     
-    // Contas Contábeis Mapeadas
     const contaPagamento = mapeamentoContabil['pagamento'];
     const contaParcelaPagar = mapeamentoContabil['parcela_pagar'];
-    // const contaDescontoObtido = mapeamentoContabil['desconto_obtido']; // REMOVIDO (Erro 1)
 
     try {
-      // 1. Registrar o pagamento (admin_pagamentos)
       const pagamentoBasePayload = { 
           parcela_id: parcela.id, 
           admin_id: adminId, 
           valor_pago: valorPagoAtual, 
           conta_id: values.conta_id,
-          id_conta_contabil: contaPagamento, // Mapeamento para Pagamento (Saída)
+          id_conta_contabil: contaPagamento,
       };
       
       const { error: pagamentoError } = await supabase.from(tabelaPagamentos).insert({
@@ -176,18 +158,15 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
       
       if (pagamentoError) throw pagamentoError;
       
-      // 2. Lidar com a parcela original (admin_parcelas_pagar)
       if (quitouComPagamentoAtual) {
-        // Se quitou, atualiza a parcela para paga
         await supabase.from(tabelaParcelas).update({
           status: 'paga',
           valor_pago: novoValorPagoTotal,
           data_pagamento: format(values.data_pagamento, 'yyyy-MM-dd'),
           id_conta_contabil: contaParcelaPagar,
         }).eq('id', parcela.id);
-      } else { // Pagamento parcial
+      } else {
         if (values.acao_saldo_restante === 'desconto_obtido') {
-          // Se for desconto obtido, a parcela é marcada como paga, e o saldo restante é o desconto (Receita)
           await supabase.from(tabelaParcelas).update({
             status: 'paga',
             valor_pago: novoValorPagoTotal,
@@ -195,11 +174,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
             observacao: `Pago R$ ${valorPagoAtual.toFixed(2)} com R$ ${saldoRestanteCalculado.toFixed(2)} de desconto obtido.`,
             id_conta_contabil: contaParcelaPagar,
           }).eq('id', parcela.id);
-          
-          // TODO: Registrar o desconto obtido como um lançamento de Receita (Entrada)
-          
         } else if (values.acao_saldo_restante === 'reprogramar' || values.acao_saldo_restante === 'parcelar') {
-          // Marca a parcela original como paga (quitada pelo valor pago + saldo restante tratado)
           await supabase.from(tabelaParcelas).update({
             status: 'paga', 
             valor_pago: novoValorPagoTotal,
@@ -219,7 +194,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
               data_vencimento: format(values.nova_data_vencimento!, 'yyyy-MM-dd'),
               status: 'reprogramada'
             });
-          } else { // Parcelar
+          } else {
             const valorNovaParcela = saldoRestanteCalculado / values.numero_novas_parcelas!;
             const novasParcelas = Array.from({ length: values.numero_novas_parcelas! }).map((_, i) => ({
               conta_pagar_id: parcela.conta_pagar_id,
@@ -232,7 +207,6 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
             await supabase.from(tabelaParcelas).insert(novasParcelas);
           }
         } else {
-            // Caso de pagamento parcial sem ação definida (apenas atualiza)
             await supabase.from(tabelaParcelas).update({
                 status: 'parcial',
                 valor_pago: novoValorPagoTotal,
@@ -241,20 +215,17 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
         }
       }
       
-      // 3. Registrar o Lançamento na conta de Saldo (Movimentação de Caixa/Banco)
-      // O tipo é 'Saida' porque é um Pagamento
       const lancamentoPayload = {
           empresa_id: adminId,
           data_movimentacao: values.data_pagamento.toISOString(),
           descricao: `Pagamento Parcela ${parcela.id} - ${parcela.fornecedor}`,
           valor: valorPagoAtual,
-          tipo: 'Saida', // <-- SAÍDA
+          tipo: 'Saida',
           conta_bancaria_id: values.conta_id,
-          conta_contabil_id: contaPagamento, // Conta contábil do pagamento (Admin)
+          conta_contabil_id: contaPagamento,
       };
       
       await supabase.from('lancamentos').insert(lancamentoPayload);
-
 
       showSuccess('Pagamento registrado com sucesso!');
       onSaveComplete();
@@ -263,12 +234,14 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
     }
   };
 
+  const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Registrar Pagamento</DialogTitle>
-          <DialogDescription>Saldo devedor da parcela: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(saldoDevedor)}</DialogDescription>
+          <DialogDescription>Saldo devedor da parcela: {formatCurrency(saldoDevedor)}</DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -282,7 +255,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
                 <FormField control={form.control} name="conta_id" render={({ field }) => (
                     <FormItem>
                         <FormLabel>Conta/Caixa de Origem</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value || undefined} disabled={loadingContas}>
+                        <Select onValueChange={field.onChange} value={field.value || undefined} disabled={loadingContas}>
                             <FormControl>
                                 <SelectTrigger>
                                     <SelectValue placeholder={loadingContas ? "Carregando Contas..." : "Selecione a conta"} />
@@ -294,14 +267,14 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
                                 ) : (
                                     contasOrigem.map(c => (
                                         <SelectItem key={c.id} value={c.id}>
-                                            {c.nome} ({c.tipo_saldo})
+                                            {c.nome} ({formatCurrency(c.saldo_atual)})
                                         </SelectItem>
                                     ))
                                 )}
                             </SelectContent>
                         </Select>
                         <FormMessage />
-                        {contasOrigem.length === 0 && (
+                        {contasOrigem.length === 0 && !loadingContas && (
                             <p className="text-sm text-red-500">
                                 Nenhuma conta de saldo encontrada. Crie uma em <a href="/bancos" className="underline">Bancos / Caixas</a>.
                             </p>
@@ -312,7 +285,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
             
             {isPagamentoParcial && (
               <div className="space-y-4 pt-4 border-t">
-                <h3 className="font-semibold text-destructive">Saldo restante: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(saldoRestante)}</h3>
+                <h3 className="font-semibold text-destructive">Saldo restante: {formatCurrency(saldoRestante)}</h3>
                 <FormField control={form.control} name="acao_saldo_restante" render={({ field }) => (
                   <FormItem><FormLabel>O que fazer com o saldo restante?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="space-y-2"><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="desconto_obtido" /></FormControl><FormLabel className="font-normal">Obter Desconto (Receita)</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="reprogramar" /></FormControl><FormLabel className="font-normal">Reprogramar Saldo</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="parcelar" /></FormControl><FormLabel className="font-normal">Parcelar Saldo</FormLabel></FormItem></RadioGroup></FormControl></FormItem>
                 )} />
