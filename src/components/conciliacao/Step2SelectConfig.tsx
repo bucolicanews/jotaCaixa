@@ -22,7 +22,7 @@ const Step2SelectConfig: React.FC<Step2SelectConfigProps> = ({ configs, configSe
       <CardContent className="space-y-4">
         <Select 
           onValueChange={onSelectConfig} 
-          value={configSelecionada?.id || ''}
+          value={configSelecionada?.id || undefined} // Usando || undefined para satisfazer a tipagem string | undefined
         >
           <SelectTrigger><SelectValue placeholder="Selecione uma configuração" /></SelectTrigger>
           <SelectContent>

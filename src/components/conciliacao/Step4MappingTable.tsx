@@ -71,7 +71,7 @@ const Step4MappingTable: React.FC<Step4MappingTableProps> = ({
             <div className="flex-1 w-full">
                 <Select 
                     onValueChange={onContaContabilLoteChange}
-                    value={contaContabilLote || undefined}
+                    value={contaContabilLote || undefined} // Ajustado para || undefined
                     disabled={isSaving || transacoesSelecionadas.length === 0}
                 >
                     <SelectTrigger className="h-10 text-sm">
@@ -152,7 +152,7 @@ const Step4MappingTable: React.FC<Step4MappingTableProps> = ({
                                 ) : (
                                     <Select 
                                         onValueChange={(id) => onContaContabilChange(i, id)}
-                                        value={t.conta_contabil_id || undefined}
+                                        value={t.conta_contabil_id || undefined} // Ajustado para || undefined
                                         disabled={isSaving}
                                     >
                                         <SelectTrigger className="h-8 text-xs">
