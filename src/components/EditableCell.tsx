@@ -56,7 +56,7 @@ const EditableCell: React.FC<EditableCellProps> = ({
     
     const payload = {
         [fieldName]: trimmedValue || null, // Salva como null se estiver vazio (para campos opcionais)
-        updated_at: new Date().toISOString(), // Atualiza o timestamp
+        atualizado_em: new Date().toISOString(), // CORRIGIDO: Usando 'atualizado_em'
     };
 
     try {
