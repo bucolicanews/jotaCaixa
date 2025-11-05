@@ -15,6 +15,7 @@ import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useDebounce } from '@/hooks/use-debounce';
+import EditableCell from '@/components/EditableCell'; // Importando o novo componente
 
 const PlanoContasPage = () => {
   const { usuario, perfil, role, carregando: carregandoSessao } = useSessao();
@@ -113,6 +114,13 @@ const PlanoContasPage = () => {
     if (proprietarioId) {
       buscarPlanoContas(proprietarioId);
     }
+  };
+  
+  // Função de sucesso para o EditableCell
+  const handleInlineSaveSuccess = () => {
+      if (proprietarioId) {
+          buscarPlanoContas(proprietarioId);
+      }
   };
 
   const handleEdit = (conta: PlanoContas) => {
@@ -261,10 +269,39 @@ const PlanoContasPage = () => {
                   ) : (
                     contas.map((conta) => (
                       <TableRow key={conta.id}>
-                        <TableCell className="font-mono text-sm">{conta.Conta}</TableCell>
-                        <TableCell className="text-sm">{conta.codigo_reduzido || '-'}</TableCell>
-                        <TableCell>{conta.Descricao}</TableCell>
-                        <TableCell className="text-center">{conta.Analitica}</TableCell>
+                        <TableCell className="font-mono text-sm">
+                            <EditableCell
+                                id={conta.id}
+                                initialValue={conta.Conta}
+                                fieldName="Conta"
+                                onSaveSuccess={handleInlineSaveSuccess}
+                                isEditable={false} // Código da conta não deve ser editável inline
+                                className="font-mono text-sm"
+                            />
+                        </TableCell>
+                        <TableCell className="text-sm">
+                            <EditableCell
+                                id={conta.id}
+                                initialValue={conta.codigo_reduzido}
+                                fieldName="codigo_reduzido"
+                                onSaveSuccess={handleInlineSaveSuccess}
+                                isEditable={true}
+                                className="text-sm"
+                            />
+                        </TableCell>
+                        <TableCell>
+                            <EditableCell
+                                id={conta.id}
+                                initialValue={conta.Descricao}
+                                fieldName="Descricao"
+                                onSaveSuccess={handleInlineSaveSuccess}
+                                isEditable={true}
+                            />
+                        </TableCell>
+                        <TableCell className="text-center">
+                            {/* Analítica não é editável inline, usa o botão de edição completo */}
+                            {conta.Analitica}
+                        </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end space-x-2">
                             <Button variant="ghost" size="sm" onClick={() => handleEdit(conta)}>
