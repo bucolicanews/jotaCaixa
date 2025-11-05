@@ -86,14 +86,15 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
                         <TableHead className="text-right">Valor</TableHead>
                         <TableHead className="text-right">Pago</TableHead>
                         <TableHead>Status</TableHead>
+                        <TableHead>Data Pagamento</TableHead>
                         <TableHead className="text-right">Ações</TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
                     {loading ? (
-                        <TableRow><TableCell colSpan={6} className="text-center">Carregando...</TableCell></TableRow>
+                        <TableRow><TableCell colSpan={7} className="text-center">Carregando...</TableCell></TableRow>
                     ) : parcelas.length === 0 ? (
-                        <TableRow><TableCell colSpan={6} className="text-center">Nenhuma parcela encontrada.</TableCell></TableRow>
+                        <TableRow><TableCell colSpan={7} className="text-center">Nenhuma parcela encontrada.</TableCell></TableRow>
                     ) : (
                         parcelas.map((p) => {
                             const statusVariant = getBadgeVariant(p.status, p.data_vencimento);
@@ -110,6 +111,7 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
                                             {p.status}
                                         </Badge>
                                     </TableCell>
+                                    <TableCell>{p.data_pagamento ? formatarData(p.data_pagamento) : '-'}</TableCell>
                                     <TableCell className="text-right">
                                         {!isPaga && (
                                             <Button size="sm" onClick={() => handleOpenPagamento(p)}>

@@ -53,15 +53,16 @@ const ParcelasTab: React.FC<ParcelasTabProps> = ({
                                     <TableHead className="text-right">Valor Parcela</TableHead>
                                     <TableHead className="text-right">Valor Pago</TableHead>
                                     <TableHead>Status</TableHead>
+                                    <TableHead>Data Pagamento</TableHead>
                                     <TableHead>Origem</TableHead>
                                     <TableHead className="text-right">Ações</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {loading ? (
-                                    <TableRow><TableCell colSpan={8} className="text-center">Carregando...</TableCell></TableRow>
+                                    <TableRow><TableCell colSpan={9} className="text-center">Carregando...</TableCell></TableRow>
                                 ) : parcelas.length === 0 ? (
-                                    <TableRow><TableCell colSpan={8} className="text-center">Nenhuma parcela encontrada no período.</TableCell></TableRow>
+                                    <TableRow><TableCell colSpan={9} className="text-center">Nenhuma parcela encontrada no período.</TableCell></TableRow>
                                 ) : (
                                     parcelas.map((p) => {
                                         const statusVariant = getBadgeVariant(p.status as ContaStatus, p.data_vencimento);
@@ -76,6 +77,7 @@ const ParcelasTab: React.FC<ParcelasTabProps> = ({
                                                 <TableCell className="text-right">{formatCurrency(p.valor_parcela)}</TableCell>
                                                 <TableCell className="text-right">{formatCurrency(p.valor_pago || 0)}</TableCell>
                                                 <TableCell><Badge variant={statusVariant}>{p.status}</Badge></TableCell>
+                                                <TableCell>{p.data_pagamento ? formatarData(p.data_pagamento) : '-'}</TableCell>
                                                 <TableCell>{formatarOrigem(p.admin_contas_pagar?.origem || 'manual')}</TableCell>
                                                 <TableCell className="text-right">
                                                     {!isPaga && (
