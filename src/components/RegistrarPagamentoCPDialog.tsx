@@ -5,7 +5,7 @@ import * as z from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { CalendarIcon, Loader2, PlusCircle, Trash2 } from 'lucide-react';
@@ -46,7 +46,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
   const isAdmin = role === 'Admin';
   
   const [mapeamentoContabil, setMapeamentoContabil] = useState<Record<string, string | null>>({});
-  const [isInitialized, setIsInitialized] = useState(false); // State to prevent re-initialization loop
+  const [isInitialized, setIsInitialized] = useState(false);
   
   const tabelaPagamentos = 'admin_pagamentos';
   const tabelaParcelas = 'admin_parcelas_pagar';
@@ -96,10 +96,9 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
     }
   }, [isAdmin, adminId]);
   
-  // Effect to fetch data and reset initialization state when dialog opens
   useEffect(() => {
       if (open) {
-          setIsInitialized(false); // Reset initialization on open
+          setIsInitialized(false);
           refetchSaldos();
           if (isAdmin) {
               fetchMapeamentoContabil();
@@ -107,7 +106,6 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
       }
   }, [open, isAdmin, refetchSaldos, fetchMapeamentoContabil]);
 
-  // Effect to initialize the form once data is loaded
   useEffect(() => {
     if (open && !loadingContas && !isInitialized) {
         form.reset({
@@ -117,7 +115,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
                 ? [{ conta_id: contasOrigem[0].id, valor_pago: saldoDevedor }]
                 : []
         });
-        setIsInitialized(true); // Mark as initialized
+        setIsInitialized(true);
     }
   }, [open, loadingContas, contasOrigem, saldoDevedor, isInitialized, form]);
 
@@ -132,7 +130,6 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
         return;
     }
 
-    // --- VERIFICAÇÃO DE SALDO PARA CADA PAGAMENTO ---
     for (const pagamento of values.pagamentos) {
         const contaSelecionada = contasOrigem.find(c => c.id === pagamento.conta_id);
         if (!contaSelecionada) {
@@ -144,13 +141,11 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
             return;
         }
     }
-    // --- FIM DA VERIFICAÇÃO ---
 
     const contaPagamento = mapeamentoContabil['pagamento'];
     const contaParcelaPagar = mapeamentoContabil['parcela_pagar'];
 
     try {
-      // 1. Registrar cada pagamento e lançamento
       for (const pagamento of values.pagamentos) {
         const pagamentoPayload = { 
             parcela_id: parcela.id, 
@@ -160,7 +155,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
             id_conta_contabil: contaPagamento,
             data_pagamento: values.data_pagamento.toISOString(),
             forma_pagamento: values.forma_pagamento,
-            tipo_pagamento: 'total', // Assumindo que o total das partes quita a parcela
+            tipo_pagamento: 'total',
         };
         
         const { error: pagamentoError } = await supabase.from(tabelaPagamentos).insert(pagamentoPayload);
@@ -180,7 +175,6 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
         if (lancamentoError) throw lancamentoError;
       }
 
-      // 2. Atualizar a parcela para 'paga'
       await supabase.from(tabelaParcelas).update({
         status: 'paga',
         valor_pago: (parcela.valor_pago || 0) + totalPago,
@@ -202,8 +196,13 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Registrar Pagamento (Múltiplas Contas)</DialogTitle>
-          <DialogDescription>Saldo devedor da parcela: {formatCurrency(saldoDevedor)}</DialogDescription>
         </DialogHeader>
+        
+        <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-500 rounded-md text-center my-4">
+            <p className="text-sm font-medium text-blue-600 dark:text-blue-400">Saldo Devedor da Parcela</p>
+            <p className="text-3xl font-bold text-blue-700 dark:text-blue-300">{formatCurrency(saldoDevedor)}</p>
+        </div>
+
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             <div className="grid grid-cols-2 gap-4">
@@ -257,11 +256,10 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
             </div>
             
             <div className="p-4 bg-secondary rounded-md space-y-2 text-sm">
-                <div className="flex justify-between font-medium"><p>Total a Pagar:</p><p>{formatCurrency(saldoDevedor)}</p></div>
                 <div className="flex justify-between font-medium"><p>Total Informado:</p><p>{formatCurrency(totalPago)}</p></div>
                 <Separator />
-                <div className={cn("flex justify-between font-bold text-lg", restante === 0 ? 'text-green-600' : 'text-red-600')}>
-                    <p>Restante:</p>
+                <div className={cn("flex justify-between font-bold text-lg", Math.abs(restante) < 0.01 ? 'text-green-600' : 'text-red-600')}>
+                    <p>Restante a Pagar:</p>
                     <p>{formatCurrency(restante)}</p>
                 </div>
             </div>
