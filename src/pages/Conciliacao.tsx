@@ -137,12 +137,18 @@ const Conciliacao = () => {
           if (config.coluna_tipo_transacao && row[config.coluna_tipo_transacao] !== config.valor_credito) {
             valor = -Math.abs(valor);
           }
+          
+          // Extrai a identificação se a coluna estiver mapeada
+          const identificacao = config.mapeamento.identificacao 
+            ? String(row[config.mapeamento.identificacao] || '') 
+            : undefined;
 
           return {
             data: row[config.mapeamento.data],
             descricao: row[config.mapeamento.descricao],
             valor: valor,
             tipo: (valor >= 0 ? 'Entrada' : 'Saida') as 'Entrada' | 'Saida',
+            identificacao: identificacao, // Adiciona a identificação
           };
         }).filter(t => t.data && t.descricao);
         
@@ -194,6 +200,7 @@ const Conciliacao = () => {
             conta_contabil_id: t.conta_contabil_id,
             conciliado: true,
             origem: 'conciliacao_extrato',
+            documento: t.identificacao || null, // NOVO: Salva a identificação no campo documento
         }));
         
         // 1. Inserir Lançamentos
@@ -288,10 +295,17 @@ const Conciliacao = () => {
       <CardContent>
         <div className="overflow-y-auto max-h-[400px] border rounded-md">
           <Table>
-            <TableHeader><TableRow><TableHead>Data</TableHead><TableHead>Descrição</TableHead><TableHead>Tipo</TableHead><TableHead className="text-right">Valor</TableHead><TableHead className="w-[250px]">Conta Contábil</TableHead></TableRow></TableHeader>
+            <TableHeader><TableRow>
+                <TableHead>Data</TableHead>
+                <TableHead>Descrição</TableHead>
+                <TableHead>Identificação</TableHead> {/* NOVO CABEÇALHO */}
+                <TableHead>Tipo</TableHead>
+                <TableHead className="text-right">Valor</TableHead>
+                <TableHead className="w-[250px]">Conta Contábil</TableHead>
+            </TableRow></TableHeader>
             <TableBody>
               {transacoes.length === 0 ? (
-                <TableRow><TableCell colSpan={5} className="text-center h-24">Nenhuma transação importada.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={6} className="text-center h-24">Nenhuma transação importada.</TableCell></TableRow>
               ) : (
                 transacoes.map((t, i) => {
                     const isMapeada = !!t.conta_contabil_id;
@@ -301,6 +315,7 @@ const Conciliacao = () => {
                         <TableRow key={i} className={cn(isMapeada ? 'bg-green-500/10' : 'bg-red-500/10')}>
                             <TableCell>{t.data}</TableCell>
                             <TableCell>{t.descricao}</TableCell>
+                            <TableCell className="text-sm text-muted-foreground">{t.identificacao || '-'}</TableCell> {/* NOVO CAMPO */}
                             <TableCell>
                                 <Badge variant={t.tipo === 'Entrada' ? 'success' : 'destructive'} className="flex items-center justify-center">
                                     {t.tipo === 'Entrada' ? <ArrowUpCircle className="w-3 h-3 mr-1" /> : <ArrowDownCircle className="w-3 h-3 mr-1" />}

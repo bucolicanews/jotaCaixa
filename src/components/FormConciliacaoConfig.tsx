@@ -15,6 +15,7 @@ const formSchema = z.object({
   coluna_data: z.string().min(1, 'O nome da coluna de data é obrigatória.'),
   coluna_descricao: z.string().min(1, 'O nome da coluna de descrição é obrigatória.'),
   coluna_valor: z.string().min(1, 'O nome da coluna de valor é obrigatória.'),
+  coluna_identificacao: z.string().optional(), // NOVO CAMPO
   coluna_tipo_transacao: z.string().optional(),
   valor_credito: z.string().optional(),
 });
@@ -38,6 +39,7 @@ const FormConciliacaoConfig: React.FC<FormConciliacaoConfigProps> = ({ configIni
       coluna_data: configInicial?.mapeamento?.data || 'Data',
       coluna_descricao: configInicial?.mapeamento?.descricao || 'Transação',
       coluna_valor: configInicial?.mapeamento?.valor || 'Valor',
+      coluna_identificacao: configInicial?.mapeamento?.identificacao || 'Identificação', // Valor inicial
       coluna_tipo_transacao: configInicial?.coluna_tipo_transacao || 'Tipo Transação',
       valor_credito: configInicial?.valor_credito || 'CRÉDITO',
     },
@@ -58,6 +60,7 @@ const FormConciliacaoConfig: React.FC<FormConciliacaoConfigProps> = ({ configIni
         data: values.coluna_data,
         descricao: values.coluna_descricao,
         valor: values.coluna_valor,
+        identificacao: values.coluna_identificacao || null, // Salva o novo campo
       },
       coluna_tipo_transacao: values.coluna_tipo_transacao || null,
       valor_credito: values.valor_credito || null,
@@ -99,6 +102,15 @@ const FormConciliacaoConfig: React.FC<FormConciliacaoConfigProps> = ({ configIni
               <FormItem><FormLabel>Coluna de Valor</FormLabel><FormControl><Input placeholder="Valor" {...field} /></FormControl><FormMessage /></FormItem>
             )} />
         </div>
+        
+        <FormField control={form.control} name="coluna_identificacao" render={({ field }) => (
+            <FormItem>
+                <FormLabel>Coluna de Identificação (Opcional)</FormLabel>
+                <FormControl><Input placeholder="Identificação" {...field} /></FormControl>
+                <FormMessage />
+            </FormItem>
+        )} />
+        
         <h4 className="font-semibold pt-2 border-t">Regra de Crédito/Débito (Opcional)</h4>
         <p className="text-xs text-muted-foreground">Use se a coluna de valor não tiver sinal (+/-). Se o valor já for negativo para saídas, deixe em branco.</p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

@@ -2,6 +2,7 @@ export interface MapeamentoConciliacao {
     data: string;
     descricao: string;
     valor: string;
+    identificacao?: string; // NOVO CAMPO
 }
 
 export interface ConfiguracaoConciliacao {
@@ -20,8 +21,9 @@ export interface TransacaoExtrato {
     descricao: string;
     valor: number;
     tipo: 'Entrada' | 'Saida';
-    conciliada?: boolean; // Novo: Indica se já foi mapeada
-    conta_contabil_id?: string | null; // Novo: ID da conta mapeada
+    identificacao?: string; // NOVO CAMPO
+    conciliada?: boolean;
+    conta_contabil_id?: string | null;
 }
 
 export interface ConciliacaoRegra {
