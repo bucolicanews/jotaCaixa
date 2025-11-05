@@ -4,3 +4,4 @@
 4 - informações de contas na tela - ok
 5 - Contas a pagarc e receber ok
 6 - Contratos ok
+7 - CONCILIAÇÃO BANCÁRIA OK
