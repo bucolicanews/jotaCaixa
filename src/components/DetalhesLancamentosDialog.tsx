@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, ArrowUpCircle, ArrowDownCircle, Printer } from 'lucide-react';
+import { Loader2, ArrowUpCircle, ArrowDownCircle, Printer, Wallet, Landmark } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError } from '@/utils/toast';
 import { format, parseISO } from 'date-fns';
@@ -10,6 +10,7 @@ import { Badge } from './ui/badge';
 import { cn } from '@/lib/utils';
 import { Button } from './ui/button';
 import { usePrint } from '@/hooks/use-print';
+import { SaldoContaDetalhada } from '@/types/saldo-conta';
 
 interface Lancamento {
   id: string;
@@ -20,7 +21,7 @@ interface Lancamento {
 }
 
 interface DetalhesLancamentosDialogProps {
-  conta: { id: string; nome: string } | null;
+  conta: SaldoContaDetalhada | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
@@ -58,11 +59,13 @@ const DetalhesLancamentosDialog: React.FC<DetalhesLancamentosDialogProps> = ({ c
     }
   }, [conta, open, fetchLancamentos]);
 
+  const saldoInicial = conta?.saldo_inicial || 0;
   const totalEntradas = lancamentos.filter(l => l.tipo === 'Entrada').reduce((sum, l) => sum + l.valor, 0);
   const totalSaidas = lancamentos.filter(l => l.tipo === 'Saida').reduce((sum, l) => sum + l.valor, 0);
+  const saldoFinal = saldoInicial + totalEntradas - totalSaidas;
 
   const handlePrint = () => {
-    if (!conta || lancamentos.length === 0) {
+    if (!conta) {
       showError("Não há dados para imprimir.");
       return;
     }
@@ -74,8 +77,10 @@ const DetalhesLancamentosDialog: React.FC<DetalhesLancamentosDialogProps> = ({ c
       </div>
       <div class="print-section">
         <h2 style="font-size: 14px; font-weight: bold;">Resumo</h2>
+        <p>Saldo Inicial: ${formatCurrency(saldoInicial)}</p>
         <p>Total de Entradas: ${formatCurrency(totalEntradas)}</p>
         <p>Total de Saídas: ${formatCurrency(totalSaidas)}</p>
+        <p style="font-weight: bold;">Saldo Final: ${formatCurrency(saldoFinal)}</p>
       </div>
       <div class="print-section">
         <h2 style="font-size: 14px; font-weight: bold;">Lançamentos</h2>
@@ -107,7 +112,7 @@ const DetalhesLancamentosDialog: React.FC<DetalhesLancamentosDialogProps> = ({ c
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-3xl max-h-[90vh] flex flex-col">
+      <DialogContent className="sm:max-w-4xl max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Extrato da Conta: {conta?.nome}</DialogTitle>
           <DialogDescription>
@@ -118,14 +123,22 @@ const DetalhesLancamentosDialog: React.FC<DetalhesLancamentosDialogProps> = ({ c
           <div className="flex justify-center items-center h-40"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
         ) : (
           <>
-            <div className="grid grid-cols-2 gap-4 my-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 my-4">
+                <div className="p-4 bg-gray-100 dark:bg-gray-800 rounded-lg">
+                    <h4 className="text-sm font-medium text-muted-foreground flex items-center"><Wallet className="w-4 h-4 mr-2" />Saldo Inicial</h4>
+                    <p className="text-xl font-bold mt-1">{formatCurrency(saldoInicial)}</p>
+                </div>
                 <div className="p-4 bg-green-100 dark:bg-green-900/20 rounded-lg">
-                    <h4 className="text-sm font-medium text-green-700 dark:text-green-300">Total de Entradas</h4>
-                    <p className="text-2xl font-bold text-green-600 dark:text-green-400">{formatCurrency(totalEntradas)}</p>
+                    <h4 className="text-sm font-medium text-green-700 dark:text-green-300 flex items-center"><ArrowUpCircle className="w-4 h-4 mr-2" />Total de Entradas</h4>
+                    <p className="text-xl font-bold text-green-600 dark:text-green-400 mt-1">{formatCurrency(totalEntradas)}</p>
                 </div>
                 <div className="p-4 bg-red-100 dark:bg-red-900/20 rounded-lg">
-                    <h4 className="text-sm font-medium text-red-700 dark:text-red-300">Total de Saídas</h4>
-                    <p className="text-2xl font-bold text-red-600 dark:text-red-400">{formatCurrency(totalSaidas)}</p>
+                    <h4 className="text-sm font-medium text-red-700 dark:text-red-300 flex items-center"><ArrowDownCircle className="w-4 h-4 mr-2" />Total de Saídas</h4>
+                    <p className="text-xl font-bold text-red-600 dark:text-red-400 mt-1">{formatCurrency(totalSaidas)}</p>
+                </div>
+                <div className={cn("p-4 rounded-lg", saldoFinal >= 0 ? "bg-blue-100 dark:bg-blue-900/20" : "bg-red-100 dark:bg-red-900/20")}>
+                    <h4 className={cn("text-sm font-medium flex items-center", saldoFinal >= 0 ? "text-blue-700 dark:text-blue-300" : "text-red-700 dark:text-red-300")}><Landmark className="w-4 h-4 mr-2" />Saldo Final</h4>
+                    <p className={cn("text-xl font-bold mt-1", saldoFinal >= 0 ? "text-blue-600 dark:text-blue-400" : "text-red-600 dark:text-red-400")}>{formatCurrency(saldoFinal)}</p>
                 </div>
             </div>
             <div className="mt-4 flex-1 overflow-y-auto border rounded-md">
