@@ -108,7 +108,7 @@ const Conciliacao = () => {
         .from('conciliacoes')
         .select(`
             *,
-            saldo_contas ( nome )
+            saldo_contas:id_saldo_contas ( nome )
         `)
         .eq('empresa_id', usuario.id)
         .order('criado_em', { ascending: false });
@@ -301,7 +301,7 @@ const Conciliacao = () => {
         const historicoPayload = {
             empresa_id: proprietarioDaConfiguracao,
             usuario_id: usuario?.id,
-            id_saldo_contas: contaSelecionadaId,
+            id_saldo_contas: contaSelecionadaId, // Usando a coluna correta
             nome_arquivo: file.name,
             extrato_json: transacoesParaSalvar, // Salva apenas as transações que foram salvas como lançamentos
         };
