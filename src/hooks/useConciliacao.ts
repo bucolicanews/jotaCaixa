@@ -6,7 +6,7 @@ import { SaldoConta } from '@/types/saldo-conta';
 import { ConfiguracaoConciliacao, TransacaoExtrato, ConciliacaoRegra, ConciliacaoHistorico } from '@/types/conciliacao';
 import { PlanoContas } from '@/types/plano-contas';
 import Papa, { ParseResult } from 'papaparse';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { formatDDMMYYYYToISO, normalizeString } from '@/utils/formatters'; // Importando normalizeString
 
 interface ConciliacaoHook {
@@ -348,7 +348,13 @@ export function useConciliacao(): ConciliacaoHook {
         
         // Cria um Set de chaves únicas (Data YYYY-MM-DD | Descrição Normalizada | Valor Absoluto (2 casas) | Tipo)
         const existingSet = new Set(existingLancamentos.map(l => {
-            const formattedDate = format(new Date(l.data_movimentacao), 'yyyy-MM-dd');
+            // CORREÇÃO CRÍTICA: Garantir que a data seja tratada como YYYY-MM-DD, ignorando o fuso horário
+            // Se a data for salva como '2025-11-03', parseISO(l.data_movimentacao) funciona.
+            // Se for salva como '2025-11-03T00:00:00Z', format() pode mudar o dia.
+            // Usamos parseISO para garantir que a string seja interpretada corretamente.
+            const dateObj = parseISO(l.data_movimentacao);
+            const formattedDate = format(dateObj, 'yyyy-MM-dd');
+            
             const normalizedDesc = normalizeString(l.descricao);
             return `${formattedDate}|${normalizedDesc}|${Math.abs(Number(l.valor)).toFixed(2)}|${l.tipo}`;
         }));
