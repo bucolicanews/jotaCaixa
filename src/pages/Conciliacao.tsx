@@ -56,16 +56,27 @@ const Conciliacao = () => {
   }, [contaSelecionadaId]);
   
   const fetchContasContabeis = useCallback(async () => {
-    if (!proprietarioDaConfiguracao) return;
+    if (!proprietarioDaConfiguracao || !contaSelecionada) return;
+    
+    // Busca todas as contas analíticas do proprietário
     const { data, error } = await supabase
         .from('plano_contas')
-        .select('id, Conta, Descricao, Analitica')
+        .select('id, Conta, Descricao, Analitica, is_conta_saldo')
         .eq('proprietario_id', proprietarioDaConfiguracao)
         .eq('Analitica', 'Sim')
         .order('Conta');
-    if (error) showError('Erro ao carregar Plano de Contas: ' + error.message);
-    else setContasContabeis(data as PlanoContas[]);
-  }, [proprietarioDaConfiguracao]);
+        
+    if (error) {
+        showError('Erro ao carregar Plano de Contas: ' + error.message);
+        setContasContabeis([]);
+    } else {
+        // Filtra as contas: exclui a conta contábil que está vinculada à conta de saldo selecionada
+        const filteredContas = (data as PlanoContas[]).filter(c => 
+            c.id !== contaSelecionada.conta_contabil_id
+        );
+        setContasContabeis(filteredContas);
+    }
+  }, [proprietarioDaConfiguracao, contaSelecionada]);
   
   const fetchRegras = useCallback(async () => {
     if (!proprietarioDaConfiguracao) return;
@@ -79,9 +90,15 @@ const Conciliacao = () => {
 
   useEffect(() => {
     fetchContas();
-    fetchContasContabeis();
-    fetchRegras();
-  }, [fetchContas, fetchContasContabeis, fetchRegras]);
+  }, [fetchContas]);
+  
+  useEffect(() => {
+    // Re-busca contas contábeis e regras quando a conta selecionada muda
+    if (contaSelecionadaId) {
+        fetchContasContabeis();
+        fetchRegras();
+    }
+  }, [contaSelecionadaId, fetchContasContabeis, fetchRegras]);
 
   useEffect(() => {
     fetchConfigs();
