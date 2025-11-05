@@ -42,7 +42,8 @@ const Conciliacao = () => {
   const fetchContas = useCallback(async () => {
     if (!usuario?.id) return;
     setLoading(true);
-    const { data, error } = await supabase.from('saldo_contas').select('*').eq('empresa_id', usuario.id);
+    // INCLUINDO conta_contabil_id na seleção
+    const { data, error } = await supabase.from('saldo_contas').select('*, conta_contabil_id').eq('empresa_id', usuario.id);
     if (error) showError('Erro ao carregar contas: ' + error.message);
     else setContas(data as SaldoConta[]);
     setLoading(false);
