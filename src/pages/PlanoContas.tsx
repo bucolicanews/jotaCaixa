@@ -275,7 +275,7 @@ const PlanoContasPage = () => {
                                 initialValue={conta.Conta}
                                 fieldName="Conta"
                                 onSaveSuccess={handleInlineSaveSuccess}
-                                isEditable={false} // Código da conta não deve ser editável inline
+                                isEditable={true} // ALTERADO PARA TRUE
                                 className="font-mono text-sm"
                             />
                         </TableCell>
