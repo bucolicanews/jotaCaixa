@@ -250,19 +250,21 @@ const PlanoContasPage = () => {
                     <TableHead className="w-[100px]">Cód. Reduzido</TableHead>
                     <TableHead>Descrição</TableHead>
                     <TableHead className="w-[100px] text-center">Analítica</TableHead>
+                    <TableHead className="w-[100px] text-center">Conta de Saldo</TableHead> {/* NOVO CABEÇALHO */}
+                    <TableHead className="w-[100px] text-center">Conta de Resultado</TableHead> {/* NOVO CABEÇALHO */}
                     <TableHead className="w-[100px] text-right">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {carregandoContas ? (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center py-8">
+                      <TableCell colSpan={7} className="text-center py-8">
                         <Loader2 className="h-6 w-6 animate-spin mx-auto text-primary" />
                       </TableCell>
                     </TableRow>
                   ) : contas.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center py-4 text-muted-foreground">
+                      <TableCell colSpan={7} className="text-center py-4 text-muted-foreground">
                         Nenhuma conta encontrada com os filtros aplicados.
                       </TableCell>
                     </TableRow>
@@ -275,7 +277,7 @@ const PlanoContasPage = () => {
                                 initialValue={conta.Conta}
                                 fieldName="Conta"
                                 onSaveSuccess={handleInlineSaveSuccess}
-                                isEditable={true} // ALTERADO PARA TRUE
+                                isEditable={true}
                                 className="font-mono text-sm"
                             />
                         </TableCell>
@@ -302,6 +304,37 @@ const PlanoContasPage = () => {
                             {/* Analítica não é editável inline, usa o botão de edição completo */}
                             {conta.Analitica}
                         </TableCell>
+                        
+                        {/* NOVO CAMPO: CONTA DE SALDO */}
+                        <TableCell className="text-center">
+                            {conta.Analitica === 'Sim' ? (
+                                <EditableCell
+                                    id={conta.id}
+                                    initialValue={conta.is_conta_saldo}
+                                    fieldName="is_conta_saldo"
+                                    onSaveSuccess={handleInlineSaveSuccess}
+                                    isEditable={true}
+                                />
+                            ) : (
+                                '-'
+                            )}
+                        </TableCell>
+                        
+                        {/* NOVO CAMPO: CONTA DE RESULTADO */}
+                        <TableCell className="text-center">
+                            {conta.Analitica === 'Sim' ? (
+                                <EditableCell
+                                    id={conta.id}
+                                    initialValue={conta.is_conta_resultado}
+                                    fieldName="is_conta_resultado"
+                                    onSaveSuccess={handleInlineSaveSuccess}
+                                    isEditable={true}
+                                />
+                            ) : (
+                                '-'
+                            )}
+                        </TableCell>
+                        
                         <TableCell className="text-right">
                           <div className="flex justify-end space-x-2">
                             <Button variant="ghost" size="sm" onClick={() => handleEdit(conta)}>
