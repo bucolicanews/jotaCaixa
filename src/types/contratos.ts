@@ -20,7 +20,7 @@ export interface ContratoGerado {
   modelo_id: string;
   cliente_id: string;
   empresa_id: string;
-  status: 'rascunho' | 'pendente_assinatura' | 'ativo' | 'cancelado' | 'concluido';
+  status: 'rascunho' | 'pendente_assinatura' | 'ativo' | 'cancelado' | 'concluido' | 'bloqueado';
   valor_total: number;
   data_inicio: string;
   numero_parcelas: number;

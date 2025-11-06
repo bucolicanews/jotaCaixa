@@ -40,7 +40,7 @@ const ContratoAcoesDialog: React.FC<ContratoAcoesDialogProps> = ({ contrato, ope
   
   const ownerId = contrato?.empresa_id; // O proprietário do contrato é quem define a configuração
   const isMyContract = ownerId === usuario?.id || (role === 'Cliente' && ownerId === (usuario as any)?.cliente_id);
-  const isCanceled = contrato?.status === 'cancelado';
+  const isCanceledOrBlocked = contrato?.status === 'cancelado' || contrato?.status === 'bloqueado';
 
   const fetchConfig = useCallback(async () => {
     if (!ownerId) {
@@ -136,7 +136,7 @@ const ContratoAcoesDialog: React.FC<ContratoAcoesDialogProps> = ({ contrato, ope
     setIsBlocking(true);
     
     try {
-        // 1. Cancelar parcelas pendentes
+        // 1. Bloquear parcelas pendentes (RPC cancel_contract_installments agora define o status do contrato como 'bloqueado')
         const { error: rpcError } = await supabase.rpc('cancel_contract_installments', {
             p_contrato_id: contrato.id,
             p_motivo: 'Contrato Bloqueado',
@@ -144,14 +144,6 @@ const ContratoAcoesDialog: React.FC<ContratoAcoesDialogProps> = ({ contrato, ope
         
         if (rpcError) throw rpcError;
         
-        // 2. Atualizar o status do contrato para 'cancelado'
-        const { error: updateError } = await supabase
-            .from('contratos_gerados')
-            .update({ status: 'cancelado' })
-            .eq('id', contrato.id);
-            
-        if (updateError) throw updateError;
-
         showSuccess('Contrato bloqueado e parcelas canceladas com sucesso.');
         // Força o recarregamento da página de contratos
         window.location.href = '/contratos';
@@ -268,7 +260,7 @@ const ContratoAcoesDialog: React.FC<ContratoAcoesDialogProps> = ({ contrato, ope
         
         <div className="flex justify-between pt-4 border-t">
             {isMyContract && (
-                isCanceled ? (
+                isCanceledOrBlocked ? (
                     <AlertDialog>
                         <AlertDialogTrigger asChild>
                             <Button variant="default" size="sm" disabled={isBlocking}>
@@ -301,7 +293,7 @@ const ContratoAcoesDialog: React.FC<ContratoAcoesDialogProps> = ({ contrato, ope
                             <AlertDialogHeader>
                                 <AlertDialogTitle>Bloquear Contrato e Cancelar Parcelas?</AlertDialogTitle>
                                 <AlertDialogDescription>
-                                    Esta ação irá marcar o contrato como 'cancelado' e **marcar como canceladas todas as parcelas pendentes** associadas. Esta ação é reversível através do botão 'Desbloquear'.
+                                    Esta ação irá marcar o contrato como 'bloqueado' e **marcar como canceladas todas as parcelas pendentes** associadas. Esta ação é reversível através do botão 'Desbloquear'.
                                 </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>

@@ -146,12 +146,12 @@ const Contratos = () => {
   };
   
   const handleBlockContract = async (contrato: ContratoGerado) => {
-    if (!window.confirm(`Tem certeza que deseja BLOQUEAR o contrato ${contrato.id}? Esta ação irá marcar o contrato como 'cancelado' e cancelar todas as parcelas pendentes associadas.`)) return;
+    if (!window.confirm(`Tem certeza que deseja BLOQUEAR o contrato ${contrato.id}? Esta ação irá marcar o contrato como 'bloqueado' e cancelar todas as parcelas pendentes associadas.`)) return;
 
     setCarregandoContratos(true);
     
     try {
-        // 1. Cancelar parcelas pendentes
+        // 1. Bloquear parcelas pendentes (RPC cancel_contract_installments agora define o status do contrato como 'bloqueado')
         const { error: rpcError } = await supabase.rpc('cancel_contract_installments', {
             p_contrato_id: contrato.id,
             p_motivo: 'Contrato Bloqueado',
@@ -159,14 +159,6 @@ const Contratos = () => {
         
         if (rpcError) throw rpcError;
         
-        // 2. Atualizar o status do contrato para 'cancelado'
-        const { error: updateError } = await supabase
-            .from('contratos_gerados')
-            .update({ status: 'cancelado' })
-            .eq('id', contrato.id);
-            
-        if (updateError) throw updateError;
-
         showSuccess('Contrato bloqueado e parcelas canceladas com sucesso.');
         buscarContratos();
     } catch (error: any) {
@@ -205,6 +197,7 @@ const Contratos = () => {
           case 'pendente_assinatura': return <Badge variant="warning">Pendente Assinatura</Badge>;
           case 'ativo': return <Badge variant="default">Ativo</Badge>;
           case 'cancelado': return <Badge variant="destructive">Cancelado</Badge>;
+          case 'bloqueado': return <Badge variant="destructive">Bloqueado</Badge>;
           case 'concluido': return <Badge variant="success">Concluído</Badge>;
           case 'rascunho': return <Badge variant="secondary">Rascunho</Badge>;
           default: return <Badge variant="secondary">{status}</Badge>;
@@ -227,7 +220,7 @@ const Contratos = () => {
       
       const pendentes = meusContratos.filter(c => c.status === 'pendente_assinatura' || c.status === 'rascunho');
       const ativos = meusContratos.filter(c => c.status === 'ativo' || c.status === 'concluido');
-      const inativos = meusContratos.filter(c => c.status === 'cancelado'); // Novo filtro para inativos/cancelados
+      const inativos = meusContratos.filter(c => c.status === 'cancelado' || c.status === 'bloqueado'); // Inclui 'bloqueado'
       
       return { meusContratos, contratosClientes, pendentes, ativos, inativos };
   }, [contratos, empresaId, filtroTextoDebounced]);
@@ -273,7 +266,7 @@ const Contratos = () => {
                     list.map(c => {
                         const canEdit = c.status === 'rascunho' || c.status === 'pendente_assinatura';
                         const isMyContract = c.empresa_id === empresaId;
-                        const isCanceled = c.status === 'cancelado';
+                        const isCanceledOrBlocked = c.status === 'cancelado' || c.status === 'bloqueado';
                         
                         return (
                             <TableRow key={c.id}>
@@ -297,7 +290,7 @@ const Contratos = () => {
                                         
                                         {/* Botão de Bloqueio/Desbloqueio */}
                                         {isMyContract && (
-                                            isCanceled ? (
+                                            isCanceledOrBlocked ? (
                                                 <Button 
                                                     variant="default" 
                                                     size="icon" 
@@ -318,8 +311,8 @@ const Contratos = () => {
                                             )
                                         )}
                                         
-                                        {/* Botão de Excluir (Aparece se for rascunho ou cancelado) */}
-                                        {(canEdit || isCanceled) && isMyContract && (
+                                        {/* Botão de Excluir (Aparece se for rascunho ou cancelado/bloqueado) */}
+                                        {(canEdit || isCanceledOrBlocked) && isMyContract && (
                                             <Button 
                                                 variant="ghost" 
                                                 size="icon" 
@@ -442,7 +435,7 @@ const Contratos = () => {
         {/* ABA DE CONTRATOS INATIVOS/CANCELADOS */}
         <TabsContent value="inativos" className="mt-4">
           <Card>
-            <CardHeader><CardTitle className="text-xl">Contratos Inativos ou Cancelados</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-xl">Contratos Inativos ou Bloqueados</CardTitle></CardHeader>
             <CardContent>
               {renderContratosTable(contratosParaExibir, isAdmin && activeContratoTab === 'contratos_clientes')}
             </CardContent>
