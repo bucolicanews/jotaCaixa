@@ -56,8 +56,8 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
       .from('lancamentos')
       .select(`
         *,
-        saldo_contas:conta_bancaria_id ( nome ),
-        plano_contas:conta_contabil_id ( Conta, Descricao )
+        conta_bancaria_id ( nome ),
+        conta_contabil_id ( Conta, Descricao )
       `)
       .eq('empresa_id', empresaId)
       .order('data_movimentacao', { ascending: false });
@@ -81,13 +81,17 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
     const { data, error } = await query;
 
     if (error) {
-      // Se o erro persistir, o problema é no esquema ou no cache do Supabase.
-      // O erro original era: "Could not find a relationship between 'lancamentos' and 'saldo_contas'"
-      // A sintaxe 'saldo_contas:conta_bancaria_id' força o nome da relação.
       showError('Erro ao carregar lançamentos: ' + error.message);
       setLancamentos([]);
     } else {
-      setLancamentos(data as Lancamento[]);
+      // Mapeia os dados para o formato esperado, usando o nome da coluna como chave da relação
+      const mappedData = (data as any[]).map(l => ({
+          ...l,
+          saldo_contas: l.conta_bancaria_id, // Renomeia a relação de volta para o nome esperado
+          plano_contas: l.conta_contabil_id, // Renomeia a relação de volta para o nome esperado
+      })) as Lancamento[];
+      
+      setLancamentos(mappedData);
     }
     setLoadingLancamentos(false);
   }, [empresaId, filtroContaId, filtroTipo, filtroTextoDebounced, filtroPeriodo]);
