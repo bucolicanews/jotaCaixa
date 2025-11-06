@@ -513,7 +513,7 @@ const ContasReceber = () => {
         {/* ABA 2: PARCELAS (ANALÍTICO) */}
         <TabsContent value="parcelas" className="mt-4">
           <Card>
-            <CardHeader><CardTitle>Parcelas Pendentes e Pagas ({parcelasFiltradas.length})</CardTitle></CardHeader>
+            <CardHeader><CardTitle>Parcelas Pendentes e Recebidas ({parcelasFiltradas.length})</CardTitle></CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
                 <Table>
@@ -526,7 +526,7 @@ const ContasReceber = () => {
                       <TableHead>Vencimento</TableHead>
                       <TableHead>Valor</TableHead>
                       <TableHead>Vlr Pago</TableHead>
-                      <TableHead>Data Pagamento</TableHead>
+                      <TableHead>Data Recebimento</TableHead>
                       <TableHead>Status</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -560,7 +560,7 @@ const ContasReceber = () => {
                                     <TableCell className={cn(isPaga && 'font-semibold text-green-600')}>{formatCurrency(p.valor_pago || 0)}</TableCell>
                                     <TableCell>{p.data_pagamento ? formatDate(p.data_pagamento) : '-'}</TableCell>
                                     <TableCell>
-                                        <Badge variant={statusVariant}>{p.status}</Badge>
+                                        <Badge variant={statusVariant}>{p.status === 'paga' ? 'recebida' : p.status}</Badge>
                                     </TableCell>
                                 </TableRow>
                             );
