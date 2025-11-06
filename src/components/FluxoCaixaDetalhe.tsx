@@ -181,9 +181,9 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
                 
                 {/* Saldo Inicial (Apenas se conta filtrada) */}
                 {isContaFiltrada && (
-                    <div className="p-3 bg-blue-100 dark:bg-blue-900/20 rounded-lg">
-                        <h4 className="text-sm font-medium text-blue-700 dark:text-blue-300 flex items-center"><Landmark className="w-4 h-4 mr-2" /> Saldo Inicial (Conta)</h4>
-                        <p className={cn("text-xl font-bold mt-1", saldoInicialConta >= 0 ? 'text-blue-600 dark:text-blue-400' : 'text-red-600 dark:text-red-400')}>{formatCurrency(saldoInicialConta)}</p>
+                    <div className="p-3 bg-orange-400/50 dark:bg-orange-900/50 rounded-lg text-white">
+                        <h4 className="text-sm font-medium flex items-center"><Landmark className="w-4 h-4 mr-2" /> Saldo Inicial (Conta)</h4>
+                        <p className={cn("text-xl font-bold mt-1", saldoInicialConta >= 0 ? 'text-white' : 'text-red-200')}>{formatCurrency(saldoInicialConta)}</p>
                     </div>
                 )}
                 
@@ -200,7 +200,7 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
                 </div>
                 
                 {/* Saldo Final / Variação Líquida (Ocupa o restante da linha) */}
-                <div className={cn("p-3 rounded-lg", saldoFinalOuVariacao >= 0 ? "bg-blue-100 dark:bg-blue-900/20" : "bg-red-100 dark:bg-red-900/20", isContaFiltrada ? "md:col-span-1" : "md:col-span-2")}>
+                <div className={cn("p-3 rounded-lg", saldoFinalOuVariacao >= 0 ? "bg-blue-100 dark:bg-blue-900/20" : "bg-red-100 dark:bg-red-900/20")}>
                     <h4 className="text-sm font-medium text-muted-foreground flex items-center"><Landmark className="w-4 h-4 mr-2" /> {tituloSaldoFinal}</h4>
                     <p className={cn("text-xl font-bold mt-1", saldoFinalOuVariacao >= 0 ? "text-blue-600 dark:text-blue-400" : "text-red-600 dark:text-red-400")}>{formatCurrency(saldoFinalOuVariacao)}</p>
                 </div>
