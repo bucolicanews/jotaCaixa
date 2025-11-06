@@ -136,7 +136,7 @@ const ContratoAcoesDialog: React.FC<ContratoAcoesDialogProps> = ({ contrato, ope
     setIsBlocking(true);
     
     try {
-        // 1. Bloquear parcelas pendentes (RPC cancel_contract_installments agora define o status do contrato como 'bloqueado')
+        // 1. Bloquear parcelas pendentes (RPC cancel_contract_installments agora define o status do contrato como 'bloqueado' e as parcelas como 'cancelada')
         const { error: rpcError } = await supabase.rpc('cancel_contract_installments', {
             p_contrato_id: contrato.id,
             p_motivo: 'Contrato Bloqueado',
@@ -144,7 +144,7 @@ const ContratoAcoesDialog: React.FC<ContratoAcoesDialogProps> = ({ contrato, ope
         
         if (rpcError) throw rpcError;
         
-        showSuccess('Contrato bloqueado e parcelas canceladas com sucesso.');
+        showSuccess('Contrato bloqueado e parcelas bloqueadas com sucesso.');
         // Força o recarregamento da página de contratos
         window.location.href = '/contratos';
     } catch (error: any) {
@@ -291,9 +291,9 @@ const ContratoAcoesDialog: React.FC<ContratoAcoesDialogProps> = ({ contrato, ope
                         </AlertDialogTrigger>
                         <AlertDialogContent>
                             <AlertDialogHeader>
-                                <AlertDialogTitle>Bloquear Contrato e Cancelar Parcelas?</AlertDialogTitle>
+                                <AlertDialogTitle>Bloquear Contrato e Bloquear Parcelas?</AlertDialogTitle>
                                 <AlertDialogDescription>
-                                    Esta ação irá marcar o contrato como 'bloqueado' e **marcar como canceladas todas as parcelas pendentes** associadas. Esta ação é reversível através do botão 'Desbloquear'.
+                                    Esta ação irá marcar o contrato como 'bloqueado' e **BLOQUEAR todas as parcelas pendentes** associadas. Esta ação é reversível através do botão 'Desbloquear'.
                                 </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
