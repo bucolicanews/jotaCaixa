@@ -23,7 +23,6 @@ const REPORTS = [
     permissionLabel: 'Contas a Receber',
   },
   {
-  // ... (restante dos relatórios)
     title: "Contas a Pagar",
     description: "Relatório detalhado de parcelas, status de pagamento e fornecedores.",
     icon: ArrowDownCircle,
@@ -72,10 +71,8 @@ const Relatorios = () => {
   // Correção 1: Acesso seguro à propriedade 'relatorios'
   const canAccessPage = userPermissions.relatorios === true || role === 'Admin';
 
-  // Correção 2: Se canAccessPage for false, o role não pode ser 'Admin'.
-  // A verificação 'role !== 'Admin'' é redundante, mas o TS exige que o tipo seja compatível.
-  // Usamos 'role && role !== 'Admin'' para garantir que a comparação só ocorra se role não for null.
-  if (!canAccessPage && role && role !== 'Admin') {
+  // Correção 2: Se !canAccessPage for verdadeiro, e role não for Admin, bloqueia.
+  if (!canAccessPage) {
     return (
       <LayoutPrincipal>
         <Card><CardHeader><CardTitle>Acesso Negado</CardTitle></CardHeader><CardContent><p>Você não tem permissão para acessar a área de relatórios.</p></CardContent></Card>

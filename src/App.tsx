@@ -35,6 +35,7 @@ import { showSuccess, showError } from "./utils/toast";
 import { useSessao } from "./hooks/use-sessao";
 import MinhaAssinatura from "./pages/MinhaAssinatura";
 import SelecaoPagamentoRenovacao from "./pages/SelecaoPagamentoRenovacao";
+import FluxoCaixa from "./pages/FluxoCaixa"; // Importando a nova página
 
 const queryClient = new QueryClient();
 
@@ -126,7 +127,7 @@ const PaymentRenewalHandler = () => {
         
         // 1. Buscar dados da sessão do Stripe para obter o valor pago
         const { data: sessionData, error: sessionError } = await supabase.functions.invoke('get-stripe-session', {
-            body: { sessionId },
+            body: { sessionId, proprietarioId: (usuario as any)?.admin_id || usuario?.id }, // Passa o ID do Admin
         });
         
         if (sessionError || !sessionData?.metadata?.valorCobrado) {
@@ -211,6 +212,10 @@ const App = () => (
             <Route path="/conciliacao" element={<Conciliacao />} />
             <Route path="/importar" element={<Importar />} />
             <Route path="/relatorios" element={<Relatorios />} />
+            <Route path="/relatorios/fluxo-caixa" element={<FluxoCaixa />} /> {/* NOVA ROTA */}
+            <Route path="/relatorios/balanco" element={<Relatorios />} /> {/* Placeholder */}
+            <Route path="/relatorios/dre" element={<Relatorios />} /> {/* Placeholder */}
+            <Route path="/relatorios/calima" element={<Relatorios />} /> {/* Placeholder */}
             <Route path="/configuracoes" element={<Configuracoes />} />
             <Route path="/planos" element={<GerenciarPlanos />} />
             <Route path="/plano-contas" element={<PlanoContasPage />} />
