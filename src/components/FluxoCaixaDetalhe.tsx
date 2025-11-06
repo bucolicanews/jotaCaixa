@@ -181,7 +181,7 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
                 
                 {/* Saldo Inicial (Apenas se conta filtrada) */}
                 {isContaFiltrada && (
-                    <div className="p-3 bg-orange-600 dark:bg-orange-900 rounded-lg text-white">
+                    <div className="p-3 bg-black/20 dark:bg-orange-900/20 rounded-lg text-white">
                         <h4 className="text-sm font-medium flex items-center"><Landmark className="w-4 h-4 mr-2" /> Saldo Inicial (Conta)</h4>
                         <p className={cn("text-lg font-bold mt-1 truncate", saldoInicialConta >= 0 ? 'text-white' : 'text-red-200')}>{formatCurrency(saldoInicialConta)}</p>
                     </div>

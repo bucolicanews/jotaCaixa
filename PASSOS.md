@@ -5,3 +5,4 @@
 5 - Contas a pagarc e receber ok
 6 - Contratos ok
 7 - CONCILIAÇÃO BANCÁRIA OK
+8 - RELATÓRIOS (FLUXO DE CAIXA , CONTAS RECEBER , CONTAS A PAGAR)
