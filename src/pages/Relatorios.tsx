@@ -34,7 +34,7 @@ const REPORTS = [
     title: "Balanço Patrimonial (Simplificado)",
     description: "Visão geral dos ativos e passivos da empresa.",
     icon: Scale,
-    link: "/relatorios/balanco",
+    link: "/relatorios/balanco", 
     permissionKey: 'relatorios',
     permissionLabel: 'Relatórios',
   },

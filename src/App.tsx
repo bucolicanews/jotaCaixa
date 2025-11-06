@@ -35,7 +35,8 @@ import { showSuccess, showError } from "./utils/toast";
 import { useSessao } from "./hooks/use-sessao";
 import MinhaAssinatura from "./pages/MinhaAssinatura";
 import SelecaoPagamentoRenovacao from "./pages/SelecaoPagamentoRenovacao";
-import FluxoCaixa from "./pages/FluxoCaixa"; // Importando a nova página
+import FluxoCaixa from "./pages/FluxoCaixa";
+import BalancoPatrimonial from "./pages/BalancoPatrimonial"; // Importando a nova página
 
 const queryClient = new QueryClient();
 
@@ -212,8 +213,8 @@ const App = () => (
             <Route path="/conciliacao" element={<Conciliacao />} />
             <Route path="/importar" element={<Importar />} />
             <Route path="/relatorios" element={<Relatorios />} />
-            <Route path="/relatorios/fluxo-caixa" element={<FluxoCaixa />} /> {/* NOVA ROTA */}
-            <Route path="/relatorios/balanco" element={<Relatorios />} /> {/* Placeholder */}
+            <Route path="/relatorios/fluxo-caixa" element={<FluxoCaixa />} />
+            <Route path="/relatorios/balanco" element={<BalancoPatrimonial />} /> {/* NOVA ROTA */}
             <Route path="/relatorios/dre" element={<Relatorios />} /> {/* Placeholder */}
             <Route path="/relatorios/calima" element={<Relatorios />} /> {/* Placeholder */}
             <Route path="/configuracoes" element={<Configuracoes />} />
