@@ -87,6 +87,7 @@ const PreencherContrato: React.FC = () => {
   const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
   const formatDate = (date: Date) => format(date, 'dd/MM/yyyy');
 
+  // --- FUNÇÃO PRINCIPAL DE BUSCA DE DADOS INICIAIS ---
   const buscarDados = useCallback(async () => {
     if (!modeloId || !ownerIdLogado) {
         setCarregandoDados(false);
@@ -95,6 +96,7 @@ const PreencherContrato: React.FC = () => {
     
     setCarregandoDados(true);
     
+    // 1. Buscar Modelo
     const { data: modeloData, error: modeloError } = await supabase
         .from('contrato_modelos')
         .select('*')
@@ -108,36 +110,9 @@ const PreencherContrato: React.FC = () => {
     }
     setModelo(modeloData as ContratoModelo);
     
-    let finalEmpresaContratoId = ownerIdLogado;
-    
-    if (isAdmin) {
-        const { data: clientesData, error: clientesError } = await supabase
-            .from('tbl_clientes')
-            // CORREÇÃO: Usando 'id' no lugar de 'documento' na seleção, e mantendo 'cpf' para mapeamento
-            .select('id, nome, cpf, email, telefone, telefone_fixo, razao_social, nome_fantasia, cep, endereco, numero, complemento, bairro, cidade, estado, criado_em')
-            .eq('aprovado', true)
-            .order('nome');
-            
-        if (clientesError) {
-            showError('Erro ao carregar clientes do sistema: ' + clientesError.message);
-        } else {
-            const adminOption: EmpresaContrato = { id: ownerIdLogado, nome: 'Meus Contratos (Admin)' };
-            const allClients = [adminOption, ...(clientesData as EmpresaContrato[])];
-            setEmpresasContrato(allClients);
-            finalEmpresaContratoId = allClients[0].id;
-        }
-    }
-    
+    // 2. Configurar Empresa Logada (Contratante)
     let currentEmpresaLogada: EmpresaLogada | null = null;
-    if (isAdmin) {
-        const profile = perfil as ClienteProfile; 
-        currentEmpresaLogada = {
-            nome: profile.nome,
-            email: profile.email,
-            documento: null, 
-            endereco_completo: null,
-        };
-    } else if (isCliente) {
+    if (isAdmin || isCliente) {
         const profile = perfil as ClienteProfile;
         currentEmpresaLogada = {
             nome: profile.nome,
@@ -153,6 +128,26 @@ const PreencherContrato: React.FC = () => {
     }
     setEmpresaLogada(currentEmpresaLogada);
     
+    // 3. Configurar Empresas Contratantes (Apenas Admin)
+    let initialEmpresaContratoId = ownerIdLogado;
+    if (isAdmin) {
+        const { data: clientesData, error: clientesError } = await supabase
+            .from('tbl_clientes')
+            .select('id, nome')
+            .eq('aprovado', true)
+            .order('nome');
+            
+        if (clientesError) {
+            showError('Erro ao carregar clientes do sistema: ' + clientesError.message);
+        } else {
+            const adminOption: EmpresaContrato = { id: ownerIdLogado, nome: 'Meus Contratos (Admin)' };
+            const allClients = [adminOption, ...(clientesData as EmpresaContrato[])];
+            setEmpresasContrato(allClients);
+            initialEmpresaContratoId = allClients[0].id;
+        }
+    }
+    
+    // 4. Carregar Contrato Inicial (se for edição)
     if (contratoId) {
         const { data: contratoData, error: contratoLoadError } = await supabase
             .from('contratos_gerados')
@@ -168,7 +163,7 @@ const PreencherContrato: React.FC = () => {
         
         const contrato = contratoData as ContratoGerado;
         setContratoInicial(contrato);
-        finalEmpresaContratoId = contrato.empresa_id;
+        initialEmpresaContratoId = contrato.empresa_id; // Sobrescreve o ID inicial
         
         setClienteSelecionadoId(contrato.cliente_id);
         setValorTotal(contrato.valor_total);
@@ -177,7 +172,6 @@ const PreencherContrato: React.FC = () => {
         const numParcelas = contrato.numero_parcelas;
         const valorTotalContrato = contrato.valor_total;
         
-        // Determina as tabelas corretas para buscar a parcela
         const tabelaParcelas = contrato.empresa_id === ownerIdLogado && isAdmin ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
         
         const { data: primeiraParcela } = await supabase
@@ -215,92 +209,84 @@ const PreencherContrato: React.FC = () => {
         setTipoConteudo(isHtmlContent ? 'html' : 'texto');
     }
     
-    let combinedClients: Cliente[] = [];
-    if (finalEmpresaContratoId) {
-        if (isAdmin && finalEmpresaContratoId === ownerIdLogado) {
-            // Admin criando um contrato para si mesmo. O cliente DEVE ser uma empresa do sistema (tbl_clientes).
-            const { data: systemClientsData, error: systemClientsError } = await supabase
-                .from('tbl_clientes')
-                .select('id, nome, cpf, email, telefone, telefone_fixo, razao_social, nome_fantasia, cep, endereco, numero, complemento, bairro, cidade, estado, criado_em')
-                .eq('aprovado', true);
-            if (systemClientsError) {
-                showError('Erro ao carregar clientes do sistema: ' + systemClientsError.message);
-            } else if (systemClientsData) {
-                combinedClients = systemClientsData.map(sc => ({
-                    id: sc.id,
-                    empresa_id: ownerIdLogado,
-                    nome: sc.nome,
-                    razao_social: sc.razao_social || sc.nome,
-                    nome_fantasia: sc.nome_fantasia || sc.nome,
-                    documento: sc.cpf || null, // Mapeia cpf para documento
-                    email: sc.email || null,
-                    telefone: sc.telefone || null,
-                    telefone_fixo: sc.telefone_fixo || null,
-                    cep: sc.cep || null,
-                    endereco: sc.endereco || null,
-                    numero: sc.numero || null,
-                    complemento: sc.complemento || null,
-                    bairro: sc.bairro || null,
-                    cidade: sc.cidade || null,
-                    estado: sc.estado || null,
-                    created_at: sc.criado_em,
-                    updated_at: sc.criado_em,
-                }));
-            }
-        } else {
-            // Cliente criando um contrato, ou Admin criando para um cliente.
-            // O cliente DEVE ser da lista de CR (public.clientes).
-            const { data: clientesCRData, error: clientesCRError } = await supabase
-                .from('clientes')
-                .select('*')
-                .eq('empresa_id', finalEmpresaContratoId);
-            if (clientesCRError) {
-                showError('Erro ao carregar clientes de CR: ' + clientesCRError.message);
-            } else if (clientesCRData) {
-                combinedClients.push(...(clientesCRData as Cliente[]));
-            }
-        }
-    }
-    combinedClients.sort((a, b) => a.nome.localeCompare(b.nome));
-    setClientes(combinedClients);
+    setEmpresaContratoId(initialEmpresaContratoId);
     
-    setEmpresaContratoId(finalEmpresaContratoId);
+    // A lista de clientes e tags será carregada no próximo useEffect (monitorando empresaContratoId)
     setCarregandoDados(false);
   }, [modeloId, ownerIdLogado, navigate, role, perfil, usuario, isAdmin, isCliente, contratoId]);
   
-  useEffect(() => {
-    if (isAdmin && empresaContratoId && !carregandoDados) {
-        const fetchDependentData = async () => {
-            const { data: tagsData } = await supabase
-                .from('contrato_tags')
-                .select('*')
-                .eq('empresa_id', empresaContratoId)
-                .order('nome_tag');
-                
-            if (tagsData) {
-                setTags(tagsData as ContratoTag[]);
-            }
-            
-            // Re-fetch clients if the contract owner changes (only relevant for Admin)
-            if (isAdmin && empresaContratoId !== ownerIdLogado) {
-                const { data: clientesCRData, error: clientesCRError } = await supabase
-                    .from('clientes')
-                    .select('*')
-                    .eq('empresa_id', empresaContratoId);
-                if (clientesCRError) {
-                    showError('Erro ao carregar clientes de CR: ' + clientesCRError.message);
-                } else if (clientesCRData) {
-                    setClientes(clientesCRData as Cliente[]);
-                }
-            }
-            
-            if (clienteSelecionadoId && !clientes.some(c => c.id === clienteSelecionadoId)) {
-                setClienteSelecionadoId('');
-            }
-        };
-        fetchDependentData();
+  // --- FUNÇÃO DE BUSCA DE CLIENTES E TAGS DEPENDENTE DO PROPRIETÁRIO ---
+  const fetchDependentData = useCallback(async (targetEmpresaId: string) => {
+    if (!targetEmpresaId) return;
+    
+    // 1. Buscar Tags Customizadas
+    const { data: tagsData } = await supabase
+        .from('contrato_tags')
+        .select('*')
+        .eq('empresa_id', targetEmpresaId)
+        .order('nome_tag');
+        
+    if (tagsData) {
+        setTags(tagsData as ContratoTag[]);
     }
-  }, [isAdmin, empresaContratoId, carregandoDados, clienteSelecionadoId, ownerIdLogado, clientes]);
+    
+    // 2. Buscar Clientes (Contratados)
+    let combinedClients: Cliente[] = [];
+    
+    // Regra 1: Se o proprietário do contrato for o Admin logado, os clientes são as Empresas do Sistema (tbl_clientes)
+    if (isAdmin && targetEmpresaId === ownerIdLogado) {
+        const { data: systemClientsData, error: systemClientsError } = await supabase
+            .from('tbl_clientes')
+            .select('id, nome, cpf, email, telefone, telefone_fixo, razao_social, nome_fantasia, cep, endereco, numero, complemento, bairro, cidade, estado, criado_em')
+            .eq('aprovado', true)
+            .order('nome');
+            
+        if (systemClientsError) {
+            showError('Erro ao carregar clientes do sistema: ' + systemClientsError.message);
+        } else if (systemClientsData) {
+            combinedClients = systemClientsData.map(sc => ({
+                id: sc.id,
+                empresa_id: ownerIdLogado,
+                nome: sc.nome,
+                razao_social: sc.razao_social || sc.nome,
+                nome_fantasia: sc.nome_fantasia || sc.nome,
+                documento: sc.cpf || null, 
+                email: sc.email || null,
+                telefone: sc.telefone || null,
+                telefone_fixo: sc.telefone_fixo || null,
+                cep: sc.cep || null,
+                endereco: sc.endereco || null,
+                numero: sc.numero || null,
+                complemento: sc.complemento || null,
+                bairro: sc.bairro || null,
+                cidade: sc.cidade || null,
+                estado: sc.estado || null,
+                created_at: sc.criado_em,
+                updated_at: sc.criado_em,
+            }));
+        }
+    } else {
+        // Regra 2: Se o proprietário for um Cliente (ou o Admin selecionou um Cliente), os clientes são da tabela 'clientes' (CR)
+        const { data: clientesCRData, error: clientesCRError } = await supabase
+            .from('clientes')
+            .select('*')
+            .eq('empresa_id', targetEmpresaId);
+        if (clientesCRError) {
+            showError('Erro ao carregar clientes de CR: ' + clientesCRError.message);
+        } else if (clientesCRData) {
+            combinedClients.push(...(clientesCRData as Cliente[]));
+        }
+    }
+    
+    combinedClients.sort((a, b) => a.nome.localeCompare(b.nome));
+    setClientes(combinedClients);
+    
+    // Se o cliente selecionado não estiver mais na lista, limpa a seleção
+    if (clienteSelecionadoId && !combinedClients.some(c => c.id === clienteSelecionadoId)) {
+        setClienteSelecionadoId('');
+    }
+    
+  }, [isAdmin, ownerIdLogado, clienteSelecionadoId]);
 
 
   useEffect(() => {
@@ -311,6 +297,14 @@ const PreencherContrato: React.FC = () => {
     }
   }, [carregandoSessao, isAdmin, isCliente, role, ownerIdLogado, buscarDados, navigate]);
   
+  // Efeito para monitorar a mudança do proprietário do contrato (empresaContratoId)
+  useEffect(() => {
+      if (empresaContratoId) {
+          fetchDependentData(empresaContratoId);
+      }
+  }, [empresaContratoId, fetchDependentData]);
+
+
   useEffect(() => {
     const updateTags = () => {
         const newTags: Record<string, string> = {};
@@ -389,17 +383,17 @@ const PreencherContrato: React.FC = () => {
         });
         
         setValoresTags(prev => {
-            const customTags = Object.keys(prev).filter(key => !TAGS_PADRAO.some(t => t.nome_tag === key));
+            const customTags = tags.map(t => t.nome_tag).filter(key => !TAGS_PADRAO.some(t => t.nome_tag === key));
             const updatedTags = { ...newTags };
             customTags.forEach(key => {
-                updatedTags[key] = prev[key];
+                updatedTags[key] = prev[key] || '';
             });
             return updatedTags;
         });
     };
     
     updateTags();
-  }, [clienteSelecionadoId, valorTotal, tipoLancamento, numeroParcelas, dataVencimentoUnico, dataPrimeiroVencimento, clientes, empresaLogada, intervaloDias, tipoConteudo, valoresTags]);
+  }, [clienteSelecionadoId, valorTotal, tipoLancamento, numeroParcelas, dataVencimentoUnico, dataPrimeiroVencimento, clientes, empresaLogada, intervaloDias, tipoConteudo, tags, valoresTags]);
 
 
   const handleTagChange = (tag: string, value: string) => {
@@ -495,7 +489,6 @@ const PreencherContrato: React.FC = () => {
         const isContractOwnerAdmin = empresaContratoId === ownerIdLogado && isAdmin;
 
         // CORREÇÃO: Se for Admin, garantir que o cliente (de tbl_clientes) também exista na tabela 'clientes'
-        // EXPANDINDO O PAYLOAD PARA INCLUIR TODOS OS CAMPOS NECESSÁRIOS PARA O UPSERT
         if (isContractOwnerAdmin) {
             const clienteDataParaUpsert = {
                 id: clienteSelecionado.id,
@@ -713,7 +706,7 @@ const PreencherContrato: React.FC = () => {
                 
                 <div className="space-y-2">
                     <Label htmlFor="cliente">Cliente</Label>
-                    <Select value={clienteSelecionadoId} onValueChange={setClienteSelecionadoId} disabled={isEditing || !empresaContratoId}>
+                    <Select value={clienteSelecionadoId} onValueChange={setClienteSelecionadoId} disabled={!empresaContratoId}>
                         <SelectTrigger id="cliente">
                             <SelectValue placeholder="Selecione o Cliente" />
                         </SelectTrigger>
