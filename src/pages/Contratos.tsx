@@ -159,7 +159,7 @@ const Contratos = () => {
   };
   
   const handleBlockContract = async (contrato: ContratoGerado) => {
-    if (!window.confirm(`Tem certeza que deseja BLOQUEAR o contrato ${contrato.id}? Isso cancelará todas as parcelas futuras e marcará o contrato como 'cancelado'.`)) return;
+    if (!window.confirm(`Tem certeza que deseja BLOQUEAR o contrato ${contrato.id}? Esta ação irá marcar o contrato como 'cancelado' e cancelar todas as parcelas pendentes associadas.`)) return;
 
     setCarregandoContratos(true);
     

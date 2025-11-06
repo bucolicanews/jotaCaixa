@@ -255,7 +255,7 @@ const ContratoAcoesDialog: React.FC<ContratoAcoesDialogProps> = ({ contrato, ope
                         <AlertDialogHeader>
                             <AlertDialogTitle>Bloquear Contrato e Cancelar Parcelas?</AlertDialogTitle>
                             <AlertDialogDescription>
-                                Esta ação irá marcar o contrato como 'cancelado' e todas as parcelas futuras (abertas, parciais, reprogramadas) associadas a ele serão marcadas como 'cancelada' com a observação "Contrato Bloqueado". Esta ação é irreversível.
+                                Esta ação irá marcar o contrato como 'cancelado' e **cancelar todas as parcelas pendentes** associadas. Esta ação é irreversível.
                             </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
