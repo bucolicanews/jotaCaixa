@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Copy, ExternalLink, FileText, Eye, Printer } from 'lucide-react';
+import { Copy, ExternalLink, FileText, Eye, Printer, Mail, MessageSquare } from 'lucide-react';
 import { ContratoGerado } from '@/types/contratos';
 import { showSuccess } from '@/utils/toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
-import { usePrint } from '@/hooks/use-print'; // Importando usePrint
+import { usePrint } from '@/hooks/use-print';
 
 interface ContratoAcoesDialogProps {
   contrato: ContratoGerado | null;
@@ -21,10 +21,9 @@ const ContratoAcoesDialog: React.FC<ContratoAcoesDialogProps> = ({ contrato, ope
 
   useEffect(() => {
     if (contrato) {
-      // Simulação de geração de link externo
-      const baseLink = window.location.origin;
-      const simulatedLink = `${baseLink}/assinar-contrato/${contrato.id}`;
-      setLinkAssinatura(simulatedLink);
+      // Link real para a nova rota pública
+      const realLink = `${window.location.origin}/assinar-contrato/${contrato.id}`;
+      setLinkAssinatura(realLink);
     }
   }, [contrato]);
 
@@ -33,6 +32,29 @@ const ContratoAcoesDialog: React.FC<ContratoAcoesDialogProps> = ({ contrato, ope
       navigator.clipboard.writeText(linkAssinatura);
       showSuccess('Link de assinatura copiado!');
     }
+  };
+  
+  const handleSendEmail = () => {
+      if (!linkAssinatura) return;
+      const subject = encodeURIComponent(`Contrato para Assinatura: ${contrato?.valores_tags_preenchidos?.titulo || 'Documento'}`);
+      const body = encodeURIComponent(`Prezado(a) cliente,\n\nSeu contrato está pronto para assinatura. Clique no link abaixo para visualizar e assinar:\n\n${linkAssinatura}\n\nAtenciosamente,\nEquipe Financeira`);
+      
+      // Tenta usar o email do cliente, se disponível nos metadados
+      const recipient = contrato?.valores_tags_preenchidos?.['{{CLIENTE_EMAIL}}'] || '';
+      
+      window.open(`mailto:${recipient}?subject=${subject}&body=${body}`, '_blank');
+      showSuccess('Abrindo cliente de e-mail...');
+  };
+  
+  const handleSendWhatsapp = () => {
+      if (!linkAssinatura) return;
+      const message = encodeURIComponent(`*Contrato para Assinatura*\n\nSeu contrato está pronto. Clique no link para assinar:\n${linkAssinatura}`);
+      
+      // Tenta usar o telefone do cliente, se disponível nos metadados
+      const phone = contrato?.valores_tags_preenchidos?.['{{CLIENTE_TELEFONE}}']?.replace(/\D/g, '') || '';
+      
+      window.open(`https://wa.me/${phone}?text=${message}`, '_blank');
+      showSuccess('Abrindo WhatsApp...');
   };
   
   const handlePrint = () => {
@@ -80,7 +102,7 @@ const ContratoAcoesDialog: React.FC<ContratoAcoesDialogProps> = ({ contrato, ope
         <Tabs defaultValue="preview">
             <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="preview" className="flex items-center"><Eye className="w-4 h-4 mr-1" /> Visualizar Contrato</TabsTrigger>
-                <TabsTrigger value="link">Link de Assinatura</TabsTrigger>
+                <TabsTrigger value="link">Enviar para Assinatura</TabsTrigger>
             </TabsList>
             
             {/* ABA: PRÉVIA RENDERIZADA */}
@@ -95,14 +117,14 @@ const ContratoAcoesDialog: React.FC<ContratoAcoesDialogProps> = ({ contrato, ope
             
             <TabsContent value="link" className="space-y-4 pt-4">
                 <div className="space-y-2">
-                    <Label>Link para Assinatura Externa (Simulado)</Label>
+                    <Label>Link para Assinatura Externa</Label>
                     <div className="flex space-x-2">
                         <Input readOnly value={linkAssinatura} className="flex-1" />
-                        <Button onClick={handleCopyLink} variant="secondary" size="icon">
+                        <Button onClick={handleCopyLink} variant="secondary" size="icon" title="Copiar Link">
                             <Copy className="w-4 h-4" />
                         </Button>
                         <a href={linkAssinatura} target="_blank" rel="noopener noreferrer">
-                            <Button variant="default" size="icon">
+                            <Button variant="default" size="icon" title="Abrir Link">
                                 <ExternalLink className="w-4 h-4" />
                             </Button>
                         </a>
@@ -111,6 +133,15 @@ const ContratoAcoesDialog: React.FC<ContratoAcoesDialogProps> = ({ contrato, ope
                 <p className="text-sm text-muted-foreground">
                     Envie este link ao cliente para que ele possa visualizar e assinar o contrato eletronicamente.
                 </p>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t">
+                    <Button onClick={handleSendEmail} variant="outline" className="w-full">
+                        <Mail className="w-4 h-4 mr-2" /> Enviar por Email
+                    </Button>
+                    <Button onClick={handleSendWhatsapp} variant="outline" className="w-full">
+                        <MessageSquare className="w-4 h-4 mr-2" /> Enviar por WhatsApp
+                    </Button>
+                </div>
             </TabsContent>
         </Tabs>
         

@@ -36,7 +36,8 @@ import { useSessao } from "./hooks/use-sessao";
 import MinhaAssinatura from "./pages/MinhaAssinatura";
 import SelecaoPagamentoRenovacao from "./pages/SelecaoPagamentoRenovacao";
 import FluxoCaixa from "./pages/FluxoCaixa";
-import BalancoPatrimonial from "./pages/BalancoPatrimonial"; // Importando a nova página
+import BalancoPatrimonial from "./pages/BalancoPatrimonial";
+import AssinarContrato from "./pages/AssinarContrato"; // Importando a nova página
 
 const queryClient = new QueryClient();
 
@@ -203,6 +204,7 @@ const App = () => (
             <Route path="/vendas" element={<Vendas />} />
             <Route path="/login" element={<Login />} />
             <Route path="/atualizar-senha" element={<AtualizarSenha />} />
+            <Route path="/assinar-contrato/:id" element={<AssinarContrato />} /> {/* NOVA ROTA PÚBLICA */}
             
             {/* Rotas Autenticadas (Protegidas pelo LayoutPrincipal) */}
             <Route path="/painel" element={<Painel />} />
@@ -214,7 +216,7 @@ const App = () => (
             <Route path="/importar" element={<Importar />} />
             <Route path="/relatorios" element={<Relatorios />} />
             <Route path="/relatorios/fluxo-caixa" element={<FluxoCaixa />} />
-            <Route path="/relatorios/balanco" element={<BalancoPatrimonial />} /> {/* NOVA ROTA */}
+            <Route path="/relatorios/balanco" element={<BalancoPatrimonial />} />
             <Route path="/relatorios/dre" element={<Relatorios />} /> {/* Placeholder */}
             <Route path="/relatorios/calima" element={<Relatorios />} /> {/* Placeholder */}
             <Route path="/configuracoes" element={<Configuracoes />} />
