@@ -95,7 +95,8 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ onCapture, onReset, captu
       
       canvas.toBlob((blob) => {
         if (blob) {
-          const file = new File([blob], `selfie-${Date.now()}.jpeg`, { type: 'image/jpeg' });
+          // Alterado para forçar a extensão .jpg
+          const file = new File([blob], `selfie-${Date.now()}.jpg`, { type: 'image/jpeg' });
           onCapture(file);
           stopCamera();
           console.log("LOG: Selfie capturada com sucesso.");
