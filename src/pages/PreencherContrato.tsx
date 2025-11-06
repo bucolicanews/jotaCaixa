@@ -194,7 +194,7 @@ const PreencherContrato: React.FC = () => {
             const { data: primeiraParcela, error: parcelaError } = await supabase
                 .from(tabelaParcelas)
                 .select('valor_parcela, data_vencimento')
-                .eq('conta_receber_id', contaReceberId) // <-- CORRIGIDO AQUI
+                .eq('conta_receber_id', contaReceberId)
                 .order('numero_parcela', { ascending: true })
                 .limit(1)
                 .single();
@@ -224,15 +224,31 @@ const PreencherContrato: React.FC = () => {
                 }
             } else {
                 // Se a conta sintética existe, mas não tem parcelas (erro de integridade)
-                showError('Aviso: Conta sintética encontrada, mas sem parcelas associadas. Verifique o lançamento financeiro.');
-                setTipoLancamento('unico');
-                setNumeroParcelas(1);
+                console.error('LOG: Conta sintética encontrada, mas sem parcelas associadas. Usando dados do contrato.');
+                // Fallback: Usa os dados do contrato para preencher o formulário
+                if (numParcelas === 1) {
+                    setTipoLancamento('unico');
+                    setDataVencimentoUnico(contrato.data_inicio ? parseISO(contrato.data_inicio) : undefined);
+                } else {
+                    setTipoLancamento('parcelar'); // Assume parcelar como padrão para múltiplos
+                    setNumeroParcelas(numParcelas);
+                    setDataPrimeiroVencimento(contrato.data_inicio ? parseISO(contrato.data_inicio) : undefined);
+                    setIntervaloDias(contrato.dia_vencimento_parcela || 30);
+                }
             }
         } else {
             // Se não encontrou a conta a receber (registro ausente)
-            showError('Aviso: Não foi possível carregar as parcelas associadas. Verifique o lançamento financeiro.');
-            setTipoLancamento('unico');
-            setNumeroParcelas(1);
+            console.error('LOG: Conta sintética não encontrada. Usando dados do contrato.');
+            // Fallback: Usa os dados do contrato para preencher o formulário
+            if (numParcelas === 1) {
+                setTipoLancamento('unico');
+                setDataVencimentoUnico(contrato.data_inicio ? parseISO(contrato.data_inicio) : undefined);
+            } else {
+                setTipoLancamento('parcelar');
+                setNumeroParcelas(numParcelas);
+                setDataPrimeiroVencimento(contrato.data_inicio ? parseISO(contrato.data_inicio) : undefined);
+                setIntervaloDias(contrato.dia_vencimento_parcela || 30);
+            }
         }
         
         setTipoConteudo(contrato.valores_tags_preenchidos?.tipo_conteudo || 'html');
@@ -600,17 +616,12 @@ const PreencherContrato: React.FC = () => {
             contratoGeradoId = contratoInicial.id;
             
             // 1. Buscar a conta sintética existente
-            const { data: existingConta, error: fetchExistingError } = await supabase
+            const { data: existingConta } = await supabase
                 .from(tabelaContasReceber)
                 .select('id')
                 .eq('contrato_gerado_id', contratoGeradoId)
                 .limit(1)
                 .single();
-                
-            if (fetchExistingError && fetchExistingError.code !== 'PGRST116') {
-                console.error('Erro ao buscar conta existente para exclusão:', fetchExistingError);
-                // Não lançamos erro fatal aqui, apenas logamos e tentamos continuar
-            }
                 
             if (existingConta) {
                 contaReceberId = existingConta.id;
