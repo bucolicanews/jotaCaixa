@@ -172,21 +172,26 @@ const PreencherContrato: React.FC = () => {
         const numParcelas = contrato.numero_parcelas;
         const valorTotalContrato = contrato.valor_total;
         
-        const tabelaContasReceber = contrato.empresa_id === ownerIdLogado && isAdmin ? 'admin_contas_receber' : 'contas_receber';
-        const tabelaParcelas = contrato.empresa_id === ownerIdLogado && isAdmin ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
+        const isContractOwnerAdmin = contrato.empresa_id === ownerIdLogado && isAdmin;
+        const tabelaContasReceber = isContractOwnerAdmin ? 'admin_contas_receber' : 'contas_receber';
+        const tabelaParcelas = isContractOwnerAdmin ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
         
         // Busca a conta sintética para obter o ID da conta a receber
-        const { data: contaReceberData } = await supabase
+        const { data: contaReceberData, error: contaReceberError } = await supabase
             .from(tabelaContasReceber)
             .select('id')
             .eq('contrato_gerado_id', contrato.id)
             .limit(1)
             .single();
             
+        if (contaReceberError && contaReceberError.code !== 'PGRST116') {
+            console.error(`Erro ao buscar conta sintética na tabela ${tabelaContasReceber}:`, contaReceberError);
+        }
+            
         const contaReceberId = contaReceberData?.id;
 
         if (contaReceberId) {
-            const { data: primeiraParcela } = await supabase
+            const { data: primeiraParcela, error: parcelaError } = await supabase
                 .from(tabelaParcelas)
                 .select('valor_parcela, data_vencimento')
                 .eq('conta_receber_id', contaReceberId) // <-- CORRIGIDO AQUI
@@ -194,30 +199,40 @@ const PreencherContrato: React.FC = () => {
                 .limit(1)
                 .single();
                 
-            if (numParcelas === 1) {
-                setTipoLancamento('unico');
-                setDataVencimentoUnico(primeiraParcela?.data_vencimento ? parseISO(primeiraParcela.data_vencimento) : undefined);
-                setNumeroParcelas(1);
-            } else {
-                const valorParcela = primeiraParcela?.valor_parcela || 0;
+            if (parcelaError && parcelaError.code !== 'PGRST116') {
+                console.error(`Erro ao buscar primeira parcela na tabela ${tabelaParcelas}:`, parcelaError);
+            }
                 
-                // Determina se é parcelar ou repetir
-                if (Math.abs(valorTotalContrato - (valorParcela * numParcelas)) < 0.01) {
-                    setTipoLancamento('parcelar');
+            if (primeiraParcela) {
+                if (numParcelas === 1) {
+                    setTipoLancamento('unico');
+                    setDataVencimentoUnico(primeiraParcela.data_vencimento ? parseISO(primeiraParcela.data_vencimento) : undefined);
+                    setNumeroParcelas(1);
                 } else {
-                    setTipoLancamento('repetir');
+                    const valorParcela = primeiraParcela.valor_parcela || 0;
+                    
+                    // Determina se é parcelar ou repetir
+                    if (Math.abs(valorTotalContrato - (valorParcela * numParcelas)) < 0.01) {
+                        setTipoLancamento('parcelar');
+                    } else {
+                        setTipoLancamento('repetir');
+                    }
+                    
+                    setNumeroParcelas(numParcelas);
+                    setDataPrimeiroVencimento(primeiraParcela.data_vencimento ? parseISO(primeiraParcela.data_vencimento) : undefined);
+                    setIntervaloDias(contrato.dia_vencimento_parcela || 30);
                 }
-                
-                setNumeroParcelas(numParcelas);
-                setDataPrimeiroVencimento(primeiraParcela?.data_vencimento ? parseISO(primeiraParcela.data_vencimento) : undefined);
-                setIntervaloDias(contrato.dia_vencimento_parcela || 30);
+            } else {
+                // Se a conta sintética existe, mas não tem parcelas (erro de integridade)
+                showError('Aviso: Conta sintética encontrada, mas sem parcelas associadas. Verifique o lançamento financeiro.');
+                setTipoLancamento('unico');
+                setNumeroParcelas(1);
             }
         } else {
-            // Se não encontrou a conta a receber, assume valores padrão para evitar quebrar a UI
+            // Se não encontrou a conta a receber (registro ausente)
             showError('Aviso: Não foi possível carregar as parcelas associadas. Verifique o lançamento financeiro.');
             setTipoLancamento('unico');
             setNumeroParcelas(1);
-            // Mantém valorTotal do contrato
         }
         
         setTipoConteudo(contrato.valores_tags_preenchidos?.tipo_conteudo || 'html');
@@ -584,16 +599,23 @@ const PreencherContrato: React.FC = () => {
             if (updateError) throw updateError;
             contratoGeradoId = contratoInicial.id;
             
-            const { data: existingConta } = await supabase
+            // 1. Buscar a conta sintética existente
+            const { data: existingConta, error: fetchExistingError } = await supabase
                 .from(tabelaContasReceber)
                 .select('id')
                 .eq('contrato_gerado_id', contratoGeradoId)
                 .limit(1)
                 .single();
                 
+            if (fetchExistingError && fetchExistingError.code !== 'PGRST116') {
+                console.error('Erro ao buscar conta existente para exclusão:', fetchExistingError);
+                // Não lançamos erro fatal aqui, apenas logamos e tentamos continuar
+            }
+                
             if (existingConta) {
                 contaReceberId = existingConta.id;
                 
+                // 2. Deletar parcelas antigas
                 const { error: deleteParcelasError } = await supabase
                     .from(tabelaParcelasReceber)
                     .delete()
@@ -629,12 +651,14 @@ const PreencherContrato: React.FC = () => {
         };
         
         if (contaReceberId) {
+            // Atualiza a conta sintética existente
             const { error: updateContaError } = await supabase
                 .from(tabelaContasReceber)
                 .update(contaReceberPayload)
                 .eq('id', contaReceberId);
             if (updateContaError) throw updateContaError;
         } else {
+            // Cria uma nova conta sintética
             const { data: contaReceber, error: contaReceberError } = await supabase
                 .from(tabelaContasReceber)
                 .insert(contaReceberPayload)
