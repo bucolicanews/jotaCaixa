@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { usePrint } from '@/hooks/use-print';
+import { BASE_URL } from '@/config/app-config'; // Importando BASE_URL
 
 interface ContratoAcoesDialogProps {
   contrato: ContratoGerado | null;
@@ -22,7 +23,7 @@ const ContratoAcoesDialog: React.FC<ContratoAcoesDialogProps> = ({ contrato, ope
   useEffect(() => {
     if (contrato) {
       // Link real para a nova rota pública
-      const realLink = `${window.location.origin}/assinar-contrato/${contrato.id}`;
+      const realLink = `${BASE_URL}/assinar-contrato/${contrato.id}`;
       setLinkAssinatura(realLink);
     }
   }, [contrato]);

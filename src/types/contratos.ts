@@ -31,4 +31,8 @@ export interface ContratoGerado {
   documento_assinado_url: string | null;
   criado_em: string;
   updated_at: string;
+  
+  // NOVOS CAMPOS DE ASSINATURA
+  assinatura_nome?: string | null;
+  assinatura_selfie_url?: string | null;
 }

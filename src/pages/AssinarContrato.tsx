@@ -5,8 +5,11 @@ import { showError, showSuccess } from '@/utils/toast';
 import { ContratoGerado } from '@/types/contratos';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Loader2, FileSignature, CheckCircle2, Printer } from 'lucide-react';
+import { Loader2, FileSignature, CheckCircle2, Printer, Camera } from 'lucide-react';
 import { usePrint } from '@/hooks/use-print';
+import CameraCapture from '@/components/CameraCapture';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 const AssinarContrato: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -16,6 +19,10 @@ const AssinarContrato: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [isSigning, setIsSigning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // Campos de Assinatura
+  const [nomeCompleto, setNomeCompleto] = useState('');
+  const [selfieFile, setSelfieFile] = useState<File | null>(null); 
 
   const fetchContrato = useCallback(async () => {
     if (!id) {
@@ -26,9 +33,6 @@ const AssinarContrato: React.FC = () => {
     
     setLoading(true);
     
-    // Busca o contrato. Como esta é uma rota pública, a RLS deve ser configurada
-    // para permitir leitura de contratos pendentes/ativos por qualquer um (ou usamos RLS bypass se fosse uma Edge Function).
-    // Por enquanto, confiamos que o RLS permite a leitura de contratos gerados.
     const { data, error: fetchError } = await supabase
       .from('contratos_gerados')
       .select('*')
@@ -40,7 +44,6 @@ const AssinarContrato: React.FC = () => {
       setError('Contrato não encontrado ou acesso negado.');
     } else {
       setContrato(data as ContratoGerado);
-      // Verifica se o contrato já está assinado/concluído
       if (data.status === 'ativo' || data.status === 'concluido') {
           showSuccess('Este contrato já foi assinado.');
       }
@@ -51,27 +54,74 @@ const AssinarContrato: React.FC = () => {
   useEffect(() => {
     fetchContrato();
   }, [fetchContrato]);
+  
+  const handleCapture = useCallback((file: File) => {
+    setSelfieFile(file);
+  }, []);
+
+  const handleResetSelfie = useCallback(() => {
+    setSelfieFile(null);
+  }, []);
+  
+  const uploadSelfie = async (file: File): Promise<string> => {
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${contrato!.id}/assinatura-${Date.now()}.${fileExt}`;
+    const filePath = `${contrato!.id}/${fileName}`;
+
+    const { error } = await supabase.storage
+      .from('documentos-admissao') // Usando o bucket de documentos
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: false,
+      });
+
+    if (error) {
+      console.error("LOG: Erro detalhado do Supabase Storage:", error);
+      throw new Error('Falha ao fazer upload da selfie: ' + error.message);
+    }
+
+    const { data: publicUrlData } = supabase.storage.from('documentos-admissao').getPublicUrl(filePath);
+    return publicUrlData.publicUrl;
+  };
 
   const handleAssinar = async () => {
     if (!contrato || contrato.status === 'ativo' || contrato.status === 'concluido') return;
+    if (!nomeCompleto.trim()) {
+        showError('O nome completo é obrigatório.');
+        return;
+    }
+    if (!selfieFile) {
+        showError('A captura da selfie é obrigatória para a assinatura.');
+        return;
+    }
     
     setIsSigning(true);
     
     try {
-      // 1. Atualizar o status do contrato para 'ativo'
+      // 1. Upload da Selfie
+      const selfieUrl = await uploadSelfie(selfieFile);
+      
+      // 2. Atualizar o status do contrato para 'ativo' e salvar os dados de assinatura
       const { error: updateError } = await supabase
         .from('contratos_gerados')
         .update({ 
             status: 'ativo', 
-            documento_assinado_url: 'Assinado Eletronicamente', // Simulação de URL de documento assinado
-            updated_at: new Date().toISOString(),
+            documento_assinado_url: 'Assinado Eletronicamente', 
+            assinatura_nome: nomeCompleto, // NOVO CAMPO
+            assinatura_selfie_url: selfieUrl, // NOVO CAMPO
         })
         .eq('id', contrato.id);
 
       if (updateError) throw updateError;
       
-      // 2. Atualizar o estado local
-      setContrato(prev => prev ? { ...prev, status: 'ativo', documento_assinado_url: 'Assinado Eletronicamente' } : null);
+      // 3. Atualizar o estado local
+      setContrato(prev => prev ? { 
+          ...prev, 
+          status: 'ativo', 
+          documento_assinado_url: 'Assinado Eletronicamente',
+          assinatura_nome: nomeCompleto,
+          assinatura_selfie_url: selfieUrl,
+      } : null);
       showSuccess('Contrato assinado com sucesso!');
 
     } catch (error: any) {
@@ -149,6 +199,58 @@ const AssinarContrato: React.FC = () => {
             {contentToDisplay}
           </div>
           
+          {/* Seção de Assinatura */}
+          <div className="pt-4 border-t space-y-4">
+              <h3 className="text-xl font-semibold flex items-center"><FileSignature className="w-5 h-5 mr-2" /> Assinatura Eletrônica</h3>
+              
+              {isAssinado ? (
+                  <div className="p-4 bg-green-100 dark:bg-green-900/20 rounded-md space-y-2">
+                      <p className="font-semibold text-green-700 dark:text-green-300 flex items-center">
+                          <CheckCircle2 className="w-5 h-5 mr-2" /> Contrato assinado por {contrato.assinatura_nome || 'N/A'}.
+                      </p>
+                      {contrato.assinatura_selfie_url && (
+                          <a href={contrato.assinatura_selfie_url} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline flex items-center">
+                              <Camera className="w-4 h-4 mr-1" /> Visualizar Selfie de Assinatura
+                          </a>
+                      )}
+                  </div>
+              ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-4">
+                          <div className="space-y-2">
+                              <Label htmlFor="nome-completo">Nome Completo (Assinante)</Label>
+                              <Input 
+                                  id="nome-completo"
+                                  value={nomeCompleto}
+                                  onChange={(e) => setNomeCompleto(e.target.value)}
+                                  placeholder="Seu Nome Completo"
+                                  disabled={isSigning}
+                              />
+                          </div>
+                          <div className="space-y-2">
+                              <Label className="flex items-center"><Camera className="w-4 h-4 mr-2" /> Captura Facial (Selfie)</Label>
+                              <CameraCapture 
+                                  onCapture={handleCapture} 
+                                  onReset={handleResetSelfie} 
+                                  capturedFile={selfieFile}
+                              />
+                          </div>
+                      </div>
+                      
+                      <div className="flex flex-col justify-end">
+                          <Button 
+                              onClick={handleAssinar} 
+                              disabled={isSigning || !nomeCompleto.trim() || !selfieFile}
+                              className="w-full h-12 bg-primary hover:bg-primary/90"
+                          >
+                              {isSigning ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileSignature className="mr-2 h-4 w-4" />}
+                              Assinar Contrato Eletronicamente
+                          </Button>
+                      </div>
+                  </div>
+              )}
+          </div>
+          
           {/* Ações */}
           <div className="flex flex-col sm:flex-row justify-between items-center space-y-3 sm:space-y-0 sm:space-x-4 pt-4 border-t">
             
@@ -160,18 +262,9 @@ const AssinarContrato: React.FC = () => {
                 <Printer className="w-4 h-4 mr-2" /> Baixar PDF / Imprimir
             </Button>
             
-            {isAssinado ? (
+            {isAssinado && (
               <Button disabled className="w-full sm:w-auto bg-green-600 hover:bg-green-700">
                 <CheckCircle2 className="w-4 h-4 mr-2" /> Contrato Assinado
-              </Button>
-            ) : (
-              <Button 
-                onClick={handleAssinar} 
-                disabled={isSigning}
-                className="w-full sm:w-auto bg-primary hover:bg-primary/90"
-              >
-                {isSigning ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileSignature className="mr-2 h-4 w-4" />}
-                Assinar Contrato Eletronicamente
               </Button>
             )}
           </div>

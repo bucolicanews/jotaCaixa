@@ -14,4 +14,6 @@ export default defineConfig(() => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  // Adicionando prefixo para variáveis de ambiente públicas
+  envPrefix: 'VITE_PUBLIC_',
 }));

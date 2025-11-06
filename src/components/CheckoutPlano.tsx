@@ -12,6 +12,7 @@ import { format, addDays } from 'date-fns';
 import { useStripeConfig } from '@/hooks/use-stripe-config';
 import { useSessao } from '@/hooks/use-sessao';
 import { ClienteProfile } from '@/types/usuario';
+import { BASE_URL } from '@/config/app-config'; // Importando BASE_URL
 
 interface CheckoutPlanoProps {
   plano: Plano;
@@ -58,7 +59,7 @@ const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano, isUpgrade = false,
         email: email,
         password: Math.random().toString(36).substring(2, 15), // Senha temporária
         options: {
-          emailRedirectTo: `${window.location.origin}/atualizar-senha`,
+          emailRedirectTo: `${BASE_URL}/atualizar-senha`, // Usando BASE_URL
           data: { 
             role: 'Cliente', // Define a role para que o trigger insira em tbl_clientes
             nome: nomeEmpresa, 

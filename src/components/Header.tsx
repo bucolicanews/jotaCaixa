@@ -13,6 +13,7 @@ import { Link } from 'react-router-dom';
 import { UsuarioProfile, ClienteProfile } from '@/types/usuario';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { BASE_URL } from '@/config/app-config'; // Importando BASE_URL
 
 const ThemeToggle = () => {
   const { theme, setTheme } = useTheme();
@@ -102,7 +103,7 @@ const Header: React.FC = () => {
   
   const handlePasswordReset = async () => {
     if (!perfil?.email) return;
-    const { error } = await supabase.auth.resetPasswordForEmail(perfil.email, { redirectTo: `${window.location.origin}/atualizar-senha` });
+    const { error } = await supabase.auth.resetPasswordForEmail(perfil.email, { redirectTo: `${BASE_URL}/atualizar-senha` }); // Usando BASE_URL
     if (error) console.error('Falha ao enviar email de reset:', error);
     else alert('Link de redefinição de senha enviado para seu email.');
   };

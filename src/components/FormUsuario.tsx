@@ -22,6 +22,7 @@ import { Calendar } from './ui/calendar';
 import { CalendarIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ptBR } from 'date-fns/locale';
+import { BASE_URL } from '@/config/app-config'; // Importando BASE_URL
 
 const textOptional = z.string().optional().or(z.literal(''));
 const urlSchema = z.string().url('URL inválida.').optional().or(z.literal(''));
@@ -252,7 +253,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                 email: values.email,
                 password: Math.random().toString(36).substring(2, 15),
                 options: {
-                    emailRedirectTo: `${window.location.origin}/atualizar-senha`,
+                    emailRedirectTo: `${BASE_URL}/atualizar-senha`, // Usando BASE_URL
                     data: { role: 'Cliente', nome: values.nome, cliente_id: null }
                 }
             });
@@ -321,7 +322,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                 email: values.email,
                 password: Math.random().toString(36).substring(2, 15),
                 options: {
-                    emailRedirectTo: `${window.location.origin}/atualizar-senha`,
+                    emailRedirectTo: `${BASE_URL}/atualizar-senha`, // Usando BASE_URL
                     data: { role: 'Usuario', nome: values.nome, cliente_id: targetClienteId }
                 }
             });
@@ -423,6 +424,8 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                                         type="number" 
                                         placeholder="5" 
                                         {...field} 
+                                        value={field.value === undefined || field.value === null ? '' : String(field.value)}
+                                        onChange={(e) => field.onChange(e.target.value === '' ? undefined : Number(e.target.value))}
                                         disabled={isSubmitting} 
                                     />
                                 </FormControl>

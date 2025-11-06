@@ -16,6 +16,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { Plano } from '@/types/plano';
 import { useSessao } from '@/hooks/use-sessao';
+import { BASE_URL } from '@/config/app-config'; // Importando BASE_URL
 
 const formSchema = z.object({
   nome: z.string().min(1, 'O nome da empresa é obrigatório.'),
@@ -122,7 +123,7 @@ const FormEmpresaAvulsa: React.FC<FormEmpresaAvulsaProps> = ({ onSaveComplete })
 
       // 2. Enviar o link de redefinição de senha (que funciona como convite)
       const { error: resetError } = await supabase.auth.resetPasswordForEmail(values.email, {
-          redirectTo: `${window.location.origin}/atualizar-senha`,
+          redirectTo: `${BASE_URL}/atualizar-senha`, // Usando BASE_URL
       });
       
       if (resetError) {

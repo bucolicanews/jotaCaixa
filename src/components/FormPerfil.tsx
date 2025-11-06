@@ -41,7 +41,7 @@ const formSchema = z.object({
   // Novos Dados Cadastrais (Comum a Cliente e Usuário)
   cpf: textOptional,
   rg: textOptional,
-  nome_mae: z.string().min(1, 'O nome da mãe é obrigatório.').optional().or(z.literal('')),
+  nome_mae: textOptional,
   nome_pai: textOptional,
   telefone: textOptional,
   cep: textOptional,

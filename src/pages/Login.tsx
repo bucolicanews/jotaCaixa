@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { useEffect } from 'react';
 import { useSessao } from '@/hooks/use-sessao';
 import { useTheme } from '@/contexts/ThemeProvider'; // Importando useTheme
+import { BASE_URL } from '@/config/app-config'; // Importando BASE_URL
 
 /**
  * Componente de Login.
@@ -40,7 +41,7 @@ const Login = () => {
           appearance={{ theme: ThemeSupa }}
           theme={authTheme} // Usando o tema dinâmico
           providers={[]}
-          redirectTo={window.location.origin + '/painel'}
+          redirectTo={BASE_URL + '/painel'} // Usando BASE_URL
           view="sign_in" // Garante que a tela inicial seja o login
           localization={{
             variables: {
