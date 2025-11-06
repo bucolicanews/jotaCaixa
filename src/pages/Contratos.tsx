@@ -2,7 +2,7 @@ import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { PlusCircle, FileSignature, Loader2, Eye, Edit, Trash2, Search, Filter } from 'lucide-react';
+import { PlusCircle, FileSignature, Loader2, Eye, Edit, Trash2, Search, Filter, Lock } from 'lucide-react';
 import { useSessao } from '@/hooks/use-sessao';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
@@ -102,11 +102,24 @@ const Contratos = () => {
     setCarregandoContratos(true);
     
     try {
-        // 1. Determinar as tabelas de CR
+        // 1. Cancelar parcelas pendentes antes de deletar a conta sintética
+        const { error: rpcError } = await supabase.rpc('cancel_contract_installments', {
+            p_contrato_id: contrato.id,
+            p_motivo: 'Contrato Deletado',
+        });
+        
+        if (rpcError) {
+            console.error('Aviso: Falha ao cancelar parcelas:', rpcError);
+            showError('Aviso: Falha ao cancelar parcelas pendentes. Exclusão do contrato abortada.');
+            setCarregandoContratos(false);
+            return;
+        }
+        
+        // 2. Determinar as tabelas de CR
         const isContractOwnerAdmin = isAdmin && contrato.empresa_id === empresaId;
         const tabelaContasReceber = isContractOwnerAdmin ? 'admin_contas_receber' : 'contas_receber';
         
-        // 2. Buscar e deletar a Conta a Receber Sintética associada
+        // 3. Buscar e deletar a Conta a Receber Sintética associada
         const { data: contaReceber, error: fetchError } = await supabase
             .from(tabelaContasReceber)
             .select('id')
@@ -127,7 +140,7 @@ const Contratos = () => {
             if (deleteCR) throw deleteCR;
         }
         
-        // 3. Deletar o Contrato Gerado
+        // 4. Deletar o Contrato Gerado
         const { error: deleteContrato } = await supabase
             .from('contratos_gerados')
             .delete()
@@ -140,6 +153,38 @@ const Contratos = () => {
     } catch (error: any) {
         console.error('Erro ao deletar contrato:', error);
         showError('Falha ao excluir contrato: ' + error.message);
+    } finally {
+        setCarregandoContratos(false);
+    }
+  };
+  
+  const handleBlockContract = async (contrato: ContratoGerado) => {
+    if (!window.confirm(`Tem certeza que deseja BLOQUEAR o contrato ${contrato.id}? Isso cancelará todas as parcelas futuras e marcará o contrato como 'cancelado'.`)) return;
+
+    setCarregandoContratos(true);
+    
+    try {
+        // 1. Cancelar parcelas pendentes
+        const { error: rpcError } = await supabase.rpc('cancel_contract_installments', {
+            p_contrato_id: contrato.id,
+            p_motivo: 'Contrato Bloqueado',
+        });
+        
+        if (rpcError) throw rpcError;
+        
+        // 2. Atualizar o status do contrato para 'cancelado'
+        const { error: updateError } = await supabase
+            .from('contratos_gerados')
+            .update({ status: 'cancelado' })
+            .eq('id', contrato.id);
+            
+        if (updateError) throw updateError;
+
+        showSuccess('Contrato bloqueado e parcelas canceladas com sucesso.');
+        buscarContratos();
+    } catch (error: any) {
+        console.error('Erro ao bloquear contrato:', error);
+        showError('Falha ao bloquear contrato: ' + error.message);
     } finally {
         setCarregandoContratos(false);
     }
@@ -218,6 +263,7 @@ const Contratos = () => {
                     list.map(c => {
                         const canEdit = c.status === 'rascunho' || c.status === 'pendente_assinatura';
                         const isMyContract = c.empresa_id === empresaId;
+                        const isCanceled = c.status === 'cancelado';
                         
                         return (
                             <TableRow key={c.id}>
@@ -229,25 +275,40 @@ const Contratos = () => {
                                 <TableCell className="text-right">
                                     <div className="flex justify-end space-x-2">
                                         {canEdit && isMyContract && (
-                                            <>
-                                                <Button 
-                                                    variant="ghost" 
-                                                    size="icon" 
-                                                    onClick={() => handleEditContract(c)}
-                                                    title="Editar Contrato"
-                                                >
-                                                    <Edit className="w-4 h-4" />
-                                                </Button>
-                                                <Button 
-                                                    variant="ghost" 
-                                                    size="icon" 
-                                                    onClick={() => handleDeleteContract(c)}
-                                                    title="Excluir Contrato"
-                                                >
-                                                    <Trash2 className="w-4 h-4 text-red-500" />
-                                                </Button>
-                                            </>
+                                            <Button 
+                                                variant="ghost" 
+                                                size="icon" 
+                                                onClick={() => handleEditContract(c)}
+                                                title="Editar Contrato"
+                                            >
+                                                <Edit className="w-4 h-4" />
+                                            </Button>
                                         )}
+                                        
+                                        {/* Botão de Bloqueio (Aparece se não estiver cancelado) */}
+                                        {!isCanceled && isMyContract && (
+                                            <Button 
+                                                variant="destructive" 
+                                                size="icon" 
+                                                onClick={() => handleBlockContract(c)}
+                                                title="Bloquear Contrato (Cancela Parcelas)"
+                                            >
+                                                <Lock className="w-4 h-4" />
+                                            </Button>
+                                        )}
+                                        
+                                        {/* Botão de Excluir (Aparece se for rascunho ou cancelado) */}
+                                        {(canEdit || isCanceled) && isMyContract && (
+                                            <Button 
+                                                variant="ghost" 
+                                                size="icon" 
+                                                onClick={() => handleDeleteContract(c)}
+                                                title="Excluir Contrato"
+                                            >
+                                                <Trash2 className="w-4 h-4 text-red-500" />
+                                            </Button>
+                                        )}
+                                        
                                         <Button variant="outline" size="sm" onClick={() => handleOpenAcoes(c)}>
                                             <Eye className="w-4 h-4 mr-2" /> Ver Ações
                                         </Button>

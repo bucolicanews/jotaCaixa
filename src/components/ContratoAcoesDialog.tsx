@@ -1,15 +1,16 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Copy, ExternalLink, FileText, Eye, Printer, Mail, MessageSquare, Loader2 } from 'lucide-react';
+import { Copy, ExternalLink, FileText, Eye, Printer, Mail, MessageSquare, Loader2, Lock } from 'lucide-react';
 import { ContratoGerado } from '@/types/contratos';
-import { showSuccess } from '@/utils/toast';
+import { showSuccess, showError } from '@/utils/toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { usePrint } from '@/hooks/use-print';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
 
 interface ContratoAcoesDialogProps {
   contrato: ContratoGerado | null;
@@ -30,13 +31,16 @@ const DEFAULT_CONFIG: ContratoConfig = {
 };
 
 const ContratoAcoesDialog: React.FC<ContratoAcoesDialogProps> = ({ contrato, open, onOpenChange }) => {
-  useSessao();
+  const { usuario, role } = useSessao();
   const [linkAssinatura, setLinkAssinatura] = useState('');
   const [config, setConfig] = useState<ContratoConfig>(DEFAULT_CONFIG);
   const [loadingConfig, setLoadingConfig] = useState(true);
+  const [isBlocking, setIsBlocking] = useState(false);
   const { printContent } = usePrint();
   
   const ownerId = contrato?.empresa_id; // O proprietário do contrato é quem define a configuração
+  const isMyContract = ownerId === usuario?.id || (role === 'Cliente' && ownerId === (usuario as any)?.cliente_id);
+  const isCanceled = contrato?.status === 'cancelado';
 
   const fetchConfig = useCallback(async () => {
     if (!ownerId) {
@@ -126,6 +130,38 @@ const ContratoAcoesDialog: React.FC<ContratoAcoesDialogProps> = ({ contrato, ope
         printContent(printHtml, `Contrato: ${contrato.id}`);
     }
   };
+  
+  const handleBlockContract = async () => {
+    if (!contrato) return;
+    setIsBlocking(true);
+    
+    try {
+        // 1. Cancelar parcelas pendentes
+        const { error: rpcError } = await supabase.rpc('cancel_contract_installments', {
+            p_contrato_id: contrato.id,
+            p_motivo: 'Contrato Bloqueado',
+        });
+        
+        if (rpcError) throw rpcError;
+        
+        // 2. Atualizar o status do contrato para 'cancelado'
+        const { error: updateError } = await supabase
+            .from('contratos_gerados')
+            .update({ status: 'cancelado' })
+            .eq('id', contrato.id);
+            
+        if (updateError) throw updateError;
+
+        showSuccess('Contrato bloqueado e parcelas canceladas com sucesso.');
+        // Força o recarregamento da página de contratos
+        window.location.href = '/contratos';
+    } catch (error: any) {
+        console.error('Erro ao bloquear contrato:', error);
+        showError('Falha ao bloquear contrato: ' + error.message);
+    } finally {
+        setIsBlocking(false);
+    }
+  };
 
   if (!contrato) return null;
   
@@ -207,8 +243,32 @@ const ContratoAcoesDialog: React.FC<ContratoAcoesDialogProps> = ({ contrato, ope
             </TabsContent>
         </Tabs>
         
-        <div className="flex justify-end pt-4">
-            <Button onClick={() => onOpenChange(false)} variant="secondary">
+        <div className="flex justify-between pt-4 border-t">
+            {isMyContract && !isCanceled && (
+                <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                        <Button variant="destructive" size="sm" disabled={isBlocking}>
+                            <Lock className="w-4 h-4 mr-2" /> Bloquear Contrato
+                        </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>Bloquear Contrato e Cancelar Parcelas?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                                Esta ação irá marcar o contrato como 'cancelado' e todas as parcelas futuras (abertas, parciais, reprogramadas) associadas a ele serão marcadas como 'cancelada' com a observação "Contrato Bloqueado". Esta ação é irreversível.
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel disabled={isBlocking}>Cancelar</AlertDialogCancel>
+                            <AlertDialogAction onClick={handleBlockContract} disabled={isBlocking}>
+                                {isBlocking ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : 'Confirmar Bloqueio'}
+                            </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
+            )}
+            
+            <Button onClick={() => onOpenChange(false)} variant="secondary" className="ml-auto">
                 Fechar
             </Button>
         </div>
