@@ -68,8 +68,8 @@ const AssinarContrato: React.FC = () => {
     const fileName = `${contrato!.id}/assinatura-${Date.now()}.${fileExt}`;
     const filePath = `${contrato!.id}/${fileName}`;
 
-    const { error } = await supabase.storage
-      .from('contrato-assinaturas') // <-- NOVO NOME DO BUCKET
+    const { error } = await supabase.storage // Corrigido: removido 'data: uploadData'
+      .from('contrato-assinaturas')
       .upload(filePath, file, {
         cacheControl: '3600',
         upsert: false,
@@ -86,6 +86,8 @@ const AssinarContrato: React.FC = () => {
 
   const handleAssinar = async () => {
     if (!contrato || contrato.status === 'ativo' || contrato.status === 'concluido') return;
+    
+    // Validação de Nome e Selfie
     if (!nomeCompleto.trim()) {
         showError('O nome completo é obrigatório.');
         return;
@@ -107,8 +109,8 @@ const AssinarContrato: React.FC = () => {
         .update({ 
             status: 'ativo', 
             documento_assinado_url: 'Assinado Eletronicamente', 
-            assinatura_nome: nomeCompleto, // NOVO CAMPO
-            assinatura_selfie_url: selfieUrl, // NOVO CAMPO
+            assinatura_nome: nomeCompleto, 
+            assinatura_selfie_url: selfieUrl, 
         })
         .eq('id', contrato.id);
 
@@ -137,6 +139,7 @@ const AssinarContrato: React.FC = () => {
         return;
     }
     
+    // Corrigido: usando 'valores_tags_preenchidos'
     const isHtml = contrato.valores_tags_preenchidos?.tipo_conteudo === 'html';
     let printHtml = contrato.conteudo_renderizado;
     
@@ -169,6 +172,7 @@ const AssinarContrato: React.FC = () => {
   }
   
   const isAssinado = contrato.status === 'ativo' || contrato.status === 'concluido';
+  // Corrigido: usando 'valores_tags_preenchidos'
   const isHtml = contrato.valores_tags_preenchidos?.tipo_conteudo === 'html';
   
   const contentToDisplay = contrato.conteudo_renderizado ? (
@@ -180,6 +184,8 @@ const AssinarContrato: React.FC = () => {
   ) : (
     <p className="text-center text-muted-foreground">Conteúdo não renderizado.</p>
   );
+
+  const isReadyToSign = nomeCompleto.trim().length > 0 && !!selfieFile;
 
   return (
     <div className="min-h-screen flex flex-col items-center bg-background p-4 md:p-8">
@@ -240,7 +246,7 @@ const AssinarContrato: React.FC = () => {
                       <div className="flex flex-col justify-end">
                           <Button 
                               onClick={handleAssinar} 
-                              disabled={isSigning || !nomeCompleto.trim() || !selfieFile}
+                              disabled={isSigning || !isReadyToSign}
                               className="w-full h-12 bg-primary hover:bg-primary/90"
                           >
                               {isSigning ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileSignature className="mr-2 h-4 w-4" />}
