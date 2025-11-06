@@ -121,11 +121,12 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
   // Lógica Condicional para o Saldo Final/Variação
   let saldoFinalOuVariacao = 0;
   let tituloSaldoFinal = '';
+  let saldoInicialConta = 0;
   
   if (filtroContaId !== 'todos') {
       // 1. Se uma conta específica está filtrada, encontramos o saldo inicial dela
       const contaSelecionada = contas.find(c => c.id === filtroContaId);
-      const saldoInicialConta = contaSelecionada ? contaSelecionada.saldo_inicial : 0;
+      saldoInicialConta = contaSelecionada ? contaSelecionada.saldo_inicial : 0;
       
       // 2. Calculamos o Saldo Final da Conta (Saldo Inicial + Entradas - Saídas)
       saldoFinalOuVariacao = saldoInicialConta + totalEntradas - totalSaidas;
@@ -152,6 +153,7 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
             saldoFinalOuVariacao={saldoFinalOuVariacao}
             tituloSaldoFinal={tituloSaldoFinal}
             filtroPeriodo={filtroPeriodo}
+            saldoInicialConta={saldoInicialConta} // Passando o saldo inicial
         />
     );
 
@@ -170,6 +172,15 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
                 <h4 className="text-sm font-medium text-muted-foreground flex items-center"><Wallet className="w-4 h-4 mr-2" /> Saldo Total (Contas)</h4>
                 <p className={cn("text-xl font-bold mt-1", totalSaldo >= 0 ? 'text-green-600' : 'text-red-600')}>{formatCurrency(totalSaldo)}</p>
             </div>
+            
+            {/* NOVO CARD: SALDO INICIAL DA CONTA FILTRADA */}
+            {filtroContaId !== 'todos' && (
+                <div className="p-3 bg-blue-100 dark:bg-blue-900/20 rounded-lg">
+                    <h4 className="text-sm font-medium text-blue-700 dark:text-blue-300 flex items-center"><Landmark className="w-4 h-4 mr-2" /> Saldo Inicial (Conta)</h4>
+                    <p className={cn("text-xl font-bold mt-1", saldoInicialConta >= 0 ? 'text-blue-600 dark:text-blue-400' : 'text-red-600 dark:text-red-400')}>{formatCurrency(saldoInicialConta)}</p>
+                </div>
+            )}
+            
             <div className="p-3 bg-green-100 dark:bg-green-900/20 rounded-lg">
                 <h4 className="text-sm font-medium text-green-700 dark:text-green-300 flex items-center"><ArrowUpCircle className="w-4 h-4 mr-2" /> Entradas no Período</h4>
                 <p className="text-xl font-bold text-green-600 dark:text-green-400 mt-1">{formatCurrency(totalEntradas)}</p>

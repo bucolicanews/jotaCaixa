@@ -19,6 +19,7 @@ interface FluxoCaixaPrintProps {
   saldoFinalOuVariacao: number;
   tituloSaldoFinal: string;
   filtroPeriodo: DateRange | undefined;
+  saldoInicialConta: number; // NOVO CAMPO
 }
 
 const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -31,6 +32,7 @@ const FluxoCaixaPrint: React.FC<FluxoCaixaPrintProps> = ({
   saldoFinalOuVariacao,
   tituloSaldoFinal,
   filtroPeriodo,
+  saldoInicialConta, // Usando o novo campo
 }) => {
     
     const getPeriodoDisplay = () => {
@@ -53,13 +55,20 @@ const FluxoCaixaPrint: React.FC<FluxoCaixaPrintProps> = ({
         <h2 style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '10px' }}>Resumo Financeiro</h2>
         <table className="print-table" style={{ width: '100%', border: 'none' }}>
             <tbody>
+                {saldoInicialConta !== 0 && (
+                    <tr>
+                        <th style={{ width: '30%', textAlign: 'left', border: 'none', padding: '5px 0' }}>Saldo Inicial da Conta</th>
+                        <td style={{ width: '20%', textAlign: 'right', border: 'none', padding: '5px 0', fontWeight: 'bold' }}>{formatCurrency(saldoInicialConta)}</td>
+                        <td colSpan={2} style={{ border: 'none' }}></td>
+                    </tr>
+                )}
                 <tr>
                     <th style={{ width: '30%', textAlign: 'left', border: 'none', padding: '5px 0' }}>Total de Entradas</th>
                     <td style={{ width: '20%', textAlign: 'right', color: 'green', border: 'none', padding: '5px 0' }}>{formatCurrency(totalEntradas)}</td>
                     <th style={{ width: '30%', textAlign: 'left', border: 'none', padding: '5px 0' }}>Total de Saídas</th>
                     <td style={{ width: '20%', textAlign: 'right', color: 'red', border: 'none', padding: '5px 0' }}>{formatCurrency(totalSaidas)}</td>
                 </tr>
-                <tr style={{ borderTop: '1px solid #ccc' }}>
+                <tr style={{ borderTop: '1px solid #000' }}>
                     <th colSpan={3} style={{ textAlign: 'left', padding: '5px 0' }}>{tituloSaldoFinal}</th>
                     <td style={{ textAlign: 'right', fontWeight: 'bold', padding: '5px 0', color: saldoFinalOuVariacao >= 0 ? 'blue' : 'red' }}>{formatCurrency(saldoFinalOuVariacao)}</td>
                 </tr>
