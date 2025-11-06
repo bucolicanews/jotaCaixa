@@ -98,33 +98,52 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
 
   const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
   const formatDate = (dateString: string) => new Date(dateString + 'T00:00:00').toLocaleDateString('pt-BR');
+  
+  const getStatusDisplay = (status: Parcela['status']) => {
+      if (status === 'paga') return 'recebida';
+      return status;
+  };
 
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-full max-w-full sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Detalhes do Lançamento</DialogTitle>
-            <DialogDescription><strong>{conta?.descricao}</strong> para o cliente <strong data-dyad-id="src\components\DetalhesParcelasDialog.tsx:104:100" data-dyad-name="strong">{conta?.clientes?.nome || 'N/A'}</strong></DialogDescription>
+            <DialogDescription>
+                <strong>{conta?.descricao}</strong> para o cliente <strong>{conta?.clientes?.nome || 'N/A'}</strong>
+            </DialogDescription>
           </DialogHeader>
           {loading ? (
             <div className="flex justify-center items-center h-40"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
           ) : (
             <div className="mt-4">
               <h3 className="font-semibold mb-2">Parcelas</h3>
-              <div className="border rounded-md">
+              <div className="border rounded-md overflow-x-auto">
                 <Table>
-                  <TableHeader><TableRow><TableHead className="w-[80px]">Parcela</TableHead><TableHead>Vencimento</TableHead><TableHead>Valor</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader>
+                  <TableHeader>
+                    <TableRow>
+                        <TableHead className="w-[80px]">Parcela</TableHead>
+                        <TableHead className="w-[120px]">Vencimento</TableHead>
+                        <TableHead className="w-[100px]">Valor</TableHead>
+                        <TableHead className="w-[100px]">Status</TableHead>
+                        <TableHead className="w-[150px] text-right">Ações</TableHead>
+                    </TableRow>
+                  </TableHeader>
                   <TableBody>
                     {parcelas.map((p) => (
                       <TableRow key={p.id}>
                         <TableCell className="font-medium">{p.numero_parcela}</TableCell>
                         <TableCell>{formatDate(p.data_vencimento)}</TableCell>
                         <TableCell>{formatCurrency(p.valor_parcela)}</TableCell>
-                        <TableCell><Badge variant={p.status === 'paga' ? 'default' : 'secondary'}>{p.status}</Badge></TableCell>
+                        <TableCell>
+                            <Badge variant={p.status === 'paga' ? 'success' : 'secondary'}>
+                                {getStatusDisplay(p.status)}
+                            </Badge>
+                        </TableCell>
                         <TableCell className="text-right">
                           <Button variant="outline" size="sm" onClick={() => handleOpenPagamento(p)} disabled={p.status === 'paga' || p.status === 'cancelada'}>
-                            <BadgeDollarSign className="w-4 h-4 mr-2" />Registrar Pagamento
+                            <BadgeDollarSign className="w-4 h-4 mr-2" />Receber
                           </Button>
                         </TableCell>
                       </TableRow>
