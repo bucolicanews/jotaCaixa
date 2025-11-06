@@ -238,7 +238,7 @@ const PreencherContrato: React.FC = () => {
         // Busca na tbl_clientes onde admin_id é o ID do Admin logado
         const { data: systemClientsData, error: systemClientsError } = await supabase
             .from('tbl_clientes')
-            .select('id, nome, cpf, email, telefone, telefone_fixo, razao_social, nome_fantasia, cep, endereco, numero, complemento, bairro, cidade, estado, criado_em')
+            .select('id, nome, cpf, email, telefone, razao_social, nome_fantasia, cep, endereco, numero, complemento, bairro, cidade, estado, criado_em')
             .eq('admin_id', ownerIdLogado) // FILTRO CORRIGIDO
             .eq('aprovado', true)
             .order('nome');
@@ -256,7 +256,7 @@ const PreencherContrato: React.FC = () => {
                 documento: sc.cpf || null, 
                 email: sc.email || null,
                 telefone: sc.telefone || null,
-                telefone_fixo: sc.telefone_fixo || null,
+                telefone_fixo: null, // Removido o acesso a esta coluna
                 cep: sc.cep || null,
                 endereco: sc.endereco || null,
                 numero: sc.numero || null,
