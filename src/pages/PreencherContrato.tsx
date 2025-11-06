@@ -113,7 +113,7 @@ const PreencherContrato: React.FC = () => {
     if (isAdmin) {
         const { data: clientesData, error: clientesError } = await supabase
             .from('tbl_clientes')
-            .select('id, nome')
+            .select('id, nome, documento, email, cep, endereco, numero, complemento, bairro, cidade, estado, razao_social, nome_fantasia, telefone, telefone_fixo')
             .eq('aprovado', true)
             .order('nome');
             
@@ -176,7 +176,8 @@ const PreencherContrato: React.FC = () => {
         const numParcelas = contrato.numero_parcelas;
         const valorTotalContrato = contrato.valor_total;
         
-        const tabelaParcelas = isAdmin && finalEmpresaContratoId === ownerIdLogado ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
+        const tabelaContasReceber = contrato.empresa_id === ownerIdLogado && isAdmin ? 'admin_contas_receber' : 'contas_receber';
+        const tabelaParcelas = contrato.empresa_id === ownerIdLogado && isAdmin ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
         
         const { data: primeiraParcela } = await supabase
             .from(tabelaParcelas)
@@ -219,7 +220,7 @@ const PreencherContrato: React.FC = () => {
             // Admin criando um contrato para si mesmo. O cliente DEVE ser uma empresa do sistema (tbl_clientes).
             const { data: systemClientsData, error: systemClientsError } = await supabase
                 .from('tbl_clientes')
-                .select('*')
+                .select('id, nome, documento, email, telefone, telefone_fixo, razao_social, nome_fantasia, cep, endereco, numero, complemento, bairro, cidade, estado, criado_em')
                 .eq('aprovado', true);
             if (systemClientsError) {
                 showError('Erro ao carregar clientes do sistema: ' + systemClientsError.message);
@@ -228,12 +229,12 @@ const PreencherContrato: React.FC = () => {
                     id: sc.id,
                     empresa_id: ownerIdLogado,
                     nome: sc.nome,
-                    razao_social: sc.nome,
-                    nome_fantasia: sc.nome,
+                    razao_social: sc.razao_social || sc.nome,
+                    nome_fantasia: sc.nome_fantasia || sc.nome,
                     documento: sc.documento || null,
                     email: sc.email || null,
                     telefone: sc.telefone || null,
-                    telefone_fixo: null,
+                    telefone_fixo: sc.telefone_fixo || null,
                     cep: sc.cep || null,
                     endereco: sc.endereco || null,
                     numero: sc.numero || null,
@@ -267,35 +268,38 @@ const PreencherContrato: React.FC = () => {
   }, [modeloId, ownerIdLogado, navigate, role, perfil, usuario, isAdmin, isCliente, contratoId]);
   
   useEffect(() => {
-      if (isAdmin && empresaContratoId && !carregandoDados) {
-          const fetchDependentData = async () => {
-              const { data: tagsData } = await supabase
-                  .from('contrato_tags')
-                  .select('*')
-                  .eq('empresa_id', empresaContratoId)
-                  .order('nome_tag');
-                  
-              if (tagsData) {
-                  setTags(tagsData as ContratoTag[]);
-              }
-              
-              const { data: clientesData } = await supabase
-                  .from('clientes')
-                  .select('*')
-                  .eq('empresa_id', empresaContratoId)
-                  .order('nome');
-                  
-              if (clientesData) {
-                  setClientes(clientesData as Cliente[]);
-              }
-              
-              if (clienteSelecionadoId && !clientesData?.some(c => c.id === clienteSelecionadoId)) {
-                  setClienteSelecionadoId('');
-              }
-          };
-          fetchDependentData();
-      }
-  }, [isAdmin, empresaContratoId, carregandoDados, clienteSelecionadoId]);
+    if (isAdmin && empresaContratoId && !carregandoDados) {
+        const fetchDependentData = async () => {
+            const { data: tagsData } = await supabase
+                .from('contrato_tags')
+                .select('*')
+                .eq('empresa_id', empresaContratoId)
+                .order('nome_tag');
+                
+            if (tagsData) {
+                setTags(tagsData as ContratoTag[]);
+            }
+            
+            // Re-fetch clients if the contract owner changes (only relevant for Admin)
+            if (isAdmin && empresaContratoId !== ownerIdLogado) {
+                const { data: clientesCRData, error: clientesCRError } = await supabase
+                    .from('clientes')
+                    .select('*')
+                    .eq('empresa_id', empresaContratoId);
+                if (clientesCRError) {
+                    showError('Erro ao carregar clientes de CR: ' + clientesCRError.message);
+                } else if (clientesCRData) {
+                    setClientes(clientesCRData as Cliente[]);
+                }
+            }
+            
+            if (clienteSelecionadoId && !clientes.some(c => c.id === clienteSelecionadoId)) {
+                setClienteSelecionadoId('');
+            }
+        };
+        fetchDependentData();
+    }
+  }, [isAdmin, empresaContratoId, carregandoDados, clienteSelecionadoId, ownerIdLogado, clientes]);
 
 
   useEffect(() => {
@@ -394,7 +398,7 @@ const PreencherContrato: React.FC = () => {
     };
     
     updateTags();
-  }, [clienteSelecionadoId, valorTotal, tipoLancamento, numeroParcelas, dataVencimentoUnico, dataPrimeiroVencimento, clientes, empresaLogada, intervaloDias]);
+  }, [clienteSelecionadoId, valorTotal, tipoLancamento, numeroParcelas, dataVencimentoUnico, dataPrimeiroVencimento, clientes, empresaLogada, intervaloDias, tipoConteudo, valoresTags]);
 
 
   const handleTagChange = (tag: string, value: string) => {
@@ -490,6 +494,7 @@ const PreencherContrato: React.FC = () => {
         const isContractOwnerAdmin = empresaContratoId === ownerIdLogado && isAdmin;
 
         // CORREÇÃO: Se for Admin, garantir que o cliente (de tbl_clientes) também exista na tabela 'clientes'
+        // EXPANDINDO O PAYLOAD PARA INCLUIR TODOS OS CAMPOS NECESSÁRIOS PARA O UPSERT
         if (isContractOwnerAdmin) {
             const clienteDataParaUpsert = {
                 id: clienteSelecionado.id,
@@ -497,6 +502,17 @@ const PreencherContrato: React.FC = () => {
                 nome: clienteSelecionado.nome,
                 documento: clienteSelecionado.documento,
                 email: clienteSelecionado.email,
+                razao_social: clienteSelecionado.razao_social,
+                nome_fantasia: clienteSelecionado.nome_fantasia,
+                telefone: clienteSelecionado.telefone,
+                telefone_fixo: clienteSelecionado.telefone_fixo,
+                cep: clienteSelecionado.cep,
+                endereco: clienteSelecionado.endereco,
+                numero: clienteSelecionado.numero,
+                complemento: clienteSelecionado.complemento,
+                bairro: clienteSelecionado.bairro,
+                cidade: clienteSelecionado.cidade,
+                estado: clienteSelecionado.estado,
             };
             const { error: upsertError } = await supabase
                 .from('clientes')
@@ -506,7 +522,7 @@ const PreencherContrato: React.FC = () => {
                 throw new Error('Falha ao garantir a existência do cliente na tabela CR do admin: ' + upsertError.message);
             }
         }
-
+        
         const parcelasParaInserir = gerarParcelas(
             valorNumerico, 
             tipoLancamento, 
