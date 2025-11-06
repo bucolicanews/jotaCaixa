@@ -4,8 +4,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useSessao } from '@/hooks/use-sessao';
 import FormConfiguracoesStripe from '@/components/FormConfiguracoesStripe';
 import FormConfiguracoesCR from '@/components/FormConfiguracoesCR';
-import FormConfiguracoesCP from '@/components/FormConfiguracoesCP'; // Importando o novo componente
-import { Key, Settings, DollarSign, ArrowDownCircle } from 'lucide-react';
+import FormConfiguracoesCP from '@/components/FormConfiguracoesCP';
+import FormConfiguracoesContrato from '@/components/FormConfiguracoesContrato'; // Importando o novo componente
+import { Key, Settings, DollarSign, ArrowDownCircle, FileSignature } from 'lucide-react';
 
 const Configuracoes = () => {
   const { role } = useSessao();
@@ -22,6 +23,7 @@ const Configuracoes = () => {
           <TabsTrigger value="geral">Geral</TabsTrigger>
           {isAdmin && <TabsTrigger value="cr" className="flex items-center"><DollarSign className="w-4 h-4 mr-1" /> Contas a Receber</TabsTrigger>}
           {isAdmin && <TabsTrigger value="cp" className="flex items-center"><ArrowDownCircle className="w-4 h-4 mr-1" /> Contas a Pagar</TabsTrigger>}
+          {isAdmin && <TabsTrigger value="contratos" className="flex items-center"><FileSignature className="w-4 h-4 mr-1" /> Contratos</TabsTrigger>}
           {isAdmin && <TabsTrigger value="stripe" className="flex items-center"><Key className="w-4 h-4 mr-1" /> Stripe</TabsTrigger>}
           <TabsTrigger value="usuarios">Usuários</TabsTrigger>
           <TabsTrigger value="tributarias">Tributárias</TabsTrigger>
@@ -56,6 +58,17 @@ const Configuracoes = () => {
               <CardHeader><CardTitle>Mapeamento Contábil de Contas a Pagar</CardTitle></CardHeader>
               <CardContent>
                 <FormConfiguracoesCP />
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
+        
+        {isAdmin && (
+          <TabsContent value="contratos" className="mt-4">
+            <Card>
+              <CardHeader><CardTitle>Configurações de Contratos e Links</CardTitle></CardHeader>
+              <CardContent>
+                <FormConfiguracoesContrato />
               </CardContent>
             </Card>
           </TabsContent>
