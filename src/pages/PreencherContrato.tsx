@@ -113,6 +113,7 @@ const PreencherContrato: React.FC = () => {
     if (isAdmin) {
         const { data: clientesData, error: clientesError } = await supabase
             .from('tbl_clientes')
+            // CORREÇÃO: Usando 'id' no lugar de 'documento' na seleção, e mantendo 'cpf' para mapeamento
             .select('id, nome, cpf, email, telefone, telefone_fixo, razao_social, nome_fantasia, cep, endereco, numero, complemento, bairro, cidade, estado, criado_em')
             .eq('aprovado', true)
             .order('nome');
@@ -231,7 +232,7 @@ const PreencherContrato: React.FC = () => {
                     nome: sc.nome,
                     razao_social: sc.razao_social || sc.nome,
                     nome_fantasia: sc.nome_fantasia || sc.nome,
-                    documento: sc.cpf || null, // Usando cpf como documento
+                    documento: sc.cpf || null, // Mapeia cpf para documento
                     email: sc.email || null,
                     telefone: sc.telefone || null,
                     telefone_fixo: sc.telefone_fixo || null,
