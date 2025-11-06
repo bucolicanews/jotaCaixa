@@ -80,9 +80,6 @@ const BalancoPatrimonialPrint: React.FC<BalancoPatrimonialPrintProps> = ({
             
             if (isSintetica && isZero) return false;
             
-            // Se a lista de contas já foi filtrada pelo BalancoPatrimonialDetalhe,
-            // não precisamos filtrar novamente aqui, apenas renderizar.
-            
             return true;
         });
         

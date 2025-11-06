@@ -18,7 +18,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 
 interface BalancoPatrimonialDetalheProps {
   endDate: Date;
-  filtroSomenteComSaldo: boolean; // NOVO PROP
+  filtroSomenteComSaldo: boolean;
 }
 
 // Tipo auxiliar para a conta (copiado do hook)
