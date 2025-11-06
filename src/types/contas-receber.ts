@@ -26,7 +26,7 @@ export interface Parcela {
   valor_parcela: number;
   valor_pago: number;
   data_vencimento: string;
-  status: 'aberta' | 'parcial' | 'paga' | 'reprogramada' | 'cancelada';
+  status: 'aberta' | 'parcial' | 'paga' | 'reprogramada' | 'cancelada' | 'bloqueada';
 }
 
 export interface ParcelaDetalhada extends Parcela {

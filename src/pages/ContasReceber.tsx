@@ -21,14 +21,14 @@ import RegistrarPagamentoDialog from '@/components/RegistrarPagamentoDialog';
 import ContasReceberAcoes from '@/components/ContasReceberAcoes';
 import ContasReceberResumo from '@/components/ContasReceberResumo';
 
-type ParcelaStatus = 'aberta' | 'parcial' | 'paga' | 'reprogramada' | 'cancelada';
+type ParcelaStatus = 'aberta' | 'parcial' | 'paga' | 'reprogramada' | 'cancelada' | 'bloqueada';
 type BadgeVariant = 'success' | 'warning' | 'secondary' | 'destructive' | 'default' | 'info';
 
 const getBadgeVariant = (status: ParcelaStatus, dataVencimento: string): BadgeVariant => {
   const vencimento = parseISO(dataVencimento + 'T00:00:00');
 
   if (status === 'paga') return 'success';
-  if (status === 'cancelada') return 'destructive';
+  if (status === 'cancelada' || status === 'bloqueada') return 'destructive';
   
   if (isPast(vencimento) && !isToday(vencimento)) return 'destructive';
   if (isToday(vencimento)) return 'warning';
@@ -547,7 +547,7 @@ const ContasReceber = () => {
                                             variant="outline" 
                                             size="sm" 
                                             onClick={() => handleOpenPagamento(p)} 
-                                            disabled={isPaga}
+                                            disabled={isPaga || p.status === 'bloqueada'}
                                         >
                                             <BadgeDollarSign className="w-4 h-4 mr-2" /> Receber
                                         </Button>
