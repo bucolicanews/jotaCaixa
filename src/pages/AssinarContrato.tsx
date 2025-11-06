@@ -68,8 +68,8 @@ const AssinarContrato: React.FC = () => {
     const fileName = `${contrato!.id}/assinatura-${Date.now()}.${fileExt}`;
     const filePath = `${contrato!.id}/${fileName}`;
 
-    const { error } = await supabase.storage // Corrigido: removido 'data: uploadData'
-      .from('contrato-assinaturas')
+    const { error } = await supabase.storage
+      .from('contrato_self') // <-- NOME DO BUCKET ATUALIZADO
       .upload(filePath, file, {
         cacheControl: '3600',
         upsert: false,
@@ -77,10 +77,10 @@ const AssinarContrato: React.FC = () => {
 
     if (error) {
       console.error("LOG: Erro detalhado do Supabase Storage:", error);
-      throw new Error('Falha ao fazer upload da selfie: ' + error.message);
+      throw new Error('Falha ao fazer upload da selfie. Verifique se o bucket "contrato_self" existe e tem permissão de RLS pública.');
     }
 
-    const { data: publicUrlData } = supabase.storage.from('contrato-assinaturas').getPublicUrl(filePath);
+    const { data: publicUrlData } = supabase.storage.from('contrato_self').getPublicUrl(filePath);
     return publicUrlData.publicUrl;
   };
 
