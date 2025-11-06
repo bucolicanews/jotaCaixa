@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Edit, Trash2, Eye, Lock, Unlock, Loader2 } from 'lucide-react';
 import { ContratoGerado } from '@/types/contratos';
 import { format, parseISO } from 'date-fns';
-import { cn } from '@/lib/utils';
+// import { cn } from '@/lib/utils'; // REMOVIDO
 
 type ContratoComCliente = ContratoGerado & { clientes: { nome: string } | null };
 type ContratoStatus = ContratoGerado['status'];

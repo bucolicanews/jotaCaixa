@@ -18,12 +18,10 @@ const Contratos = () => {
   const [activeContratoTab, setActiveContratoTab] = useState('pendentes');
   
   const {
-    // 'contratos' removido do destructuring pois não é usado diretamente
     contratosAgrupados,
     carregando,
     isAdmin,
     empresaId,
-    // 'refetch' removido do destructuring pois não é usado diretamente
     filtroTexto,
     setFiltroTexto,
     filtroStatus,
@@ -57,7 +55,8 @@ const Contratos = () => {
   }, [activeContratoTab, isAdmin, contratosAgrupados]);
   
   const isSupervisao = isAdmin && activeContratoTab === 'contratos_clientes';
-  const canCreateContract = isAdmin || (empresaId && !isSupervisao);
+  // CORREÇÃO: Garante que o resultado seja estritamente booleano
+  const canCreateContract = isAdmin || (!!empresaId && !isSupervisao);
 
   const handleOpenAcoes = (contrato: ContratoGerado) => {
       setContratoSelecionado(contrato);

@@ -10,6 +10,7 @@ import { ContratoGerado } from '@/types/contratos';
 import ContratosPrint from '../ContratosPrint';
 import ReactDOMServer from 'react-dom/server';
 import { showError } from '@/utils/toast';
+import { ContratoStatus, Ordenacao } from '@/hooks/use-contratos'; // IMPORTADO
 
 interface ContratosHeaderProps {
     contratosParaExibir: ContratoGerado[];
@@ -19,10 +20,10 @@ interface ContratosHeaderProps {
     // Filters/Sorting Props
     filtroTexto: string;
     setFiltroTexto: (text: string) => void;
-    filtroStatus: string;
-    setFiltroStatus: (status: string) => void;
-    ordenacao: string;
-    setOrdenacao: (order: string) => void;
+    filtroStatus: ContratoStatus; // Tipo corrigido
+    setFiltroStatus: (status: ContratoStatus) => void; // Tipo corrigido
+    ordenacao: Ordenacao; // Tipo corrigido
+    setOrdenacao: (order: Ordenacao) => void; // Tipo corrigido
     activeContratoTab: string;
 }
 
@@ -91,7 +92,10 @@ const ContratosHeader: React.FC<ContratosHeaderProps> = ({
                         />
                     </div>
                     
-                    <Select value={filtroStatus} onValueChange={setFiltroStatus}>
+                    <Select 
+                        value={filtroStatus} 
+                        onValueChange={setFiltroStatus} // Agora aceita ContratoStatus
+                    >
                         <SelectTrigger className="w-full md:w-[180px]">
                             <SelectValue placeholder="Filtrar Status" />
                         </SelectTrigger>
@@ -106,7 +110,10 @@ const ContratosHeader: React.FC<ContratosHeaderProps> = ({
                         </SelectContent>
                     </Select>
                     
-                    <Select value={ordenacao} onValueChange={setOrdenacao}>
+                    <Select 
+                        value={ordenacao} 
+                        onValueChange={setOrdenacao} // Agora aceita Ordenacao
+                    >
                         <SelectTrigger className="w-full md:w-[200px]">
                             <SelectValue placeholder="Ordenar por" />
                         </SelectTrigger>

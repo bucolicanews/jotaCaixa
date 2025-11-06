@@ -7,8 +7,8 @@ import { useSessao } from './use-sessao';
 import { useDebounce } from './use-debounce';
 
 type ContratoComCliente = ContratoGerado & { clientes: { nome: string } | null };
-type ContratoStatus = ContratoGerado['status'] | 'todos';
-type Ordenacao = 'criado_em_desc' | 'vencimento_asc' | 'cliente_asc';
+export type ContratoStatus = ContratoGerado['status'] | 'todos'; // EXPORTADO
+export type Ordenacao = 'criado_em_desc' | 'vencimento_asc' | 'cliente_asc'; // EXPORTADO
 
 interface ContratosHook {
     contratos: ContratoComCliente[];
