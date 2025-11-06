@@ -1,14 +1,17 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, BadgeDollarSign } from 'lucide-react';
+import { Loader2, BadgeDollarSign, DollarSign } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { ContaReceber } from '@/types/contas-receber';
 import { showError } from '@/utils/toast';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import RegistrarPagamentoDialog from './RegistrarPagamentoDialog';
-import { useSessao } from '@/hooks/use-sessao'; // Importando useSessao
+import { useSessao } from '@/hooks/use-sessao';
+import { cn } from '@/lib/utils';
+import { Card, CardContent } from './ui/card';
+import { Progress } from './ui/progress';
 
 // Interface ParcelaParaPagamento copiada de RegistrarPagamentoDialog.tsx
 interface ParcelaParaPagamento {
@@ -65,18 +68,17 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
       setParcelas(data as Parcela[]);
     }
     setLoading(false);
-  }, [conta, role]); // Adicionando 'role' como dependência
+  }, [conta, role]);
 
   useEffect(() => {
     if (open) {
       fetchParcelas();
     }
-  }, [conta, open, fetchParcelas]); // Adicionando fetchParcelas como dependência
+  }, [conta, open, fetchParcelas]);
 
   const handleOpenPagamento = (parcela: Parcela) => {
     if (!conta) return;
     
-    // Mapeamento para ParcelaParaPagamento, injetando cliente_id da conta pai
     const mappedParcela: ParcelaParaPagamento = {
         id: parcela.id,
         conta_receber_id: parcela.conta_receber_id,
@@ -103,51 +105,93 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
       if (status === 'paga') return 'recebida';
       return status;
   };
+  
+  const { totalValor, totalPago, progressoPercentual } = useMemo(() => {
+      const total = parcelas.reduce((sum, p) => sum + p.valor_parcela, 0);
+      const pago = parcelas.reduce((sum, p) => sum + (p.valor_pago || 0), 0);
+      const percentual = total > 0 ? Math.round((pago / total) * 100) : 0;
+      return { totalValor: total, totalPago: pago, progressoPercentual: percentual };
+  }, [parcelas]);
+  
+  const totalRestante = totalValor - totalPago;
 
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="w-full max-w-full sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-full max-w-full sm:max-w-3xl max-h-[90vh] flex flex-col">
           <DialogHeader>
-            <DialogTitle>Detalhes do Lançamento</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="truncate">Detalhes do Lançamento</DialogTitle>
+            <DialogDescription className="truncate">
                 <strong>{conta?.descricao}</strong> para o cliente <strong>{conta?.clientes?.nome || 'N/A'}</strong>
             </DialogDescription>
           </DialogHeader>
+          
           {loading ? (
             <div className="flex justify-center items-center h-40"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
           ) : (
-            <div className="mt-4">
+            <div className="mt-4 flex-1 flex flex-col overflow-hidden">
+              
+              {/* Resumo de Progresso */}
+              <Card className="mb-4">
+                  <CardContent className="p-4 space-y-3">
+                      <div className="flex justify-between items-center">
+                          <div className="flex items-center space-x-2">
+                              <DollarSign className="w-5 h-5 text-primary" />
+                              <span className="font-semibold">Progresso de Recebimento</span>
+                          </div>
+                          <span className="text-lg font-bold text-primary">{progressoPercentual}%</span>
+                      </div>
+                      <Progress value={progressoPercentual} className="h-2" />
+                      <div className="grid grid-cols-3 gap-4 text-sm">
+                          <div>
+                              <p className="text-muted-foreground">Total</p>
+                              <p className="font-medium">{formatCurrency(totalValor)}</p>
+                          </div>
+                          <div>
+                              <p className="text-muted-foreground text-green-600">Recebido</p>
+                              <p className="font-medium text-green-600">{formatCurrency(totalPago)}</p>
+                          </div>
+                          <div>
+                              <p className="text-muted-foreground text-red-600">Restante</p>
+                              <p className="font-medium text-red-600">{formatCurrency(totalRestante)}</p>
+                          </div>
+                      </div>
+                  </CardContent>
+              </Card>
+              
               <h3 className="font-semibold mb-2">Parcelas</h3>
-              <div className="border rounded-md overflow-x-auto">
+              <div className="border rounded-md overflow-x-auto flex-1">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                        <TableHead className="w-[80px]">Parcela</TableHead>
-                        <TableHead className="w-[120px]">Vencimento</TableHead>
+                        <TableHead className="w-[50px]">Nº</TableHead>
+                        <TableHead className="w-[100px]">Vencimento</TableHead>
                         <TableHead className="w-[100px]">Valor</TableHead>
                         <TableHead className="w-[100px]">Status</TableHead>
-                        <TableHead className="w-[150px] text-right">Ações</TableHead>
+                        <TableHead className="w-[120px] text-right">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {parcelas.map((p) => (
-                      <TableRow key={p.id}>
-                        <TableCell className="font-medium">{p.numero_parcela}</TableCell>
-                        <TableCell>{formatDate(p.data_vencimento)}</TableCell>
-                        <TableCell>{formatCurrency(p.valor_parcela)}</TableCell>
-                        <TableCell>
-                            <Badge variant={p.status === 'paga' ? 'success' : 'secondary'}>
-                                {getStatusDisplay(p.status)}
-                            </Badge>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button variant="outline" size="sm" onClick={() => handleOpenPagamento(p)} disabled={p.status === 'paga' || p.status === 'cancelada'}>
-                            <BadgeDollarSign className="w-4 h-4 mr-2" />Receber
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {parcelas.map((p) => {
+                        const isPaga = p.status === 'paga';
+                        return (
+                            <TableRow key={p.id} className={cn(isPaga && 'bg-green-500/10')}>
+                                <TableCell className="font-medium">{p.numero_parcela}</TableCell>
+                                <TableCell>{formatDate(p.data_vencimento)}</TableCell>
+                                <TableCell>{formatCurrency(p.valor_parcela)}</TableCell>
+                                <TableCell>
+                                    <Badge variant={isPaga ? 'success' : 'secondary'}>
+                                        {getStatusDisplay(p.status)}
+                                    </Badge>
+                                </TableCell>
+                                <TableCell className="text-right">
+                                    <Button variant="outline" size="sm" onClick={() => handleOpenPagamento(p)} disabled={isPaga || p.status === 'cancelada'}>
+                                        <BadgeDollarSign className="w-4 h-4 mr-2 hidden sm:inline" />Receber
+                                    </Button>
+                                </TableCell>
+                            </TableRow>
+                        );
+                    })}
                   </TableBody>
                 </Table>
               </div>
