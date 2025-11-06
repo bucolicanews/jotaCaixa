@@ -29,7 +29,6 @@ interface Lancamento {
   
   // Relações
   saldo_contas: { nome: string } | null;
-  // plano_contas: { Conta: string, Descricao: string } | null; // REMOVIDO
 }
 
 interface FluxoCaixaDetalheProps {
@@ -39,12 +38,9 @@ interface FluxoCaixaDetalheProps {
 }
 
 const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas, totalSaldo }) => {
-  // Removendo a dependência de calcularSaldoAcumulado, pois não será mais usado para o resumo
-  // const { calcularSaldoAcumulado } = useSaldoContaCalculado('todos', 'todos', ''); 
   
   const [lancamentos, setLancamentos] = useState<Lancamento[]>([]);
   const [loadingLancamentos, setLoadingLancamentos] = useState(true);
-  // Removendo saldoInicialPeriodo
   
   // Filtros
   const [filtroContaId, setFiltroContaId] = useState('todos');
@@ -117,8 +113,24 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
   const totalEntradas = lancamentos.filter(l => l.tipo === 'Entrada').reduce((sum, l) => sum + l.valor, 0);
   const totalSaidas = lancamentos.filter(l => l.tipo === 'Saida').reduce((sum, l) => sum + l.valor, 0);
   
-  // Saldo do Período (Variação Líquida) = Entradas - Saídas
-  const variacaoLiquida = totalEntradas - totalSaidas;
+  // Lógica Condicional para o Saldo Final/Variação
+  let saldoFinalOuVariacao = 0;
+  let tituloSaldoFinal = '';
+  
+  if (filtroContaId !== 'todos') {
+      // 1. Se uma conta específica está filtrada, encontramos o saldo inicial dela
+      const contaSelecionada = contas.find(c => c.id === filtroContaId);
+      const saldoInicialConta = contaSelecionada ? contaSelecionada.saldo_inicial : 0;
+      
+      // 2. Calculamos o Saldo Final da Conta (Saldo Inicial + Entradas - Saídas)
+      saldoFinalOuVariacao = saldoInicialConta + totalEntradas - totalSaidas;
+      tituloSaldoFinal = 'Saldo Final da Conta';
+      
+  } else {
+      // 3. Se todas as contas estão filtradas, mostramos a Variação Líquida do Período
+      saldoFinalOuVariacao = totalEntradas - totalSaidas;
+      tituloSaldoFinal = 'Variação Líquida do Período';
+  }
 
   return (
     <div className="space-y-6">
@@ -139,9 +151,9 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
                 <h4 className="text-sm font-medium text-red-700 dark:text-red-300 flex items-center"><ArrowDownCircle className="w-4 h-4 mr-2" /> Saídas no Período</h4>
                 <p className="text-xl font-bold text-red-600 dark:text-red-400 mt-1">{formatCurrency(totalSaidas)}</p>
             </div>
-            <div className={cn("p-3 rounded-lg", variacaoLiquida >= 0 ? "bg-blue-100 dark:bg-blue-900/20" : "bg-red-100 dark:bg-red-900/20")}>
-                <h4 className="text-sm font-medium text-muted-foreground flex items-center"><Landmark className="w-4 h-4 mr-2" /> Variação Líquida do Período</h4>
-                <p className={cn("text-xl font-bold mt-1", variacaoLiquida >= 0 ? "text-blue-600 dark:text-blue-400" : "text-red-600 dark:text-red-400")}>{formatCurrency(variacaoLiquida)}</p>
+            <div className={cn("p-3 rounded-lg", saldoFinalOuVariacao >= 0 ? "bg-blue-100 dark:bg-blue-900/20" : "bg-red-100 dark:bg-red-900/20")}>
+                <h4 className="text-sm font-medium text-muted-foreground flex items-center"><Landmark className="w-4 h-4 mr-2" /> {tituloSaldoFinal}</h4>
+                <p className={cn("text-xl font-bold mt-1", saldoFinalOuVariacao >= 0 ? "text-blue-600 dark:text-blue-400" : "text-red-600 dark:text-red-400")}>{formatCurrency(saldoFinalOuVariacao)}</p>
             </div>
         </CardContent>
       </Card>
