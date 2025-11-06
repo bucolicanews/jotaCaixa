@@ -57,7 +57,7 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
       .select(`
         *,
         saldo_contas:conta_bancaria_id ( nome ),
-        plano_contas_rel:conta_contabil_id ( Conta, Descricao )
+        plano_contas_rel:conta_contabil_id!plano_contas ( Conta, Descricao )
       `)
       .eq('empresa_id', empresaId)
       .order('data_movimentacao', { ascending: false });
