@@ -144,6 +144,11 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
 
     const contaPagamento = mapeamentoContabil['pagamento'];
     const contaParcelaPagar = mapeamentoContabil['parcela_pagar'];
+    
+    // CORREÇÃO DE FUSO HORÁRIO: Salva a data no meio do dia UTC para evitar que o fuso horário local mude o dia.
+    const dataPagamento = values.data_pagamento;
+    const dataNoonUTC = new Date(Date.UTC(dataPagamento.getFullYear(), dataPagamento.getMonth(), dataPagamento.getDate(), 12, 0, 0));
+    const dataPagamentoISO = dataNoonUTC.toISOString();
 
     try {
       for (const pagamento of values.pagamentos) {
@@ -153,7 +158,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
             valor_pago: pagamento.valor_pago, 
             conta_id: pagamento.conta_id,
             id_conta_contabil: contaPagamento,
-            data_pagamento: values.data_pagamento.toISOString(),
+            data_pagamento: dataPagamentoISO, // USANDO DATA CORRIGIDA
             forma_pagamento: values.forma_pagamento,
             tipo_pagamento: 'total',
         };
@@ -163,7 +168,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
         
         const lancamentoPayload = {
             empresa_id: adminId,
-            data_movimentacao: values.data_pagamento.toISOString(),
+            data_movimentacao: dataPagamentoISO, // USANDO DATA CORRIGIDA
             descricao: `Pagamento Parcela ${parcela.id} - ${parcela.fornecedor}`,
             valor: pagamento.valor_pago,
             tipo: 'Saida' as const,
@@ -178,7 +183,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
       await supabase.from(tabelaParcelas).update({
         status: 'paga',
         valor_pago: (parcela.valor_pago || 0) + totalPago,
-        data_pagamento: format(values.data_pagamento, 'yyyy-MM-dd'),
+        data_pagamento: format(dataPagamento, 'yyyy-MM-dd'), // Mantém o formato YYYY-MM-DD para a coluna DATE
         id_conta_contabil: contaParcelaPagar,
       }).eq('id', parcela.id);
 
@@ -202,7 +207,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <FormField control={form.control} name="data_pagamento" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Data do Pagamento</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "dd/MM/yy") : <span>Data</span>}<CalendarIcon className="ml-auto h-4 w-4 opacity-50" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus /></PopoverContent></Popover><FormMessage /></FormItem>)} />
-              <FormField control={form.control} name="forma_pagamento" render={({ field }) => (<FormItem><FormLabel>Forma de Pagamento</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
+              <FormField control={form.control} name="forma_pagamento" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Forma de Pagamento</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
             </div>
             
             <Separator />
