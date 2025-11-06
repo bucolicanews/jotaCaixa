@@ -65,11 +65,12 @@ const AssinarContrato: React.FC = () => {
   
   const uploadSelfie = async (file: File): Promise<string> => {
     const fileExt = file.name.split('.').pop();
-    const fileName = `${contrato!.id}/assinatura-${Date.now()}.${fileExt}`;
-    const filePath = `${contrato!.id}/${fileName}`;
+    // CORREÇÃO: Adiciona 'public/' no início do caminho para satisfazer a política de RLS
+    const fileName = `public/${contrato!.id}/assinatura-${Date.now()}.${fileExt}`;
+    const filePath = fileName;
 
     const { error } = await supabase.storage
-      .from('contrato_self') // <-- NOME DO BUCKET ATUALIZADO
+      .from('contrato_self')
       .upload(filePath, file, {
         cacheControl: '3600',
         upsert: false,
