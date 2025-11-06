@@ -88,16 +88,17 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
             return;
         }
         
-        // 2. Deletar Lançamentos (Saídas)
-        // Deletamos os lançamentos que foram gerados pelos pagamentos desta parcela.
+        // 2. Deletar Lançamentos (Saídas) usando a descrição que contém o ID da parcela
+        // A descrição é: "Pagamento Parcela [ID] - [Fornecedor]"
+        const expectedDescription = `Pagamento Parcela ${parcelaId}%`;
+        
         const { error: deleteLancamentosError } = await supabase
             .from('lancamentos')
             .delete()
-            .in('origem', ['pagamento_manual', 'pagamento_parcial']) // Origens que podem ser usadas
-            .in('conta_bancaria_id', pagamentos.map(p => p.conta_id))
+            .ilike('descricao', expectedDescription) // Filtra pela descrição que contém o ID
+            .eq('tipo', 'Saida')
             .eq('empresa_id', usuario.id); 
             
-        // Se houver erro na exclusão dos lançamentos, lançamos a exceção.
         if (deleteLancamentosError) throw deleteLancamentosError;
         
         // 3. Deletar Registros de Pagamento

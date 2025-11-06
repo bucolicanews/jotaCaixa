@@ -158,7 +158,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
             valor_pago: pagamento.valor_pago, 
             conta_id: pagamento.conta_id,
             id_conta_contabil: contaPagamento,
-            data_pagamento: dataPagamentoISO, // USANDO DATA CORRIGIDA
+            data_pagamento: dataPagamentoISO,
             forma_pagamento: values.forma_pagamento,
             tipo_pagamento: 'total',
         };
@@ -168,12 +168,14 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
         
         const lancamentoPayload = {
             empresa_id: adminId,
-            data_movimentacao: dataPagamentoISO, // USANDO DATA CORRIGIDA
-            descricao: `Pagamento Parcela ${parcela.id} - ${parcela.fornecedor}`,
+            data_movimentacao: dataPagamentoISO,
+            // NOVO: Inclui o ID da parcela na descrição para facilitar o estorno
+            descricao: `Pagamento Parcela ${parcela.id} - ${parcela.fornecedor}`, 
             valor: pagamento.valor_pago,
             tipo: 'Saida' as const,
             conta_bancaria_id: pagamento.conta_id,
             conta_contabil_id: contaPagamento,
+            origem: 'pagamento_manual', // Garante que a origem seja rastreável
         };
         
         const { error: lancamentoError } = await supabase.from('lancamentos').insert(lancamentoPayload);
@@ -183,7 +185,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
       await supabase.from(tabelaParcelas).update({
         status: 'paga',
         valor_pago: (parcela.valor_pago || 0) + totalPago,
-        data_pagamento: format(dataPagamento, 'yyyy-MM-dd'), // Mantém o formato YYYY-MM-DD para a coluna DATE
+        data_pagamento: format(dataPagamento, 'yyyy-MM-dd'),
         id_conta_contabil: contaParcelaPagar,
       }).eq('id', parcela.id);
 
@@ -200,7 +202,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Registrar Pagamento (Múltiplas Contas)</DialogTitle>
+          <DialogTitle>Registrar Pagamento</DialogTitle>
           <DialogDescription>Saldo devedor da parcela: {formatCurrency(saldoDevedor)}</DialogDescription>
         </DialogHeader>
         <Form {...form}>
