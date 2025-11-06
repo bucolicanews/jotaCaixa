@@ -189,7 +189,7 @@ const PreencherContrato: React.FC = () => {
             const { data: primeiraParcela } = await supabase
                 .from(tabelaParcelas)
                 .select('valor_parcela, data_vencimento')
-                .eq('conta_receber_id', contaReceberId) 
+                .eq('conta_receber_id', contaReceberId) // <-- CORRIGIDO AQUI
                 .order('numero_parcela', { ascending: true })
                 .limit(1)
                 .single();
@@ -217,7 +217,7 @@ const PreencherContrato: React.FC = () => {
             showError('Aviso: Não foi possível carregar as parcelas associadas. Verifique o lançamento financeiro.');
             setTipoLancamento('unico');
             setNumeroParcelas(1);
-            setValorTotal(contrato.valor_total);
+            // Mantém valorTotal do contrato
         }
         
         setTipoConteudo(contrato.valores_tags_preenchidos?.tipo_conteudo || 'html');
