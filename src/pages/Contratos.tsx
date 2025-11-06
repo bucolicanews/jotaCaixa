@@ -2,7 +2,7 @@ import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { PlusCircle, FileSignature, Loader2, Eye, Edit, Trash2, Search, Filter, Lock, Unlock } from 'lucide-react';
+import { PlusCircle, FileSignature, Eye, Edit, Trash2, Search, Filter, Lock, Unlock, Printer } from 'lucide-react';
 import { useSessao } from '@/hooks/use-sessao';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
@@ -17,26 +17,35 @@ import { format, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { useDebounce } from '@/hooks/use-debounce';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { usePrint } from '@/hooks/use-print';
+import ReactDOMServer from 'react-dom/server';
+import ContratosPrint from '@/components/ContratosPrint';
+
+type ContratoComCliente = ContratoGerado & { clientes: { nome: string } | null };
 
 const Contratos = () => {
   const { role, perfil, usuario, carregando: carregandoSessao } = useSessao();
   const navigate = useNavigate();
-  const location = useLocation(); // Adicionando useLocation
-  const [contratos, setContratos] = useState<ContratoGerado[]>([]);
+  const location = useLocation();
+  const { printContent } = usePrint();
+  
+  const [contratos, setContratos] = useState<ContratoComCliente[]>([]);
   const [carregandoContratos, setCarregandoContratos] = useState(true);
   const [contratoSelecionado, setContratoSelecionado] = useState<ContratoGerado | null>(null);
   const [acoesDialogOpen, setAcoesDialogOpen] = useState(false);
   
-  // Filtro de Busca
+  // Filtros
   const [filtroTexto, setFiltroTexto] = useState('');
   const filtroTextoDebounced = useDebounce(filtroTexto, 500);
+  const [filtroStatus, setFiltroStatus] = useState('todos');
+  const [ordenacao, setOrdenacao] = useState('criado_em_desc');
 
   const canCreateContract = role === 'Admin' || role === 'Cliente';
   
   const isAdmin = role === 'Admin';
   const isCliente = role === 'Cliente';
   
-  // ID do proprietário (Admin ou Cliente)
   const getEmpresaId = () => {
     if (isAdmin) return usuario?.id || null;
     if (isCliente) return (perfil as ClienteProfile)?.id;
@@ -59,14 +68,28 @@ const Contratos = () => {
     
     let query = supabase
       .from('contratos_gerados')
-      .select('*, clientes(nome)')
-      .order('criado_em', { ascending: false });
+      .select('*, clientes(nome)');
       
     // Se for Cliente/Usuário, filtra apenas pelos seus contratos
     if (!isAdmin && empresaId) {
         query = query.eq('empresa_id', empresaId);
     }
-    // Se for Admin, a RLS já garante que ele veja todos os contratos (seus e dos clientes)
+    
+    // Aplica ordenação
+    let ascending = true;
+    let orderByColumn = 'criado_em';
+    
+    if (ordenacao === 'cliente_asc') {
+        // Ordenação por cliente é complexa no Supabase com JOIN, faremos no frontend
+    } else if (ordenacao === 'criado_em_desc') {
+        orderByColumn = 'criado_em';
+        ascending = false;
+    } else if (ordenacao === 'vencimento_asc') {
+        orderByColumn = 'data_inicio'; // Usamos data_inicio como proxy para vencimento
+        ascending = true;
+    }
+
+    query = query.order(orderByColumn, { ascending: ascending });
 
     const { data, error } = await query;
 
@@ -74,17 +97,39 @@ const Contratos = () => {
       showError('Erro ao carregar contratos: ' + error.message);
       setContratos([]);
     } else {
-      setContratos(data as any[]);
+      let fetchedContratos = data as ContratoComCliente[];
+      
+      // Filtragem de status (se não for 'todos')
+      if (filtroStatus !== 'todos') {
+          fetchedContratos = fetchedContratos.filter(c => c.status === filtroStatus);
+      }
+      
+      // Filtragem de texto
+      const termoBusca = filtroTextoDebounced.toLowerCase();
+      if (termoBusca) {
+          fetchedContratos = fetchedContratos.filter(c => {
+              const clienteNome = c.clientes?.nome || '';
+              return c.conteudo_renderizado?.toLowerCase().includes(termoBusca) ||
+                     clienteNome.toLowerCase().includes(termoBusca) ||
+                     c.id.toLowerCase().includes(termoBusca);
+          });
+      }
+      
+      // Ordenação por cliente (se selecionado)
+      if (ordenacao === 'cliente_asc') {
+          fetchedContratos.sort((a, b) => (a.clientes?.nome || '').localeCompare(b.clientes?.nome || ''));
+      }
+      
+      setContratos(fetchedContratos);
     }
     setCarregandoContratos(false);
-  }, [empresaId, isAdmin]);
+  }, [empresaId, isAdmin, location.key, filtroStatus, filtroTextoDebounced, ordenacao]);
 
   useEffect(() => {
-    // Adicionando location.key como dependência para forçar a re-execução
     if (!carregandoSessao && (isAdmin || empresaId)) {
         buscarContratos();
     }
-  }, [carregandoSessao, isAdmin, empresaId, buscarContratos, location.key]); // Adicionado location.key
+  }, [carregandoSessao, isAdmin, empresaId, buscarContratos, location.key]);
   
   const handleOpenAcoes = (contrato: ContratoGerado) => {
       setContratoSelecionado(contrato);
@@ -92,7 +137,6 @@ const Contratos = () => {
   };
   
   const handleEditContract = (contrato: ContratoGerado) => {
-      // Redireciona para a página de preenchimento, passando o ID do modelo e o ID do contrato para edição
       navigate(`/contratos/preencher/${contrato.modelo_id}?contratoId=${contrato.id}`);
   };
   
@@ -102,11 +146,9 @@ const Contratos = () => {
     setCarregandoContratos(true);
     
     try {
-        // 1. Determinar as tabelas de CR
         const isContractOwnerAdmin = isAdmin && contrato.empresa_id === empresaId;
         const tabelaContasReceber = isContractOwnerAdmin ? 'admin_contas_receber' : 'contas_receber';
         
-        // 2. Buscar e deletar a Conta a Receber Sintética associada
         const { data: contaReceber, error: fetchError } = await supabase
             .from(tabelaContasReceber)
             .select('id')
@@ -119,7 +161,6 @@ const Contratos = () => {
         }
         
         if (contaReceber) {
-            // Deletar a conta sintética (deve cascatear para as parcelas)
             const { error: deleteCR } = await supabase
                 .from(tabelaContasReceber)
                 .delete()
@@ -127,7 +168,6 @@ const Contratos = () => {
             if (deleteCR) throw deleteCR;
         }
         
-        // 3. Deletar o Contrato Gerado
         const { error: deleteContrato } = await supabase
             .from('contratos_gerados')
             .delete()
@@ -136,7 +176,7 @@ const Contratos = () => {
         if (deleteContrato) throw deleteContrato;
 
         showSuccess('Contrato e contas a receber associadas excluídos com sucesso.');
-        buscarContratos(); // Re-fetch the list
+        buscarContratos();
     } catch (error: any) {
         console.error('Erro ao deletar contrato:', error);
         showError('Falha ao excluir contrato: ' + error.message);
@@ -146,12 +186,11 @@ const Contratos = () => {
   };
   
   const handleBlockContract = async (contrato: ContratoGerado) => {
-    if (!window.confirm(`Tem certeza que deseja BLOQUEAR o contrato ${contrato.id}? Esta ação irá marcar o contrato como 'bloqueado' e cancelar todas as parcelas pendentes associadas.`)) return;
+    if (!window.confirm(`Tem certeza que deseja BLOQUEAR o contrato ${contrato.id}? Esta ação irá marcar o contrato como 'bloqueado' e BLOQUEAR todas as parcelas pendentes associadas.`)) return;
 
     setCarregandoContratos(true);
     
     try {
-        // 1. Bloquear parcelas pendentes (RPC cancel_contract_installments agora define o status do contrato como 'bloqueado')
         const { error: rpcError } = await supabase.rpc('cancel_contract_installments', {
             p_contrato_id: contrato.id,
             p_motivo: 'Contrato Bloqueado',
@@ -159,7 +198,7 @@ const Contratos = () => {
         
         if (rpcError) throw rpcError;
         
-        showSuccess('Contrato bloqueado e parcelas canceladas com sucesso.');
+        showSuccess('Contrato bloqueado e parcelas bloqueadas com sucesso.');
         buscarContratos();
     } catch (error: any) {
         console.error('Erro ao bloquear contrato:', error);
@@ -170,12 +209,11 @@ const Contratos = () => {
   };
   
   const handleReactivateContract = async (contrato: ContratoGerado) => {
-    if (!window.confirm(`Tem certeza que deseja DESBLOQUEAR o contrato ${contrato.id}? Isso irá reativar o status do contrato e reabrir as parcelas que foram canceladas devido ao bloqueio.`)) return;
+    if (!window.confirm(`Tem certeza que deseja DESBLOQUEAR o contrato ${contrato.id}? Isso irá reativar o status do contrato e reabrir as parcelas que foram bloqueadas.`)) return;
 
     setCarregandoContratos(true);
     
     try {
-        // 1. Reativar parcelas pendentes
         const { error: rpcError } = await supabase.rpc('reactivate_contract_installments', {
             p_contrato_id: contrato.id,
         });
@@ -204,55 +242,64 @@ const Contratos = () => {
       }
   };
   
-  // --- Lógica de Filtragem e Agrupamento ---
-  const contratosFiltrados = useMemo(() => {
-      const termoBusca = filtroTextoDebounced.toLowerCase();
-      
-      const filteredBySearch = contratos.filter(c => {
-          const clienteNome = (c as any).clientes?.nome || '';
-          return c.conteudo_renderizado?.toLowerCase().includes(termoBusca) ||
-                 clienteNome.toLowerCase().includes(termoBusca) ||
-                 c.id.toLowerCase().includes(termoBusca);
-      });
-      
-      const meusContratos = filteredBySearch.filter(c => c.empresa_id === empresaId);
-      const contratosClientes = filteredBySearch.filter(c => c.empresa_id !== empresaId);
+  // --- Lógica de Agrupamento e Filtro de Abas ---
+  const contratosAgrupados = useMemo(() => {
+      const meusContratos = contratos.filter(c => c.empresa_id === empresaId);
+      const contratosClientes = contratos.filter(c => c.empresa_id !== empresaId);
       
       const pendentes = meusContratos.filter(c => c.status === 'pendente_assinatura' || c.status === 'rascunho');
       const ativos = meusContratos.filter(c => c.status === 'ativo' || c.status === 'concluido');
-      const inativos = meusContratos.filter(c => c.status === 'cancelado' || c.status === 'bloqueado'); // Inclui 'bloqueado'
+      const inativos = meusContratos.filter(c => c.status === 'cancelado' || c.status === 'bloqueado');
       
       return { meusContratos, contratosClientes, pendentes, ativos, inativos };
-  }, [contratos, empresaId, filtroTextoDebounced]);
+  }, [contratos, empresaId]);
   
   const contratosParaExibir = useMemo(() => {
       if (isAdmin) {
           switch (activeContratoTab) {
-              case 'meus_contratos': return contratosFiltrados.meusContratos;
-              case 'contratos_clientes': return contratosFiltrados.contratosClientes;
-              case 'pendentes': return contratosFiltrados.pendentes;
-              case 'ativos': return contratosFiltrados.ativos;
-              case 'inativos': return contratosFiltrados.inativos;
+              case 'meus_contratos': return contratosAgrupados.meusContratos;
+              case 'contratos_clientes': return contratosAgrupados.contratosClientes;
+              case 'pendentes': return contratosAgrupados.pendentes;
+              case 'ativos': return contratosAgrupados.ativos;
+              case 'inativos': return contratosAgrupados.inativos;
               default: return [];
           }
       } else {
-          // Cliente/Usuário
           switch (activeContratoTab) {
-              case 'pendentes': return contratosFiltrados.pendentes;
-              case 'ativos': return contratosFiltrados.ativos;
-              case 'inativos': return contratosFiltrados.inativos;
+              case 'pendentes': return contratosAgrupados.pendentes;
+              case 'ativos': return contratosAgrupados.ativos;
+              case 'inativos': return contratosAgrupados.inativos;
               default: return [];
           }
       }
-  }, [activeContratoTab, isAdmin, contratosFiltrados]);
+  }, [activeContratoTab, isAdmin, contratosAgrupados]);
+  
+  const isSupervisao = isAdmin && activeContratoTab === 'contratos_clientes';
+  
+  // --- Lógica de Impressão ---
+  const handlePrint = () => {
+      if (contratosParaExibir.length === 0) {
+          showError('Nenhum contrato para imprimir na aba atual.');
+          return;
+      }
+      
+      const tituloRelatorio = activeContratoTab.replace('_', ' ').toUpperCase();
+      
+      const printComponent = (
+          <ContratosPrint
+              data={contratosParaExibir}
+              titulo={`Relatório de Contratos - ${tituloRelatorio}`}
+              isSupervisao={isSupervisao}
+          />
+      );
 
+      const htmlContent = ReactDOMServer.renderToStaticMarkup(printComponent);
+      printContent(htmlContent, `Relatório Contratos - ${tituloRelatorio}`);
+  };
 
-  if (carregandoSessao || carregandoContratos) {
-    return <LayoutPrincipal><div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div></LayoutPrincipal>;
-  }
 
   // Helper para renderizar a tabela
-  const renderContratosTable = (list: ContratoGerado[], isSupervisao: boolean) => (
+  const renderContratosTable = (list: ContratoComCliente[], isSupervisao: boolean) => (
     <div className="overflow-x-auto">
         <Table>
             <TableHeader><TableRow>
@@ -260,7 +307,9 @@ const Contratos = () => {
                 <TableHead>Cliente</TableHead><TableHead>Valor</TableHead><TableHead>Data Início</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Ações</TableHead>
             </TableRow></TableHeader>
             <TableBody>
-                {list.length === 0 ? (
+                {carregandoContratos ? (
+                    <TableRow><TableCell colSpan={isSupervisao ? 6 : 5} className="text-center py-4 text-muted-foreground">Carregando contratos...</TableCell></TableRow>
+                ) : list.length === 0 ? (
                     <TableRow><TableCell colSpan={isSupervisao ? 6 : 5} className="text-center py-4 text-muted-foreground">Nenhum contrato encontrado.</TableCell></TableRow>
                 ) : (
                     list.map(c => {
@@ -270,8 +319,8 @@ const Contratos = () => {
                         
                         return (
                             <TableRow key={c.id}>
-                                {isSupervisao && <TableCell className="text-sm text-muted-foreground">{(c as any).clientes?.nome || 'N/A'}</TableCell>}
-                                <TableCell className="font-medium">{(c as any).clientes?.nome || 'N/A'}</TableCell>
+                                {isSupervisao && <TableCell className="text-sm text-muted-foreground">{c.clientes?.nome || 'N/A'}</TableCell>}
+                                <TableCell className="font-medium">{c.clientes?.nome || 'N/A'}</TableCell>
                                 <TableCell>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(c.valor_total)}</TableCell>
                                 <TableCell>{format(parseISO(c.data_inicio), 'dd/MM/yyyy')}</TableCell>
                                 <TableCell>{getStatusBadge(c.status)}</TableCell>
@@ -304,7 +353,7 @@ const Contratos = () => {
                                                     variant="destructive" 
                                                     size="icon" 
                                                     onClick={() => handleBlockContract(c)}
-                                                    title="Bloquear Contrato (Cancela Parcelas)"
+                                                    title="Bloquear Contrato (Bloqueia Parcelas)"
                                                 >
                                                     <Lock className="w-4 h-4" />
                                                 </Button>
@@ -355,28 +404,58 @@ const Contratos = () => {
       
       <Card className="mb-6">
         <CardHeader className="pb-2">
-            <CardTitle className="text-lg flex items-center"><Filter className="w-4 h-4 mr-2" /> Filtros</CardTitle>
+            <CardTitle className="text-lg flex items-center"><Filter className="w-4 h-4 mr-2" /> Filtros e Ações</CardTitle>
         </CardHeader>
-        <CardContent>
-            <div className="relative w-full">
+        <CardContent className="flex flex-col md:flex-row gap-4">
+            <div className="relative w-full md:w-[300px]">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                    placeholder="Buscar por cliente, conteúdo ou ID do contrato..."
+                    placeholder="Buscar por cliente, conteúdo ou ID..."
                     value={filtroTexto}
                     onChange={(e) => setFiltroTexto(e.target.value)}
                     className="pl-10"
                 />
             </div>
+            
+            <Select value={filtroStatus} onValueChange={setFiltroStatus}>
+                <SelectTrigger className="w-full md:w-[180px]">
+                    <SelectValue placeholder="Filtrar Status" />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="todos">Todos os Status</SelectItem>
+                    <SelectItem value="pendente_assinatura">Pendente Assinatura</SelectItem>
+                    <SelectItem value="ativo">Ativo</SelectItem>
+                    <SelectItem value="bloqueado">Bloqueado</SelectItem>
+                    <SelectItem value="cancelado">Cancelado</SelectItem>
+                    <SelectItem value="concluido">Concluído</SelectItem>
+                    <SelectItem value="rascunho">Rascunho</SelectItem>
+                </SelectContent>
+            </Select>
+            
+            <Select value={ordenacao} onValueChange={setOrdenacao}>
+                <SelectTrigger className="w-full md:w-[200px]">
+                    <SelectValue placeholder="Ordenar por" />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="criado_em_desc">Data Criação (Mais Recente)</SelectItem>
+                    <SelectItem value="vencimento_asc">Data Início (Mais Antigo)</SelectItem>
+                    <SelectItem value="cliente_asc">Nome do Cliente (A-Z)</SelectItem>
+                </SelectContent>
+            </Select>
+            
+            <Button onClick={handlePrint} variant="outline" className="w-full md:w-auto">
+                <Printer className="w-4 h-4 mr-2" /> Imprimir
+            </Button>
         </CardContent>
       </Card>
 
       <Tabs value={activeContratoTab} onValueChange={setActiveContratoTab} className="w-full">
         <TabsList className={cn("grid w-full", isAdmin ? "grid-cols-5" : "grid-cols-3")}>
-          {isAdmin && <TabsTrigger value="meus_contratos">Meus Contratos ({contratosFiltrados.meusContratos.length})</TabsTrigger>}
-          {isAdmin && <TabsTrigger value="contratos_clientes">Clientes ({contratosFiltrados.contratosClientes.length})</TabsTrigger>}
-          <TabsTrigger value="pendentes">Pendentes ({contratosFiltrados.pendentes.length})</TabsTrigger>
-          <TabsTrigger value="ativos">Ativos ({contratosFiltrados.ativos.length})</TabsTrigger>
-          <TabsTrigger value="inativos">Inativos ({contratosFiltrados.inativos.length})</TabsTrigger>
+          {isAdmin && <TabsTrigger value="meus_contratos">Meus Contratos ({contratosAgrupados.meusContratos.length})</TabsTrigger>}
+          {isAdmin && <TabsTrigger value="contratos_clientes">Clientes ({contratosAgrupados.contratosClientes.length})</TabsTrigger>}
+          <TabsTrigger value="pendentes">Pendentes ({contratosAgrupados.pendentes.length})</TabsTrigger>
+          <TabsTrigger value="ativos">Ativos ({contratosAgrupados.ativos.length})</TabsTrigger>
+          <TabsTrigger value="inativos">Inativos ({contratosAgrupados.inativos.length})</TabsTrigger>
         </TabsList>
         
         {/* ABA DE CONTRATOS DE CLIENTES (APENAS ADMIN) */}
@@ -417,7 +496,7 @@ const Contratos = () => {
           <Card>
             <CardHeader><CardTitle className="text-xl">Contratos Pendentes de Assinatura/Rascunho</CardTitle></CardHeader>
             <CardContent>
-              {renderContratosTable(contratosParaExibir, isAdmin && activeContratoTab === 'contratos_clientes')}
+              {renderContratosTable(contratosParaExibir, isSupervisao)}
             </CardContent>
           </Card>
         </TabsContent>
@@ -427,7 +506,7 @@ const Contratos = () => {
           <Card>
             <CardHeader><CardTitle className="text-xl">Contratos Ativos e Concluídos</CardTitle></CardHeader>
             <CardContent>
-              {renderContratosTable(contratosParaExibir, isAdmin && activeContratoTab === 'contratos_clientes')}
+              {renderContratosTable(contratosParaExibir, isSupervisao)}
             </CardContent>
           </Card>
         </TabsContent>
@@ -437,7 +516,7 @@ const Contratos = () => {
           <Card>
             <CardHeader><CardTitle className="text-xl">Contratos Inativos ou Bloqueados</CardTitle></CardHeader>
             <CardContent>
-              {renderContratosTable(contratosParaExibir, isAdmin && activeContratoTab === 'contratos_clientes')}
+              {renderContratosTable(contratosParaExibir, isSupervisao)}
             </CardContent>
           </Card>
         </TabsContent>
