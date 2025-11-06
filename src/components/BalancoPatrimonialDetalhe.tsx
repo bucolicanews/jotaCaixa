@@ -46,14 +46,21 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
     return contas.filter(c => c.tipo_principal === tipo);
   };
   
+  // Função para renderizar contas (inclui indentação e filtro de saldo)
   const renderContas = (contasList: ContaBalanco[]) => {
     return contasList.map(c => {
       const isSintetica = c.Analitica === 'Não';
       const isZero = Math.abs(c.saldo_final) < 0.01;
       
-      // Aplica o filtro de saldo
+      // Regra de Filtragem:
+      // 1. Se o filtro 'Somente Com Saldo' está ativo E a conta é analítica E o saldo é zero, NÃO renderiza.
       if (filtroSomenteComSaldo && isZero && !isSintetica) return null;
-      if (isZero && isSintetica) return null;
+      
+      // 2. Contas Sintéticas (grupos) devem ser sempre renderizadas, a menos que o filtro de saldo esteja ativo E o saldo do grupo seja zero.
+      // No entanto, para a aba 'Completo', queremos a estrutura completa.
+      // Vamos manter a regra de que sintéticas com saldo zero são renderizadas, a menos que o filtro de saldo esteja ativo.
+      if (filtroSomenteComSaldo && isZero && isSintetica) return null;
+
 
       // Calcula o nível de indentação baseado no código da conta (ex: 1.1.1.1)
       const level = c.Conta.split('.').filter(p => p.length > 0).length;
@@ -71,6 +78,7 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
     });
   };
   
+  // Função para renderizar a hierarquia (Circulante/Não Circulante)
   const renderHierarquia = (contas: ContaBalanco[], tipoPrincipal: 'Ativo' | 'Passivo') => {
     const circulante = contas.filter(c => c.sub_tipo === 'Circulante');
     const naoCirculante = contas.filter(c => c.sub_tipo === 'Nao Circulante');
@@ -79,15 +87,16 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
     const totalNaoCirculante = naoCirculante.reduce((sum, c) => sum + c.saldo_final, 0);
     
     const renderGroup = (group: ContaBalanco[], title: string, total: number) => {
-        if (group.length === 0) return null;
-        
         // Filtra contas sintéticas que não têm saldo e contas analíticas com saldo zero (se o filtro estiver ativo)
         const filteredGroup = group.filter(c => {
             const isSintetica = c.Analitica === 'Não';
             const isZero = Math.abs(c.saldo_final) < 0.01;
             
-            if (isSintetica && isZero) return false;
-            if (filtroSomenteComSaldo && !isSintetica && isZero) return false;
+            // Se o filtro de saldo está ativo, só renderiza se o grupo tiver saldo OU se for uma conta analítica com saldo
+            if (filtroSomenteComSaldo) {
+                if (isSintetica && isZero) return false;
+                if (!isSintetica && isZero) return false;
+            }
             
             return true;
         });
@@ -96,10 +105,12 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
 
         return (
             <>
+                {/* Linha de Agrupamento (Circulante/Não Circulante) */}
                 <TableRow className="bg-primary/10 font-bold">
                     <TableCell colSpan={2} className="pl-4">{title}</TableCell>
                     <TableCell className="text-right">{formatCurrency(total)}</TableCell>
                 </TableRow>
+                {/* Contas detalhadas dentro do grupo */}
                 {renderContas(group)}
             </>
         );

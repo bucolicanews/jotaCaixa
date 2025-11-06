@@ -41,7 +41,9 @@ const BalancoPatrimonialPrint: React.FC<BalancoPatrimonialPrintProps> = ({
       const isSintetica = c.Analitica === 'Não';
       const isZero = Math.abs(c.saldo_final) < 0.01;
       
-      if (isZero && isSintetica) return null;
+      // Regra de Filtragem: Se a conta é analítica e o saldo é zero, e o filtro de saldo foi aplicado, não renderiza.
+      // Se a conta é sintética, renderiza sempre (a menos que o filtro de saldo tenha sido aplicado e o saldo seja zero, mas isso é tratado no BalancoPatrimonialDetalhe).
+      if (isZero && isSintetica) return null; // Se o filtro de saldo foi aplicado, esta conta já foi removida. Se não foi, ela deve ser renderizada.
 
       // Calcula o nível de indentação baseado no código da conta (ex: 1.1.1.1)
       const level = c.Conta.split('.').filter(p => p.length > 0).length;
@@ -78,9 +80,11 @@ const BalancoPatrimonialPrint: React.FC<BalancoPatrimonialPrintProps> = ({
             const isSintetica = c.Analitica === 'Não';
             const isZero = Math.abs(c.saldo_final) < 0.01;
             
-            if (isSintetica && isZero) return false;
+            // Se a conta é sintética, renderiza sempre (para manter a estrutura)
+            if (isSintetica) return true;
             
-            return true;
+            // Se a conta é analítica, renderiza se tiver saldo (ou se o filtro de saldo não foi aplicado)
+            return !isZero;
         });
         
         if (filteredGroup.length === 0) return null;
