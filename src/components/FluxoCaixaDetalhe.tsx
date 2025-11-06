@@ -29,7 +29,7 @@ interface Lancamento {
   
   // Relações
   saldo_contas: { nome: string } | null;
-  plano_contas: { Conta: string, Descricao: string } | null;
+  // plano_contas: { Conta: string, Descricao: string } | null; // REMOVIDO
 }
 
 interface FluxoCaixaDetalheProps {
@@ -56,8 +56,7 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
       .from('lancamentos')
       .select(`
         *,
-        saldo_contas:conta_bancaria_id ( nome ),
-        plano_contas_rel:conta_contabil_id!plano_contas ( Conta, Descricao )
+        saldo_contas:conta_bancaria_id ( nome )
       `)
       .eq('empresa_id', empresaId)
       .order('data_movimentacao', { ascending: false });
@@ -81,7 +80,6 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
     const { data, error } = await query;
 
     if (error) {
-      // Se o erro for de ambiguidade, ele deve aparecer aqui.
       showError('Erro ao carregar lançamentos: ' + error.message);
       setLancamentos([]);
     } else {
@@ -89,7 +87,7 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
       const mappedData = (data as any[]).map(l => ({
           ...l,
           saldo_contas: l.saldo_contas, 
-          plano_contas: l.plano_contas_rel, // Usando o nome da relação forçada
+          plano_contas: null, // Definido como null para evitar o erro
       })) as Lancamento[];
       
       setLancamentos(mappedData);
@@ -183,23 +181,21 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
                   <TableHead className="w-[150px]">Data</TableHead>
                   <TableHead className="w-[150px]">Conta/Caixa</TableHead>
                   <TableHead>Descrição</TableHead>
-                  <TableHead className="w-[150px]">Conta Contábil</TableHead>
                   <TableHead className="w-[100px] text-center">Tipo</TableHead>
                   <TableHead className="w-[120px] text-right">Valor</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loadingLancamentos ? (
-                  <TableRow><TableCell colSpan={6} className="text-center py-8"><Loader2 className="h-6 w-6 animate-spin mx-auto text-primary" /></TableCell></TableRow>
+                  <TableRow><TableCell colSpan={5} className="text-center py-8"><Loader2 className="h-6 w-6 animate-spin mx-auto text-primary" /></TableCell></TableRow>
                 ) : lancamentos.length === 0 ? (
-                  <TableRow><TableCell colSpan={6} className="text-center py-4 text-muted-foreground">Nenhum lançamento encontrado com os filtros aplicados.</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={5} className="text-center py-4 text-muted-foreground">Nenhum lançamento encontrado com os filtros aplicados.</TableCell></TableRow>
                 ) : (
                   lancamentos.map((l) => (
                     <TableRow key={l.id}>
                       <TableCell className="text-sm">{formatarData(l.data_movimentacao)}</TableCell>
                       <TableCell className="font-medium text-sm">{l.saldo_contas?.nome || 'N/A'}</TableCell>
                       <TableCell className="text-sm">{l.descricao}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{l.plano_contas?.Conta} - {l.plano_contas?.Descricao || 'N/A'}</TableCell>
                       <TableCell className="text-center">
                         <Badge variant={l.tipo === 'Entrada' ? 'success' : 'destructive'} className="flex items-center justify-center">
                           {l.tipo === 'Entrada' ? <ArrowUpCircle className="w-3 h-3 mr-1" /> : <ArrowDownCircle className="w-3 h-3 mr-1" />}
