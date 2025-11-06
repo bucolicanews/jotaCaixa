@@ -2,7 +2,7 @@ import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { PlusCircle, FileSignature, Loader2, Eye, Edit, Trash2 } from 'lucide-react';
+import { PlusCircle, FileSignature, Loader2, Eye, Edit, Trash2, Search, Filter } from 'lucide-react';
 import { useSessao } from '@/hooks/use-sessao';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -15,6 +15,8 @@ import { Badge } from '@/components/ui/badge';
 import ContratoAcoesDialog from '@/components/ContratoAcoesDialog';
 import { format, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { Input } from '@/components/ui/input';
+import { useDebounce } from '@/hooks/use-debounce';
 
 const Contratos = () => {
   const { role, perfil, usuario, carregando: carregandoSessao } = useSessao();
@@ -23,6 +25,10 @@ const Contratos = () => {
   const [carregandoContratos, setCarregandoContratos] = useState(true);
   const [contratoSelecionado, setContratoSelecionado] = useState<ContratoGerado | null>(null);
   const [acoesDialogOpen, setAcoesDialogOpen] = useState(false);
+  
+  // Filtro de Busca
+  const [filtroTexto, setFiltroTexto] = useState('');
+  const filtroTextoDebounced = useDebounce(filtroTexto, 500);
 
   const canCreateContract = role === 'Admin' || role === 'Cliente';
   
@@ -148,32 +154,43 @@ const Contratos = () => {
       }
   };
   
-  // Filtros de Frontend para as abas
+  // --- Lógica de Filtragem e Agrupamento ---
   const contratosFiltrados = useMemo(() => {
-      const meusContratos = contratos.filter(c => c.empresa_id === empresaId);
-      const contratosClientes = contratos.filter(c => c.empresa_id !== empresaId);
+      const termoBusca = filtroTextoDebounced.toLowerCase();
       
-      // Pendentes e Ativos agora filtram APENAS os contratos do empresaId
+      const filteredBySearch = contratos.filter(c => {
+          const clienteNome = (c as any).clientes?.nome || '';
+          return c.conteudo_renderizado?.toLowerCase().includes(termoBusca) ||
+                 clienteNome.toLowerCase().includes(termoBusca) ||
+                 c.id.toLowerCase().includes(termoBusca);
+      });
+      
+      const meusContratos = filteredBySearch.filter(c => c.empresa_id === empresaId);
+      const contratosClientes = filteredBySearch.filter(c => c.empresa_id !== empresaId);
+      
       const pendentes = meusContratos.filter(c => c.status === 'pendente_assinatura' || c.status === 'rascunho');
       const ativos = meusContratos.filter(c => c.status === 'ativo' || c.status === 'concluido');
+      const inativos = meusContratos.filter(c => c.status === 'cancelado'); // Novo filtro para inativos/cancelados
       
-      return { meusContratos, contratosClientes, pendentes, ativos };
-  }, [contratos, empresaId]);
+      return { meusContratos, contratosClientes, pendentes, ativos, inativos };
+  }, [contratos, empresaId, filtroTextoDebounced]);
   
   const contratosParaExibir = useMemo(() => {
       if (isAdmin) {
           switch (activeContratoTab) {
               case 'meus_contratos': return contratosFiltrados.meusContratos;
-              case 'contratos_clientes': return contratosFiltrados.contratosClientes; // Renomeado
-              case 'pendentes': return contratosFiltrados.pendentes; // Apenas Admin
-              case 'gerados': return contratosFiltrados.ativos; // Apenas Admin
+              case 'contratos_clientes': return contratosFiltrados.contratosClientes;
+              case 'pendentes': return contratosFiltrados.pendentes;
+              case 'ativos': return contratosFiltrados.ativos;
+              case 'inativos': return contratosFiltrados.inativos;
               default: return [];
           }
       } else {
           // Cliente/Usuário
           switch (activeContratoTab) {
               case 'pendentes': return contratosFiltrados.pendentes;
-              case 'gerados': return contratosFiltrados.ativos;
+              case 'ativos': return contratosFiltrados.ativos;
+              case 'inativos': return contratosFiltrados.inativos;
               default: return [];
           }
       }
@@ -229,7 +246,7 @@ const Contratos = () => {
                                                 </Button>
                                             </>
                                         )}
-                                        <Button variant="ghost" size="sm" onClick={() => handleOpenAcoes(c)}>
+                                        <Button variant="outline" size="sm" onClick={() => handleOpenAcoes(c)}>
                                             <Eye className="w-4 h-4 mr-2" /> Ver Ações
                                         </Button>
                                     </div>
@@ -258,15 +275,31 @@ const Contratos = () => {
             </Link>
         </div>
       </div>
+      
+      <Card className="mb-6">
+        <CardHeader className="pb-2">
+            <CardTitle className="text-lg flex items-center"><Filter className="w-4 h-4 mr-2" /> Filtros</CardTitle>
+        </CardHeader>
+        <CardContent>
+            <div className="relative w-full">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                    placeholder="Buscar por cliente, conteúdo ou ID do contrato..."
+                    value={filtroTexto}
+                    onChange={(e) => setFiltroTexto(e.target.value)}
+                    className="pl-10"
+                />
+            </div>
+        </CardContent>
+      </Card>
 
       <Tabs value={activeContratoTab} onValueChange={setActiveContratoTab} className="w-full">
-        <TabsList className={cn("grid w-full", isAdmin ? "grid-cols-4" : "grid-cols-3")}>
+        <TabsList className={cn("grid w-full", isAdmin ? "grid-cols-5" : "grid-cols-3")}>
           {isAdmin && <TabsTrigger value="meus_contratos">Meus Contratos ({contratosFiltrados.meusContratos.length})</TabsTrigger>}
-          {isAdmin && <TabsTrigger value="contratos_clientes">Contratos de Clientes ({contratosFiltrados.contratosClientes.length})</TabsTrigger>}
-          {/* Pendentes e Ativos agora filtram apenas os contratos do empresaId */}
+          {isAdmin && <TabsTrigger value="contratos_clientes">Clientes ({contratosFiltrados.contratosClientes.length})</TabsTrigger>}
           <TabsTrigger value="pendentes">Pendentes ({contratosFiltrados.pendentes.length})</TabsTrigger>
-          <TabsTrigger value="gerados">Ativos ({contratosFiltrados.ativos.length})</TabsTrigger>
-          {/* Removendo a aba Modelos/Tags */}
+          <TabsTrigger value="ativos">Ativos ({contratosFiltrados.ativos.length})</TabsTrigger>
+          <TabsTrigger value="inativos">Inativos ({contratosFiltrados.inativos.length})</TabsTrigger>
         </TabsList>
         
         {/* ABA DE CONTRATOS DE CLIENTES (APENAS ADMIN) */}
@@ -277,26 +310,6 @@ const Contratos = () => {
                 </p>
             </div>
         )}
-        
-        {/* ABA DE CONTRATOS PENDENTES (Apenas do EmpresaId) */}
-        <TabsContent value="pendentes" className="mt-4">
-          <Card>
-            <CardHeader><CardTitle className="text-xl">Contratos Pendentes de Assinatura</CardTitle></CardHeader>
-            <CardContent>
-              {renderContratosTable(contratosParaExibir.filter(c => c.status === 'pendente_assinatura' || c.status === 'rascunho'), isAdmin && activeContratoTab === 'contratos_clientes')}
-            </CardContent>
-          </Card>
-        </TabsContent>
-        
-        {/* ABA DE CONTRATOS ATIVOS (Apenas do EmpresaId) */}
-        <TabsContent value="gerados" className="mt-4">
-          <Card>
-            <CardHeader><CardTitle className="text-xl">Contratos Ativos e Concluídos</CardTitle></CardHeader>
-            <CardContent>
-              {renderContratosTable(contratosParaExibir.filter(c => c.status === 'ativo' || c.status === 'concluido'), isAdmin && activeContratoTab === 'contratos_clientes')}
-            </CardContent>
-          </Card>
-        </TabsContent>
         
         {/* ABA MEUS CONTRATOS (APENAS ADMIN) */}
         {isAdmin && activeContratoTab === 'meus_contratos' && (
@@ -321,6 +334,36 @@ const Contratos = () => {
                 </Card>
             </TabsContent>
         )}
+        
+        {/* ABA DE CONTRATOS PENDENTES */}
+        <TabsContent value="pendentes" className="mt-4">
+          <Card>
+            <CardHeader><CardTitle className="text-xl">Contratos Pendentes de Assinatura/Rascunho</CardTitle></CardHeader>
+            <CardContent>
+              {renderContratosTable(contratosParaExibir, isAdmin && activeContratoTab === 'contratos_clientes')}
+            </CardContent>
+          </Card>
+        </TabsContent>
+        
+        {/* ABA DE CONTRATOS ATIVOS */}
+        <TabsContent value="ativos" className="mt-4">
+          <Card>
+            <CardHeader><CardTitle className="text-xl">Contratos Ativos e Concluídos</CardTitle></CardHeader>
+            <CardContent>
+              {renderContratosTable(contratosParaExibir, isAdmin && activeContratoTab === 'contratos_clientes')}
+            </CardContent>
+          </Card>
+        </TabsContent>
+        
+        {/* ABA DE CONTRATOS INATIVOS/CANCELADOS */}
+        <TabsContent value="inativos" className="mt-4">
+          <Card>
+            <CardHeader><CardTitle className="text-xl">Contratos Inativos ou Cancelados</CardTitle></CardHeader>
+            <CardContent>
+              {renderContratosTable(contratosParaExibir, isAdmin && activeContratoTab === 'contratos_clientes')}
+            </CardContent>
+          </Card>
+        </TabsContent>
         
       </Tabs>
       
