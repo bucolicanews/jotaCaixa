@@ -320,7 +320,7 @@ const PreencherContrato: React.FC = () => {
         }
     } else {
         // Regra 2: Se o proprietário for um Cliente (ou o Admin selecionou um Cliente), os clientes são da tabela 'clientes' (CR)
-        const { data: clientesCRData, error: _ } = await supabase // Corrigido: usando _ para descartar o erro
+        const { data: clientesCRData, error: _ } = await supabase
             .from('clientes')
             .select('*')
             .eq('proprietario_id', targetEmpresaId); // AJUSTE AQUI
@@ -724,7 +724,7 @@ const PreencherContrato: React.FC = () => {
     <LayoutPrincipal>
       <div className="flex items-center mb-6">
         <Button 
-            onClick={() => navigate('/contratos')} 
+            onClick={(e) => { e.preventDefault(); navigate('/contratos'); }} 
             variant="link" 
             type="button"
             className="text-muted-foreground hover:text-primary flex items-center mr-4 p-0 h-auto"
