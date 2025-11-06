@@ -15,6 +15,7 @@ import BalancoPatrimonialPrint from './BalancoPatrimonialPrint';
 import { useSessao } from '@/hooks/use-sessao';
 import { ClienteProfile } from '@/types/usuario';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
+import Balanco1ColunaPrint from './Balanco1ColunaPrint'; // NOVO IMPORT
 
 interface BalancoPatrimonialDetalheProps {
   endDate: Date;
@@ -76,24 +77,43 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
     });
   };
   
-  const handlePrint = (onlyWithBalance: boolean) => {
+  const handlePrint = (onlyWithBalance: boolean, formatType: '2colunas' | '1coluna') => {
     const contasParaImpressao = onlyWithBalance 
         ? contas.filter(c => c.Analitica === 'Não' || Math.abs(c.saldo_final) >= 0.01)
         : contas;
         
-    const printComponent = (
-        <BalancoPatrimonialPrint
-            empresaNome={empresaNome}
-            endDate={endDate}
-            contas={contasParaImpressao}
-            totalAtivo={totalAtivo}
-            totalPassivoPL={totalPassivoPL}
-            isBalanced={isBalanced}
-        />
-    );
+    let printComponent;
+    let fileName;
+    
+    if (formatType === '2colunas') {
+        printComponent = (
+            <BalancoPatrimonialPrint
+                empresaNome={empresaNome}
+                endDate={endDate}
+                contas={contasParaImpressao}
+                totalAtivo={totalAtivo}
+                totalPassivoPL={totalPassivoPL}
+                isBalanced={isBalanced}
+            />
+        );
+        fileName = `Balanço 2 Colunas - ${format(endDate, 'dd/MM/yyyy')}`;
+    } else {
+        printComponent = (
+            <Balanco1ColunaPrint
+                empresaNome={empresaNome}
+                endDate={endDate}
+                contas={contasParaImpressao}
+                totalAtivo={totalAtivo}
+                totalPassivo={totalPassivo}
+                totalPatrimonioLiquido={totalPatrimonioLiquido}
+                resultadoLiquido={resultadoLiquido}
+            />
+        );
+        fileName = `Balanço 1 Coluna - ${format(endDate, 'dd/MM/yyyy')}`;
+    }
 
     const htmlContent = ReactDOMServer.renderToStaticMarkup(printComponent);
-    printContent(htmlContent, `Balanço Patrimonial - ${format(endDate, 'dd/MM/yyyy')}`);
+    printContent(htmlContent, fileName);
   };
 
   if (carregando) {
@@ -128,11 +148,17 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
                     </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => handlePrint(false)}>
-                        Balanço Completo
+                    <DropdownMenuItem onClick={() => handlePrint(false, '2colunas')}>
+                        Balanço 2 Colunas (Completo)
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handlePrint(true)}>
-                        Somente Contas com Saldo
+                    <DropdownMenuItem onClick={() => handlePrint(true, '2colunas')}>
+                        Balanço 2 Colunas (Somente Saldo)
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handlePrint(false, '1coluna')}>
+                        Balanço 1 Coluna (Completo)
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handlePrint(true, '1coluna')}>
+                        Balanço 1 Coluna (Somente Saldo)
                     </DropdownMenuItem>
                 </DropdownMenuContent>
             </DropdownMenu>
