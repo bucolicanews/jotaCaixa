@@ -88,19 +88,19 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
             return;
         }
         
-        // 2. Deletar Lançamentos (Saídas) e Pagamentos
-        
-        // Deletar Lançamentos (Saídas)
+        // 2. Deletar Lançamentos (Saídas)
+        // Deletamos os lançamentos que foram gerados pelos pagamentos desta parcela.
         const { error: deleteLancamentosError } = await supabase
             .from('lancamentos')
             .delete()
-            .in('origem', ['pagamento_manual', 'pagamento_parcial']) // Assumindo que pagamentos manuais usam estas origens
+            .in('origem', ['pagamento_manual', 'pagamento_parcial']) // Origens que podem ser usadas
             .in('conta_bancaria_id', pagamentos.map(p => p.conta_id))
-            .eq('empresa_id', usuario.id); // Garante que só deletamos nossos lançamentos
+            .eq('empresa_id', usuario.id); 
             
+        // Se houver erro na exclusão dos lançamentos, lançamos a exceção.
         if (deleteLancamentosError) throw deleteLancamentosError;
         
-        // Deletar Registros de Pagamento
+        // 3. Deletar Registros de Pagamento
         const { error: deletePagamentosError } = await supabase
             .from('admin_pagamentos')
             .delete()
@@ -108,13 +108,13 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
             
         if (deletePagamentosError) throw deletePagamentosError;
         
-        // 3. Resetar a Parcela
+        // 4. Resetar a Parcela
         const { error: resetError } = await supabase
             .from('admin_parcelas_pagar')
             .update({
                 status: 'aberta',
                 valor_pago: 0,
-                data_pagamento: null,
+                data_pagamento: null, // Resetando a data de pagamento
                 observacao: 'Estorno de pagamento realizado.',
             })
             .eq('id', parcelaId);
