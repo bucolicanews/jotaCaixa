@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, ArrowUpCircle, ArrowDownCircle, Filter, Search, Banknote, Wallet, Landmark } from 'lucide-react';
+import { Loader2, ArrowUpCircle, ArrowDownCircle, Filter, Search, Banknote, Wallet, Landmark, Printer } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError } from '@/utils/toast';
 import { formatCurrency, formatarData } from '@/utils/formatters';
@@ -14,6 +14,10 @@ import { SaldoContaDetalhada } from '@/types/saldo-conta';
 import { DateRangePicker } from './DateRangePicker';
 import { DateRange } from 'react-day-picker';
 import { format } from 'date-fns';
+import { Button } from './ui/button';
+import { usePrint } from '@/hooks/use-print';
+import ReactDOMServer from 'react-dom/server';
+import FluxoCaixaPrint from './FluxoCaixaPrint';
 
 interface Lancamento {
   id: string;
@@ -38,6 +42,7 @@ interface FluxoCaixaDetalheProps {
 }
 
 const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas, totalSaldo }) => {
+  const { printContent } = usePrint();
   
   const [lancamentos, setLancamentos] = useState<Lancamento[]>([]);
   const [loadingLancamentos, setLoadingLancamentos] = useState(true);
@@ -131,6 +136,28 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
       saldoFinalOuVariacao = totalEntradas - totalSaidas;
       tituloSaldoFinal = 'Variação Líquida do Período';
   }
+  
+  const handlePrint = () => {
+    if (lancamentos.length === 0) {
+        showError('Nenhum lançamento para imprimir.');
+        return;
+    }
+    
+    const printComponent = (
+        <FluxoCaixaPrint
+            empresaId={empresaId}
+            lancamentos={lancamentos}
+            totalEntradas={totalEntradas}
+            totalSaidas={totalSaidas}
+            saldoFinalOuVariacao={saldoFinalOuVariacao}
+            tituloSaldoFinal={tituloSaldoFinal}
+            filtroPeriodo={filtroPeriodo}
+        />
+    );
+
+    const htmlContent = ReactDOMServer.renderToStaticMarkup(printComponent);
+    printContent(htmlContent, `Relatório Fluxo de Caixa - ${format(new Date(), 'yyyyMMdd')}`);
+  };
 
   return (
     <div className="space-y-6">
@@ -160,7 +187,12 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
       
       {/* Filtros de Lançamentos */}
       <Card>
-        <CardHeader><CardTitle className="text-lg flex items-center"><Filter className="w-4 h-4 mr-2" /> Filtros de Lançamentos</CardTitle></CardHeader>
+        <CardHeader className="flex flex-col md:flex-row items-start md:items-center justify-between space-y-4 md:space-y-0 pb-2">
+            <CardTitle className="text-lg flex items-center"><Filter className="w-4 h-4 mr-2" /> Filtros de Lançamentos</CardTitle>
+            <Button onClick={handlePrint} variant="outline" disabled={loadingLancamentos || lancamentos.length === 0}>
+                <Printer className="w-4 h-4 mr-2" /> Imprimir Relatório
+            </Button>
+        </CardHeader>
         <CardContent className="flex flex-col sm:flex-row gap-4">
             <div className="relative w-full sm:w-[300px]">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
