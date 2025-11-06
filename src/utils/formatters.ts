@@ -5,6 +5,13 @@ export const formatCurrency = (value: number): string => {
 export const formatarData = (dateString: string): string => {
     if (!dateString) return 'N/A';
     try {
+        // Se for uma string YYYY-MM-DD (sem T e Z), parseISO a trata como UTC, causando o desvio.
+        // Para corrigir, adicionamos 'T00:00:00' para forçar a interpretação como data local.
+        if (dateString.length === 10 && !dateString.includes('T')) {
+            const date = new Date(dateString + 'T00:00:00');
+            return date.toLocaleDateString('pt-BR');
+        }
+        
         const date = new Date(dateString);
         return date.toLocaleDateString('pt-BR');
     } catch (e) {
