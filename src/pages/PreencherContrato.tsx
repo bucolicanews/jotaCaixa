@@ -233,18 +233,21 @@ const PreencherContrato: React.FC = () => {
     // 2. Buscar Clientes (Contratados)
     let combinedClients: Cliente[] = [];
     
-    // Regra 1: Se o proprietário do contrato for o Admin logado, os clientes são as Empresas do Sistema (tbl_clientes)
+    // Regra 1: Se o proprietário do contrato for o Admin logado ('Meus Contratos (Admin)')
     if (isAdmin && targetEmpresaId === ownerIdLogado) {
+        // Busca na tbl_clientes onde admin_id é o ID do Admin logado
         const { data: systemClientsData, error: systemClientsError } = await supabase
             .from('tbl_clientes')
             .select('id, nome, cpf, email, telefone, telefone_fixo, razao_social, nome_fantasia, cep, endereco, numero, complemento, bairro, cidade, estado, criado_em')
+            .eq('admin_id', ownerIdLogado) // FILTRO CORRIGIDO
             .eq('aprovado', true)
             .order('nome');
             
         if (systemClientsError) {
             showError('Erro ao carregar clientes do sistema: ' + systemClientsError.message);
         } else if (systemClientsData) {
-            combinedClients = systemClientsData.map(sc => ({
+            // Mapeamento para o tipo Cliente[]
+            combinedClients = (systemClientsData as any[]).map(sc => ({
                 id: sc.id,
                 empresa_id: ownerIdLogado,
                 nome: sc.nome,
