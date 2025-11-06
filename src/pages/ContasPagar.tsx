@@ -135,6 +135,13 @@ const ContasPagar: React.FC = () => {
     } else if (filtroStatus === 'nao_quitado') {
         query = query.neq('status', 'paga');
     }
+    
+    // Aplica filtro de origem (usando a relação)
+    if (filtroOrigem !== 'todos') {
+        // Nota: Não podemos usar .eq('admin_contas_pagar.origem', filtroOrigem) diretamente no Supabase JS v2.
+        // A solução é buscar todos e filtrar no frontend, ou usar um RPC/View.
+        // Como a tabela é pequena, vamos buscar e filtrar no frontend por enquanto.
+    }
 
     const { data, error } = await query.order('data_vencimento', { ascending: true });
 
@@ -142,10 +149,17 @@ const ContasPagar: React.FC = () => {
       showError('Erro ao carregar parcelas: ' + error.message);
       setParcelas([]);
     } else {
-      setParcelas(data as ExtendedParcelaPagar[]);
+      let fetchedParcelas = data as ExtendedParcelaPagar[];
+      
+      // Filtragem de origem no frontend
+      if (filtroOrigem !== 'todos') {
+          fetchedParcelas = fetchedParcelas.filter(p => p.admin_contas_pagar?.origem === filtroOrigem);
+      }
+      
+      setParcelas(fetchedParcelas);
     }
     setLoading(false);
-  }, [proprietarioId, isSupervisao, filtroPeriodo, filtroStatus]);
+  }, [proprietarioId, isSupervisao, filtroPeriodo, filtroStatus, filtroOrigem]); // Adicionando filtroOrigem aqui
   
   const fetchPagamentos = useCallback(async () => {
     if (!proprietarioId || !isSupervisao) return;
@@ -174,10 +188,17 @@ const ContasPagar: React.FC = () => {
       showError('Erro ao carregar pagamentos: ' + error.message);
       setPagamentos([]);
     } else {
-      setPagamentos(data as any[]);
+      let fetchedPagamentos = data as any[];
+      
+      // Filtragem de origem no frontend
+      if (filtroOrigem !== 'todos') {
+          fetchedPagamentos = fetchedPagamentos.filter(p => p.admin_parcelas_pagar?.admin_contas_pagar?.origem === filtroOrigem);
+      }
+      
+      setPagamentos(fetchedPagamentos);
     }
     setLoading(false);
-  }, [proprietarioId, isSupervisao, filtroPeriodo]);
+  }, [proprietarioId, isSupervisao, filtroPeriodo, filtroOrigem]); // Adicionando filtroOrigem aqui
 
   useEffect(() => {
     if (activeTab === 'sintetico') {
