@@ -123,7 +123,9 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
   let tituloSaldoFinal = '';
   let saldoInicialConta = 0;
   
-  if (filtroContaId !== 'todos') {
+  const isContaFiltrada = filtroContaId !== 'todos';
+  
+  if (isContaFiltrada) {
       // 1. Se uma conta específica está filtrada, encontramos o saldo inicial dela
       const contaSelecionada = contas.find(c => c.id === filtroContaId);
       saldoInicialConta = contaSelecionada ? contaSelecionada.saldo_inicial : 0;
@@ -153,7 +155,7 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
             saldoFinalOuVariacao={saldoFinalOuVariacao}
             tituloSaldoFinal={tituloSaldoFinal}
             filtroPeriodo={filtroPeriodo}
-            saldoInicialConta={saldoInicialConta} // Passando o saldo inicial
+            saldoInicialConta={saldoInicialConta}
         />
     );
 
@@ -167,31 +169,41 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
       {/* Resumo de Saldos */}
       <Card>
         <CardHeader><CardTitle className="text-xl flex items-center"><Banknote className="w-5 h-5 mr-2" /> Resumo de Saldo</CardTitle></CardHeader>
-        <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="p-3 bg-gray-100 dark:bg-gray-800 rounded-lg">
-                <h4 className="text-sm font-medium text-muted-foreground flex items-center"><Wallet className="w-4 h-4 mr-2" /> Saldo Total (Contas)</h4>
-                <p className={cn("text-xl font-bold mt-1", totalSaldo >= 0 ? 'text-green-600' : 'text-red-600')}>{formatCurrency(totalSaldo)}</p>
-            </div>
-            
-            {/* NOVO CARD: SALDO INICIAL DA CONTA FILTRADA */}
-            {filtroContaId !== 'todos' && (
-                <div className="p-3 bg-blue-100 dark:bg-blue-900/20 rounded-lg">
-                    <h4 className="text-sm font-medium text-blue-700 dark:text-blue-300 flex items-center"><Landmark className="w-4 h-4 mr-2" /> Saldo Inicial (Conta)</h4>
-                    <p className={cn("text-xl font-bold mt-1", saldoInicialConta >= 0 ? 'text-blue-600 dark:text-blue-400' : 'text-red-600 dark:text-red-400')}>{formatCurrency(saldoInicialConta)}</p>
+        <CardContent>
+            {/* Grid ajustado para 5 colunas no desktop */}
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                
+                {/* Saldo Total (Sempre visível) */}
+                <div className="p-3 bg-gray-100 dark:bg-gray-800 rounded-lg">
+                    <h4 className="text-sm font-medium text-muted-foreground flex items-center"><Wallet className="w-4 h-4 mr-2" /> Saldo Total (Contas)</h4>
+                    <p className={cn("text-xl font-bold mt-1", totalSaldo >= 0 ? 'text-green-600' : 'text-red-600')}>{formatCurrency(totalSaldo)}</p>
                 </div>
-            )}
-            
-            <div className="p-3 bg-green-100 dark:bg-green-900/20 rounded-lg">
-                <h4 className="text-sm font-medium text-green-700 dark:text-green-300 flex items-center"><ArrowUpCircle className="w-4 h-4 mr-2" /> Entradas no Período</h4>
-                <p className="text-xl font-bold text-green-600 dark:text-green-400 mt-1">{formatCurrency(totalEntradas)}</p>
-            </div>
-            <div className="p-3 bg-red-100 dark:bg-red-900/20 rounded-lg">
-                <h4 className="text-sm font-medium text-red-700 dark:text-red-300 flex items-center"><ArrowDownCircle className="w-4 h-4 mr-2" /> Saídas no Período</h4>
-                <p className="text-xl font-bold text-red-600 dark:text-red-400 mt-1">{formatCurrency(totalSaidas)}</p>
-            </div>
-            <div className={cn("p-3 rounded-lg", saldoFinalOuVariacao >= 0 ? "bg-blue-100 dark:bg-blue-900/20" : "bg-red-100 dark:bg-red-900/20")}>
-                <h4 className="text-sm font-medium text-muted-foreground flex items-center"><Landmark className="w-4 h-4 mr-2" /> {tituloSaldoFinal}</h4>
-                <p className={cn("text-xl font-bold mt-1", saldoFinalOuVariacao >= 0 ? "text-blue-600 dark:text-blue-400" : "text-red-600 dark:text-red-400")}>{formatCurrency(saldoFinalOuVariacao)}</p>
+                
+                {/* Saldo Inicial (Apenas se conta filtrada) */}
+                {isContaFiltrada && (
+                    <div className="p-3 bg-blue-100 dark:bg-blue-900/20 rounded-lg">
+                        <h4 className="text-sm font-medium text-blue-700 dark:text-blue-300 flex items-center"><Landmark className="w-4 h-4 mr-2" /> Saldo Inicial (Conta)</h4>
+                        <p className={cn("text-xl font-bold mt-1", saldoInicialConta >= 0 ? 'text-blue-600 dark:text-blue-400' : 'text-red-600 dark:text-red-400')}>{formatCurrency(saldoInicialConta)}</p>
+                    </div>
+                )}
+                
+                {/* Entradas no Período */}
+                <div className="p-3 bg-green-100 dark:bg-green-900/20 rounded-lg">
+                    <h4 className="text-sm font-medium text-green-700 dark:text-green-300 flex items-center"><ArrowUpCircle className="w-4 h-4 mr-2" /> Entradas no Período</h4>
+                    <p className="text-xl font-bold text-green-600 dark:text-green-400 mt-1">{formatCurrency(totalEntradas)}</p>
+                </div>
+                
+                {/* Saídas no Período */}
+                <div className="p-3 bg-red-100 dark:bg-red-900/20 rounded-lg">
+                    <h4 className="text-sm font-medium text-red-700 dark:text-red-300 flex items-center"><ArrowDownCircle className="w-4 h-4 mr-2" /> Saídas no Período</h4>
+                    <p className="text-xl font-bold text-red-600 dark:text-red-400 mt-1">{formatCurrency(totalSaidas)}</p>
+                </div>
+                
+                {/* Saldo Final / Variação Líquida (Ocupa o restante da linha) */}
+                <div className={cn("p-3 rounded-lg", saldoFinalOuVariacao >= 0 ? "bg-blue-100 dark:bg-blue-900/20" : "bg-red-100 dark:bg-red-900/20", isContaFiltrada ? "md:col-span-1" : "md:col-span-2")}>
+                    <h4 className="text-sm font-medium text-muted-foreground flex items-center"><Landmark className="w-4 h-4 mr-2" /> {tituloSaldoFinal}</h4>
+                    <p className={cn("text-xl font-bold mt-1", saldoFinalOuVariacao >= 0 ? "text-blue-600 dark:text-blue-400" : "text-red-600 dark:text-red-400")}>{formatCurrency(saldoFinalOuVariacao)}</p>
+                </div>
             </div>
         </CardContent>
       </Card>
