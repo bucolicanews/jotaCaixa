@@ -249,7 +249,7 @@ const PreencherContrato: React.FC = () => {
             // Mapeamento para o tipo Cliente[]
             combinedClients = (systemClientsData as any[]).map(sc => ({
                 id: sc.id,
-                empresa_id: ownerIdLogado,
+                proprietario_id: ownerIdLogado, // AJUSTE AQUI
                 nome: sc.nome,
                 razao_social: sc.razao_social || sc.nome,
                 nome_fantasia: sc.nome_fantasia || sc.nome,
@@ -273,7 +273,7 @@ const PreencherContrato: React.FC = () => {
         const { data: clientesCRData, error: clientesCRError } = await supabase
             .from('clientes')
             .select('*')
-            .eq('empresa_id', targetEmpresaId);
+            .eq('proprietario_id', targetEmpresaId); // AJUSTE AQUI
         if (clientesCRError) {
             showError('Erro ao carregar clientes de CR: ' + clientesCRError.message);
         } else if (clientesCRData) {
@@ -495,7 +495,7 @@ const PreencherContrato: React.FC = () => {
         if (isContractOwnerAdmin) {
             const clienteDataParaUpsert = {
                 id: clienteSelecionado.id,
-                empresa_id: empresaContratoId,
+                proprietario_id: empresaContratoId, // AJUSTE AQUI
                 nome: clienteSelecionado.nome,
                 documento: clienteSelecionado.documento,
                 email: clienteSelecionado.email,

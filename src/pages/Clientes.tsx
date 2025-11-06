@@ -99,10 +99,10 @@ const ClientesPage = () => {
 
     if (isAdmin) {
         if (filtroEmpresaId !== 'todos') {
-            queryCR = queryCR.eq('empresa_id', filtroEmpresaId);
+            queryCR = queryCR.eq('proprietario_id', filtroEmpresaId); // AJUSTE AQUI
         }
     } else if (ownerId) {
-        queryCR = queryCR.eq('empresa_id', ownerId);
+        queryCR = queryCR.eq('proprietario_id', ownerId); // AJUSTE AQUI
     } else {
         setClientesCR([]);
     }
@@ -357,7 +357,7 @@ const ClientesPage = () => {
                     <TableHead className="hidden md:table-cell">Razão Social</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Telefone</TableHead>
-                    {isAdmin && <TableHead>Empresa ID</TableHead>}
+                    {isAdmin && <TableHead>Proprietário ID</TableHead>}
                     <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
             </TableHeader>
@@ -375,7 +375,7 @@ const ClientesPage = () => {
                             <TableCell className="hidden md:table-cell text-sm text-muted-foreground">{cliente.razao_social || '-'}</TableCell>
                             <TableCell>{cliente.email || '-'}</TableCell>
                             <TableCell>{cliente.telefone || '-'}</TableCell>
-                            {isAdmin && <TableCell className="text-sm text-muted-foreground">{cliente.empresa_id || 'N/A'}</TableCell>}
+                            {isAdmin && <TableCell className="text-sm text-muted-foreground">{cliente.proprietario_id || 'N/A'}</TableCell>}
                             <TableCell className="text-right">
                                 <div className="flex justify-end space-x-1">
                                     <Button variant="ghost" size="sm" onClick={() => handleEditCR(cliente)}>

@@ -1,6 +1,6 @@
 export interface Cliente {
   id: string;
-  empresa_id: string;
+  proprietario_id: string;
   nome: string; // Usado como Nome Fantasia ou Nome Pessoal
   razao_social?: string | null;
   nome_fantasia?: string | null;

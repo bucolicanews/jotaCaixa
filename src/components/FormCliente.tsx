@@ -70,23 +70,23 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
   });
   
   const getOwnerIds = () => {
-    let empresaId: string | null = null;
+    let proprietarioId: string | null = null;
     
     if (role === 'Admin') {
-        empresaId = usuario?.id || null;
+        proprietarioId = usuario?.id || null;
     } else if (role === 'Cliente') {
-        empresaId = (perfil as ClienteProfile)?.id;
+        proprietarioId = (perfil as ClienteProfile)?.id;
     } else if (role === 'Usuario') {
-        empresaId = (perfil as UsuarioProfile)?.cliente_id;
+        proprietarioId = (perfil as UsuarioProfile)?.cliente_id;
     }
     
-    return { empresaId };
+    return { proprietarioId };
   };
 
   const onSubmit = async (values: FormValues) => {
-    const { empresaId } = getOwnerIds();
+    const { proprietarioId } = getOwnerIds();
     
-    if (!empresaId) {
+    if (!proprietarioId) {
       showError('Não foi possível identificar o proprietário. Não é possível salvar.');
       return;
     }
@@ -109,7 +109,7 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
       cidade: values.cidade || null,
       estado: values.estado || null,
       
-      empresa_id: empresaId,
+      proprietario_id: proprietarioId, // AJUSTE AQUI
     };
 
     let error = null;

@@ -121,7 +121,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
           let queryCR = supabase.from('clientes').select('id, nome').order('nome');
           
           // Se não for Admin, filtra pelo ownerId
-          queryCR = queryCR.eq('empresa_id', ownerId);
+          queryCR = queryCR.eq('proprietario_id', ownerId); // AJUSTE AQUI
           
           const { data: dataCR, error: errorCR } = await queryCR;
           
@@ -174,7 +174,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
       
       const clienteData = {
           id: values.cliente_id,
-          empresa_id: ownerId, // O Admin/Cliente logado é o gestor deste cliente de CR
+          proprietario_id: ownerId, // AJUSTE AQUI
           nome: clienteSelecionado.nome,
           documento: 'N/A', // Placeholder
           email: 'N/A', // Placeholder
@@ -285,7 +285,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
                 <FormItem><FormLabel>Intervalo (dias)</FormLabel><FormControl><Input type="number" placeholder="30" {...field} /></FormControl><FormMessage /></FormItem>
               )} />
               <FormField control={form.control} name="data_primeiro_vencimento" render={({ field }) => (
-                <FormItem className="flex flex-col"><FormLabel>1º Vencimento</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "dd/MM/yy") : <span>Data</span>}<CalendarIcon className="ml-auto h-4 w-4 opacity-50" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus /></PopoverContent></Popover><FormMessage /></FormItem>
+                <FormItem className="flex flex-col"><FormLabel>1º Vencimento</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "PPP", { locale: ptBR }) : <span>Escolha uma data</span>}<CalendarIcon className="ml-auto h-4 w-4 opacity-50" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus /></PopoverContent></Popover><FormMessage /></FormItem>
               )} />
             </div>
           )}
