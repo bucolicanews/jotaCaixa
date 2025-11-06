@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatCurrency } from '@/utils/formatters';
@@ -15,7 +15,7 @@ import BalancoPatrimonialPrint from './BalancoPatrimonialPrint';
 import { useSessao } from '@/hooks/use-sessao';
 import { ClienteProfile } from '@/types/usuario';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
-import Balanco1ColunaPrint from './Balanco1ColunaPrint'; // NOVO IMPORT
+import Balanco1ColunaPrint from './Balanco1ColunaPrint';
 
 interface BalancoPatrimonialDetalheProps {
   endDate: Date;
@@ -34,17 +34,11 @@ interface ContaBalanco {
 
 const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ endDate, filtroSomenteComSaldo }) => {
   const { perfil, role } = useSessao();
-  const { contas, totalAtivo, totalPassivo, totalPatrimonioLiquido, carregando } = useBalancoPatrimonial(endDate);
+  const { contas, totalAtivo, totalPassivo, totalPatrimonioLiquido, resultadoLiquido, carregando } = useBalancoPatrimonial(endDate);
   const { printContent } = usePrint();
   
   const empresaNome = role === 'Admin' ? 'Admin' : (perfil as ClienteProfile)?.nome || 'Empresa';
 
-  const resultadoLiquido = useMemo(() => {
-    return contas
-      .filter(c => c.tipo_principal === 'Resultado')
-      .reduce((sum, c) => sum + c.saldo_final, 0);
-  }, [contas]);
-  
   const totalPassivoPL = totalPassivo + totalPatrimonioLiquido + resultadoLiquido;
   const isBalanced = Math.abs(totalAtivo - totalPassivoPL) < 0.01;
   
@@ -57,9 +51,10 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
       const isSintetica = c.Analitica === 'Não';
       const isZero = Math.abs(c.saldo_final) < 0.01;
       
-      // Aplica o filtro de saldo
-      if (filtroSomenteComSaldo && isZero && !isSintetica) return null;
-      if (isZero && isSintetica) return null;
+      // Lógica de Omissão:
+      // Se o filtro "Somente com Saldo" estiver ativo, omite se o saldo for zero.
+      // Contas sintéticas com saldo zero devem ser omitidas se o filtro estiver ativo.
+      if (filtroSomenteComSaldo && isZero) return null;
 
       // Calcula o nível de indentação baseado no código da conta (ex: 1.1.1.1)
       const level = c.Conta.split('.').filter(p => p.length > 0).length;
@@ -78,8 +73,9 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
   };
   
   const handlePrint = (onlyWithBalance: boolean, formatType: '2colunas' | '1coluna') => {
+    // A filtragem é feita aqui antes de passar para o componente de impressão
     const contasParaImpressao = onlyWithBalance 
-        ? contas.filter(c => c.Analitica === 'Não' || Math.abs(c.saldo_final) >= 0.01)
+        ? contas.filter(c => Math.abs(c.saldo_final) >= 0.01 || c.Analitica === 'Não') // Mantém sintéticas mesmo se zero, mas o componente de impressão deve lidar com a omissão de sintéticas zero
         : contas;
         
     let printComponent;

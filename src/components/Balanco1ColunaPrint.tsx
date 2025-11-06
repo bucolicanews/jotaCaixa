@@ -42,7 +42,24 @@ const Balanco1ColunaPrint: React.FC<Balanco1ColunaPrintProps> = ({
       const isSintetica = c.Analitica === 'Não';
       const isZero = Math.abs(c.saldo_final) < 0.01;
       
-      if (!isSintetica && isZero) return null;
+      // A lista 'contas' já foi pré-filtrada no BalancoPatrimonialDetalhe se o filtro 'Somente Saldo' estiver ativo.
+      // A regra de filtragem no BalancoPatrimonialDetalhe é: omite se saldo for zero.
+      // Se o saldo for zero, mas a conta for sintética, ela só será omitida se o filtro 'Somente Saldo' estiver ativo.
+      
+      // Se o saldo for zero, e a conta for analítica, ela já foi omitida no BalancoPatrimonialDetalhe.
+      // Se o saldo for zero, e a conta for sintética, ela só deve ser omitida se o filtro 'Somente Saldo' estiver ativo.
+      // Como a lista 'contas' já vem filtrada, apenas renderizamos o que sobrou.
+      
+      // Para garantir que a lógica de omissão de sintéticas zero seja consistente com o BalancoPatrimonialDetalhe:
+      // Se o saldo for zero, e a conta for sintética, e o filtro 'Somente Saldo' foi usado, ela não deve estar aqui.
+      // Se o filtro 'Somente Saldo' NÃO foi usado, ela deve estar aqui, mesmo com saldo zero.
+      
+      // Para simplificar, vamos confiar que a lista 'contas' já está filtrada corretamente.
+      // Se o saldo for zero, e a conta for analítica, ela já foi removida.
+      // Se o saldo for zero, e a conta for sintética, ela só foi removida se o filtro 'Somente Saldo' foi usado.
+      
+      // Se o saldo for zero, e a conta for analítica, ela já foi removida.
+      if (isZero && c.Analitica === 'Sim') return null; // Redundante, mas seguro.
 
       const level = c.Conta.split('.').filter(p => p.length > 0).length;
       const paddingLeft = (level - 1) * 10;
