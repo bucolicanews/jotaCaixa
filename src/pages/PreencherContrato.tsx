@@ -61,7 +61,7 @@ const PreencherContrato: React.FC = () => {
   const [tipoConteudo, setTipoConteudo] = useState<TipoConteudo>('html'); 
   
   const [clienteSelecionadoId, setClienteSelecionadoId] = useState<string>('');
-  const [valorTotal, setValorTotal] = useState<number | ''>('');
+  const [valorTotal, setValorTotal] = useState<number>(0); // Inicializado como 0
   
   const [empresaContratoId, setEmpresaContratoId] = useState<string | null>(null); 
   
@@ -166,47 +166,66 @@ const PreencherContrato: React.FC = () => {
         initialEmpresaContratoId = contrato.empresa_id; // Sobrescreve o ID inicial
         
         setClienteSelecionadoId(contrato.cliente_id);
-        setValorTotal(contrato.valor_total);
+        setValorTotal(contrato.valor_total); // Define o valor total
         setValoresTags(contrato.valores_tags_preenchidos || {});
         
         const numParcelas = contrato.numero_parcelas;
         const valorTotalContrato = contrato.valor_total;
         
+        const tabelaContasReceber = contrato.empresa_id === ownerIdLogado && isAdmin ? 'admin_contas_receber' : 'contas_receber';
         const tabelaParcelas = contrato.empresa_id === ownerIdLogado && isAdmin ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
         
-        const { data: primeiraParcela } = await supabase
-            .from(tabelaParcelas)
-            .select('valor_parcela, data_vencimento')
-            .eq('conta_receber_id', contrato.id) 
-            .order('numero_parcela', { ascending: true })
+        // Busca a conta sintética para obter o ID da conta a receber
+        const { data: contaReceberData } = await supabase
+            .from(tabelaContasReceber)
+            .select('id')
+            .eq('contrato_gerado_id', contrato.id)
             .limit(1)
             .single();
             
-        if (numParcelas === 1) {
-            setTipoLancamento('unico');
-            setDataVencimentoUnico(primeiraParcela?.data_vencimento ? parseISO(primeiraParcela.data_vencimento) : undefined);
-            setNumeroParcelas(1);
-            setValorTotal(valorTotalContrato);
-        } else {
-            const valorParcela = primeiraParcela?.valor_parcela || 0;
-            
-            if (Math.abs(valorTotalContrato - (valorParcela * numParcelas)) < 0.01) {
-                setTipoLancamento('parcelar');
-                setValorTotal(valorTotalContrato); 
+        const contaReceberId = contaReceberData?.id;
+
+        if (contaReceberId) {
+            const { data: primeiraParcela } = await supabase
+                .from(tabelaParcelas)
+                .select('valor_parcela, data_vencimento')
+                .eq('conta_receber_id', contaReceberId) 
+                .order('numero_parcela', { ascending: true })
+                .limit(1)
+                .single();
+                
+            if (numParcelas === 1) {
+                setTipoLancamento('unico');
+                setDataVencimentoUnico(primeiraParcela?.data_vencimento ? parseISO(primeiraParcela.data_vencimento) : undefined);
+                setNumeroParcelas(1);
             } else {
-                setTipoLancamento('repetir');
-                setValorTotal(valorTotalContrato); // Deve ser o valor total, não o valor da parcela
+                const valorParcela = primeiraParcela?.valor_parcela || 0;
+                
+                // Determina se é parcelar ou repetir
+                if (Math.abs(valorTotalContrato - (valorParcela * numParcelas)) < 0.01) {
+                    setTipoLancamento('parcelar');
+                } else {
+                    setTipoLancamento('repetir');
+                }
+                
+                setNumeroParcelas(numParcelas);
+                setDataPrimeiroVencimento(primeiraParcela?.data_vencimento ? parseISO(primeiraParcela.data_vencimento) : undefined);
+                setIntervaloDias(contrato.dia_vencimento_parcela || 30);
             }
-            
-            setNumeroParcelas(numParcelas);
-            setDataPrimeiroVencimento(primeiraParcela?.data_vencimento ? parseISO(primeiraParcela.data_vencimento) : undefined);
-            setIntervaloDias(contrato.dia_vencimento_parcela || 30);
+        } else {
+            // Se não encontrou a conta a receber, assume valores padrão para evitar quebrar a UI
+            showError('Aviso: Não foi possível carregar as parcelas associadas. Verifique o lançamento financeiro.');
+            setTipoLancamento('unico');
+            setNumeroParcelas(1);
+            setValorTotal(contrato.valor_total);
         }
         
         setTipoConteudo(contrato.valores_tags_preenchidos?.tipo_conteudo || 'html');
     } else {
+        // Novo Contrato
         const isHtmlContent = modeloData?.conteudo_template?.trim().startsWith('<') ?? true;
         setTipoConteudo(isHtmlContent ? 'html' : 'texto');
+        setValorTotal(0);
     }
     
     setEmpresaContratoId(initialEmpresaContratoId);
@@ -458,7 +477,7 @@ const PreencherContrato: React.FC = () => {
     const valorNumerico = Number(valorTotal);
     const numParcelas = Number(numeroParcelas);
     
-    if (!modelo || !clienteSelecionadoId || valorTotal === '' || !empresaContratoId || valorNumerico <= 0) {
+    if (!modelo || !clienteSelecionadoId || valorNumerico <= 0 || !empresaContratoId) {
         showError('Preencha Cliente, Valor Total e Proprietário.');
         return;
     }
@@ -859,7 +878,7 @@ const PreencherContrato: React.FC = () => {
                 onClick={handlePreview} 
                 variant="outline"
                 className="flex-1 h-12"
-                disabled={!modelo || !clienteSelecionadoId || valorTotal === ''}
+                disabled={!modelo || !clienteSelecionadoId || valorTotal <= 0}
             >
                 <Eye className="mr-2 h-4 w-4" />
                 Visualizar Contrato
@@ -867,7 +886,7 @@ const PreencherContrato: React.FC = () => {
             <Button 
                 onClick={handleSalvarContrato} 
                 className="flex-1 h-12"
-                disabled={isSubmitting || !clienteSelecionadoId || valorTotal === ''}
+                disabled={isSubmitting || !clienteSelecionadoId || valorTotal <= 0}
             >
                 {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                 {isEditing ? 'Salvar Edição e Reajustar Contas' : 'Salvar e Gerar Contas a Receber'}
