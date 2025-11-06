@@ -176,33 +176,33 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
                 {/* Saldo Total (Sempre visível) */}
                 <div className="p-3 bg-gray-100 dark:bg-gray-800 rounded-lg">
                     <h4 className="text-sm font-medium text-muted-foreground flex items-center"><Wallet className="w-4 h-4 mr-2" /> Saldo Total (Contas)</h4>
-                    <p className={cn("text-xl font-bold mt-1", totalSaldo >= 0 ? 'text-green-600' : 'text-red-600')}>{formatCurrency(totalSaldo)}</p>
+                    <p className={cn("text-lg font-bold mt-1 truncate", totalSaldo >= 0 ? 'text-green-600' : 'text-red-600')}>{formatCurrency(totalSaldo)}</p>
                 </div>
                 
                 {/* Saldo Inicial (Apenas se conta filtrada) */}
                 {isContaFiltrada && (
-                    <div className="p-3 bg-orange-400/50 dark:bg-orange-900/50 rounded-lg text-white">
+                    <div className="p-3 bg-orange-600 dark:bg-orange-900 rounded-lg text-white">
                         <h4 className="text-sm font-medium flex items-center"><Landmark className="w-4 h-4 mr-2" /> Saldo Inicial (Conta)</h4>
-                        <p className={cn("text-xl font-bold mt-1", saldoInicialConta >= 0 ? 'text-white' : 'text-red-200')}>{formatCurrency(saldoInicialConta)}</p>
+                        <p className={cn("text-lg font-bold mt-1 truncate", saldoInicialConta >= 0 ? 'text-white' : 'text-red-200')}>{formatCurrency(saldoInicialConta)}</p>
                     </div>
                 )}
                 
                 {/* Entradas no Período */}
                 <div className="p-3 bg-green-100 dark:bg-green-900/20 rounded-lg">
                     <h4 className="text-sm font-medium text-green-700 dark:text-green-300 flex items-center"><ArrowUpCircle className="w-4 h-4 mr-2" /> Entradas no Período</h4>
-                    <p className="text-xl font-bold text-green-600 dark:text-green-400 mt-1">{formatCurrency(totalEntradas)}</p>
+                    <p className="text-lg font-bold text-green-600 dark:text-green-400 mt-1 truncate">{formatCurrency(totalEntradas)}</p>
                 </div>
                 
                 {/* Saídas no Período */}
                 <div className="p-3 bg-red-100 dark:bg-red-900/20 rounded-lg">
                     <h4 className="text-sm font-medium text-red-700 dark:text-red-300 flex items-center"><ArrowDownCircle className="w-4 h-4 mr-2" /> Saídas no Período</h4>
-                    <p className="text-xl font-bold text-red-600 dark:text-red-400 mt-1">{formatCurrency(totalSaidas)}</p>
+                    <p className="text-lg font-bold text-red-600 dark:text-red-400 mt-1 truncate">{formatCurrency(totalSaidas)}</p>
                 </div>
                 
                 {/* Saldo Final / Variação Líquida (Ocupa o restante da linha) */}
-                <div className={cn("p-3 rounded-lg", saldoFinalOuVariacao >= 0 ? "bg-blue-100 dark:bg-blue-900/20" : "bg-red-100 dark:bg-red-900/20")}>
+                <div className={cn("p-3 rounded-lg", saldoFinalOuVariacao >= 0 ? "bg-blue-100 dark:bg-blue-900/20" : "bg-red-100 dark:bg-red-900/20", isContaFiltrada ? "md:col-span-1" : "md:col-span-2")}>
                     <h4 className="text-sm font-medium text-muted-foreground flex items-center"><Landmark className="w-4 h-4 mr-2" /> {tituloSaldoFinal}</h4>
-                    <p className={cn("text-xl font-bold mt-1", saldoFinalOuVariacao >= 0 ? "text-blue-600 dark:text-blue-400" : "text-red-600 dark:text-red-400")}>{formatCurrency(saldoFinalOuVariacao)}</p>
+                    <p className={cn("text-lg font-bold mt-1 truncate", saldoFinalOuVariacao >= 0 ? "text-blue-600 dark:text-blue-400" : "text-red-600 dark:text-red-400")}>{formatCurrency(saldoFinalOuVariacao)}</p>
                 </div>
             </div>
         </CardContent>
