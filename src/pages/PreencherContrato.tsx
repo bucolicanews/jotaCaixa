@@ -195,7 +195,7 @@ const PreencherContrato: React.FC = () => {
                 setValorTotal(valorTotalContrato); 
             } else {
                 setTipoLancamento('repetir');
-                setValorTotal(valorParcela); 
+                setValorTotal(valorTotalContrato); // Deve ser o valor total, não o valor da parcela
             }
             
             setNumeroParcelas(numParcelas);
@@ -238,7 +238,7 @@ const PreencherContrato: React.FC = () => {
         // Busca na tbl_clientes onde admin_id é o ID do Admin logado
         const { data: systemClientsData, error: systemClientsError } = await supabase
             .from('tbl_clientes')
-            .select('id, nome, cpf, email, telefone, razao_social, nome_fantasia, cep, endereco, numero, complemento, bairro, cidade, estado, criado_em')
+            .select('id, nome, email, cpf, rg, nome_mae, nome_pai, telefone, cep, endereco, numero, complemento, bairro, cidade, estado, criado_em')
             .eq('admin_id', ownerIdLogado) // FILTRO CORRIGIDO
             .eq('aprovado', true)
             .order('nome');
@@ -251,12 +251,12 @@ const PreencherContrato: React.FC = () => {
                 id: sc.id,
                 proprietario_id: ownerIdLogado, // AJUSTE AQUI
                 nome: sc.nome,
-                razao_social: sc.razao_social || sc.nome,
-                nome_fantasia: sc.nome_fantasia || sc.nome,
+                razao_social: sc.nome, // Usando nome como fallback
+                nome_fantasia: sc.nome, // Usando nome como fallback
                 documento: sc.cpf || null, 
                 email: sc.email || null,
                 telefone: sc.telefone || null,
-                telefone_fixo: null, // Removido o acesso a esta coluna
+                telefone_fixo: null, 
                 cep: sc.cep || null,
                 endereco: sc.endereco || null,
                 numero: sc.numero || null,
