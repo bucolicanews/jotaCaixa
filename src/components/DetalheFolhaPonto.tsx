@@ -296,12 +296,12 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
         <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4">
           
           {/* LINHA 1: JORNADA E SALDO */}
-          <div className="col-span-2 md:col-span-4 grid grid-cols-4 gap-4">
-            <div><p className="text-sm text-muted-foreground">Salário Base</p><p className="font-bold text-lg">{formatCurrency(salario)}</p></div>
-            <div><p className="text-sm text-muted-foreground">Jornada Mensal</p><p className="font-bold text-lg">{horas_mensais}h</p></div>
-            <div><p className="text-sm text-muted-foreground">Horas Trabalhadas</p><p className="font-bold text-lg">{formatarHoras(totalMinutosTrabalhados)}</p></div>
+          <div className="col-span-2 md:col-span-4 grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div><p className="text-xs text-muted-foreground">Salário Base</p><p className="font-bold text-lg">{formatCurrency(salario)}</p></div>
+            <div><p className="text-xs text-muted-foreground">Jornada Mensal</p><p className="font-bold text-lg">{horas_mensais}h</p></div>
+            <div><p className="text-xs text-muted-foreground">Horas Trabalhadas</p><p className="font-bold text-lg">{formatarHoras(totalMinutosTrabalhados)}</p></div>
             <div>
-                <p className="text-sm text-muted-foreground">{isExtraHours ? 'Horas Extras' : 'Diferença (Saldo)'}</p>
+                <p className="text-xs text-muted-foreground">{isExtraHours ? 'Horas Extras' : 'Diferença (Saldo)'}</p>
                 <p className={cn("font-bold text-lg", isExtraHours ? "text-green-600" : "text-red-500")}>
                     {isExtraHours ? displayExtraHours : displayDifference}
                 </p>
@@ -316,10 +316,17 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
         <CardContent>
           <div className="overflow-x-auto">
             <Table>
-              <TableHeader><TableRow><TableHead className="w-[120px]">Data</TableHead><TableHead>Registros</TableHead><TableHead className="text-right">Total Dia</TableHead></TableRow></TableHeader>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[100px] md:w-[120px]">Data</TableHead>
+                  <TableHead className="hidden md:table-cell">Registros</TableHead>
+                  <TableHead className="w-[100px] text-right">Total Dia</TableHead>
+                  <TableHead className="w-[100px] text-right">Ações</TableHead>
+                </TableRow>
+              </TableHeader>
               <TableBody>
                 {todosOsDiasDoMes.length === 0 ? (
-                    <TableRow><TableCell colSpan={3} className="text-center py-4 text-muted-foreground">Nenhum dia encontrado para este mês.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={4} className="text-center py-4 text-muted-foreground">Nenhum dia encontrado para este mês.</TableCell></TableRow>
                 ) : (
                     todosOsDiasDoMes.map(data => {
                         const diaString = format(data, 'yyyy-MM-dd');
@@ -399,8 +406,13 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
 
                         return (
                             <TableRow key={diaString} className={rowClassName}>
-                                <TableCell className="font-medium">{format(data, 'dd/MM (EEE)', { locale: ptBR })}</TableCell>
-                                <TableCell>
+                                <TableCell className="font-medium text-xs md:text-sm">
+                                    {format(data, 'dd/MM')}
+                                    <span className="block text-muted-foreground text-[10px] md:hidden">{format(data, '(EEE)', { locale: ptBR })}</span>
+                                </TableCell>
+                                
+                                {/* Coluna de Registros (Oculta em Mobile) */}
+                                <TableCell className="hidden md:table-cell">
                                     <div className="flex flex-wrap gap-2 items-center">
                                         {/* AVISO DE FOLGA TRABALHADA (Sempre visível se trabalhou na folga) */}
                                         {isFolgaFixa && hasPontoRecords && (
@@ -483,9 +495,21 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
                                             );
                                         })}
                                         
-                                        {/* Ações de Edição/Exclusão */}
+                                        {/* Renderiza o botão de Gerenciar Folga Trabalhada se necessário */}
+                                        {actionButton}
+                                    </div>
+                                </TableCell>
+                                
+                                {/* Coluna Total Dia */}
+                                <TableCell className="text-right font-semibold text-xs md:text-sm">
+                                    {totalDiaDisplay}
+                                </TableCell>
+                                
+                                {/* Coluna Ações (Visível em Mobile) */}
+                                <TableCell className="text-right min-w-[100px]">
+                                    <div className="flex justify-end space-x-1">
                                         {canEdit && !isDiaFuturo && !isFerias && !needsManagement && (
-                                            <div className="flex space-x-1 ml-2">
+                                            <>
                                                 {/* Edição/Exclusão de Falta/Abono/Compensação/Extra100 */}
                                                 {registroFaltaAbonoCompensacao && (
                                                     <>
@@ -521,34 +545,41 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
                                                 {hasPontoRecordsOnly && (
                                                     <Button 
                                                         variant="outline" 
-                                                        size="sm" 
+                                                        size="icon" 
                                                         onClick={() => onEditRegistro(data)} // Ajuste de Ponto (Entrada/Saída)
                                                         title="Ajustar Ponto"
-                                                        className="h-6 text-xs"
+                                                        className="h-6 w-6"
                                                     >
-                                                        <Edit className="w-3 h-3 mr-1" /> Ajustar Ponto
+                                                        <Edit className="w-3 h-3" />
                                                     </Button>
                                                 )}
                                                 {/* Botão de Marcar Falta (Aparece se não houver registro e não for folga fixa/ferias/futuro) */}
                                                 {!hasPontoRecordsOnly && !registroFaltaAbonoCompensacao && !isFolgaFixa && (
                                                     <Button 
                                                         variant="destructive" 
-                                                        size="sm" 
+                                                        size="icon" 
                                                         onClick={() => onEditFaltaAbono(null, data)} // Marcar Falta (registro é null)
                                                         title="Marcar Falta"
-                                                        className="h-6 text-xs"
+                                                        className="h-6 w-6"
                                                     >
-                                                        <CalendarX className="w-3 h-3 mr-1" /> Marcar Falta
+                                                        <CalendarX className="w-3 h-3" />
                                                     </Button>
                                                 )}
-                                            </div>
+                                            </>
                                         )}
-                                        {/* Renderiza o botão de Gerenciar Folga Trabalhada se necessário */}
-                                        {actionButton}
+                                        {/* Renderiza o botão de Gerenciar Folga Trabalhada se necessário (apenas em desktop) */}
+                                        {needsManagement && canEdit && (
+                                            <Button 
+                                                variant="default" 
+                                                size="icon" 
+                                                onClick={() => onManageWorkedDayOff(data, registros.filter(r => r.tipo === 'Entrada' || r.tipo === 'Saida'))}
+                                                title="Gerenciar Compensação"
+                                                className="h-6 w-6 bg-yellow-600 hover:bg-yellow-700"
+                                            >
+                                                <AlertTriangle className="w-3 h-3" />
+                                            </Button>
+                                        )}
                                     </div>
-                                </TableCell>
-                                <TableCell className="text-right font-semibold">
-                                    {totalDiaDisplay}
                                 </TableCell>
                             </TableRow>
                         );
