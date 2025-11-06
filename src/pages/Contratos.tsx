@@ -5,7 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PlusCircle, FileSignature, Loader2, Eye, Edit, Trash2, Search, Filter } from 'lucide-react';
 import { useSessao } from '@/hooks/use-sessao';
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { ContratoGerado } from '@/types/contratos';
@@ -21,6 +21,7 @@ import { useDebounce } from '@/hooks/use-debounce';
 const Contratos = () => {
   const { role, perfil, usuario, carregando: carregandoSessao } = useSessao();
   const navigate = useNavigate();
+  const location = useLocation(); // Adicionando useLocation
   const [contratos, setContratos] = useState<ContratoGerado[]>([]);
   const [carregandoContratos, setCarregandoContratos] = useState(true);
   const [contratoSelecionado, setContratoSelecionado] = useState<ContratoGerado | null>(null);
@@ -79,10 +80,11 @@ const Contratos = () => {
   }, [empresaId, isAdmin]);
 
   useEffect(() => {
+    // Adicionando location.key como dependência para forçar a re-execução
     if (!carregandoSessao && (isAdmin || empresaId)) {
         buscarContratos();
     }
-  }, [carregandoSessao, isAdmin, empresaId, buscarContratos]);
+  }, [carregandoSessao, isAdmin, empresaId, buscarContratos, location.key]); // Adicionado location.key
   
   const handleOpenAcoes = (contrato: ContratoGerado) => {
       setContratoSelecionado(contrato);

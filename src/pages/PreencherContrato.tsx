@@ -223,8 +223,9 @@ const PreencherContrato: React.FC = () => {
                     setIntervaloDias(contrato.dia_vencimento_parcela || 30);
                 }
             } else {
-                // Fallback: Usa os dados do contrato para preencher o formulário
+                // Se a conta sintética existe, mas não tem parcelas (erro de integridade)
                 console.error('LOG: Conta sintética encontrada, mas sem parcelas associadas. Usando dados do contrato.');
+                // Fallback: Usa os dados do contrato para preencher o formulário
                 if (numParcelas === 1) {
                     setTipoLancamento('unico');
                     setDataVencimentoUnico(contrato.data_inicio ? parseISO(contrato.data_inicio) : undefined);
@@ -236,8 +237,9 @@ const PreencherContrato: React.FC = () => {
                 }
             }
         } else {
-            // Fallback: Usa os dados do contrato para preencher o formulário
+            // Se não encontrou a conta a receber (registro ausente)
             console.error('LOG: Conta sintética não encontrada. Usando dados do contrato.');
+            // Fallback: Usa os dados do contrato para preencher o formulário
             if (numParcelas === 1) {
                 setTipoLancamento('unico');
                 setDataVencimentoUnico(contrato.data_inicio ? parseISO(contrato.data_inicio) : undefined);
@@ -724,9 +726,9 @@ const PreencherContrato: React.FC = () => {
     <LayoutPrincipal>
       <div className="flex items-center mb-6">
         <Button 
-            onClick={() => navigate('/contratos')} 
+            onClick={() => navigate('/contratos', { replace: true })} 
             variant="link" 
-            type="button" // Adicionado type="button"
+            type="button"
             className="text-muted-foreground hover:text-primary flex items-center mr-4 p-0 h-auto"
         >
             <ChevronLeft className="w-5 h-5" />
