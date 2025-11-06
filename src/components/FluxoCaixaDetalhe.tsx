@@ -13,8 +13,7 @@ import { useDebounce } from '@/hooks/use-debounce';
 import { SaldoContaDetalhada } from '@/types/saldo-conta';
 import { DateRangePicker } from './DateRangePicker';
 import { DateRange } from 'react-day-picker';
-import { format, subDays } from 'date-fns';
-import useSaldoContaCalculado from '@/hooks/use-saldo-conta-calculado'; // Importando o hook completo
+import { format } from 'date-fns';
 
 interface Lancamento {
   id: string;
@@ -40,11 +39,12 @@ interface FluxoCaixaDetalheProps {
 }
 
 const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas, totalSaldo }) => {
-  const { calcularSaldoAcumulado } = useSaldoContaCalculado('todos', 'todos', ''); // Usando o hook para a função RPC
+  // Removendo a dependência de calcularSaldoAcumulado, pois não será mais usado para o resumo
+  // const { calcularSaldoAcumulado } = useSaldoContaCalculado('todos', 'todos', ''); 
   
   const [lancamentos, setLancamentos] = useState<Lancamento[]>([]);
   const [loadingLancamentos, setLoadingLancamentos] = useState(true);
-  const [saldoInicialPeriodo, setSaldoInicialPeriodo] = useState(0); // NOVO ESTADO
+  // Removendo saldoInicialPeriodo
   
   // Filtros
   const [filtroContaId, setFiltroContaId] = useState('todos');
@@ -63,24 +63,11 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
         
     if (contasFiltradasIds.length === 0) {
         setLancamentos([]);
-        setSaldoInicialPeriodo(0);
         setLoadingLancamentos(false);
         return;
     }
     
-    // 2. Calcular o Saldo Inicial do Período
-    let saldoInicial = 0;
-    if (filtroPeriodo?.from) {
-        // Saldo acumulado até o dia anterior ao início do filtro
-        const dataCorte = subDays(filtroPeriodo.from, 0); // Usamos a data de início do filtro
-        saldoInicial = await calcularSaldoAcumulado(contasFiltradasIds, dataCorte);
-    } else {
-        // Se não houver filtro de data, o saldo inicial é o saldo total atual
-        saldoInicial = totalSaldo;
-    }
-    setSaldoInicialPeriodo(saldoInicial);
-
-    // 3. Buscar Lançamentos DENTRO do Período
+    // 2. Buscar Lançamentos DENTRO do Período
     let query = supabase
       .from('lancamentos')
       .select(`
@@ -121,7 +108,7 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
       setLancamentos(mappedData);
     }
     setLoadingLancamentos(false);
-  }, [empresaId, filtroContaId, filtroTipo, filtroTextoDebounced, filtroPeriodo, contas, totalSaldo, calcularSaldoAcumulado]);
+  }, [empresaId, filtroContaId, filtroTipo, filtroTextoDebounced, filtroPeriodo, contas]);
 
   useEffect(() => {
     fetchLancamentos();
@@ -130,8 +117,8 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
   const totalEntradas = lancamentos.filter(l => l.tipo === 'Entrada').reduce((sum, l) => sum + l.valor, 0);
   const totalSaidas = lancamentos.filter(l => l.tipo === 'Saida').reduce((sum, l) => sum + l.valor, 0);
   
-  // Saldo Final do Período = Saldo Inicial do Período + Entradas - Saídas
-  const saldoFinalPeriodo = saldoInicialPeriodo + totalEntradas - totalSaidas;
+  // Saldo do Período (Variação Líquida) = Entradas - Saídas
+  const variacaoLiquida = totalEntradas - totalSaidas;
 
   return (
     <div className="space-y-6">
@@ -141,8 +128,8 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
         <CardHeader><CardTitle className="text-xl flex items-center"><Banknote className="w-5 h-5 mr-2" /> Resumo de Saldo</CardTitle></CardHeader>
         <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="p-3 bg-gray-100 dark:bg-gray-800 rounded-lg">
-                <h4 className="text-sm font-medium text-muted-foreground flex items-center"><Wallet className="w-4 h-4 mr-2" /> Saldo Inicial do Período</h4>
-                <p className={cn("text-xl font-bold mt-1", saldoInicialPeriodo >= 0 ? 'text-green-600' : 'text-red-600')}>{formatCurrency(saldoInicialPeriodo)}</p>
+                <h4 className="text-sm font-medium text-muted-foreground flex items-center"><Wallet className="w-4 h-4 mr-2" /> Saldo Total (Contas)</h4>
+                <p className={cn("text-xl font-bold mt-1", totalSaldo >= 0 ? 'text-green-600' : 'text-red-600')}>{formatCurrency(totalSaldo)}</p>
             </div>
             <div className="p-3 bg-green-100 dark:bg-green-900/20 rounded-lg">
                 <h4 className="text-sm font-medium text-green-700 dark:text-green-300 flex items-center"><ArrowUpCircle className="w-4 h-4 mr-2" /> Entradas no Período</h4>
@@ -152,9 +139,9 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
                 <h4 className="text-sm font-medium text-red-700 dark:text-red-300 flex items-center"><ArrowDownCircle className="w-4 h-4 mr-2" /> Saídas no Período</h4>
                 <p className="text-xl font-bold text-red-600 dark:text-red-400 mt-1">{formatCurrency(totalSaidas)}</p>
             </div>
-            <div className={cn("p-3 rounded-lg", saldoFinalPeriodo >= 0 ? "bg-blue-100 dark:bg-blue-900/20" : "bg-red-100 dark:bg-red-900/20")}>
-                <h4 className="text-sm font-medium text-muted-foreground flex items-center"><Landmark className="w-4 h-4 mr-2" /> Saldo Final do Período</h4>
-                <p className={cn("text-xl font-bold mt-1", saldoFinalPeriodo >= 0 ? "text-blue-600 dark:text-blue-400" : "text-red-600 dark:text-red-400")}>{formatCurrency(saldoFinalPeriodo)}</p>
+            <div className={cn("p-3 rounded-lg", variacaoLiquida >= 0 ? "bg-blue-100 dark:bg-blue-900/20" : "bg-red-100 dark:bg-red-900/20")}>
+                <h4 className="text-sm font-medium text-muted-foreground flex items-center"><Landmark className="w-4 h-4 mr-2" /> Variação Líquida do Período</h4>
+                <p className={cn("text-xl font-bold mt-1", variacaoLiquida >= 0 ? "text-blue-600 dark:text-blue-400" : "text-red-600 dark:text-red-400")}>{formatCurrency(variacaoLiquida)}</p>
             </div>
         </CardContent>
       </Card>
