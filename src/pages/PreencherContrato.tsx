@@ -113,12 +113,12 @@ const PreencherContrato: React.FC = () => {
     if (isAdmin) {
         const { data: clientesData, error: clientesError } = await supabase
             .from('tbl_clientes')
-            .select('id, nome, documento, email, telefone, telefone_fixo, razao_social, nome_fantasia, cep, endereco, numero, complemento, bairro, cidade, estado, criado_em')
+            .select('id, nome, cpf, email, telefone, telefone_fixo, razao_social, nome_fantasia, cep, endereco, numero, complemento, bairro, cidade, estado, criado_em')
             .eq('aprovado', true)
             .order('nome');
             
         if (clientesError) {
-            showError('Erro ao carregar clientes para seleção: ' + clientesError.message);
+            showError('Erro ao carregar clientes do sistema: ' + clientesError.message);
         } else {
             const adminOption: EmpresaContrato = { id: ownerIdLogado, nome: 'Meus Contratos (Admin)' };
             const allClients = [adminOption, ...(clientesData as EmpresaContrato[])];
@@ -176,7 +176,7 @@ const PreencherContrato: React.FC = () => {
         const numParcelas = contrato.numero_parcelas;
         const valorTotalContrato = contrato.valor_total;
         
-        const tabelaContasReceber = contrato.empresa_id === ownerIdLogado && isAdmin ? 'admin_contas_receber' : 'contas_receber';
+        // Determina as tabelas corretas para buscar a parcela
         const tabelaParcelas = contrato.empresa_id === ownerIdLogado && isAdmin ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
         
         const { data: primeiraParcela } = await supabase
@@ -220,7 +220,7 @@ const PreencherContrato: React.FC = () => {
             // Admin criando um contrato para si mesmo. O cliente DEVE ser uma empresa do sistema (tbl_clientes).
             const { data: systemClientsData, error: systemClientsError } = await supabase
                 .from('tbl_clientes')
-                .select('id, nome, documento, email, telefone, telefone_fixo, razao_social, nome_fantasia, cep, endereco, numero, complemento, bairro, cidade, estado, criado_em')
+                .select('id, nome, cpf, email, telefone, telefone_fixo, razao_social, nome_fantasia, cep, endereco, numero, complemento, bairro, cidade, estado, criado_em')
                 .eq('aprovado', true);
             if (systemClientsError) {
                 showError('Erro ao carregar clientes do sistema: ' + systemClientsError.message);
@@ -231,7 +231,7 @@ const PreencherContrato: React.FC = () => {
                     nome: sc.nome,
                     razao_social: sc.razao_social || sc.nome,
                     nome_fantasia: sc.nome_fantasia || sc.nome,
-                    documento: sc.documento || null,
+                    documento: sc.cpf || null, // Usando cpf como documento
                     email: sc.email || null,
                     telefone: sc.telefone || null,
                     telefone_fixo: sc.telefone_fixo || null,
