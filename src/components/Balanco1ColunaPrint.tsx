@@ -42,7 +42,7 @@ const Balanco1ColunaPrint: React.FC<Balanco1ColunaPrintProps> = ({
       const isSintetica = c.Analitica === 'Não';
       const isZero = Math.abs(c.saldo_final) < 0.01;
       
-      if (isZero && isSintetica) return null;
+      if (!isSintetica && isZero) return null;
 
       const level = c.Conta.split('.').filter(p => p.length > 0).length;
       const paddingLeft = (level - 1) * 10;
@@ -109,8 +109,6 @@ const Balanco1ColunaPrint: React.FC<Balanco1ColunaPrintProps> = ({
   
   const totalReceita = receitaContas.reduce((sum, c) => sum + c.saldo_final, 0);
   const totalDespesa = despesaContas.reduce((sum, c) => sum + c.saldo_final, 0);
-  // Usamos a prop resultadoLiquido, que é equivalente a (totalReceita + totalDespesa)
-  // const lucroPrejuizo = totalReceita + totalDespesa; 
 
   return (
     <div className="print-container">

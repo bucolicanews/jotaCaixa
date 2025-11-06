@@ -31,6 +31,14 @@ const BalancoPatrimonialPrint: React.FC<BalancoPatrimonialPrintProps> = ({
   isBalanced,
 }) => {
   
+  // Função para renderizar assinaturas
+  const renderSignatures = () => (
+    <div className="print-signatures" style={{ marginTop: '50px', pageBreakBefore: 'avoid' }}>
+        <div className="print-signature-line">Assinatura do Contador</div>
+        <div className="print-signature-line">Assinatura da Empresa ({empresaNome})</div>
+    </div>
+  );
+
   // A lista de contas já vem pré-filtrada pelo BalancoPatrimonialDetalhe
   const getContasPorTipo = (tipo: ContaBalanco['tipo_principal']) => {
     return contas.filter(c => c.tipo_principal === tipo);
@@ -41,6 +49,9 @@ const BalancoPatrimonialPrint: React.FC<BalancoPatrimonialPrintProps> = ({
       const isSintetica = c.Analitica === 'Não';
       const isZero = Math.abs(c.saldo_final) < 0.01;
       
+      // A lógica de filtro de saldo deve ser feita no BalancoPatrimonialDetalhe.
+      // Aqui, apenas garantimos que contas sintéticas com saldo zero sejam omitidas,
+      // mas se o filtro 'somente com saldo' estiver ativo, a lista 'contas' já virá filtrada.
       if (isZero && isSintetica) return null;
 
       // Calcula o nível de indentação baseado no código da conta (ex: 1.1.1.1)
@@ -126,6 +137,8 @@ const BalancoPatrimonialPrint: React.FC<BalancoPatrimonialPrintProps> = ({
           </table>
         </div>
       </div>
+      
+      {renderSignatures()}
     </div>
   );
 };
