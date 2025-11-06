@@ -69,7 +69,7 @@ const AssinarContrato: React.FC = () => {
     const filePath = `${contrato!.id}/${fileName}`;
 
     const { error } = await supabase.storage
-      .from('documentos-admissao') // Usando o bucket de documentos
+      .from('contrato-assinaturas') // <-- NOVO NOME DO BUCKET
       .upload(filePath, file, {
         cacheControl: '3600',
         upsert: false,
@@ -80,7 +80,7 @@ const AssinarContrato: React.FC = () => {
       throw new Error('Falha ao fazer upload da selfie: ' + error.message);
     }
 
-    const { data: publicUrlData } = supabase.storage.from('documentos-admissao').getPublicUrl(filePath);
+    const { data: publicUrlData } = supabase.storage.from('contrato-assinaturas').getPublicUrl(filePath);
     return publicUrlData.publicUrl;
   };
 
