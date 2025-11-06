@@ -421,10 +421,10 @@ const ContasReceber = () => {
       />
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full mt-4">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="parcela_sintetica">Resumo (Sintético)</TabsTrigger>
-          <TabsTrigger value="parcelas">Parcelas (Analítico)</TabsTrigger>
-          <TabsTrigger value="recebimentos">Recebimentos (Histórico)</TabsTrigger>
+        <TabsList className="flex flex-wrap justify-start w-full h-auto p-1">
+          <TabsTrigger value="parcela_sintetica" className="flex-1 sm:flex-auto">Resumo (Sintético)</TabsTrigger>
+          <TabsTrigger value="parcelas" className="flex-1 sm:flex-auto">Parcelas (Analítico)</TabsTrigger>
+          <TabsTrigger value="recebimentos" className="flex-1 sm:flex-auto">Recebimentos (Histórico)</TabsTrigger>
         </TabsList>
         
         {/* ABA 1: RESUMO (SINTÉTICO) */}
