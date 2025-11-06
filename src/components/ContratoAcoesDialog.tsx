@@ -279,7 +279,7 @@ const ContratoAcoesDialog: React.FC<ContratoAcoesDialogProps> = ({ contrato, ope
                             <AlertDialogHeader>
                                 <AlertDialogTitle>Desbloquear Contrato e Reativar Parcelas?</AlertDialogTitle>
                                 <AlertDialogDescription>
-                                    Esta ação irá reverter o status do contrato e **reabrir todas as parcelas** que foram canceladas devido ao bloqueio.
+                                    Esta ação irá reverter o status do contrato para 'pendente de assinatura' (ou 'ativo') e **reabrir todas as parcelas** que foram marcadas como canceladas devido ao bloqueio.
                                 </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
@@ -301,7 +301,7 @@ const ContratoAcoesDialog: React.FC<ContratoAcoesDialogProps> = ({ contrato, ope
                             <AlertDialogHeader>
                                 <AlertDialogTitle>Bloquear Contrato e Cancelar Parcelas?</AlertDialogTitle>
                                 <AlertDialogDescription>
-                                    Esta ação irá marcar o contrato como 'cancelado' e **cancelar todas as parcelas pendentes** associadas. Esta ação é irreversível.
+                                    Esta ação irá marcar o contrato como 'cancelado' e **marcar como canceladas todas as parcelas pendentes** associadas. Esta ação é reversível através do botão 'Desbloquear'.
                                 </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
