@@ -10,7 +10,6 @@ import { format } from 'date-fns';
 interface ContaBalanco extends PlanoContas {
   saldo_final: number;
   tipo_principal: 'Ativo' | 'Passivo' | 'Patrimonio Liquido' | 'Resultado' | 'Outros';
-  sub_tipo: 'Circulante' | 'Nao Circulante' | 'N/A';
 }
 
 interface BalancoData {
@@ -18,26 +17,16 @@ interface BalancoData {
   totalAtivo: number;
   totalPassivo: number;
   totalPatrimonioLiquido: number;
-  resultadoLiquido: number;
   carregando: boolean;
   refetch: () => void;
 }
 
 const getTipoPrincipal = (conta: string): ContaBalanco['tipo_principal'] => {
   if (conta.startsWith('1')) return 'Ativo';
-  if (conta.startsWith('2.1')) return 'Passivo'; // Passivo (2.1)
-  if (conta.startsWith('2.2')) return 'Passivo'; // Passivo (2.2)
+  if (conta.startsWith('2')) return 'Passivo';
   if (conta.startsWith('3')) return 'Patrimonio Liquido';
   if (conta.startsWith('4') || conta.startsWith('5')) return 'Resultado';
   return 'Outros';
-};
-
-const getSubTipo = (conta: string): ContaBalanco['sub_tipo'] => {
-    if (conta.startsWith('1.1')) return 'Circulante'; // Ativo Circulante
-    if (conta.startsWith('1.2')) return 'Nao Circulante'; // Ativo Não Circulante
-    if (conta.startsWith('2.1')) return 'Circulante'; // Passivo Circulante
-    if (conta.startsWith('2.2')) return 'Nao Circulante'; // Passivo Não Circulante
-    return 'N/A';
 };
 
 export function useBalancoPatrimonial(endDate: Date | undefined): BalancoData {
@@ -118,8 +107,11 @@ export function useBalancoPatrimonial(endDate: Date | undefined): BalancoData {
         const saldoInicial = saldoInicialMap[pc.id] || 0;
         const movimentos = movimentosMap[pc.id] || 0;
         
+        // Saldo Final = Saldo Inicial (se for conta de saldo) + Movimentos
         let saldo_final = saldoInicial + movimentos;
         
+        // Se for conta de Resultado (Receita/Despesa), o saldo inicial é 0, e só conta os movimentos.
+        // O saldo final é o movimento acumulado.
         if (pc.is_conta_resultado) {
             saldo_final = movimentos;
         }
@@ -128,7 +120,6 @@ export function useBalancoPatrimonial(endDate: Date | undefined): BalancoData {
           ...pc,
           saldo_final,
           tipo_principal: getTipoPrincipal(pc.Conta),
-          sub_tipo: getSubTipo(pc.Conta),
         };
       });
       
@@ -161,17 +152,12 @@ export function useBalancoPatrimonial(endDate: Date | undefined): BalancoData {
   const totalPatrimonioLiquido = contasBalanco
     .filter(c => c.tipo_principal === 'Patrimonio Liquido')
     .reduce((sum, c) => sum + c.saldo_final, 0);
-    
-  const resultadoLiquido = contasBalanco
-    .filter(c => c.tipo_principal === 'Resultado')
-    .reduce((sum, c) => sum + c.saldo_final, 0);
 
   return {
     contas: contasBalanco,
     totalAtivo,
     totalPassivo,
     totalPatrimonioLiquido,
-    resultadoLiquido,
     carregando,
     refetch,
   };
