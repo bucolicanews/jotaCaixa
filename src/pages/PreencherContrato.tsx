@@ -113,7 +113,7 @@ const PreencherContrato: React.FC = () => {
     if (isAdmin) {
         const { data: clientesData, error: clientesError } = await supabase
             .from('tbl_clientes')
-            .select('id, nome, documento, email, cep, endereco, numero, complemento, bairro, cidade, estado, razao_social, nome_fantasia, telefone, telefone_fixo')
+            .select('id, nome, documento, email, telefone, telefone_fixo, razao_social, nome_fantasia, cep, endereco, numero, complemento, bairro, cidade, estado, criado_em')
             .eq('aprovado', true)
             .order('nome');
             
