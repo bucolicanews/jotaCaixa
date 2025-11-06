@@ -549,7 +549,7 @@ const ContasReceber = () => {
                                             onClick={() => handleOpenPagamento(p)} 
                                             disabled={isPaga}
                                         >
-                                            <BadgeDollarSign className="w-4 h-4 mr-2" /> Pagar
+                                            <BadgeDollarSign className="w-4 h-4 mr-2" /> Receber
                                         </Button>
                                     </TableCell>
                                     <TableCell className="font-medium">{clienteNome}</TableCell>
