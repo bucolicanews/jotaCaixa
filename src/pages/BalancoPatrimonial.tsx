@@ -7,6 +7,8 @@ import { DateRangePicker } from '@/components/DateRangePicker';
 import { DateRange } from 'react-day-picker';
 import BalancoPatrimonialDetalhe from '@/components/BalancoPatrimonialDetalhe';
 import { endOfMonth } from 'date-fns';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch'; // Importando Switch
 
 const BalancoPatrimonial: React.FC = () => {
   const { role, perfil, carregando: carregandoSessao } = useSessao();
@@ -16,6 +18,9 @@ const BalancoPatrimonial: React.FC = () => {
     from: undefined,
     to: endOfMonth(new Date()),
   });
+  
+  // NOVO ESTADO: Filtro para mostrar apenas contas com saldo diferente de zero
+  const [filtroSomenteComSaldo, setFiltroSomenteComSaldo] = useState(false);
   
   const canAccessPage = role === 'Admin' || (role === 'Cliente' && (perfil as any)?.permissoes?.relatorios === true);
 
@@ -46,18 +51,34 @@ const BalancoPatrimonial: React.FC = () => {
       </h1>
       
       <Card className="mb-6">
-        <CardHeader><CardTitle className="text-lg">Filtro de Data</CardTitle></CardHeader>
-        <CardContent>
-            <p className="text-sm text-muted-foreground mb-3">O balanço será calculado até a data final selecionada.</p>
-            <DateRangePicker 
-                date={filtroPeriodo}
-                setDate={setFiltroPeriodo}
-            />
+        <CardHeader><CardTitle className="text-lg">Filtros</CardTitle></CardHeader>
+        <CardContent className="flex flex-col md:flex-row md:items-center gap-6">
+            <div className="flex-1">
+                <p className="text-sm text-muted-foreground mb-3">O balanço será calculado até a data final selecionada.</p>
+                <DateRangePicker 
+                    date={filtroPeriodo}
+                    setDate={setFiltroPeriodo}
+                />
+            </div>
+            
+            <div className="flex items-center space-x-2 p-3 border rounded-md bg-secondary/50">
+                <Switch 
+                    id="filtro-saldo" 
+                    checked={filtroSomenteComSaldo} 
+                    onCheckedChange={setFiltroSomenteComSaldo} 
+                />
+                <Label htmlFor="filtro-saldo" className="text-sm">
+                    Exibir Somente Contas com Saldo (R$ ≠ 0,00)
+                </Label>
+            </div>
         </CardContent>
       </Card>
       
       {endDate ? (
-        <BalancoPatrimonialDetalhe endDate={endDate} />
+        <BalancoPatrimonialDetalhe 
+            endDate={endDate} 
+            filtroSomenteComSaldo={filtroSomenteComSaldo} // Passando o novo filtro
+        />
       ) : (
         <Card className="mt-6">
             <CardContent className="p-6 text-center text-muted-foreground">

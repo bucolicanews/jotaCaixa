@@ -14,9 +14,11 @@ import ReactDOMServer from 'react-dom/server';
 import BalancoPatrimonialPrint from './BalancoPatrimonialPrint';
 import { useSessao } from '@/hooks/use-sessao';
 import { ClienteProfile } from '@/types/usuario';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
 
 interface BalancoPatrimonialDetalheProps {
   endDate: Date;
+  filtroSomenteComSaldo: boolean; // NOVO PROP
 }
 
 // Tipo auxiliar para a conta (copiado do hook)
@@ -29,7 +31,7 @@ interface ContaBalanco {
   tipo_principal: 'Ativo' | 'Passivo' | 'Patrimonio Liquido' | 'Resultado' | 'Outros';
 }
 
-const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ endDate }) => {
+const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ endDate, filtroSomenteComSaldo }) => {
   const { perfil, role } = useSessao();
   const { contas, totalAtivo, totalPassivo, totalPatrimonioLiquido, carregando } = useBalancoPatrimonial(endDate);
   const { printContent } = usePrint();
@@ -54,6 +56,8 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
       const isSintetica = c.Analitica === 'Não';
       const isZero = Math.abs(c.saldo_final) < 0.01;
       
+      // Aplica o filtro de saldo
+      if (filtroSomenteComSaldo && isZero && !isSintetica) return null;
       if (isZero && isSintetica) return null;
 
       // Calcula o nível de indentação baseado no código da conta (ex: 1.1.1.1)
@@ -72,12 +76,16 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
     });
   };
   
-  const handlePrint = () => {
+  const handlePrint = (onlyWithBalance: boolean) => {
+    const contasParaImpressao = onlyWithBalance 
+        ? contas.filter(c => c.Analitica === 'Não' || Math.abs(c.saldo_final) >= 0.01)
+        : contas;
+        
     const printComponent = (
         <BalancoPatrimonialPrint
             empresaNome={empresaNome}
             endDate={endDate}
-            contas={contas}
+            contas={contasParaImpressao}
             totalAtivo={totalAtivo}
             totalPassivoPL={totalPassivoPL}
             isBalanced={isBalanced}
@@ -113,9 +121,21 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
       <Card className={cn("border-l-4", isBalanced ? "border-green-500" : "border-red-500")}>
         <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-xl flex items-center"><Scale className="w-5 h-5 mr-2" /> Resumo do Balanço em {format(endDate, 'dd/MM/yyyy', { locale: ptBR })}</CardTitle>
-            <Button onClick={handlePrint} variant="outline" size="sm">
-                <Printer className="w-4 h-4 mr-2" /> Imprimir
-            </Button>
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm">
+                        <Printer className="w-4 h-4 mr-2" /> Imprimir
+                    </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => handlePrint(false)}>
+                        Balanço Completo
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handlePrint(true)}>
+                        Somente Contas com Saldo
+                    </DropdownMenuItem>
+                </DropdownMenuContent>
+            </DropdownMenu>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="p-3 bg-secondary rounded-md">

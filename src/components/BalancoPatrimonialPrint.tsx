@@ -14,7 +14,7 @@ interface ContaBalanco {
 interface BalancoPatrimonialPrintProps {
   empresaNome: string;
   endDate: Date;
-  contas: ContaBalanco[];
+  contas: ContaBalanco[]; // Contas já filtradas (se for o caso)
   totalAtivo: number;
   totalPassivoPL: number;
   isBalanced: boolean;
@@ -31,6 +31,7 @@ const BalancoPatrimonialPrint: React.FC<BalancoPatrimonialPrintProps> = ({
   isBalanced,
 }) => {
   
+  // A lista de contas já vem pré-filtrada pelo BalancoPatrimonialDetalhe
   const getContasPorTipo = (tipo: ContaBalanco['tipo_principal']) => {
     return contas.filter(c => c.tipo_principal === tipo);
   };
@@ -61,6 +62,8 @@ const BalancoPatrimonialPrint: React.FC<BalancoPatrimonialPrintProps> = ({
       );
     });
   };
+  
+  const totalPassivo = getContasPorTipo('Passivo').reduce((sum, c) => sum + c.saldo_final, 0);
 
   return (
     <div className="print-container">
@@ -109,7 +112,7 @@ const BalancoPatrimonialPrint: React.FC<BalancoPatrimonialPrintProps> = ({
               {renderContas(getContasPorTipo('Passivo'))}
               <tr style={{ fontWeight: 'bold', backgroundColor: '#f0f0f0' }}>
                 <td colSpan={2}>TOTAL DO PASSIVO</td>
-                <td style={{ textAlign: 'right' }}>{formatCurrency(contas.filter(c => c.tipo_principal === 'Passivo').reduce((sum, c) => sum + c.saldo_final, 0))}</td>
+                <td style={{ textAlign: 'right' }}>{formatCurrency(totalPassivo)}</td>
               </tr>
               
               {renderContas(getContasPorTipo('Patrimonio Liquido'))}
