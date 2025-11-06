@@ -4,6 +4,7 @@ import { showError } from '@/utils/toast';
 import { SaldoContaDetalhada } from '@/types/saldo-conta';
 import { useSessao } from './use-sessao';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
+import { format } from 'date-fns';
 
 interface SaldoCalculado extends SaldoContaDetalhada {
   saldo_atual: number;
@@ -14,6 +15,7 @@ interface SaldoContaCalculadoHook {
   totalSaldo: number;
   carregando: boolean;
   refetch: () => void;
+  calcularSaldoAcumulado: (contaIds: string[], dataCorte: Date) => Promise<number>; // NOVO
 }
 
 const useSaldoContaCalculado = (filtroTipoSaldo: 'todos' | 'Credito' | 'Debito' | 'Receita' | 'Despesa', filtroContaContabilId: string, filtroNomeDebounced: string): SaldoContaCalculadoHook => {
@@ -34,6 +36,58 @@ const useSaldoContaCalculado = (filtroTipoSaldo: 'todos' | 'Credito' | 'Debito' 
   const refetch = useCallback(() => {
     setRefreshKey(prev => prev + 1);
   }, []);
+  
+  // Função auxiliar para buscar contas e lançamentos (usada por buscarContas e calcularSaldoAcumulado)
+  const fetchContasAndLancamentos = useCallback(async (targetEmpresaId: string, targetContaIds?: string[], dataCorte?: Date) => {
+      // 1. Buscar contas de saldo (filtradas ou todas)
+      let contasQuery = supabase
+        .from('saldo_contas')
+        .select(`*, plano_contas ( Conta, Descricao )`)
+        .eq('empresa_id', targetEmpresaId);
+        
+      if (targetContaIds) {
+          contasQuery = contasQuery.in('id', targetContaIds);
+      } else {
+          // Aplicar Filtros de UI (apenas se não estiver buscando por IDs específicos)
+          if (filtroTipoSaldo !== 'todos') {
+              contasQuery = contasQuery.eq('tipo_saldo', filtroTipoSaldo);
+          }
+          if (filtroContaContabilId !== 'todos') {
+              contasQuery = contasQuery.eq('conta_contabil_id', filtroContaContabilId);
+          }
+          if (filtroNomeDebounced) {
+              contasQuery = contasQuery.ilike('nome', `%${filtroNomeDebounced}%`);
+          }
+      }
+      
+      const { data: contasData, error: contasError } = await contasQuery.order('nome', { ascending: true });
+      if (contasError) throw contasError;
+      
+      let fetchedContas = contasData as SaldoContaDetalhada[];
+      const contaIds = fetchedContas.map(c => c.id);
+      
+      if (contaIds.length === 0) {
+          return { fetchedContas: [], lancamentosData: [] };
+      }
+
+      // 2. Buscar lançamentos
+      let lancamentosQuery = supabase
+        .from('lancamentos')
+        .select('valor, tipo, conta_bancaria_id')
+        .in('conta_bancaria_id', contaIds);
+        
+      // Aplicar data de corte (se fornecida)
+      if (dataCorte) {
+          // Busca lançamentos ATÉ a data de corte (exclusive)
+          lancamentosQuery = lancamentosQuery.lt('data_movimentacao', format(dataCorte, 'yyyy-MM-dd'));
+      }
+
+      const { data: lancamentosData, error: lancamentosError } = await lancamentosQuery;
+      if (lancamentosError) throw lancamentosError;
+      
+      return { fetchedContas, lancamentosData };
+  }, [filtroTipoSaldo, filtroContaContabilId, filtroNomeDebounced]);
+
 
   const buscarContas = useCallback(async () => {
     if (!empresaId || carregandoSessao) {
@@ -44,47 +98,8 @@ const useSaldoContaCalculado = (filtroTipoSaldo: 'todos' | 'Credito' | 'Debito' 
     setCarregando(true);
     
     try {
-      // 1. Buscar todas as contas de saldo
-      let query = supabase
-        .from('saldo_contas')
-        .select(`
-          *,
-          plano_contas ( Conta, Descricao )
-        `)
-        .eq('empresa_id', empresaId);
-        
-      // Aplicar Filtros (os mesmos de Bancos.tsx)
-      if (filtroTipoSaldo !== 'todos') {
-          query = query.eq('tipo_saldo', filtroTipoSaldo);
-      }
-      if (filtroContaContabilId !== 'todos') {
-          query = query.eq('conta_contabil_id', filtroContaContabilId);
-      }
-      if (filtroNomeDebounced) {
-          query = query.ilike('nome', `%${filtroNomeDebounced}%`);
-      }
-
-      const { data: contasData, error: contasError } = await query.order('nome', { ascending: true });
-
-      if (contasError) throw contasError;
-      
-      let fetchedContas = contasData as SaldoContaDetalhada[];
-      
-      // 2. Buscar todos os lançamentos para as contas encontradas
-      const contaIds = fetchedContas.map(c => c.id);
-      
-      if (contaIds.length === 0) {
-          setContas([]);
-          setCarregando(false);
-          return;
-      }
-
-      const { data: lancamentosData, error: lancamentosError } = await supabase
-        .from('lancamentos')
-        .select('valor, tipo, conta_bancaria_id')
-        .in('conta_bancaria_id', contaIds);
-
-      if (lancamentosError) throw lancamentosError;
+      // Busca contas e lançamentos (sem data de corte, ou seja, até hoje)
+      const { fetchedContas, lancamentosData } = await fetchContasAndLancamentos(empresaId);
 
       // 3. Calcular o saldo para cada conta
       const lancamentosPorConta = lancamentosData.reduce((acc, l) => {
@@ -129,15 +144,55 @@ const useSaldoContaCalculado = (filtroTipoSaldo: 'todos' | 'Credito' | 'Debito' 
     } finally {
       setCarregando(false);
     }
-  }, [empresaId, carregandoSessao, refreshKey, filtroTipoSaldo, filtroContaContabilId, filtroNomeDebounced]);
+  }, [empresaId, carregandoSessao, filtroNomeDebounced, fetchContasAndLancamentos]);
 
   useEffect(() => {
     buscarContas();
-  }, [buscarContas]);
+  }, [buscarContas, refreshKey]);
 
   const totalSaldo = contas.reduce((sum, conta) => sum + conta.saldo_atual, 0);
+  
+  // NOVO: Função para calcular o saldo acumulado até uma data de corte
+  const calcularSaldoAcumulado = useCallback(async (contaIds: string[], dataCorte: Date): Promise<number> => {
+      if (!empresaId) return 0;
+      
+      try {
+          // Busca contas e lançamentos ATÉ a data de corte
+          const { fetchedContas, lancamentosData } = await fetchContasAndLancamentos(empresaId, contaIds, dataCorte);
+          
+          let saldoAcumulado = 0;
+          
+          // 1. Calcular o saldo inicial total
+          const saldoInicialTotal = fetchedContas.reduce((sum, conta) => sum + conta.saldo_inicial, 0);
+          saldoAcumulado += saldoInicialTotal;
+          
+          // 2. Calcular lançamentos até a data de corte
+          const lancamentosPorConta = lancamentosData.reduce((acc, l) => {
+            acc[l.conta_bancaria_id] = acc[l.conta_bancaria_id] || { entradas: 0, saidas: 0 };
+            if (l.tipo === 'Entrada') {
+              acc[l.conta_bancaria_id].entradas += l.valor;
+            } else if (l.tipo === 'Saida') {
+              acc[l.conta_bancaria_id].saidas += l.valor;
+            }
+            return acc;
+          }, {} as Record<string, { entradas: number, saidas: number }>);
+          
+          // 3. Somar as movimentações
+          Object.values(lancamentosPorConta).forEach(mov => {
+              saldoAcumulado += mov.entradas;
+              saldoAcumulado -= mov.saidas;
+          });
+          
+          return saldoAcumulado;
+          
+      } catch (error) {
+          console.error('Erro ao calcular saldo acumulado:', error);
+          return 0;
+      }
+  }, [empresaId, fetchContasAndLancamentos]);
 
-  return { contas, totalSaldo, carregando, refetch };
+
+  return { contas, totalSaldo, carregando, refetch, calcularSaldoAcumulado };
 };
 
 export default useSaldoContaCalculado;

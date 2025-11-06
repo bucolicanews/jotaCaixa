@@ -13,7 +13,8 @@ import { useDebounce } from '@/hooks/use-debounce';
 import { SaldoContaDetalhada } from '@/types/saldo-conta';
 import { DateRangePicker } from './DateRangePicker';
 import { DateRange } from 'react-day-picker';
-import { format } from 'date-fns';
+import { format, subDays } from 'date-fns';
+import useSaldoContaCalculado from '@/hooks/use-saldo-conta-calculado'; // Importando o hook completo
 
 interface Lancamento {
   id: string;
@@ -39,8 +40,11 @@ interface FluxoCaixaDetalheProps {
 }
 
 const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas, totalSaldo }) => {
+  const { calcularSaldoAcumulado } = useSaldoContaCalculado('todos', 'todos', ''); // Usando o hook para a função RPC
+  
   const [lancamentos, setLancamentos] = useState<Lancamento[]>([]);
   const [loadingLancamentos, setLoadingLancamentos] = useState(true);
+  const [saldoInicialPeriodo, setSaldoInicialPeriodo] = useState(0); // NOVO ESTADO
   
   // Filtros
   const [filtroContaId, setFiltroContaId] = useState('todos');
@@ -52,6 +56,31 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
   const fetchLancamentos = useCallback(async () => {
     setLoadingLancamentos(true);
     
+    // 1. Determinar as contas a serem consideradas
+    const contasFiltradasIds = filtroContaId === 'todos' 
+        ? contas.map(c => c.id) 
+        : [filtroContaId];
+        
+    if (contasFiltradasIds.length === 0) {
+        setLancamentos([]);
+        setSaldoInicialPeriodo(0);
+        setLoadingLancamentos(false);
+        return;
+    }
+    
+    // 2. Calcular o Saldo Inicial do Período
+    let saldoInicial = 0;
+    if (filtroPeriodo?.from) {
+        // Saldo acumulado até o dia anterior ao início do filtro
+        const dataCorte = subDays(filtroPeriodo.from, 0); // Usamos a data de início do filtro
+        saldoInicial = await calcularSaldoAcumulado(contasFiltradasIds, dataCorte);
+    } else {
+        // Se não houver filtro de data, o saldo inicial é o saldo total atual
+        saldoInicial = totalSaldo;
+    }
+    setSaldoInicialPeriodo(saldoInicial);
+
+    // 3. Buscar Lançamentos DENTRO do Período
     let query = supabase
       .from('lancamentos')
       .select(`
@@ -59,17 +88,17 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
         saldo_contas:conta_bancaria_id ( nome )
       `)
       .eq('empresa_id', empresaId)
+      .in('conta_bancaria_id', contasFiltradasIds) // Filtra por contas selecionadas
       .order('data_movimentacao', { ascending: false });
       
-    if (filtroContaId !== 'todos') {
-        query = query.eq('conta_bancaria_id', filtroContaId);
-    }
     if (filtroTipo !== 'todos') {
         query = query.eq('tipo', filtroTipo);
     }
     if (filtroTextoDebounced) {
         query = query.ilike('descricao', `%${filtroTextoDebounced}%`);
     }
+    
+    // Filtro de data para os lançamentos (apenas se houver data de início)
     if (filtroPeriodo?.from) {
         query = query.gte('data_movimentacao', format(filtroPeriodo.from, 'yyyy-MM-dd'));
     }
@@ -83,17 +112,16 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
       showError('Erro ao carregar lançamentos: ' + error.message);
       setLancamentos([]);
     } else {
-      // Mapeia os dados para o formato esperado
       const mappedData = (data as any[]).map(l => ({
           ...l,
           saldo_contas: l.saldo_contas, 
-          plano_contas: null, // Definido como null para evitar o erro
+          plano_contas: null,
       })) as Lancamento[];
       
       setLancamentos(mappedData);
     }
     setLoadingLancamentos(false);
-  }, [empresaId, filtroContaId, filtroTipo, filtroTextoDebounced, filtroPeriodo]);
+  }, [empresaId, filtroContaId, filtroTipo, filtroTextoDebounced, filtroPeriodo, contas, totalSaldo, calcularSaldoAcumulado]);
 
   useEffect(() => {
     fetchLancamentos();
@@ -101,7 +129,9 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
   
   const totalEntradas = lancamentos.filter(l => l.tipo === 'Entrada').reduce((sum, l) => sum + l.valor, 0);
   const totalSaidas = lancamentos.filter(l => l.tipo === 'Saida').reduce((sum, l) => sum + l.valor, 0);
-  const saldoPeriodo = totalEntradas - totalSaidas;
+  
+  // Saldo Final do Período = Saldo Inicial do Período + Entradas - Saídas
+  const saldoFinalPeriodo = saldoInicialPeriodo + totalEntradas - totalSaidas;
 
   return (
     <div className="space-y-6">
@@ -111,8 +141,8 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
         <CardHeader><CardTitle className="text-xl flex items-center"><Banknote className="w-5 h-5 mr-2" /> Resumo de Saldo</CardTitle></CardHeader>
         <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="p-3 bg-gray-100 dark:bg-gray-800 rounded-lg">
-                <h4 className="text-sm font-medium text-muted-foreground flex items-center"><Wallet className="w-4 h-4 mr-2" /> Saldo Total (Contas)</h4>
-                <p className={cn("text-xl font-bold mt-1", totalSaldo >= 0 ? 'text-green-600' : 'text-red-600')}>{formatCurrency(totalSaldo)}</p>
+                <h4 className="text-sm font-medium text-muted-foreground flex items-center"><Wallet className="w-4 h-4 mr-2" /> Saldo Inicial do Período</h4>
+                <p className={cn("text-xl font-bold mt-1", saldoInicialPeriodo >= 0 ? 'text-green-600' : 'text-red-600')}>{formatCurrency(saldoInicialPeriodo)}</p>
             </div>
             <div className="p-3 bg-green-100 dark:bg-green-900/20 rounded-lg">
                 <h4 className="text-sm font-medium text-green-700 dark:text-green-300 flex items-center"><ArrowUpCircle className="w-4 h-4 mr-2" /> Entradas no Período</h4>
@@ -122,9 +152,9 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
                 <h4 className="text-sm font-medium text-red-700 dark:text-red-300 flex items-center"><ArrowDownCircle className="w-4 h-4 mr-2" /> Saídas no Período</h4>
                 <p className="text-xl font-bold text-red-600 dark:text-red-400 mt-1">{formatCurrency(totalSaidas)}</p>
             </div>
-            <div className={cn("p-3 rounded-lg", saldoPeriodo >= 0 ? "bg-blue-100 dark:bg-blue-900/20" : "bg-red-100 dark:bg-red-900/20")}>
-                <h4 className="text-sm font-medium text-muted-foreground flex items-center"><Landmark className="w-4 h-4 mr-2" /> Saldo do Período</h4>
-                <p className={cn("text-xl font-bold mt-1", saldoPeriodo >= 0 ? "text-blue-600 dark:text-blue-400" : "text-red-600 dark:text-red-400")}>{formatCurrency(saldoPeriodo)}</p>
+            <div className={cn("p-3 rounded-lg", saldoFinalPeriodo >= 0 ? "bg-blue-100 dark:bg-blue-900/20" : "bg-red-100 dark:bg-red-900/20")}>
+                <h4 className="text-sm font-medium text-muted-foreground flex items-center"><Landmark className="w-4 h-4 mr-2" /> Saldo Final do Período</h4>
+                <p className={cn("text-xl font-bold mt-1", saldoFinalPeriodo >= 0 ? "text-blue-600 dark:text-blue-400" : "text-red-600 dark:text-red-400")}>{formatCurrency(saldoFinalPeriodo)}</p>
             </div>
         </CardContent>
       </Card>
