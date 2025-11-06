@@ -2,7 +2,7 @@ import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { PlusCircle, FileSignature, Loader2, Eye, Edit, Trash2, Search, Filter, Lock } from 'lucide-react';
+import { PlusCircle, FileSignature, Loader2, Eye, Edit, Trash2, Search, Filter, Lock, Unlock } from 'lucide-react';
 import { useSessao } from '@/hooks/use-sessao';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
@@ -102,24 +102,11 @@ const Contratos = () => {
     setCarregandoContratos(true);
     
     try {
-        // 1. Cancelar parcelas pendentes antes de deletar a conta sintética
-        const { error: rpcError } = await supabase.rpc('cancel_contract_installments', {
-            p_contrato_id: contrato.id,
-            p_motivo: 'Contrato Deletado',
-        });
-        
-        if (rpcError) {
-            console.error('Aviso: Falha ao cancelar parcelas:', rpcError);
-            showError('Aviso: Falha ao cancelar parcelas pendentes. Exclusão do contrato abortada.');
-            setCarregandoContratos(false);
-            return;
-        }
-        
-        // 2. Determinar as tabelas de CR
+        // 1. Determinar as tabelas de CR
         const isContractOwnerAdmin = isAdmin && contrato.empresa_id === empresaId;
         const tabelaContasReceber = isContractOwnerAdmin ? 'admin_contas_receber' : 'contas_receber';
         
-        // 3. Buscar e deletar a Conta a Receber Sintética associada
+        // 2. Buscar e deletar a Conta a Receber Sintética associada
         const { data: contaReceber, error: fetchError } = await supabase
             .from(tabelaContasReceber)
             .select('id')
@@ -140,7 +127,7 @@ const Contratos = () => {
             if (deleteCR) throw deleteCR;
         }
         
-        // 4. Deletar o Contrato Gerado
+        // 3. Deletar o Contrato Gerado
         const { error: deleteContrato } = await supabase
             .from('contratos_gerados')
             .delete()
@@ -185,6 +172,29 @@ const Contratos = () => {
     } catch (error: any) {
         console.error('Erro ao bloquear contrato:', error);
         showError('Falha ao bloquear contrato: ' + error.message);
+    } finally {
+        setCarregandoContratos(false);
+    }
+  };
+  
+  const handleReactivateContract = async (contrato: ContratoGerado) => {
+    if (!window.confirm(`Tem certeza que deseja DESBLOQUEAR o contrato ${contrato.id}? Isso irá reativar o status do contrato e reabrir as parcelas que foram canceladas devido ao bloqueio.`)) return;
+
+    setCarregandoContratos(true);
+    
+    try {
+        // 1. Reativar parcelas pendentes
+        const { error: rpcError } = await supabase.rpc('reactivate_contract_installments', {
+            p_contrato_id: contrato.id,
+        });
+        
+        if (rpcError) throw rpcError;
+        
+        showSuccess('Contrato desbloqueado e parcelas reativadas com sucesso.');
+        buscarContratos();
+    } catch (error: any) {
+        console.error('Erro ao desbloquear contrato:', error);
+        showError('Falha ao desbloquear contrato: ' + error.message);
     } finally {
         setCarregandoContratos(false);
     }
@@ -267,7 +277,7 @@ const Contratos = () => {
                         
                         return (
                             <TableRow key={c.id}>
-                                {isSupervisao && <TableCell className="text-sm text-muted-foreground">{(c as any).empresa_id || 'N/A'}</TableCell>}
+                                {isSupervisao && <TableCell className="text-sm text-muted-foreground">{(c as any).clientes?.nome || 'N/A'}</TableCell>}
                                 <TableCell className="font-medium">{(c as any).clientes?.nome || 'N/A'}</TableCell>
                                 <TableCell>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(c.valor_total)}</TableCell>
                                 <TableCell>{format(parseISO(c.data_inicio), 'dd/MM/yyyy')}</TableCell>
@@ -285,16 +295,27 @@ const Contratos = () => {
                                             </Button>
                                         )}
                                         
-                                        {/* Botão de Bloqueio (Aparece se não estiver cancelado) */}
-                                        {!isCanceled && isMyContract && (
-                                            <Button 
-                                                variant="destructive" 
-                                                size="icon" 
-                                                onClick={() => handleBlockContract(c)}
-                                                title="Bloquear Contrato (Cancela Parcelas)"
-                                            >
-                                                <Lock className="w-4 h-4" />
-                                            </Button>
+                                        {/* Botão de Bloqueio/Desbloqueio */}
+                                        {isMyContract && (
+                                            isCanceled ? (
+                                                <Button 
+                                                    variant="default" 
+                                                    size="icon" 
+                                                    onClick={() => handleReactivateContract(c)}
+                                                    title="Desbloquear Contrato (Reativa Parcelas)"
+                                                >
+                                                    <Unlock className="w-4 h-4" />
+                                                </Button>
+                                            ) : (
+                                                <Button 
+                                                    variant="destructive" 
+                                                    size="icon" 
+                                                    onClick={() => handleBlockContract(c)}
+                                                    title="Bloquear Contrato (Cancela Parcelas)"
+                                                >
+                                                    <Lock className="w-4 h-4" />
+                                                </Button>
+                                            )
                                         )}
                                         
                                         {/* Botão de Excluir (Aparece se for rascunho ou cancelado) */}

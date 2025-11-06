@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Copy, ExternalLink, FileText, Eye, Printer, Mail, MessageSquare, Loader2, Lock } from 'lucide-react';
+import { Copy, ExternalLink, FileText, Eye, Printer, Mail, MessageSquare, Loader2, Lock, Unlock } from 'lucide-react';
 import { ContratoGerado } from '@/types/contratos';
 import { showSuccess, showError } from '@/utils/toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
@@ -162,6 +162,29 @@ const ContratoAcoesDialog: React.FC<ContratoAcoesDialogProps> = ({ contrato, ope
         setIsBlocking(false);
     }
   };
+  
+  const handleReactivateContract = async () => {
+    if (!contrato) return;
+    setIsBlocking(true);
+    
+    try {
+        // 1. Reativar parcelas
+        const { error: rpcError } = await supabase.rpc('reactivate_contract_installments', {
+            p_contrato_id: contrato.id,
+        });
+        
+        if (rpcError) throw rpcError;
+        
+        showSuccess('Contrato desbloqueado e parcelas reativadas com sucesso.');
+        // Força o recarregamento da página de contratos
+        window.location.href = '/contratos';
+    } catch (error: any) {
+        console.error('Erro ao desbloquear contrato:', error);
+        showError('Falha ao desbloquear contrato: ' + error.message);
+    } finally {
+        setIsBlocking(false);
+    }
+  };
 
   if (!contrato) return null;
   
@@ -244,28 +267,52 @@ const ContratoAcoesDialog: React.FC<ContratoAcoesDialogProps> = ({ contrato, ope
         </Tabs>
         
         <div className="flex justify-between pt-4 border-t">
-            {isMyContract && !isCanceled && (
-                <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                        <Button variant="destructive" size="sm" disabled={isBlocking}>
-                            <Lock className="w-4 h-4 mr-2" /> Bloquear Contrato
-                        </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                        <AlertDialogHeader>
-                            <AlertDialogTitle>Bloquear Contrato e Cancelar Parcelas?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                                Esta ação irá marcar o contrato como 'cancelado' e **cancelar todas as parcelas pendentes** associadas. Esta ação é irreversível.
-                            </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                            <AlertDialogCancel disabled={isBlocking}>Cancelar</AlertDialogCancel>
-                            <AlertDialogAction onClick={handleBlockContract} disabled={isBlocking}>
-                                {isBlocking ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : 'Confirmar Bloqueio'}
-                            </AlertDialogAction>
-                        </AlertDialogFooter>
-                    </AlertDialogContent>
-                </AlertDialog>
+            {isMyContract && (
+                isCanceled ? (
+                    <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                            <Button variant="default" size="sm" disabled={isBlocking}>
+                                <Unlock className="w-4 h-4 mr-2" /> Desbloquear Contrato
+                            </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                            <AlertDialogHeader>
+                                <AlertDialogTitle>Desbloquear Contrato e Reativar Parcelas?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                    Esta ação irá reverter o status do contrato e **reabrir todas as parcelas** que foram canceladas devido ao bloqueio.
+                                </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                                <AlertDialogCancel disabled={isBlocking}>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction onClick={handleReactivateContract} disabled={isBlocking}>
+                                    {isBlocking ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : 'Confirmar Desbloqueio'}
+                                </AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
+                ) : (
+                    <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                            <Button variant="destructive" size="sm" disabled={isBlocking}>
+                                <Lock className="w-4 h-4 mr-2" /> Bloquear Contrato
+                            </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                            <AlertDialogHeader>
+                                <AlertDialogTitle>Bloquear Contrato e Cancelar Parcelas?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                    Esta ação irá marcar o contrato como 'cancelado' e **cancelar todas as parcelas pendentes** associadas. Esta ação é irreversível.
+                                </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                                <AlertDialogCancel disabled={isBlocking}>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction onClick={handleBlockContract} disabled={isBlocking}>
+                                    {isBlocking ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : 'Confirmar Bloqueio'}
+                                </AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
+                )
             )}
             
             <Button onClick={() => onOpenChange(false)} variant="secondary" className="ml-auto">
