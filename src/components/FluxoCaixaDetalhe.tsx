@@ -57,7 +57,7 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
       .select(`
         *,
         saldo_contas:conta_bancaria_id ( nome ),
-        plano_contas_rel:conta_contabil_id!plano_contas ( Conta, Descricao )
+        plano_contas ( Conta, Descricao )
       `)
       .eq('empresa_id', empresaId)
       .order('data_movimentacao', { ascending: false });
@@ -84,11 +84,11 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
       showError('Erro ao carregar lançamentos: ' + error.message);
       setLancamentos([]);
     } else {
-      // Mapeia os dados para o formato esperado, usando o nome da coluna como chave da relação
+      // Mapeia os dados para o formato esperado
       const mappedData = (data as any[]).map(l => ({
           ...l,
-          saldo_contas: l.conta_bancaria_id, // Renomeia a relação de volta para o nome esperado
-          plano_contas: l.plano_contas_rel, // Usa o nome da relação forçada
+          saldo_contas: l.conta_bancaria_id, 
+          plano_contas: l.plano_contas, 
       })) as Lancamento[];
       
       setLancamentos(mappedData);
