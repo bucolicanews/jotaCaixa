@@ -88,6 +88,7 @@ const Conciliacao = () => {
         </TabsList>
         
         <TabsContent value="conciliacao" className="mt-4">
+            {/* Ajustado para grid-cols-1 em mobile e md:grid-cols-3 em desktop */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <Step1SelectAccount
                     contas={contas}
@@ -146,7 +147,8 @@ const Conciliacao = () => {
       
       {contaSelecionadaId && (
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogContent>
+          {/* Ajustado para sm:max-w-lg para melhor responsividade */}
+          <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader><DialogTitle>{configParaEditar ? 'Editar' : 'Nova'} Configuração de Mapeamento</DialogTitle></DialogHeader>
             <FormConciliacaoConfig 
               configInicial={configParaEditar}

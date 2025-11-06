@@ -9,7 +9,7 @@ import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { usePrint } from '@/hooks/use-print';
 import ReactDOMServer from 'react-dom/server';
-import { Badge } from './ui/badge'; // FIX: Import Badge
+import { Badge } from './ui/badge';
 
 interface HistoricoConciliacaoDialogProps {
   historico: ConciliacaoHistorico | null;
@@ -77,7 +77,8 @@ const HistoricoConciliacaoDialog: React.FC<HistoricoConciliacaoDialogProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-4xl max-h-[90vh] flex flex-col">
+      {/* Ajustado para sm:max-w-4xl e max-h-[95vh] */}
+      <DialogContent className="sm:max-w-4xl max-h-[95vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Detalhes da Conciliação</DialogTitle>
           <DialogDescription>
@@ -85,20 +86,22 @@ const HistoricoConciliacaoDialog: React.FC<HistoricoConciliacaoDialogProps> = ({
           </DialogDescription>
         </DialogHeader>
         
-        <div className="flex justify-end space-x-2 mb-4">
-            <Button onClick={handleDownload} variant="outline"><Download className="w-4 h-4 mr-2" /> Baixar JSON</Button>
-            <Button onClick={handlePrint} variant="secondary"><Printer className="w-4 h-4 mr-2" /> Imprimir Extrato</Button>
+        {/* Botões de Ação (Responsivo) */}
+        <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-2 mb-4">
+            <Button onClick={handleDownload} variant="outline" className="w-full sm:w-auto"><Download className="w-4 h-4 mr-2" /> Baixar JSON</Button>
+            <Button onClick={handlePrint} variant="secondary" className="w-full sm:w-auto"><Printer className="w-4 h-4 mr-2" /> Imprimir Extrato</Button>
         </div>
 
+        {/* Tabela (Scrollable) */}
         <div className="flex-1 overflow-y-auto border rounded-md">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Data</TableHead>
-                <TableHead>Descrição</TableHead>
-                <TableHead>Tipo</TableHead>
-                <TableHead className="text-right">Valor</TableHead>
-                <TableHead>Conta Contábil Mapeada</TableHead>
+                <TableHead className="w-[100px]">Data</TableHead>
+                <TableHead className="min-w-[150px]">Descrição</TableHead>
+                <TableHead className="w-[80px]">Tipo</TableHead>
+                <TableHead className="w-[100px] text-right">Valor</TableHead>
+                <TableHead className="min-w-[200px]">Conta Contábil Mapeada</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -107,18 +110,18 @@ const HistoricoConciliacaoDialog: React.FC<HistoricoConciliacaoDialogProps> = ({
               ) : (
                 transacoes.map((t, i) => (
                   <TableRow key={i}>
-                    <TableCell>{t.data}</TableCell>
-                    <TableCell>{t.descricao}</TableCell>
+                    <TableCell className="text-xs">{t.data}</TableCell>
+                    <TableCell className="text-sm">{t.descricao}</TableCell>
                     <TableCell>
                       <Badge variant={t.tipo === 'Entrada' ? 'success' : 'destructive'} className="flex items-center justify-center">
                         {t.tipo === 'Entrada' ? <ArrowUpCircle className="w-3 h-3 mr-1" /> : <ArrowDownCircle className="w-3 h-3 mr-1" />}
                         {t.tipo}
                       </Badge>
                     </TableCell>
-                    <TableCell className={cn("text-right font-semibold", t.tipo === 'Entrada' ? 'text-green-600' : 'text-red-600')}>
+                    <TableCell className={cn("text-right font-semibold text-sm", t.tipo === 'Entrada' ? 'text-green-600' : 'text-red-600')}>
                       {formatCurrency(Math.abs(t.valor))}
                     </TableCell>
-                    <TableCell className="text-sm font-medium">{t.conta_contabil_id || 'PENDENTE'}</TableCell>
+                    <TableCell className="text-xs font-medium">{t.conta_contabil_id || 'PENDENTE'}</TableCell>
                   </TableRow>
                 ))
               )}

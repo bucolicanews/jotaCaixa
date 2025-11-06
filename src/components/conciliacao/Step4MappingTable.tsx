@@ -67,11 +67,12 @@ const Step4MappingTable: React.FC<Step4MappingTableProps> = ({
             </div>
         )}
         
+        {/* Ações em Lote (Responsivo) */}
         <div className="flex flex-col md:flex-row items-center space-y-3 md:space-y-0 md:space-x-4 p-3 bg-secondary rounded-md mb-4">
             <div className="flex-1 w-full">
                 <Select 
                     onValueChange={onContaContabilLoteChange}
-                    value={contaContabilLote || undefined} // Ajustado para || undefined
+                    value={contaContabilLote || undefined}
                     disabled={isSaving || transacoesSelecionadas.length === 0}
                 >
                     <SelectTrigger className="h-10 text-sm">
@@ -95,7 +96,8 @@ const Step4MappingTable: React.FC<Step4MappingTableProps> = ({
             </Button>
         </div>
         
-        <div className="overflow-y-auto max-h-[400px] border rounded-md">
+        {/* Tabela de Mapeamento (Scrollable) */}
+        <div className="overflow-x-auto max-h-[400px] border rounded-md">
           <Table>
             <TableHeader><TableRow>
                 <TableHead className="w-[40px] text-center">
@@ -105,12 +107,12 @@ const Step4MappingTable: React.FC<Step4MappingTableProps> = ({
                         disabled={isSaving}
                     />
                 </TableHead>
-                <TableHead>Data</TableHead>
-                <TableHead>Descrição</TableHead>
-                <TableHead>Identificação</TableHead>
-                <TableHead>Tipo</TableHead>
-                <TableHead className="text-right">Valor</TableHead>
-                <TableHead className="w-[250px]">Conta Contábil</TableHead>
+                <TableHead className="w-[80px]">Data</TableHead>
+                <TableHead className="min-w-[150px]">Descrição</TableHead>
+                <TableHead className="hidden sm:table-cell w-[100px]">Identificação</TableHead>
+                <TableHead className="w-[80px]">Tipo</TableHead>
+                <TableHead className="w-[100px] text-right">Valor</TableHead>
+                <TableHead className="w-[250px] min-w-[200px]">Conta Contábil</TableHead>
             </TableRow></TableHeader>
             <TableBody>
               {transacoes.length === 0 ? (
@@ -130,29 +132,29 @@ const Step4MappingTable: React.FC<Step4MappingTableProps> = ({
                                     disabled={isSaving || t.isDuplicated}
                                 />
                             </TableCell>
-                            <TableCell>{t.data}</TableCell>
-                            <TableCell>{t.descricao}</TableCell>
-                            <TableCell className="text-sm text-muted-foreground">{t.identificacao || '-'}</TableCell>
+                            <TableCell className="text-xs">{t.data}</TableCell>
+                            <TableCell className="text-sm">{t.descricao}</TableCell>
+                            <TableCell className="hidden sm:table-cell text-xs text-muted-foreground">{t.identificacao || '-'}</TableCell>
                             <TableCell>
                                 <Badge variant={t.tipo === 'Entrada' ? 'success' : 'destructive'} className="flex items-center justify-center">
                                     {t.tipo === 'Entrada' ? <ArrowUpCircle className="w-3 h-3 mr-1" /> : <ArrowDownCircle className="w-3 h-3 mr-1" />}
                                     {t.tipo}
                                 </Badge>
                             </TableCell>
-                            <TableCell className={cn("text-right font-semibold", t.tipo === 'Entrada' ? 'text-green-600' : 'text-red-600')}>{formatCurrency(Math.abs(t.valor))}</TableCell>
+                            <TableCell className={cn("text-right font-semibold text-sm", t.tipo === 'Entrada' ? 'text-green-600' : 'text-red-600')}>{formatCurrency(Math.abs(t.valor))}</TableCell>
                             <TableCell>
                                 {t.isDuplicated ? (
-                                    <span className="text-sm font-medium text-red-700 flex items-center">
+                                    <span className="text-xs font-medium text-red-700 flex items-center">
                                         <AlertTriangle className="w-4 h-4 mr-1" /> DUPLICADA
                                     </span>
                                 ) : isMapeada ? (
-                                    <span className="text-sm font-medium text-green-700 flex items-center">
-                                        <CheckCircle2 className="w-4 h-4 mr-1" /> {contaContabil?.Conta} - {contaContabil?.Descricao}
+                                    <span className="text-xs font-medium text-green-700 flex items-center">
+                                        <CheckCircle2 className="w-4 h-4 mr-1" /> {contaContabil?.Conta}
                                     </span>
                                 ) : (
                                     <Select 
                                         onValueChange={(id) => onContaContabilChange(i, id)}
-                                        value={t.conta_contabil_id || undefined} // Ajustado para || undefined
+                                        value={t.conta_contabil_id || undefined}
                                         disabled={isSaving}
                                     >
                                         <SelectTrigger className="h-8 text-xs">
@@ -176,13 +178,15 @@ const Step4MappingTable: React.FC<Step4MappingTableProps> = ({
           </Table>
         </div>
         
-        <div className="flex justify-between items-center pt-4 border-t">
+        {/* Rodapé de Salvamento (Responsivo) */}
+        <div className="flex flex-col sm:flex-row justify-between items-center pt-4 border-t space-y-2 sm:space-y-0">
             <p className="text-sm text-muted-foreground">
                 {transacoesNaoConciliadas.length} transações pendentes de mapeamento.
             </p>
             <Button 
                 onClick={onSaveConciliacao} 
                 disabled={isSaving || transacoes.filter(t => t.conta_contabil_id && !t.isDuplicated).length === 0}
+                className="w-full sm:w-auto"
             >
                 {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                 Salvar Lançamentos Conciliados

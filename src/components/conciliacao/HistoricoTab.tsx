@@ -20,7 +20,7 @@ const formatTimestamp = (dateString: string) => format(new Date(dateString), 'dd
 const HistoricoTab: React.FC<HistoricoTabProps> = ({ historico, onViewDetails, onDeleteAll, isDeleting }) => {
   return (
     <Card className="col-span-1 md:col-span-3">
-        <CardHeader className="flex flex-row items-center justify-between">
+        <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between space-y-2 sm:space-y-0">
             <CardTitle className="flex items-center"><History className="w-5 h-5 mr-2" /> Histórico de Conciliações</CardTitle>
             <AlertDialog>
                 <AlertDialogTrigger asChild>
@@ -28,6 +28,7 @@ const HistoricoTab: React.FC<HistoricoTabProps> = ({ historico, onViewDetails, o
                         variant="destructive" 
                         size="sm" 
                         disabled={historico.length === 0 || isDeleting}
+                        className="w-full sm:w-auto"
                     >
                         {isDeleting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Trash2 className="w-4 h-4 mr-2" />}
                         Limpar Histórico ({historico.length})
@@ -54,11 +55,11 @@ const HistoricoTab: React.FC<HistoricoTabProps> = ({ historico, onViewDetails, o
                 <Table>
                     <TableHeader>
                         <TableRow>
-                            <TableHead>Data Conciliação</TableHead>
-                            <TableHead>Conta Bancária</TableHead>
-                            <TableHead>Nome do Arquivo</TableHead>
+                            <TableHead className="w-[150px]">Data Conciliação</TableHead>
+                            <TableHead className="w-[150px]">Conta Bancária</TableHead>
+                            <TableHead className="min-w-[200px]">Nome do Arquivo</TableHead>
                             <TableHead className="text-right">Transações Salvas</TableHead>
-                            <TableHead className="text-right">Ações</TableHead>
+                            <TableHead className="w-[120px] text-right">Ações</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -67,9 +68,9 @@ const HistoricoTab: React.FC<HistoricoTabProps> = ({ historico, onViewDetails, o
                         ) : (
                             historico.map(h => (
                                 <TableRow key={h.id}>
-                                    <TableCell>{formatTimestamp(h.criado_em)}</TableCell>
-                                    <TableCell className="font-medium">{h.saldo_contas?.nome || 'N/A'}</TableCell>
-                                    <TableCell className="font-mono text-sm">{h.nome_arquivo}</TableCell>
+                                    <TableCell className="text-sm">{formatTimestamp(h.criado_em)}</TableCell>
+                                    <TableCell className="font-medium text-sm">{h.saldo_contas?.nome || 'N/A'}</TableCell>
+                                    <TableCell className="font-mono text-xs">{h.nome_arquivo}</TableCell>
                                     <TableCell className="text-right">{h.extrato_json?.length || 0}</TableCell>
                                     <TableCell className="text-right">
                                         <Button 
