@@ -48,11 +48,14 @@ const ContratoAcoesDialog: React.FC<ContratoAcoesDialogProps> = ({ contrato, ope
   
   const handleSendWhatsapp = () => {
       if (!linkAssinatura) return;
-      const message = encodeURIComponent(`*Contrato para Assinatura*\n\nSeu contrato está pronto. Clique no link para assinar:\n${linkAssinatura}`);
+      
+      // Mensagem ajustada para garantir que o link seja reconhecido e clicável
+      const message = encodeURIComponent(`Olá! Seu contrato está pronto para assinatura. Clique no link abaixo para visualizar e assinar:\n\n${linkAssinatura}`);
       
       // Tenta usar o telefone do cliente, se disponível nos metadados
       const phone = contrato?.valores_tags_preenchidos?.['{{CLIENTE_TELEFONE}}']?.replace(/\D/g, '') || '';
       
+      // Abre o link do WhatsApp
       window.open(`https://wa.me/${phone}?text=${message}`, '_blank');
       showSuccess('Abrindo WhatsApp...');
   };

@@ -3,10 +3,9 @@ import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, FileSignature, ChevronLeft, Save, CalendarIcon, Eye, Building2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
 import { ContratoModelo, ContratoTag, ContratoGerado } from '@/types/contratos';
-import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -21,6 +20,7 @@ import { cn } from '@/lib/utils';
 import { ptBR } from 'date-fns/locale';
 import { TAGS_PADRAO } from '@/config/contrato-tags-padrao';
 import ContratoPreviewDialog from '@/components/ContratoPreviewDialog';
+import { useSessao } from '@/hooks/use-sessao';
 
 type TipoLancamento = 'unico' | 'repetir' | 'parcelar';
 type TipoConteudo = 'html' | 'texto';
@@ -671,10 +671,14 @@ const PreencherContrato: React.FC = () => {
   return (
     <LayoutPrincipal>
       <div className="flex items-center mb-6">
-        <Link to="/contratos" className="text-muted-foreground hover:text-primary flex items-center mr-4">
+        <Button 
+            onClick={() => navigate('/contratos')} 
+            variant="link" 
+            className="text-muted-foreground hover:text-primary flex items-center mr-4 p-0 h-auto"
+        >
             <ChevronLeft className="w-5 h-5" />
             Voltar
-        </Link>
+        </Button>
         <h1 className="text-2xl md:text-3xl font-bold flex items-center">
           <FileSignature className="w-6 h-6 mr-2" /> {isEditing ? 'Editar Contrato' : 'Preencher Contrato'}: {modelo.titulo}
         </h1>
