@@ -17,6 +17,7 @@ import Papa from 'papaparse';
 import { usePrint } from '@/hooks/use-print';
 import ReactDOMServer from 'react-dom/server';
 import { format } from 'date-fns'; // Adicionando importação de format
+import { Label } from '@/components/ui/label';
 
 // Componente de Formulário Simples (Inline)
 interface FormHistoricoProps {
@@ -27,6 +28,7 @@ interface FormHistoricoProps {
 
 const FormHistorico: React.FC<FormHistoricoProps> = ({ historicoInicial, proprietarioId, onSaveComplete }) => {
     const [descricao, setDescricao] = useState(historicoInicial?.descricao || '');
+    const [codigo, setCodigo] = useState(historicoInicial?.codigo || ''); // NOVO ESTADO
     const [loading, setLoading] = useState(false);
     const isEditing = !!historicoInicial;
 
@@ -40,6 +42,7 @@ const FormHistorico: React.FC<FormHistoricoProps> = ({ historicoInicial, proprie
 
         const dataToSave = {
             descricao: descricao.trim(),
+            codigo: codigo.trim() || null, // Salva o código
             proprietario_id: proprietarioId,
         };
 
@@ -64,12 +67,26 @@ const FormHistorico: React.FC<FormHistoricoProps> = ({ historicoInicial, proprie
 
     return (
         <form onSubmit={handleSubmit} className="space-y-4">
-            <Input
-                placeholder="Ex: Pagamento de Salário, Recebimento de Mensalidade"
-                value={descricao}
-                onChange={(e) => setDescricao(e.target.value)}
-                disabled={loading}
-            />
+            <div className="space-y-2">
+                <Label htmlFor="codigo">Código (Opcional)</Label>
+                <Input
+                    id="codigo"
+                    placeholder="Ex: 55845"
+                    value={codigo}
+                    onChange={(e) => setCodigo(e.target.value)}
+                    disabled={loading}
+                />
+            </div>
+            <div className="space-y-2">
+                <Label htmlFor="descricao">Descrição</Label>
+                <Input
+                    id="descricao"
+                    placeholder="Ex: Pagamento de Salário, Recebimento de Mensalidade"
+                    value={descricao}
+                    onChange={(e) => setDescricao(e.target.value)}
+                    disabled={loading}
+                />
+            </div>
             <Button type="submit" className="w-full" disabled={loading}>
                 {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : (isEditing ? 'Salvar Alterações' : 'Criar Histórico')}
             </Button>
@@ -108,12 +125,12 @@ const GerenciarHistoricos: React.FC = () => {
     
     let query = supabase
       .from('historicos')
-      .select('*')
+      .select('id, proprietario_id, descricao, codigo, criado_em') // Selecionando 'codigo'
       .eq('proprietario_id', ownerId)
       .order('descricao', { ascending: true });
       
     if (filtroTextoDebounced) {
-        query = query.ilike('descricao', `%${filtroTextoDebounced}%`);
+        query = query.or(`descricao.ilike.%${filtroTextoDebounced}%,codigo.ilike.%${filtroTextoDebounced}%`);
     }
 
     const { data, error } = await query;
@@ -177,18 +194,19 @@ const GerenciarHistoricos: React.FC = () => {
     setImportLoading(true);
 
     try {
-      // O parseFile agora retorna um array de HistoricoCSV (com a chave Descricao)
+      // O parseFile retorna um array de HistoricoCSV
       const parsedData = await parseFile(importFile) as HistoricoCSV[];
 
       if (parsedData.length === 0) {
-        showError('O arquivo está vazio ou o formato está incorreto. Use a coluna "Descrição".');
+        showError('O arquivo está vazio ou o formato está incorreto. Use as colunas "Código" e "Descrição".');
         setImportLoading(false);
         return;
       }
 
       const historicosParaInserir = parsedData.map(h => ({
         proprietario_id: ownerId,
-        descricao: h.Descricao.trim(), // Usando a chave corrigida
+        descricao: h.Descricao.trim(), 
+        codigo: h.Código?.trim() || null, // Lendo o novo campo
       })).filter(h => h.descricao.length > 0);
       
       if (historicosParaInserir.length === 0) {
@@ -225,8 +243,10 @@ const GerenciarHistoricos: React.FC = () => {
         return;
     }
     
+    // Mapeia para o formato exato: Código;Descrição
     const dataToExport = historicos.map(h => ({
-        Descrição: h.descricao, // Mantendo 'Descrição' para o cabeçalho do CSV de saída
+        Código: h.codigo || '',
+        Descrição: h.descricao, 
     }));
 
     const csv = Papa.unparse(dataToExport, {
@@ -258,13 +278,15 @@ const GerenciarHistoricos: React.FC = () => {
             <table className="print-table" style={{ marginTop: '20px' }}>
                 <thead>
                     <tr>
-                        <th style={{ width: '80%' }}>Descrição</th>
+                        <th style={{ width: '20%' }}>Código</th>
+                        <th style={{ width: '60%' }}>Descrição</th>
                         <th style={{ width: '20%' }}>Criado em</th>
                     </tr>
                 </thead>
                 <tbody>
                     {historicos.map((h) => (
                         <tr key={h.id}>
+                            <td>{h.codigo || '-'}</td>
                             <td>{h.descricao}</td>
                             <td>{new Date(h.criado_em).toLocaleDateString('pt-BR')}</td>
                         </tr>
@@ -342,7 +364,7 @@ const GerenciarHistoricos: React.FC = () => {
                         {importLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileUp className="mr-2 h-4 w-4" />}
                         Importar Históricos (CSV/JSON)
                     </Button>
-                    <p className="text-xs text-muted-foreground">Formato CSV esperado: Coluna "Descrição".</p>
+                    <p className="text-xs text-muted-foreground">Formato CSV esperado: Colunas "Código" e "Descrição".</p>
                 </div>
                 <div className="flex-1 space-y-2">
                     <Button onClick={handleExportCSV} variant="secondary" className="w-full h-10" disabled={historicos.length === 0}>
@@ -364,7 +386,7 @@ const GerenciarHistoricos: React.FC = () => {
             <div className="relative mb-4">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                    placeholder="Buscar por descrição..."
+                    placeholder="Buscar por código ou descrição..."
                     value={filtroTexto}
                     onChange={(e) => setFiltroTexto(e.target.value)}
                     className="pl-10 max-w-sm"
@@ -374,6 +396,7 @@ const GerenciarHistoricos: React.FC = () => {
                 <Table>
                     <TableHeader>
                         <TableRow>
+                            <TableHead className="w-[150px]">Código</TableHead>
                             <TableHead>Descrição</TableHead>
                             <TableHead className="w-[150px] hidden sm:table-cell">Criado em</TableHead>
                             <TableHead className="w-[100px] text-right">Ações</TableHead>
@@ -382,13 +405,14 @@ const GerenciarHistoricos: React.FC = () => {
                     <TableBody>
                         {historicos.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={3} className="text-center py-4 text-muted-foreground">
+                                <TableCell colSpan={4} className="text-center py-4 text-muted-foreground">
                                     Nenhum histórico cadastrado.
                                 </TableCell>
                             </TableRow>
                         ) : (
                             historicos.map((h) => (
                                 <TableRow key={h.id}>
+                                    <TableCell className="font-mono text-sm">{h.codigo || '-'}</TableCell>
                                     <TableCell className="font-medium">{h.descricao}</TableCell>
                                     <TableCell className="text-sm text-muted-foreground hidden sm:table-cell">{new Date(h.criado_em).toLocaleDateString('pt-BR')}</TableCell>
                                     <TableCell className="text-right">

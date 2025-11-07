@@ -30,10 +30,12 @@ const parseCSV = (file: File): Promise<ParsedData> => {
         
         // Verifica se é Histórico (procura por 'Descrição' ou 'Descricao')
         const descKey = headers.find(h => h.toLowerCase().includes('descri')) || 'Descrição';
+        const codigoKey = headers.find(h => h.toLowerCase().includes('código')) || 'Código';
         
         if (descKey) {
             const data = results.data.map((row: any) => ({
                 Descricao: String(row[descKey] || ''), // Mapeia para a chave sem acento
+                Código: String(row[codigoKey] || ''), // Mapeia para a chave com acento
             })).filter((row: HistoricoCSV) => row.Descricao);
             return resolve(data as HistoricoCSV[]);
         }
@@ -81,6 +83,7 @@ const parseJSON = (file: File): Promise<ParsedData> => {
             // Histórico JSON
             const data = json.map((row: any) => ({
                 Descricao: String(row.Descricao || row.Descrição || ''),
+                Código: String(row.Código || row.Código || ''), // Tenta ler Código
             })).filter((row: HistoricoCSV) => row.Descricao);
             return resolve(data as HistoricoCSV[]);
         }
