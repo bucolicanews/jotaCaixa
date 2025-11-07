@@ -36,7 +36,8 @@ const ContratoPreviewDialog: React.FC<ContratoPreviewDialogProps> = ({ open, onO
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
+      {/* Ajustado para sm:max-w-full e max-h-[95vh] */}
+      <DialogContent className="sm:max-w-full md:max-w-4xl max-h-[95vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center">
             <Eye className="w-5 h-5 mr-2" /> Prévia do Contrato: {titulo}

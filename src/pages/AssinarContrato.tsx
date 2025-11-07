@@ -190,9 +190,10 @@ const AssinarContrato: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col items-center bg-background p-4 md:p-8">
-      <Card className="w-full max-w-4xl">
+      {/* Removendo max-w-4xl para usar a largura total em mobile */}
+      <Card className="w-full max-w-full md:max-w-4xl"> 
         <CardHeader>
-          <CardTitle className="text-3xl flex items-center">
+          <CardTitle className="text-2xl md:text-3xl flex items-center">
             <FileSignature className="w-6 h-6 mr-2" /> {contrato.valores_tags_preenchidos?.titulo || 'Contrato para Assinatura'}
           </CardTitle>
           <CardDescription>
@@ -201,8 +202,8 @@ const AssinarContrato: React.FC = () => {
         </CardHeader>
         <CardContent className="space-y-6">
           
-          {/* Conteúdo do Contrato */}
-          <div className="border rounded-md p-6 bg-card shadow-inner max-h-[60vh] overflow-y-auto">
+          {/* Conteúdo do Contrato (Aumentando a altura máxima para leitura) */}
+          <div className="border rounded-md p-4 md:p-6 bg-card shadow-inner max-h-[70vh] overflow-y-auto">
             {contentToDisplay}
           </div>
           
@@ -223,7 +224,7 @@ const AssinarContrato: React.FC = () => {
                   </div>
               ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="space-y-4">
+                      <div className="space-y-4 md:col-span-1">
                           <div className="space-y-2">
                               <Label htmlFor="nome-completo">Nome Completo (Assinante)</Label>
                               <Input 
@@ -244,7 +245,7 @@ const AssinarContrato: React.FC = () => {
                           </div>
                       </div>
                       
-                      <div className="flex flex-col justify-end">
+                      <div className="flex flex-col justify-end md:col-span-1">
                           <Button 
                               onClick={handleAssinar} 
                               disabled={isSigning || !isReadyToSign}
