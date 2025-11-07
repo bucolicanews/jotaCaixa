@@ -40,6 +40,7 @@ const ExportarLancamentos: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [filtroPeriodo, setFiltroPeriodo] = useState<DateRange | undefined>(undefined);
   const [cnpjCpf, setCnpjCpf] = useState('');
+  const [skippedLaunches, setSkippedLaunches] = useState<string[]>([]); // NOVO ESTADO PARA SKIPPED
 
   const getOwnerId = () => {
     if (role === 'Admin' || role === 'Cliente') return (perfil as any)?.id;
@@ -74,6 +75,7 @@ const ExportarLancamentos: React.FC = () => {
         return;
     }
     setLoading(true);
+    setSkippedLaunches([]); // Reset skipped launches
 
     try {
       const startDate = format(filtroPeriodo.from, 'yyyy-MM-dd');
@@ -115,6 +117,8 @@ const ExportarLancamentos: React.FC = () => {
         setLoading(false);
         return;
       }
+      
+      const currentSkipped: string[] = [];
 
       // 2. Mapeamento para o formato Calima (Partidas Dobradas)
       const dataToExport = lancamentos.map(l => {
@@ -127,7 +131,9 @@ const ExportarLancamentos: React.FC = () => {
         const historicoCodigo = l.historicos?.[0]?.codigo || '';
         
         if (!contaResultadoCodigo || !contaSaldoCodigo) {
-            console.warn(`Lançamento ID ${l.id} ignorado: Conta contábil ou conta de saldo não mapeada.`); 
+            const motivo = `Conta Resultado (${contaResultadoCodigo || 'N/A'}) ou Conta Saldo (${contaSaldoCodigo || 'N/A'}) não mapeada.`;
+            console.warn(`Calima Export Skip: Lançamento ID ${l.id} (${l.descricao}). Motivo: ${motivo}`); 
+            currentSkipped.push(`ID ${l.id}: ${l.descricao} - ${motivo}`);
             return null;
         }
         
@@ -159,13 +165,15 @@ const ExportarLancamentos: React.FC = () => {
         };
       }).filter(l => l !== null); // Remove lançamentos que não puderam ser mapeados
 
+      setSkippedLaunches(currentSkipped);
+
       if (dataToExport.length === 0) {
           showError('Nenhum lançamento pôde ser mapeado para o formato Calima. Verifique se todas as contas de saldo e resultado estão vinculadas a um Plano de Contas.');
           setLoading(false);
           return;
       }
 
-      // Cabeçalhos Calima (Ordem Importante)
+      // 3. Exportar CSV
       const headers = ['Data', 'Conta Débito', 'Conta Crédito', 'Valor', 'Código Histórico', 'Complemento', 'CPF/CNPJ'];
 
       const csv = Papa.unparse(dataToExport, {
@@ -220,6 +228,20 @@ const ExportarLancamentos: React.FC = () => {
           {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
           Baixar Lançamentos CSV
         </Button>
+        
+        {skippedLaunches.length > 0 && (
+            <div className="p-3 bg-yellow-100 dark:bg-yellow-900/20 border border-yellow-500 rounded-md text-sm text-yellow-700 dark:text-yellow-300">
+                <p className="font-semibold mb-1">Aviso: {skippedLaunches.length} Lançamentos Ignorados</p>
+                <p>Os seguintes lançamentos não puderam ser mapeados para o Calima por falta de vínculo contábil:</p>
+                <ul className="list-disc list-inside mt-1 max-h-24 overflow-y-auto">
+                    {skippedLaunches.map((msg, i) => <li key={i} className="text-xs">{msg}</li>)}
+                </ul>
+            </div>
+        )}
+        
+        <p className="text-xs text-muted-foreground">
+            Verifique se as contas de saldo em <a href="/bancos" className="underline">Bancos/Caixas</a> e as contas de resultado em <a href="/plano-contas" className="underline">Plano de Contas</a> estão corretamente vinculadas.
+        </p>
       </CardContent>
     </Card>
   );
