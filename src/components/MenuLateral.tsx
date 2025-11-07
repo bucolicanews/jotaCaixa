@@ -61,23 +61,22 @@ const SECOES_MENU: MenuSection[] = [
         titulo: 'Cadastros',
         perfis: ['Admin', 'Cliente', 'Usuario'],
         itens: [
-            // Admin agora tem acesso a estes cadastros para gerenciar seus próprios dados
             // Clientes está vinculado a 'contas_receber'
             { nome: 'Clientes', caminho: '/clientes', icone: Contact, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'contas_receber' },
             { nome: 'Plano de Contas', caminho: '/plano-contas', icone: BookOpen, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'plano_contas' },
-            { nome: 'Históricos', caminho: '/historicos', icone: History, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'plano_contas' }, // NOVO ITEM
-            { nome: 'Importar', caminho: '/importar', icone: Upload, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'importar' },
+            { nome: 'Históricos', caminho: '/historicos', icone: History, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'plano_contas' },
         ]
     },
     {
         titulo: 'Administração',
-        perfis: ['Admin', 'Cliente', 'Usuario'], // ADICIONADO 'Usuario'
+        perfis: ['Admin', 'Cliente', 'Usuario'],
         itens: [
             // Adicionando permissionKey aqui
             { nome: 'Minha Assinatura', caminho: '/minha-assinatura', icone: DollarSign, perfis: ['Cliente'] },
             { nome: 'Gerenciar Usuários', caminho: '/gerenciar-usuarios', icone: Users, perfis: ['Admin', 'Cliente'], permissionKey: 'cadastrar_usuarios' },
             { nome: 'Gerenciar Planos', caminho: '/planos', icone: Package, perfis: ['Admin'] }, 
             { nome: 'Relatórios', caminho: '/relatorios', icone: FileText, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'relatorios' },
+            { nome: 'Importar', caminho: '/importar', icone: Upload, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'importar' }, // ITEM MOVIDO
             { nome: 'Configurações', caminho: '/configuracoes', icone: Settings, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'configuracoes' },
         ]
     }
