@@ -40,7 +40,8 @@ import BalancoPatrimonial from "./pages/BalancoPatrimonial";
 import AssinarContrato from "./pages/AssinarContrato";
 import ContratoLinkPage from "./pages/ContratoLinkPage";
 import DRE from "./pages/DRE";
-import GerenciarHistoricos from "./pages/GerenciarHistoricos"; // NOVO IMPORT
+import GerenciarHistoricos from "./pages/GerenciarHistoricos";
+import ExportacaoCalima from "./pages/ExportacaoCalima"; // NOVO IMPORT
 
 const queryClient = new QueryClient();
 
@@ -222,7 +223,7 @@ const App = () => (
             <Route path="/relatorios/fluxo-caixa" element={<FluxoCaixa />} />
             <Route path="/relatorios/balanco" element={<BalancoPatrimonial />} />
             <Route path="/relatorios/dre" element={<DRE />} />
-            <Route path="/relatorios/calima" element={<Relatorios />} /> {/* Placeholder */}
+            <Route path="/relatorios/calima" element={<ExportacaoCalima />} /> {/* NOVA ROTA */}
             <Route path="/configuracoes" element={<Configuracoes />} />
             <Route path="/planos" element={<GerenciarPlanos />} />
             <Route path="/plano-contas" element={<PlanoContasPage />} />
@@ -238,7 +239,7 @@ const App = () => (
             <Route path="/contratos/preencher/:modeloId" element={<PreencherContrato />} />
             <Route path="/minha-assinatura" element={<MinhaAssinatura />} />
             <Route path="/renovacao" element={<SelecaoPagamentoRenovacao />} />
-            <Route path="/historicos" element={<GerenciarHistoricos />} /> {/* NOVA ROTA */}
+            <Route path="/historicos" element={<GerenciarHistoricos />} />
 
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />

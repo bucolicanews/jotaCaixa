@@ -50,7 +50,7 @@ const REPORTS = [
     title: "Exportação Calima",
     description: "Gere arquivos para importação no sistema contábil Calima.",
     icon: FileText,
-    link: "/relatorios/calima",
+    link: "/relatorios/calima", // ROTA CORRIGIDA
     permissionKey: 'relatorios',
     permissionLabel: 'Relatórios',
   },

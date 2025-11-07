@@ -7,6 +7,8 @@ export interface AdminProfile {
   nome: string;
   email: string;
   avatar_url?: string | null;
+  cpf?: string | null; // NOVO CAMPO
+  cnpj?: string | null; // NOVO CAMPO
 }
 
 export interface ClienteProfile {

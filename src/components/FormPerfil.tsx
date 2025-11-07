@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
-import { AnyProfile, ClienteProfile, UsuarioProfile } from '@/types/usuario';
+import { AnyProfile, ClienteProfile, UsuarioProfile, AdminProfile } from '@/types/usuario';
 import { PERMISSOES_DISPONIVEIS, Permissao } from '../config/permissoes';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { format } from 'date-fns';
@@ -17,6 +17,9 @@ import FormDadosCadastrais from './usuario-forms/FormDadosCadastrais';
 import FormDocumentos from './usuario-forms/FormDocumentos';
 import FormDadosContratuais from './usuario-forms/FormDadosContratuais';
 import { Form } from '@/components/ui/form';
+import { Input } from './ui/input';
+import { FormField, FormItem, FormLabel, FormControl, FormMessage } from './ui/form';
+import { Separator } from './ui/separator';
 
 // Esquema de validação para os campos de URL (opcional)
 const urlSchema = z.string().url('URL inválida.').optional().or(z.literal(''));
@@ -40,6 +43,7 @@ const formSchema = z.object({
   
   // Novos Dados Cadastrais (Comum a Cliente e Usuário)
   cpf: textOptional,
+  cnpj: textOptional, // NOVO CAMPO
   rg: textOptional,
   nome_mae: textOptional,
   nome_pai: textOptional,
@@ -89,9 +93,9 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
     
   const isClient = 'limite_usuarios' in perfilInicial;
   const isUser = 'cliente_id' in perfilInicial;
-  const isAdminProfile = role === 'Admin'; // Novo: Verifica se o perfil logado é Admin
+  const isAdminProfile = role === 'Admin';
   
-  const profileToEdit = perfilInicial as UsuarioProfile | ClienteProfile;
+  const profileToEdit = perfilInicial as UsuarioProfile | ClienteProfile | AdminProfile;
   
   const isLoggedUserAdmin = role === 'Admin';
   
@@ -129,7 +133,8 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
       horas_mensais: (profileToEdit as UsuarioProfile)?.horas_mensais || 220,
 
       // Dados Cadastrais
-      cpf: (profileToEdit as UsuarioProfile)?.cpf || '',
+      cpf: (profileToEdit as UsuarioProfile)?.cpf || (profileToEdit as AdminProfile)?.cpf || '',
+      cnpj: (profileToEdit as AdminProfile)?.cnpj || '', // NOVO CAMPO
       rg: (profileToEdit as UsuarioProfile)?.rg || '',
       nome_mae: (profileToEdit as UsuarioProfile)?.nome_mae || '',
       nome_pai: (profileToEdit as UsuarioProfile)?.nome_pai || '',
@@ -266,9 +271,10 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
         const { error } = await supabase.from('tbl_usuarios').update(dataToUpdate).eq('id', perfilInicial.id);
         if (error) throw error;
       } else if (isAdminProfile) {
-        // Edição de Admin (Apenas nome e dados cadastrais)
+        // Edição de Admin
         
         dataToUpdate.cpf = values.cpf || null;
+        dataToUpdate.cnpj = values.cnpj || null; // NOVO CAMPO
         dataToUpdate.rg = values.rg || null;
         dataToUpdate.nome_mae = values.nome_mae || null;
         dataToUpdate.nome_pai = values.nome_pai || null;
@@ -329,6 +335,19 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
                 <TabsContent value="cadastrais" className="mt-4 space-y-6 p-4">
                     <h3 className="font-semibold text-lg">Dados Cadastrais (Tags de Contrato)</h3>
                     <p className="text-sm text-muted-foreground mb-4">Estes campos são usados para preencher tags dinâmicas em contratos.</p>
+                    
+                    {/* Campos específicos do Admin (CPF/CNPJ) */}
+                    {isAdminProfile && (
+                        <div className="space-y-4">
+                            <FormField control={form.control} name="cpf" render={({ field }) => (
+                                <FormItem><FormLabel>CPF (Opcional)</FormLabel><FormControl><Input placeholder="000.000.000-00" {...field} /></FormControl><FormMessage /></FormItem>
+                            )} />
+                            <FormField control={form.control} name="cnpj" render={({ field }) => (
+                                <FormItem><FormLabel>CNPJ (Opcional)</FormLabel><FormControl><Input placeholder="00.000.000/0000-00" {...field} /></FormControl><FormMessage /></FormItem>
+                            )} />
+                            <Separator />
+                        </div>
+                    )}
                     
                     <FormDadosCadastrais 
                         control={form.control}
