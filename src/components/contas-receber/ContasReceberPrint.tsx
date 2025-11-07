@@ -35,39 +35,55 @@ const ContasReceberPrint: React.FC<ContasReceberPrintProps> = ({ data, activeTab
     
     const headers = Object.keys(data[0]);
     
-    // Mapeamento de largura de coluna em PORCENTAGEM (Otimizado para Paisagem)
+    // Mapeamento de largura de coluna em PORCENTAGEM (Ajustado para Paisagem)
     const getColumnStyle = (header: string) => {
-        switch (header) {
-            case 'ID Parcela':
-            case 'ID Conta':
-            case 'ID Recebimento':
-                return { width: '6%', fontSize: '8pt' }; // Reduzido
-            case 'Cliente':
-                return { width: '10%' };
-            case 'Descrição':
-                return { width: '30%' }; // Aumentado
-            case 'Nº Parcela':
-                return { width: '4%', textAlign: 'center' as const }; // Reduzido
-            case 'Valor Parcela':
-            case 'Vlr Pago':
-            case 'Valor Total':
-            case 'Valor Recebido':
-                return { width: '8%', textAlign: 'right' as const };
-            case 'Vencimento':
-            case 'Data Recebimento':
-            case 'Data Pagamento':
-                return { width: '8%' };
-            case 'Status':
-            case 'Origem':
-            case 'Forma Pagamento':
-                return { width: '7%' };
-            case 'Conta/Caixa':
-                return { width: '9%' };
-            case 'Progresso':
-                return { width: '5%', textAlign: 'center' as const };
-            default:
-                return {};
+        // Total de colunas no Sintético (9)
+        if (activeTab === 'parcela_sintetica') {
+            switch (header) {
+                case 'ID Conta': return { width: '10%', fontSize: '8pt' };
+                case 'Cliente': return { width: '12%' };
+                case 'Descrição': return { width: '25%' };
+                case 'Vencimento': return { width: '10%' };
+                case 'Valor Total': return { width: '10%', textAlign: 'right' as const };
+                case 'Progresso': return { width: '8%', textAlign: 'center' as const };
+                case 'Status': return { width: '10%' };
+                case 'Origem': return { width: '15%' };
+                default: return {};
+            }
         }
+        // Total de colunas no Parcelas (10)
+        if (activeTab === 'parcelas') {
+            switch (header) {
+                case 'ID Parcela': return { width: '8%', fontSize: '8pt' };
+                case 'ID Conta': return { width: '8%', fontSize: '8pt' };
+                case 'Cliente': return { width: '10%' };
+                case 'Descrição': return { width: '15%' };
+                case 'Nº Parcela': return { width: '5%', textAlign: 'center' as const };
+                case 'Vencimento': return { width: '8%' };
+                case 'Valor Parcela': return { width: '8%', textAlign: 'right' as const };
+                case 'Vlr Pago': return { width: '8%', textAlign: 'right' as const };
+                case 'Data Pagamento': return { width: '8%' };
+                case 'Status': return { width: '8%' };
+                default: return {};
+            }
+        }
+        // Total de colunas no Recebimentos (8)
+        if (activeTab === 'recebimentos') {
+            switch (header) {
+                case 'ID Recebimento': return { width: '10%', fontSize: '8pt' };
+                case 'Data Recebimento': return { width: '12%' };
+                case 'ID Conta': return { width: '8%', fontSize: '8pt' };
+                case 'Cliente': return { width: '12%' };
+                case 'Descrição': return { width: '20%' };
+                case 'Valor Recebido': return { width: '10%', textAlign: 'right' as const };
+                case 'Forma Pagamento': return { width: '10%' };
+                case 'Conta/Caixa': return { width: '18%' };
+                case 'Origem': return { width: '10%' };
+                default: return {};
+            }
+        }
+        
+        return {};
     };
     
     // Colunas que precisam de cálculo de total
