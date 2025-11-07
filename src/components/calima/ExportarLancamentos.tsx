@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { FileDown, Loader2, FileBarChart } from 'lucide-react';
@@ -6,7 +6,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
 import Papa from 'papaparse';
-import { UsuarioProfile } from '@/types/usuario';
+import { UsuarioProfile, ClienteProfile, AdminProfile } from '@/types/usuario';
 import { DateRangePicker } from '@/components/DateRangePicker';
 import { DateRange } from 'react-day-picker';
 import { format } from 'date-fns';
@@ -14,28 +14,27 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
 interface LancamentoCalima {
-    id: string; // Adicionado para o log de erro
+    id: string;
     data_movimentacao: string;
     valor: number;
     tipo: 'Entrada' | 'Saida';
     documento: string | null;
     conta_contabil_id: string;
     historico_id: string | null;
-    descricao: string; // Adicionado para o complemento
+    descricao: string;
     
-    // Relações:
-    plano_contas: { Conta: string }[] | null; // Conta de Resultado/Despesa
+    // Relações corrigidas com aliases
+    conta_resultado: { Conta: string }[] | null; 
     historicos: { codigo: string | null }[] | null;
     
-    // Corrigido para refletir a estrutura de array retornada pelo Supabase
     conta_saldo: {
         conta_contabil_id: string;
-        plano_contas: { Conta: string } | null; // A relação aninhada é um objeto, mas a relação principal é um array
-    }[] | null;
+        conta_ativo: { Conta: string }[] | null;
+    } | null;
 }
 
 const ExportarLancamentos: React.FC = () => {
-  const { perfil, role } = useSessao();
+  const { perfil, role, carregando } = useSessao();
   const [loading, setLoading] = useState(false);
   const [filtroPeriodo, setFiltroPeriodo] = useState<DateRange | undefined>(undefined);
   const [cnpjCpf, setCnpjCpf] = useState('');
@@ -47,6 +46,21 @@ const ExportarLancamentos: React.FC = () => {
   };
   
   const ownerId = getOwnerId();
+  
+  // Efeito para preencher o CPF/CNPJ automaticamente
+  useEffect(() => {
+      if (!carregando && perfil) {
+          let documento = '';
+          if (role === 'Admin') {
+              const adminProfile = perfil as AdminProfile;
+              documento = adminProfile.cnpj || adminProfile.cpf || '';
+          } else if (role === 'Cliente') {
+              const clienteProfile = perfil as ClienteProfile;
+              documento = clienteProfile.documento || clienteProfile.cpf || '';
+          }
+          setCnpjCpf(documento.replace(/\D/g, '')); // Remove caracteres não numéricos
+      }
+  }, [carregando, perfil, role]);
 
   const handleExport = useCallback(async () => {
     if (!ownerId || !filtroPeriodo?.from || !filtroPeriodo?.to) {
@@ -75,11 +89,15 @@ const ExportarLancamentos: React.FC = () => {
           conta_contabil_id,
           historico_id,
           descricao,
-          plano_contas:conta_contabil_id ( Conta ),
+          
+          // Alias para a conta de resultado/despesa
+          conta_resultado:conta_contabil_id ( Conta ),
           historicos:historico_id ( codigo ),
+          
+          // Alias para a conta de saldo (ativo/passivo)
           conta_saldo:conta_bancaria_id ( 
             conta_contabil_id,
-            plano_contas:conta_contabil_id ( Conta )
+            conta_ativo:conta_contabil_id ( Conta )
           )
         `)
         .eq('empresa_id', ownerId)
@@ -89,7 +107,6 @@ const ExportarLancamentos: React.FC = () => {
 
       if (error) throw error;
 
-      // Corrigindo o cast para 'unknown' primeiro para satisfazer o TS2352
       const lancamentos = data as unknown as LancamentoCalima[];
 
       if (lancamentos.length === 0) {
@@ -100,13 +117,12 @@ const ExportarLancamentos: React.FC = () => {
 
       // 2. Mapeamento para o formato Calima (Partidas Dobradas)
       const dataToExport = lancamentos.map(l => {
-        // A relação aninhada retorna um array, pegamos o primeiro elemento
-        const contaResultadoCodigo = l.plano_contas?.[0]?.Conta || '';
-        const contaSaldoCodigo = l.conta_saldo?.[0]?.plano_contas?.Conta || '';
+        // Acessa o primeiro elemento do array de relações
+        const contaResultadoCodigo = l.conta_resultado?.[0]?.Conta || '';
+        const contaSaldoCodigo = l.conta_saldo?.conta_ativo?.[0]?.Conta || '';
         const historicoCodigo = l.historicos?.[0]?.codigo || '';
         
         if (!contaResultadoCodigo || !contaSaldoCodigo) {
-            // TS2339 resolvido: 'id' agora existe em LancamentoCalima
             console.warn(`Lançamento ID ${l.id} ignorado: Conta contábil ou conta de saldo não mapeada.`); 
             return null;
         }
