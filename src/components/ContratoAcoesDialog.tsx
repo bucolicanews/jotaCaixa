@@ -106,13 +106,18 @@ const ContratoAcoesDialog: React.FC<ContratoAcoesDialogProps> = ({ contrato, ope
   const handleSendWhatsapp = () => {
       if (!linkAssinatura) return;
       
+      // 1. Substitui a tag no template
       const template = config.template_whatsapp.replace('{{LINK_ASSINATURA}}', linkAssinatura);
+      
+      // 2. Codifica a mensagem inteira
       const message = encodeURIComponent(template);
       
-      // Tenta usar o telefone do cliente, se disponível nos metadados
+      // 3. Tenta usar o telefone do cliente, se disponível nos metadados
       const phone = contrato?.valores_tags_preenchidos?.['{{CLIENTE_TELEFONE}}']?.replace(/\D/g, '') || '';
       
       // Abre o link do WhatsApp
+      // O WhatsApp reconhece links clicáveis se eles estiverem formatados corretamente (com https://)
+      // e se a mensagem for enviada via API ou link wa.me.
       window.open(`https://wa.me/${phone}?text=${message}`, '_blank');
       showSuccess('Abrindo WhatsApp...');
   };
