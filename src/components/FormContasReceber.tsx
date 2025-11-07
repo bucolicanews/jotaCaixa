@@ -103,7 +103,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
     if (!ownerId) return;
     const { data, error } = await supabase
         .from('historicos')
-        .select('id, descricao')
+        .select('id, descricao, codigo') // Selecionando 'codigo'
         .eq('proprietario_id', ownerId)
         .order('descricao');
         
@@ -177,7 +177,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
       data_vencimento: contaInicial?.data_vencimento ? new Date(contaInicial.data_vencimento + 'T00:00:00') : undefined,
       numero_parcelas: 1,
       intervalo_dias: 30,
-      historico_id: null, // Inicializa com null
+      historico_id: contaInicial?.historico_id || null, // Inicializa com null
       novo_historico: '',
     },
   });
@@ -193,7 +193,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
         const { data, error } = await supabase
             .from('historicos')
             .insert({ proprietario_id: ownerId, descricao: novoHistoricoValue })
-            .select('id, descricao')
+            .select('id, descricao, codigo')
             .single();
             
         if (error) throw error;
@@ -336,7 +336,10 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
                                 <SelectContent>
                                     <SelectItem value={null as any}>Nenhum</SelectItem>
                                     {historicos.map(h => (
-                                        <SelectItem key={h.id} value={h.id}>{h.descricao}</SelectItem>
+                                        <SelectItem key={h.id} value={h.id}>
+                                            {h.codigo && <span className="font-mono text-xs mr-2">[{h.codigo}]</span>}
+                                            {h.descricao}
+                                        </SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>

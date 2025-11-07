@@ -87,7 +87,7 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
     if (!adminId) return;
     const { data, error } = await supabase
         .from('historicos')
-        .select('id, descricao')
+        .select('id, descricao, codigo') // Selecionando 'codigo'
         .eq('proprietario_id', adminId)
         .order('descricao');
         
@@ -136,7 +136,7 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
         const { data, error } = await supabase
             .from('historicos')
             .insert({ proprietario_id: adminId, descricao: novoHistoricoValue })
-            .select('id, descricao')
+            .select('id, descricao, codigo')
             .single();
             
         if (error) throw error;
@@ -253,7 +253,10 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
                                 <SelectContent>
                                     <SelectItem value={null as any}>Nenhum</SelectItem>
                                     {historicos.map(h => (
-                                        <SelectItem key={h.id} value={h.id}>{h.descricao}</SelectItem>
+                                        <SelectItem key={h.id} value={h.id}>
+                                            {h.codigo && <span className="font-mono text-xs mr-2">[{h.codigo}]</span>}
+                                            {h.descricao}
+                                        </SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>

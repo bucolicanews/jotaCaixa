@@ -17,6 +17,7 @@ export interface ContaReceber {
   created_at: string;
   updated_at: string;
   clientes: Cliente;
+  historico_id?: string | null; // NOVO CAMPO
 }
 
 export interface Parcela {

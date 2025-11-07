@@ -206,7 +206,7 @@ const GerenciarHistoricos: React.FC = () => {
       const historicosParaInserir = parsedData.map(h => ({
         proprietario_id: ownerId,
         descricao: h.Descricao.trim(), 
-        codigo: h.Código?.trim() || null, // Lendo o novo campo
+        codigo: h.Código?.trim() || null, // Lendo o novo campo 'Código'
       })).filter(h => h.descricao.length > 0);
       
       if (historicosParaInserir.length === 0) {
