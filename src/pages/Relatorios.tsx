@@ -2,10 +2,12 @@ import LayoutPrincipal from '@/components/LayoutPrincipal';
 import ReportCard from '@/components/ReportCard';
 import { useSessao } from '@/hooks/use-sessao';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
-import { ArrowDownCircle, ArrowUpCircle, BarChart3, FileText, Scale, TrendingUp, FileBarChart, Users, Clock } from 'lucide-react';
+import { ArrowDownCircle, ArrowUpCircle, BarChart3, FileText, Scale, TrendingUp, FileBarChart, Users, Clock, Search, Filter } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useState, useMemo } from 'react';
+import { Input } from '@/components/ui/input';
 
-const REPORTS = [
+const REPORTS_DATA = [
   {
     title: "Folha de Ponto",
     description: "Acompanhe a jornada de trabalho, horas extras e faltas dos funcionários.",
@@ -74,9 +76,10 @@ const REPORTS = [
 
 const Relatorios = () => {
   const { role, perfil } = useSessao();
+  const [filtroBusca, setFiltroBusca] = useState('');
   
   const getPermissions = (): Record<string, boolean> => {
-    if (role === 'Admin') return REPORTS.reduce((acc, r) => ({ ...acc, [r.permissionKey]: true }), {});
+    if (role === 'Admin') return REPORTS_DATA.reduce((acc, r) => ({ ...acc, [r.permissionKey]: true }), {});
     if (role === 'Cliente') return (perfil as ClienteProfile)?.permissoes || {};
     if (role === 'Usuario') return (perfil as UsuarioProfile)?.permissoes || {};
     return {};
@@ -84,10 +87,25 @@ const Relatorios = () => {
   
   const userPermissions = getPermissions();
   
-  // Correção 1: Acesso seguro à propriedade 'relatorios'
   const canAccessPage = userPermissions.relatorios === true || role === 'Admin';
 
-  // Correção 2: Se !canAccessPage for verdadeiro, e role não for Admin, bloqueia.
+  const relatoriosFiltrados = useMemo(() => {
+    let filtered = REPORTS_DATA;
+    
+    // 1. Filtrar por texto
+    if (filtroBusca) {
+        const termo = filtroBusca.toLowerCase();
+        filtered = filtered.filter(r => 
+            r.title.toLowerCase().includes(termo) || 
+            r.description.toLowerCase().includes(termo)
+        );
+    }
+    
+    // 2. Ordenar alfabeticamente
+    return filtered.sort((a, b) => a.title.localeCompare(b.title));
+  }, [filtroBusca]);
+
+
   if (!canAccessPage) {
     return (
       <LayoutPrincipal>
@@ -98,18 +116,31 @@ const Relatorios = () => {
 
   return (
     <LayoutPrincipal>
-      <h1 className="text-2xl md:text-3xl font-bold mb-8 flex items-center">
+      <h1 className="text-2xl md:text-3xl font-bold mb-6 flex items-center">
         <FileBarChart className="w-6 h-6 mr-2" /> Dashboard de Relatórios Financeiros
       </h1>
       
+      <Card className="mb-6">
+        <CardHeader className="pb-2">
+            <CardTitle className="text-lg flex items-center"><Filter className="w-4 h-4 mr-2" /> Filtros</CardTitle>
+        </CardHeader>
+        <CardContent>
+            <div className="relative w-full max-w-md">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                    placeholder="Buscar relatório por nome ou descrição..."
+                    value={filtroBusca}
+                    onChange={(e) => setFiltroBusca(e.target.value)}
+                    className="pl-10"
+                />
+            </div>
+        </CardContent>
+      </Card>
+      
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-        {REPORTS.map((report) => {
-          // Correção 3: Acesso seguro à chave usando userPermissions[report.permissionKey]
+        {relatoriosFiltrados.map((report) => {
           const hasPermission = userPermissions[report.permissionKey] === true;
           const isDisabled = !hasPermission && role !== 'Admin';
-          
-          // Exceção: Se o link for para Contas a Pagar/Receber, a permissão é verificada lá,
-          // mas aqui usamos a permissão do módulo para habilitar o card.
           
           return (
             <ReportCard
@@ -124,6 +155,14 @@ const Relatorios = () => {
           );
         })}
       </div>
+      
+      {relatoriosFiltrados.length === 0 && (
+          <Card className="mt-6">
+              <CardContent className="p-6 text-center text-muted-foreground">
+                  Nenhum relatório encontrado com o termo de busca.
+              </CardContent>
+          </Card>
+      )}
     </LayoutPrincipal>
   );
 };
