@@ -91,13 +91,13 @@ const ExportarLancamentos: React.FC = () => {
           descricao,
           proprietario_id,
           
-          conta_resultado:plano_contas!lancamentos_conta_contabil_id ( Conta ),
+          conta_resultado:plano_contas!conta_contabil_id ( Conta ),
           
-          historicos:historicos!lancamentos_historico_id ( codigo ),
+          historicos:historicos!historico_id ( codigo ),
           
-          conta_saldo:saldo_contas!lancamentos_conta_bancaria_id ( 
+          conta_saldo:saldo_contas!conta_bancaria_id ( 
             conta_contabil_id,
-            conta_ativo:plano_contas!saldo_contas_conta_contabil_id ( Conta )
+            conta_ativo:plano_contas!conta_contabil_id ( Conta )
           )
         `)
         .eq('proprietario_id', ownerId) // USANDO proprietario_id
