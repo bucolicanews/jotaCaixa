@@ -80,6 +80,9 @@ const ExportarLancamentos: React.FC = () => {
       const endDate = format(filtroPeriodo.to, 'yyyy-MM-dd');
 
       // 1. Buscar Lançamentos com as contas contábeis e históricos
+      // Usamos o nome da coluna FK como nome do relacionamento para a conta de resultado (plano_contas)
+      // E o nome da coluna FK como nome do relacionamento para o histórico (historicos)
+      // E o nome da coluna FK como nome do relacionamento para a conta de saldo (saldo_contas)
       const { data, error } = await supabase
         .from('lancamentos')
         .select(`
@@ -91,9 +94,9 @@ const ExportarLancamentos: React.FC = () => {
           conta_contabil_id,
           historico_id,
           descricao,
-          conta_resultado:plano_contas!lancamentos_conta_contabil_id ( Conta ),
-          historicos:historicos!lancamentos_historico_id ( codigo ),
-          conta_saldo:saldo_contas!lancamentos_conta_bancaria_id ( 
+          conta_contabil_id:plano_contas!lancamentos_conta_contabil_id ( Conta ),
+          historico_id:historicos!lancamentos_historico_id ( codigo ),
+          conta_bancaria_id:saldo_contas!lancamentos_conta_bancaria_id ( 
             conta_contabil_id,
             conta_ativo:plano_contas!saldo_contas_conta_contabil_id ( Conta )
           )
@@ -117,12 +120,13 @@ const ExportarLancamentos: React.FC = () => {
       // 2. Mapeamento para o formato Calima (Partidas Dobradas)
       const dataToExport = lancamentos.map(l => {
         // Acessa o primeiro elemento do array de relações
-        const contaResultadoCodigo = l.conta_resultado?.[0]?.Conta || '';
+        // Nota: O nome da coluna agora é 'conta_contabil_id' (que é o alias para a relação)
+        const contaResultadoCodigo = (l as any).conta_contabil_id?.[0]?.Conta || '';
         
         // CORREÇÃO: Acessa o primeiro elemento de conta_saldo, e depois o primeiro elemento de conta_ativo
-        const contaSaldoCodigo = l.conta_saldo?.[0]?.conta_ativo?.[0]?.Conta || '';
+        const contaSaldoCodigo = (l as any).conta_bancaria_id?.[0]?.conta_ativo?.[0]?.Conta || '';
         
-        const historicoCodigo = l.historicos?.[0]?.codigo || '';
+        const historicoCodigo = (l as any).historico_id?.[0]?.codigo || '';
         
         if (!contaResultadoCodigo || !contaSaldoCodigo) {
             console.warn(`Lançamento ID ${l.id} ignorado: Conta contábil ou conta de saldo não mapeada.`); 
