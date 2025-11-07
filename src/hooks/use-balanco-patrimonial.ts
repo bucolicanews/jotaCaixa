@@ -135,7 +135,7 @@ export function useBalancoPatrimonial(endDate: Date | undefined): BalancoData {
       const { data: lancamentosData, error: lError } = await supabase
         .from('lancamentos')
         .select('valor, tipo, conta_contabil_id')
-        .eq('empresa_id', empresaId)
+        .eq('proprietario_id', empresaId) // ALTERADO: empresa_id -> proprietario_id
         .lte('data_movimentacao', endDateISO);
         
       if (lError) throw lError;

@@ -223,7 +223,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
         if (pagamentoError) throw pagamentoError;
         
         const lancamentoPayload = {
-            empresa_id: adminId,
+            proprietario_id: adminId, // ALTERADO: empresa_id -> proprietario_id
             data_movimentacao: dataPagamentoISO,
             descricao: `Pagamento Parcela ${parcela.id} - ${parcela.fornecedor}`, 
             valor: pagamento.valor_pago,

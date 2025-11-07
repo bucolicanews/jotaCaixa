@@ -112,7 +112,7 @@ export function useDRE(filtroPeriodo: DateRange | undefined): DREData {
       const { data: lancamentosData, error: lError } = await supabase
         .from('lancamentos')
         .select('valor, tipo, conta_contabil_id')
-        .eq('empresa_id', empresaId)
+        .eq('proprietario_id', empresaId) // ALTERADO: empresa_id -> proprietario_id
         .gte('data_movimentacao', startDateISO)
         .lte('data_movimentacao', endDateISO);
         

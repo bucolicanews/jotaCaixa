@@ -68,6 +68,7 @@ const useSaldoContaCalculado = (filtroTipoSaldo: 'todos' | 'Credito' | 'Debito' 
       let lancamentosQuery = supabase
         .from('lancamentos')
         .select('valor, tipo, conta_bancaria_id')
+        .eq('proprietario_id', targetEmpresaId) // ALTERADO: empresa_id -> proprietario_id
         .in('conta_bancaria_id', contaIds);
 
       const { data: lancamentosData, error: lancamentosError } = await lancamentosQuery;

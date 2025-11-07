@@ -75,7 +75,7 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
         *,
         saldo_contas:conta_bancaria_id ( nome )
       `)
-      .eq('empresa_id', empresaId)
+      .eq('proprietario_id', empresaId) // ALTERADO: empresa_id -> proprietario_id
       .in('conta_bancaria_id', contasFiltradasIds) // Filtra por contas selecionadas
       .order('data_movimentacao', { ascending: false });
       

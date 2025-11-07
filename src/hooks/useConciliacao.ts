@@ -457,7 +457,7 @@ export function useConciliacao(): ConciliacaoHook {
                 const formattedDate = formatDDMMYYYYToISO(t.data);
                 
                 return {
-                    empresa_id: proprietarioDaConfiguracao,
+                    proprietario_id: proprietarioDaConfiguracao, // ALTERADO: empresa_id -> proprietario_id
                     data_movimentacao: formattedDate || t.data,
                     descricao: t.descricao,
                     valor: Math.abs(t.valor), // Valor absoluto para lancamentos

@@ -270,7 +270,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
       
       // 3. Registrar o Lançamento na conta de Saldo (Movimentação de Caixa/Banco)
       const lancamentoPayload = {
-          empresa_id: ownerId,
+          proprietario_id: ownerId, // ALTERADO: empresa_id -> proprietario_id
           data_movimentacao: values.data_pagamento.toISOString(),
           descricao: `Recebimento Parcela ${parcela.id} - ${values.forma_pagamento}`,
           valor: valorRecebido,
