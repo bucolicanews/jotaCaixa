@@ -27,7 +27,7 @@ const ContasPagar: React.FC = () => {
   const isSupervisao = role === 'Admin';
   const proprietarioId = isSupervisao ? usuario?.id : (usuario as any)?.empresa_id;
 
-  const [contas, setContas] = useState<(ContaPagar | ContaPagarComProgresso)[]>([]);
+  const [contasRaw, setContasRaw] = useState<(ContaPagar | ContaPagarComProgresso)[]>([]); // Armazena dados brutos
   const [parcelas, setParcelas] = useState<ExtendedParcelaPagar[]>([]);
   const [pagamentos, setPagamentos] = useState<any[]>([]); // TODO: Criar tipo AdminPagamento
   const [loading, setLoading] = useState(true);
@@ -75,24 +75,24 @@ const ContasPagar: React.FC = () => {
     }
     
     // Aplica filtros de status (simplificado para o sintético)
-    if (filtroStatus === 'quitado') {
-        query = query.eq('status', 'pago');
-    } else if (filtroStatus === 'nao_quitado') {
-        query = query.neq('status', 'pago');
-    }
+    // NOTA: O filtro de status será aplicado no frontend para permitir a busca por texto
+    // if (filtroStatus === 'quitado') {
+    //     query = query.eq('status', 'pago');
+    // } else if (filtroStatus === 'nao_quitado') {
+    //     query = query.neq('status', 'pago');
+    // }
     
-    // Aplica filtro de texto (busca por ID ou descrição/fornecedor)
-    if (filtroTextoDebounced) {
-        const termo = `%${filtroTextoDebounced}%`;
-        // CORREÇÃO: Remove a busca por ID (UUID) e foca em campos TEXT
-        query = query.or(`descricao.ilike.${termo},fornecedor.ilike.${termo}`);
-    }
+    // REMOVIDO: Filtro de texto no backend para evitar erro de operador em UUID
+    // if (filtroTextoDebounced) {
+    //     const termo = `%${filtroTextoDebounced}%`;
+    //     query = query.or(`descricao.ilike.${termo},fornecedor.ilike.${termo}`);
+    // }
 
     const { data, error } = await query.order('data_vencimento', { ascending: true });
 
     if (error) {
       showError('Erro ao carregar contas a pagar: ' + error.message);
-      setContas([]);
+      setContasRaw([]);
     } else {
       // Se for supervisão, precisamos calcular o progresso de parcelas
       if (isSupervisao) {
@@ -115,13 +115,13 @@ const ContasPagar: React.FC = () => {
             
             return { ...conta, parcelas_total: count || 0, parcelas_pagas: pagasCount || 0 };
         }));
-        setContas(contasComProgresso);
+        setContasRaw(contasComProgresso);
       } else {
-        setContas(data as ContaPagar[]);
+        setContasRaw(data as ContaPagar[]);
       }
     }
     setLoading(false);
-  }, [proprietarioId, isSupervisao, filtroPeriodo, filtroOrigem, filtroStatus, filtroTextoDebounced]);
+  }, [proprietarioId, isSupervisao, filtroPeriodo, filtroOrigem]); // Removido filtroTextoDebounced
   
   const fetchParcelas = useCallback(async () => {
     if (!proprietarioId || !isSupervisao) return;
@@ -160,9 +160,10 @@ const ContasPagar: React.FC = () => {
           const origemMatch = filtroOrigem === 'todos' || p.admin_contas_pagar?.origem === filtroOrigem;
           
           const termo = filtroTextoDebounced.toLowerCase();
+          const contaPagarId = p.admin_contas_pagar?.id || '';
           const textMatch = !termo || 
                             p.id.toLowerCase().includes(termo) ||
-                            p.admin_contas_pagar?.id.toLowerCase().includes(termo) ||
+                            contaPagarId.toLowerCase().includes(termo) ||
                             p.admin_contas_pagar?.descricao.toLowerCase().includes(termo) ||
                             p.admin_contas_pagar?.fornecedor.toLowerCase().includes(termo);
                             
@@ -232,6 +233,41 @@ const ContasPagar: React.FC = () => {
       fetchPagamentos();
     }
   }, [activeTab, fetchContas, fetchParcelas, fetchPagamentos]);
+
+  // --- Filtro de Frontend para a aba Sintético ---
+  const contas = useMemo(() => {
+      let filtered = contasRaw;
+      const termo = filtroTextoDebounced.toLowerCase();
+      
+      // 1. Filtro de Status
+      filtered = filtered.filter(conta => {
+          const total = ((conta as ContaPagarComProgresso).parcelas_total ?? 0);
+          const pagas = ((conta as ContaPagarComProgresso).parcelas_pagas ?? 0);
+
+          const isPago = isSupervisao 
+              ? pagas === total && total > 0
+              : conta.status === 'pago';
+              
+          if (filtroStatus === 'quitado') return isPago;
+          if (filtroStatus === 'nao_quitado') return !isPago;
+          return true;
+      });
+      
+      // 2. Filtro de Texto (ID, Fornecedor, Descrição)
+      if (termo) {
+          filtered = filtered.filter(conta => {
+              const idMatch = conta.id.toLowerCase().includes(termo);
+              const fornecedorMatch = conta.fornecedor?.toLowerCase().includes(termo);
+              const descricaoMatch = (conta as ContaPagarComProgresso).descricao?.toLowerCase().includes(termo);
+              
+              return idMatch || fornecedorMatch || descricaoMatch;
+          });
+      }
+      
+      return filtered;
+  }, [contasRaw, filtroStatus, filtroTextoDebounced, isSupervisao]);
+  // -----------------------------------------------
+
 
   const handleOpenForm = (conta: ContaPagarComProgresso | null = null) => {
     setFormDialog({ open: true, conta });

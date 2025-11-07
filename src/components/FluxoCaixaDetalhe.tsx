@@ -86,8 +86,8 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
     // Filtro de texto: busca por ID, descrição ou documento
     if (filtroTextoDebounced) {
         const termo = `%${filtroTextoDebounced}%`;
-        // Permite buscar por ID (UUID) ou por campos de texto
-        query = query.or(`descricao.ilike.${termo},documento.ilike.${termo},id.ilike.${termo},conta_bancaria_id.ilike.${termo}`);
+        // CORREÇÃO: Foca apenas em campos de texto (descricao e documento)
+        query = query.or(`descricao.ilike.${termo},documento.ilike.${termo}`);
     }
     
     // Filtro de data para os lançamentos (apenas se houver data de início)
@@ -110,7 +110,17 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
           plano_contas: null,
       })) as Lancamento[];
       
-      setLancamentos(mappedData);
+      // Filtro de ID no frontend (para IDs de lançamento ou conta bancária)
+      let filteredData = mappedData;
+      if (filtroTextoDebounced) {
+          const termo = filtroTextoDebounced.toLowerCase();
+          filteredData = filteredData.filter(l => 
+              l.id.toLowerCase().includes(termo) ||
+              l.conta_bancaria_id.toLowerCase().includes(termo)
+          );
+      }
+      
+      setLancamentos(filteredData);
     }
     setLoadingLancamentos(false);
   }, [empresaId, filtroContaId, filtroTipo, filtroTextoDebounced, filtroPeriodo, contas]);
