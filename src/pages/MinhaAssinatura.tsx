@@ -13,7 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Link, useNavigate } from 'react-router-dom';
-import { useStripeConfig } from '@/hooks/use-stripe-config';
+import { useStripeConfigClient } from '@/integrations/stripe/use-stripe-config-client';
 import ContasFuturasDialog from '@/components/ContasFuturasDialog'; // Importando o novo componente
 
 interface Pagamento {
@@ -42,7 +42,7 @@ const MinhaAssinatura: React.FC = () => {
   const clienteId = clienteProfile?.id;
   const adminId = clienteProfile?.admin_id;
 
-  const { loading: loadingStripe } = useStripeConfig(adminId || null);
+  const { loading: loadingStripe } = useStripeConfigClient(adminId || null);
   
   const [planoAtual, setPlanoAtual] = useState<Plano | null>(null);
   const [carregandoPlano, setCarregandoPlano] = useState(true);

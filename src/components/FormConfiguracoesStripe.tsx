@@ -11,28 +11,32 @@ import { showError, showSuccess } from '@/utils/toast';
 import { useSessao } from '@/hooks/use-sessao';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { PlanoContas } from '@/types/plano-contas';
-import { Historico } from '@/types/historico'; // Importando Historico
+import { Historico } from '@/types/historico';
+import { useStripeConfigAdmin } from '@/integrations/stripe/use-stripe-config-admin'; // NOVO HOOK
 
 const formSchema = z.object({
   stripe_publishable_key: z.string().min(1, 'A chave publicável é obrigatória.'),
   stripe_secret_key: z.string().min(1, 'A chave secreta é obrigatória.'),
   conta_sintetica_id: z.string().uuid('Selecione uma conta contábil válida.').nullable(),
   conta_receber_id: z.string().uuid('Selecione uma conta contábil válida.').nullable(),
-  historico_padrao_id: z.string().uuid('Selecione um histórico padrão válido.').nullable(), // NOVO CAMPO
+  historico_padrao_id: z.string().uuid('Selecione um histórico padrão válido.').nullable(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
 
 const FormConfiguracoesStripe: React.FC = () => {
   const { role, usuario, carregando: carregandoSessao } = useSessao();
-  const [loadingData, setLoadingData] = useState(true);
-  const [existingId, setExistingId] = useState<string | null>(null);
   const [contasContabeis, setContasContabeis] = useState<PlanoContas[]>([]);
-  const [historicos, setHistoricos] = useState<Historico[]>([]); // NOVO ESTADO
+  const [historicos, setHistoricos] = useState<Historico[]>([]);
   const [loadingContas, setLoadingContas] = useState(true);
   
   const isAdmin = role === 'Admin';
   const adminId = usuario?.id;
+  
+  // Usando o novo hook para buscar a configuração completa (Admin-only)
+  const { config: configInicial, loading: loadingData, error: configError, refetch: refetchConfig } = useStripeConfigAdmin(adminId || null);
+  const [existingId, setExistingId] = useState<string | null>(null);
+
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -41,20 +45,43 @@ const FormConfiguracoesStripe: React.FC = () => {
       stripe_secret_key: '',
       conta_sintetica_id: null,
       conta_receber_id: null,
-      historico_padrao_id: null, // Valor inicial
+      historico_padrao_id: null,
     },
   });
   
+  // Efeito para carregar os valores iniciais do hook no formulário
+  useEffect(() => {
+      if (configInicial) {
+          setExistingId(configInicial.id);
+          form.reset({
+              stripe_publishable_key: configInicial.stripe_publishable_key || '',
+              stripe_secret_key: configInicial.stripe_secret_key || '',
+              conta_sintetica_id: configInicial.conta_sintetica_id || undefined, 
+              conta_receber_id: configInicial.conta_receber_id || undefined,
+              historico_padrao_id: configInicial.historico_padrao_id || undefined,
+          });
+      } else if (!loadingData && !configInicial) {
+          setExistingId(null);
+          form.reset({
+              stripe_publishable_key: '',
+              stripe_secret_key: '',
+              conta_sintetica_id: undefined,
+              conta_receber_id: undefined,
+              historico_padrao_id: undefined,
+          });
+      }
+  }, [configInicial, loadingData, form]);
+
+
   const fetchContasContabeis = useCallback(async () => {
     if (!adminId) return;
     setLoadingContas(true);
     
-    // Busca apenas contas analíticas do Admin (que serão usadas como contas sintéticas de recebimento)
     const { data, error } = await supabase
         .from('plano_contas')
         .select('id, Conta, Descricao, Analitica')
         .eq('proprietario_id', adminId)
-        .eq('Analitica', 'Sim') // Apenas contas analíticas
+        .eq('Analitica', 'Sim')
         .order('Conta');
         
     if (error) {
@@ -66,7 +93,6 @@ const FormConfiguracoesStripe: React.FC = () => {
     setLoadingContas(false);
   }, [adminId]);
   
-  // NOVO: Função para buscar históricos
   const fetchHistoricos = useCallback(async () => {
     if (!adminId) return;
     const { data, error } = await supabase
@@ -83,54 +109,12 @@ const FormConfiguracoesStripe: React.FC = () => {
     }
   }, [adminId]);
 
-  const fetchConfig = useCallback(async () => {
-    if (!isAdmin || !adminId) {
-      setLoadingData(false);
-      return;
-    }
-    
-    setLoadingData(true);
-    
-    // Busca a configuração vinculada ao ID do Admin logado (proprietario_id = adminId)
-    const { data, error } = await supabase
-      .from('configuracoes_stripe')
-      .select('id, stripe_publishable_key, stripe_secret_key, conta_sintetica_id, conta_receber_id, historico_padrao_id') // Inclui o novo campo
-      .eq('proprietario_id', adminId)
-      .limit(1)
-      .single();
-
-    if (error && error.code !== 'PGRST116') {
-      showError('Erro ao carregar configurações do Stripe: ' + error.message);
-    } else if (data) {
-      setExistingId(data.id);
-      
-      form.reset({
-        stripe_publishable_key: data.stripe_publishable_key || '',
-        stripe_secret_key: data.stripe_secret_key || '',
-        conta_sintetica_id: data.conta_sintetica_id || undefined, 
-        conta_receber_id: data.conta_receber_id || undefined,
-        historico_padrao_id: data.historico_padrao_id || undefined, // Carrega o novo campo
-      });
-    } else {
-      setExistingId(null);
-      form.reset({
-        stripe_publishable_key: '',
-        stripe_secret_key: '',
-        conta_sintetica_id: undefined,
-        conta_receber_id: undefined,
-        historico_padrao_id: undefined, // Reseta o novo campo
-      });
-    }
-    setLoadingData(false);
-  }, [isAdmin, adminId, form]);
-
   useEffect(() => {
     if (!carregandoSessao && isAdmin) {
       fetchContasContabeis();
-      fetchHistoricos(); // Busca históricos
-      fetchConfig();
+      fetchHistoricos();
     }
-  }, [carregandoSessao, isAdmin, fetchConfig, fetchContasContabeis, fetchHistoricos]);
+  }, [carregandoSessao, isAdmin, fetchContasContabeis, fetchHistoricos]);
 
   const onSubmit = async (values: FormValues) => {
     if (!isAdmin) {
@@ -163,7 +147,7 @@ const FormConfiguracoesStripe: React.FC = () => {
       stripe_secret_key: values.stripe_secret_key,
       conta_sintetica_id: values.conta_sintetica_id,
       conta_receber_id: values.conta_receber_id,
-      historico_padrao_id: values.historico_padrao_id, // Salva o novo campo
+      historico_padrao_id: values.historico_padrao_id,
       proprietario_id: adminId,
     };
 
@@ -186,7 +170,7 @@ const FormConfiguracoesStripe: React.FC = () => {
       if (error) throw error;
 
       showSuccess('Configurações do Stripe salvas com sucesso!');
-      fetchConfig();
+      refetchConfig(); // Recarrega a configuração
     } catch (error: any) {
       showError(`Falha ao salvar configurações: ${error.message}`);
     }
@@ -198,6 +182,10 @@ const FormConfiguracoesStripe: React.FC = () => {
 
   if (loadingData || loadingContas) {
     return <div className="flex justify-center items-center h-20"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>;
+  }
+  
+  if (configError) {
+      return <p className="text-red-500">Erro ao carregar configurações: {configError}</p>;
   }
 
   return (

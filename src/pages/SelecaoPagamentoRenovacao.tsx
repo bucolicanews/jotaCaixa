@@ -13,6 +13,7 @@ import { useSessao } from '@/hooks/use-sessao';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ClienteProfile } from '@/types/usuario';
 import { Badge } from '@/components/ui/badge';
+import { useStripeConfigClient } from '@/integrations/stripe/use-stripe-config-client';
 
 const SelecaoPagamentoRenovacao: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -27,6 +28,9 @@ const SelecaoPagamentoRenovacao: React.FC = () => {
   const contaPagarId = searchParams.get('cp_id'); // Este é o ID da Parcela
   const clienteProfile = perfil as ClienteProfile;
   const planoAtualId = clienteProfile?.plano_id;
+  const adminId = clienteProfile?.admin_id;
+
+  const { loading: loadingStripe } = useStripeConfigClient(adminId || null);
 
   const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
   
@@ -91,7 +95,7 @@ const SelecaoPagamentoRenovacao: React.FC = () => {
       setPlanoSelecionado(null);
   };
 
-  if (carregando || carregandoPlanos || !contaPagarId || valorParcela === null) {
+  if (carregando || carregandoPlanos || loadingStripe || !contaPagarId || valorParcela === null) {
     return (
         <LayoutPrincipal>
             <div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>

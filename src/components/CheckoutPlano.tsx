@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useNavigate } from 'react-router-dom';
 import { format, addDays } from 'date-fns';
-import { useStripeConfig } from '@/hooks/use-stripe-config';
+import { useStripeConfigClient } from '@/integrations/stripe/use-stripe-config-client';
 import { useSessao } from '@/hooks/use-sessao';
 import { ClienteProfile } from '@/types/usuario';
 import { BASE_URL } from '@/config/app-config'; // Importando BASE_URL
@@ -37,7 +37,7 @@ const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano, isUpgrade = false,
     return null;
   }, [role, usuario, perfil]);
 
-  const { loading: loadingStripe } = useStripeConfig(proprietarioId);
+  const { loading: loadingStripe } = useStripeConfigClient(proprietarioId);
 
   const handleAdesao = async (e: React.FormEvent) => {
     e.preventDefault();

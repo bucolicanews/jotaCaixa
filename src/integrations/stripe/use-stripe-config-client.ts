@@ -15,15 +15,15 @@ const keyCache: Record<string, string> = {};
 
 /**
  * Hook que carrega a chave publicável do Stripe com base no `proprietario_id`.
+ * Este hook é usado no frontend (CheckoutPlano) e depende da política RLS de leitura.
  */
-export function useStripeConfig(proprietarioId: string | null): StripeConfig {
+export function useStripeConfigClient(proprietarioId: string | null): StripeConfig {
   const [loading, setLoading] = useState(true);
   const [publishableKey, setPublishableKey] = useState<string | null>(null);
   const [stripePromise, setStripePromise] = useState<Promise<Stripe | null> | null>(null);
 
   useEffect(() => {
     if (!proprietarioId) {
-      // Não mostra erro imediatamente, espera o ID ser carregado
       setLoading(false);
       return;
     }
@@ -39,6 +39,7 @@ export function useStripeConfig(proprietarioId: string | null): StripeConfig {
     const fetchStripeKey = async () => {
       setLoading(true);
       try {
+        // Acesso direto à tabela, dependendo da política RLS "Authenticated users can read stripe configs"
         const { data, error } = await supabase
           .from('configuracoes_stripe')
           .select('stripe_publishable_key')
@@ -46,8 +47,11 @@ export function useStripeConfig(proprietarioId: string | null): StripeConfig {
           .single();
 
         if (error || !data?.stripe_publishable_key) {
-          console.error('Erro ao buscar chave publicável do Stripe:', error);
-          showError('Falha ao carregar a configuração de pagamento.');
+          // Não mostra erro se for PGRST116 (No rows found), apenas se for erro de permissão ou outro.
+          if (error && error.code !== 'PGRST116') {
+            console.error('Erro ao buscar chave publicável do Stripe:', error);
+            showError('Falha ao carregar a configuração de pagamento.');
+          }
           setLoading(false);
           return;
         }
