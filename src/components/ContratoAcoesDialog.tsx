@@ -189,7 +189,41 @@ const ContratoAcoesDialog: React.FC<ContratoAcoesDialogProps> = ({ contrato, ope
   // Conteúdo a ser exibido na aba de prévia
   const contentToDisplay = contrato.conteudo_renderizado ? (
     isHtml ? (
-        <div dangerouslySetInnerHTML={{ __html: contrato.conteudo_renderizado }} />
+        // Injeta CSS de sobrescrita para garantir responsividade do template HTML
+        <div className="contract-preview-wrapper">
+            <style>{`
+                /* Sobrescreve o max-width fixo do template para telas pequenas */
+                .contract-preview-wrapper .container {
+                    max-width: 100% !important;
+                    padding: 10px !important; /* Reduz o padding interno */
+                    margin: 0 auto !important;
+                }
+                /* Garante que o card interno também se ajuste */
+                .contract-preview-wrapper .card {
+                    padding: 15px !important;
+                }
+                /* Garante que o layout de duas colunas se torne uma coluna em mobile */
+                @media (max-width: 640px) {
+                    .contract-preview-wrapper .two-col {
+                        grid-template-columns: 1fr !important;
+                    }
+                    .contract-preview-wrapper header {
+                        flex-direction: column;
+                        align-items: flex-start;
+                    }
+                    .contract-preview-wrapper .meta {
+                        text-align: left;
+                        margin-left: 0;
+                        margin-top: 10px;
+                    }
+                    .contract-preview-wrapper .signature-row {
+                        flex-direction: column;
+                        gap: 10px;
+                    }
+                }
+            `}</style>
+            <div dangerouslySetInnerHTML={{ __html: contrato.conteudo_renderizado }} />
+        </div>
     ) : (
         <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', margin: 0 }}>{contrato.conteudo_renderizado}</pre>
     )
