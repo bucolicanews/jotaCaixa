@@ -99,8 +99,7 @@ const ClientesPrint: React.FC<ClientesPrintProps> = ({ data, titulo, isSupervisa
     return (
         <div className="print-container landscape">
             <div className="print-header">
-                <h1 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '5px' }}>RELATÓRIO DE CLIENTES E EMPRESAS</h1>
-                <h2 style={{ fontSize: '12px', fontWeight: 'normal', marginBottom: '5px' }}>{finalTitulo}</h2>
+                <h1 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '5px' }}>{finalTitulo}</h1>
                 <p style={{ fontSize: '10px', color: '#555' }}>Gerado em: {format(new Date(), 'dd/MM/yyyy HH:mm', { locale: ptBR })}</p>
             </div>
 
