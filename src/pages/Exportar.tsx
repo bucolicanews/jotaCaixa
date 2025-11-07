@@ -28,7 +28,7 @@ const Exportar: React.FC = () => {
   return (
     <LayoutPrincipal>
       <h1 className="text-2xl md:text-3xl font-bold mb-8 flex items-center">
-        <FileText className="w-6 h-6 mr-2" /> Exportação Contábil (Calima)
+        <FileText className="w-6 h-6 mr-2" /> Exportação Contábil
       </h1>
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
