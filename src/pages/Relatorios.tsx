@@ -2,7 +2,7 @@ import LayoutPrincipal from '@/components/LayoutPrincipal';
 import ReportCard from '@/components/ReportCard';
 import { useSessao } from '@/hooks/use-sessao';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
-import { ArrowDownCircle, ArrowUpCircle, BarChart3, FileText, Scale, TrendingUp, FileBarChart } from 'lucide-react';
+import { ArrowDownCircle, ArrowUpCircle, BarChart3, FileText, Scale, TrendingUp, FileBarChart, Users } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 const REPORTS = [
@@ -29,6 +29,14 @@ const REPORTS = [
     link: "/contas-pagar", 
     permissionKey: 'contas_pagar',
     permissionLabel: 'Contas a Pagar',
+  },
+  {
+    title: "Clientes e Empresas",
+    description: "Lista e status de todas as empresas e clientes cadastrados (Ativos, Inativos, Avulsos).",
+    icon: Users, 
+    link: "/clientes", 
+    permissionKey: 'contas_receber', 
+    permissionLabel: 'Contas a Receber',
   },
   {
     title: "Balanço Patrimonial (Simplificado)",
