@@ -22,9 +22,9 @@ interface LancamentoCalima {
     conta_contabil_id: string;
     historico_id: string | null;
     
-    // Relações (Ajustado para refletir a estrutura aninhada da query)
-    plano_contas: { Conta: string } | null;
-    historicos: { codigo: string | null } | null;
+    // Relações: Ajustado para esperar um array de objetos (mesmo que seja de 1 elemento)
+    plano_contas: { Conta: string }[] | null;
+    historicos: { codigo: string | null }[] | null;
 }
 
 const ExportarLancamentos: React.FC = () => {
@@ -83,8 +83,13 @@ const ExportarLancamentos: React.FC = () => {
 
       // 2. Mapeamento para o formato Calima
       const dataToExport = lancamentos.flatMap(l => {
-        const contaContabil = l.plano_contas?.Conta || '';
-        const historicoCodigo = l.historicos?.codigo || '';
+        // Ajuste para lidar com o array retornado pelo Supabase
+        const planoContas = l.plano_contas?.[0];
+        const historicos = l.historicos?.[0];
+        
+        const contaContabil = planoContas?.Conta || '';
+        const historicoCodigo = historicos?.codigo || '';
+        
         const valor = l.valor.toFixed(2).replace('.', ',');
         const dataFormatada = format(new Date(l.data_movimentacao + 'T00:00:00'), 'dd/MM/yyyy');
         

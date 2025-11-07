@@ -51,11 +51,14 @@ const FormGeral: React.FC<FormGeralProps> = ({
   );
   
   const nomeLabel = isUserScope ? 'Nome Completo do Usuário' : 'Nome da Empresa';
+  
+  // Se for edição de Admin/Cliente (não UserScope), o campo 'nome' deve ser editável.
+  const isNameEditable = isUserScope || (isEditing && !isUserScope);
 
   return (
     <div className="space-y-4">
       <FormField control={control} name="nome" render={({ field }) => (
-        <FormItem><FormLabel>{nomeLabel}</FormLabel><FormControl><Input placeholder="Nome completo" {...field} disabled={isEditing && !isUserScope} /></FormControl><FormMessage /></FormItem>
+        <FormItem><FormLabel>{nomeLabel}</FormLabel><FormControl><Input placeholder="Nome completo" {...field} disabled={!isNameEditable} /></FormControl><FormMessage /></FormItem>
       )} />
       <FormField control={control} name="email" render={({ field }) => (
         <FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" placeholder="email@exemplo.com" {...field} disabled={isEditing} /></FormControl><FormMessage /></FormItem>
