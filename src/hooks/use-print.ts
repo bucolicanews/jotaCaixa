@@ -25,9 +25,10 @@ export function usePrint() {
             margin: 15mm;
           }
           
-          /* Sobrescreve para Paisagem se a classe 'landscape' estiver presente */
-          .landscape @page {
-              size: A4 landscape; /* FORÇA MODO PAISAGEM */
+          /* FORÇA PAISAGEM QUANDO A CLASSE 'landscape' ESTIVER NO BODY */
+          body.landscape @page {
+              size: A4 landscape; 
+              margin: 15mm;
           }
           
           body { 
