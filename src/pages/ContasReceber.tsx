@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, PlusCircle, Edit, Trash2, ListChecks, BadgeDollarSign } from 'lucide-react';
+import { Loader2, PlusCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
@@ -10,10 +10,8 @@ import { ContaReceber, ExtendedParcelaDetalhada, ContaReceberComProgresso, Admin
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import FormContasReceber from '@/components/FormContasReceber';
 import DetalhesParcelasDialog from '@/components/DetalhesParcelasDialog';
-import { Badge } from '@/components/ui/badge';
 import { DateRange } from 'react-day-picker';
 import { isToday, isPast, parseISO, format } from 'date-fns';
-import { cn } from '@/lib/utils';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 import RegistrarPagamentoDialog from '@/components/RegistrarPagamentoDialog';
 import ContasReceberAcoes from '@/components/contas-receber/ContasReceberAcoes';
@@ -22,7 +20,7 @@ import TabelaSintetica from '@/components/contas-receber/TabelaSintetica';
 import TabelaParcelas from '@/components/contas-receber/TabelaParcelas';
 import TabelaRecebimentos from '@/components/contas-receber/TabelaRecebimentos';
 import { useDebounce } from '@/hooks/use-debounce';
-import { formatCurrency, formatarData } from '@/utils/formatters';
+import { formatarData } from '@/utils/formatters'; // Removido formatCurrency
 
 type ParcelaStatus = 'aberta' | 'parcial' | 'paga' | 'reprogramada' | 'cancelada' | 'bloqueada';
 type BadgeVariant = 'success' | 'warning' | 'secondary' | 'destructive' | 'default' | 'info';
@@ -209,8 +207,8 @@ const ContasReceber = () => {
     buscarDados();
   };
 
-  // CORREÇÃO: Atualiza handleEdit para aceitar ContaReceberComProgresso
-  const handleEdit = (conta: ContaReceberComProgresso) => {
+  // CORREÇÃO: Atualiza handleEdit para aceitar ContaReceberComProgresso e usa _conta para evitar TS6133
+  const handleEdit = (_conta: ContaReceberComProgresso) => {
     showError('Funcionalidade de edição de Contas a Receber ainda não implementada.');
     // Para abrir o formulário de edição, você precisaria converter ContaReceberComProgresso para ContaReceber
     // setContaSelecionada(conta); 

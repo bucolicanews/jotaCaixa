@@ -5,23 +5,11 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ListChecks, Edit, Trash2 } from 'lucide-react';
 import { isToday, isPast, parseISO } from 'date-fns';
-// import { cn } from '@/lib/utils'; // Removido
-// import { cn } from '@/lib/utils'; // Removido
+import { ContaReceberComProgresso } from '@/types/contas-receber';
 
 // Tipos importados do ContasReceber.tsx
 type ParcelaStatus = 'aberta' | 'parcial' | 'paga' | 'reprogramada' | 'cancelada' | 'bloqueada';
 type BadgeVariant = 'success' | 'warning' | 'secondary' | 'destructive' | 'default' | 'info';
-
-interface ContaReceberComProgresso {
-    id: string;
-    descricao: string;
-    data_vencimento: string;
-    valor_total: number;
-    origem: 'manual' | 'contrato' | 'assinatura_recorrente';
-    parcelas_pagas?: number;
-    parcelas_total?: number;
-    clientes: { nome: string } | null;
-}
 
 interface TabelaSinteticaProps {
     contasFiltradas: ContaReceberComProgresso[];
@@ -30,7 +18,7 @@ interface TabelaSinteticaProps {
     handleDelete: (contaId: string) => void;
     formatCurrency: (value: number) => string;
     formatDate: (dateString: string) => string;
-    getBadgeVariant: (status: ParcelaStatus, dataVencimento: string) => BadgeVariant;
+    // Removido: getBadgeVariant: (status: ParcelaStatus, dataVencimento: string) => BadgeVariant;
 }
 
 const TabelaSintetica: React.FC<TabelaSinteticaProps> = ({
@@ -40,7 +28,6 @@ const TabelaSintetica: React.FC<TabelaSinteticaProps> = ({
     handleDelete,
     formatCurrency,
     formatDate,
-    // getBadgeVariant, // Removido
 }) => {
     
     // Recriando a lógica de status localmente, pois o prop getBadgeVariant foi removido
