@@ -2,10 +2,18 @@ import LayoutPrincipal from '@/components/LayoutPrincipal';
 import ReportCard from '@/components/ReportCard';
 import { useSessao } from '@/hooks/use-sessao';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
-import { ArrowDownCircle, ArrowUpCircle, BarChart3, FileText, Scale, TrendingUp, FileBarChart, Users } from 'lucide-react';
+import { ArrowDownCircle, ArrowUpCircle, BarChart3, FileText, Scale, TrendingUp, FileBarChart, Users, Clock } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 const REPORTS = [
+  {
+    title: "Folha de Ponto",
+    description: "Acompanhe a jornada de trabalho, horas extras e faltas dos funcionários.",
+    icon: Clock,
+    link: "/folha-ponto", 
+    permissionKey: 'folha_ponto',
+    permissionLabel: 'Acompanhar Ponto (Gestor)',
+  },
   {
     title: "Fluxo de Caixa",
     description: "Visualize entradas e saídas por período e o saldo atual das contas.",
