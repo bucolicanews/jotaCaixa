@@ -3,7 +3,7 @@ type StatusType = 'pendente' | 'pago' | 'atrasado' | 'cancelado' | 'cancelada' |
 type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline' | 'success' | 'warning';
 
 export const getBadgeVariant = (status: StatusType, dataVencimento: string): BadgeVariant => {
-    if (status === 'paga' || status === 'parcial') return 'success';
+    if (status === 'paga' || status === 'parcial' || status === 'pago') return 'success';
     if (status === 'cancelada' || status === 'cancelado') return 'destructive';
     
     const today = new Date();
