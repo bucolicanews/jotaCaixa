@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Edit, Trash2, PlusCircle, Filter, Building2, CheckCircle, Users as UsersIcon, Mail, PowerOff } from 'lucide-react';
+import { Loader2, Edit, Trash2, PlusCircle, Filter, Building2, CheckCircle, Users as UsersIcon, Mail, PowerOff, Printer } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
@@ -18,7 +18,10 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import FormUsuario from '@/components/FormUsuario';
 import { parseISO, isPast, format } from 'date-fns';
-import FormEmpresaAvulsa from '@/components/FormEmpresaAvulsa'; // Importando o novo formulário
+import FormEmpresaAvulsa from '@/components/FormEmpresaAvulsa';
+import { usePrint } from '@/hooks/use-print';
+import ReactDOMServer from 'react-dom/server';
+import ClientesPrint from '@/components/ClientesPrint'; // NOVO IMPORT
 
 // Tipo para o filtro de empresa (inclui o Admin)
 interface EmpresaFiltro {
@@ -27,7 +30,7 @@ interface EmpresaFiltro {
 }
 
 // Tipo para as empresas do sistema (tbl_clientes)
-interface EmpresaSistema extends ClienteProfile {
+export interface EmpresaSistema extends ClienteProfile {
     id: string;
     nome: string;
     aprovado: boolean;
@@ -38,6 +41,7 @@ interface EmpresaSistema extends ClienteProfile {
 
 const ClientesPage = () => {
   const { usuario, perfil, role, carregando: carregandoSessao } = useSessao();
+  const { printContent } = usePrint();
   const [clientesCR, setClientesCR] = useState<Cliente[]>([]); // Clientes de Contas a Receber
   const [empresasSistema, setEmpresasSistema] = useState<EmpresaSistema[]>([]); // Empresas do sistema (tbl_clientes)
   const [carregandoDados, setCarregandoDados] = useState(true);
@@ -339,13 +343,15 @@ const ClientesPage = () => {
   const empresasInativas = filterEmpresasSistema('inativos');
   const empresasAvulsas = filterEmpresasSistema('avulsos');
   
-  const empresasParaExibir = activeEmpresaTab === 'ativos' 
-      ? empresasAtivas 
-      : activeEmpresaTab === 'inativos' 
-      ? empresasInativas 
-      : activeEmpresaTab === 'avulsos' 
-      ? empresasAvulsas
-      : empresasSistema.filter(e => !e.aprovado); // Pendentes
+  const empresasParaExibir = useMemo(() => {
+      return activeEmpresaTab === 'ativos' 
+          ? empresasAtivas 
+          : activeEmpresaTab === 'inativos' 
+          ? empresasInativas 
+          : activeEmpresaTab === 'avulsos' 
+          ? empresasAvulsas
+          : empresasSistema.filter(e => !e.aprovado); // Pendentes
+  }, [activeEmpresaTab, empresasAtivas, empresasInativas, empresasAvulsas, empresasSistema]);
 
   // Renderização do conteúdo da tabela de Clientes CR
   const renderClientesCRTable = () => (
@@ -506,6 +512,38 @@ const ClientesPage = () => {
         </Table>
     </div>
   );
+  
+  const handlePrint = () => {
+      let dataToPrint: (Cliente | EmpresaSistema)[] = [];
+      let tituloRelatorio = '';
+      
+      if (activeTab === 'clientes_cr') {
+          dataToPrint = clientesCR;
+          tituloRelatorio = 'Clientes de Contas a Receber';
+      } else {
+          dataToPrint = empresasParaExibir;
+          tituloRelatorio = `Empresas do Sistema - ${activeEmpresaTab.charAt(0).toUpperCase() + activeEmpresaTab.slice(1)}`;
+      }
+      
+      if (dataToPrint.length === 0) {
+          showError('Nenhum dado para imprimir na aba atual.');
+          return;
+      }
+      
+      const printComponent = (
+          <ClientesPrint
+              data={dataToPrint}
+              titulo={tituloRelatorio}
+              isSupervisao={isAdmin}
+              activeTab={activeTab as 'clientes_cr' | 'empresas_sistema'}
+              activeEmpresaTab={activeEmpresaTab as 'pendentes' | 'ativos' | 'inativos' | 'avulsos'}
+          />
+      );
+
+      const htmlContent = ReactDOMServer.renderToStaticMarkup(printComponent);
+      // Passa a classe 'landscape' para o container de impressão
+      printContent(htmlContent, `Relatório Clientes - ${tituloRelatorio}`);
+  };
 
 
   if (carregandoSessao || carregandoDados) {
@@ -524,6 +562,9 @@ const ClientesPage = () => {
         <h1 className="text-2xl md:text-3xl font-bold">Gerenciamento de Clientes</h1>
         
         <div className="flex space-x-2 w-full sm:w-auto">
+            <Button onClick={handlePrint} variant="outline" className="w-full sm:w-auto">
+                <Printer className="w-4 h-4 mr-2" /> Imprimir
+            </Button>
             {/* Botão para Novo Cliente CR */}
             <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
               <DialogTrigger asChild>
@@ -628,25 +669,25 @@ const ClientesPage = () => {
                     <TabsContent value="pendentes" className="mt-4">
                         <Card>
                             <CardHeader><CardTitle className="text-xl">Empresas Pendentes de Aprovação ({empresasSistema.filter(e => !e.aprovado).length})</CardTitle></CardHeader>
-                            <CardContent>{renderEmpresasSistemaTable(empresasParaExibir.filter(e => !e.aprovado))}</CardContent>
+                            <CardContent>{renderEmpresasSistemaTable(empresasParaExibir.filter((e: EmpresaSistema) => !e.aprovado))}</CardContent>
                         </Card>
                     </TabsContent>
                     <TabsContent value="ativos" className="mt-4">
                         <Card>
                             <CardHeader><CardTitle className="text-xl">Empresas Ativas ({empresasAtivas.length})</CardTitle></CardHeader>
-                            <CardContent>{renderEmpresasSistemaTable(empresasParaExibir.filter(e => empresasAtivas.includes(e)))}</CardContent>
+                            <CardContent>{renderEmpresasSistemaTable(empresasParaExibir.filter((e: EmpresaSistema) => empresasAtivas.includes(e)))}</CardContent>
                         </Card>
                     </TabsContent>
                     <TabsContent value="inativos" className="mt-4">
                         <Card>
                             <CardHeader><CardTitle className="text-xl">Empresas Inativas ({empresasInativas.length})</CardTitle></CardHeader>
-                            <CardContent>{renderEmpresasSistemaTable(empresasParaExibir.filter(e => empresasInativas.includes(e)))}</CardContent>
+                            <CardContent>{renderEmpresasSistemaTable(empresasParaExibir.filter((e: EmpresaSistema) => empresasInativas.includes(e)))}</CardContent>
                         </Card>
                     </TabsContent>
                     <TabsContent value="avulsos" className="mt-4">
                         <Card>
                             <CardHeader><CardTitle className="text-xl">Empresas Avulsas ({empresasAvulsas.length})</CardTitle></CardHeader>
-                            <CardContent>{renderEmpresasSistemaTable(empresasParaExibir.filter(e => empresasAvulsas.includes(e)))}</CardContent>
+                            <CardContent>{renderEmpresasSistemaTable(empresasParaExibir.filter((e: EmpresaSistema) => empresasAvulsas.includes(e)))}</CardContent>
                         </Card>
                     </TabsContent>
                 </Tabs>
@@ -669,8 +710,8 @@ const ClientesPage = () => {
               <DialogTitle>Editar Empresa do Sistema</DialogTitle>
             </DialogHeader>
             <FormUsuario 
-              criadorRole={role}
-              criadorPerfil={perfil}
+              criadorRole={role!}
+              criadorPerfil={perfil!}
               usuarioInicial={perfilParaEditar}
               onSaveComplete={handleSaveComplete}
             />

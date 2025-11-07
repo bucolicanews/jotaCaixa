@@ -19,9 +19,19 @@ export function usePrint() {
       const printStyles = `
         <style>
           @page {
-            size: A4 portrait; /* FORÇA MODO RETRATO */
+            size: A4 portrait; /* Padrão: Retrato */
             margin: 15mm; /* Margens padrão para documentos */
           }
+          
+          /* Sobrescreve para Paisagem se a classe 'landscape' estiver presente */
+          .print-container.landscape {
+              width: 297mm; /* Largura A4 */
+              height: 210mm; /* Altura A4 */
+          }
+          .print-container.landscape @page {
+              size: A4 landscape; /* FORÇA MODO PAISAGEM */
+          }
+          
           body { 
             font-family: Arial, sans-serif; 
             margin: 0; 
