@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { FileDown, Loader2, FileBarChart } from 'lucide-react';
+import { FileDown, Loader2, FileBarChart, Printer } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
@@ -12,6 +12,9 @@ import { DateRange } from 'react-day-picker';
 import { format } from 'date-fns';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { usePrint } from '@/hooks/use-print';
+import ReactDOMServer from 'react-dom/server';
+import ExportacaoCalimaPrint from './ExportacaoCalimaPrint';
 
 interface LancamentoCalima {
     id: string;
@@ -37,6 +40,7 @@ interface LancamentoCalima {
 
 const ExportarLancamentos: React.FC = () => {
   const { perfil, role, carregando } = useSessao();
+  const { printContent } = usePrint();
   const [loading, setLoading] = useState(false);
   const [filtroPeriodo, setFiltroPeriodo] = useState<DateRange | undefined>(undefined);
   const [cnpjCpf, setCnpjCpf] = useState('');
@@ -133,7 +137,7 @@ const ExportarLancamentos: React.FC = () => {
         if (!contaResultadoCodigo || !contaSaldoCodigo) {
             const motivo = `Conta Resultado (${contaResultadoCodigo || 'N/A'}) ou Conta Saldo (${contaSaldoCodigo || 'N/A'}) não mapeada.`;
             console.warn(`Calima Export Skip: Lançamento ID ${l.id} (${l.descricao}). Motivo: ${motivo}`); 
-            currentSkipped.push(`ID ${l.id}: ${l.descricao} - ${motivo}`);
+            currentSkipped.push(`ID ${l.id.substring(0, 8)}: ${l.descricao} - ${motivo}`);
             return null;
         }
         
@@ -198,6 +202,25 @@ const ExportarLancamentos: React.FC = () => {
       setLoading(false);
     }
   }, [ownerId, filtroPeriodo, cnpjCpf]);
+  
+  const handlePrintErrors = () => {
+      if (skippedLaunches.length === 0 || !filtroPeriodo?.from || !filtroPeriodo?.to) {
+          showError('Nenhum erro para imprimir.');
+          return;
+      }
+      
+      const periodoDisplay = `${format(filtroPeriodo.from, 'dd/MM/yyyy')} - ${format(filtroPeriodo.to, 'dd/MM/yyyy')}`;
+      
+      const printComponent = (
+          <ExportacaoCalimaPrint 
+              skippedLaunches={skippedLaunches} 
+              periodo={periodoDisplay} 
+          />
+      );
+
+      const htmlContent = ReactDOMServer.renderToStaticMarkup(printComponent);
+      printContent(htmlContent, `Erros Calima - ${periodoDisplay}`);
+  };
 
   return (
     <Card>
@@ -220,14 +243,25 @@ const ExportarLancamentos: React.FC = () => {
             />
         </div>
         
-        <Button 
-            onClick={handleExport} 
-            disabled={loading || !filtroPeriodo?.from || !filtroPeriodo?.to || !cnpjCpf} 
-            className="w-full"
-        >
-          {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
-          Baixar Lançamentos CSV
-        </Button>
+        <div className="flex flex-col sm:flex-row gap-4">
+            <Button 
+                onClick={handleExport} 
+                disabled={loading || !filtroPeriodo?.from || !filtroPeriodo?.to || !cnpjCpf} 
+                className="flex-1"
+            >
+              {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
+              Baixar Lançamentos CSV
+            </Button>
+            
+            <Button 
+                onClick={handlePrintErrors} 
+                variant="outline" 
+                disabled={skippedLaunches.length === 0}
+                className="w-full sm:w-auto"
+            >
+                <Printer className="w-4 h-4 mr-2" /> Imprimir Erros ({skippedLaunches.length})
+            </Button>
+        </div>
         
         {skippedLaunches.length > 0 && (
             <div className="p-3 bg-yellow-100 dark:bg-yellow-900/20 border border-yellow-500 rounded-md text-sm text-yellow-700 dark:text-yellow-300">
