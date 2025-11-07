@@ -273,7 +273,7 @@ const ExportarLancamentos: React.FC = () => {
             <Button 
                 onClick={handleExport} 
                 disabled={loading || !filtroPeriodo?.from || !filtroPeriodo?.to || !cnpjCpf} 
-                className="flex-1"
+                className="w-full sm:w-auto"
             >
               {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
               Baixar Lançamentos CSV
