@@ -177,7 +177,8 @@ const GerenciarHistoricos: React.FC = () => {
     setImportLoading(true);
 
     try {
-      const parsedData: (HistoricoCSV)[] = await parseFile(importFile);
+      // O parseFile agora retorna um array de HistoricoCSV (com a chave Descricao)
+      const parsedData = await parseFile(importFile) as HistoricoCSV[];
 
       if (parsedData.length === 0) {
         showError('O arquivo está vazio ou o formato está incorreto. Use a coluna "Descrição".');
@@ -187,7 +188,7 @@ const GerenciarHistoricos: React.FC = () => {
 
       const historicosParaInserir = parsedData.map(h => ({
         proprietario_id: ownerId,
-        descricao: h.Descrição.trim(),
+        descricao: h.Descricao.trim(), // Usando a chave corrigida
       })).filter(h => h.descricao.length > 0);
       
       if (historicosParaInserir.length === 0) {
@@ -225,7 +226,7 @@ const GerenciarHistoricos: React.FC = () => {
     }
     
     const dataToExport = historicos.map(h => ({
-        Descrição: h.descricao,
+        Descrição: h.descricao, // Mantendo 'Descrição' para o cabeçalho do CSV de saída
     }));
 
     const csv = Papa.unparse(dataToExport, {

@@ -51,16 +51,24 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
 
     try {
       // Usando a função unificada para parsear
-      const parsedData: (ContaCSV | ContaJSON)[] = await parseFile(file);
+      const parsedData = await parseFile(file);
 
       if (parsedData.length === 0) {
         showError('O arquivo está vazio ou o formato está incorreto. Verifique se os cabeçalhos estão corretos.');
         setLoading(false);
         return;
       }
+      
+      // Validação de tipo: Verifica se o primeiro item tem as chaves esperadas para Plano de Contas
+      const firstRow = parsedData[0] as any;
+      if (!('Conta' in firstRow) || !('Descrição' in firstRow) || !('Analítica' in firstRow)) {
+          showError('O arquivo não parece ser um Plano de Contas. Verifique se as colunas "Conta", "Descrição" e "Analítica" estão presentes.');
+          setLoading(false);
+          return;
+      }
 
       // Mapear dados para o formato do banco de dados
-      const contasParaInserir = parsedData.map(conta => ({
+      const contasParaInserir = (parsedData as (ContaCSV | ContaJSON)[]).map(conta => ({
         proprietario_id: proprietarioId,
         Conta: conta.Conta,
         codigo_reduzido: conta['Código reduzido'] || null,

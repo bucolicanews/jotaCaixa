@@ -6,5 +6,5 @@ export interface Historico {
 }
 
 export interface HistoricoCSV {
-  Descrição: string;
+  Descricao: string; // Alterado para Descricao (sem acento)
 }
