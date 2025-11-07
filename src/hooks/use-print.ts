@@ -15,12 +15,12 @@ export function usePrint() {
         return;
       }
 
-      // Estilos otimizados para impressão A4 em modo PAISAGEM
+      // Estilos otimizados para impressão A4 em modo RETRATO
       const printStyles = `
         <style>
           @page {
-            size: A4 landscape; /* FORÇA MODO PAISAGEM */
-            margin: 10mm; /* Margens reduzidas para maximizar o espaço */
+            size: A4 portrait; /* FORÇA MODO RETRATO */
+            margin: 15mm; /* Margens padrão para documentos */
           }
           body { 
             font-family: Arial, sans-serif; 
@@ -33,34 +33,34 @@ export function usePrint() {
           .print-header { 
             border-bottom: 2px solid #000; 
             padding-bottom: 10px; 
-            margin-bottom: 15px; /* Reduzido */
+            margin-bottom: 15px; 
             page-break-after: avoid;
           }
           .print-section { 
-            margin-bottom: 15px; /* Reduzido */
+            margin-bottom: 15px; 
             padding: 0; 
             page-break-inside: avoid; 
           }
           .print-table { 
             width: 100%; 
             border-collapse: collapse; 
-            margin-top: 5px; /* Reduzido */
+            margin-top: 5px; 
             table-layout: fixed; 
           }
           .print-table th, .print-table td { 
             border: 1px solid #ccc; 
-            padding: 3px 6px; /* REDUZIDO O PADDING PARA CABER MAIS CONTEÚDO */
+            padding: 4px 8px; 
             text-align: left; 
-            font-size: 8pt; /* REDUZIDO O TAMANHO DA FONTE PARA CABER MAIS */
+            font-size: 9pt; 
             word-wrap: break-word; 
-            white-space: nowrap; /* Tenta evitar quebra de linha na célula */
-            overflow: hidden; /* Esconde o que não couber */
-            text-overflow: ellipsis; /* Adiciona reticências se o texto for cortado */
+            white-space: normal; /* Permite quebra de linha na célula */
+            overflow: visible; 
+            text-overflow: clip; 
           }
           .print-table th { 
             background-color: #f0f0f0; 
             font-weight: bold;
-            white-space: nowrap; /* Garante que o cabeçalho não quebre */
+            white-space: nowrap; 
           }
           .print-signatures { 
             display: flex; 
