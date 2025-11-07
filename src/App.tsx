@@ -41,8 +41,8 @@ import AssinarContrato from "./pages/AssinarContrato";
 import ContratoLinkPage from "./pages/ContratoLinkPage";
 import DRE from "./pages/DRE";
 import GerenciarHistoricos from "./pages/GerenciarHistoricos";
-import ExportacaoCalima from "./pages/ExportacaoCalima";
-import LancamentosNaoMapeados from "./pages/LancamentosNaoMapeados"; // NOVO IMPORT
+import Exportar from "./pages/Exportar"; // NOVO IMPORT
+import LancamentosNaoMapeados from "./pages/LancamentosNaoMapeados";
 
 const queryClient = new QueryClient();
 
@@ -220,12 +220,12 @@ const App = () => (
             <Route path="/bancos" element={<Bancos />} />
             <Route path="/conciliacao" element={<Conciliacao />} />
             <Route path="/importar" element={<Importar />} />
+            <Route path="/exportar" element={<Exportar />} /> {/* NOVA ROTA */}
             <Route path="/relatorios" element={<Relatorios />} />
             <Route path="/relatorios/fluxo-caixa" element={<FluxoCaixa />} />
             <Route path="/relatorios/balanco" element={<BalancoPatrimonial />} />
             <Route path="/relatorios/dre" element={<DRE />} />
-            <Route path="/relatorios/calima" element={<ExportacaoCalima />} />
-            <Route path="/relatorios/lancamentos-nao-mapeados" element={<LancamentosNaoMapeados />} /> {/* NOVA ROTA */}
+            <Route path="/relatorios/lancamentos-nao-mapeados" element={<LancamentosNaoMapeados />} />
             <Route path="/configuracoes" element={<Configuracoes />} />
             <Route path="/planos" element={<GerenciarPlanos />} />
             <Route path="/plano-contas" element={<PlanoContasPage />} />

@@ -8,7 +8,7 @@ import ExportarLancamentos from '@/components/calima/ExportarLancamentos';
 import { useSessao } from '@/hooks/use-sessao';
 import { ClienteProfile } from '@/types/usuario';
 
-const ExportacaoCalima: React.FC = () => {
+const Exportar: React.FC = () => {
   const { role, perfil, carregando } = useSessao();
   
   const canAccessPage = role === 'Admin' || (role === 'Cliente' && (perfil as ClienteProfile)?.permissoes?.relatorios === true);
@@ -20,7 +20,7 @@ const ExportacaoCalima: React.FC = () => {
   if (!canAccessPage) {
     return (
       <LayoutPrincipal>
-        <Card><CardHeader><CardTitle>Acesso Negado</CardTitle></CardHeader><CardContent><p>Você não tem permissão para acessar a exportação Calima.</p></CardContent></Card>
+        <Card><CardHeader><CardTitle>Acesso Negado</CardTitle></CardHeader><CardContent><p>Você não tem permissão para acessar a exportação de dados.</p></CardContent></Card>
       </LayoutPrincipal>
     );
   }
@@ -49,4 +49,4 @@ const ExportacaoCalima: React.FC = () => {
   );
 };
 
-export default ExportacaoCalima;
+export default Exportar;

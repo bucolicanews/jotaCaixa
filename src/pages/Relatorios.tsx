@@ -2,7 +2,7 @@ import LayoutPrincipal from '@/components/LayoutPrincipal';
 import ReportCard from '@/components/ReportCard';
 import { useSessao } from '@/hooks/use-sessao';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
-import { ArrowDownCircle, ArrowUpCircle, BarChart3, FileText, Scale, TrendingUp, FileBarChart, Users, Clock, Search, Filter } from 'lucide-react';
+import { ArrowDownCircle, ArrowUpCircle, BarChart3, Scale, TrendingUp, FileBarChart, Users, Clock, Search, Filter } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useState, useMemo } from 'react';
 import { Input } from '@/components/ui/input';
@@ -64,14 +64,7 @@ const REPORTS_DATA = [
     permissionKey: 'relatorios',
     permissionLabel: 'Relatórios',
   },
-  {
-    title: "Exportação Calima",
-    description: "Gere arquivos para importação no sistema contábil Calima.",
-    icon: FileText,
-    link: "/relatorios/calima", // ROTA CORRIGIDA
-    permissionKey: 'relatorios',
-    permissionLabel: 'Relatórios',
-  },
+  // O card Exportação Calima foi movido para a página /exportar
 ];
 
 const Relatorios = () => {
