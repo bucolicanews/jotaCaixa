@@ -42,24 +42,7 @@ const Balanco1ColunaPrint: React.FC<Balanco1ColunaPrintProps> = ({
       const isSintetica = c.Analitica === 'Não';
       const isZero = Math.abs(c.saldo_final) < 0.01;
       
-      // A lista 'contas' já foi pré-filtrada no BalancoPatrimonialDetalhe se o filtro 'Somente Saldo' estiver ativo.
-      // A regra de filtragem no BalancoPatrimonialDetalhe é: omite se saldo for zero.
-      // Se o saldo for zero, mas a conta for sintética, ela só será omitida se o filtro 'Somente Saldo' estiver ativo.
-      
-      // Se o saldo for zero, e a conta for analítica, ela já foi omitida no BalancoPatrimonialDetalhe.
-      // Se o saldo for zero, e a conta for sintética, ela só deve ser omitida se o filtro 'Somente Saldo' estiver ativo.
-      // Como a lista 'contas' já vem filtrada, apenas renderizamos o que sobrou.
-      
-      // Para garantir que a lógica de omissão de sintéticas zero seja consistente com o BalancoPatrimonialDetalhe:
-      // Se o saldo for zero, e a conta for sintética, e o filtro 'Somente Saldo' foi usado, ela não deve estar aqui.
-      // Se o filtro 'Somente Saldo' NÃO foi usado, ela deve estar aqui, mesmo com saldo zero.
-      
-      // Para simplificar, vamos confiar que a lista 'contas' já está filtrada corretamente.
-      // Se o saldo for zero, e a conta for analítica, ela já foi removida.
-      // Se o saldo for zero, e a conta for sintética, ela só foi removida se o filtro 'Somente Saldo' foi usado.
-      
-      // Se o saldo for zero, e a conta for analítica, ela já foi removida.
-      if (isZero && c.Analitica === 'Sim') return null; // Redundante, mas seguro.
+      if (isZero && c.Analitica === 'Sim') return null;
 
       const level = c.Conta.split('.').filter(p => p.length > 0).length;
       const paddingLeft = (level - 1) * 10;
@@ -70,8 +53,8 @@ const Balanco1ColunaPrint: React.FC<Balanco1ColunaPrintProps> = ({
             backgroundColor: isSintetica ? '#f0f0f0' : 'white',
             fontSize: isSintetica ? '10pt' : '9pt',
         }}>
-          <td style={{ paddingLeft: `${paddingLeft}px`, width: '15%' }}>{c.Conta}</td>
-          <td style={{ width: '60%' }}>{c.Descricao}</td>
+          <td style={{ paddingLeft: `${paddingLeft}px`, width: '20%' }}>{c.Conta}</td>
+          <td style={{ width: '55%' }}>{c.Descricao}</td>
           <td style={{ textAlign: 'right', width: '25%', color: c.saldo_final < 0 ? 'red' : 'inherit' }}>
             {formatCurrency(c.saldo_final)}
           </td>
@@ -101,8 +84,8 @@ const Balanco1ColunaPrint: React.FC<Balanco1ColunaPrintProps> = ({
         <table className="print-table" style={{ width: '100%' }}>
             <thead>
                 <tr>
-                    <th style={{ width: '15%' }}>Conta</th>
-                    <th style={{ width: '60%' }}>Descrição</th>
+                    <th style={{ width: '20%' }}>Conta</th>
+                    <th style={{ width: '55%' }}>Descrição</th>
                     <th style={{ width: '25%', textAlign: 'right' }}>Saldo Final</th>
                 </tr>
             </thead>
@@ -150,7 +133,7 @@ const Balanco1ColunaPrint: React.FC<Balanco1ColunaPrintProps> = ({
         {renderHeader('DEMONSTRAÇÃO DO RESULTADO (DRE) - RESUMO')}
         <table className="print-table" style={{ width: '50%' }}>
             <tbody>
-                <tr><th>Total Receitas</th><td style={{ textAlign: 'right', color: 'green' }}>{formatCurrency(totalReceita)}</td></tr>
+                <tr><th style={{ width: '75%' }}>Total Receitas</th><td style={{ textAlign: 'right', color: 'green' }}>{formatCurrency(totalReceita)}</td></tr>
                 <tr><th>Total Despesas</th><td style={{ textAlign: 'right', color: 'red' }}>{formatCurrency(totalDespesa)}</td></tr>
                 <tr style={{ fontWeight: 'bold', borderTop: '2px solid #000' }}>
                     <th>LUCRO / PREJUÍZO LÍQUIDO</th>

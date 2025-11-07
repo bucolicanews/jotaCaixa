@@ -45,15 +45,6 @@ const DREPrint: React.FC<DREPrintProps> = ({
             const isSintetica = c.Analitica === 'Não';
             const isZero = Math.abs(c.saldo_final) < 0.01;
             
-            // Se a conta for analítica e tiver saldo zero, ela já foi filtrada no DREDetalhe.
-            // Se for sintética e tiver saldo zero, ela só deve ser omitida se o filtro 'Somente Saldo' foi usado.
-            // Como a lista 'contas' já vem filtrada, apenas renderizamos o que sobrou.
-            
-            // No entanto, para garantir que contas sintéticas com saldo zero sejam omitidas APENAS se o filtro foi aplicado,
-            // precisamos garantir que a lista 'contas' no DREDetalhe foi filtrada corretamente.
-            // Aqui, vamos apenas renderizar o que foi passado.
-            
-            // Se o saldo for zero, e a conta for analítica, ela já foi removida.
             if (isZero && c.Analitica === 'Sim') return null;
 
             const level = c.Conta.split('.').filter(p => p.length > 0).length;
@@ -65,8 +56,8 @@ const DREPrint: React.FC<DREPrintProps> = ({
                     backgroundColor: isSintetica ? '#f0f0f0' : 'white',
                     fontSize: isSintetica ? '10pt' : '9pt',
                 }}>
-                    <td style={{ paddingLeft: `${paddingLeft}px`, width: '15%' }}>{c.Conta}</td>
-                    <td style={{ width: '60%' }}>{c.Descricao}</td>
+                    <td style={{ paddingLeft: `${paddingLeft}px`, width: '20%' }}>{c.Conta}</td>
+                    <td style={{ width: '55%' }}>{c.Descricao}</td>
                     <td style={{ textAlign: 'right', width: '25%', color: c.saldo_final < 0 ? 'red' : 'inherit' }}>
                         {formatCurrency(c.saldo_final)}
                     </td>
@@ -89,8 +80,8 @@ const DREPrint: React.FC<DREPrintProps> = ({
                 <table className="print-table" style={{ width: '100%' }}>
                     <thead>
                         <tr>
-                            <th style={{ width: '15%' }}>Conta</th>
-                            <th style={{ width: '60%' }}>Descrição</th>
+                            <th style={{ width: '20%' }}>Conta</th>
+                            <th style={{ width: '55%' }}>Descrição</th>
                             <th style={{ width: '25%', textAlign: 'right' }}>Valor</th>
                         </tr>
                     </thead>

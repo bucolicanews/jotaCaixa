@@ -34,11 +34,12 @@ const ClientesPrint: React.FC<ClientesPrintProps> = ({ data, titulo, isSupervisa
         <table className="print-table">
             <thead>
                 <tr>
-                    <th style={{ width: '25%' }}>Nome Fantasia</th>
-                    <th style={{ width: '25%' }}>Razão Social</th>
+                    <th style={{ width: '20%' }}>Nome Fantasia</th>
+                    <th style={{ width: '20%' }}>Razão Social</th>
                     <th style={{ width: '15%' }}>Documento</th>
                     <th style={{ width: '20%' }}>Email</th>
-                    <th style={{ width: '15%' }}>Telefone</th>
+                    <th style={{ width: '10%' }}>Telefone</th>
+                    {isSupervisao && <th style={{ width: '10%' }}>Proprietário</th>}
                 </tr>
             </thead>
             <tbody>
@@ -51,6 +52,7 @@ const ClientesPrint: React.FC<ClientesPrintProps> = ({ data, titulo, isSupervisa
                             <td>{cliente.documento || '-'}</td>
                             <td>{cliente.email || '-'}</td>
                             <td>{cliente.telefone || '-'}</td>
+                            {isSupervisao && <td style={{ fontSize: '8pt' }}>{cliente.proprietario_id || 'N/A'}</td>}
                         </tr>
                     );
                 })}
@@ -97,7 +99,7 @@ const ClientesPrint: React.FC<ClientesPrintProps> = ({ data, titulo, isSupervisa
     const finalTitulo = titulo + (isSupervisao ? ' (Modo Supervisão)' : '') + subTitulo;
 
     return (
-        <div className="print-container landscape">
+        <div className="print-container">
             <div className="print-header">
                 <h1 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '5px' }}>{finalTitulo}</h1>
                 <p style={{ fontSize: '10px', color: '#555' }}>Gerado em: {format(new Date(), 'dd/MM/yyyy HH:mm', { locale: ptBR })}</p>

@@ -117,7 +117,7 @@ const FolhaPontoPrint: React.FC<FolhaPontoPrintProps> = ({
                 <h2 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '10px' }}>Resumo Financeiro/Jornada</h2>
                 <table className="print-table" style={{ width: '50%' }}>
                     <tbody>
-                        <tr><th>Salário Base</th><td>{formatCurrency(funcionario.salario)}</td></tr>
+                        <tr><th style={{ width: '50%' }}>Salário Base</th><td style={{ width: '50%' }}>{formatCurrency(funcionario.salario)}</td></tr>
                         <tr><th>Jornada Mensal</th><td>{funcionario.horas_mensais}h</td></tr>
                         <tr><th>Horas Trabalhadas</th><td>{formatarHoras(totalMinutosTrabalhados)}</td></tr>
                         <tr>
@@ -137,16 +137,16 @@ const FolhaPontoPrint: React.FC<FolhaPontoPrintProps> = ({
                         <tr>
                             <th rowSpan={2} style={{ width: '8%' }}>Data</th>
                             <th rowSpan={2} style={{ width: '8%' }}>Dia</th>
-                            <th colSpan={2} style={{ width: '20%', textAlign: 'center' }}>Primeiro Turno</th>
-                            <th colSpan={2} style={{ width: '20%', textAlign: 'center' }}>Segundo Turno</th>
+                            <th colSpan={2} style={{ width: '24%', textAlign: 'center' }}>Primeiro Turno</th>
+                            <th colSpan={2} style={{ width: '24%', textAlign: 'center' }}>Segundo Turno</th>
                             <th rowSpan={2} style={{ width: '10%' }}>Total Dia</th>
-                            <th rowSpan={2} style={{ width: '34%' }}>Observações</th>
+                            <th rowSpan={2} style={{ width: '26%' }}>Observações</th>
                         </tr>
                         <tr>
-                            <th style={{ width: '10%' }}>Entrada</th>
-                            <th style={{ width: '10%' }}>Saída</th>
-                            <th style={{ width: '10%' }}>Entrada</th>
-                            <th style={{ width: '10%' }}>Saída</th>
+                            <th style={{ width: '12%' }}>Entrada</th>
+                            <th style={{ width: '12%' }}>Saída</th>
+                            <th style={{ width: '12%' }}>Entrada</th>
+                            <th style={{ width: '12%' }}>Saída</th>
                         </tr>
                     </thead>
                     <tbody>

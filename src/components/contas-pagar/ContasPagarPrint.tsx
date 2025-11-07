@@ -19,7 +19,7 @@ const TAB_TITLES: Record<string, string> = {
 
 const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
-const ContasPagarPrint: React.FC<ContasPagarPrintProps> = ({ data, activeTab, filtroPeriodo, orientation = 'portrait' }) => {
+const ContasPagarPrint: React.FC<ContasPagarPrintProps> = ({ data, activeTab, filtroPeriodo }) => {
     
     const getPeriodoDisplay = () => {
         if (!filtroPeriodo?.from) return 'Todo o Período';
@@ -36,6 +36,7 @@ const ContasPagarPrint: React.FC<ContasPagarPrintProps> = ({ data, activeTab, fi
     
     const headers = Object.keys(data[0]);
     
+    // Mapeamento de largura de coluna em PORCENTAGEM
     const getColumnStyle = (header: string) => {
         switch (header) {
             case 'ID Conta':
@@ -43,7 +44,7 @@ const ContasPagarPrint: React.FC<ContasPagarPrintProps> = ({ data, activeTab, fi
             case 'ID Pagamento':
                 return { width: '8%', fontSize: '8pt' }; 
             case 'Fornecedor':
-                return { width: '15%' };
+                return { width: '12%' };
             case 'Descrição':
                 return { width: '25%' };
             case 'Nº Parcela':
@@ -52,16 +53,16 @@ const ContasPagarPrint: React.FC<ContasPagarPrintProps> = ({ data, activeTab, fi
             case 'Vlr Pago':
             case 'Valor Total':
             case 'Valor Pago':
-                return { width: '8%', textAlign: 'right' as const };
+                return { width: '10%', textAlign: 'right' as const };
             case 'Vencimento':
             case 'Data Pagamento':
-                return { width: '8%' };
+                return { width: '10%' };
             case 'Status':
             case 'Origem':
             case 'Forma Pagamento':
-                return { width: '6%' };
-            case 'Conta Origem':
                 return { width: '8%' };
+            case 'Conta Origem':
+                return { width: '10%' };
             case 'Progresso':
                 return { width: '6%', textAlign: 'center' as const };
             default:
@@ -92,7 +93,7 @@ const ContasPagarPrint: React.FC<ContasPagarPrintProps> = ({ data, activeTab, fi
     });
 
     return (
-        <div className={orientation === 'landscape' ? 'print-container landscape' : 'print-container'}>
+        <div className="print-container">
             <div className="print-header">
                 <h1 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '5px' }}>RELATÓRIO DE CONTAS A PAGAR</h1>
                 <h2 style={{ fontSize: '12px', fontWeight: 'normal', marginBottom: '5px' }}>{TAB_TITLES[activeTab] || 'Relatório Personalizado'}</h2>

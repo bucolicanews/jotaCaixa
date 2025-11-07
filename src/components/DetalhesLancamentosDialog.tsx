@@ -88,10 +88,10 @@ const DetalhesLancamentosDialog: React.FC<DetalhesLancamentosDialogProps> = ({ c
         <table class="print-table">
           <thead>
             <tr>
-              <th>Data</th>
-              <th>Descrição</th>
-              <th>Tipo</th>
-              <th style="text-align: right;">Valor</th>
+              <th style="width: 20%;">Data</th>
+              <th style="width: 50%;">Descrição</th>
+              <th style="width: 15%;">Tipo</th>
+              <th style="width: 15%; text-align: right;">Valor</th>
             </tr>
           </thead>
           <tbody>
@@ -146,10 +146,10 @@ const DetalhesLancamentosDialog: React.FC<DetalhesLancamentosDialogProps> = ({ c
               <Table>
                 <TableHeader className="sticky top-0 bg-background">
                   <TableRow>
-                    <TableHead className="w-[150px]">Data</TableHead>
-                    <TableHead>Descrição</TableHead>
-                    <TableHead className="w-[100px]">Tipo</TableHead>
-                    <TableHead className="w-[120px] text-right">Valor</TableHead>
+                    <TableHead className="w-[20%]">Data</TableHead>
+                    <TableHead className="w-[50%]">Descrição</TableHead>
+                    <TableHead className="w-[15%]">Tipo</TableHead>
+                    <TableHead className="w-[15%] text-right">Valor</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>

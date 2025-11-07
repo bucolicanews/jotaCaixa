@@ -49,9 +49,6 @@ const BalancoPatrimonialPrint: React.FC<BalancoPatrimonialPrintProps> = ({
       const isSintetica = c.Analitica === 'Não';
       const isZero = Math.abs(c.saldo_final) < 0.01;
       
-      // A lógica de filtro de saldo deve ser feita no BalancoPatrimonialDetalhe.
-      // Aqui, apenas garantimos que contas sintéticas com saldo zero sejam omitidas,
-      // mas se o filtro 'somente com saldo' estiver ativo, a lista 'contas' já virá filtrada.
       if (isZero && isSintetica) return null;
 
       // Calcula o nível de indentação baseado no código da conta (ex: 1.1.1.1)
@@ -64,8 +61,8 @@ const BalancoPatrimonialPrint: React.FC<BalancoPatrimonialPrintProps> = ({
             backgroundColor: isSintetica ? '#f0f0f0' : 'white',
             fontSize: isSintetica ? '10pt' : '9pt',
         }}>
-          <td style={{ paddingLeft: `${paddingLeft}px`, width: '15%' }}>{c.Conta}</td>
-          <td style={{ width: '60%' }}>{c.Descricao}</td>
+          <td style={{ paddingLeft: `${paddingLeft}px`, width: '20%' }}>{c.Conta}</td>
+          <td style={{ width: '55%' }}>{c.Descricao}</td>
           <td style={{ textAlign: 'right', width: '25%', color: c.saldo_final < 0 ? 'red' : 'inherit' }}>
             {formatCurrency(c.saldo_final)}
           </td>
@@ -93,8 +90,8 @@ const BalancoPatrimonialPrint: React.FC<BalancoPatrimonialPrintProps> = ({
           <table className="print-table" style={{ width: '100%' }}>
             <thead>
               <tr>
-                <th style={{ width: '15%' }}>Conta</th>
-                <th style={{ width: '60%' }}>Descrição</th>
+                <th style={{ width: '20%' }}>Conta</th>
+                <th style={{ width: '55%' }}>Descrição</th>
                 <th style={{ width: '25%', textAlign: 'right' }}>Saldo Final</th>
               </tr>
             </thead>
@@ -114,8 +111,8 @@ const BalancoPatrimonialPrint: React.FC<BalancoPatrimonialPrintProps> = ({
           <table className="print-table" style={{ width: '100%' }}>
             <thead>
               <tr>
-                <th style={{ width: '15%' }}>Conta</th>
-                <th style={{ width: '60%' }}>Descrição</th>
+                <th style={{ width: '20%' }}>Conta</th>
+                <th style={{ width: '55%' }}>Descrição</th>
                 <th style={{ width: '25%', textAlign: 'right' }}>Saldo Final</th>
               </tr>
             </thead>

@@ -26,11 +26,7 @@ export function usePrint() {
           }
           
           /* Sobrescreve para Paisagem se a classe 'landscape' estiver presente */
-          .print-container.landscape {
-              width: 297mm; /* Largura A4 em paisagem */
-              height: 210mm; /* Altura A4 em paisagem */
-          }
-          .print-container.landscape @page {
+          .landscape @page {
               size: A4 landscape; /* FORÇA MODO PAISAGEM */
           }
           
@@ -41,6 +37,14 @@ export function usePrint() {
             color: #000; 
             font-size: 10pt; 
           }
+          
+          /* Container principal que deve se expandir */
+          .print-container {
+              width: 100%;
+              max-width: 100%;
+              padding: 0;
+          }
+          
           h1, h2, h3 { margin-top: 0; page-break-after: avoid; }
           .print-header { 
             border-bottom: 2px solid #000; 
@@ -106,7 +110,7 @@ export function usePrint() {
         </style>
       `;
       
-      const containerClass = orientation === 'landscape' ? 'print-container landscape' : 'print-container';
+      const bodyClass = orientation === 'landscape' ? 'landscape' : '';
 
       printWindow.document.write(`
         <!DOCTYPE html>
@@ -115,12 +119,12 @@ export function usePrint() {
             <title>${title}</title>
             ${printStyles}
           </head>
-          <body>
+          <body class="${bodyClass}">
             <div class="no-print" style="padding: 20px; text-align: center; background: #ffffe0; border: 1px solid #ccc;">
                 <p style="font-size: 14pt; color: #333;">Documento pronto para impressão. Use <strong>Ctrl+P</strong> (ou Cmd+P) para imprimir.</p>
                 <button onclick="window.print()" style="padding: 10px 20px; margin-top: 10px; cursor: pointer;">Imprimir Agora</button>
             </div>
-            <div class="${containerClass}">
+            <div class="print-container">
                 ${contentHtml}
             </div>
           </body>
