@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { FileDown, Loader2, FileBarChart, Printer } from 'lucide-react';
+import { FileDown, Loader2, FileBarChart, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
@@ -15,6 +15,7 @@ import { Label } from '@/components/ui/label';
 import { usePrint } from '@/hooks/use-print';
 import ReactDOMServer from 'react-dom/server';
 import ExportacaoCalimaPrint from './ExportacaoCalimaPrint';
+import { useNavigate } from 'react-router-dom';
 
 interface LancamentoCalima {
     id: string;
@@ -28,7 +29,6 @@ interface LancamentoCalima {
     proprietario_id: string; // ALTERADO: empresa_id -> proprietario_id
     
     // Relações:
-    // Nota: O Supabase retorna as relações como arrays, mesmo que seja single()
     conta_resultado: { Conta: string }[] | null; 
     historicos: { codigo: string | null }[] | null;
     
@@ -41,10 +41,12 @@ interface LancamentoCalima {
 const ExportarLancamentos: React.FC = () => {
   const { perfil, role, carregando } = useSessao();
   const { printContent } = usePrint();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [filtroPeriodo, setFiltroPeriodo] = useState<DateRange | undefined>(undefined);
   const [cnpjCpf, setCnpjCpf] = useState('');
-  const [skippedLaunches, setSkippedLaunches] = useState<string[]>([]); // NOVO ESTADO PARA SKIPPED
+  const [skippedLaunches, setSkippedLaunches] = useState<string[]>([]);
+  const [totalNaoMapeados, setTotalNaoMapeados] = useState(0); // NOVO ESTADO
 
   const getOwnerId = () => {
     if (role === 'Admin' || role === 'Cliente') return (perfil as any)?.id;
@@ -68,6 +70,28 @@ const ExportarLancamentos: React.FC = () => {
           setCnpjCpf(documento.replace(/\D/g, '')); // Remove caracteres não numéricos
       }
   }, [carregando, perfil, role]);
+  
+  // Efeito para buscar o total de lançamentos não mapeados
+  const fetchTotalNaoMapeados = useCallback(async () => {
+      if (!ownerId) return;
+      
+      const { count, error } = await supabase
+          .from('lancamentos')
+          .select('id', { count: 'exact', head: true })
+          .eq('proprietario_id', ownerId)
+          .or('conta_contabil_id.is.null,historico_id.is.null');
+          
+      if (error) {
+          console.error('Erro ao contar não mapeados:', error);
+          setTotalNaoMapeados(0);
+      } else {
+          setTotalNaoMapeados(count || 0);
+      }
+  }, [ownerId]);
+  
+  useEffect(() => {
+      fetchTotalNaoMapeados();
+  }, [fetchTotalNaoMapeados]);
 
   const handleExport = useCallback(async () => {
     if (!ownerId || !filtroPeriodo?.from || !filtroPeriodo?.to) {
@@ -79,7 +103,7 @@ const ExportarLancamentos: React.FC = () => {
         return;
     }
     setLoading(true);
-    setSkippedLaunches([]); // Reset skipped launches
+    setSkippedLaunches([]);
 
     try {
       const startDate = format(filtroPeriodo.from, 'yyyy-MM-dd');
@@ -113,7 +137,6 @@ const ExportarLancamentos: React.FC = () => {
 
       if (error) throw error;
 
-      // Corrigindo o cast para 'unknown' primeiro para satisfazer o TS2352
       const lancamentos = data as unknown as LancamentoCalima[];
 
       if (lancamentos.length === 0) {
@@ -134,11 +157,10 @@ const ExportarLancamentos: React.FC = () => {
         
         const historicoCodigo = l.historicos?.[0]?.codigo || '';
         
-        if (!contaResultadoCodigo || !contaSaldoCodigo) {
-            // NOVO: Inclui o tipo de transação no log de erro
+        // Verifica se as contas essenciais estão mapeadas
+        if (!contaResultadoCodigo || !contaSaldoCodigo || !l.historico_id) {
             const tipoTransacao = l.tipo === 'Entrada' ? 'Receita/Ativo' : 'Despesa/Ativo';
-            const motivo = `Tipo: ${tipoTransacao}. Conta Resultado (${contaResultadoCodigo || 'N/A'}) ou Conta Saldo (${contaSaldoCodigo || 'N/A'}) não mapeada.`;
-            console.warn(`Calima Export Skip: Lançamento ID ${l.id} (${l.descricao}). Motivo: ${motivo}`); 
+            const motivo = `Tipo: ${tipoTransacao}. Conta Resultado (${contaResultadoCodigo || 'N/A'}), Conta Saldo (${contaSaldoCodigo || 'N/A'}) ou Histórico (N/A) não mapeada.`;
             currentSkipped.push(`ID ${l.id.substring(0, 8)} (${l.tipo}): ${l.descricao} - ${motivo}`);
             return null;
         }
@@ -160,14 +182,13 @@ const ExportarLancamentos: React.FC = () => {
             contaCredito = contaSaldoCodigo;
         }
         
+        // Formato simplificado solicitado: Data;Valor;Conta Débito;Conta Crédito;Número Histórico
         return {
             Data: dataFormatada,
+            Valor: valor,
             'Conta Débito': contaDebito,
             'Conta Crédito': contaCredito,
-            Valor: valor,
-            'Código Histórico': historicoCodigo,
-            Complemento: l.descricao,
-            'CPF/CNPJ': cnpjCpf,
+            'Número Histórico': historicoCodigo,
         };
       }).filter(l => l !== null); // Remove lançamentos que não puderam ser mapeados
 
@@ -180,7 +201,8 @@ const ExportarLancamentos: React.FC = () => {
       }
 
       // 3. Exportar CSV
-      const headers = ['Data', 'Conta Débito', 'Conta Crédito', 'Valor', 'Código Histórico', 'Complemento', 'CPF/CNPJ'];
+      // Headers simplificados
+      const headers = ['Data', 'Valor', 'Conta Débito', 'Conta Crédito', 'Número Histórico'];
 
       const csv = Papa.unparse(dataToExport, {
         header: true,
@@ -256,22 +278,19 @@ const ExportarLancamentos: React.FC = () => {
             </Button>
             
             <Button 
-                onClick={handlePrintErrors} 
+                onClick={() => navigate('/relatorios/lancamentos-nao-mapeados')}
                 variant="outline" 
-                disabled={skippedLaunches.length === 0}
+                disabled={totalNaoMapeados === 0}
                 className="w-full sm:w-auto"
             >
-                <Printer className="w-4 h-4 mr-2" /> Imprimir Erros ({skippedLaunches.length})
+                <AlertTriangle className="w-4 h-4 mr-2 text-yellow-500" /> Mapear Pendentes ({totalNaoMapeados})
             </Button>
         </div>
         
         {skippedLaunches.length > 0 && (
             <div className="p-3 bg-yellow-100 dark:bg-yellow-900/20 border border-yellow-500 rounded-md text-sm text-yellow-700 dark:text-yellow-300">
                 <p className="font-semibold mb-1">Aviso: {skippedLaunches.length} Lançamentos Ignorados</p>
-                <p>Os seguintes lançamentos não puderam ser mapeados para o Calima por falta de vínculo contábil:</p>
-                <ul className="list-disc list-inside mt-1 max-h-24 overflow-y-auto">
-                    {skippedLaunches.map((msg, i) => <li key={i} className="text-xs">{msg}</li>)}
-                </ul>
+                <p>Os lançamentos ignorados não possuem vínculo contábil ou histórico. <Button variant="link" size="sm" onClick={handlePrintErrors} className="p-0 h-auto text-yellow-700 dark:text-yellow-300">Imprima o relatório de erros</Button> para detalhes.</p>
             </div>
         )}
         

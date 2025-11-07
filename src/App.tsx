@@ -41,7 +41,8 @@ import AssinarContrato from "./pages/AssinarContrato";
 import ContratoLinkPage from "./pages/ContratoLinkPage";
 import DRE from "./pages/DRE";
 import GerenciarHistoricos from "./pages/GerenciarHistoricos";
-import ExportacaoCalima from "./pages/ExportacaoCalima"; // NOVO IMPORT
+import ExportacaoCalima from "./pages/ExportacaoCalima";
+import LancamentosNaoMapeados from "./pages/LancamentosNaoMapeados"; // NOVO IMPORT
 
 const queryClient = new QueryClient();
 
@@ -223,7 +224,8 @@ const App = () => (
             <Route path="/relatorios/fluxo-caixa" element={<FluxoCaixa />} />
             <Route path="/relatorios/balanco" element={<BalancoPatrimonial />} />
             <Route path="/relatorios/dre" element={<DRE />} />
-            <Route path="/relatorios/calima" element={<ExportacaoCalima />} /> {/* NOVA ROTA */}
+            <Route path="/relatorios/calima" element={<ExportacaoCalima />} />
+            <Route path="/relatorios/lancamentos-nao-mapeados" element={<LancamentosNaoMapeados />} /> {/* NOVA ROTA */}
             <Route path="/configuracoes" element={<Configuracoes />} />
             <Route path="/planos" element={<GerenciarPlanos />} />
             <Route path="/plano-contas" element={<PlanoContasPage />} />
