@@ -37,7 +37,8 @@ import MinhaAssinatura from "./pages/MinhaAssinatura";
 import SelecaoPagamentoRenovacao from "./pages/SelecaoPagamentoRenovacao";
 import FluxoCaixa from "./pages/FluxoCaixa";
 import BalancoPatrimonial from "./pages/BalancoPatrimonial";
-import AssinarContrato from "./pages/AssinarContrato"; // Importando a nova página
+import AssinarContrato from "./pages/AssinarContrato";
+import ContratoLinkPage from "./pages/ContratoLinkPage"; // Importando a nova página
 
 const queryClient = new QueryClient();
 
@@ -204,7 +205,8 @@ const App = () => (
             <Route path="/vendas" element={<Vendas />} />
             <Route path="/login" element={<Login />} />
             <Route path="/atualizar-senha" element={<AtualizarSenha />} />
-            <Route path="/assinar-contrato/:id" element={<AssinarContrato />} /> {/* NOVA ROTA PÚBLICA */}
+            <Route path="/assinar-contrato/:id" element={<AssinarContrato />} />
+            <Route path="/contrato-link/:id" element={<ContratoLinkPage />} /> {/* NOVA ROTA */}
             
             {/* Rotas Autenticadas (Protegidas pelo LayoutPrincipal) */}
             <Route path="/painel" element={<Painel />} />

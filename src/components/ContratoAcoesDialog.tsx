@@ -76,8 +76,8 @@ const ContratoAcoesDialog: React.FC<ContratoAcoesDialogProps> = ({ contrato, ope
 
   useEffect(() => {
     if (contrato && config.url_base_assinatura) {
-      // Link real para a nova rota pública, usando a URL base configurada
-      const realLink = `${config.url_base_assinatura}/assinar-contrato/${contrato.id}`;
+      // NOVO LINK: Aponta para a página intermediária /contrato-link/:id
+      const realLink = `${config.url_base_assinatura}/contrato-link/${contrato.id}`;
       setLinkAssinatura(realLink);
     }
   }, [contrato, config.url_base_assinatura]);
@@ -116,8 +116,6 @@ const ContratoAcoesDialog: React.FC<ContratoAcoesDialogProps> = ({ contrato, ope
       const phone = contrato?.valores_tags_preenchidos?.['{{CLIENTE_TELEFONE}}']?.replace(/\D/g, '') || '';
       
       // Abre o link do WhatsApp
-      // O WhatsApp reconhece links clicáveis se eles estiverem formatados corretamente (com https://)
-      // e se a mensagem for enviada via API ou link wa.me.
       window.open(`https://wa.me/${phone}?text=${message}`, '_blank');
       showSuccess('Abrindo WhatsApp...');
   };
@@ -233,7 +231,7 @@ const ContratoAcoesDialog: React.FC<ContratoAcoesDialogProps> = ({ contrato, ope
                 ) : (
                     <>
                         <div className="space-y-2">
-                            <Label>Link para Assinatura Externa</Label>
+                            <Label>Link para Página de Assinatura</Label>
                             <div className="flex space-x-2">
                                 <Input readOnly value={linkAssinatura} className="flex-1" />
                                 <Button onClick={handleCopyLink} variant="secondary" size="icon" title="Copiar Link">
