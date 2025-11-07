@@ -23,14 +23,16 @@ interface LancamentoCalima {
     historico_id: string | null;
     descricao: string;
     
-    // Relações corrigidas com aliases
+    // Relações:
     conta_resultado: { Conta: string }[] | null; 
     historicos: { codigo: string | null }[] | null;
     
+    // Corrigido para refletir a estrutura de array retornada pelo Supabase
     conta_saldo: {
         conta_contabil_id: string;
-        conta_ativo: { Conta: string }[] | null;
-    } | null;
+        // A relação aninhada 'conta_ativo' é um array de objetos { Conta: string }
+        conta_ativo: { Conta: string }[] | null; 
+    }[] | null;
 }
 
 const ExportarLancamentos: React.FC = () => {
@@ -89,12 +91,8 @@ const ExportarLancamentos: React.FC = () => {
           conta_contabil_id,
           historico_id,
           descricao,
-          
-          // Alias para a conta de resultado/despesa
           conta_resultado:conta_contabil_id ( Conta ),
           historicos:historico_id ( codigo ),
-          
-          // Alias para a conta de saldo (ativo/passivo)
           conta_saldo:conta_bancaria_id ( 
             conta_contabil_id,
             conta_ativo:conta_contabil_id ( Conta )
@@ -107,6 +105,7 @@ const ExportarLancamentos: React.FC = () => {
 
       if (error) throw error;
 
+      // Corrigindo o cast para 'unknown' primeiro para satisfazer o TS2352
       const lancamentos = data as unknown as LancamentoCalima[];
 
       if (lancamentos.length === 0) {
@@ -119,7 +118,10 @@ const ExportarLancamentos: React.FC = () => {
       const dataToExport = lancamentos.map(l => {
         // Acessa o primeiro elemento do array de relações
         const contaResultadoCodigo = l.conta_resultado?.[0]?.Conta || '';
-        const contaSaldoCodigo = l.conta_saldo?.conta_ativo?.[0]?.Conta || '';
+        
+        // CORREÇÃO: Acessa o primeiro elemento de conta_saldo, e depois o primeiro elemento de conta_ativo
+        const contaSaldoCodigo = l.conta_saldo?.[0]?.conta_ativo?.[0]?.Conta || '';
+        
         const historicoCodigo = l.historicos?.[0]?.codigo || '';
         
         if (!contaResultadoCodigo || !contaSaldoCodigo) {
