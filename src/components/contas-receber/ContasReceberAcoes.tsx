@@ -12,7 +12,7 @@ import ReactDOMServer from 'react-dom/server';
 import ContasReceberPrint from './ContasReceberPrint';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { formatCurrency, formatarData } from '@/utils/formatters'; // Importando formatCurrency e formatarData
+import { formatarData } from '@/utils/formatters';
 
 // Definindo o tipo ContaReceberComProgresso localmente
 interface ContaReceberComProgresso extends ContaReceber {
