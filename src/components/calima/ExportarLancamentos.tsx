@@ -135,9 +135,11 @@ const ExportarLancamentos: React.FC = () => {
         const historicoCodigo = l.historicos?.[0]?.codigo || '';
         
         if (!contaResultadoCodigo || !contaSaldoCodigo) {
-            const motivo = `Conta Resultado (${contaResultadoCodigo || 'N/A'}) ou Conta Saldo (${contaSaldoCodigo || 'N/A'}) não mapeada.`;
+            // NOVO: Inclui o tipo de transação no log de erro
+            const tipoTransacao = l.tipo === 'Entrada' ? 'Receita/Ativo' : 'Despesa/Ativo';
+            const motivo = `Tipo: ${tipoTransacao}. Conta Resultado (${contaResultadoCodigo || 'N/A'}) ou Conta Saldo (${contaSaldoCodigo || 'N/A'}) não mapeada.`;
             console.warn(`Calima Export Skip: Lançamento ID ${l.id} (${l.descricao}). Motivo: ${motivo}`); 
-            currentSkipped.push(`ID ${l.id.substring(0, 8)}: ${l.descricao} - ${motivo}`);
+            currentSkipped.push(`ID ${l.id.substring(0, 8)} (${l.tipo}): ${l.descricao} - ${motivo}`);
             return null;
         }
         

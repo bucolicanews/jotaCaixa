@@ -48,6 +48,7 @@ export interface ContaReceberComProgresso extends ContaReceber {
 export interface ExtendedParcelaDetalhada extends ParcelaDetalhada {
     data_pagamento?: string | null;
     contas_receber: {
+        id: string; // CORRIGIDO: Adicionado ID
         descricao: string;
         cliente_id: string | null;
         origem: ContaReceber['origem'];

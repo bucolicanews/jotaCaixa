@@ -1,7 +1,7 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Plus, Filter, Printer, DollarSign } from 'lucide-react';
+import { Plus, Filter, Printer, DollarSign, Search } from 'lucide-react';
 import { DateRangePicker } from '@/components/DateRangePicker';
 import { DateRange } from 'react-day-picker';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -12,6 +12,7 @@ import ReactDOMServer from 'react-dom/server';
 import ContasPagarPrint from './ContasPagarPrint';
 import { showError } from '@/utils/toast';
 import { format as formatDateFns } from 'date-fns';
+import { Input } from '@/components/ui/input';
 
 interface ContasPagarHeaderProps {
     isSupervisao: boolean;
@@ -28,6 +29,9 @@ interface ContasPagarHeaderProps {
     parcelas: ExtendedParcelaPagar[];
     pagamentos: any[];
     activeTab: string;
+    // New props for filtering
+    filtroTexto: string;
+    setFiltroTexto: (text: string) => void;
 }
 
 const ContasPagarHeader: React.FC<ContasPagarHeaderProps> = ({
@@ -44,6 +48,8 @@ const ContasPagarHeader: React.FC<ContasPagarHeaderProps> = ({
     parcelas,
     pagamentos,
     activeTab,
+    filtroTexto,
+    setFiltroTexto,
 }) => {
     const { printContent } = usePrint();
 
@@ -64,9 +70,10 @@ const ContasPagarHeader: React.FC<ContasPagarHeaderProps> = ({
                 'Origem': c.origem,
             }));
         } else if (activeTab === 'parcelas') {
-            headers = ['ID Parcela', 'Fornecedor', 'Descrição', 'Nº Parcela', 'Vencimento', 'Valor Parcela', 'Vlr Pago', 'Status'];
+            headers = ['ID Parcela', 'ID Conta', 'Fornecedor', 'Descrição', 'Nº Parcela', 'Vencimento', 'Valor Parcela', 'Vlr Pago', 'Status'];
             data = parcelas.map(p => ({
                 'ID Parcela': p.id,
+                'ID Conta': p.conta_pagar_id,
                 'Fornecedor': p.admin_contas_pagar?.fornecedor || 'N/A',
                 'Descrição': p.admin_contas_pagar?.descricao || 'N/A',
                 'Nº Parcela': p.numero_parcela,
@@ -76,10 +83,11 @@ const ContasPagarHeader: React.FC<ContasPagarHeaderProps> = ({
                 'Status': p.status,
             }));
         } else if (activeTab === 'pagamentos') {
-            headers = ['ID Pagamento', 'Data Pagamento', 'Fornecedor', 'Descrição', 'Valor Pago', 'Conta Origem'];
+            headers = ['ID Pagamento', 'Data Pagamento', 'ID Conta', 'Fornecedor', 'Descrição', 'Valor Pago', 'Conta Origem'];
             data = pagamentos.map(p => ({
                 'ID Pagamento': p.id,
                 'Data Pagamento': formatDateFns(new Date(p.data_pagamento), 'dd/MM/yyyy HH:mm'),
+                'ID Conta': p.admin_parcelas_pagar?.admin_contas_pagar?.id || 'N/A',
                 'Fornecedor': p.admin_parcelas_pagar?.admin_contas_pagar?.fornecedor || 'N/A',
                 'Descrição': p.admin_parcelas_pagar?.admin_contas_pagar?.descricao || 'N/A',
                 'Valor Pago': p.valor_pago,
@@ -114,6 +122,15 @@ const ContasPagarHeader: React.FC<ContasPagarHeaderProps> = ({
                 <CardHeader className="flex flex-col md:flex-row items-start md:items-center justify-between space-y-4 md:space-y-0 pb-2">
                     <CardTitle className="text-lg flex items-center"><Filter className="w-4 h-4 mr-2" /> Filtros e Ações</CardTitle>
                     <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto">
+                        <div className="relative w-full sm:w-[200px]">
+                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                            <Input
+                                placeholder="Buscar ID, Fornecedor, Descrição..."
+                                value={filtroTexto}
+                                onChange={(e) => setFiltroTexto(e.target.value)}
+                                className="pl-10"
+                            />
+                        </div>
                         {isSupervisao && (
                             <Select value={filtroOrigem} onValueChange={setFiltroOrigem}>
                                 <SelectTrigger className="w-full sm:w-[180px]"><SelectValue placeholder="Filtrar Origem" /></SelectTrigger>

@@ -2,8 +2,8 @@ import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { DateRange } from 'react-day-picker';
 import { DateRangePicker } from '@/components/DateRangePicker';
-import { Printer, FileDown, Filter, Loader2 } from 'lucide-react';
-import { ContaReceber, ParcelaDetalhada } from '@/types/contas-receber';
+import { Printer, FileDown, Filter, Loader2, Search } from 'lucide-react';
+import { ContaReceber } from '@/types/contas-receber';
 import { format, isPast, isToday, parseISO } from 'date-fns';
 import Papa from 'papaparse';
 import { showError, showSuccess } from '@/utils/toast';
@@ -13,17 +13,8 @@ import ContasReceberPrint from './ContasReceberPrint';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { formatarData } from '@/utils/formatters';
-
-// Definindo o tipo ContaReceberComProgresso localmente
-interface ContaReceberComProgresso extends ContaReceber {
-    parcelas_pagas?: number;
-    parcelas_total?: number;
-}
-
-// Tipo para a parcela detalhada com data_pagamento
-interface ExtendedParcelaDetalhada extends ParcelaDetalhada {
-    data_pagamento?: string | null;
-}
+import { Input } from '@/components/ui/input';
+import { ExtendedParcelaDetalhada, ContaReceberComProgresso, AdminRecebimento } from '@/types/contas-receber'; // Importação corrigida
 
 type FiltroOrigem = 'todos' | 'contrato' | 'assinatura_recorrente' | 'manual';
 
@@ -35,7 +26,7 @@ interface ContasReceberAcoesProps {
   // Dados filtrados para exportação/impressão
   contasFiltradas: ContaReceberComProgresso[];
   parcelasFiltradas: ExtendedParcelaDetalhada[];
-  recebimentosFiltrados: any[];
+  recebimentosFiltrados: AdminRecebimento[];
   clienteNomeMap: Record<string, string>;
   isAdmin: boolean;
   
@@ -44,6 +35,8 @@ interface ContasReceberAcoesProps {
   setFiltroStatus: (status: 'todos' | 'quitado' | 'nao_quitado') => void;
   filtroOrigem: FiltroOrigem;
   setFiltroOrigem: (origem: FiltroOrigem) => void;
+  filtroTexto: string; // NOVO PROP
+  setFiltroTexto: (text: string) => void; // NOVO PROP
 }
 
 const formatTimestamp = (dateString: string) => new Date(dateString).toLocaleDateString('pt-BR') + ' ' + new Date(dateString).toLocaleTimeString('pt-BR');
@@ -60,6 +53,8 @@ const ContasReceberAcoes: React.FC<ContasReceberAcoesProps> = ({
   setFiltroStatus,
   filtroOrigem,
   setFiltroOrigem,
+  filtroTexto,
+  setFiltroTexto,
 }) => {
   const [exportLoading, setExportLoading] = useState(false);
   const { printContent } = usePrint();
@@ -103,9 +98,10 @@ const ContasReceberAcoes: React.FC<ContasReceberAcoesProps> = ({
         };
       });
     } else if (activeTab === 'parcelas') {
-      headers = ['ID Parcela', 'Cliente', 'Descrição', 'Nº Parcela', 'Vencimento', 'Valor Parcela', 'Vlr Pago', 'Data Pagamento', 'Status'];
+      headers = ['ID Parcela', 'ID Conta', 'Cliente', 'Descrição', 'Nº Parcela', 'Vencimento', 'Valor Parcela', 'Vlr Pago', 'Data Pagamento', 'Status'];
       data = parcelasFiltradas.map(p => ({
         'ID Parcela': p.id,
+        'ID Conta': p.contas_receber?.id || 'N/A',
         'Cliente': p.contas_receber?.clientes?.nome || 'N/A',
         'Descrição': p.contas_receber?.descricao || 'N/A',
         'Nº Parcela': p.numero_parcela,
@@ -116,10 +112,11 @@ const ContasReceberAcoes: React.FC<ContasReceberAcoesProps> = ({
         'Status': p.status,
       }));
     } else if (activeTab === 'recebimentos') {
-      headers = ['ID Recebimento', 'Data Recebimento', 'Cliente', 'Descrição', 'Valor Recebido', 'Forma Pagamento', 'Conta/Caixa', 'Origem'];
+      headers = ['ID Recebimento', 'Data Recebimento', 'ID Conta', 'Cliente', 'Descrição', 'Valor Recebido', 'Forma Pagamento', 'Conta/Caixa', 'Origem'];
       data = recebimentosFiltrados.map(r => ({
         'ID Recebimento': r.id,
         'Data Recebimento': formatTimestamp(r.data_recebimento),
+        'ID Conta': r.admin_parcelas_receber?.admin_contas_receber?.id || 'N/A',
         'Cliente': clienteNomeMap[r.cliente_id] || 'N/A',
         'Descrição': r.admin_parcelas_receber?.admin_contas_receber?.descricao || 'N/A',
         'Valor Recebido': r.valor_recebido,
@@ -202,6 +199,18 @@ const ContasReceberAcoes: React.FC<ContasReceberAcoesProps> = ({
           <Filter className="w-4 h-4 mr-2" /> Filtros e Ações
         </CardTitle>
         <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto">
+          
+          {/* FILTRO DE TEXTO */}
+          <div className="relative w-full sm:w-[200px]">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                  placeholder="Buscar ID, Cliente, Descrição..."
+                  value={filtroTexto}
+                  onChange={(e) => setFiltroTexto(e.target.value)}
+                  className="pl-10"
+              />
+          </div>
+          {/* FIM FILTRO DE TEXTO */}
           
           {/* FILTRO DE ORIGEM */}
           <Select value={filtroOrigem} onValueChange={setFiltroOrigem}>

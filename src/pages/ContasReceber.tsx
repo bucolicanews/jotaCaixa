@@ -8,7 +8,7 @@ import { Loader2, PlusCircle, Edit, Trash2, ListChecks, BadgeDollarSign } from '
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
-import { ContaReceber, ParcelaDetalhada } from '@/types/contas-receber';
+import { ContaReceber, ParcelaDetalhada, ExtendedParcelaDetalhada, ContaReceberComProgresso, AdminRecebimento } from '@/types/contas-receber';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import FormContasReceber from '@/components/FormContasReceber';
 import DetalhesParcelasDialog from '@/components/DetalhesParcelasDialog';
@@ -20,6 +20,7 @@ import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 import RegistrarPagamentoDialog from '@/components/RegistrarPagamentoDialog';
 import ContasReceberAcoes from '@/components/contas-receber/ContasReceberAcoes';
 import ContasReceberResumo from '@/components/contas-receber/ContasReceberResumo';
+import { useDebounce } from '@/hooks/use-debounce'; // Importando useDebounce
 
 type ParcelaStatus = 'aberta' | 'parcial' | 'paga' | 'reprogramada' | 'cancelada' | 'bloqueada';
 type BadgeVariant = 'success' | 'warning' | 'secondary' | 'destructive' | 'default' | 'info';
@@ -37,43 +38,7 @@ const getBadgeVariant = (status: ParcelaStatus, dataVencimento: string): BadgeVa
 };
 
 // Type for the nested account data fetched within a parcel
-interface NestedContaReceber {
-    descricao: string;
-    cliente_id: string | null;
-    origem: ContaReceber['origem'];
-    clientes: { nome: string } | null;
-}
-
-// NOVO: Tipo para a parcela detalhada com data_pagamento
-interface ExtendedParcelaDetalhada extends ParcelaDetalhada {
-    data_pagamento?: string | null;
-    contas_receber: NestedContaReceber | null;
-}
-
-// Novo tipo para a conta sintética com progresso
-interface ContaReceberComProgresso extends ContaReceber {
-    parcelas_pagas?: number;
-    parcelas_total?: number;
-}
-
-// Tipo para o histórico de recebimentos (Admin)
-interface AdminRecebimento {
-    id: string;
-    data_recebimento: string;
-    valor_recebido: number;
-    forma_pagamento: string;
-    cliente_id: string;
-    conta_id: string; // NOVO CAMPO
-    saldo_contas: { nome: string } | null; // NOVO CAMPO
-    admin_parcelas_receber: {
-        numero_parcela: number;
-        admin_contas_receber: {
-            descricao: string;
-            origem: ContaReceber['origem'];
-            cliente_id: string;
-        } | null;
-    } | null;
-}
+// REMOVIDO: interface NestedContaReceber { ... }
 
 type FiltroOrigem = 'todos' | 'contrato' | 'assinatura_recorrente' | 'manual';
 
@@ -95,6 +60,8 @@ const ContasReceber = () => {
   const [activeTab, setActiveTab] = useState('parcela_sintetica');
   const [filtroStatus, setFiltroStatus] = useState<'todos' | 'quitado' | 'nao_quitado'>('todos');
   const [filtroOrigem, setFiltroOrigem] = useState<FiltroOrigem>('todos');
+  const [filtroTexto, setFiltroTexto] = useState(''); // NOVO ESTADO
+  const filtroTextoDebounced = useDebounce(filtroTexto, 500); // NOVO DEBOUNCE
 
   const isAdmin = role === 'Admin';
   
@@ -119,18 +86,37 @@ const ContasReceber = () => {
     const tabelaParcelasReceber = isAdmin ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
     const ownerKey = isAdmin ? 'admin_id' : 'empresa_id';
     
-    const [contasRes, parcelasRes, recebimentosRes] = await Promise.all([
-      supabase
+    // --- 1. Buscar Contas Sintéticas ---
+    let contasQuery = supabase
         .from(tabelaContasReceber)
         .select(`*, clientes(nome)`)
         .eq(ownerKey, ownerId)
-        .order('data_vencimento', { ascending: true }),
+        .order('data_vencimento', { ascending: true });
+        
+    // Aplica filtros de período
+    if (filtroPeriodo?.from) {
+        contasQuery = contasQuery.gte('data_vencimento', format(filtroPeriodo.from, 'yyyy-MM-dd'));
+    }
+    if (filtroPeriodo?.to) {
+        contasQuery = contasQuery.lte('data_vencimento', format(filtroPeriodo.to, 'yyyy-MM-dd'));
+    }
+    
+    // Aplica filtro de texto (busca por ID, descrição ou cliente)
+    if (filtroTextoDebounced) {
+        const termo = `%${filtroTextoDebounced}%`;
+        contasQuery = contasQuery.or(`id.ilike.${termo},descricao.ilike.${termo},clientes.nome.ilike.${termo}`);
+    }
+    
+    const [contasRes, parcelasRes, recebimentosRes] = await Promise.all([
+      contasQuery,
       
+      // --- 2. Buscar Parcelas (Analítico) ---
       supabase
         .from(tabelaParcelasReceber)
         .select(`
           *,
           contas_receber: ${tabelaContasReceber} (
+            id,
             descricao,
             cliente_id,
             clientes ( nome ),
@@ -140,6 +126,7 @@ const ContasReceber = () => {
         .eq(ownerKey, ownerId)
         .order('data_vencimento', { ascending: true }),
         
+      // --- 3. Buscar Recebimentos (Histórico) ---
       isAdmin ? supabase
         .from('admin_recebimentos')
         .select(`
@@ -204,7 +191,7 @@ const ContasReceber = () => {
     }
 
     setCarregandoDados(false);
-  }, [ownerId, isAdmin]);
+  }, [ownerId, isAdmin, filtroPeriodo, filtroTextoDebounced]);
 
   useEffect(() => {
     if (!carregandoSessao && usuario) {
@@ -355,11 +342,43 @@ const ContasReceber = () => {
 
   const parcelasFiltradas = useMemo(() => {
     const dateFiltered = filterData(parcelas, 'data_vencimento') as ExtendedParcelaDetalhada[];
-    return filterByStatus(dateFiltered, false) as ExtendedParcelaDetalhada[];
-  }, [parcelas, filtroPeriodo, filtroStatus, filtroOrigem]);
+    
+    // Filtro de texto para parcelas (busca por ID da conta sintética, descrição ou cliente)
+    let filteredByText = dateFiltered;
+    if (filtroTextoDebounced) {
+        const termo = filtroTextoDebounced.toLowerCase();
+        filteredByText = filteredByText.filter(p => {
+            const contaId = p.contas_receber?.id || '';
+            const descricao = p.contas_receber?.descricao || '';
+            const clienteNome = p.contas_receber?.clientes?.nome || '';
+            
+            return p.id.toLowerCase().includes(termo) ||
+                   contaId.toLowerCase().includes(termo) ||
+                   descricao.toLowerCase().includes(termo) ||
+                   clienteNome.toLowerCase().includes(termo);
+        });
+    }
+    
+    return filterByStatus(filteredByText, false) as ExtendedParcelaDetalhada[];
+  }, [parcelas, filtroPeriodo, filtroStatus, filtroOrigem, filtroTextoDebounced]);
   
   const recebimentosFiltrados = useMemo(() => {
     let filtered = filterData(recebimentos, 'data_recebimento');
+    
+    // Filtro de texto para recebimentos (busca por ID da conta sintética, descrição ou cliente)
+    if (filtroTextoDebounced) {
+        const termo = filtroTextoDebounced.toLowerCase();
+        filtered = filtered.filter(r => {
+            const contaId = r.admin_parcelas_receber?.admin_contas_receber?.id || '';
+            const descricao = r.admin_parcelas_receber?.admin_contas_receber?.descricao || '';
+            const clienteNome = clienteNomeMap[r.cliente_id] || '';
+            
+            return r.id.toLowerCase().includes(termo) ||
+                   contaId.toLowerCase().includes(termo) ||
+                   descricao.toLowerCase().includes(termo) ||
+                   clienteNome.toLowerCase().includes(termo);
+        });
+    }
     
     if (filtroOrigem !== 'todos') {
         filtered = filtered.filter(r => {
@@ -369,7 +388,7 @@ const ContasReceber = () => {
     }
     
     return filtered;
-  }, [recebimentos, filtroPeriodo, filtroOrigem]);
+  }, [recebimentos, filtroPeriodo, filtroOrigem, filtroTextoDebounced, clienteNomeMap]);
 
   if (carregandoSessao || carregandoDados) {
     return <LayoutPrincipal><div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div></LayoutPrincipal>;
@@ -411,6 +430,8 @@ const ContasReceber = () => {
         setFiltroStatus={setFiltroStatus}
         filtroOrigem={filtroOrigem}
         setFiltroOrigem={setFiltroOrigem}
+        filtroTexto={filtroTexto} // NOVO PROP
+        setFiltroTexto={setFiltroTexto} // NOVO PROP
       />
       
       <ContasReceberResumo
@@ -437,6 +458,7 @@ const ContasReceber = () => {
                   <TableHeader>
                     <TableRow>
                       <TableHead className="w-[120px]">Ações</TableHead>
+                      <TableHead className="w-[100px]">ID Conta</TableHead> {/* NOVO CAMPO */}
                       <TableHead>Cliente</TableHead>
                       <TableHead>Descrição</TableHead>
                       <TableHead>Vencimento</TableHead>
@@ -448,7 +470,7 @@ const ContasReceber = () => {
                   </TableHeader>
                   <TableBody>
                     {contasFiltradas.length === 0 ? (
-                        <TableRow><TableCell colSpan={8} className="text-center h-24">Nenhuma conta a receber encontrada no período.</TableCell></TableRow>
+                        <TableRow><TableCell colSpan={9} className="text-center h-24">Nenhuma conta a receber encontrada no período.</TableCell></TableRow>
                     ) : (
                         contasFiltradas.map((conta) => {
                             
@@ -488,6 +510,7 @@ const ContasReceber = () => {
                                             <Button variant="ghost" size="icon" onClick={() => handleDelete(conta.id)} title="Excluir Lançamento"><Trash2 className="w-4 h-4 text-red-500" /></Button>
                                         </div>
                                     </TableCell>
+                                    <TableCell className="font-mono text-xs text-muted-foreground truncate max-w-[100px]" title={conta.id}>{conta.id.substring(0, 8)}...</TableCell> {/* NOVO CAMPO */}
                                     <TableCell className="font-medium">{conta.clientes?.nome || 'N/A'}</TableCell>
                                     <TableCell>{conta.descricao}</TableCell>
                                     <TableCell>{formatDate(conta.data_vencimento)}</TableCell>
@@ -520,6 +543,7 @@ const ContasReceber = () => {
                   <TableHeader>
                     <TableRow>
                       <TableHead className="w-[120px]">Ações</TableHead>
+                      <TableHead className="w-[100px]">ID Conta</TableHead> {/* NOVO CAMPO */}
                       <TableHead>Cliente</TableHead>
                       <TableHead>Descrição</TableHead>
                       <TableHead>Nº</TableHead>
@@ -532,13 +556,14 @@ const ContasReceber = () => {
                   </TableHeader>
                   <TableBody>
                     {parcelasFiltradas.length === 0 ? (
-                        <TableRow><TableCell colSpan={9} className="text-center h-24">Nenhuma parcela encontrada no período.</TableCell></TableRow>
+                        <TableRow><TableCell colSpan={10} className="text-center h-24">Nenhuma parcela encontrada no período.</TableCell></TableRow>
                     ) : (
                         parcelasFiltradas.map((p) => {
                             const statusVariant = getBadgeVariant(p.status, p.data_vencimento);
                             const isPaga = p.status === 'paga';
                             const clienteNome = p.contas_receber?.clientes?.nome || 'N/A';
                             const descricao = p.contas_receber?.descricao || 'N/A';
+                            const contaId = p.contas_receber?.id || 'N/A';
 
                             return (
                                 <TableRow key={p.id} className={cn(isPaga && 'bg-green-500/10')}>
@@ -552,6 +577,7 @@ const ContasReceber = () => {
                                             <BadgeDollarSign className="w-4 h-4 mr-2" /> Receber
                                         </Button>
                                     </TableCell>
+                                    <TableCell className="font-mono text-xs text-muted-foreground truncate max-w-[100px]" title={contaId}>{contaId.substring(0, 8)}...</TableCell> {/* NOVO CAMPO */}
                                     <TableCell className="font-medium">{clienteNome}</TableCell>
                                     <TableCell className="text-sm text-muted-foreground">{descricao}</TableCell>
                                     <TableCell className="text-center">{p.numero_parcela}</TableCell>
@@ -583,6 +609,7 @@ const ContasReceber = () => {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Data Recebimento</TableHead>
+                      <TableHead className="w-[100px]">ID Conta</TableHead> {/* NOVO CAMPO */}
                       <TableHead>Cliente</TableHead>
                       <TableHead>Descrição</TableHead>
                       <TableHead>Valor Recebido</TableHead>
@@ -593,7 +620,7 @@ const ContasReceber = () => {
                   </TableHeader>
                   <TableBody>
                     {recebimentosFiltrados.length === 0 ? (
-                        <TableRow><TableCell colSpan={7} className="text-center h-24">Nenhum recebimento encontrado no período.</TableCell></TableRow>
+                        <TableRow><TableCell colSpan={8} className="text-center h-24">Nenhum recebimento encontrado no período.</TableCell></TableRow>
                     ) : (
                         recebimentosFiltrados.map((r) => {
                             const dataRecebimentoDisplay = formatTimestamp(r.data_recebimento);
@@ -601,10 +628,12 @@ const ContasReceber = () => {
                             const descricao = r.admin_parcelas_receber?.admin_contas_receber?.descricao || 'N/A';
                             const origem = r.admin_parcelas_receber?.admin_contas_receber?.origem || 'manual';
                             const contaDestino = r.saldo_contas?.nome || 'N/A';
+                            const contaId = r.admin_parcelas_receber?.admin_contas_receber?.id || 'N/A';
 
                             return (
                                 <TableRow key={r.id}>
                                     <TableCell>{dataRecebimentoDisplay}</TableCell>
+                                    <TableCell className="font-mono text-xs text-muted-foreground truncate max-w-[100px]" title={contaId}>{contaId.substring(0, 8)}...</TableCell> {/* NOVO CAMPO */}
                                     <TableCell className="font-medium">{clienteNome}</TableCell>
                                     <TableCell className="text-sm text-muted-foreground">{descricao}</TableCell>
                                     <TableCell className="font-semibold text-green-600">{formatCurrency(r.valor_recebido)}</TableCell>

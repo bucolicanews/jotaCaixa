@@ -18,6 +18,7 @@ import SinteticoTab from '@/components/contas-pagar/SinteticoTab';
 import ParcelasTab from '@/components/contas-pagar/ParcelasTab';
 import PagamentosTab from '@/components/contas-pagar/PagamentosTab';
 import LayoutPrincipal from '@/components/LayoutPrincipal'; // Importando LayoutPrincipal
+import { useDebounce } from '@/hooks/use-debounce'; // Importando useDebounce
 
 // O tipo ContaStatus foi movido para utils/badge-variants.ts ou é inferido nos componentes filhos.
 
@@ -39,6 +40,8 @@ const ContasPagar: React.FC = () => {
   });
   const [filtroOrigem, setFiltroOrigem] = useState('todos');
   const [filtroStatus, setFiltroStatus] = useState('nao_quitado');
+  const [filtroTexto, setFiltroTexto] = useState(''); // NOVO ESTADO
+  const filtroTextoDebounced = useDebounce(filtroTexto, 500); // NOVO DEBOUNCE
 
   // Diálogos
   const [formDialog, setFormDialog] = useState<{ open: boolean, conta: ContaPagarComProgresso | null }>({ open: false, conta: null });
@@ -49,7 +52,8 @@ const ContasPagar: React.FC = () => {
     if (!proprietarioId) return;
     setLoading(true);
     
-    let query = supabase.from(isSupervisao ? 'admin_contas_pagar' : 'contas_pagar').select('*');
+    const tabela = isSupervisao ? 'admin_contas_pagar' : 'contas_pagar';
+    let query = supabase.from(tabela).select('*');
     
     if (!isSupervisao) {
         query = query.eq('empresa_id', proprietarioId);
@@ -75,6 +79,12 @@ const ContasPagar: React.FC = () => {
         query = query.eq('status', 'pago');
     } else if (filtroStatus === 'nao_quitado') {
         query = query.neq('status', 'pago');
+    }
+    
+    // Aplica filtro de texto (busca por ID ou descrição/fornecedor)
+    if (filtroTextoDebounced) {
+        const termo = `%${filtroTextoDebounced}%`;
+        query = query.or(`id.ilike.${termo},descricao.ilike.${termo},fornecedor.ilike.${termo}`);
     }
 
     const { data, error } = await query.order('data_vencimento', { ascending: true });
@@ -110,7 +120,7 @@ const ContasPagar: React.FC = () => {
       }
     }
     setLoading(false);
-  }, [proprietarioId, isSupervisao, filtroPeriodo, filtroOrigem, filtroStatus]);
+  }, [proprietarioId, isSupervisao, filtroPeriodo, filtroOrigem, filtroStatus, filtroTextoDebounced]);
   
   const fetchParcelas = useCallback(async () => {
     if (!proprietarioId || !isSupervisao) return;
@@ -118,7 +128,7 @@ const ContasPagar: React.FC = () => {
     
     let query = supabase.from('admin_parcelas_pagar').select(`
         *,
-        admin_contas_pagar ( fornecedor, origem, descricao )
+        admin_contas_pagar ( id, fornecedor, origem, descricao )
     `).eq('admin_id', proprietarioId);
     
     // Aplica filtros de período
@@ -136,13 +146,6 @@ const ContasPagar: React.FC = () => {
         query = query.neq('status', 'paga');
     }
     
-    // Aplica filtro de origem (usando a relação)
-    if (filtroOrigem !== 'todos') {
-        // Nota: Não podemos usar .eq('admin_contas_pagar.origem', filtroOrigem) diretamente no Supabase JS v2.
-        // A solução é buscar todos e filtrar no frontend, ou usar um RPC/View.
-        // Como a tabela é pequena, vamos buscar e filtrar no frontend por enquanto.
-    }
-
     const { data, error } = await query.order('data_vencimento', { ascending: true });
 
     if (error) {
@@ -151,15 +154,24 @@ const ContasPagar: React.FC = () => {
     } else {
       let fetchedParcelas = data as ExtendedParcelaPagar[];
       
-      // Filtragem de origem no frontend
-      if (filtroOrigem !== 'todos') {
-          fetchedParcelas = fetchedParcelas.filter(p => p.admin_contas_pagar?.origem === filtroOrigem);
-      }
+      // Filtragem de origem e texto no frontend
+      fetchedParcelas = fetchedParcelas.filter(p => {
+          const origemMatch = filtroOrigem === 'todos' || p.admin_contas_pagar?.origem === filtroOrigem;
+          
+          const termo = filtroTextoDebounced.toLowerCase();
+          const textMatch = !termo || 
+                            p.id.toLowerCase().includes(termo) ||
+                            p.admin_contas_pagar?.id.toLowerCase().includes(termo) ||
+                            p.admin_contas_pagar?.descricao.toLowerCase().includes(termo) ||
+                            p.admin_contas_pagar?.fornecedor.toLowerCase().includes(termo);
+                            
+          return origemMatch && textMatch;
+      });
       
       setParcelas(fetchedParcelas);
     }
     setLoading(false);
-  }, [proprietarioId, isSupervisao, filtroPeriodo, filtroStatus, filtroOrigem]); // Adicionando filtroOrigem aqui
+  }, [proprietarioId, isSupervisao, filtroPeriodo, filtroStatus, filtroOrigem, filtroTextoDebounced]);
   
   const fetchPagamentos = useCallback(async () => {
     if (!proprietarioId || !isSupervisao) return;
@@ -170,7 +182,7 @@ const ContasPagar: React.FC = () => {
         saldo_contas ( nome ),
         admin_parcelas_pagar (
             numero_parcela,
-            admin_contas_pagar ( descricao, origem, fornecedor )
+            admin_contas_pagar ( id, descricao, origem, fornecedor )
         )
     `).eq('admin_id', proprietarioId);
     
@@ -190,15 +202,25 @@ const ContasPagar: React.FC = () => {
     } else {
       let fetchedPagamentos = data as any[];
       
-      // Filtragem de origem no frontend
-      if (filtroOrigem !== 'todos') {
-          fetchedPagamentos = fetchedPagamentos.filter(p => p.admin_parcelas_pagar?.admin_contas_pagar?.origem === filtroOrigem);
-      }
+      // Filtragem de origem e texto no frontend
+      fetchedPagamentos = fetchedPagamentos.filter(p => {
+          const origemMatch = filtroOrigem === 'todos' || p.admin_parcelas_pagar?.admin_contas_pagar?.origem === filtroOrigem;
+          
+          const termo = filtroTextoDebounced.toLowerCase();
+          const contaPagarId = p.admin_parcelas_pagar?.admin_contas_pagar?.id || '';
+          const textMatch = !termo || 
+                            p.id.toLowerCase().includes(termo) ||
+                            contaPagarId.toLowerCase().includes(termo) ||
+                            p.admin_parcelas_pagar?.admin_contas_pagar?.descricao.toLowerCase().includes(termo) ||
+                            p.admin_parcelas_pagar?.admin_contas_pagar?.fornecedor.toLowerCase().includes(termo);
+                            
+          return origemMatch && textMatch;
+      });
       
       setPagamentos(fetchedPagamentos);
     }
     setLoading(false);
-  }, [proprietarioId, isSupervisao, filtroPeriodo, filtroOrigem]); // Adicionando filtroOrigem aqui
+  }, [proprietarioId, isSupervisao, filtroPeriodo, filtroOrigem, filtroTextoDebounced]);
 
   useEffect(() => {
     if (activeTab === 'sintetico') {
@@ -290,6 +312,8 @@ const ContasPagar: React.FC = () => {
               parcelas={parcelas}
               pagamentos={pagamentos}
               activeTab={activeTab}
+              filtroTexto={filtroTexto}
+              setFiltroTexto={setFiltroTexto}
           />
 
           <TabsContent value="sintetico" className="space-y-4">
