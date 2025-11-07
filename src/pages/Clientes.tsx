@@ -317,7 +317,7 @@ const ClientesPage = () => {
   const filterEmpresasSistema = (status: 'ativos' | 'inativos' | 'avulsos') => {
       const now = new Date();
       
-      return empresasSistema.filter(e => {
+      return empresasSistema.filter((e: EmpresaSistema) => {
           const dataFimAcesso = e.data_fim_acesso ? parseISO(e.data_fim_acesso) : null;
           const isAtivo = dataFimAcesso && isPast(now) === false; // Data de fim de acesso é futura ou hoje
           const isAvulso = e.tipo_cliente?.endsWith('_Avulso') ?? false; // Verifica o novo sufixo
@@ -350,7 +350,7 @@ const ClientesPage = () => {
           ? empresasInativas 
           : activeEmpresaTab === 'avulsos' 
           ? empresasAvulsas
-          : empresasSistema.filter(e => !e.aprovado); // Pendentes
+          : empresasSistema.filter((e: EmpresaSistema) => !e.aprovado); // Pendentes
   }, [activeEmpresaTab, empresasAtivas, empresasInativas, empresasAvulsas, empresasSistema]);
 
   // Renderização do conteúdo da tabela de Clientes CR
@@ -646,7 +646,7 @@ const ClientesPage = () => {
             <TabsContent value="empresas_sistema">
                 <Tabs value={activeEmpresaTab} onValueChange={setActiveEmpresaTab} className="w-full">
                     <TabsList className="grid w-full grid-cols-4">
-                        <TabsTrigger value="pendentes">Pendentes ({empresasSistema.filter(e => !e.aprovado).length})</TabsTrigger>
+                        <TabsTrigger value="pendentes">Pendentes ({empresasSistema.filter((e: EmpresaSistema) => !e.aprovado).length})</TabsTrigger>
                         <TabsTrigger value="ativos">Ativos ({empresasAtivas.length})</TabsTrigger>
                         <TabsTrigger value="inativos">Inativos ({empresasInativas.length})</TabsTrigger>
                         <TabsTrigger value="avulsos">Avulsos ({empresasAvulsas.length})</TabsTrigger>
@@ -668,7 +668,7 @@ const ClientesPage = () => {
                     
                     <TabsContent value="pendentes" className="mt-4">
                         <Card>
-                            <CardHeader><CardTitle className="text-xl">Empresas Pendentes de Aprovação ({empresasSistema.filter(e => !e.aprovado).length})</CardTitle></CardHeader>
+                            <CardHeader><CardTitle className="text-xl">Empresas Pendentes de Aprovação ({empresasSistema.filter((e: EmpresaSistema) => !e.aprovado).length})</CardTitle></CardHeader>
                             <CardContent>{renderEmpresasSistemaTable(empresasParaExibir.filter((e: EmpresaSistema) => !e.aprovado))}</CardContent>
                         </Card>
                     </TabsContent>
