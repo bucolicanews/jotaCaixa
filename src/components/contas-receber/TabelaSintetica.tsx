@@ -8,7 +8,7 @@ import { isToday, isPast, parseISO } from 'date-fns';
 import { ContaReceberComProgresso } from '@/types/contas-receber';
 
 // Tipos importados do ContasReceber.tsx
-type ParcelaStatus = 'aberta' | 'parcial' | 'paga' | 'reprogramada' | 'cancelada' | 'bloqueada';
+// Removido: type ParcelaStatus = 'aberta' | 'parcial' | 'paga' | 'reprogramada' | 'cancelada' | 'bloqueada';
 type BadgeVariant = 'success' | 'warning' | 'secondary' | 'destructive' | 'default' | 'info';
 
 interface TabelaSinteticaProps {
@@ -18,7 +18,6 @@ interface TabelaSinteticaProps {
     handleDelete: (contaId: string) => void;
     formatCurrency: (value: number) => string;
     formatDate: (dateString: string) => string;
-    // Removido: getBadgeVariant: (status: ParcelaStatus, dataVencimento: string) => BadgeVariant;
 }
 
 const TabelaSintetica: React.FC<TabelaSinteticaProps> = ({
@@ -30,7 +29,7 @@ const TabelaSintetica: React.FC<TabelaSinteticaProps> = ({
     formatDate,
 }) => {
     
-    // Recriando a lógica de status localmente, pois o prop getBadgeVariant foi removido
+    // Recriando a lógica de status localmente
     const getStatusInfo = (conta: ContaReceberComProgresso) => {
         const total = conta.parcelas_total ?? 0;
         const pagas = conta.parcelas_pagas ?? 0;

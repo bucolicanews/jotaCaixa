@@ -20,7 +20,7 @@ import TabelaSintetica from '@/components/contas-receber/TabelaSintetica';
 import TabelaParcelas from '@/components/contas-receber/TabelaParcelas';
 import TabelaRecebimentos from '@/components/contas-receber/TabelaRecebimentos';
 import { useDebounce } from '@/hooks/use-debounce';
-import { formatarData } from '@/utils/formatters'; // Removido formatCurrency
+import { formatarData } from '@/utils/formatters';
 
 type ParcelaStatus = 'aberta' | 'parcial' | 'paga' | 'reprogramada' | 'cancelada' | 'bloqueada';
 type BadgeVariant = 'success' | 'warning' | 'secondary' | 'destructive' | 'default' | 'info';
@@ -474,7 +474,6 @@ const ContasReceber = () => {
             handleDelete={handleDelete}
             formatCurrency={formatCurrency}
             formatDate={formatDate}
-            getBadgeVariant={getBadgeVariant}
           />
         </TabsContent>
         
