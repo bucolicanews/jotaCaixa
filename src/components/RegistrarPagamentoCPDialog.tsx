@@ -246,18 +246,18 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
         id_conta_contabil: contaParcelaPagar,
       }).eq('id', parcela.id);
       
-      // 4. Verificar se todas as parcelas da conta sintética foram pagas
+      // 4. Verificar se há parcelas que ainda exigem pagamento (aberta, parcial, reprogramada)
       const { count: parcelasPendentesCount, error: countError } = await supabase
           .from(tabelaParcelas)
           .select('id', { count: 'exact', head: true })
           .eq('conta_pagar_id', parcela.conta_pagar_id)
-          .neq('status', 'paga');
+          .in('status', ['aberta', 'parcial', 'reprogramada']); // CORREÇÃO AQUI: Apenas status que indicam necessidade de pagamento
           
       if (countError) {
           console.error('Erro ao contar parcelas pendentes:', countError);
           // Continua, mas não atualiza o status sintético
       } else if (parcelasPendentesCount === 0) {
-          // Se não houver parcelas pendentes, atualiza a conta sintética para 'pago'
+          // Se não houver parcelas que exigem pagamento, a conta sintética está quitada
           const { error: updateContaError } = await supabase
               .from(tabelaContasPagar)
               .update({ status: 'pago' })
