@@ -18,8 +18,8 @@ import { isToday, isPast, parseISO, format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 import RegistrarPagamentoDialog from '@/components/RegistrarPagamentoDialog';
-import ContasReceberAcoes from '@/components/ContasReceberAcoes';
-import ContasReceberResumo from '@/components/ContasReceberResumo';
+import ContasReceberAcoes from '@/components/contas-receber/ContasReceberAcoes';
+import ContasReceberResumo from '@/components/contas-receber/ContasReceberResumo';
 
 type ParcelaStatus = 'aberta' | 'parcial' | 'paga' | 'reprogramada' | 'cancelada' | 'bloqueada';
 type BadgeVariant = 'success' | 'warning' | 'secondary' | 'destructive' | 'default' | 'info';

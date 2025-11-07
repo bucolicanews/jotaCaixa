@@ -11,7 +11,8 @@ import { usePrint } from '@/hooks/use-print';
 import ReactDOMServer from 'react-dom/server';
 import ContasReceberPrint from './ContasReceberPrint';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { formatCurrency, formatarData } from '@/utils/formatters'; // Importando formatCurrency e formatarData
 
 // Definindo o tipo ContaReceberComProgresso localmente
 interface ContaReceberComProgresso extends ContaReceber {
@@ -45,9 +46,7 @@ interface ContasReceberAcoesProps {
   setFiltroOrigem: (origem: FiltroOrigem) => void;
 }
 
-const formatDate = (dateString: string) => new Date(dateString + 'T00:00:00').toLocaleDateString('pt-BR');
 const formatTimestamp = (dateString: string) => new Date(dateString).toLocaleDateString('pt-BR') + ' ' + new Date(dateString).toLocaleTimeString('pt-BR');
-// const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value); // Removido
 
 const ContasReceberAcoes: React.FC<ContasReceberAcoesProps> = ({
   activeTab,
@@ -96,7 +95,7 @@ const ContasReceberAcoes: React.FC<ContasReceberAcoesProps> = ({
             'ID Conta': c.id,
             'Cliente': c.clientes?.nome || 'N/A',
             'Descrição': c.descricao,
-            'Vencimento': formatDate(c.data_vencimento),
+            'Vencimento': formatarData(c.data_vencimento),
             'Valor Total': c.valor_total, // Mantém como número para cálculo de total
             'Progresso': `${pagas}/${total}`,
             'Status': displayStatus,
@@ -110,10 +109,10 @@ const ContasReceberAcoes: React.FC<ContasReceberAcoesProps> = ({
         'Cliente': p.contas_receber?.clientes?.nome || 'N/A',
         'Descrição': p.contas_receber?.descricao || 'N/A',
         'Nº Parcela': p.numero_parcela,
-        'Vencimento': formatDate(p.data_vencimento),
+        'Vencimento': formatarData(p.data_vencimento),
         'Valor Parcela': p.valor_parcela,
         'Vlr Pago': p.valor_pago || 0,
-        'Data Pagamento': p.data_pagamento ? formatDate(p.data_pagamento) : '-',
+        'Data Pagamento': p.data_pagamento ? formatarData(p.data_pagamento) : '-',
         'Status': p.status,
       }));
     } else if (activeTab === 'recebimentos') {

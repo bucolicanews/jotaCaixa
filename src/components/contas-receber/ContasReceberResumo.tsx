@@ -1,8 +1,9 @@
 import React, { useMemo } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { DollarSign, ListChecks, Receipt } from 'lucide-react';
 import { ContaReceberComProgresso, ExtendedParcelaDetalhada, AdminRecebimento } from '@/types/contas-receber';
 import { cn } from '@/lib/utils';
+import { formatCurrency } from '@/utils/formatters'; // Importando formatCurrency
 
 interface ContasReceberResumoProps {
   activeTab: string;
@@ -11,7 +12,7 @@ interface ContasReceberResumoProps {
   recebimentosFiltrados: AdminRecebimento[];
 }
 
-const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+// Removido: const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
 const ContasReceberResumo: React.FC<ContasReceberResumoProps> = ({
   activeTab,

@@ -16,7 +16,7 @@ import { showError, showSuccess } from '@/utils/toast';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useSessao } from '@/hooks/use-sessao';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { SaldoConta } from '@/types/saldo-conta';
+import useSaldoContaCalculado from '@/hooks/use-saldo-conta-calculado';
 
 interface ParcelaParaPagamento {
   id: string;
@@ -51,8 +51,6 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
   const { role, usuario } = useSessao();
   const isAdmin = role === 'Admin';
   
-  const [contasDestino, setContasDestino] = useState<SaldoConta[]>([]);
-  const [loadingContas, setLoadingContas] = useState(true);
   const [mapeamentoContabil, setMapeamentoContabil] = useState<Record<string, string | null>>({});
   
   // Determina as tabelas de destino
@@ -61,6 +59,9 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
   
   // O ID do proprietário da conta (Admin ID ou Empresa ID)
   const ownerId = isAdmin ? usuario?.id : parcela?.empresa_id;
+
+  // Usamos o hook de saldo calculado para obter as contas de destino
+  const { contas: contasDestino, carregando: loadingContas, refetch: refetchSaldos } = useSaldoContaCalculado('todos', 'todos', '');
 
   const saldoDevedor = parcela ? parcela.valor_parcela - (parcela.valor_pago || 0) : 0;
 
@@ -81,41 +82,6 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
   // Desestruturando setValue para usar nas funções de callback
   const { setValue } = form;
 
-  const fetchContasDestino = useCallback(async () => {
-    if (!ownerId) return;
-    setLoadingContas(true);
-    
-    // Busca saldo_contas e faz JOIN com plano_contas para filtrar
-    const { data, error } = await supabase
-        .from('saldo_contas')
-        .select(`
-            *,
-            plano_contas ( is_conta_saldo )
-        `)
-        .eq('empresa_id', ownerId)
-        .order('nome');
-        
-    if (error) {
-        showError('Erro ao carregar Contas/Caixas: ' + error.message);
-        setContasDestino([]);
-    } else {
-        // Filtra no frontend para garantir que apenas contas com is_conta_saldo = true sejam exibidas
-        const filteredData = (data as any[])
-            .filter(c => c.plano_contas?.is_conta_saldo === true)
-            .map(c => ({ ...c, plano_contas: undefined })) as SaldoConta[]; // Remove o join para manter o tipo SaldoConta
-            
-        setContasDestino(filteredData);
-        
-        // Se houver contas, define a primeira como padrão
-        if (filteredData.length > 0) {
-            setValue('conta_id', filteredData[0].id);
-        } else {
-            setValue('conta_id', null);
-        }
-    }
-    setLoadingContas(false);
-  }, [ownerId, setValue]); // Corrigido: usando setValue como dependência
-  
   const fetchMapeamentoContabil = useCallback(async () => {
     if (!isAdmin || !ownerId) return;
     
@@ -138,12 +104,22 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
   
   useEffect(() => {
       if (open) {
-          fetchContasDestino();
+          refetchSaldos(); // Garante que as contas de saldo estejam atualizadas
           if (isAdmin) {
               fetchMapeamentoContabil();
           }
       }
-  }, [open, fetchContasDestino, fetchMapeamentoContabil, isAdmin]);
+  }, [open, refetchSaldos, fetchMapeamentoContabil, isAdmin]);
+
+  useEffect(() => {
+    if (open && !loadingContas && contasDestino.length > 0) {
+        // Define a primeira conta como padrão se nenhuma estiver selecionada
+        if (!form.getValues('conta_id')) {
+            setValue('conta_id', contasDestino[0].id);
+        }
+    }
+  }, [open, loadingContas, contasDestino, setValue, form]);
+
 
   const valorRecebido = form.watch('valor_recebido');
   const acaoSaldoRestante = form.watch('acao_saldo_restante');
