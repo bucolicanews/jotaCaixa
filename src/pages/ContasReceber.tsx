@@ -98,10 +98,11 @@ const ContasReceber = () => {
         contasQuery = contasQuery.lte('data_vencimento', format(filtroPeriodo.to, 'yyyy-MM-dd'));
     }
     
-    // Aplica filtro de texto (busca por ID, descrição ou cliente)
+    // Aplica filtro de texto (busca apenas por descrição no backend)
     if (filtroTextoDebounced) {
         const termo = `%${filtroTextoDebounced}%`;
-        contasQuery = contasQuery.or(`id.ilike.${termo},descricao.ilike.${termo},clientes.nome.ilike.${termo}`);
+        // CORREÇÃO: Remove a busca por ID (UUID) e clientes.nome (relação)
+        contasQuery = contasQuery.ilike('descricao', termo);
     }
     
     const [contasRes, parcelasRes, recebimentosRes] = await Promise.all([
@@ -161,6 +162,15 @@ const ContasReceber = () => {
                 parcelas_total: parcelas.length,
             };
         });
+        
+        // FILTRAGEM DE TEXTO NO FRONTEND (para clientes.nome e id)
+        if (filtroTextoDebounced) {
+            const termo = filtroTextoDebounced.toLowerCase();
+            fetchedContas = fetchedContas.filter(c => 
+                c.id.toLowerCase().includes(termo) ||
+                c.clientes?.nome?.toLowerCase().includes(termo)
+            );
+        }
         
         setContas(fetchedContas);
         setParcelas(fetchedParcelas);

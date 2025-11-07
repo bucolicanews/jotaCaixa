@@ -84,7 +84,8 @@ const ContasPagar: React.FC = () => {
     // Aplica filtro de texto (busca por ID ou descrição/fornecedor)
     if (filtroTextoDebounced) {
         const termo = `%${filtroTextoDebounced}%`;
-        query = query.or(`id.ilike.${termo},descricao.ilike.${termo},fornecedor.ilike.${termo}`);
+        // CORREÇÃO: Remove a busca por ID (UUID) e foca em campos TEXT
+        query = query.or(`descricao.ilike.${termo},fornecedor.ilike.${termo}`);
     }
 
     const { data, error } = await query.order('data_vencimento', { ascending: true });
