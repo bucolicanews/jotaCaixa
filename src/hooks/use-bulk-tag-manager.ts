@@ -11,6 +11,7 @@ interface BulkTagManagerHook {
     isAllActive: boolean;
     toggleAllTags: (activate: boolean) => Promise<void>;
     refetchStatus: () => void;
+    refreshKey: number; // ADICIONADO
 }
 
 /**
@@ -124,5 +125,5 @@ export function useBulkTagManager(resourceId: string | undefined): BulkTagManage
         }
     }, [resourceId, empresaId, refetchStatus]);
 
-    return { loading, isAllActive, toggleAllTags, refetchStatus };
+    return { loading, isAllActive, toggleAllTags, refetchStatus, refreshKey };
 }

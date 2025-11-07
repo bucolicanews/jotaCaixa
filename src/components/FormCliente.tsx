@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useCallback } from 'react';
 import { useForm, FormProvider } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -46,7 +46,8 @@ interface FormClienteProps {
 const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplete }) => {
   const { perfil, role, usuario } = useSessao();
   const clienteId = clienteInicial?.id;
-  const [tagRefreshKey, setTagRefreshKey] = useState(0);
+  // Removendo o estado local tagRefreshKey, pois usaremos o do useBulkTagManager
+  // const [tagRefreshKey, setTagRefreshKey] = useState(0); 
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -85,7 +86,7 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
   };
   
   // Usando o useBulkTagManager para a lista de tags do Cliente CR
-  const { loading: loadingBulk, isAllActive, toggleAllTags, refetchStatus } = useBulkTagManager(clienteId);
+  const { loading: loadingBulk, isAllActive, toggleAllTags, refetchStatus, refreshKey } = useBulkTagManager(clienteId);
   
   // Função de callback para forçar a atualização do status das tags em massa
   const handleTagToggle = useCallback(() => {
@@ -135,7 +136,7 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
       showError(`Falha ao salvar cliente: ${error.message}`);
     } else {
       showSuccess(`Cliente salvo com sucesso!`);
-      setTagRefreshKey(prev => prev + 1); // Força a re-busca do status das tags
+      // setTagRefreshKey(prev => prev + 1); // Não é mais necessário
       onSaveComplete();
     }
   };
@@ -178,7 +179,7 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
               control={form.control} 
               clienteId={clienteId} 
               isSubmitting={form.formState.isSubmitting}
-              tagRefreshKey={tagRefreshKey}
+              tagRefreshKey={refreshKey} // Passando o refreshKey do bulk manager
               onTagToggle={handleTagToggle}
           />
           
@@ -186,7 +187,7 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
               control={form.control} 
               clienteId={clienteId} 
               isSubmitting={form.formState.isSubmitting}
-              tagRefreshKey={tagRefreshKey}
+              tagRefreshKey={refreshKey} // Passando o refreshKey do bulk manager
               onTagToggle={handleTagToggle}
           />
           
@@ -194,7 +195,7 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
               control={form.control} 
               clienteId={clienteId} 
               isSubmitting={form.formState.isSubmitting}
-              tagRefreshKey={tagRefreshKey}
+              tagRefreshKey={refreshKey} // Passando o refreshKey do bulk manager
               onTagToggle={handleTagToggle}
           />
           

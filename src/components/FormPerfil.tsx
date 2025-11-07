@@ -20,6 +20,7 @@ import { Form } from '@/components/ui/form';
 import { Input } from './ui/input';
 import { FormField, FormItem, FormLabel, FormControl, FormMessage } from './ui/form';
 import { Separator } from './ui/separator';
+import { useBulkTagManager } from '@/hooks/use-bulk-tag-manager'; // Importando o hook de bulk tag
 
 // Esquema de validação para os campos de URL (opcional)
 const urlSchema = z.string().url('URL inválida.').optional().or(z.literal(''));
@@ -100,7 +101,11 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
   const isLoggedUserAdmin = role === 'Admin';
   
   const [activeTab, setActiveTab] = useState('pessoal');
-  const [tagRefreshKey] = useState(0); // Não usado aqui, mas mantido para compatibilidade futura
+  // Usamos o ID do perfil logado como resourceId para o bulk manager
+  const resourceId = perfilInicial.id; 
+  
+  // Inicializa o hook de bulk tag
+  const { refetchStatus, refreshKey } = useBulkTagManager(resourceId);
 
   const parseDate = (dateString: string | null | undefined) => 
     dateString ? new Date(dateString + 'T00:00:00') : undefined;
@@ -292,6 +297,7 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
       }
       
       showSuccess('Perfil atualizado com sucesso!');
+      refetchStatus(); // Força a re-busca do status das tags após o salvamento principal
       onSaveComplete();
     } catch (error: any) {
       showError(`Falha ao salvar: ${error.message}`);
@@ -352,8 +358,8 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
                     <FormDadosCadastrais 
                         control={form.control}
                         isSubmitting={form.formState.isSubmitting}
-                        resourceId={perfilInicial.id}
-                        tagRefreshKey={tagRefreshKey}
+                        resourceId={resourceId}
+                        tagRefreshKey={refreshKey} // Passando o refreshKey do bulk manager
                     />
                 </TabsContent>
                 
@@ -425,7 +431,7 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
                     control={form.control}
                     isSubmitting={form.formState.isSubmitting}
                     resourceId={perfilInicial.id}
-                    tagRefreshKey={0} // Não usado aqui, mas mantido para compatibilidade futura
+                    tagRefreshKey={refreshKey} // Passando o refreshKey do bulk manager
                 />
             </TabsContent>
 
