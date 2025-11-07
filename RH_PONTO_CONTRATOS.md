@@ -4,21 +4,39 @@
 
 Sistema para registro e gestão da jornada de trabalho.
 
-*   **Registro de Ponto (`/ponto-eletronico`):** Permite que o Usuário (Funcionário) registre Entrada/Saída com captura de selfie e geolocalização.
-*   **Folha de Ponto (`/folha-ponto`):** Interface de gestão para Clientes/Admin, com funcionalidades como:
-    *   Visualização detalhada da jornada mensal (horas trabalhadas, saldo, horas extras).
-    *   Ajuste manual de registros.
-    *   Gerenciamento de Faltas e Abonos.
-    *   Gestão de Folgas Trabalhadas.
+### Tabelas Chave
+
+| Tabela | Propósito | RLS |
+| :--- | :--- | :--- |
+| `tbl_usuarios` | Armazena dados de RH (salário, jornada, folgas fixas). | Acesso restrito ao próprio usuário e ao Cliente/Admin. |
+| `registros_ponto` | Registros de Entrada/Saída, Falta, Abono, Compensação. | Usuário só insere/vê os próprios. Cliente/Admin gerencia todos da empresa. |
+| `ferias` | Períodos de férias agendados. | Usuário só vê os próprios. Cliente/Admin gerencia todos da empresa. |
+
+### Fluxos de Gestão (`/folha-ponto`)
+
+*   **Cálculo de Jornada:** O componente `DetalheFolhaPonto.tsx` calcula as horas trabalhadas, horas extras e saldo de horas com base nos registros e nas configurações de jornada (`horas_mensais`, `dias_folga_fixos`).
+*   **Ajuste de Ponto (`AjustarPontoDialog`):** Permite que o gestor (Cliente/Admin) apague e reinsira os registros de Entrada/Saída de um dia.
+*   **Gerenciamento de Faltas/Abonos (`GerenciarFaltas`):** Cria um registro de dia inteiro (`tipo: 'Falta'` ou `tipo: 'Abono'`) para justificar a ausência.
+*   **Gestão de Folga Trabalhada (`GerenciarFolgaTrabalhada`):** Cria um registro de decisão (`tipo: 'Compensacao'` ou `tipo: 'Extra100'`) para o dia de folga que foi trabalhado, afetando o cálculo de horas extras.
 
 ## 2. Módulo de Contratos
 
 Sistema para criação e gestão de documentos dinâmicos.
 
-*   **Gerenciamento de Tags (`/contratos/tags`):** Criação de tags dinâmicas customizadas que podem ser usadas nos modelos.
-*   **Gerenciamento de Modelos (`/contratos/modelos`):** Criação e importação de templates de contrato (HTML ou Texto Simples).
-*   **Geração de Contrato (`/contratos/preencher/:modeloId`):** Fluxo que permite:
-    *   Selecionar um cliente.
-    *   Preencher tags customizadas e dados financeiros (valor, parcelamento).
-    *   Renderizar o contrato final.
-    *   Gerar as Contas a Receber correspondentes no sistema financeiro.
+### Tabelas Chave
+
+| Tabela | Propósito | RLS |
+| :--- | :--- | :--- |
+| `contrato_tags` | Tags dinâmicas customizadas (ex: `{{NOME_DO_PROJETO}}`). | Acesso restrito ao Cliente/Admin proprietário. |
+| `contrato_modelos` | Templates de contrato (HTML/Texto). | Acesso restrito ao Cliente/Admin proprietário. |
+| `contratos_gerados` | Contratos preenchidos e prontos para assinatura. | Acesso restrito ao Cliente/Admin proprietário. |
+| `configuracao_contratos` | Configurações de URL base e templates de envio (Admin-only). | Acesso restrito ao Admin. |
+
+### Fluxos de Geração
+
+1.  **Seleção de Modelo:** O usuário escolhe um modelo em `/contratos/novo`.
+2.  **Preenchimento de Tags:** Em `/contratos/preencher/:modeloId`, o sistema preenche automaticamente as tags de sistema (`{{CLIENTE_NOME}}`, `{{VALOR_TOTAL_CONTRATO}}`) e solicita o preenchimento das tags customizadas.
+3.  **Geração de CR:** Ao salvar, o sistema:
+    *   Cria/Atualiza o registro em `contratos_gerados`.
+    *   Cria a conta sintética (`admin_contas_receber` ou `contas_receber`) e as parcelas correspondentes.
+4.  **Assinatura:** O link gerado (`/contrato-link/:id`) redireciona para a página de assinatura (`/assinar-contrato/:id`), onde o cliente assina com nome e selfie, atualizando o status do contrato para `ativo`.
