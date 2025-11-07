@@ -17,7 +17,8 @@ import GerenciarFolgaTrabalhada from '@/components/GerenciarFolgaTrabalhada';
 import { Button } from '@/components/ui/button';
 import { usePrint } from '@/hooks/use-print';
 import FolhaPontoPrint from '@/components/FolhaPontoPrint';
-import ReactDOMServer from 'react-dom/server'; // Importação corrigida
+import ReactDOMServer from 'react-dom/server';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 
 interface FuncionarioComDados extends UsuarioProfile {
     id: string;
@@ -252,7 +253,7 @@ const FolhaPonto: React.FC = () => {
   
   // --- Lógica de Impressão ---
   
-  const handlePrint = () => {
+  const handlePrint = (orientation: 'portrait' | 'landscape') => {
     if (!funcionarioDetalhe || !empresaIdParaFiltro) {
         showError('Selecione um funcionário e uma empresa para imprimir.');
         return;
@@ -394,7 +395,7 @@ const FolhaPonto: React.FC = () => {
     );
 
     const htmlContent = ReactDOMServer.renderToStaticMarkup(printComponent);
-    printContent(htmlContent, `Folha de Ponto - ${funcionarioDetalhe.nome} - ${format(dataSelecionada, 'MM/yyyy')}`);
+    printContent(htmlContent, `Folha de Ponto - ${funcionarioDetalhe.nome} - ${format(dataSelecionada, 'MM/yyyy')}`, orientation);
   };
 
 
@@ -412,13 +413,24 @@ const FolhaPonto: React.FC = () => {
         <h1 className="text-2xl md:text-3xl font-bold flex items-center">
           <Clock className="w-6 h-6 mr-2" /> Acompanhar Folha de Ponto
         </h1>
-        <Button 
-            onClick={handlePrint} 
-            disabled={!funcionarioDetalhe || carregandoDados}
-            className="w-full sm:w-auto"
-        >
-            <Printer className="w-4 h-4 mr-2" /> Imprimir Folha
-        </Button>
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <Button 
+                    disabled={!funcionarioDetalhe || carregandoDados}
+                    className="w-full sm:w-auto"
+                >
+                    <Printer className="w-4 h-4 mr-2" /> Imprimir Folha
+                </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => handlePrint('portrait')}>
+                    Imprimir (Retrato)
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handlePrint('landscape')}>
+                    Imprimir (Paisagem)
+                </DropdownMenuItem>
+            </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       <Card className="mb-6">
