@@ -16,18 +16,19 @@ export function usePrint() {
         return;
       }
 
-      // Estilos otimizados para impressão A4 em modo RETRATO
+      // Estilos otimizados para impressão A4
       const printStyles = `
         <style>
+          /* Configuração A4 padrão (Retrato) */
           @page {
-            size: A4 portrait; /* Padrão: Retrato */
-            margin: 15mm; /* Margens padrão para documentos */
+            size: A4 portrait;
+            margin: 15mm;
           }
           
           /* Sobrescreve para Paisagem se a classe 'landscape' estiver presente */
           .print-container.landscape {
-              width: 297mm; /* Largura A4 */
-              height: 210mm; /* Altura A4 */
+              width: 297mm; /* Largura A4 em paisagem */
+              height: 210mm; /* Altura A4 em paisagem */
           }
           .print-container.landscape @page {
               size: A4 landscape; /* FORÇA MODO PAISAGEM */
@@ -64,7 +65,7 @@ export function usePrint() {
             text-align: left; 
             font-size: 9pt; 
             word-wrap: break-word; 
-            white-space: normal; /* Permite quebra de linha na célula */
+            white-space: normal;
             overflow: visible; 
             text-overflow: clip; 
           }
@@ -73,6 +74,14 @@ export function usePrint() {
             font-weight: bold;
             white-space: nowrap; 
           }
+          
+          /* Estilos para a linha de total */
+          .print-table tfoot tr, .print-table tbody tr:last-child.total-row {
+              font-weight: bold;
+              border-top: 2px solid #000;
+              background-color: #e0e0e0;
+          }
+
           .print-signatures { 
             display: flex; 
             justify-content: space-around; 
