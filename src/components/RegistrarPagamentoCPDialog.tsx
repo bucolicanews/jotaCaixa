@@ -264,9 +264,9 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
               .eq('id', parcela.conta_pagar_id);
               
           if (updateContaError) {
-              console.error('Erro ao atualizar conta sintética para pago:', updateContaError);
+                  console.error('Erro ao atualizar conta sintética para pago:', updateContaError);
+              }
           }
-      }
       
       // 5. Salvar Histórico Padrão (se marcado)
       if (isAdmin && values.salvar_como_padrao && values.historico_id) {

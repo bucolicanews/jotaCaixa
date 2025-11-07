@@ -5,7 +5,7 @@ import { Loader2, TrendingUp, Filter } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DateRangePicker } from '@/components/DateRangePicker';
 import { DateRange } from 'react-day-picker';
-import DREDetalhe from '@/components/DREDetalhe';
+import DREDetalhe from '@/components/contabilidade/DREDetalhe';
 import { startOfMonth, endOfMonth } from 'date-fns';
 import { ClienteProfile } from '@/types/usuario';
 import { Label } from '@/components/ui/label';

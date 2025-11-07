@@ -18,7 +18,7 @@ import { PlanoContas } from '@/types/plano-contas';
 import { Input } from '@/components/ui/input';
 import { useDebounce } from '@/hooks/use-debounce';
 import useSaldoContaCalculado from '@/hooks/use-saldo-conta-calculado';
-import DetalhesLancamentosDialog from '@/components/DetalhesLancamentosDialog';
+import DetalhesLancamentosDialog from '@/components/contabilidade/DetalhesLancamentosDialog';
 
 type TipoSaldoFiltro = 'todos' | 'Credito' | 'Debito' | 'Receita' | 'Despesa';
 
@@ -289,7 +289,7 @@ const Bancos = () => {
       <DetalhesLancamentosDialog
         conta={detalhesDialog.conta}
         open={detalhesDialog.open}
-        onOpenChange={(open) => setDetalhesDialog({ open, conta: null })}
+        onOpenChange={(open: boolean) => setDetalhesDialog({ open, conta: null })}
       />
     </LayoutPrincipal>
   );

@@ -7,15 +7,15 @@ import { useBalancoPatrimonial } from '@/hooks/use-balanco-patrimonial';
 import { Loader2, Scale, Printer } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { Button } from './ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
+import { Button } from '../ui/button';
 import { usePrint } from '@/hooks/use-print';
 import ReactDOMServer from 'react-dom/server';
-import BalancoPatrimonialPrint from '@/components/contabilidade/BalancoPatrimonialPrint';
+import BalancoPatrimonialPrint from './BalancoPatrimonialPrint';
 import { useSessao } from '@/hooks/use-sessao';
 import { ClienteProfile } from '@/types/usuario';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
-import Balanco1ColunaPrint from '@/components/contabilidade/Balanco1ColunaPrint';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../ui/dropdown-menu';
+import Balanco1ColunaPrint from './Balanco1ColunaPrint';
 
 interface BalancoPatrimonialDetalheProps {
   endDate: Date;

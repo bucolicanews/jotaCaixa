@@ -4,7 +4,7 @@ import { useSessao } from '@/hooks/use-sessao';
 import { Loader2, TrendingUp } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import useSaldoContaCalculado from '@/hooks/use-saldo-conta-calculado';
-import FluxoCaixaDetalhe from '@/components/FluxoCaixaDetalhe';
+import FluxoCaixaDetalhe from '@/components/contabilidade/FluxoCaixaDetalhe';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 
 const FluxoCaixa: React.FC = () => {

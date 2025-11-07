@@ -6,15 +6,15 @@ import { cn } from '@/lib/utils';
 import { Loader2, Printer, TrendingUp } from 'lucide-react';
 import { DateRange } from 'react-day-picker';
 import { useDRE } from '@/hooks/use-dre';
-import { Button } from './ui/button';
+import { Button } from '../ui/button';
 import { usePrint } from '@/hooks/use-print';
 import ReactDOMServer from 'react-dom/server';
-import DREPrint from '@/components/contabilidade/DREPrint';
+import DREPrint from './DREPrint';
 import { useSessao } from '@/hooks/use-sessao';
 import { ClienteProfile } from '@/types/usuario';
 import { showError } from '@/utils/toast';
 import { format } from 'date-fns';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../ui/dropdown-menu';
 
 interface DREDetalheProps {
   filtroPeriodo: DateRange | undefined;

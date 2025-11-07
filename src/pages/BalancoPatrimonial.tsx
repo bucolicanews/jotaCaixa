@@ -5,7 +5,7 @@ import { Loader2, Scale } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DateRangePicker } from '@/components/DateRangePicker';
 import { DateRange } from 'react-day-picker';
-import BalancoPatrimonialDetalhe from '@/components/BalancoPatrimonialDetalhe';
+import BalancoPatrimonialDetalhe from '@/components/contabilidade/BalancoPatrimonialDetalhe';
 import { endOfMonth } from 'date-fns';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch'; // Importando Switch
