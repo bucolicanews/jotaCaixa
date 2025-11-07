@@ -8,6 +8,8 @@ import { DateRange } from 'react-day-picker';
 import DREDetalhe from '@/components/DREDetalhe';
 import { startOfMonth, endOfMonth } from 'date-fns';
 import { ClienteProfile } from '@/types/usuario';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 
 const DRE: React.FC = () => {
   const { role, perfil, carregando: carregandoSessao } = useSessao();
@@ -17,6 +19,9 @@ const DRE: React.FC = () => {
     from: startOfMonth(new Date()),
     to: endOfMonth(new Date()),
   });
+  
+  // NOVO ESTADO: Filtro para mostrar apenas contas com saldo diferente de zero
+  const [filtroSomenteComSaldo, setFiltroSomenteComSaldo] = useState(false);
   
   const canAccessPage = role === 'Admin' || (role === 'Cliente' && (perfil as ClienteProfile)?.permissoes?.relatorios === true);
 
@@ -48,18 +53,32 @@ const DRE: React.FC = () => {
       
       <Card className="mb-6">
         <CardHeader><CardTitle className="text-lg flex items-center"><Filter className="w-4 h-4 mr-2" /> Filtros</CardTitle></CardHeader>
-        <CardContent>
-            <p className="text-sm text-muted-foreground mb-3">Selecione o período para o cálculo da DRE.</p>
-            <DateRangePicker 
-                date={filtroPeriodo}
-                setDate={setFiltroPeriodo}
-            />
+        <CardContent className="flex flex-col md:flex-row md:items-center gap-6">
+            <div className="flex-1">
+                <p className="text-sm text-muted-foreground mb-3">Selecione o período para o cálculo da DRE.</p>
+                <DateRangePicker 
+                    date={filtroPeriodo}
+                    setDate={setFiltroPeriodo}
+                />
+            </div>
+            
+            <div className="flex items-center space-x-2 p-3 border rounded-md bg-secondary/50">
+                <Switch 
+                    id="filtro-saldo" 
+                    checked={filtroSomenteComSaldo} 
+                    onCheckedChange={setFiltroSomenteComSaldo} 
+                />
+                <Label htmlFor="filtro-saldo" className="text-sm">
+                    Exibir Somente Contas com Saldo (R$ ≠ 0,00)
+                </Label>
+            </div>
         </CardContent>
       </Card>
       
       {isPeriodSelected ? (
         <DREDetalhe 
             filtroPeriodo={filtroPeriodo}
+            filtroSomenteComSaldo={filtroSomenteComSaldo}
         />
       ) : (
         <Card className="mt-6">

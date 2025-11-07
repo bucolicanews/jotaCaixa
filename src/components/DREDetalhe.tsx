@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatCurrency } from '@/utils/formatters';
@@ -13,10 +13,12 @@ import DREPrint from './DREPrint';
 import { useSessao } from '@/hooks/use-sessao';
 import { ClienteProfile } from '@/types/usuario';
 import { showError } from '@/utils/toast';
-import { format } from 'date-fns'; // Adicionando importação de 'format'
+import { format } from 'date-fns';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
 
 interface DREDetalheProps {
   filtroPeriodo: DateRange | undefined;
+  filtroSomenteComSaldo: boolean; // NOVO PROP
 }
 
 // Tipo auxiliar para a conta (copiado do hook)
@@ -29,7 +31,7 @@ interface ContaDRE {
   tipo_dre: 'Receita' | 'Custo' | 'Despesa' | 'Resultado';
 }
 
-const DREDetalhe: React.FC<DREDetalheProps> = ({ filtroPeriodo }) => {
+const DREDetalhe: React.FC<DREDetalheProps> = ({ filtroPeriodo, filtroSomenteComSaldo }) => {
   const { perfil, role } = useSessao();
   const { contas, totalReceita, totalCusto, totalDespesa, resultadoLiquido, carregando } = useDRE(filtroPeriodo);
   const { printContent } = usePrint();
@@ -38,18 +40,30 @@ const DREDetalhe: React.FC<DREDetalheProps> = ({ filtroPeriodo }) => {
 
   const resultadoBruto = totalReceita - totalCusto;
   
+  // Filtra as contas com base no estado local
+  const contasFiltradas = useMemo(() => {
+      if (!filtroSomenteComSaldo) return contas;
+      
+      return contas.filter(c => {
+          const isZero = Math.abs(c.saldo_final) < 0.01;
+          
+          // Mantém contas sintéticas (Analitica='Não') mesmo se o saldo for zero,
+          // mas remove analíticas (Analitica='Sim') com saldo zero.
+          if (isZero && c.Analitica === 'Sim') return false;
+          
+          // Se o saldo não for zero, ou se for sintética, mantém.
+          return true;
+      });
+  }, [contas, filtroSomenteComSaldo]);
+  
   const getContasPorTipo = (tipo: ContaDRE['tipo_dre']) => {
-    return contas.filter(c => c.tipo_dre === tipo);
+    return contasFiltradas.filter(c => c.tipo_dre === tipo);
   };
   
   const renderContas = (contasList: ContaDRE[]) => {
     return contasList.map(c => {
       const isSintetica = c.Analitica === 'Não';
-      const isZero = Math.abs(c.saldo_final) < 0.01;
       
-      // Oculta contas analíticas com saldo zero
-      if (isZero && c.Analitica === 'Sim') return null;
-
       // Calcula o nível de indentação baseado no código da conta (ex: 3.1.1.1)
       const level = c.Conta.split('.').filter(p => p.length > 0).length;
       const paddingLeft = (level - 1) * 10;
@@ -66,13 +80,17 @@ const DREDetalhe: React.FC<DREDetalheProps> = ({ filtroPeriodo }) => {
     });
   };
   
-  const handlePrint = () => {
+  const handlePrint = (onlyWithBalance: boolean) => {
     if (!filtroPeriodo?.from || !filtroPeriodo?.to) {
         showError('Selecione um período completo para imprimir.');
         return;
     }
     
-    if (contas.length === 0) {
+    const contasParaImpressao = onlyWithBalance 
+        ? contas.filter(c => Math.abs(c.saldo_final) >= 0.01 || c.Analitica === 'Não')
+        : contas;
+        
+    if (contasParaImpressao.length === 0) {
         showError('Nenhum dado para imprimir.');
         return;
     }
@@ -81,7 +99,7 @@ const DREDetalhe: React.FC<DREDetalheProps> = ({ filtroPeriodo }) => {
         <DREPrint
             empresaNome={empresaNome}
             filtroPeriodo={filtroPeriodo as DateRange}
-            contas={contas}
+            contas={contasParaImpressao}
             totalReceita={totalReceita}
             totalCusto={totalCusto}
             totalDespesa={totalDespesa}
@@ -118,9 +136,21 @@ const DREDetalhe: React.FC<DREDetalheProps> = ({ filtroPeriodo }) => {
       <Card className={cn("border-l-4", resultadoLiquido >= 0 ? "border-green-500" : "border-red-500")}>
         <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-xl flex items-center"><TrendingUp className="w-5 h-5 mr-2" /> Resumo da DRE</CardTitle>
-            <Button onClick={handlePrint} variant="outline" size="sm" disabled={!filtroPeriodo?.from || !filtroPeriodo?.to}>
-                <Printer className="w-4 h-4 mr-2" /> Imprimir DRE
-            </Button>
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" disabled={!filtroPeriodo?.from || !filtroPeriodo?.to}>
+                        <Printer className="w-4 h-4 mr-2" /> Imprimir DRE
+                    </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => handlePrint(false)}>
+                        Imprimir DRE (Completo)
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handlePrint(true)}>
+                        Imprimir DRE (Somente Saldo)
+                    </DropdownMenuItem>
+                </DropdownMenuContent>
+            </DropdownMenu>
         </CardHeader>
         <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="p-3 bg-green-100 dark:bg-green-900/20 rounded-md">
@@ -146,7 +176,7 @@ const DREDetalhe: React.FC<DREDetalheProps> = ({ filtroPeriodo }) => {
 
       {/* Tabela Detalhada da DRE */}
       <Card>
-        <CardHeader><CardTitle className="text-xl">Demonstração Detalhada</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-xl">Demonstração Detalhada ({filtroSomenteComSaldo ? 'Somente Contas com Saldo' : 'Completo'})</CardTitle></CardHeader>
         <CardContent>
             <div className="overflow-x-auto">
                 <Table>

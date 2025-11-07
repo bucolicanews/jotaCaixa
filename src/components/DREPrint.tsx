@@ -45,7 +45,16 @@ const DREPrint: React.FC<DREPrintProps> = ({
             const isSintetica = c.Analitica === 'Não';
             const isZero = Math.abs(c.saldo_final) < 0.01;
             
-            if (isZero && isSintetica) return null;
+            // Se a conta for analítica e tiver saldo zero, ela já foi filtrada no DREDetalhe.
+            // Se for sintética e tiver saldo zero, ela só deve ser omitida se o filtro 'Somente Saldo' foi usado.
+            // Como a lista 'contas' já vem filtrada, apenas renderizamos o que sobrou.
+            
+            // No entanto, para garantir que contas sintéticas com saldo zero sejam omitidas APENAS se o filtro foi aplicado,
+            // precisamos garantir que a lista 'contas' no DREDetalhe foi filtrada corretamente.
+            // Aqui, vamos apenas renderizar o que foi passado.
+            
+            // Se o saldo for zero, e a conta for analítica, ela já foi removida.
+            if (isZero && c.Analitica === 'Sim') return null;
 
             const level = c.Conta.split('.').filter(p => p.length > 0).length;
             const paddingLeft = (level - 1) * 10;
@@ -66,27 +75,36 @@ const DREPrint: React.FC<DREPrintProps> = ({
         });
     };
     
-    const renderSection = (title: string, contasList: ContaDRE[], total: number, totalLabel: string, color: string) => (
-        <div className="print-section" style={{ pageBreakBefore: 'avoid' }}>
-            <h2 style={{ fontSize: '14px', fontWeight: 'bold', color: color, marginBottom: '5px' }}>{title}</h2>
-            <table className="print-table" style={{ width: '100%' }}>
-                <thead>
-                    <tr>
-                        <th style={{ width: '15%' }}>Conta</th>
-                        <th style={{ width: '60%' }}>Descrição</th>
-                        <th style={{ width: '25%', textAlign: 'right' }}>Valor</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {renderContas(contasList)}
-                    <tr style={{ fontWeight: 'bold', borderTop: '2px solid #000', backgroundColor: '#e0e0e0' }}>
-                        <td colSpan={2}>{totalLabel}</td>
-                        <td style={{ textAlign: 'right' }}>{formatCurrency(total)}</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-    );
+    const renderSection = (title: string, contasList: ContaDRE[], total: number, totalLabel: string, color: string) => {
+        // Filtra contas nulas (analíticas com saldo zero)
+        const renderedRows = renderContas(contasList).filter(row => row !== null);
+        
+        if (renderedRows.length === 0 && contasList.filter(c => c.Analitica === 'Não').length === 0) {
+            return null; // Não renderiza a seção se não houver contas analíticas ou sintéticas com saldo
+        }
+        
+        return (
+            <div className="print-section" style={{ pageBreakBefore: 'avoid' }}>
+                <h2 style={{ fontSize: '14px', fontWeight: 'bold', color: color, marginBottom: '5px' }}>{title}</h2>
+                <table className="print-table" style={{ width: '100%' }}>
+                    <thead>
+                        <tr>
+                            <th style={{ width: '15%' }}>Conta</th>
+                            <th style={{ width: '60%' }}>Descrição</th>
+                            <th style={{ width: '25%', textAlign: 'right' }}>Valor</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {renderedRows}
+                        <tr style={{ fontWeight: 'bold', borderTop: '2px solid #000', backgroundColor: '#e0e0e0' }}>
+                            <td colSpan={2}>{totalLabel}</td>
+                            <td style={{ textAlign: 'right' }}>{formatCurrency(total)}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        );
+    };
 
     const receitas = contas.filter(c => c.tipo_dre === 'Receita');
     const custos = contas.filter(c => c.tipo_dre === 'Custo');
