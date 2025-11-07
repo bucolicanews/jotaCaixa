@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useForm, FormProvider } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from '@/components/ui/button';
 import { Form } from '@/components/ui/form';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Tag } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { Cliente } from '@/types/cliente';
@@ -13,6 +13,7 @@ import { UsuarioProfile, ClienteProfile } from '@/types/usuario';
 import FormIdentificacao from './cliente-forms/FormIdentificacao';
 import FormContato from './cliente-forms/FormContato';
 import FormEndereco from './cliente-forms/FormEndereco';
+import { useBulkTagManager } from '@/hooks/use-bulk-tag-manager'; // Importando o hook de bulk tag
 
 const textOptional = z.string().optional().or(z.literal(''));
 
@@ -82,6 +83,14 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
     
     return { proprietarioId };
   };
+  
+  // Usando o useBulkTagManager para a lista de tags do Cliente CR
+  const { loading: loadingBulk, isAllActive, toggleAllTags, refetchStatus } = useBulkTagManager(clienteId);
+  
+  // Função de callback para forçar a atualização do status das tags em massa
+  const handleTagToggle = useCallback(() => {
+      refetchStatus();
+  }, [refetchStatus]);
 
   const onSubmit = async (values: FormValues) => {
     const { proprietarioId } = getOwnerIds();
@@ -138,11 +147,39 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
           
+          <div className="flex justify-between items-center pt-4 border-t">
+              <h3 className="font-semibold text-lg flex items-center"><Tag className="w-5 h-5 mr-2" /> Tags de Contrato</h3>
+              <div className="flex space-x-2">
+                  <Button 
+                      type="button" 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => toggleAllTags(true)} 
+                      disabled={loadingBulk || form.formState.isSubmitting || isAllActive || !clienteId}
+                  >
+                      {loadingBulk ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Marcar Todas'}
+                  </Button>
+                  <Button 
+                      type="button" 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => toggleAllTags(false)} 
+                      disabled={loadingBulk || form.formState.isSubmitting || !isAllActive || !clienteId}
+                  >
+                      {loadingBulk ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Desmarcar Todas'}
+                  </Button>
+              </div>
+          </div>
+          <p className="text-sm text-muted-foreground">
+              Marque os campos abaixo que devem ser usados como tags dinâmicas em modelos de contrato.
+          </p>
+          
           <FormIdentificacao 
               control={form.control} 
               clienteId={clienteId} 
               isSubmitting={form.formState.isSubmitting}
               tagRefreshKey={tagRefreshKey}
+              onTagToggle={handleTagToggle}
           />
           
           <FormContato 
@@ -150,6 +187,7 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
               clienteId={clienteId} 
               isSubmitting={form.formState.isSubmitting}
               tagRefreshKey={tagRefreshKey}
+              onTagToggle={handleTagToggle}
           />
           
           <FormEndereco 
@@ -157,6 +195,7 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
               clienteId={clienteId} 
               isSubmitting={form.formState.isSubmitting}
               tagRefreshKey={tagRefreshKey}
+              onTagToggle={handleTagToggle}
           />
           
           <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>

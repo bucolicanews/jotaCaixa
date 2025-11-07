@@ -8,9 +8,10 @@ interface FormContatoProps {
   clienteId: string | undefined;
   isSubmitting: boolean;
   tagRefreshKey: number;
+  onTagToggle: () => void; // NOVO PROP
 }
 
-const FormContato: React.FC<FormContatoProps> = ({ control, clienteId, isSubmitting, tagRefreshKey }) => {
+const FormContato: React.FC<FormContatoProps> = ({ control, clienteId, isSubmitting, tagRefreshKey, onTagToggle }) => {
   return (
     <div className="space-y-4">
       <Separator />
@@ -24,6 +25,7 @@ const FormContato: React.FC<FormContatoProps> = ({ control, clienteId, isSubmitt
           clienteId={clienteId} 
           disabled={isSubmitting}
           tagRefreshKey={tagRefreshKey}
+          onTagToggle={onTagToggle}
       />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <TaggedFormField 
@@ -34,6 +36,7 @@ const FormContato: React.FC<FormContatoProps> = ({ control, clienteId, isSubmitt
               clienteId={clienteId} 
               disabled={isSubmitting}
               tagRefreshKey={tagRefreshKey}
+              onTagToggle={onTagToggle}
           />
           <TaggedFormField 
               control={control} 
@@ -43,6 +46,7 @@ const FormContato: React.FC<FormContatoProps> = ({ control, clienteId, isSubmitt
               clienteId={clienteId} 
               disabled={isSubmitting}
               tagRefreshKey={tagRefreshKey}
+              onTagToggle={onTagToggle}
           />
       </div>
     </div>

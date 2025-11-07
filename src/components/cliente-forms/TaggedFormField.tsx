@@ -18,9 +18,10 @@ interface TaggedFormFieldProps {
     disabled: boolean;
     isOptional?: boolean;
     tagRefreshKey: number;
+    onTagToggle?: () => void; // NOVO PROP: Opcional, pois nem sempre será usado (ex: FormCliente)
 }
 
-const TaggedFormField: React.FC<TaggedFormFieldProps> = ({ control, fieldName, label, placeholder, clienteId, disabled, isOptional = true, tagRefreshKey }) => {
+const TaggedFormField: React.FC<TaggedFormFieldProps> = ({ control, fieldName, label, placeholder, clienteId, disabled, isOptional = true, tagRefreshKey, onTagToggle }) => {
     const fieldMap = CAMPOS_CLIENTE_MAPA.find(m => m.field === fieldName);
     
     // Se o campo não estiver mapeado para uma tag, renderiza o input normal
@@ -38,6 +39,13 @@ const TaggedFormField: React.FC<TaggedFormFieldProps> = ({ control, fieldName, l
     
     const { isTagActive, loading, toggleTag } = useTagManager(clienteId, { label: fieldMap.label, tag: fieldMap.tag, field: fieldMap.field }, tagRefreshKey);
 
+    const handleToggle = async (checked: boolean) => {
+        await toggleTag(checked);
+        if (onTagToggle) {
+            onTagToggle();
+        }
+    };
+
     return (
         <FormField control={control} name={fieldName} render={({ field }) => (
             <FormItem>
@@ -47,7 +55,7 @@ const TaggedFormField: React.FC<TaggedFormFieldProps> = ({ control, fieldName, l
                         <Checkbox 
                             id={`tag-${fieldName}`}
                             checked={isTagActive}
-                            onCheckedChange={(checked) => toggleTag(!!checked)}
+                            onCheckedChange={handleToggle}
                             disabled={loading || disabled}
                         />
                         <Label htmlFor={`tag-${fieldName}`} className={cn("text-xs font-normal flex items-center", isTagActive ? "text-primary" : "text-muted-foreground")}>

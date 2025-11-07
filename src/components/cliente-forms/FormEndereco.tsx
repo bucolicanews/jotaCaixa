@@ -9,9 +9,10 @@ interface FormEnderecoProps {
   clienteId: string | undefined;
   isSubmitting: boolean;
   tagRefreshKey: number;
+  onTagToggle: () => void; // NOVO PROP
 }
 
-const FormEndereco: React.FC<FormEnderecoProps> = ({ control, clienteId, isSubmitting, tagRefreshKey }) => {
+const FormEndereco: React.FC<FormEnderecoProps> = ({ control, clienteId, isSubmitting, tagRefreshKey, onTagToggle }) => {
   const { watch, setValue } = useFormContext();
   const cepValue = watch('cep');
   
@@ -80,6 +81,7 @@ const FormEndereco: React.FC<FormEnderecoProps> = ({ control, clienteId, isSubmi
               clienteId={clienteId} 
               disabled={isSubmitting}
               tagRefreshKey={tagRefreshKey}
+              onTagToggle={onTagToggle}
           />
           <TaggedFormField 
               control={control} 
@@ -89,6 +91,7 @@ const FormEndereco: React.FC<FormEnderecoProps> = ({ control, clienteId, isSubmi
               clienteId={clienteId} 
               disabled={isSubmitting || isAddressLoading}
               tagRefreshKey={tagRefreshKey}
+              onTagToggle={onTagToggle}
           />
           <TaggedFormField 
               control={control} 
@@ -98,6 +101,7 @@ const FormEndereco: React.FC<FormEnderecoProps> = ({ control, clienteId, isSubmi
               clienteId={clienteId} 
               disabled={isSubmitting || isAddressLoading}
               tagRefreshKey={tagRefreshKey}
+              onTagToggle={onTagToggle}
           />
       </div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -109,6 +113,7 @@ const FormEndereco: React.FC<FormEnderecoProps> = ({ control, clienteId, isSubmi
               clienteId={clienteId} 
               disabled={isSubmitting || isAddressLoading}
               tagRefreshKey={tagRefreshKey}
+              onTagToggle={onTagToggle}
           />
           <TaggedFormField 
               control={control} 
@@ -118,6 +123,7 @@ const FormEndereco: React.FC<FormEnderecoProps> = ({ control, clienteId, isSubmi
               clienteId={clienteId} 
               disabled={isSubmitting}
               tagRefreshKey={tagRefreshKey}
+              onTagToggle={onTagToggle}
           />
           <TaggedFormField 
               control={control} 
@@ -127,6 +133,7 @@ const FormEndereco: React.FC<FormEnderecoProps> = ({ control, clienteId, isSubmi
               clienteId={clienteId} 
               disabled={isSubmitting}
               tagRefreshKey={tagRefreshKey}
+              onTagToggle={onTagToggle}
           />
       </div>
       <TaggedFormField 
@@ -137,6 +144,7 @@ const FormEndereco: React.FC<FormEnderecoProps> = ({ control, clienteId, isSubmi
           clienteId={clienteId} 
           disabled={isSubmitting || isAddressLoading}
           tagRefreshKey={tagRefreshKey}
+          onTagToggle={onTagToggle}
       />
     </div>
   );

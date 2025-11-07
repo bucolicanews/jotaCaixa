@@ -7,9 +7,10 @@ interface FormIdentificacaoProps {
   clienteId: string | undefined;
   isSubmitting: boolean;
   tagRefreshKey: number;
+  onTagToggle: () => void; // NOVO PROP
 }
 
-const FormIdentificacao: React.FC<FormIdentificacaoProps> = ({ control, clienteId, isSubmitting, tagRefreshKey }) => {
+const FormIdentificacao: React.FC<FormIdentificacaoProps> = ({ control, clienteId, isSubmitting, tagRefreshKey, onTagToggle }) => {
   return (
     <div className="space-y-4">
       <h3 className="font-semibold text-lg">Dados de Identificação</h3>
@@ -23,6 +24,7 @@ const FormIdentificacao: React.FC<FormIdentificacaoProps> = ({ control, clienteI
           disabled={isSubmitting}
           isOptional={false}
           tagRefreshKey={tagRefreshKey}
+          onTagToggle={onTagToggle}
       />
       <TaggedFormField 
           control={control} 
@@ -32,6 +34,7 @@ const FormIdentificacao: React.FC<FormIdentificacaoProps> = ({ control, clienteI
           clienteId={clienteId} 
           disabled={isSubmitting}
           tagRefreshKey={tagRefreshKey}
+          onTagToggle={onTagToggle}
       />
       <TaggedFormField 
           control={control} 
@@ -41,6 +44,7 @@ const FormIdentificacao: React.FC<FormIdentificacaoProps> = ({ control, clienteI
           clienteId={clienteId} 
           disabled={isSubmitting}
           tagRefreshKey={tagRefreshKey}
+          onTagToggle={onTagToggle}
       />
     </div>
   );
