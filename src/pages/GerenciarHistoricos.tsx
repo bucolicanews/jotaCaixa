@@ -396,7 +396,7 @@ const GerenciarHistoricos: React.FC = () => {
       <Card className="mb-6">
         <CardHeader><CardTitle className="text-lg">Importação e Exportação</CardTitle></CardHeader>
         <CardContent className="space-y-4">
-            <div className="flex flex-col sm:flex-row gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="flex-1 space-y-2">
                     <Input 
                         id="import-file" 
@@ -416,7 +416,7 @@ const GerenciarHistoricos: React.FC = () => {
                     </Button>
                     <p className="text-xs text-muted-foreground">Formato CSV esperado: Colunas "Código" e "Descrição".</p>
                 </div>
-                <div className="flex-1 space-y-2">
+                <div className="flex-1 space-y-2 grid grid-cols-1 gap-2">
                     <Button onClick={handleExportCSV} variant="secondary" className="w-full h-10" disabled={historicos.length === 0}>
                         <FileDown className="w-4 h-4 mr-2" /> Exportar Históricos (CSV)
                     </Button>

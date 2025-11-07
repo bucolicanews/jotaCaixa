@@ -31,7 +31,7 @@ const Exportar: React.FC = () => {
         <FileText className="w-6 h-6 mr-2" /> Exportação Contábil (Calima)
       </h1>
       
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <ExportarHistoricos />
         <ExportarPlanoContas />
         <ExportarLancamentos />
