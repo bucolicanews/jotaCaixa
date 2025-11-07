@@ -91,12 +91,10 @@ const ExportarLancamentos: React.FC = () => {
           conta_contabil_id,
           historico_id,
           descricao,
-          // FIX: Resolvendo ambiguidade usando a sintaxe target_table!source_column_name
           conta_resultado:plano_contas!lancamentos_conta_contabil_id ( Conta ),
           historicos:historicos!lancamentos_historico_id ( codigo ),
           conta_saldo:saldo_contas!lancamentos_conta_bancaria_id ( 
             conta_contabil_id,
-            // FIX: Resolvendo ambiguidade aninhada
             conta_ativo:plano_contas!saldo_contas_conta_contabil_id ( Conta )
           )
         `)
