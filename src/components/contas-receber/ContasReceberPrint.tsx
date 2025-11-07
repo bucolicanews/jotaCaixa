@@ -35,36 +35,36 @@ const ContasReceberPrint: React.FC<ContasReceberPrintProps> = ({ data, activeTab
     
     const headers = Object.keys(data[0]);
     
-    // Mapeamento de largura de coluna em PORCENTAGEM
+    // Mapeamento de largura de coluna em PORCENTAGEM (Otimizado para Paisagem)
     const getColumnStyle = (header: string) => {
         switch (header) {
             case 'ID Parcela':
             case 'ID Conta':
             case 'ID Recebimento':
-                return { width: '8%', fontSize: '8pt' }; 
+                return { width: '6%', fontSize: '8pt' }; // Reduzido
             case 'Cliente':
-                return { width: '12%' };
+                return { width: '10%' };
             case 'Descrição':
-                return { width: '25%' };
+                return { width: '30%' }; // Aumentado
             case 'Nº Parcela':
-                return { width: '5%', textAlign: 'center' as const };
+                return { width: '4%', textAlign: 'center' as const }; // Reduzido
             case 'Valor Parcela':
             case 'Vlr Pago':
             case 'Valor Total':
             case 'Valor Recebido':
-                return { width: '10%', textAlign: 'right' as const };
+                return { width: '8%', textAlign: 'right' as const };
             case 'Vencimento':
             case 'Data Recebimento':
             case 'Data Pagamento':
-                return { width: '10%' };
+                return { width: '8%' };
             case 'Status':
             case 'Origem':
             case 'Forma Pagamento':
-                return { width: '8%' };
+                return { width: '7%' };
             case 'Conta/Caixa':
-                return { width: '10%' };
+                return { width: '9%' };
             case 'Progresso':
-                return { width: '6%', textAlign: 'center' as const };
+                return { width: '5%', textAlign: 'center' as const };
             default:
                 return {};
         }
