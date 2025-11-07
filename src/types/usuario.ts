@@ -9,6 +9,19 @@ export interface AdminProfile {
   avatar_url?: string | null;
   cpf?: string | null; // NOVO CAMPO
   cnpj?: string | null; // NOVO CAMPO
+  
+  // Campos de Endereço e Documentos (Adicionados para compatibilidade com FormPerfil)
+  rg?: string | null;
+  nome_mae?: string | null;
+  nome_pai?: string | null;
+  telefone?: string | null;
+  cep?: string | null;
+  endereco?: string | null;
+  numero?: string | null;
+  complemento?: string | null;
+  bairro?: string | null;
+  cidade?: string | null;
+  estado?: string | null;
 }
 
 export interface ClienteProfile {
