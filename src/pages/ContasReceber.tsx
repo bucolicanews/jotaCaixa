@@ -1,14 +1,12 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Loader2, PlusCircle, Edit, Trash2, ListChecks, BadgeDollarSign } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
-import { ContaReceber, ParcelaDetalhada, ExtendedParcelaDetalhada, ContaReceberComProgresso, AdminRecebimento } from '@/types/contas-receber';
+import { ContaReceber, ExtendedParcelaDetalhada, ContaReceberComProgresso, AdminRecebimento } from '@/types/contas-receber';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import FormContasReceber from '@/components/FormContasReceber';
 import DetalhesParcelasDialog from '@/components/DetalhesParcelasDialog';
@@ -20,7 +18,11 @@ import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 import RegistrarPagamentoDialog from '@/components/RegistrarPagamentoDialog';
 import ContasReceberAcoes from '@/components/contas-receber/ContasReceberAcoes';
 import ContasReceberResumo from '@/components/contas-receber/ContasReceberResumo';
-import { useDebounce } from '@/hooks/use-debounce'; // Importando useDebounce
+import TabelaSintetica from '@/components/contas-receber/TabelaSintetica';
+import TabelaParcelas from '@/components/contas-receber/TabelaParcelas';
+import TabelaRecebimentos from '@/components/contas-receber/TabelaRecebimentos';
+import { useDebounce } from '@/hooks/use-debounce';
+import { formatCurrency, formatarData } from '@/utils/formatters';
 
 type ParcelaStatus = 'aberta' | 'parcial' | 'paga' | 'reprogramada' | 'cancelada' | 'bloqueada';
 type BadgeVariant = 'success' | 'warning' | 'secondary' | 'destructive' | 'default' | 'info';
@@ -36,9 +38,6 @@ const getBadgeVariant = (status: ParcelaStatus, dataVencimento: string): BadgeVa
 
   return 'secondary';
 };
-
-// Type for the nested account data fetched within a parcel
-// REMOVIDO: interface NestedContaReceber { ... }
 
 type FiltroOrigem = 'todos' | 'contrato' | 'assinatura_recorrente' | 'manual';
 
@@ -134,7 +133,7 @@ const ContasReceber = () => {
           saldo_contas ( nome ),
           admin_parcelas_receber (
             numero_parcela,
-            admin_contas_receber ( descricao, origem, cliente_id )
+            admin_contas_receber ( id, descricao, origem, cliente_id )
           )
         `)
         .eq('admin_id', ownerId)
@@ -210,9 +209,12 @@ const ContasReceber = () => {
     buscarDados();
   };
 
-  const handleEdit = (_conta: ContaReceber) => {
+  // CORREÇÃO: Atualiza handleEdit para aceitar ContaReceberComProgresso
+  const handleEdit = (conta: ContaReceberComProgresso) => {
     showError('Funcionalidade de edição de Contas a Receber ainda não implementada.');
-    // TODO: Implementar Dialog/Form para Contas a Receber
+    // Para abrir o formulário de edição, você precisaria converter ContaReceberComProgresso para ContaReceber
+    // setContaSelecionada(conta); 
+    // setDialogAberto(true);
   };
 
   const handleDelete = async (contaId: string) => {
@@ -231,8 +233,25 @@ const ContasReceber = () => {
     }
   };
   
-  const handleOpenParcelas = (conta: ContaReceber) => {
-    setContaSelecionada(conta);
+  // CORREÇÃO: Atualiza handleOpenParcelas para aceitar ContaReceberComProgresso
+  const handleOpenParcelas = (conta: ContaReceberComProgresso) => {
+    // Converte ContaReceberComProgresso para ContaReceber (removendo os campos opcionais)
+    const baseConta: ContaReceber = {
+        id: conta.id,
+        empresa_id: (conta as any).empresa_id || (conta as any).admin_id,
+        cliente_id: conta.cliente_id,
+        origem: conta.origem,
+        descricao: conta.descricao,
+        valor_total: conta.valor_total,
+        data_emissao: conta.data_emissao,
+        data_vencimento: conta.data_vencimento,
+        status: conta.status,
+        tipo_receita: conta.tipo_receita,
+        clientes: conta.clientes,
+        created_at: conta.created_at,
+        updated_at: conta.updated_at,
+    };
+    setContaSelecionada(baseConta);
     setParcelasDialogOpen(true);
   };
   
@@ -259,7 +278,7 @@ const ContasReceber = () => {
   };
 
   const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
-  const formatDate = (dateString: string) => new Date(dateString + 'T00:00:00').toLocaleDateString('pt-BR');
+  const formatDate = (dateString: string) => formatarData(dateString);
   
   // Função para formatar timestamp completo (ISO string)
   const formatTimestamp = (dateString: string) => {
@@ -271,7 +290,7 @@ const ContasReceber = () => {
     }
   };
   
-  // --- Filtros de Dados ---
+  // --- Filtros de Dados (Mantidos) ---
   const filterData = (data: any[], dateKey: string) => {
     if (!filtroPeriodo?.from) return data;
     
@@ -450,205 +469,36 @@ const ContasReceber = () => {
         
         {/* ABA 1: RESUMO (SINTÉTICO) */}
         <TabsContent value="parcela_sintetica" className="mt-4">
-          <Card>
-            <CardHeader><CardTitle>Lançamentos Sintéticos ({contasFiltradas.length})</CardTitle></CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-[120px]">Ações</TableHead>
-                      <TableHead className="w-[100px]">ID Conta</TableHead> {/* NOVO CAMPO */}
-                      <TableHead>Cliente</TableHead>
-                      <TableHead>Descrição</TableHead>
-                      <TableHead>Vencimento</TableHead>
-                      <TableHead>Valor Total</TableHead>
-                      <TableHead>Progresso</TableHead>
-                      <TableHead className="hidden sm:table-cell">Status</TableHead>
-                      <TableHead className="hidden sm:table-cell">Origem</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {contasFiltradas.length === 0 ? (
-                        <TableRow><TableCell colSpan={9} className="text-center h-24">Nenhuma conta a receber encontrada no período.</TableCell></TableRow>
-                    ) : (
-                        contasFiltradas.map((conta) => {
-                            
-                            const total = conta.parcelas_total ?? 0;
-                            const pagas = conta.parcelas_pagas ?? 0;
-                            const isQuitada = total > 0 && pagas === total;
-                            let displayStatus: string;
-                            let statusVariant: BadgeVariant;
-
-                            if (isQuitada) {
-                                displayStatus = 'quitada';
-                                statusVariant = 'success';
-                            } else {
-                                const vencimento = parseISO(conta.data_vencimento + 'T00:00:00');
-                                if (isPast(vencimento) && !isToday(vencimento)) {
-                                    statusVariant = 'destructive';
-                                    displayStatus = 'atrasada';
-                                } else if (isToday(vencimento)) {
-                                    statusVariant = 'warning';
-                                    displayStatus = 'vence hoje';
-                                } else {
-                                    statusVariant = 'secondary';
-                                    displayStatus = 'aberta';
-                                }
-                            }
-                            
-                            const progresso = total ? `${pagas}/${total}` : 'N/A';
-                            
-                            const origemDisplay = conta.origem === 'assinatura_recorrente' ? 'Assinatura' : (conta.origem === 'contrato' ? 'Contrato' : 'Manual');
-
-                            return (
-                                <TableRow key={conta.id}>
-                                    <TableCell className="text-left min-w-[120px]">
-                                        <div className="flex space-x-1">
-                                            <Button variant="ghost" size="icon" onClick={() => handleOpenParcelas(conta)} title="Ver Parcelas"><ListChecks className="h-4 w-4" /></Button>
-                                            <Button variant="ghost" size="icon" onClick={() => handleEdit(conta)} title="Editar Lançamento"><Edit className="h-4 w-4" /></Button>
-                                            <Button variant="ghost" size="icon" onClick={() => handleDelete(conta.id)} title="Excluir Lançamento"><Trash2 className="w-4 h-4 text-red-500" /></Button>
-                                        </div>
-                                    </TableCell>
-                                    <TableCell className="font-mono text-xs text-muted-foreground truncate max-w-[100px]" title={conta.id}>{conta.id.substring(0, 8)}...</TableCell> {/* NOVO CAMPO */}
-                                    <TableCell className="font-medium">{conta.clientes?.nome || 'N/A'}</TableCell>
-                                    <TableCell>{conta.descricao}</TableCell>
-                                    <TableCell>{formatDate(conta.data_vencimento)}</TableCell>
-                                    <TableCell className="font-semibold">{formatCurrency(conta.valor_total)}</TableCell>
-                                    <TableCell className="text-sm text-muted-foreground">{progresso}</TableCell>
-                                    <TableCell className="hidden sm:table-cell">
-                                        <Badge variant={statusVariant}>{displayStatus}</Badge>
-                                    </TableCell>
-                                    <TableCell className="hidden sm:table-cell">
-                                        <Badge variant="secondary">{origemDisplay}</Badge>
-                                    </TableCell>
-                                </TableRow>
-                            );
-                        })
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
+          <TabelaSintetica
+            contasFiltradas={contasFiltradas}
+            handleOpenParcelas={handleOpenParcelas}
+            handleEdit={handleEdit}
+            handleDelete={handleDelete}
+            formatCurrency={formatCurrency}
+            formatDate={formatDate}
+            getBadgeVariant={getBadgeVariant}
+          />
         </TabsContent>
         
         {/* ABA 2: PARCELAS (ANALÍTICO) */}
         <TabsContent value="parcelas" className="mt-4">
-          <Card>
-            <CardHeader><CardTitle>Parcelas Pendentes e Recebidas ({parcelasFiltradas.length})</CardTitle></CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-[120px]">Ações</TableHead>
-                      <TableHead className="w-[100px]">ID Conta</TableHead> {/* NOVO CAMPO */}
-                      <TableHead>Cliente</TableHead>
-                      <TableHead>Descrição</TableHead>
-                      <TableHead>Nº</TableHead>
-                      <TableHead>Vencimento</TableHead>
-                      <TableHead>Valor</TableHead>
-                      <TableHead>Vlr Pago</TableHead>
-                      <TableHead>Data Recebimento</TableHead>
-                      <TableHead>Status</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {parcelasFiltradas.length === 0 ? (
-                        <TableRow><TableCell colSpan={10} className="text-center h-24">Nenhuma parcela encontrada no período.</TableCell></TableRow>
-                    ) : (
-                        parcelasFiltradas.map((p) => {
-                            const statusVariant = getBadgeVariant(p.status, p.data_vencimento);
-                            const isPaga = p.status === 'paga';
-                            const clienteNome = p.contas_receber?.clientes?.nome || 'N/A';
-                            const descricao = p.contas_receber?.descricao || 'N/A';
-                            const contaId = p.contas_receber?.id || 'N/A';
-
-                            return (
-                                <TableRow key={p.id} className={cn(isPaga && 'bg-green-500/10')}>
-                                    <TableCell className="text-left min-w-[120px]">
-                                        <Button 
-                                            variant="outline" 
-                                            size="sm" 
-                                            onClick={() => handleOpenPagamento(p)} 
-                                            disabled={isPaga || p.status === 'bloqueada'}
-                                        >
-                                            <BadgeDollarSign className="w-4 h-4 mr-2" /> Receber
-                                        </Button>
-                                    </TableCell>
-                                    <TableCell className="font-mono text-xs text-muted-foreground truncate max-w-[100px]" title={contaId}>{contaId.substring(0, 8)}...</TableCell> {/* NOVO CAMPO */}
-                                    <TableCell className="font-medium">{clienteNome}</TableCell>
-                                    <TableCell className="text-sm text-muted-foreground">{descricao}</TableCell>
-                                    <TableCell className="text-center">{p.numero_parcela}</TableCell>
-                                    <TableCell>{formatDate(p.data_vencimento)}</TableCell>
-                                    <TableCell>{formatCurrency(p.valor_parcela)}</TableCell>
-                                    <TableCell className={cn(isPaga && 'font-semibold text-green-600')}>{formatCurrency(p.valor_pago || 0)}</TableCell>
-                                    <TableCell>{p.data_pagamento ? formatDate(p.data_pagamento) : '-'}</TableCell>
-                                    <TableCell>
-                                        <Badge variant={statusVariant}>{p.status === 'paga' ? 'recebida' : p.status}</Badge>
-                                    </TableCell>
-                                </TableRow>
-                            );
-                        })
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
+          <TabelaParcelas
+            parcelasFiltradas={parcelasFiltradas}
+            handleOpenPagamento={handleOpenPagamento}
+            formatCurrency={formatCurrency}
+            formatDate={formatDate}
+            getBadgeVariant={getBadgeVariant}
+          />
         </TabsContent>
         
         {/* ABA 3: RECEBIMENTOS (HISTÓRICO) */}
         <TabsContent value="recebimentos" className="mt-4">
-          <Card>
-            <CardHeader><CardTitle>Histórico de Recebimentos ({recebimentosFiltrados.length})</CardTitle></CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Data Recebimento</TableHead>
-                      <TableHead className="w-[100px]">ID Conta</TableHead> {/* NOVO CAMPO */}
-                      <TableHead>Cliente</TableHead>
-                      <TableHead>Descrição</TableHead>
-                      <TableHead>Valor Recebido</TableHead>
-                      <TableHead>Forma Pagamento</TableHead>
-                      <TableHead>Conta/Caixa</TableHead>
-                      <TableHead>Origem</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {recebimentosFiltrados.length === 0 ? (
-                        <TableRow><TableCell colSpan={8} className="text-center h-24">Nenhum recebimento encontrado no período.</TableCell></TableRow>
-                    ) : (
-                        recebimentosFiltrados.map((r) => {
-                            const dataRecebimentoDisplay = formatTimestamp(r.data_recebimento);
-                            const clienteNome = clienteNomeMap[r.cliente_id] || 'N/A';
-                            const descricao = r.admin_parcelas_receber?.admin_contas_receber?.descricao || 'N/A';
-                            const origem = r.admin_parcelas_receber?.admin_contas_receber?.origem || 'manual';
-                            const contaDestino = r.saldo_contas?.nome || 'N/A';
-                            const contaId = r.admin_parcelas_receber?.admin_contas_receber?.id || 'N/A';
-
-                            return (
-                                <TableRow key={r.id}>
-                                    <TableCell>{dataRecebimentoDisplay}</TableCell>
-                                    <TableCell className="font-mono text-xs text-muted-foreground truncate max-w-[100px]" title={contaId}>{contaId.substring(0, 8)}...</TableCell> {/* NOVO CAMPO */}
-                                    <TableCell className="font-medium">{clienteNome}</TableCell>
-                                    <TableCell className="text-sm text-muted-foreground">{descricao}</TableCell>
-                                    <TableCell className="font-semibold text-green-600">{formatCurrency(r.valor_recebido)}</TableCell>
-                                    <TableCell>{r.forma_pagamento}</TableCell>
-                                    <TableCell>{contaDestino}</TableCell>
-                                    <TableCell><Badge variant="secondary">{origem}</Badge></TableCell>
-                                </TableRow>
-                            );
-                        })
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
+          <TabelaRecebimentos
+            recebimentosFiltrados={recebimentosFiltrados}
+            clienteNomeMap={clienteNomeMap}
+            formatCurrency={formatCurrency}
+            formatTimestamp={formatTimestamp}
+          />
         </TabsContent>
       </Tabs>
       

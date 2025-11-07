@@ -3,7 +3,6 @@ import { Button } from '@/components/ui/button';
 import { DateRange } from 'react-day-picker';
 import { DateRangePicker } from '@/components/DateRangePicker';
 import { Printer, FileDown, Filter, Loader2, Search } from 'lucide-react';
-import { ContaReceber } from '@/types/contas-receber';
 import { format, isPast, isToday, parseISO } from 'date-fns';
 import Papa from 'papaparse';
 import { showError, showSuccess } from '@/utils/toast';
@@ -121,7 +120,7 @@ const ContasReceberAcoes: React.FC<ContasReceberAcoesProps> = ({
         'Descrição': r.admin_parcelas_receber?.admin_contas_receber?.descricao || 'N/A',
         'Valor Recebido': r.valor_recebido,
         'Forma Pagamento': r.forma_pagamento,
-        'Conta/Caixa': r.saldo_contas?.nome || 'N/A', // NOVO CAMPO
+        'Conta/Caixa': r.saldo_contas?.nome || 'N/A', // CORRIGIDO: Acesso direto a saldo_contas
         'Origem': r.admin_parcelas_receber?.admin_contas_receber?.origem || 'manual',
       }));
     }

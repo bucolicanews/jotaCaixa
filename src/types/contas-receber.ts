@@ -62,10 +62,13 @@ export interface AdminRecebimento {
     valor_recebido: number;
     forma_pagamento: string;
     cliente_id: string;
+    conta_id: string; // NOVO CAMPO
+    saldo_contas: { nome: string } | null; // CORRIGIDO: Adicionado saldo_contas
     historico_id?: string | null; // ADICIONADO
     admin_parcelas_receber: {
         numero_parcela: number;
         admin_contas_receber: {
+            id: string; // CORRIGIDO: Adicionado ID
             descricao: string;
             origem: ContaReceber['origem'];
             cliente_id: string;
