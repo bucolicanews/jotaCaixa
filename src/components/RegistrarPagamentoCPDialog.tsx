@@ -60,6 +60,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
   
   const tabelaPagamentos = 'admin_pagamentos';
   const tabelaParcelas = 'admin_parcelas_pagar';
+  const tabelaContasPagar = 'admin_contas_pagar'; // Adicionado
   
   const adminId = usuario?.id;
 
@@ -237,6 +238,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
         if (lancamentoError) throw lancamentoError;
       }
 
+      // 3. Atualizar a parcela para 'paga'
       await supabase.from(tabelaParcelas).update({
         status: 'paga',
         valor_pago: (parcela.valor_pago || 0) + totalPago,
@@ -244,7 +246,29 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
         id_conta_contabil: contaParcelaPagar,
       }).eq('id', parcela.id);
       
-      // 4. Salvar Histórico Padrão (se marcado)
+      // 4. Verificar se todas as parcelas da conta sintética foram pagas
+      const { count: parcelasPendentesCount, error: countError } = await supabase
+          .from(tabelaParcelas)
+          .select('id', { count: 'exact', head: true })
+          .eq('conta_pagar_id', parcela.conta_pagar_id)
+          .neq('status', 'paga');
+          
+      if (countError) {
+          console.error('Erro ao contar parcelas pendentes:', countError);
+          // Continua, mas não atualiza o status sintético
+      } else if (parcelasPendentesCount === 0) {
+          // Se não houver parcelas pendentes, atualiza a conta sintética para 'pago'
+          const { error: updateContaError } = await supabase
+              .from(tabelaContasPagar)
+              .update({ status: 'pago' })
+              .eq('id', parcela.conta_pagar_id);
+              
+          if (updateContaError) {
+              console.error('Erro ao atualizar conta sintética para pago:', updateContaError);
+          }
+      }
+      
+      // 5. Salvar Histórico Padrão (se marcado)
       if (isAdmin && values.salvar_como_padrao && values.historico_id) {
           await supabase.from('configuracao_contas_pagar').upsert({
               proprietario_id: adminId,
