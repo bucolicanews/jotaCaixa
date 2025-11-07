@@ -82,8 +82,12 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
     if (filtroTipo !== 'todos') {
         query = query.eq('tipo', filtroTipo);
     }
+    
+    // Filtro de texto: busca por ID, descrição ou documento
     if (filtroTextoDebounced) {
-        query = query.ilike('descricao', `%${filtroTextoDebounced}%`);
+        const termo = `%${filtroTextoDebounced}%`;
+        // Permite buscar por ID (UUID) ou por campos de texto
+        query = query.or(`descricao.ilike.${termo},documento.ilike.${termo},id.ilike.${termo},conta_bancaria_id.ilike.${termo}`);
     }
     
     // Filtro de data para os lançamentos (apenas se houver data de início)
@@ -220,7 +224,7 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
             <div className="relative w-full sm:w-[300px]">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                    placeholder="Buscar por descrição ou documento..."
+                    placeholder="Buscar ID, Conta, Descrição ou Documento..."
                     value={filtroTexto}
                     onChange={(e) => setFiltroTexto(e.target.value)}
                     className="pl-10"
