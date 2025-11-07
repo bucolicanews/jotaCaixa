@@ -21,10 +21,7 @@ interface LancamentoNaoMapeado {
     conta_contabil_id: string | null;
     historico_id: string | null;
     
-    // Campos temporários adicionados para compatibilidade com MapearLancamentosTable
-    temp_conta_contabil_id?: string | null;
-    temp_historico_id?: string | null;
-    is_dirty?: boolean;
+    // Campos temporários removidos para evitar conflito de tipagem
 }
 
 const LancamentosNaoMapeados: React.FC = () => {

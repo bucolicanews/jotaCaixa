@@ -11,7 +11,8 @@ import { PlanoContas } from '@/types/plano-contas';
 import { Historico } from '@/types/historico';
 import { cn } from '@/lib/utils';
 
-interface LancamentoNaoMapeado {
+// Tipo para os dados de entrada (o que vem do Supabase)
+interface InputLancamento {
     id: string;
     data_movimentacao: string;
     descricao: string;
@@ -19,8 +20,10 @@ interface LancamentoNaoMapeado {
     tipo: 'Entrada' | 'Saida';
     conta_contabil_id: string | null;
     historico_id: string | null;
-    
-    // Campos para edição local
+}
+
+// Tipo para o estado interno (inclui campos temporários para edição)
+interface MapeamentoState extends InputLancamento {
     temp_conta_contabil_id: string | null;
     temp_historico_id: string | null;
     is_dirty: boolean;
@@ -28,7 +31,7 @@ interface LancamentoNaoMapeado {
 
 interface MapearLancamentosTableProps {
     empresaId: string;
-    lancamentosIniciais: LancamentoNaoMapeado[];
+    lancamentosIniciais: InputLancamento[]; // Usa o tipo de entrada
     contasContabeis: PlanoContas[];
     historicos: Historico[];
     onSaveComplete: () => void;
@@ -40,8 +43,8 @@ const MapearLancamentosTable: React.FC<MapearLancamentosTableProps> = ({
     historicos, 
     onSaveComplete 
 }) => {
-    const [lancamentos, setLancamentos] = useState<LancamentoNaoMapeado[]>([]);
-    const [isSaving, setIsSaving] = useState(false);
+    const [lancamentos, setLancamentos] = useState<MapeamentoState[]>([]); // Usa o tipo de estado
+    const [isSaving, setIsSaving] = useState(false); // CORREÇÃO: Adiciona o estado isSaving
 
     useEffect(() => {
         // Inicializa o estado local com os dados iniciais
@@ -50,7 +53,7 @@ const MapearLancamentosTable: React.FC<MapearLancamentosTableProps> = ({
             temp_conta_contabil_id: l.conta_contabil_id,
             temp_historico_id: l.historico_id,
             is_dirty: false,
-        }));
+        })) as MapeamentoState[]; // Cast para garantir o tipo correto
         setLancamentos(mapped);
     }, [lancamentosIniciais]);
 
@@ -97,6 +100,7 @@ const MapearLancamentosTable: React.FC<MapearLancamentosTableProps> = ({
     };
     
     const totalDirty = lancamentos.filter(l => l.is_dirty).length;
+    // Usa os campos originais para calcular o total mapeado (após o fetch)
     const totalMapeados = lancamentos.filter(l => l.conta_contabil_id && l.historico_id).length;
     const totalNaoMapeados = lancamentos.length - totalMapeados;
 
