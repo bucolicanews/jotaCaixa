@@ -21,14 +21,14 @@ export function DateRangePicker({
   disabled = false,
 }: DateRangePickerProps) {
   return (
-    <div className={cn("grid gap-2", className)}>
+    <div className={cn("grid gap-2 w-full", className)}>
       <Popover>
         <PopoverTrigger asChild>
           <Button
             id="date"
             variant={"outline"}
             className={cn(
-              "w-full justify-start text-left font-normal md:w-[300px]", // Ajustado para w-full em mobile
+              "w-full justify-start text-left font-normal", // Removido md:w-[300px] para garantir w-full
               !date && "text-muted-foreground"
             )}
             disabled={disabled}

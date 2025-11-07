@@ -256,7 +256,8 @@ const ExportarLancamentos: React.FC = () => {
         
         <div className="space-y-4 border p-4 rounded-md">
             <Label>Período de Exportação</Label>
-            <DateRangePicker date={filtroPeriodo} setDate={setFiltroPeriodo} />
+            {/* Ajuste 1: Garantir que o DateRangePicker use w-full */}
+            <DateRangePicker date={filtroPeriodo} setDate={setFiltroPeriodo} className="w-full" />
             
             <Label htmlFor="cnpj-cpf">CPF/CNPJ da Empresa (Obrigatório para Calima)</Label>
             <Input 
@@ -267,6 +268,7 @@ const ExportarLancamentos: React.FC = () => {
             />
         </div>
         
+        {/* Ajuste 2: Usar flex-col em mobile e flex-row em sm:flex-row para os botões */}
         <div className="flex flex-col sm:flex-row gap-4">
             <Button 
                 onClick={handleExport} 
@@ -281,7 +283,7 @@ const ExportarLancamentos: React.FC = () => {
                 onClick={() => navigate('/relatorios/lancamentos-nao-mapeados')}
                 variant="outline" 
                 disabled={totalNaoMapeados === 0}
-                className="w-full sm:w-auto"
+                className="w-full sm:w-auto flex-shrink-0"
             >
                 <AlertTriangle className="w-4 h-4 mr-2 text-yellow-500" /> Mapear Pendentes ({totalNaoMapeados})
             </Button>
