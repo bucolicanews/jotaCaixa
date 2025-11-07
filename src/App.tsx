@@ -38,7 +38,8 @@ import SelecaoPagamentoRenovacao from "./pages/SelecaoPagamentoRenovacao";
 import FluxoCaixa from "./pages/FluxoCaixa";
 import BalancoPatrimonial from "./pages/BalancoPatrimonial";
 import AssinarContrato from "./pages/AssinarContrato";
-import ContratoLinkPage from "./pages/ContratoLinkPage"; // Importando a nova página
+import ContratoLinkPage from "./pages/ContratoLinkPage";
+import DRE from "./pages/DRE"; // Importando a nova página DRE
 
 const queryClient = new QueryClient();
 
@@ -206,7 +207,7 @@ const App = () => (
             <Route path="/login" element={<Login />} />
             <Route path="/atualizar-senha" element={<AtualizarSenha />} />
             <Route path="/assinar-contrato/:id" element={<AssinarContrato />} />
-            <Route path="/contrato-link/:id" element={<ContratoLinkPage />} /> {/* NOVA ROTA */}
+            <Route path="/contrato-link/:id" element={<ContratoLinkPage />} />
             
             {/* Rotas Autenticadas (Protegidas pelo LayoutPrincipal) */}
             <Route path="/painel" element={<Painel />} />
@@ -219,7 +220,7 @@ const App = () => (
             <Route path="/relatorios" element={<Relatorios />} />
             <Route path="/relatorios/fluxo-caixa" element={<FluxoCaixa />} />
             <Route path="/relatorios/balanco" element={<BalancoPatrimonial />} />
-            <Route path="/relatorios/dre" element={<Relatorios />} /> {/* Placeholder */}
+            <Route path="/relatorios/dre" element={<DRE />} /> {/* NOVA ROTA DRE */}
             <Route path="/relatorios/calima" element={<Relatorios />} /> {/* Placeholder */}
             <Route path="/configuracoes" element={<Configuracoes />} />
             <Route path="/planos" element={<GerenciarPlanos />} />
