@@ -5,9 +5,10 @@ import { showError } from '@/utils/toast';
  * Hook para gerar e imprimir conteúdo HTML em uma nova janela.
  * @param contentHtml O HTML completo do conteúdo a ser impresso.
  * @param title O título do documento de impressão.
+ * @param orientation Define a orientação da impressão ('portrait' ou 'landscape').
  */
 export function usePrint() {
-  const printContent = useCallback((contentHtml: string, title: string = 'Documento de Impressão') => {
+  const printContent = useCallback((contentHtml: string, title: string = 'Documento de Impressão', orientation: 'portrait' | 'landscape' = 'portrait') => {
     try {
       const printWindow = window.open('', '_blank');
       if (!printWindow) {
@@ -95,6 +96,8 @@ export function usePrint() {
           }
         </style>
       `;
+      
+      const containerClass = orientation === 'landscape' ? 'print-container landscape' : 'print-container';
 
       printWindow.document.write(`
         <!DOCTYPE html>
@@ -108,7 +111,9 @@ export function usePrint() {
                 <p style="font-size: 14pt; color: #333;">Documento pronto para impressão. Use <strong>Ctrl+P</strong> (ou Cmd+P) para imprimir.</p>
                 <button onclick="window.print()" style="padding: 10px 20px; margin-top: 10px; cursor: pointer;">Imprimir Agora</button>
             </div>
-            ${contentHtml}
+            <div class="${containerClass}">
+                ${contentHtml}
+            </div>
           </body>
         </html>
       `);

@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils';
 import { Button } from './ui/button';
 import { usePrint } from '@/hooks/use-print';
 import { SaldoContaDetalhada } from '@/types/saldo-conta';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
 
 interface Lancamento {
   id: string;
@@ -64,7 +65,7 @@ const DetalhesLancamentosDialog: React.FC<DetalhesLancamentosDialogProps> = ({ c
   const totalSaidas = lancamentos.filter(l => l.tipo === 'Saida').reduce((sum, l) => sum + l.valor, 0);
   const saldoFinal = saldoInicial + totalEntradas - totalSaidas;
 
-  const handlePrint = () => {
+  const handlePrint = (orientation: 'portrait' | 'landscape') => {
     if (!conta) {
       showError("Não há dados para imprimir.");
       return;
@@ -107,7 +108,7 @@ const DetalhesLancamentosDialog: React.FC<DetalhesLancamentosDialogProps> = ({ c
       </div>
     `;
 
-    printContent(printHtml, `Extrato - ${conta.nome}`);
+    printContent(printHtml, `Extrato - ${conta.nome}`, orientation);
   };
 
   return (
@@ -137,7 +138,7 @@ const DetalhesLancamentosDialog: React.FC<DetalhesLancamentosDialogProps> = ({ c
                     <p className="text-xl font-bold text-red-600 dark:text-red-400 mt-1">{formatCurrency(totalSaidas)}</p>
                 </div>
                 <div className={cn("p-4 rounded-lg", saldoFinal >= 0 ? "bg-blue-100 dark:bg-blue-900/20" : "bg-red-100 dark:bg-red-900/20")}>
-                    <h4 className={cn("text-sm font-medium flex items-center", saldoFinal >= 0 ? "text-blue-700 dark:text-blue-300" : "text-red-700 dark:text-red-300")}><Landmark className="w-4 h-4 mr-2" />Saldo Final</h4>
+                    <h4 className="text-sm font-medium flex items-center" style={{ color: saldoFinal >= 0 ? 'var(--color-blue-700)' : 'var(--color-red-700)' }}><Landmark className="w-4 h-4 mr-2" />Saldo Final</h4>
                     <p className={cn("text-xl font-bold mt-1", saldoFinal >= 0 ? "text-blue-600 dark:text-blue-400" : "text-red-600 dark:text-red-400")}>{formatCurrency(saldoFinal)}</p>
                 </div>
             </div>
@@ -179,9 +180,21 @@ const DetalhesLancamentosDialog: React.FC<DetalhesLancamentosDialogProps> = ({ c
               </Table>
             </div>
             <div className="flex justify-end space-x-2 pt-4 border-t">
-                <Button onClick={handlePrint} variant="outline">
-                    <Printer className="w-4 h-4 mr-2" /> Imprimir Extrato
-                </Button>
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button variant="outline">
+                            <Printer className="w-4 h-4 mr-2" /> Imprimir Extrato
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => handlePrint('portrait')}>
+                            Imprimir (Retrato)
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handlePrint('landscape')}>
+                            Imprimir (Paisagem)
+                        </DropdownMenuItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
                 <Button onClick={() => onOpenChange(false)} variant="secondary">
                     Fechar
                 </Button>

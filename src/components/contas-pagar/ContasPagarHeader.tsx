@@ -13,6 +13,7 @@ import ContasPagarPrint from './ContasPagarPrint';
 import { showError } from '@/utils/toast';
 import { format as formatDateFns } from 'date-fns';
 import { Input } from '@/components/ui/input';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 
 interface ContasPagarHeaderProps {
     isSupervisao: boolean;
@@ -97,7 +98,7 @@ const ContasPagarHeader: React.FC<ContasPagarHeaderProps> = ({
         return { data, headers };
     };
 
-    const handlePrint = () => {
+    const handlePrint = (orientation: 'portrait' | 'landscape') => {
         const { data } = getDataForPrint();
         if (data.length === 0) {
             showError('Nenhum dado para imprimir.');
@@ -113,7 +114,7 @@ const ContasPagarHeader: React.FC<ContasPagarHeaderProps> = ({
         );
 
         const htmlContent = ReactDOMServer.renderToStaticMarkup(printComponent);
-        printContent(htmlContent, `Relatório CP - ${activeTab}`);
+        printContent(htmlContent, `Relatório CP - ${activeTab}`, orientation);
     };
 
     return (
@@ -151,7 +152,23 @@ const ContasPagarHeader: React.FC<ContasPagarHeaderProps> = ({
                             </SelectContent>
                         </Select>
                         <DateRangePicker date={filtroPeriodo} setDate={setFiltroPeriodo} />
-                        <Button onClick={handlePrint} variant="outline" className="w-full sm:w-auto"><Printer className="w-4 h-4 mr-2" /> Imprimir</Button>
+                        
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="outline" className="w-full sm:w-auto">
+                                    <Printer className="w-4 h-4 mr-2" /> Imprimir
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => handlePrint('portrait')}>
+                                    Imprimir (Retrato)
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handlePrint('landscape')}>
+                                    Imprimir (Paisagem)
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                        
                         <Button onClick={() => handleOpenForm()} className="w-full sm:w-auto"><Plus className="w-4 h-4 mr-2" /> Novo Lançamento</Button>
                     </div>
                 </CardHeader>

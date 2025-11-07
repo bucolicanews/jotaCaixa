@@ -8,6 +8,8 @@ interface ContasReceberPrintProps {
     data: any[];
     activeTab: string;
     filtroPeriodo: DateRange | undefined;
+    // NOVO PROP: Orientação
+    orientation?: 'portrait' | 'landscape';
 }
 
 const TAB_TITLES: Record<string, string> = {
@@ -18,7 +20,7 @@ const TAB_TITLES: Record<string, string> = {
 
 // Removido: const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
-const ContasReceberPrint: React.FC<ContasReceberPrintProps> = ({ data, activeTab, filtroPeriodo }) => {
+const ContasReceberPrint: React.FC<ContasReceberPrintProps> = ({ data, activeTab, filtroPeriodo, orientation = 'portrait' }) => {
     
     const getPeriodoDisplay = () => {
         if (!filtroPeriodo?.from) return 'Todo o Período';
@@ -96,7 +98,7 @@ const ContasReceberPrint: React.FC<ContasReceberPrintProps> = ({ data, activeTab
     });
 
     return (
-        <div className="print-container">
+        <div className={orientation === 'landscape' ? 'print-container landscape' : 'print-container'}>
             <div className="print-header">
                 <h1 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '5px' }}>RELATÓRIO DE CONTAS A RECEBER</h1>
                 <h2 style={{ fontSize: '12px', fontWeight: 'normal', marginBottom: '5px' }}>{TAB_TITLES[activeTab] || 'Relatório Personalizado'}</h2>

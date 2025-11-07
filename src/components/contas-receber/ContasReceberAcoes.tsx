@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { formatarData } from '@/utils/formatters';
 import { Input } from '@/components/ui/input';
 import { ExtendedParcelaDetalhada, ContaReceberComProgresso, AdminRecebimento } from '@/types/contas-receber'; // Importação corrigida
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../ui/dropdown-menu';
 
 type FiltroOrigem = 'todos' | 'contrato' | 'assinatura_recorrente' | 'manual';
 
@@ -171,7 +172,7 @@ const ContasReceberAcoes: React.FC<ContasReceberAcoesProps> = ({
     }
   };
   
-  const handlePrint = () => {
+  const handlePrint = (orientation: 'portrait' | 'landscape') => {
     const { data } = getDataForExport();
     
     if (data.length === 0) {
@@ -188,7 +189,7 @@ const ContasReceberAcoes: React.FC<ContasReceberAcoesProps> = ({
     );
 
     const htmlContent = ReactDOMServer.renderToStaticMarkup(printComponent);
-    printContent(htmlContent, `Relatório CR - ${activeTab}`);
+    printContent(htmlContent, `Relatório CR - ${activeTab}`, orientation);
   };
 
   return (
@@ -242,9 +243,23 @@ const ContasReceberAcoes: React.FC<ContasReceberAcoesProps> = ({
             date={filtroPeriodo}
             setDate={setFiltroPeriodo}
           />
-          <Button onClick={handlePrint} variant="outline" className="w-full sm:w-auto">
-            <Printer className="w-4 h-4 mr-2" /> Imprimir
-          </Button>
+          
+          <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                  <Button variant="outline" className="w-full sm:w-auto">
+                      <Printer className="w-4 h-4 mr-2" /> Imprimir
+                  </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => handlePrint('portrait')}>
+                      Imprimir (Retrato)
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handlePrint('landscape')}>
+                      Imprimir (Paisagem)
+                  </DropdownMenuItem>
+              </DropdownMenuContent>
+          </DropdownMenu>
+          
           <Button onClick={handleExportCSV} variant="secondary" className="w-full sm:w-auto" disabled={exportLoading}>
             {exportLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="w-4 h-4 mr-2" />}
             Exportar CSV

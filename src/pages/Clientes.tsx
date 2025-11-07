@@ -22,6 +22,7 @@ import FormEmpresaAvulsa from '@/components/FormEmpresaAvulsa';
 import { usePrint } from '@/hooks/use-print';
 import ReactDOMServer from 'react-dom/server';
 import ClientesPrint from '@/components/ClientesPrint'; // NOVO IMPORT
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 
 // Tipo para o filtro de empresa (inclui o Admin)
 interface EmpresaFiltro {
@@ -513,7 +514,7 @@ const ClientesPage = () => {
     </div>
   );
   
-  const handlePrint = () => {
+  const handlePrint = (orientation: 'portrait' | 'landscape') => {
       let dataToPrint: (Cliente | EmpresaSistema)[] = [];
       let tituloRelatorio = '';
       
@@ -542,7 +543,7 @@ const ClientesPage = () => {
 
       const htmlContent = ReactDOMServer.renderToStaticMarkup(printComponent);
       // Passa a classe 'landscape' para o container de impressão
-      printContent(htmlContent, `Relatório Clientes - ${tituloRelatorio}`);
+      printContent(htmlContent, `Relatório Clientes - ${tituloRelatorio}`, orientation);
   };
 
 
@@ -562,9 +563,21 @@ const ClientesPage = () => {
         <h1 className="text-2xl md:text-3xl font-bold">Gerenciamento de Clientes</h1>
         
         <div className="flex space-x-2 w-full sm:w-auto">
-            <Button onClick={handlePrint} variant="outline" className="w-full sm:w-auto">
-                <Printer className="w-4 h-4 mr-2" /> Imprimir
-            </Button>
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <Button variant="outline" className="w-full sm:w-auto">
+                        <Printer className="w-4 h-4 mr-2" /> Imprimir
+                    </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => handlePrint('portrait')}>
+                        Imprimir (Retrato)
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handlePrint('landscape')}>
+                        Imprimir (Paisagem)
+                    </DropdownMenuItem>
+                </DropdownMenuContent>
+            </DropdownMenu>
             {/* Botão para Novo Cliente CR */}
             <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
               <DialogTrigger asChild>
