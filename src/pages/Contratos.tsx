@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, Building2 } from 'lucide-react';
 import { useSessao } from '@/hooks/use-sessao';
 import { useState, useMemo } from 'react';
-import ContratoAcoesDialog from '@/components/ContratoAcoesDialog';
+import ContratoAcoesDialog from '@/components/contratos/ContratoAcoesDialog';
 import { cn } from '@/lib/utils';
 import { useContratos } from '@/hooks/use-contratos';
 import ContratosHeader from '@/components/contratos/ContratosHeader';

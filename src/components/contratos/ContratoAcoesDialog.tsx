@@ -4,13 +4,13 @@ import { Button } from '@/components/ui/button';
 import { Copy, ExternalLink, FileText, Eye, Printer, Mail, MessageSquare, Loader2, Lock, Unlock } from 'lucide-react';
 import { ContratoGerado } from '@/types/contratos';
 import { showSuccess, showError } from '@/utils/toast';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { Input } from './ui/input';
-import { Label } from './ui/label';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
+import { Input } from '../ui/input';
+import { Label } from '../ui/label';
 import { usePrint } from '@/hooks/use-print';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '../ui/alert-dialog';
 
 interface ContratoAcoesDialogProps {
   contrato: ContratoGerado | null;

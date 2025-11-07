@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Link } from 'react-router-dom';
 import { usePrint } from '@/hooks/use-print';
 import { ContratoGerado } from '@/types/contratos';
-import ContratosPrint from '../ContratosPrint';
+import ContratosPrint from './ContratosPrint';
 import ReactDOMServer from 'react-dom/server';
 import { showError } from '@/utils/toast';
 import { ContratoStatus, Ordenacao } from '@/hooks/use-contratos'; // IMPORTADO

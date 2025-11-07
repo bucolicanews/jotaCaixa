@@ -210,7 +210,7 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
               <FormItem>
                 <FormLabel>Título do Modelo</FormLabel>
                 <FormControl>
-                  <Input placeholder="Ex: Contrato de Prestação de Serviços Padrão" {...field} />
+                  <Input placeholder="Ex: Contrato de Prestação de Serviços Padrão" {...field} disabled={isEditing} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -256,7 +256,7 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
                           
                           return (
                               <FormItem>
-                                  <FormLabel>Conteúdo do Template (Use tags)</FormLabel>
+                                  <FormLabel>Contéudo do Template (Use tags)</FormLabel>
                                   <FormControl>
                                       <Textarea 
                                           ref={mergedRef} // Usando o ref combinado

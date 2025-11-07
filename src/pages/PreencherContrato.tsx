@@ -19,7 +19,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { ptBR } from 'date-fns/locale';
 import { TAGS_PADRAO } from '@/config/contrato-tags-padrao';
-import ContratoPreviewDialog from '@/components/ContratoPreviewDialog';
+import ContratoPreviewDialog from '@/components/contratos/ContratoPreviewDialog';
 import { useSessao } from '@/hooks/use-sessao';
 
 type TipoLancamento = 'unico' | 'repetir' | 'parcelar';
@@ -545,10 +545,10 @@ const PreencherContrato: React.FC = () => {
                 id: clienteSelecionado.id,
                 proprietario_id: empresaContratoId, // AJUSTE AQUI
                 nome: clienteSelecionado.nome,
-                documento: clienteSelecionado.documento,
-                email: clienteSelecionado.email,
                 razao_social: clienteSelecionado.razao_social,
                 nome_fantasia: clienteSelecionado.nome_fantasia,
+                documento: clienteSelecionado.documento,
+                email: clienteSelecionado.email,
                 telefone: clienteSelecionado.telefone,
                 telefone_fixo: clienteSelecionado.telefone_fixo,
                 cep: clienteSelecionado.cep,
@@ -915,7 +915,7 @@ const PreencherContrato: React.FC = () => {
                 disabled={!modelo || !clienteSelecionadoId || valorTotal <= 0}
             >
                 <Eye className="mr-2 h-4 w-4" />
-                Visualizar Contrato
+                Pré-visualizar Contrato
             </Button>
             <Button 
                 onClick={handleSalvarContrato} 
