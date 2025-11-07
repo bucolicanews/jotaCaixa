@@ -80,9 +80,6 @@ const ExportarLancamentos: React.FC = () => {
       const endDate = format(filtroPeriodo.to, 'yyyy-MM-dd');
 
       // 1. Buscar Lançamentos com as contas contábeis e históricos
-      // Usamos aliases explícitos para as relações:
-      // conta_resultado: plano_contas (via lancamentos.conta_contabil_id)
-      // conta_saldo: saldo_contas (via lancamentos.conta_bancaria_id) -> plano_contas (via saldo_contas.conta_contabil_id)
       const { data, error } = await supabase
         .from('lancamentos')
         .select(`
@@ -94,13 +91,10 @@ const ExportarLancamentos: React.FC = () => {
           descricao,
           proprietario_id,
           
-          // Relação 1: Conta de Resultado (Débito/Crédito)
           conta_resultado:plano_contas!lancamentos_conta_contabil_id ( Conta ),
           
-          // Relação 2: Histórico
           historicos:historicos!lancamentos_historico_id ( codigo ),
           
-          // Relação 3: Conta de Saldo (Caixa/Banco) e sua Conta Contábil (Ativo/Passivo)
           conta_saldo:saldo_contas!lancamentos_conta_bancaria_id ( 
             conta_contabil_id,
             conta_ativo:plano_contas!saldo_contas_conta_contabil_id ( Conta )
