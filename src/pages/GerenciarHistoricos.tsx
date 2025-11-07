@@ -18,6 +18,8 @@ import { usePrint } from '@/hooks/use-print';
 import ReactDOMServer from 'react-dom/server';
 import { format } from 'date-fns'; // Adicionando importação de format
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 
 // Componente de Formulário Simples (Inline)
 interface FormHistoricoProps {
@@ -107,6 +109,10 @@ const GerenciarHistoricos: React.FC = () => {
   const filtroTextoDebounced = useDebounce(filtroTexto, 500);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importLoading, setImportLoading] = useState(false);
+  
+  // NOVO ESTADO: Seleção em massa
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isDeletingBulk, setIsDeletingBulk] = useState(false);
 
   const getOwnerId = () => {
     if (role === 'Admin' || role === 'Cliente') return (perfil as any)?.id;
@@ -149,6 +155,11 @@ const GerenciarHistoricos: React.FC = () => {
       buscarHistoricos();
     }
   }, [carregandoSessao, ownerId, buscarHistoricos]);
+  
+  // Limpa a seleção ao recarregar os dados
+  useEffect(() => {
+      setSelectedIds([]);
+  }, [historicos]);
 
   const handleSaveComplete = () => {
     setDialogAberto(false);
@@ -175,6 +186,45 @@ const GerenciarHistoricos: React.FC = () => {
       showSuccess('Histórico excluído com sucesso.');
       buscarHistoricos();
     }
+  };
+  
+  // --- Lógica de Seleção em Massa ---
+  const handleToggleSelect = (id: string, checked: boolean) => {
+      setSelectedIds(prev => 
+          checked ? [...prev, id] : prev.filter(prevId => prevId !== id)
+      );
+  };
+  
+  const handleSelectAll = (checked: boolean) => {
+      if (checked) {
+          setSelectedIds(historicos.map(h => h.id));
+      } else {
+          setSelectedIds([]);
+      }
+  };
+  
+  const handleDeleteSelected = async () => {
+      if (selectedIds.length === 0 || !ownerId) return;
+      
+      setIsDeletingBulk(true);
+      
+      try {
+          const { error } = await supabase
+              .from('historicos')
+              .delete()
+              .in('id', selectedIds)
+              .eq('proprietario_id', ownerId); // RLS garante que só deleta os próprios
+              
+          if (error) throw error;
+          
+          showSuccess(`${selectedIds.length} históricos excluídos com sucesso.`);
+          setSelectedIds([]);
+          buscarHistoricos();
+      } catch (error: any) {
+          showError('Falha ao excluir históricos: ' + error.message);
+      } finally {
+          setIsDeletingBulk(false);
+      }
   };
   
   // --- Importação ---
@@ -383,19 +433,59 @@ const GerenciarHistoricos: React.FC = () => {
             <CardTitle className="text-xl">Históricos Cadastrados ({historicos.length})</CardTitle>
         </CardHeader>
         <CardContent>
-            <div className="relative mb-4">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                    placeholder="Buscar por código ou descrição..."
-                    value={filtroTexto}
-                    onChange={(e) => setFiltroTexto(e.target.value)}
-                    className="pl-10 max-w-sm"
-                />
+            <div className="flex flex-col sm:flex-row justify-between items-center mb-4 gap-4">
+                <div className="relative w-full sm:w-auto flex-1">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                        placeholder="Buscar por código ou descrição..."
+                        value={filtroTexto}
+                        onChange={(e) => setFiltroTexto(e.target.value)}
+                        className="pl-10 max-w-sm"
+                    />
+                </div>
+                
+                {selectedIds.length > 0 && (
+                    <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                            <Button 
+                                variant="destructive" 
+                                size="sm" 
+                                disabled={isDeletingBulk}
+                                className="w-full sm:w-auto"
+                            >
+                                {isDeletingBulk ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                                Excluir Selecionados ({selectedIds.length})
+                            </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                            <AlertDialogHeader>
+                                <AlertDialogTitle>Confirmar Exclusão em Massa</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                    Você tem certeza que deseja excluir {selectedIds.length} históricos? Esta ação não pode ser desfeita.
+                                </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                                <AlertDialogCancel disabled={isDeletingBulk}>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction onClick={handleDeleteSelected} disabled={isDeletingBulk}>
+                                    {isDeletingBulk ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Excluir'}
+                                </AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
+                )}
             </div>
+            
             <div className="overflow-x-auto">
                 <Table>
                     <TableHeader>
                         <TableRow>
+                            <TableHead className="w-[40px] text-center">
+                                <Checkbox 
+                                    checked={selectedIds.length === historicos.length && historicos.length > 0}
+                                    onCheckedChange={(checked) => handleSelectAll(!!checked)}
+                                    disabled={historicos.length === 0}
+                                />
+                            </TableHead>
                             <TableHead className="w-[150px]">Código</TableHead>
                             <TableHead>Descrição</TableHead>
                             <TableHead className="w-[150px] hidden sm:table-cell">Criado em</TableHead>
@@ -405,28 +495,37 @@ const GerenciarHistoricos: React.FC = () => {
                     <TableBody>
                         {historicos.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={4} className="text-center py-4 text-muted-foreground">
+                                <TableCell colSpan={5} className="text-center py-4 text-muted-foreground">
                                     Nenhum histórico cadastrado.
                                 </TableCell>
                             </TableRow>
                         ) : (
-                            historicos.map((h) => (
-                                <TableRow key={h.id}>
-                                    <TableCell className="font-mono text-sm">{h.codigo || '-'}</TableCell>
-                                    <TableCell className="font-medium">{h.descricao}</TableCell>
-                                    <TableCell className="text-sm text-muted-foreground hidden sm:table-cell">{new Date(h.criado_em).toLocaleDateString('pt-BR')}</TableCell>
-                                    <TableCell className="text-right">
-                                        <div className="flex justify-end space-x-2">
-                                            <Button variant="ghost" size="sm" onClick={() => handleEdit(h)}>
-                                                <Edit className="w-4 h-4" />
-                                            </Button>
-                                            <Button variant="ghost" size="sm" onClick={() => handleDelete(h.id)}>
-                                                <Trash2 className="w-4 h-4 text-red-500" />
-                                            </Button>
-                                        </div>
-                                    </TableCell>
-                                </TableRow>
-                            ))
+                            historicos.map((h) => {
+                                const isSelected = selectedIds.includes(h.id);
+                                return (
+                                    <TableRow key={h.id} className={isSelected ? 'bg-secondary/50' : ''}>
+                                        <TableCell className="text-center">
+                                            <Checkbox 
+                                                checked={isSelected}
+                                                onCheckedChange={(checked) => handleToggleSelect(h.id, !!checked)}
+                                            />
+                                        </TableCell>
+                                        <TableCell className="font-mono text-sm">{h.codigo || '-'}</TableCell>
+                                        <TableCell className="font-medium">{h.descricao}</TableCell>
+                                        <TableCell className="text-sm text-muted-foreground hidden sm:table-cell">{new Date(h.criado_em).toLocaleDateString('pt-BR')}</TableCell>
+                                        <TableCell className="text-right">
+                                            <div className="flex justify-end space-x-2">
+                                                <Button variant="ghost" size="sm" onClick={() => handleEdit(h)}>
+                                                    <Edit className="w-4 h-4" />
+                                                </Button>
+                                                <Button variant="ghost" size="sm" onClick={() => handleDelete(h.id)}>
+                                                    <Trash2 className="w-4 h-4 text-red-500" />
+                                                </Button>
+                                            </div>
+                                        </TableCell>
+                                    </TableRow>
+                                );
+                            })
                         )}
                     </TableBody>
                 </Table>
