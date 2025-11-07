@@ -62,7 +62,7 @@ export function usePrint() {
             width: 100%; 
             border-collapse: collapse; 
             margin-top: 5px; 
-            table-layout: fixed; 
+            table-layout: fixed; /* Garante que a largura da tabela seja respeitada */
           }
           .print-table th, .print-table td { 
             border: 1px solid #ccc; 
@@ -70,14 +70,14 @@ export function usePrint() {
             text-align: left; 
             font-size: 9pt; 
             word-wrap: break-word; 
-            white-space: normal;
+            white-space: normal; /* Permite quebra de linha */
             overflow: visible; 
             text-overflow: clip; 
           }
           .print-table th { 
             background-color: #f0f0f0; 
             font-weight: bold;
-            white-space: nowrap; 
+            white-space: normal; /* Permite quebra de linha no cabeçalho */
           }
           
           /* Estilos para a linha de total */
