@@ -21,7 +21,7 @@ interface StripeConfigAdminHook {
  * Hook que busca a configuração COMPLETA do Stripe (incluindo a chave secreta)
  * para uso exclusivo na página de Configurações do Admin.
  * 
- * Nota: Este hook depende da política RLS que permite ao Admin ler sua própria linha.
+ * Nota: Este hook agora usa uma Edge Function para contornar problemas de RLS.
  */
 export function useStripeConfigAdmin(adminId: string | null): StripeConfigAdminHook {
   const [config, setConfig] = useState<StripeConfigData | null>(null);
@@ -43,23 +43,29 @@ export function useStripeConfigAdmin(adminId: string | null): StripeConfigAdminH
     setError(null);
     
     try {
-      const { data, error: fetchError } = await supabase
-        .from('configuracoes_stripe')
-        .select('id, stripe_publishable_key, stripe_secret_key, conta_sintetica_id, conta_receber_id, historico_padrao_id')
-        .eq('proprietario_id', adminId)
-        .limit(1)
-        .single();
+      // Chamada para a Edge Function que usa a Service Role Key
+      const { data, error: invokeError } = await supabase.functions.invoke('get-admin-stripe-config', {
+          body: { adminId },
+      });
 
-      if (fetchError && fetchError.code !== 'PGRST116') {
-        // Este é o erro que estamos tentando corrigir: "permission denied"
-        console.error('Erro ao carregar configurações do Stripe (Admin):', fetchError);
-        setError('Erro ao carregar configurações do Stripe: ' + fetchError.message);
-        setConfig(null);
-        return;
+      if (invokeError) {
+          console.error('Edge Function Invoke Error:', invokeError);
+          setError('Falha na comunicação com o servidor: ' + invokeError.message);
+          setConfig(null);
+          return;
       }
       
-      if (data) {
-        setConfig(data as StripeConfigData);
+      if (data?.error) {
+          console.error('Edge Function returned error:', data.error);
+          setError('Erro ao carregar configurações: ' + data.error);
+          setConfig(null);
+          return;
+      }
+      
+      const fetchedConfig = data?.config;
+
+      if (fetchedConfig) {
+        setConfig(fetchedConfig as StripeConfigData);
       } else {
         setConfig(null);
       }
