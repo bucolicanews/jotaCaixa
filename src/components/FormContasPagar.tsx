@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { CalendarIcon, Loader2 } from 'lucide-react';
+import { CalendarIcon, Loader2, PlusCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -17,6 +17,8 @@ import { AdminContaPagar } from '@/types/contas-pagar';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Separator } from './ui/separator';
 import { useSessao } from '@/hooks/use-sessao';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { Historico } from '@/types/historico'; // Importando Historico
 
 const formSchema = z.object({
   fornecedor: z.string().min(1, 'O nome do fornecedor é obrigatório.'),
@@ -29,6 +31,9 @@ const formSchema = z.object({
   numero_parcelas: z.coerce.number().int().min(1).optional(),
   data_primeiro_vencimento: z.date().optional(),
   intervalo_dias: z.coerce.number().int().min(1).optional(),
+  
+  historico_id: z.string().uuid('Selecione um histórico válido.').nullable(), // NOVO CAMPO
+  novo_historico: z.string().optional(), // NOVO CAMPO
 
 }).superRefine((data, ctx) => {
   if (data.tipo_lancamento === 'unico' && !data.data_vencimento) {
@@ -51,6 +56,8 @@ interface FormContasPagarProps {
 const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveComplete }) => {
   const { usuario, role } = useSessao();
   const [mapeamentoContabil, setMapeamentoContabil] = useState<Record<string, string | null>>({});
+  const [historicos, setHistoricos] = useState<Historico[]>([]); // NOVO ESTADO
+  const [isCreatingHistorico, setIsCreatingHistorico] = useState(false); // NOVO ESTADO
   const isEditing = !!contaInicial;
 
   const isAdmin = role === 'Admin';
@@ -75,12 +82,31 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
         setMapeamentoContabil(map);
     }
   }, [isAdmin, adminId]);
+  
+  const fetchHistoricos = useCallback(async () => {
+    if (!adminId) return;
+    const { data, error } = await supabase
+        .from('historicos')
+        .select('id, descricao')
+        .eq('proprietario_id', adminId)
+        .order('descricao');
+        
+    if (error) {
+        console.error('Erro ao carregar históricos:', error);
+        setHistoricos([]);
+    } else {
+        setHistoricos(data as Historico[]);
+    }
+  }, [adminId]);
 
   useEffect(() => {
     if (isAdmin) {
         fetchMapeamentoContabil();
     }
-  }, [isAdmin, fetchMapeamentoContabil]);
+    if (adminId) {
+        fetchHistoricos();
+    }
+  }, [isAdmin, adminId, fetchMapeamentoContabil, fetchHistoricos]);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -92,10 +118,40 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
       data_vencimento: contaInicial?.data_vencimento ? new Date(contaInicial.data_vencimento + 'T00:00:00') : undefined,
       numero_parcelas: 1,
       intervalo_dias: 30,
+      historico_id: contaInicial?.historico_id || null, // Carrega histórico inicial
+      novo_historico: '',
     },
   });
+  
+  const { isSubmitting } = form.formState; // Desestruturando isSubmitting
 
   const tipoLancamento = form.watch('tipo_lancamento');
+  const novoHistoricoValue = form.watch('novo_historico');
+  
+  const handleCreateHistorico = async () => {
+    if (!novoHistoricoValue || !adminId) return;
+    
+    setIsCreatingHistorico(true);
+    try {
+        const { data, error } = await supabase
+            .from('historicos')
+            .insert({ proprietario_id: adminId, descricao: novoHistoricoValue })
+            .select('id, descricao')
+            .single();
+            
+        if (error) throw error;
+        
+        showSuccess('Histórico criado e selecionado!');
+        fetchHistoricos(); // Recarrega a lista
+        form.setValue('historico_id', data.id); // Seleciona o novo histórico
+        form.setValue('novo_historico', ''); // Limpa o campo de criação
+        setIsCreatingHistorico(false);
+        
+    } catch (error: any) {
+        showError('Falha ao criar histórico: ' + error.message);
+        setIsCreatingHistorico(false);
+    }
+  };
 
   const onSubmit = async (values: FormValues) => {
     if (!adminId) { showError('ID do administrador não pôde ser determinado.'); return; }
@@ -134,6 +190,7 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
           status: 'pendente',
           origem: 'manual',
           id_conta_contabil: contaAPagar,
+          historico_id: values.historico_id, // NOVO CAMPO
       };
 
       if (isEditing && contaInicial) {
@@ -177,9 +234,57 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
           <FormItem><FormLabel>2. Descrição do Lançamento</FormLabel><FormControl><Input placeholder="Ex: Compra de material de escritório" {...field} /></FormControl><FormMessage /></FormItem>
         )} />
         <Separator />
+        
+        {/* NOVO CAMPO: Histórico */}
+        <div className="space-y-2">
+            <FormLabel>3. Histórico (Opcional)</FormLabel>
+            <div className="flex space-x-2">
+                <FormField
+                    control={form.control}
+                    name="historico_id"
+                    render={({ field }) => (
+                        <FormItem className="flex-1">
+                            <Select onValueChange={field.onChange} value={field.value || undefined} disabled={isCreatingHistorico}>
+                                <FormControl>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Selecione um histórico pré-cadastrado" />
+                                    </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                    <SelectItem value={null as any}>Nenhum</SelectItem>
+                                    {historicos.map(h => (
+                                        <SelectItem key={h.id} value={h.id}>{h.descricao}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            <FormMessage />
+                        </FormItem>
+                    )}
+                />
+                <Button type="button" variant="outline" size="icon" onClick={() => setIsCreatingHistorico(prev => !prev)} title="Criar Novo Histórico">
+                    <PlusCircle className="w-4 h-4" />
+                </Button>
+            </div>
+            {isCreatingHistorico && (
+                <div className="flex space-x-2 pt-2">
+                    <FormField control={form.control} name="novo_historico" render={({ field }) => (
+                        <FormItem className="flex-1">
+                            <FormControl><Input placeholder="Novo Histórico" {...field} disabled={isSubmitting} /></FormControl>
+                            <FormMessage />
+                        </FormItem>
+                    )} />
+                    <Button type="button" onClick={handleCreateHistorico} disabled={isSubmitting || !novoHistoricoValue}>
+                        {isCreatingHistorico ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Criar'}
+                    </Button>
+                </div>
+            )}
+        </div>
+        <Separator />
+        
         <div className="space-y-4">
+          <FormLabel>4. Detalhes do Pagamento</FormLabel>
           <FormField control={form.control} name="tipo_lancamento" render={({ field }) => (
-            <FormItem><FormLabel>3. Forma de Pagamento</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex space-x-4 pt-2"><FormItem className="flex items-center space-x-2 space-y-0"><FormControl><RadioGroupItem value="unico" /></FormControl><FormLabel className="font-normal">Único</FormLabel></FormItem><FormItem className="flex items-center space-x-2 space-y-0"><FormControl><RadioGroupItem value="repetir" /></FormControl><FormLabel className="font-normal">Repetir Valor</FormLabel></FormItem><FormItem className="flex items-center space-x-2 space-y-0"><FormControl><RadioGroupItem value="parcelar" /></FormControl><FormLabel className="font-normal">Parcelar Valor</FormLabel></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>
+            <FormItem><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex space-x-4 pt-2"><FormItem className="flex items-center space-x-2 space-y-0"><FormControl><RadioGroupItem value="unico" /></FormControl><FormLabel className="font-normal">Único</FormLabel></FormItem><FormItem className="flex items-center space-x-2 space-y-0"><FormControl><RadioGroupItem value="repetir" /></FormControl><FormLabel className="font-normal">Repetir Valor</FormLabel></FormItem><FormItem className="flex items-center space-x-2 space-y-0"><FormControl><RadioGroupItem value="parcelar" /></FormControl><FormLabel className="font-normal">Parcelar Valor</FormLabel></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>
           )} />
           <FormField control={form.control} name="valor" render={({ field }) => (
             <FormItem><FormLabel>{tipoLancamento === 'parcelar' ? 'Valor Total a Parcelar' : 'Valor da Parcela'}</FormLabel><FormControl><Input type="number" step="0.01" placeholder="0,00" {...field} /></FormControl><FormMessage /></FormItem>
@@ -201,8 +306,8 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
             </div>
           )}
         </div>
-        <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
-          {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+        <Button type="submit" className="w-full" disabled={isSubmitting}>
+          {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           {isEditing ? 'Salvar Alterações' : 'Salvar Lançamento'}
         </Button>
       </form>

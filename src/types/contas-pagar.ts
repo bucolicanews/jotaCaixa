@@ -22,6 +22,7 @@ export interface AdminContaPagar {
   descricao: string;
   origem: 'manual' | 'contrato' | 'assinatura_recorrente';
   id_conta_contabil: string | null;
+  historico_id?: string | null; // ADICIONADO
 }
 
 export interface AdminParcelaPagar {
