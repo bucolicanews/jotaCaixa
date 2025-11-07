@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useDebounce } from '@/hooks/use-debounce';
 import { SaldoContaDetalhada } from '@/types/saldo-conta';
-import { DateRangePicker } from '../../DateRangePicker';
+import { DateRangePicker } from '@/components/DateRangePicker';
 import { DateRange } from 'react-day-picker';
 import { format } from 'date-fns';
 import { Button } from '../ui/button';
