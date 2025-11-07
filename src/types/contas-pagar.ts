@@ -46,6 +46,7 @@ export interface AdminPagamento {
   forma_pagamento: string;
   conta_id: string;
   id_conta_contabil: string | null;
+  historico_id?: string | null; // ADICIONADO
   
   // Relações para exibição
   saldo_contas: { nome: string } | null;

@@ -18,6 +18,7 @@ const TIPOS_REGISTRO = [
   { key: 'parcela_pagar', label: 'Parcelas a Pagar (Analítico)' },
   { key: 'pagamento', label: 'Pagamentos (Saída)' },
   { key: 'desconto_obtido', label: 'Descontos Obtidos (Receita)' },
+  { key: 'pagamento_historico_padrao', label: 'Histórico Padrão (Pagamento)' }, // NOVO
 ];
 
 // Esquema dinâmico para garantir que todos os campos estejam presentes
@@ -26,6 +27,7 @@ const formSchema = z.object({
   parcela_pagar: z.string().uuid('Conta inválida para Parcelas a Pagar.').nullable(),
   pagamento: z.string().uuid('Conta inválida para Pagamentos.').nullable(),
   desconto_obtido: z.string().uuid('Conta inválida para Descontos Obtidos.').nullable(),
+  pagamento_historico_padrao: z.string().uuid('Histórico inválido para Pagamento Padrão.').nullable(), // NOVO
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -46,6 +48,7 @@ const FormConfiguracoesCP: React.FC = () => {
       parcela_pagar: null,
       pagamento: null,
       desconto_obtido: null,
+      pagamento_historico_padrao: null, // NOVO
     },
   });
   
@@ -141,6 +144,10 @@ const FormConfiguracoesCP: React.FC = () => {
       id: c.id,
       display: `${c.Conta} - ${c.Descricao}`,
   }));
+  
+  // Filtra as contas contábeis para o campo de Histórico Padrão (que na verdade armazena um ID de Histórico)
+  const historicoPadraoItem = TIPOS_REGISTRO.find(t => t.key === 'pagamento_historico_padrao');
+  const outrosRegistros = TIPOS_REGISTRO.filter(t => t.key !== 'pagamento_historico_padrao');
 
   return (
     <Form {...form}>
@@ -152,7 +159,7 @@ const FormConfiguracoesCP: React.FC = () => {
         <Separator />
         
         <div className="space-y-4">
-            {TIPOS_REGISTRO.map(tipo => (
+            {outrosRegistros.map(tipo => (
                 <FormField
                     key={tipo.key}
                     control={form.control}
@@ -184,6 +191,45 @@ const FormConfiguracoesCP: React.FC = () => {
                 />
             ))}
         </div>
+        
+        <Separator />
+        
+        {/* NOVO CAMPO: Histórico Padrão (usa o ID da conta contábil para armazenar o ID do Histórico) */}
+        {historicoPadraoItem && (
+            <FormField
+                key={historicoPadraoItem.key}
+                control={form.control}
+                name={historicoPadraoItem.key as keyof FormValues}
+                render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>{historicoPadraoItem.label}</FormLabel>
+                        <Select 
+                            onValueChange={field.onChange} 
+                            value={field.value || undefined}
+                        >
+                            <FormControl>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Selecione o Histórico Padrão" />
+                                </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                                <SelectItem value={null as any}>Nenhum (Não Mapear)</SelectItem>
+                                {/* Aqui, listamos os IDs dos Históricos, mas o campo armazena em conta_contabil_id */}
+                                {contasContabeis.map(c => (
+                                    <SelectItem key={c.id} value={c.id}>
+                                        {c.Descricao}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <FormMessage />
+                        <p className="text-xs text-muted-foreground">
+                            Nota: O histórico padrão para pagamentos é configurado diretamente no diálogo de pagamento.
+                        </p>
+                    </FormItem>
+                )}
+            />
+        )}
         
         <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
           {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

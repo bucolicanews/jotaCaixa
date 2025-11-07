@@ -61,6 +61,7 @@ export interface AdminRecebimento {
     valor_recebido: number;
     forma_pagamento: string;
     cliente_id: string;
+    historico_id?: string | null; // ADICIONADO
     admin_parcelas_receber: {
         numero_parcela: number;
         admin_contas_receber: {

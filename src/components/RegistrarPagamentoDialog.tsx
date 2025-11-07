@@ -17,6 +17,8 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useSessao } from '@/hooks/use-sessao';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import useSaldoContaCalculado from '@/hooks/use-saldo-conta-calculado';
+import { Historico } from '@/types/historico';
+import { Checkbox } from './ui/checkbox';
 
 interface ParcelaParaPagamento {
   id: string;
@@ -31,11 +33,15 @@ const formSchema = z.object({
   valor_recebido: z.coerce.number().positive('O valor deve ser maior que zero.'),
   data_pagamento: z.date({ required_error: 'A data é obrigatória.' }),
   forma_pagamento: z.string().min(1, 'A forma de pagamento é obrigatória.'),
-  conta_id: z.string().uuid('Selecione a conta de destino.').nullable(), // NOVO CAMPO
+  conta_id: z.string().uuid('Selecione a conta de destino.').nullable(),
   acao_saldo_restante: z.enum(['desconto', 'reprogramar', 'parcelar']).optional(),
   nova_data_vencimento: z.date().optional(),
   numero_novas_parcelas: z.coerce.number().int().min(2).optional(),
   intervalo_dias_novas_parcelas: z.coerce.number().int().min(1).optional(),
+  
+  // Campos de Histórico
+  historico_id: z.string().uuid('Selecione um histórico válido.').nullable(),
+  salvar_como_padrao: z.boolean().optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -51,7 +57,9 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
   const { role, usuario } = useSessao();
   const isAdmin = role === 'Admin';
   
-  const [mapeamentoContabil, setMapeamentoContabil] = useState<Record<string, string | null>>({});
+  const [historicos, setHistoricos] = useState<Historico[]>([]);
+  const [loadingHistoricos, setLoadingHistoricos] = useState(true);
+  const [_historicoPadraoId, setHistoricoPadraoId] = useState<string | null>(null);
   
   // Determina as tabelas de destino
   const tabelaRecebimentos = isAdmin ? 'admin_recebimentos' : 'recebimentos';
@@ -72,48 +80,66 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
       valor_recebido: saldoDevedor,
       data_pagamento: new Date(),
       forma_pagamento: 'Pix',
-      conta_id: null, // Inicializa como null
+      conta_id: null,
       acao_saldo_restante: 'reprogramar',
       numero_novas_parcelas: 2,
       intervalo_dias_novas_parcelas: 30,
+      historico_id: null,
+      salvar_como_padrao: false,
     },
   });
   
   // Desestruturando setValue para usar nas funções de callback
   const { setValue } = form;
 
-  const fetchMapeamentoContabil = useCallback(async () => {
+  const fetchHistoricos = useCallback(async () => {
+    if (!ownerId) return;
+    setLoadingHistoricos(true);
+    const { data, error } = await supabase
+        .from('historicos')
+        .select('id, descricao, codigo')
+        .eq('proprietario_id', ownerId)
+        .order('descricao');
+        
+    if (error) {
+        console.error('Erro ao carregar históricos:', error);
+        setHistoricos([]);
+    } else {
+        setHistoricos(data as Historico[]);
+    }
+    setLoadingHistoricos(false);
+  }, [ownerId]);
+  
+  const fetchHistoricoPadrao = useCallback(async () => {
     if (!isAdmin || !ownerId) return;
     
     const { data, error } = await supabase
         .from('configuracao_contas_receber')
-        .select('tipo_registro, conta_contabil_id')
-        .eq('proprietario_id', ownerId);
+        .select('conta_contabil_id')
+        .eq('proprietario_id', ownerId)
+        .eq('tipo_registro', 'recebimento_historico_padrao') // NOVO TIPO DE REGISTRO
+        .limit(1)
+        .single();
         
-    if (error) {
-        console.error('Erro ao buscar mapeamento contábil:', error);
-        setMapeamentoContabil({});
-    } else {
-        const map = (data as { tipo_registro: string, conta_contabil_id: string | null }[]).reduce((acc, item) => {
-            acc[item.tipo_registro] = item.conta_contabil_id;
-            return acc;
-        }, {} as Record<string, string | null>);
-        setMapeamentoContabil(map);
+    if (error && error.code !== 'PGRST116') {
+        console.error('Erro ao buscar histórico padrão:', error);
     }
-  }, [isAdmin, ownerId]);
-  
+    
+    const id = data?.conta_contabil_id || null;
+    setHistoricoPadraoId(id);
+    form.setValue('historico_id', id);
+  }, [isAdmin, ownerId, form]);
+
   useEffect(() => {
       if (open) {
-          refetchSaldos(); // Garante que as contas de saldo estejam atualizadas
-          if (isAdmin) {
-              fetchMapeamentoContabil();
-          }
+          refetchSaldos();
+          fetchHistoricos();
+          fetchHistoricoPadrao();
       }
-  }, [open, refetchSaldos, fetchMapeamentoContabil, isAdmin]);
+  }, [open, refetchSaldos, fetchHistoricos, fetchHistoricoPadrao]);
 
   useEffect(() => {
     if (open && !loadingContas && contasDestino.length > 0) {
-        // Define a primeira conta como padrão se nenhuma estiver selecionada
         if (!form.getValues('conta_id')) {
             setValue('conta_id', contasDestino[0].id);
         }
@@ -139,8 +165,8 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
     const quitouComPagamentoAtual = novoValorPagoTotal >= parcela.valor_parcela;
     
     // Contas Contábeis Mapeadas
-    const contaRecebimento = isAdmin ? mapeamentoContabil['recebimento'] : null;
-    const contaParcela = isAdmin ? mapeamentoContabil['parcela'] : null;
+    const contaRecebimento = isAdmin ? (await supabase.from('configuracao_contas_receber').select('conta_contabil_id').eq('proprietario_id', ownerId).eq('tipo_registro', 'recebimento').single()).data?.conta_contabil_id : null;
+    const contaParcela = isAdmin ? (await supabase.from('configuracao_contas_receber').select('conta_contabil_id').eq('proprietario_id', ownerId).eq('tipo_registro', 'parcela').single()).data?.conta_contabil_id : null;
     
     // Payload base para recebimentos
     let recebimentoBasePayload;
@@ -159,7 +185,8 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
             valor_recebido: valorRecebido, 
             cliente_id: clienteIdPagador,
             conta_id: values.conta_id,
-            id_conta_contabil: contaRecebimento, // NOVO: Mapeamento para Recebimento
+            id_conta_contabil: contaRecebimento,
+            historico_id: values.historico_id, // NOVO CAMPO
         };
     } else {
         recebimentoBasePayload = { 
@@ -167,7 +194,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
             empresa_id: ownerId, 
             valor_recebido: valorRecebido,
             conta_id: values.conta_id,
-            // id_conta_contabil não é necessário para Cliente/Usuário
+            // historico_id não é necessário para Cliente/Usuário
         };
     }
 
@@ -184,32 +211,29 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
       
       // 2. Lidar com a parcela original
       if (quitouComPagamentoAtual) {
-        // Se quitou, atualiza a parcela para paga
         await supabase.from(tabelaParcelas).update({
           status: 'paga',
           valor_pago: novoValorPagoTotal,
           data_pagamento: values.data_pagamento.toISOString(),
-          ...(isAdmin && { id_conta_contabil: contaParcela }) // NOVO: Mapeamento para Parcela
+          ...(isAdmin && { id_conta_contabil: contaParcela })
         }).eq('id', parcela.id);
       } else { // Pagamento parcial
         if (values.acao_saldo_restante === 'desconto') {
-          // Se for desconto, a parcela é marcada como paga, e o saldo restante é o desconto
           await supabase.from(tabelaParcelas).update({
             status: 'paga',
             valor_pago: novoValorPagoTotal,
             data_pagamento: values.data_pagamento.toISOString(),
             observacao: `Recebido R$ ${valorRecebido.toFixed(2)} com R$ ${saldoRestanteCalculado.toFixed(2)} de desconto.`,
-            ...(isAdmin && { id_conta_contabil: contaParcela }) // NOVO: Mapeamento para Parcela
+            ...(isAdmin && { id_conta_contabil: contaParcela })
           }).eq('id', parcela.id);
           
         } else if (values.acao_saldo_restante === 'reprogramar' || values.acao_saldo_restante === 'parcelar') {
-          // Marca a parcela original como paga (quitada pelo valor recebido + saldo restante tratado)
           await supabase.from(tabelaParcelas).update({
             status: 'paga', 
             valor_pago: novoValorPagoTotal,
             data_pagamento: values.data_pagamento.toISOString(),
             observacao: `Recebido R$ ${valorRecebido.toFixed(2)}. Saldo de R$ ${saldoRestanteCalculado.toFixed(2)} ${values.acao_saldo_restante === 'reprogramar' ? 'reprogramado' : 'parcelado'}.`,
-            ...(isAdmin && { id_conta_contabil: contaParcela }) // NOVO: Mapeamento para Parcela
+            ...(isAdmin && { id_conta_contabil: contaParcela })
           }).eq('id', parcela.id);
 
           const baseParcelaPayload = isAdmin ? { admin_id: ownerId, id_conta_contabil: contaParcela } : { empresa_id: ownerId };
@@ -236,28 +260,36 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
             await supabase.from(tabelaParcelas).insert(novasParcelas);
           }
         } else {
-            // Caso de pagamento parcial sem ação definida (apenas atualiza)
             await supabase.from(tabelaParcelas).update({
                 status: 'parcial',
                 valor_pago: novoValorPagoTotal,
-                ...(isAdmin && { id_conta_contabil: contaParcela }) // NOVO: Mapeamento para Parcela
+                ...(isAdmin && { id_conta_contabil: contaParcela })
             }).eq('id', parcela.id);
         }
       }
       
       // 3. Registrar o Lançamento na conta de Saldo (Movimentação de Caixa/Banco)
-      // O tipo é 'Entrada' porque é um Recebimento
       const lancamentoPayload = {
-          empresa_id: ownerId, // ID do Admin/Empresa
+          empresa_id: ownerId,
           data_movimentacao: values.data_pagamento.toISOString(),
           descricao: `Recebimento Parcela ${parcela.id} - ${values.forma_pagamento}`,
           valor: valorRecebido,
           tipo: 'Entrada',
-          conta_bancaria_id: values.conta_id, // ID da conta de saldo
-          conta_contabil_id: contaRecebimento, // Conta contábil do recebimento (Admin)
+          conta_bancaria_id: values.conta_id,
+          conta_contabil_id: contaRecebimento,
+          historico_id: values.historico_id, // NOVO CAMPO
       };
       
       await supabase.from('lancamentos').insert(lancamentoPayload);
+      
+      // 4. Salvar Histórico Padrão (se marcado)
+      if (isAdmin && values.salvar_como_padrao && values.historico_id) {
+          await supabase.from('configuracao_contas_receber').upsert({
+              proprietario_id: ownerId,
+              tipo_registro: 'recebimento_historico_padrao',
+              conta_contabil_id: values.historico_id,
+          }, { onConflict: 'proprietario_id, tipo_registro' });
+      }
 
 
       showSuccess('Pagamento registrado com sucesso!');
@@ -271,7 +303,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Registrar Pagamento</DialogTitle>
+          <DialogTitle>Registrar Recebimento</DialogTitle>
           <DialogDescription>Saldo devedor da parcela: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(saldoDevedor)}</DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -313,6 +345,57 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
                     </FormItem>
                 )} />
             </div>
+            
+            {/* NOVO CAMPO: Histórico */}
+            {isAdmin && (
+                <div className="space-y-2 pt-2 border-t">
+                    <FormField
+                        control={form.control}
+                        name="historico_id"
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Histórico do Recebimento (Opcional)</FormLabel>
+                                <Select onValueChange={field.onChange} value={field.value || undefined} disabled={loadingHistoricos}>
+                                    <FormControl>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder={loadingHistoricos ? "Carregando Históricos..." : "Selecione o histórico"} />
+                                        </SelectTrigger>
+                                    </FormControl>
+                                    <SelectContent>
+                                        <SelectItem value={null as any}>Nenhum</SelectItem>
+                                        {historicos.map(h => (
+                                            <SelectItem key={h.id} value={h.id}>
+                                                {h.codigo && `[${h.codigo}] `}{h.descricao}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+                    <FormField
+                        control={form.control}
+                        name="salvar_como_padrao"
+                        render={({ field }) => (
+                            <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-3">
+                                <FormControl>
+                                    <Checkbox
+                                        checked={field.value}
+                                        onCheckedChange={field.onChange}
+                                        disabled={!form.watch('historico_id')}
+                                    />
+                                </FormControl>
+                                <div className="space-y-1 leading-none">
+                                    <FormLabel>
+                                        Definir este Histórico como Padrão para Recebimentos
+                                    </FormLabel>
+                                </div>
+                            </FormItem>
+                        )}
+                    />
+                </div>
+            )}
             
             {isPagamentoParcial && (
               <div className="space-y-4 pt-4 border-t">
