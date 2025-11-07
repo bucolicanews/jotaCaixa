@@ -16,19 +16,15 @@ export function usePrint() {
         return;
       }
 
+      const pageSize = orientation === 'landscape' ? 'A4 landscape' : 'A4 portrait';
+
       // Estilos otimizados para impressão A4
       const printStyles = `
         <style>
-          /* Configuração A4 padrão (Retrato) */
+          /* Configuração A4 dinâmica */
           @page {
-            size: A4 portrait;
+            size: ${pageSize};
             margin: 15mm;
-          }
-          
-          /* FORÇA PAISAGEM QUANDO A CLASSE 'landscape' ESTIVER NO BODY */
-          body.landscape @page {
-              size: A4 landscape; 
-              margin: 15mm;
           }
           
           body { 
@@ -111,8 +107,7 @@ export function usePrint() {
         </style>
       `;
       
-      const bodyClass = orientation === 'landscape' ? 'landscape' : '';
-
+      // Removemos a classe 'landscape' do body, pois a orientação é definida no @page
       printWindow.document.write(`
         <!DOCTYPE html>
         <html>
@@ -120,7 +115,7 @@ export function usePrint() {
             <title>${title}</title>
             ${printStyles}
           </head>
-          <body class="${bodyClass}">
+          <body>
             <div class="no-print" style="padding: 20px; text-align: center; background: #ffffe0; border: 1px solid #ccc;">
                 <p style="font-size: 14pt; color: #333;">Documento pronto para impressão. Use <strong>Ctrl+P</strong> (ou Cmd+P) para imprimir.</p>
                 <button onclick="window.print()" style="padding: 10px 20px; margin-top: 10px; cursor: pointer;">Imprimir Agora</button>
