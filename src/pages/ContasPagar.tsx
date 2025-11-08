@@ -34,10 +34,7 @@ const ContasPagar: React.FC = () => {
   const [activeTab, setActiveTab] = useState('sintetico');
   
   // Filtros
-  const [filtroPeriodo, setFiltroPeriodo] = useState<DateRange | undefined>({
-    from: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
-    to: new Date(),
-  });
+  const [filtroPeriodo, setFiltroPeriodo] = useState<DateRange | undefined>(undefined); // ALTERADO: Removido o período inicial
   const [filtroOrigem, setFiltroOrigem] = useState('todos'); // ALTERADO: Padrão 'todos'
   const [filtroStatus, setFiltroStatus] = useState('todos'); // ALTERADO: Padrão 'todos'
   const [filtroTexto, setFiltroTexto] = useState(''); // NOVO ESTADO
