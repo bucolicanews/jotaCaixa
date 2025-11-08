@@ -36,6 +36,8 @@ const GerenciarTags = () => {
   const getEmpresaId = () => {
     if (isCliente) return (perfil as ClienteProfile)?.id;
     if (isUsuario) return (perfil as UsuarioProfile)?.cliente_id;
+    // Se for Admin, o proprietário da tag é o próprio Admin logado.
+    if (isAdmin) return (perfil as any)?.id;
     return null;
   };
   
@@ -129,16 +131,27 @@ const GerenciarTags = () => {
   };
   
   const handleDeleteSelected = async () => {
-      if (selectedIds.length === 0 || !ownerId) return;
+      if (selectedIds.length === 0) {
+          showError('Nenhuma tag selecionada.');
+          return;
+      }
+      
+      // O ownerId é crucial para a RLS. Se não estiver definido, não podemos prosseguir.
+      if (!ownerId) {
+          showError('ID do proprietário não encontrado. Não é possível excluir.');
+          return;
+      }
       
       setIsDeletingBulk(true);
       
       try {
+          // A exclusão deve ser feita com base nos IDs selecionados E no ID do proprietário
+          // para garantir que a RLS seja respeitada.
           const { error } = await supabase
               .from('contrato_tags')
               .delete()
               .in('id', selectedIds)
-              .eq('empresa_id', ownerId); // RLS check
+              .eq('empresa_id', ownerId); 
               
           if (error) throw error;
           
@@ -146,6 +159,7 @@ const GerenciarTags = () => {
           setSelectedIds([]);
           buscarTags();
       } catch (error: any) {
+          console.error('Erro ao excluir tags em massa:', error);
           showError('Falha ao excluir tags: ' + error.message);
       } finally {
           setIsDeletingBulk(false);
