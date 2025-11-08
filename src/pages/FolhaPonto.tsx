@@ -8,15 +8,15 @@ import { supabase } from '@/integrations/supabase/client';
 import { showError } from '@/utils/toast';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import DetalheFolhaPonto from '@/components/DetalheFolhaPonto';
+import DetalheFolhaPonto from '@/components/ponto/DetalheFolhaPonto';
 import { MonthPicker } from '@/components/MonthPicker';
 import GerenciarFaltas from '@/components/formularios/GerenciarFaltas';
-import AjustarPontoDialog from '@/components/AjustarPontoDialog';
+import AjustarPontoDialog from '@/components/ponto/AjustarPontoDialog';
 import { RegistroPonto, Ferias } from '@/types/ponto';
 import GerenciarFolgaTrabalhada from '@/components/formularios/GerenciarFolgaTrabalhada';
 import { Button } from '@/components/ui/button';
 import { usePrint } from '@/hooks/use-print';
-import FolhaPontoPrint from '@/components/FolhaPontoPrint';
+import FolhaPontoPrint from '@/components/ponto/FolhaPontoPrint';
 import ReactDOMServer from 'react-dom/server';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 

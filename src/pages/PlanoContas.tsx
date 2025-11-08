@@ -10,7 +10,7 @@ import { showError, showSuccess } from '@/utils/toast';
 import { PlanoContas } from '@/types/plano-contas';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import FormPlanoContas from '@/components/formularios/FormPlanoContas';
-import ImportarPlanoContas from '@/components/ImportarPlanoContas';
+import ImportarPlanoContas from '@/components/contabilidade/ImportarPlanoContas';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';

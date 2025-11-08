@@ -7,7 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { showError } from '@/utils/toast';
 import { UsuarioProfile } from '@/types/usuario';
 import DetalheFolhaPonto from './DetalheFolhaPonto';
-import { MonthPicker } from './MonthPicker';
+import { MonthPicker } from '@/components/MonthPicker';
 import { RegistroPonto, Ferias } from '@/types/ponto'; // Importando a interface centralizada
 
 const DetalheProprioPonto: React.FC = () => {

@@ -1,5 +1,5 @@
 import LayoutPrincipal from '@/components/LayoutPrincipal';
-import RegistroPonto from '@/components/RegistroPonto';
+import RegistroPonto from '@/components/ponto/RegistroPonto';
 import { useSessao } from '@/hooks/use-sessao';
 import { UsuarioProfile } from '@/types/usuario';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';

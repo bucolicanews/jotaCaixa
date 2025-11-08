@@ -9,7 +9,7 @@ import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { usePrint } from '@/hooks/use-print';
 import ReactDOMServer from 'react-dom/server';
-import { Badge } from './ui/badge';
+import { Badge } from '../ui/badge';
 
 interface HistoricoConciliacaoDialogProps {
   historico: ConciliacaoHistorico | null;

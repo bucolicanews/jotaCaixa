@@ -7,7 +7,7 @@ import { showError, showSuccess } from '@/utils/toast';
 import { useSessao } from '@/hooks/use-sessao';
 import { Separator } from '@/components/ui/separator';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import CameraCapture from './CameraCapture';
+import CameraCapture from '../CameraCapture';
 import { UsuarioProfile } from '@/types/usuario';
 import usePontoStatus from '@/hooks/use-ponto-status';
 import { format, parseISO } from 'date-fns';
