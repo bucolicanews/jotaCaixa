@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Loader2, Zap, Share2 } from 'lucide-react';
+import { Loader2, Zap, Share2, DollarSign } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { ClienteProfile } from '@/types/usuario';
@@ -95,6 +95,11 @@ const TrialButton: React.FC<TrialButtonProps> = ({ clienteProfile, onTrialActiva
       
       setShareLoading(false);
   };
+  
+  const handleGoToCheckout = () => {
+      // Redireciona para a página de vendas (seleção de planos/checkout)
+      navigate('/vendas');
+  };
 
   return (
     <div className="space-y-4 pt-6 border-t">
@@ -110,10 +115,20 @@ const TrialButton: React.FC<TrialButtonProps> = ({ clienteProfile, onTrialActiva
       </Button>
       
       <Button 
+        onClick={handleGoToCheckout} 
+        variant="default" 
+        className="w-full bg-primary hover:bg-primary/90"
+        disabled={loading}
+      >
+        <DollarSign className="mr-2 h-4 w-4" />
+        Aderir aos Planos (Checkout)
+      </Button>
+      
+      <Button 
         onClick={handleShareBonus} 
         variant="outline" 
         className="w-full"
-        disabled={shareLoading}
+        disabled={shareLoading || loading}
       >
         {shareLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Share2 className="mr-2 h-4 w-4" />}
         Compartilhe e Ganhe 20 Dias Grátis
