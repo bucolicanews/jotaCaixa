@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Confirmação de Cadastro</title>
+    <style>
+        /* Reset básico */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 0;
+            -webkit-text-size-adjust: 100%;
+            -ms-text-size-adjust: 100%;
+        }
+        /* Container principal */
+        .container {
+            max-width: 600px;
+            margin: 20px auto;
+            background-color: #ffffff;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        }
+        /* Cabeçalho */
+        .header {
+            background-color: #2563eb; /* Azul primário */
+            color: #ffffff;
+            padding: 30px 20px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+            font-weight: 600;
+        }
+        /* Conteúdo */
+        .content {
+            padding: 30px 20px;
+            color: #333333;
+            line-height: 1.6;
+        }
+        .content p {
+            margin-top: 0;
+            margin-bottom: 20px;
+            font-size: 16px;
+        }
+        /* Botão de Ação */
+        .button-container {
+            text-align: center;
+            margin: 30px 0;
+        }
+        .button {
+            display: inline-block;
+            padding: 12px 25px;
+            background-color: #2563eb; /* Azul primário */
+            color: #ffffff;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: bold;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+        .button:hover {
+            background-color: #1d4ed8; /* Azul mais escuro no hover */
+        }
+        /* Rodapé */
+        .footer {
+            background-color: #f9f9f9;
+            color: #999999;
+            padding: 20px;
+            text-align: center;
+            font-size: 12px;
+            border-top: 1px solid #eeeeee;
+        }
+        .footer a {
+            color: #999999;
+            text-decoration: underline;
+        }
+        /* Responsividade */
+        @media only screen and (max-width: 600px) {
+            .container {
+                width: 100% !important;
+                margin: 0 !important;
+                border-radius: 0 !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Confirmação de Cadastro</h1>
+        </div>
+        <div class="content">
+            <p>Olá,</p>
+            <p>Obrigado por se cadastrar em nosso sistema de Fluxo de Caixa! Para ativar sua conta e começar a gerenciar suas finanças, por favor, confirme seu endereço de e-mail clicando no botão abaixo:</p>
+
+            <div class="button-container">
+                <a href="{{ .ConfirmationURL }}" class="button">Confirmar Meu E-mail</a>
+            </div>
+
+            <p>Se o botão acima não funcionar, você pode copiar e colar o link abaixo diretamente no seu navegador:</p>
+            <p style="font-size: 12px; word-break: break-all;"><a href="{{ .ConfirmationURL }}">{{ .ConfirmationURL }}</a></p>
+
+            <p>Se você não solicitou este cadastro, por favor, ignore este e-mail.</p>
+            <p>Atenciosamente,<br>A Equipe de Suporte</p>
+        </div>
+        <div class="footer">
+            <p>&copy; {{ .SiteURL }} | Todos os direitos reservados.</p>
+        </div>
+    </div>
+</body>
+</html>
