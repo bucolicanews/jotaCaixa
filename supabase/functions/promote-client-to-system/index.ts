@@ -31,55 +31,59 @@ serve(async (req: Request) => {
       { auth: { persistSession: false } }
     );
     
-    // 1. Criar o usuário no Auth (sem enviar email de confirmação)
-    const tempPassword = crypto.randomUUID(); // Senha temporária forte
-    
+    let newUserId: string;
+    let tempPassword = crypto.randomUUID();
+
+    // 1. Tentar criar o usuário no Auth
     const { data: userData, error: authError } = await supabaseService.auth.admin.createUser({
         email: email,
         password: tempPassword,
-        email_confirm: true, // Marca o email como confirmado
+        email_confirm: true,
         user_metadata: { 
             role: 'Cliente', 
             nome: nome, 
-            aprovado: true, // Já é aprovado
-            // Não passamos plano_id ou data_fim_acesso aqui, pois o Admin/Cliente deve definir isso depois.
+            aprovado: true,
         }
     });
 
     if (authError) {
-        // Se o usuário já existe, tentamos prosseguir se for um erro de duplicidade
+        // Se o erro for de usuário já registrado, tentamos buscar o ID existente
         if (authError.message.includes('already registered')) {
-            // Se já existe, não podemos criar, mas podemos tentar atualizar o perfil na tbl_clientes
-            // No entanto, para simplificar, vamos retornar um erro claro.
-            return new Response(JSON.stringify({ error: 'Usuário já existe no sistema de autenticação. Use a função de edição de perfil.' }), {
-                status: 409,
+            const { data: existingUser, error: fetchUserError } = await supabaseService.auth.admin.getUserByEmail(email);
+            if (fetchUserError || !existingUser?.user) {
+                console.error('Auth Error: User exists but cannot be fetched.', fetchUserError);
+                return new Response(JSON.stringify({ error: 'Usuário já existe, mas falha ao obter ID.' }), {
+                    status: 500,
+                    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                });
+            }
+            newUserId = existingUser.user.id;
+        } else {
+            console.error('Auth Error:', authError);
+            return new Response(JSON.stringify({ error: 'Falha ao criar usuário no Auth: ' + authError.message }), {
+                status: 500,
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             });
         }
-        console.error('Auth Error:', authError);
-        return new Response(JSON.stringify({ error: 'Falha ao criar usuário no Auth: ' + authError.message }), {
-            status: 500,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
+    } else {
+        newUserId = userData.user.id;
     }
     
-    const newUserId = userData.user.id;
-    
-    // 2. Inserir/Atualizar o perfil na tbl_clientes (o trigger route_new_user já deve ter feito isso,
-    // mas fazemos um upsert para garantir que o ID do cliente CR seja o mesmo ID do usuário Auth)
+    // 2. Inserir/Atualizar o perfil na tbl_clientes
     const dataToUpsert = {
         id: newUserId,
-        admin_id: proprietarioId, // O Admin/Cliente que promoveu
+        admin_id: proprietarioId,
         nome: nome,
         email: email,
         aprovado: true,
         limite_usuarios: 5,
+        cliente_id_promovido: clienteId, // NOVO CAMPO
         // Permissões e plano serão definidos pelo Admin/Cliente no frontend
     };
     
     const { error: upsertError } = await supabaseService
         .from('tbl_clientes')
-        .upsert(dataToUpsert);
+        .upsert(dataToUpsert, { onConflict: 'id' });
         
     if (upsertError) {
         console.error('Upsert Error:', upsertError);
@@ -89,11 +93,9 @@ serve(async (req: Request) => {
         });
     }
     
-    // 3. Deletar o registro antigo da tabela 'clientes' (CR) se o ID for o mesmo
-    // Isso é crucial para evitar duplicidade de IDs se o cliente CR foi criado com o mesmo ID do Auth.
-    // No entanto, como o cliente CR pode ter um ID diferente, vamos apenas garantir que o cliente CR
-    // que foi promovido tenha seu ID atualizado para o novo ID do Auth, se necessário.
-    // Para simplificar, vamos apenas retornar o sucesso. O Admin pode deletar o registro CR antigo se for o caso.
+    // 3. Enviar link de redefinição de senha (para que o cliente possa definir a senha)
+    // Nota: Isso deve ser feito no frontend, mas a Edge Function pode retornar o ID para que o frontend
+    // possa acionar o fluxo de convite/reenvio de link.
 
     return new Response(JSON.stringify({ success: true, userId: newUserId }), {
       status: 200,

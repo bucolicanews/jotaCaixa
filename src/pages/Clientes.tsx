@@ -3,7 +3,7 @@ import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Edit, Trash2, PlusCircle, Filter, Building2, CheckCircle, Users as UsersIcon, Mail, PowerOff, Printer, ArrowRight, Check, LogIn } from 'lucide-react';
+import { Loader2, Edit, Trash2, PlusCircle, Filter, Building2, CheckCircle, Users as UsersIcon, Mail, PowerOff, Printer, ArrowRight, LogIn } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
@@ -65,7 +65,7 @@ const ClientesPage = () => {
   const [dialogAvulsaAberto, setDialogAvulsaAberto] = useState(false); // Novo estado para dialog avulsa
   
   // NOVO ESTADO: Rastreia clientes promovidos com sucesso na sessão atual
-  const [promotedClients, setPromotedClients] = useState<Set<string>>(new Set());
+  // const [promotedClients, setPromotedClients] = useState<Set<string>>(new Set()); // REMOVIDO TS6133
   
   // NOVO ESTADO
   const [planosMap, setPlanosMap] = useState<Record<string, string>>({});
@@ -191,26 +191,43 @@ const ClientesPage = () => {
       // Filtra duplicatas visuais (mantém apenas o primeiro registro com o mesmo email)
       const uniqueEmails = new Set<string>();
       fetchedData = fetchedData.filter(c => {
-          if (c.email && uniqueEmails.has(c.email)) {
+          // Se o cliente CR tem um ID que corresponde a um cliente do sistema, ele não é duplicata
+          if (systemClientsMap[c.id]) return true; 
+          
+          // Se o email for nulo, não podemos verificar duplicidade por email
+          if (!c.email) return true; 
+          
+          // Se o email já foi visto, e não é um cliente do sistema, é duplicata
+          if (uniqueEmails.has(c.email)) {
               return false;
           }
-          if (c.email) {
-              uniqueEmails.add(c.email);
-          }
+          uniqueEmails.add(c.email);
           return true;
       });
       
       // 2.1. Adicionar status do sistema
       const clientesComStatus: ClienteCRComStatus[] = fetchedData.map(c => {
+          // A verificação agora usa o ID do cliente CR para buscar o cliente do sistema
           const systemClient = systemClientsMap[c.id];
+          
+          // Se o cliente CR tem um email, verificamos se existe um cliente do sistema com o mesmo email
+          let systemClientByEmail: EmpresaSistema | undefined;
+          if (c.email) {
+              systemClientByEmail = systemClientsList.find(e => e.email === c.email);
+          }
+          
+          // O cliente é considerado "do sistema" se o ID for o mesmo OU se o email for o mesmo
+          const isSystemClient = !!systemClient || !!systemClientByEmail;
+          const finalSystemClient = systemClient || systemClientByEmail;
+          
           let systemStatus: ClienteCRComStatus['system_client_status'] = undefined;
           
-          if (systemClient) {
-              const dataFimAcesso = systemClient.data_fim_acesso ? parseISO(systemClient.data_fim_acesso) : null;
+          if (finalSystemClient) {
+              const dataFimAcesso = finalSystemClient.data_fim_acesso ? parseISO(finalSystemClient.data_fim_acesso) : null;
               const isAtivo = dataFimAcesso && isPast(new Date()) === false;
-              const isBlocked = dataFimAcesso === null && systemClient.aprovado;
+              const isBlocked = dataFimAcesso === null && finalSystemClient.aprovado;
               
-              if (!systemClient.aprovado) {
+              if (!finalSystemClient.aprovado) {
                   systemStatus = 'Pendente';
               } else if (isBlocked) {
                   systemStatus = 'Bloqueado';
@@ -223,7 +240,7 @@ const ClientesPage = () => {
           
           return {
               ...c,
-              is_system_client: !!systemClient,
+              is_system_client: isSystemClient,
               system_client_status: systemStatus,
           };
       });
@@ -430,7 +447,7 @@ const ClientesPage = () => {
         showSuccess(`Cliente ${cliente.nome} promovido para Cliente do Sistema com sucesso!`);
         
         // Adiciona o ID do cliente ao estado de promovidos
-        setPromotedClients(prev => new Set(prev).add(cliente.id));
+        // setPromotedClients(prev => new Set(prev).add(cliente.id)); // REMOVIDO TS6133
         
         // 2. Re-busca os dados para atualizar a lista (o cliente promovido deve sumir desta lista)
         buscarDados();
@@ -576,8 +593,8 @@ const ClientesPage = () => {
                     </TableRow>
                 ) : (
                     clientesCR.map((cliente) => {
-                        const isPromoted = promotedClients.has(cliente.id);
-                        const isSystemClient = cliente.is_system_client || isPromoted;
+                        // Verifica se o cliente CR já é um cliente do sistema (tbl_clientes)
+                        const isSystemClient = cliente.is_system_client;
                         const systemStatus = cliente.system_client_status;
                         
                         const statusBadge = systemStatus ? (
@@ -601,7 +618,7 @@ const ClientesPage = () => {
                                 <TableCell className="text-right">
                                     <div className="flex justify-end space-x-1">
                                         
-                                        {/* BOTÃO PROMOVER PARA SISTEMA (Sem Convite) */}
+                                        {/* BOTÃO PROMOVER PARA SISTEMA (Sem Convite) - SÓ APARECE SE NÃO FOR CLIENTE DO SISTEMA */}
                                         {(isAdmin || isClient) && cliente.email && !isSystemClient && (
                                             <Button 
                                                 variant="default" 
@@ -609,39 +626,40 @@ const ClientesPage = () => {
                                                 onClick={() => handlePromoteToSystem(cliente)}
                                                 title="Promover para Cliente do Sistema (Sem Convite de Login)"
                                                 disabled={isActionDisabled}
-                                                className={cn("h-8", isPromoted && "bg-green-600 hover:bg-green-700")}
+                                                className="h-8"
                                             >
-                                                {isPromoted ? <Check className="w-4 h-4 mr-1" /> : <ArrowRight className="w-4 h-4 mr-1" />}
-                                                {isPromoted ? 'Promovido' : 'Promover'}
+                                                <ArrowRight className="w-4 h-4 mr-1" /> Promover
                                             </Button>
                                         )}
                                         
-                                        {/* BOTÃO CONVITE / ACESSO */}
-                                        {isAdmin && cliente.email && (
-                                            isSystemClient ? (
-                                                <Button 
-                                                    variant="secondary" 
-                                                    size="sm" 
-                                                    onClick={() => handleResendInvite(cliente.email!, cliente.nome)}
-                                                    title="Reenviar Link de Acesso"
-                                                    disabled={carregandoDados}
-                                                    className="h-8"
-                                                >
-                                                    <LogIn className="w-4 h-4 mr-1" /> Acesso
-                                                </Button>
-                                            ) : (
-                                                <Button 
-                                                    variant="secondary" 
-                                                    size="sm" 
-                                                    onClick={() => handleSendInvite(cliente)}
-                                                    title="Enviar Convite de Acesso (Cria perfil no sistema)"
-                                                    disabled={isActionDisabled}
-                                                    className="h-8"
-                                                >
-                                                    <Mail className="w-4 h-4 mr-1" /> Convite
-                                                </Button>
-                                            )
+                                        {/* BOTÃO CONVITE / ACESSO - SÓ APARECE SE FOR CLIENTE DO SISTEMA */}
+                                        {isAdmin && cliente.email && isSystemClient && (
+                                            <Button 
+                                                variant="secondary" 
+                                                size="sm" 
+                                                onClick={() => handleResendInvite(cliente.email!, cliente.nome)}
+                                                title="Reenviar Link de Acesso"
+                                                disabled={carregandoDados}
+                                                className="h-8"
+                                            >
+                                                <LogIn className="w-4 h-4 mr-1" /> Acesso
+                                            </Button>
                                         )}
+                                        
+                                        {/* BOTÃO CONVITE (Para clientes CR que não são do sistema) */}
+                                        {isAdmin && cliente.email && !isSystemClient && (
+                                            <Button 
+                                                variant="secondary" 
+                                                size="sm" 
+                                                onClick={() => handleSendInvite(cliente)}
+                                                title="Enviar Convite de Acesso (Cria perfil no sistema)"
+                                                disabled={isActionDisabled}
+                                                className="h-8"
+                                            >
+                                                <Mail className="w-4 h-4 mr-1" /> Convite
+                                            </Button>
+                                        )}
+                                        
                                         {/* BOTÃO DE EDIÇÃO */}
                                         <Button variant="ghost" size="icon" onClick={() => handleEditCR(cliente)}>
                                             <Edit className="w-4 h-4" />
