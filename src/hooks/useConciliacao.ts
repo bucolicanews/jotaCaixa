@@ -89,14 +89,14 @@ export function useConciliacao(): ConciliacaoHook {
     const [historicoSelecionado, setHistoricoSelecionado] = useState<ConciliacaoHistorico | null>(null);
 
     const contaSelecionada = useMemo(() => contas.find(c => c.id === contaSelecionadaId), [contas, contaSelecionadaId]);
-    const proprietarioDaConfiguracao = contaSelecionada?.empresa_id;
+    const proprietarioDaConfiguracao = contaSelecionada?.proprietario_id;
 
     // --- Funções de Busca de Dados ---
 
     const fetchContas = useCallback(async () => {
         if (!usuario?.id) return;
         setLoading(true);
-        const { data, error } = await supabase.from('saldo_contas').select('*, conta_contabil_id').eq('empresa_id', usuario.id);
+        const { data, error } = await supabase.from('saldo_contas').select('*, conta_contabil_id').eq('proprietario_id', usuario.id);
         if (error) showError('Erro ao carregar contas: ' + error.message);
         else setContas(data as SaldoConta[]);
         setLoading(false);

@@ -87,7 +87,7 @@ const FormSaldoConta: React.FC<FormSaldoContaProps> = ({ contaInicial, onSaveCom
     }
     
     const dataToSave = {
-      empresa_id: empresaId,
+      proprietario_id: empresaId,
       nome: values.nome,
       tipo_saldo: values.tipo_saldo,
       saldo_inicial: values.saldo_inicial,

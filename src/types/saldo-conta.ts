@@ -1,6 +1,6 @@
 export interface SaldoConta {
   id: string;
-  empresa_id: string;
+  proprietario_id: string;
   nome: string; // Nome da Conta/Caixa
   conta_contabil_id: string | null; // Referência ao Plano de Contas
   tipo_saldo: 'Credito' | 'Debito' | 'Receita' | 'Despesa'; // Tipo de saldo (Ativo/Passivo)

@@ -41,7 +41,7 @@ const useSaldoContaCalculado = (filtroTipoSaldo: 'todos' | 'Credito' | 'Debito' 
       let contasQuery = supabase
         .from('saldo_contas')
         .select(`*, plano_contas ( Conta, Descricao )`)
-        .eq('empresa_id', targetEmpresaId);
+        .eq('proprietario_id', targetEmpresaId);
         
       // Aplicar Filtros de UI
       if (filtroTipoSaldo !== 'todos') {

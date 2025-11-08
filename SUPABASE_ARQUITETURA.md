@@ -178,7 +178,7 @@ CREATE POLICY "Allow authenticated users to manage their own plan of accounts" O
 -- Tabela de Contas/Caixas (Saldo Contas)
 CREATE TABLE public.saldo_contas (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  empresa_id UUID,
+  proprietario_id UUID, -- RENOMEADO DE empresa_id PARA proprietario_id
   nome TEXT,
   saldo_inicial NUMERIC DEFAULT 0,
   conta_contabil_id UUID REFERENCES public.plano_contas(id) ON DELETE SET NULL,
@@ -188,8 +188,9 @@ CREATE TABLE public.saldo_contas (
   atualizado_em TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 ALTER TABLE public.saldo_contas ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Empresas podem gerenciar seus saldos de contas" ON public.saldo_contas FOR ALL TO authenticated USING (empresa_id IN ( SELECT tbl_clientes.id FROM tbl_clientes WHERE (tbl_clientes.id = auth.uid()) UNION SELECT tbl_usuarios.cliente_id FROM tbl_usuarios WHERE ((tbl_usuarios.id = auth.uid()) AND (tbl_usuarios.cliente_id IS NOT NULL))));
-CREATE POLICY "Admin pode gerenciar suas contas" ON public.saldo_contas FOR ALL TO authenticated USING (auth.uid() = empresa_id);
+-- Políticas atualizadas para usar proprietario_id
+CREATE POLICY "Empresas podem gerenciar seus saldos de contas" ON public.saldo_contas FOR ALL TO authenticated USING (proprietario_id IN ( SELECT tbl_clientes.id FROM tbl_clientes WHERE (tbl_clientes.id = auth.uid()) UNION SELECT tbl_usuarios.cliente_id FROM tbl_usuarios WHERE ((tbl_usuarios.id = auth.uid()) AND (tbl_usuarios.cliente_id IS NOT NULL)))) WITH CHECK (proprietario_id IN ( SELECT tbl_clientes.id FROM tbl_clientes WHERE (tbl_clientes.id = auth.uid()) UNION SELECT tbl_usuarios.cliente_id FROM tbl_usuarios WHERE ((tbl_usuarios.id = auth.uid()) AND (tbl_usuarios.cliente_id IS NOT NULL))));
+CREATE POLICY "Admin pode gerenciar suas contas" ON public.saldo_contas FOR ALL TO authenticated USING (auth.uid() = proprietario_id) WITH CHECK (auth.uid() = proprietario_id);
 
 
 -- Tabela de Lançamentos (Movimentação de Saldo)
@@ -423,7 +424,7 @@ BEGIN
   IF v_conta_contabil_a_receber IS NULL OR v_conta_sintetica_stripe_id IS NULL THEN RAISE EXCEPTION 'Configurações contábeis/Stripe incompletas.'; END IF;
 
   -- 3. Busca a saldo_conta do Admin que referencia a conta sintética configurada no Stripe
-  SELECT id INTO v_conta_destino_id FROM public.saldo_contas WHERE empresa_id = v_admin_id AND conta_contabil_id = v_conta_sintetica_stripe_id LIMIT 1;
+  SELECT id INTO v_conta_destino_id FROM public.saldo_contas WHERE proprietario_id = v_admin_id AND conta_contabil_id = v_conta_sintetica_stripe_id LIMIT 1;
   IF v_conta_destino_id IS NULL THEN RAISE EXCEPTION 'Nenhuma conta de saldo (Stripe/Banco) encontrada para o Admin.'; END IF;
 
   -- 4. Busca o preço e as PERMISSÕES do plano
@@ -485,73 +486,3 @@ BEGIN
 
 END;
 $function$;
-```
-
-### 2. Atualizando `README.md`
-
-<dyad-write path="README.md" description="Atualizando o README com o resumo das funcionalidades e a arquitetura.">
-# Fluxo de Caixa - Sistema de Gestão Financeira (v2.0)
-
-# PROXIMO PASSO
-
-- VERIFICAR CONTAS APAGAR
-
-Este é um sistema de gestão financeira e RH multi-inquilino (multi-tenant) construído com React, TypeScript e Supabase.
-
-## 🚀 Novas Funcionalidades e Módulos
-
-A versão 2.0 introduz módulos robustos de RH e Contratos, além de um fluxo completo de vendas e gestão de assinaturas via Stripe.
-
-### 1. Módulo de Assinatura e Faturamento (Stripe)
-
-Implementação completa do ciclo de vida da assinatura, desde a adesão até o faturamento recorrente.
-
-*   **Fluxo de Vendas (`/vendas`):** Permite a adesão a planos (PF/PJ) e inicia o Trial de 7 ou 30 dias.
-*   **Checkout Stripe (Edge Function):** Utiliza a função `create-checkout-session` para gerar sessões de pagamento único (Edge Function) e registrar o pagamento inicial.
-*   **Ativação de Assinatura (RPC `activate_subscription`):** Função de banco de dados que, após o pagamento, atualiza o `plano_id` e a `data_fim_acesso` do cliente (30 dias de renovação) e gera os registros de faturamento do Admin.
-*   **Renovação (`/renovacao`):** Permite que o cliente pague a próxima mensalidade pendente, atualizando o plano e estendendo o acesso por mais 30 dias via RPC `manual_subscription_renewal`.
-
-### 2. Módulo de Ponto Eletrônico e Folha de Ponto
-
-Sistema completo para registro de ponto por funcionários e acompanhamento por gestores.
-
-*   **Registro de Ponto (`/ponto-eletronico`):** Permite que o usuário (Funcionário) registre Entrada/Saída com captura de selfie e geolocalização.
-*   **Folha de Ponto (`/folha-ponto`):** Interface de gestão para Clientes/Admin, permitindo:
-    *   Visualização detalhada da jornada mensal (horas trabalhadas, saldo, horas extras).
-    *   Ajuste manual de registros de Entrada/Saída.
-    *   Gerenciamento de Faltas (Justificadas/Injustificadas) e Abonos (4h, 6h, 8h).
-    *   Gestão de Folgas Trabalhadas (Compensação ou Pagamento Extra 100%).
-
-### 3. Módulo de Contratos
-
-Criação, gestão e preenchimento de contratos dinâmicos.
-
-*   **Gerenciamento de Tags (`/contratos/tags`):** Criação de tags dinâmicas customizadas.
-*   **Gerenciamento de Modelos (`/contratos/modelos`):** Criação e importação de templates de contrato (HTML ou Texto Simples).
-*   **Geração de Contrato (`/contratos/preencher/:modeloId`):** Fluxo para selecionar um cliente, preencher tags customizadas e dados financeiros (valor, parcelamento), renderizar o contrato e gerar as Contas a Receber correspondentes.
-*   **Assinatura Eletrônica (`/assinar-contrato/:id`):** Fluxo externo para assinatura com selfie e nome completo.
-
-### 4. Módulo de Contabilidade e Exportação
-
-*   **Plano de Contas (`/plano-contas`):** Cadastro e mapeamento de contas de saldo e resultado.
-*   **Históricos (`/historicos`):** Cadastro de históricos para lançamentos.
-*   **Exportação Contábil (`/exportar`):** Exportação de lançamentos no formato de partidas dobradas (Débito/Crédito) para sistemas contábeis (ex: Calima).
-
----
-
-## 🗄️ Arquitetura do Banco de Dados (Supabase/PostgreSQL)
-
-Consulte o arquivo `SUPABASE_ARQUITETURA.md` para o SQL completo de criação de tabelas, funções RPC e políticas RLS.
-
-### RLS e Multi-Tenancy
-
-As políticas de RLS garantem a segregação de dados:
-
-| Tabela | Proprietário | Acesso de Usuário (Funcionário) |
-| :--- | :--- | :--- |
-| `tbl_clientes` | Admin | Leitura (apenas da sua empresa) |
-| `tbl_usuarios` | Cliente | Leitura/Escrita (apenas seus funcionários) |
-| `clientes` (CR) | Cliente | Leitura/Escrita (apenas seus clientes) |
-| `registros_ponto` | Cliente | Leitura/Escrita (apenas seus registros) |
-| `lancamentos` | Cliente/Admin | Leitura/Escrita (apenas seus lançamentos) |
-| `admin_contas_receber` | Admin | Leitura (apenas seus registros como pagador) |
