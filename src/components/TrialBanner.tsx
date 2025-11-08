@@ -59,16 +59,15 @@ const TrialBanner: React.FC = () => {
         return null; 
     }
     
-    // Lógica de Trial:
-    // 1. Se o preço for zero, é um plano de teste/gratuito.
-    // 2. Se o preço for maior que zero, só exibe o banner se o período de acesso
-    //    for menor que 30 dias (indicando o período de trial inicial).
-    
+    // Lógica de Trial/Alerta:
+    // 1. Calcula quantos dias se passaram desde a criação do perfil.
     const diasDesdeCriacao = differenceInDays(new Date(), parseISO(clienteProfile.criado_em));
-    const isInitialTrial = diasDesdeCriacao <= 30; // Considera os primeiros 30 dias como trial
     
-    // Se o plano for pago E o período de trial inicial já passou, não exibe o banner.
-    if (planoInfo.preco_mensal > 0 && !isInitialTrial) {
+    // 2. Determina se o cliente está no PRIMEIRO ciclo (30 dias após a criação).
+    const isInitialCycle = diasDesdeCriacao <= 30; 
+    
+    // 3. Se o plano é pago E já passou do primeiro ciclo, não exibe o banner.
+    if (planoInfo.preco_mensal > 0 && !isInitialCycle) {
         return null;
     }
 
@@ -78,10 +77,11 @@ const TrialBanner: React.FC = () => {
     let message: string;
 
     if (planoInfo.preco_mensal > 0) {
-        // Cenário 1: Plano pago (Mensagem de cobrança futura)
-        message = `Aproveite seu teste gratuito com acesso completo até <span class="font-bold">${dataCobranca}</span>! Depois, o plano <span class="font-bold">${planoInfo.nome}</span> será ativado e a cobrança de <span class="font-bold">${precoFormatado}</span> será aplicada a partir desta data.`;
+        // Cenário 1: Plano pago, mas ainda no ciclo inicial (Trial de 7 dias ou primeiro mês pago)
+        // A mensagem deve ser de alerta de cobrança futura, mas sem a palavra "gratuito" se o preço for > 0.
+        message = `Seu plano <span class="font-bold">${planoInfo.nome}</span> está ativo. A próxima cobrança de <span class="font-bold">${precoFormatado}</span> será aplicada em <span class="font-bold">${dataCobranca}</span>.`;
     } else {
-        // Cenário 2: Plano de teste (Preço zero, usa a descrição do plano)
+        // Cenário 2: Plano gratuito (Preço zero)
         message = `Aproveite seu teste gratuito com acesso completo até <span class="font-bold">${dataCobranca}</span>! ${planoInfo.descricao || 'O acesso será desativado após esta data.'}`;
     }
 
