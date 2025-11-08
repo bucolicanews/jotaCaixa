@@ -32,10 +32,11 @@ const SelecaoPerfil: React.FC = () => {
   const buscarPlanos = useCallback(async () => {
     setCarregandoPlanos(true);
     
-    // Busca todos os planos e ordena por preço
+    // Busca apenas planos visíveis para vendas
     const { data, error } = await supabase
       .from('planos')
       .select('*')
+      .eq('visivel_vendas', true) // FILTRO ADICIONADO
       .order('preco_mensal', { ascending: true });
 
     if (error) {

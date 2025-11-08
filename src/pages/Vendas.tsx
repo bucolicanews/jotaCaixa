@@ -34,6 +34,7 @@ const Vendas: React.FC = () => {
     const { data, error } = await supabase
       .from('planos')
       .select('*')
+      .eq('visivel_vendas', true) // FILTRO ADICIONADO
       .order('preco_mensal', { ascending: true });
 
     if (error) {

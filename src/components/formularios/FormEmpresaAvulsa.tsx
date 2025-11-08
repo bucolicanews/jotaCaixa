@@ -53,6 +53,7 @@ const FormEmpresaAvulsa: React.FC<FormEmpresaAvulsaProps> = ({ onSaveComplete })
 
   const fetchPlanos = useCallback(async () => {
     setLoadingPlanos(true);
+    // REMOVIDO FILTRO: Busca todos os planos, incluindo os internos
     const { data, error } = await supabase
       .from('planos')
       .select('*')
@@ -222,7 +223,11 @@ const FormEmpresaAvulsa: React.FC<FormEmpresaAvulsaProps> = ({ onSaveComplete })
                             </FormControl>
                             <SelectContent>
                                 {planos.map(p => (
-                                    <SelectItem key={p.id} value={p.id}>{p.nome} ({p.preco_mensal > 0 ? formatCurrency(p.preco_mensal) : 'Grátis'})</SelectItem>
+                                    <SelectItem key={p.id} value={p.id}>
+                                        {p.nome} 
+                                        {p.preco_mensal > 0 ? ` (${formatCurrency(p.preco_mensal)})` : ' (Grátis)'}
+                                        {!p.visivel_vendas && ' (Interno)'} {/* SINALIZAÇÃO ADICIONADA */}
+                                    </SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>

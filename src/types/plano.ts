@@ -6,4 +6,5 @@ export interface Plano {
   permissoes: Record<string, boolean>;
   tipo_cliente: 'PF' | 'PJ';
   criado_em: string;
+  visivel_vendas: boolean;
 }
