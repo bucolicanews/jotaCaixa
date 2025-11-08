@@ -116,7 +116,7 @@ const TrialButton: React.FC<TrialButtonProps> = ({ clienteProfile, onTrialActiva
       
       <Button 
         onClick={handleGoToCheckout} 
-        variant="default" 
+        // Removendo variant="default" e confiando no className para a cor primária
         className="w-full bg-primary hover:bg-primary/90"
         disabled={loading}
       >
