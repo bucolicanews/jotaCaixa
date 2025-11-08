@@ -693,7 +693,7 @@ const ClientesPage = () => {
                     </CardContent>
                 </Card>
                 <Card className="mt-4">
-                    <CardHeader><CardTitle className="text-xl">Clientes Diretos/Contratos Cadastrados ({clientesCR.length})</CardTitle></CardHeader>
+                    <CardHeader><CardTitle className="text-xl">Clientes Diretos / Contratos Cadastrados ({clientesCR.length})</CardTitle></CardHeader>
                     <CardContent>{renderClientesCRTable()}</CardContent>
                 </Card>
             </TabsContent>
@@ -741,7 +741,7 @@ const ClientesPage = () => {
                     </TabsContent>
                     <TabsContent value="avulsos" className="mt-4">
                         <Card>
-                            <CardHeader><CardTitle className="text-xl">Empresas Avulsas ({empresasAvulsas.length})</CardTitle></CardHeader>
+                            <CardHeader><CardTitle className="text-xl">Clientes do Sistema Avulsos ({empresasAvulsas.length})</CardTitle></CardHeader>
                             <CardContent>{renderEmpresasSistemaTable(empresasParaExibir.filter((e: EmpresaSistema) => empresasAvulsas.includes(e)))}</CardContent>
                         </Card>
                     </TabsContent>
@@ -752,7 +752,7 @@ const ClientesPage = () => {
         // Cliente/Usuário (apenas Clientes CR)
         <Card>
             <CardHeader>
-                <CardTitle className="text-xl">Clientes Cadastrados ({clientesCR.length})</CardTitle>
+                <CardTitle className="text-xl">Clientes Diretos / Contratos Cadastrados ({clientesCR.length})</CardTitle>
             </CardHeader>
             <CardContent>{renderClientesCRTable()}</CardContent>
         </Card>
