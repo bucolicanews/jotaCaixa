@@ -38,22 +38,13 @@ const DREDetalhe: React.FC<DREDetalheProps> = ({ filtroPeriodo, filtroSomenteCom
   
   const empresaNome = role === 'Admin' ? 'Admin' : (perfil as ClienteProfile)?.nome || 'Empresa';
 
-  // const resultadoBruto = totalReceita - totalCusto; // Removido TS6133
-  
   // Filtra as contas com base no estado local
   const contasFiltradas = useMemo(() => {
       if (!filtroSomenteComSaldo) return contas;
       
-      return contas.filter(c => {
-          const isZero = Math.abs(c.saldo_final) < 0.01;
-          
-          // Mantém contas sintéticas (Analitica='Não') mesmo se o saldo for zero,
-          // mas remove analíticas (Analitica='Sim') com saldo zero.
-          if (isZero && c.Analitica === 'Sim') return false;
-          
-          // Se o saldo não for zero, ou se for sintética, mantém.
-          return true;
-      });
+      // Filtra todas as contas onde o saldo é zero (ou muito próximo de zero)
+      return contas.filter(c => Math.abs(c.saldo_final) >= 0.01);
+      
   }, [contas, filtroSomenteComSaldo]);
   
   const getContasPorTipo = (tipo: ContaDRE['tipo_dre']) => {
@@ -86,9 +77,17 @@ const DREDetalhe: React.FC<DREDetalheProps> = ({ filtroPeriodo, filtroSomenteCom
         return;
     }
     
-    const contasParaImpressao = onlyWithBalance 
-        ? contas.filter(c => Math.abs(c.saldo_final) >= 0.01 || c.Analitica === 'Não')
-        : contas;
+    // Para a impressão, precisamos de todas as contas, mas o componente de impressão
+    // deve lidar com a omissão de linhas zero se onlyWithBalance for true.
+    // No entanto, como ajustamos a filtragem no useMemo, vamos garantir que a lista
+    // passada para a impressão seja a lista filtrada, mas adicionando as contas sintéticas
+    // de nível 1 (Receita, Custo, Despesa) se elas tiverem saldo total, para manter a estrutura.
+    
+    let contasParaImpressao = contas;
+    if (onlyWithBalance) {
+        // Se for para imprimir só com saldo, usamos a lista filtrada do useMemo
+        contasParaImpressao = contasFiltradas;
+    }
         
     if (contasParaImpressao.length === 0) {
         showError('Nenhum dado para imprimir.');

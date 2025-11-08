@@ -42,8 +42,17 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
   const totalPassivoPL = totalPassivo + totalPatrimonioLiquido + resultadoLiquido;
   const isBalanced = Math.abs(totalAtivo - totalPassivoPL) < 0.01;
   
+  // Filtra as contas com base no estado local
+  const contasFiltradas = React.useMemo(() => {
+      if (!filtroSomenteComSaldo) return contas;
+      
+      // Filtra todas as contas onde o saldo é zero (ou muito próximo de zero)
+      return contas.filter(c => Math.abs(c.saldo_final) >= 0.01);
+      
+  }, [contas, filtroSomenteComSaldo]);
+  
   const getContasPorTipo = (tipo: ContaBalanco['tipo_principal']) => {
-    return contas.filter(c => c.tipo_principal === tipo);
+    return contasFiltradas.filter(c => c.tipo_principal === tipo);
   };
   
   const renderContas = (contasList: ContaBalanco[]) => {
@@ -51,9 +60,8 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
       const isSintetica = c.Analitica === 'Não';
       const isZero = Math.abs(c.saldo_final) < 0.01;
       
-      // Lógica de Omissão:
-      // Se o filtro "Somente com Saldo" estiver ativo, omite se o saldo for zero.
-      // Contas sintéticas com saldo zero devem ser omitidas se o filtro estiver ativo.
+      // Se a conta já foi filtrada pelo useMemo, não precisamos checar isZero aqui,
+      // mas mantemos a verificação para garantir que a lógica de renderização não quebre.
       if (filtroSomenteComSaldo && isZero) return null;
 
       // Calcula o nível de indentação baseado no código da conta (ex: 1.1.1.1)
@@ -75,7 +83,7 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
   const handlePrint = (onlyWithBalance: boolean, formatType: '2colunas' | '1coluna') => {
     // A filtragem é feita aqui antes de passar para o componente de impressão
     const contasParaImpressao = onlyWithBalance 
-        ? contas.filter(c => Math.abs(c.saldo_final) >= 0.01 || c.Analitica === 'Não') // Mantém sintéticas mesmo se zero, mas o componente de impressão deve lidar com a omissão de sintéticas zero
+        ? contas.filter(c => Math.abs(c.saldo_final) >= 0.01)
         : contas;
         
     let printComponent;
