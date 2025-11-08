@@ -40,9 +40,9 @@ import AssinarContrato from "./pages/AssinarContrato";
 import ContratoLinkPage from "./pages/ContratoLinkPage";
 import DRE from "./pages/DRE";
 import GerenciarHistoricos from "./pages/GerenciarHistoricos";
-import Exportar from "./pages/Exportar"; // NOVO IMPORT
+import Exportar from "./pages/Exportar";
 import LancamentosNaoMapeados from "./pages/LancamentosNaoMapeados";
-import ClientesPage from "./pages/Clientes"; // IMPORTAÇÃO CORRIGIDA
+import ClientesPage from "./pages/Clientes";
 
 const queryClient = new QueryClient();
 
@@ -241,7 +241,7 @@ const App = () => (
             <Route path="/minha-assinatura" element={<MinhaAssinatura />} />
             <Route path="/renovacao" element={<SelecaoPagamentoRenovacao />} />
             <Route path="/historicos" element={<GerenciarHistoricos />} />
-            <Route path="/clientes" element={<ClientesPage />} /> {/* ROTA CORRIGIDA */}
+            <Route path="/clientes" element={<ClientesPage />} />
 
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />

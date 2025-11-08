@@ -3,7 +3,7 @@ import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Edit, Trash2, PlusCircle, Filter, Building2, CheckCircle, Users as UsersIcon, Mail, PowerOff, Printer, ArrowRight } from 'lucide-react';
+import { Loader2, Edit, Trash2, PlusCircle, Filter, Building2, CheckCircle, Users as UsersIcon, Mail, PowerOff, Printer } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
@@ -324,7 +324,7 @@ const ClientesPage = () => {
           // Usamos resetPasswordForEmail para reenviar o link de autenticação/atualização de senha,
           // que é o fluxo seguro e disponível no cliente para convites.
           const { error } = await supabase.auth.resetPasswordForEmail(email, {
-              redirectTo: `${window.location.origin}/atualizar-senha`,
+              redirectTo: `${BASE_URL}/atualizar-senha`,
           });
           
           if (error) throw error;
@@ -343,52 +343,65 @@ const ClientesPage = () => {
       setDialogAberto(true);
   };
   
-  // NOVO HANDLER: Promover Cliente CR para Cliente do Sistema
-  const handlePromoteToSystem = async (cliente: Cliente) => {
+  // NOVO HANDLER: Enviar Convite de Acesso (Substitui PromoteToSystem)
+  const handleSendInvite = async (cliente: Cliente) => {
     if (!cliente.email) {
-        showError('O cliente deve ter um email cadastrado para ser promovido.');
-        return;
-    }
-    if (!usuario?.id) {
-        showError('Sessão de administrador inválida.');
+        showError('O cliente deve ter um email cadastrado para enviar o convite.');
         return;
     }
     
-    if (!window.confirm(`Tem certeza que deseja promover o cliente ${cliente.nome} para Cliente do Sistema? Isso irá enviar um convite de acesso.`)) return;
+    if (!window.confirm(`Tem certeza que deseja enviar o convite de acesso para ${cliente.nome} (${cliente.email})?`)) return;
     
     setCarregandoDados(true);
     
     try {
-        // 1. Chamar a Edge Function para criar o usuário no Auth e o perfil na tbl_clientes
-        const { data, error } = await supabase.functions.invoke('promote-client-to-system', {
-            body: {
-                clienteCrId: cliente.id,
-                adminId: usuario.id,
-                baseUrl: BASE_URL,
+        // 1. Tentar criar o usuário no Auth (se já existir, o erro será capturado)
+        const { error: signUpError } = await supabase.auth.signUp({
+            email: cliente.email,
+            password: Math.random().toString(36).substring(2, 15), // Senha temporária
+            options: {
+                emailRedirectTo: `${BASE_URL}/atualizar-senha`,
+                data: { 
+                    role: 'Cliente', 
+                    nome: cliente.nome, 
+                    aprovado: false, // Começa como pendente de aprovação
+                }
             }
         });
         
-        if (error) throw error;
-        if (data.error) throw new Error(data.error);
+        if (signUpError && !signUpError.message.includes('already registered')) {
+            throw signUpError;
+        }
         
-        // 2. Enviar o email de redefinição de senha (convite)
-        const { error: resetError } = await supabase.auth.resetPasswordForEmail(cliente.email, {
-            // Redireciona para a página de login com o hash de recuperação de senha
-            redirectTo: `${BASE_URL}/login#auth-forgot-password`, 
+        // 2. Enviar o link de redefinição de senha (convite)
+        const { data: resetData, error: resetError } = await supabase.auth.resetPasswordForEmail(cliente.email, {
+            redirectTo: `${BASE_URL}/atualizar-senha`, 
         });
         
-        if (resetError) {
-            console.error('Erro ao enviar email de redefinição:', resetError);
-            showError('Falha ao enviar convite de acesso. O cliente pode tentar redefinir a senha na tela de login.');
-        } else {
-            showSuccess('Cliente promovido com sucesso! Convite de acesso enviado para o email.');
+        if (resetError) throw resetError;
+        
+        // CORREÇÃO DO ERRO 3: Acessando action_link diretamente de resetData.data
+        const resetLink = resetData.action_link || `${BASE_URL}/atualizar-senha`;
+        
+        showSuccess('Convite de acesso enviado! Use o botão de Ações para enviar o link.');
+        
+        // 3. Abrir o diálogo de ações para que o Admin possa copiar/enviar o link
+        
+        const whatsappTemplate = `Olá ${cliente.nome}! Seu convite de acesso ao sistema está pronto. Clique no link abaixo para definir sua senha e acessar:\n\n${resetLink}`;
+        
+        if (window.confirm(`Link de Acesso Gerado para ${cliente.nome}. Deseja copiar o link para enviar manualmente?`)) {
+            navigator.clipboard.writeText(resetLink);
+            showSuccess('Link copiado para a área de transferência.');
         }
+        
+        // Abre o WhatsApp com o template
+        window.open(`https://wa.me/${cliente.telefone?.replace(/\D/g, '') || ''}?text=${encodeURIComponent(whatsappTemplate)}`, '_blank');
         
         buscarDados();
         
     } catch (error: any) {
-        console.error('Erro ao promover cliente:', error);
-        showError('Falha ao promover cliente: ' + error.message);
+        console.error('Erro ao enviar convite:', error);
+        showError('Falha ao enviar convite: ' + error.message);
     } finally {
         setCarregandoDados(false);
     }
@@ -469,16 +482,16 @@ const ClientesPage = () => {
                             {isAdmin && <TableCell className="text-sm text-muted-foreground">{cliente.proprietario_id || 'N/A'}</TableCell>}
                             <TableCell className="text-right">
                                 <div className="flex justify-end space-x-1">
-                                    {/* NOVO BOTÃO: Promover para Sistema */}
+                                    {/* NOVO BOTÃO: Enviar Convite de Acesso */}
                                     {isAdmin && cliente.email && (
                                         <Button 
                                             variant="secondary" 
                                             size="sm" 
-                                            onClick={() => handlePromoteToSystem(cliente)}
-                                            title="Promover para Cliente do Sistema"
+                                            onClick={() => handleSendInvite(cliente)}
+                                            title="Enviar Convite de Acesso (Login/Senha)"
                                             disabled={carregandoDados}
                                         >
-                                            <ArrowRight className="w-4 h-4 mr-1" /> Sistema
+                                            <Mail className="w-4 h-4 mr-1" /> Convite
                                         </Button>
                                     )}
                                     <Button variant="ghost" size="sm" onClick={() => handleEditCR(cliente)}>
@@ -521,9 +534,9 @@ const ClientesPage = () => {
                 ) : (
                     empresas.map((empresa) => {
                         const dataFimAcesso = empresa.data_fim_acesso ? parseISO(empresa.data_fim_acesso) : null;
-                        const isAtivo = dataFimAcesso && isPast(new Date()) === false;
-                        const isAvulso = empresa.tipo_cliente?.endsWith('_Avulso') ?? false;
-                        const isBlocked = dataFimAcesso === null && empresa.aprovado;
+                        const isAtivo = dataFimAcesso && isPast(new Date()) === false; // Data de fim de acesso é futura ou hoje
+                        const isAvulso = empresa.tipo_cliente?.endsWith('_Avulso') ?? false; // Verifica o novo sufixo
+                        const isBlocked = dataFimAcesso === null && empresa.aprovado; // Aprovado, mas sem data de fim (desativado)
                         
                         let statusBadge;
                         if (!empresa.aprovado) {
