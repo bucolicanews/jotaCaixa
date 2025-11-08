@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
 import { Package } from 'lucide-react';
+import DashboardFinanceiro from '@/components/DashboardFinanceiro'; // Importando o novo componente
 
 const Painel = () => {
   const { role, perfil } = useSessao();
@@ -28,6 +29,7 @@ const Painel = () => {
   }
   
   const isClient = role === 'Cliente';
+  const isAdmin = role === 'Admin';
 
   return (
     <LayoutPrincipal>
@@ -46,10 +48,12 @@ const Painel = () => {
       {isClientApproved ? (
         <>
           <p className="text-lg text-muted-foreground mb-8">
-            Bem-vindo ao {role === 'Admin' ? 'Painel Administrativo' : 'Fluxo de Caixa'}.
+            Bem-vindo ao {isAdmin ? 'Painel Administrativo' : 'Fluxo de Caixa'}.
           </p>
 
-          {hasFinancePermissions ? (
+          {isAdmin ? (
+            <DashboardFinanceiro />
+          ) : hasFinancePermissions ? (
             <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-6">
               <Card>
                 <CardHeader><CardTitle className="text-xl font-semibold">Saldo Atual</CardTitle></CardHeader>
