@@ -49,7 +49,7 @@ export function useBulkTagManager(resourceId: string | undefined): BulkTagManage
     const refetchStatus = useCallback(() => {
         console.log(`[BulkTagManager] Forçando re-busca de status. Key: ${refreshKey + 1}`);
         setRefreshKey(prev => prev + 1);
-    }, [refreshKey]);
+    }, []); // Removendo [refreshKey] para evitar stale closure na função
 
     const fetchTagStatus = useCallback(async () => {
         if (!resourceId || !empresaId) {
@@ -69,7 +69,11 @@ export function useBulkTagManager(resourceId: string | undefined): BulkTagManage
                 .in('nome_tag', allMappableTags);
 
             if (error && error.code !== 'PGRST116') { // PGRST116 = No rows found
-                console.error('[BulkTagManager] Erro ao buscar status da tag:', error);
+                if (error.code === '406') {
+                    console.error(`[BulkTagManager] Erro 406 ao buscar tags. Verifique a codificação.`, error);
+                } else {
+                    console.error('[BulkTagManager] Erro ao buscar status da tag:', error);
+                }
                 setActiveTagsCount(0);
             } else {
                 const countValue = count || 0;
@@ -83,11 +87,11 @@ export function useBulkTagManager(resourceId: string | undefined): BulkTagManage
             setLoading(false);
             console.log('[BulkTagManager] Status: Fetch finished. Loading set to false.');
         }
-    }, [resourceId, empresaId, allMappableTags, refreshKey]); // Adicionando refreshKey aqui para forçar a re-execução
+    }, [resourceId, empresaId, allMappableTags, refreshKey]); // Mantendo refreshKey aqui para que o useEffect reaja
 
     useEffect(() => {
         fetchTagStatus();
-    }, [fetchTagStatus, refreshKey]); // Adicionando refreshKey aqui para forçar a re-execução
+    }, [fetchTagStatus, refreshKey]);
 
     const toggleAllTags = useCallback(async (activate: boolean) => {
         if (!resourceId || !empresaId) {
