@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useSessao } from '@/hooks/use-sessao';
 import { ClienteProfile } from '@/types/usuario';
 import { supabase } from '@/integrations/supabase/client';
-import { format, parseISO, isFuture } from 'date-fns';
+import { format, parseISO, isFuture, differenceInDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -44,7 +44,6 @@ const TrialBanner: React.FC = () => {
         setDataFimAcesso(dataFim);
         setPlanoInfo(planoData as PlanoInfo);
         
-        // O banner só aparece se o acesso for futuro
         setLoading(false);
 
     }, [isClient, clienteProfile]);
@@ -58,6 +57,19 @@ const TrialBanner: React.FC = () => {
     // O banner só é exibido se for um cliente E o acesso for futuro
     if (loading || carregando || !isClient || !planoInfo || !dataFimAcesso || !isFuture(dataFimAcesso)) {
         return null; 
+    }
+    
+    // Lógica de Trial:
+    // 1. Se o preço for zero, é um plano de teste/gratuito.
+    // 2. Se o preço for maior que zero, só exibe o banner se o período de acesso
+    //    for menor que 30 dias (indicando o período de trial inicial).
+    
+    const diasDesdeCriacao = differenceInDays(new Date(), parseISO(clienteProfile.criado_em));
+    const isInitialTrial = diasDesdeCriacao <= 30; // Considera os primeiros 30 dias como trial
+    
+    // Se o plano for pago E o período de trial inicial já passou, não exibe o banner.
+    if (planoInfo.preco_mensal > 0 && !isInitialTrial) {
+        return null;
     }
 
     const dataCobranca = format(dataFimAcesso, 'dd/MM/yyyy', { locale: ptBR });
