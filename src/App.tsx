@@ -16,11 +16,10 @@ import Importar from "./pages/Importar";
 import Relatorios from "./pages/Relatorios";
 import Configuracoes from "./pages/Configuracoes";
 import AtualizarSenha from "./pages/AtualizarSenha";
-import PlanoContasPage from "./pages/PlanoContas";
+import PlanoContasPage from "./pages/contabilidade/PlanoContas";
 import GerenciarUsuarios from "./pages/GerenciarUsuarios";
 import CadastrarEmpresa from "./pages/CadastrarEmpresa";
 import PontoEletronico from "./pages/PontoEletronico";
-import ClientesPage from "./pages/Clientes";
 import Perfil from "./pages/Perfil";
 import FolhaPonto from "./pages/FolhaPonto";
 import Contratos from "./pages/Contratos";
@@ -216,7 +215,6 @@ const App = () => (
             <Route path="/painel" element={<Painel />} />
             <Route path="/contas-pagar" element={<ContasPagar />} />
             <Route path="/contas-receber" element={<ContasReceber />} />
-            <Route path="/clientes" element={<ClientesPage />} />
             <Route path="/bancos" element={<Bancos />} />
             <Route path="/conciliacao" element={<Conciliacao />} />
             <Route path="/importar" element={<Importar />} />
