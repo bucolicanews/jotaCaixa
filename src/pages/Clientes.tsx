@@ -605,9 +605,12 @@ const ClientesPage = () => {
                         }
                         
                         const isActionDisabled = carregandoDados || isSystemClient;
+                        
+                        // NOVO: Classe de destaque para clientes promovidos
+                        const rowClassName = isSystemClient ? 'bg-green-500/10' : '';
 
                         return (
-                            <TableRow key={cliente.id}>
+                            <TableRow key={cliente.id} className={rowClassName}>
                                 <TableCell className="font-medium">{cliente.nome_fantasia || cliente.nome}</TableCell>
                                 <TableCell className="hidden md:table-cell text-sm text-muted-foreground">{cliente.razao_social || '-'}</TableCell>
                                 <TableCell>{cliente.email || '-'}</TableCell>
