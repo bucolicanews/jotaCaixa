@@ -3,7 +3,7 @@ import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Edit, Trash2, PlusCircle, Filter, Building2, CheckCircle, Users as UsersIcon, Mail, PowerOff, Printer } from 'lucide-react';
+import { Loader2, Edit, Trash2, PlusCircle, Filter, Building2, CheckCircle, Users as UsersIcon, Mail, PowerOff, Printer, ArrowRight } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
@@ -23,6 +23,7 @@ import { usePrint } from '@/hooks/use-print';
 import ReactDOMServer from 'react-dom/server';
 import ClientesPrint from '@/components/ClientesPrint';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { BASE_URL } from '@/config/app-config';
 
 // Tipo para o filtro de empresa (inclui o Admin)
 interface EmpresaFiltro {
@@ -342,6 +343,44 @@ const ClientesPage = () => {
       setDialogAberto(true);
   };
   
+  // NOVO HANDLER: Promover Cliente CR para Cliente do Sistema
+  const handlePromoteToSystem = async (cliente: Cliente) => {
+    if (!cliente.email) {
+        showError('O cliente deve ter um email cadastrado para ser promovido.');
+        return;
+    }
+    if (!usuario?.id) {
+        showError('Sessão de administrador inválida.');
+        return;
+    }
+    
+    if (!window.confirm(`Tem certeza que deseja promover o cliente ${cliente.nome} para Cliente do Sistema? Isso irá enviar um convite de acesso e remover o registro da lista de Clientes Diretos.`)) return;
+    
+    setCarregandoDados(true);
+    
+    try {
+        const { data, error } = await supabase.functions.invoke('promote-client-to-system', {
+            body: {
+                clienteCrId: cliente.id,
+                adminId: usuario.id,
+                baseUrl: BASE_URL,
+            }
+        });
+        
+        if (error) throw error;
+        if (data.error) throw new Error(data.error);
+        
+        showSuccess('Cliente promovido com sucesso! Convite de acesso enviado.');
+        buscarDados();
+        
+    } catch (error: any) {
+        console.error('Erro ao promover cliente:', error);
+        showError('Falha ao promover cliente: ' + error.message);
+    } finally {
+        setCarregandoDados(false);
+    }
+  };
+  
   // --- Lógica de Filtragem de Empresas do Sistema ---
   const filterEmpresasSistema = (status: 'pendentes' | 'ativos' | 'inativos' | 'avulsos') => {
       
@@ -356,12 +395,12 @@ const ClientesPage = () => {
           }
           
           if (status === 'ativos') {
-              // Ativos: Aprovados, e com acesso futuro (inclui avulsos ativos)
-              return e.aprovado && isAtivo && !isBlocked;
+              // Ativos: Aprovados, não avulsos e com acesso futuro
+              return e.aprovado && !isAvulso && isAtivo;
           }
           if (status === 'inativos') {
-              // Inativos: Aprovados, e com acesso expirado OU bloqueado
-              return e.aprovado && (!isAtivo || isBlocked);
+              // Inativos: Aprovados, não avulsos e com acesso expirado OU bloqueado
+              return e.aprovado && !isAvulso && (!isAtivo || isBlocked);
           }
           if (status === 'avulsos') {
               // Avulsos: Aprovados e com o sufixo _Avulso
@@ -417,6 +456,18 @@ const ClientesPage = () => {
                             {isAdmin && <TableCell className="text-sm text-muted-foreground">{cliente.proprietario_id || 'N/A'}</TableCell>}
                             <TableCell className="text-right">
                                 <div className="flex justify-end space-x-1">
+                                    {/* NOVO BOTÃO: Promover para Sistema */}
+                                    {isAdmin && cliente.email && (
+                                        <Button 
+                                            variant="secondary" 
+                                            size="sm" 
+                                            onClick={() => handlePromoteToSystem(cliente)}
+                                            title="Promover para Cliente do Sistema"
+                                            disabled={carregandoDados}
+                                        >
+                                            <ArrowRight className="w-4 h-4 mr-1" /> Sistema
+                                        </Button>
+                                    )}
                                     <Button variant="ghost" size="sm" onClick={() => handleEditCR(cliente)}>
                                         <Edit className="w-4 h-4" />
                                     </Button>
@@ -456,13 +507,14 @@ const ClientesPage = () => {
                     </TableRow>
                 ) : (
                     empresas.map((empresa) => {
+                        const isAprovado = empresa.aprovado;
                         const dataFimAcesso = empresa.data_fim_acesso ? parseISO(empresa.data_fim_acesso) : null;
-                        const isAtivo = dataFimAcesso && isPast(new Date()) === false;
-                        const isAvulso = empresa.tipo_cliente?.endsWith('_Avulso') ?? false;
-                        const isBlocked = dataFimAcesso === null && empresa.aprovado;
+                        const isAtivo = dataFimAcesso && isPast(new Date()) === false; // Data de fim de acesso é futura ou hoje
+                        const isAvulso = empresa.tipo_cliente?.endsWith('_Avulso') ?? false; // Verifica o novo sufixo
+                        const isBlocked = dataFimAcesso === null && isAprovado; // Aprovado, mas sem data de fim (desativado)
                         
                         let statusBadge;
-                        if (!empresa.aprovado) {
+                        if (!isAprovado) {
                             statusBadge = <Badge variant="warning">Pendente</Badge>;
                         } else if (isBlocked) {
                             statusBadge = <Badge variant="destructive">Bloqueado</Badge>;
@@ -479,7 +531,7 @@ const ClientesPage = () => {
                         const planoNome = empresa.plano_id ? planosMap[empresa.plano_id] || 'N/A' : 'N/A';
 
                         return (
-                            <TableRow key={empresa.id} className={cn(!empresa.aprovado && "bg-yellow-500/10", isBlocked && "bg-red-500/10")}>
+                            <TableRow key={empresa.id} className={cn(!isAprovado && "bg-yellow-500/10", isBlocked && "bg-red-500/10")}>
                                 <TableCell className="font-medium">{empresa.nome}</TableCell>
                                 <TableCell>{empresa.email}</TableCell>
                                 <TableCell className="text-sm text-muted-foreground">{planoNome}</TableCell>
