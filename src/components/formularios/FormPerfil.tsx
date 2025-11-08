@@ -3,7 +3,7 @@ import { useForm, FormProvider } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from '@/components/ui/button';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Tag } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { AnyProfile, ClienteProfile, UsuarioProfile, AdminProfile } from '@/types/usuario';
@@ -20,8 +20,7 @@ import { Form } from '@/components/ui/form';
 import { Input } from '../ui/input';
 import { FormField, FormItem, FormLabel, FormControl, FormMessage } from '../ui/form';
 import { Separator } from '../ui/separator';
-import { useBulkTagManager } from '@/hooks/use-bulk-tag-manager'; // Importando o hook de bulk tag
-// import { Switch } from '../ui/switch'; // Removido: TS6133
+import { useBulkTagManager } from '@/hooks/use-bulk-tag-manager';
 
 // Esquema de validação para os campos de URL (opcional)
 const urlSchema = z.string().url('URL inválida.').optional().or(z.literal(''));
@@ -106,7 +105,7 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
   const resourceId = perfilInicial.id; 
   
   // Inicializa o hook de bulk tag
-  const { refetchStatus, refreshKey } = useBulkTagManager(resourceId);
+  const { refetchStatus, refreshKey, toggleAllTags, isAllActive, loading: loadingBulk } = useBulkTagManager(resourceId);
 
   const parseDate = (dateString: string | null | undefined) => 
     dateString ? new Date(dateString + 'T00:00:00') : undefined;
@@ -344,7 +343,31 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
                 
                 {/* TAB 2: DADOS CADASTRAIS */}
                 <TabsContent value="cadastrais" className="mt-4 space-y-6 p-4">
-                    <h3 className="font-semibold text-lg">Dados Cadastrais (Tags de Contrato)</h3>
+                    <div className="flex justify-between items-center">
+                        <h3 className="font-semibold text-lg flex items-center"><Tag className="w-5 h-5 mr-2" /> Tags de Contrato</h3>
+                        <div className="space-x-2">
+                            <Button 
+                                type="button" 
+                                variant="link" 
+                                size="sm" 
+                                onClick={() => toggleAllTags(true)} 
+                                disabled={form.formState.isSubmitting || loadingBulk || isAllActive}
+                                className="p-0 h-auto"
+                            >
+                                {loadingBulk && isAllActive ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : 'Marcar Todos'}
+                            </Button>
+                            <Button 
+                                type="button" 
+                                variant="link" 
+                                size="sm" 
+                                onClick={() => toggleAllTags(false)} 
+                                disabled={form.formState.isSubmitting || loadingBulk || !isAllActive}
+                                className="p-0 h-auto text-destructive"
+                            >
+                                {loadingBulk && !isAllActive ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : 'Desmarcar Todos'}
+                            </Button>
+                        </div>
+                    </div>
                     <p className="text-sm text-muted-foreground mb-4">Estes campos são usados para preencher tags dinâmicas em contratos.</p>
                     
                     {/* Campos específicos do Admin (CPF/CNPJ) */}
@@ -435,6 +458,32 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
             {/* TAB 3: DADOS CADASTRAIS */}
             {isUserBeingManagedByClient && (
                 <TabsContent value="cadastrais" className="mt-4 space-y-6 p-4">
+                    <div className="flex justify-between items-center">
+                        <h3 className="font-semibold text-lg flex items-center"><Tag className="w-5 h-5 mr-2" /> Tags de Contrato</h3>
+                        <div className="space-x-2">
+                            <Button 
+                                type="button" 
+                                variant="link" 
+                                size="sm" 
+                                onClick={() => toggleAllTags(true)} 
+                                disabled={form.formState.isSubmitting || loadingBulk || isAllActive}
+                                className="p-0 h-auto"
+                            >
+                                {loadingBulk && isAllActive ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : 'Marcar Todos'}
+                            </Button>
+                            <Button 
+                                type="button" 
+                                variant="link" 
+                                size="sm" 
+                                onClick={() => toggleAllTags(false)} 
+                                disabled={form.formState.isSubmitting || loadingBulk || !isAllActive}
+                                className="p-0 h-auto text-destructive"
+                            >
+                                {loadingBulk && !isAllActive ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : 'Desmarcar Todos'}
+                            </Button>
+                        </div>
+                    </div>
+                    <p className="text-sm text-muted-foreground mb-4">Dados pessoais e de contato do funcionário.</p>
                     <FormDadosCadastrais
                         control={form.control}
                         isSubmitting={form.formState.isSubmitting}

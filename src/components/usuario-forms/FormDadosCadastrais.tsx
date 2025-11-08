@@ -11,6 +11,7 @@ import { Loader2, Tag } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { showError } from '@/utils/toast';
 import { useBulkTagManager } from '@/hooks/use-bulk-tag-manager';
+import { Button } from '../ui/button'; // Importando Button
 
 interface TaggedFormFieldProps {
     fieldName: string;
@@ -131,7 +132,7 @@ interface FormDadosCadastraisProps {
 }
 
 const FormDadosCadastrais: React.FC<FormDadosCadastraisProps> = ({ isSubmitting, resourceId }) => {
-    const { refetchStatus, refreshKey } = useBulkTagManager(resourceId);
+    const { refetchStatus, refreshKey, toggleAllTags, isAllActive, loading: loadingBulk } = useBulkTagManager(resourceId);
     
     const { watch } = useFormContext();
     const isAddressLoading = watch('endereco') === 'Buscando...';
@@ -146,7 +147,28 @@ const FormDadosCadastrais: React.FC<FormDadosCadastraisProps> = ({ isSubmitting,
         <div className="space-y-6">
             <div className="flex justify-between items-center">
                 <h3 className="font-semibold text-lg">Dados Cadastrais (Tags de Contrato)</h3>
-                {/* BOTÕES REMOVIDOS */}
+                <div className="space-x-2">
+                    <Button 
+                        type="button" 
+                        variant="link" 
+                        size="sm" 
+                        onClick={() => toggleAllTags(true)} 
+                        disabled={isSubmitting || loadingBulk || isAllActive}
+                        className="p-0 h-auto"
+                    >
+                        {loadingBulk && isAllActive ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : 'Marcar Todos'}
+                    </Button>
+                    <Button 
+                        type="button" 
+                        variant="link" 
+                        size="sm" 
+                        onClick={() => toggleAllTags(false)} 
+                        disabled={isSubmitting || loadingBulk || !isAllActive}
+                        className="p-0 h-auto text-destructive"
+                    >
+                        {loadingBulk && !isAllActive ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : 'Desmarcar Todos'}
+                    </Button>
+                </div>
             </div>
             <p className="text-sm text-muted-foreground">Dados pessoais e de contato do funcionário.</p>
             
