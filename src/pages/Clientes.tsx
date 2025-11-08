@@ -64,9 +64,6 @@ const ClientesPage = () => {
   const [dialogAberto, setDialogAberto] = useState(false);
   const [dialogAvulsaAberto, setDialogAvulsaAberto] = useState(false); // Novo estado para dialog avulsa
   
-  // NOVO ESTADO: Rastreia clientes promovidos com sucesso na sessão atual
-  // const [promotedClients, setPromotedClients] = useState<Set<string>>(new Set()); // REMOVIDO TS6133
-  
   // NOVO ESTADO
   const [planosMap, setPlanosMap] = useState<Record<string, string>>({});
   
@@ -446,9 +443,6 @@ const ClientesPage = () => {
         
         showSuccess(`Cliente ${cliente.nome} promovido para Cliente do Sistema com sucesso!`);
         
-        // Adiciona o ID do cliente ao estado de promovidos
-        // setPromotedClients(prev => new Set(prev).add(cliente.id)); // REMOVIDO TS6133
-        
         // 2. Re-busca os dados para atualizar a lista (o cliente promovido deve sumir desta lista)
         buscarDados();
         
@@ -597,13 +591,18 @@ const ClientesPage = () => {
                         const isSystemClient = cliente.is_system_client;
                         const systemStatus = cliente.system_client_status;
                         
-                        const statusBadge = systemStatus ? (
-                            <Badge variant={systemStatus === 'Ativo' ? 'default' : systemStatus === 'Pendente' ? 'warning' : 'destructive'}>
-                                {systemStatus}
-                            </Badge>
-                        ) : (
-                            <Badge variant="secondary">CR</Badge>
-                        );
+                        let statusBadge;
+                        if (isSystemClient) {
+                            // Se é cliente do sistema, exibe o status real
+                            statusBadge = (
+                                <Badge variant={systemStatus === 'Ativo' ? 'default' : systemStatus === 'Pendente' ? 'warning' : 'destructive'}>
+                                    {systemStatus}
+                                </Badge>
+                            );
+                        } else {
+                            // Se não é cliente do sistema, exibe apenas CR
+                            statusBadge = <Badge variant="secondary">CR</Badge>;
+                        }
                         
                         const isActionDisabled = carregandoDados || isSystemClient;
 
