@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Menu, Zap, LogIn } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
@@ -15,6 +15,81 @@ const NAV_ITEMS = [
 
 const SiteHeader: React.FC = () => {
   const [sheetOpen, setSheetOpen] = useState(false);
+  const location = useLocation();
+
+  const handleScrollToSection = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
+    // Se o link for para outra página (ex: /vendas), deixa o React Router lidar com isso
+    if (!href.startsWith('/#')) return;
+
+    e.preventDefault();
+    const targetId = href.substring(2); // Remove '/#'
+    const targetElement = document.getElementById(targetId);
+
+    if (targetElement) {
+      // Se já estiver na Landing Page, faz o scroll suave
+      if (location.pathname === '/') {
+        targetElement.scrollIntoView({ behavior: 'smooth' });
+        setSheetOpen(false); // Fecha o menu mobile
+      } else {
+        // Se estiver em outra página, navega para a raiz e o scroll será feito no próximo render
+        // Nota: O scroll suave após a navegação é mais complexo e geralmente requer um useEffect no destino.
+        // Para simplificar, navegamos e confiamos que o usuário verá a seção.
+        window.location.href = href;
+      }
+    }
+  };
+  
+  // Função auxiliar para determinar se o link deve ser um Link ou um <a>
+  const renderNavLink = (item: typeof NAV_ITEMS[0]) => {
+      const isAnchor = item.href.startsWith('/#');
+      
+      if (isAnchor) {
+          return (
+              <a
+                  href={item.href}
+                  onClick={(e) => handleScrollToSection(e, item.href)}
+                  className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+              >
+                  {item.name}
+              </a>
+          );
+      }
+      
+      return (
+          <Link 
+              to={item.href} 
+              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+          >
+              {item.name}
+          </Link>
+      );
+  };
+  
+  const renderMobileNavLink = (item: typeof NAV_ITEMS[0]) => {
+      const isAnchor = item.href.startsWith('/#');
+      
+      if (isAnchor) {
+          return (
+              <a
+                  href={item.href}
+                  onClick={(e) => handleScrollToSection(e, item.href)}
+                  className="text-lg font-medium text-foreground hover:text-primary transition-colors"
+              >
+                  {item.name}
+              </a>
+          );
+      }
+      
+      return (
+          <Link 
+              to={item.href} 
+              onClick={() => setSheetOpen(false)}
+              className="text-lg font-medium text-foreground hover:text-primary transition-colors"
+          >
+              {item.name}
+          </Link>
+      );
+  };
 
   return (
     <header className={cn(
@@ -30,13 +105,9 @@ const SiteHeader: React.FC = () => {
       {/* Navegação Desktop */}
       <nav className="hidden md:flex items-center space-x-6">
         {NAV_ITEMS.map(item => (
-          <Link 
-            key={item.name} 
-            to={item.href} 
-            className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-          >
-            {item.name}
-          </Link>
+          <React.Fragment key={item.name}>
+              {renderNavLink(item)}
+          </React.Fragment>
         ))}
       </nav>
       
@@ -57,14 +128,9 @@ const SiteHeader: React.FC = () => {
           <SheetContent side="right" className="p-4 w-64">
             <nav className="flex flex-col space-y-4 pt-8">
               {NAV_ITEMS.map(item => (
-                <Link 
-                  key={item.name} 
-                  to={item.href} 
-                  onClick={() => setSheetOpen(false)}
-                  className="text-lg font-medium text-foreground hover:text-primary transition-colors"
-                >
-                  {item.name}
-                </Link>
+                <React.Fragment key={item.name}>
+                    {renderMobileNavLink(item)}
+                </React.Fragment>
               ))}
             </nav>
           </SheetContent>
