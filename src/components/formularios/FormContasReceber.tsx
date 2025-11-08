@@ -267,7 +267,9 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
       let tabelaContasReceber = isAdmin ? 'admin_contas_receber' : 'contas_receber';
       let tabelaParcelasReceber = isAdmin ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
       
-      const baseData = isAdmin ? { admin_id: ownerId, cliente_id: values.cliente_id, id_conta_contabil: contaAReceber, historico_id: values.historico_id } : { empresa_id: ownerId, cliente_id: values.cliente_id };
+      const baseData = isAdmin 
+        ? { admin_id: ownerId, cliente_id: values.cliente_id, id_conta_contabil: contaAReceber, historico_id: values.historico_id } 
+        : { empresa_id: ownerId, cliente_id: values.cliente_id };
       
       const contaReceberPayload = {
           ...baseData,
