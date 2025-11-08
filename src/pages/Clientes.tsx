@@ -354,11 +354,12 @@ const ClientesPage = () => {
         return;
     }
     
-    if (!window.confirm(`Tem certeza que deseja promover o cliente ${cliente.nome} para Cliente do Sistema? Isso irá enviar um convite de acesso e remover o registro da lista de Clientes Diretos.`)) return;
+    if (!window.confirm(`Tem certeza que deseja promover o cliente ${cliente.nome} para Cliente do Sistema? Isso irá enviar um convite de acesso.`)) return;
     
     setCarregandoDados(true);
     
     try {
+        // 1. Chamar a Edge Function para criar o usuário no Auth e o perfil na tbl_clientes
         const { data, error } = await supabase.functions.invoke('promote-client-to-system', {
             body: {
                 clienteCrId: cliente.id,
@@ -370,7 +371,19 @@ const ClientesPage = () => {
         if (error) throw error;
         if (data.error) throw new Error(data.error);
         
-        showSuccess('Cliente promovido com sucesso! Convite de acesso enviado.');
+        // 2. Enviar o email de redefinição de senha (convite)
+        const { error: resetError } = await supabase.auth.resetPasswordForEmail(cliente.email, {
+            // Redireciona para a página de login com o hash de recuperação de senha
+            redirectTo: `${BASE_URL}/login#auth-forgot-password`, 
+        });
+        
+        if (resetError) {
+            console.error('Erro ao enviar email de redefinição:', resetError);
+            showError('Falha ao enviar convite de acesso. O cliente pode tentar redefinir a senha na tela de login.');
+        } else {
+            showSuccess('Cliente promovido com sucesso! Convite de acesso enviado para o email.');
+        }
+        
         buscarDados();
         
     } catch (error: any) {

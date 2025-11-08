@@ -63,7 +63,7 @@ serve(async (req: Request) => {
     
     // Se houver erro, verifica se é de duplicidade
     if (signUpError) {
-        if (signUpError.message === 'User already registered') {
+        if (signUpError.message.includes('already registered')) {
             userAlreadyExists = true;
             // Usuário já existe, buscar o ID real
             const { data: authUser, error: authError } = await supabaseService.auth.admin.getUserByEmail(clientEmail);
@@ -127,36 +127,13 @@ serve(async (req: Request) => {
         });
     }
 
-    // 4. Enviar o link de redefinição de senha (convite)
-    // Enviamos o link de redefinição de senha mesmo se o usuário já existia, para garantir o acesso.
-    const { error: resetError } = await supabaseService.auth.admin.generateLink({
-        type: 'recovery',
-        email: clientEmail,
-        options: {
-            redirectTo: `${baseUrl}/atualizar-senha`,
-        }
-    });
+    // 4. NÃO DELETAR o registro da tabela 'clientes' (CR) - Conforme nova regra.
     
-    if (resetError) {
-        console.error('Reset Password Link Error:', resetError);
-        // Não é um erro fatal, mas deve ser reportado
-    }
-    
-    // 5. Deletar o registro da tabela 'clientes' (CR)
-    const { error: deleteCrError } = await supabaseService
-        .from('clientes')
-        .delete()
-        .eq('id', clienteCrId);
-        
-    if (deleteCrError) {
-        console.error('Delete CR Error:', deleteCrError);
-        // Não é um erro fatal, apenas um aviso
-    }
-
-    // Retorno 200 OK
+    // 5. Retorna sucesso e o email do cliente para que o frontend envie o convite
     return new Response(JSON.stringify({ 
         success: true, 
-        message: userAlreadyExists ? 'Cliente já existia, perfil atualizado e convite reenviado.' : 'Convite enviado e cliente promovido.' 
+        message: userAlreadyExists ? 'Cliente já existia, perfil atualizado.' : 'Usuário criado no Auth e perfil atualizado.',
+        clientEmail: clientEmail,
     }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
