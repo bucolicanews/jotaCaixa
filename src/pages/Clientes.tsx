@@ -3,7 +3,7 @@ import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Edit, Trash2, PlusCircle, Filter, Building2, CheckCircle, Users as UsersIcon, Mail, PowerOff, Printer, ArrowRight } from 'lucide-react';
+import { Loader2, Edit, Trash2, PlusCircle, Filter, Building2, CheckCircle, Users as UsersIcon, Mail, PowerOff, Printer, ArrowRight, Check } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
@@ -62,6 +62,9 @@ const ClientesPage = () => {
   const [perfilParaEditar, setPerfilParaEditar] = useState<AnyProfile | null>(null);
   const [dialogAberto, setDialogAberto] = useState(false);
   const [dialogAvulsaAberto, setDialogAvulsaAberto] = useState(false); // Novo estado para dialog avulsa
+  
+  // NOVO ESTADO: Rastreia clientes promovidos com sucesso na sessão atual
+  const [promotedClients, setPromotedClients] = useState<Set<string>>(new Set());
   
   // NOVO ESTADO
   const [planosMap, setPlanosMap] = useState<Record<string, string>>({});
@@ -393,10 +396,10 @@ const ClientesPage = () => {
         
         showSuccess(`Cliente ${cliente.nome} promovido para Cliente do Sistema com sucesso!`);
         
-        // 2. Opcional: Deletar o registro antigo da tabela 'clientes' (CR) se o ID for diferente
-        // Como o novo ID é gerado pelo Auth, o registro CR original pode ser mantido ou deletado.
-        // Vamos manter o registro CR, mas o Admin pode deletá-lo manualmente se quiser.
+        // Adiciona o ID do cliente ao estado de promovidos
+        setPromotedClients(prev => new Set(prev).add(cliente.id));
         
+        // 2. Re-busca os dados para atualizar a lista (o cliente promovido deve sumir desta lista)
         buscarDados();
         
     } catch (error: any) {
@@ -538,54 +541,63 @@ const ClientesPage = () => {
                         </TableCell>
                     </TableRow>
                 ) : (
-                    clientesCR.map((cliente) => (
-                        <TableRow key={cliente.id}>
-                            <TableCell className="font-medium">{cliente.nome_fantasia || cliente.nome}</TableCell>
-                            <TableCell className="hidden md:table-cell text-sm text-muted-foreground">{cliente.razao_social || '-'}</TableCell>
-                            <TableCell>{cliente.email || '-'}</TableCell>
-                            <TableCell>{cliente.telefone || '-'}</TableCell>
-                            {isAdmin && <TableCell className="text-sm text-muted-foreground">{cliente.proprietario_id || 'N/A'}</TableCell>}
-                            <TableCell className="text-right">
-                                <div className="flex justify-end space-x-1">
-                                    {/* BOTÃO PROMOVER PARA SISTEMA (Sem Convite) */}
-                                    {(isAdmin || isClient) && cliente.email && !cliente.is_system_client && (
-                                        <Button 
-                                            variant="default" 
-                                            size="sm" 
-                                            onClick={() => handlePromoteToSystem(cliente)}
-                                            title="Promover para Cliente do Sistema (Sem Convite de Login)"
-                                            disabled={carregandoDados}
-                                            className="h-8"
-                                        >
-                                            <ArrowRight className="w-4 h-4 mr-1" /> Promover
+                    clientesCR.map((cliente) => {
+                        const isPromoted = promotedClients.has(cliente.id);
+                        const isSystemClient = cliente.is_system_client || isPromoted;
+                        
+                        return (
+                            <TableRow key={cliente.id}>
+                                <TableCell className="font-medium">{cliente.nome_fantasia || cliente.nome}</TableCell>
+                                <TableCell className="hidden md:table-cell text-sm text-muted-foreground">{cliente.razao_social || '-'}</TableCell>
+                                <TableCell>{cliente.email || '-'}</TableCell>
+                                <TableCell>{cliente.telefone || '-'}</TableCell>
+                                {isAdmin && <TableCell className="text-sm text-muted-foreground">{cliente.proprietario_id || 'N/A'}</TableCell>}
+                                <TableCell className="text-right">
+                                    <div className="flex justify-end space-x-1">
+                                        
+                                        {/* BOTÃO PROMOVER PARA SISTEMA (Sem Convite) */}
+                                        {(isAdmin || isClient) && cliente.email && !isSystemClient && (
+                                            <Button 
+                                                variant={isPromoted ? 'default' : 'default'} 
+                                                size="sm" 
+                                                onClick={() => handlePromoteToSystem(cliente)}
+                                                title="Promover para Cliente do Sistema (Sem Convite de Login)"
+                                                disabled={carregandoDados || isPromoted}
+                                                className={cn("h-8", isPromoted && "bg-green-600 hover:bg-green-700")}
+                                            >
+                                                {carregandoDados && !isPromoted ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : (
+                                                    isPromoted ? <Check className="w-4 h-4 mr-1" /> : <ArrowRight className="w-4 h-4 mr-1" />
+                                                )}
+                                                {isPromoted ? 'Promovido' : 'Promover'}
+                                            </Button>
+                                        )}
+                                        
+                                        {/* BOTÃO CONVITE: Aparece se tiver email E NÃO for um cliente do sistema */}
+                                        {isAdmin && cliente.email && !isSystemClient && (
+                                            <Button 
+                                                variant="secondary" 
+                                                size="sm" 
+                                                onClick={() => handleSendInvite(cliente)}
+                                                title="Enviar Convite de Acesso (Cria perfil no sistema)"
+                                                disabled={carregandoDados || isPromoted}
+                                                className="h-8"
+                                            >
+                                                <Mail className="w-4 h-4 mr-1" /> Convite
+                                            </Button>
+                                        )}
+                                        {/* BOTÃO DE EDIÇÃO */}
+                                        <Button variant="ghost" size="icon" onClick={() => handleEditCR(cliente)}>
+                                            <Edit className="w-4 h-4" />
                                         </Button>
-                                    )}
-                                    
-                                    {/* BOTÃO CONVITE: Aparece se tiver email E NÃO for um cliente do sistema */}
-                                    {isAdmin && cliente.email && !cliente.is_system_client && (
-                                        <Button 
-                                            variant="secondary" 
-                                            size="sm" 
-                                            onClick={() => handleSendInvite(cliente)}
-                                            title="Enviar Convite de Acesso (Cria perfil no sistema)"
-                                            disabled={carregandoDados}
-                                            className="h-8"
-                                        >
-                                            <Mail className="w-4 h-4 mr-1" /> Convite
+                                        {/* BOTÃO DE DELETAR */}
+                                        <Button variant="ghost" size="icon" onClick={() => handleDeleteCR(cliente.id)}>
+                                            <Trash2 className="w-4 h-4 text-red-500" />
                                         </Button>
-                                    )}
-                                    {/* BOTÃO DE EDIÇÃO */}
-                                    <Button variant="ghost" size="icon" onClick={() => handleEditCR(cliente)}>
-                                        <Edit className="w-4 h-4" />
-                                    </Button>
-                                    {/* BOTÃO DE DELETAR */}
-                                    <Button variant="ghost" size="icon" onClick={() => handleDeleteCR(cliente.id)}>
-                                        <Trash2 className="w-4 h-4 text-red-500" />
-                                    </Button>
-                                </div>
-                            </TableCell>
-                        </TableRow>
-                    ))
+                                    </div>
+                                </TableCell>
+                            </TableRow>
+                        );
+                    })
                 )}
             </TableBody>
         </Table>
