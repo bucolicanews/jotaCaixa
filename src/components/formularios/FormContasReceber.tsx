@@ -123,8 +123,9 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
       
       let combinedClients: ClienteCombinado[] = [];
       
-      if (isAdmin) {
-          // ADMIN: Busca Clientes do Sistema (tbl_clientes)
+      // NOVO: Se for Admin ou Cliente, busca APENAS clientes da tbl_clientes (Empresas do Sistema)
+      // Isso garante que o ID selecionado seja sempre um ID de usuário válido.
+      if (isAdmin || role === 'Cliente') {
           const { data: dataSistema, error: errorSistema } = await supabase
               .from('tbl_clientes')
               .select('id, nome, email, cpf, rg, nome_mae, nome_pai, telefone, cep, endereco, numero, complemento, bairro, cidade, estado')
@@ -137,7 +138,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
               // Mapeia para o tipo ClienteCombinado (que estende Cliente)
               combinedClients = (dataSistema as any[]).map(c => ({ 
                   id: c.id, 
-                  proprietario_id: ownerId, // Define o Admin como proprietário
+                  proprietario_id: ownerId, // Define o Admin/Cliente logado como proprietário
                   nome: c.nome, 
                   email: c.email,
                   documento: c.cpf || c.rg,
@@ -146,28 +147,8 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
                   razao_social: c.nome, nome_fantasia: c.nome, telefone: c.telefone, telefone_fixo: null, cep: c.cep, endereco: c.endereco, numero: c.numero, complemento: c.complemento, bairro: c.bairro, cidade: c.cidade, estado: c.estado, created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
               }));
           }
-          
-          // ADMIN: Busca Clientes Diretos (clientes)
-          const { data: dataCR, error: errorCR } = await supabase
-              .from('clientes')
-              .select('*')
-              .eq('proprietario_id', ownerId)
-              .order('nome');
-              
-          if (errorCR) {
-              showError('Erro ao carregar clientes CR.');
-          } else {
-              // Adiciona clientes CR, evitando duplicidade se o ID for o mesmo
-              const existingIds = new Set(combinedClients.map(c => c.id));
-              (dataCR as Cliente[]).forEach(c => {
-                  if (!existingIds.has(c.id)) {
-                      combinedClients.push({ ...c, tipo: 'CR' as const });
-                  }
-              });
-          }
-          
       } else {
-          // Cliente/Usuário: Busca APENAS Clientes de Contas a Receber (clientes)
+          // Usuário: Busca APENAS Clientes de Contas a Receber (clientes)
           let queryCR = supabase.from('clientes').select('*').order('nome');
           queryCR = queryCR.eq('proprietario_id', ownerId);
           
@@ -250,6 +231,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
       if (!clienteSelecionado) throw new Error('Cliente selecionado não encontrado.');
       
       // Se o cliente for do tipo 'Sistema', precisamos garantir que ele exista na tabela 'clientes' (CR)
+      // Esta lógica é crucial para resolver o erro de FK.
       if (clienteSelecionado.tipo === 'Sistema') {
           const clienteDataParaUpsert: Partial<Cliente> = {
               id: clienteSelecionado.id,
