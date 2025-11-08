@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Loader2, User, Building2, Check, X } from 'lucide-react';
-import { Card } from '@/components/ui/card'; // Apenas Card é mantido
+import { Card } from '@/components/ui/card';
 import { supabase } from '@/integrations/supabase/client';
 import { showError } from '@/utils/toast';
 import { Plano } from '@/types/plano';
@@ -9,13 +9,15 @@ import { PERMISSOES_DISPONIVEIS } from '@/config/permissoes';
 import { cn } from '@/lib/utils';
 import CheckoutPlano from '@/components/CheckoutPlano';
 import { useSessao } from '@/hooks/use-sessao';
+import { useNavigate } from 'react-router-dom'; // Importando useNavigate
 
 const Vendas: React.FC = () => {
   const [planos, setPlanos] = useState<Plano[]>([]);
   const [carregandoPlanos, setCarregandoPlanos] = useState(true);
   const [planoSelecionado, setPlanoSelecionado] = useState<Plano | null>(null);
   
-  const { role, carregando: carregandoSessao } = useSessao();
+  const { role, usuario, carregando: carregandoSessao } = useSessao();
+  const navigate = useNavigate();
   const isClient = role === 'Cliente';
 
   const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -33,7 +35,7 @@ const Vendas: React.FC = () => {
     const { data, error } = await supabase
       .from('planos')
       .select('*')
-      .eq('visivel_vendas', true) // FILTRO ADICIONADO
+      .eq('visivel_vendas', true)
       .order('preco_mensal', { ascending: true });
 
     if (error) {
@@ -65,6 +67,13 @@ const Vendas: React.FC = () => {
     );
   }
   
+  // Se o usuário não estiver logado E não houver um plano selecionado, redireciona para o login.
+  // Isso garante que a página de vendas só seja usada para checkout/upgrade.
+  if (!usuario && !planoSelecionado) {
+      navigate('/login', { replace: true });
+      return null;
+  }
+  
   if (planoSelecionado) {
       return (
         <div className="flex flex-col items-center justify-center p-4 w-full">
@@ -77,7 +86,7 @@ const Vendas: React.FC = () => {
       );
   }
   
-  // Renderização para Cliente Logado (Apenas seleção de plano)
+  // Renderização para Cliente Logado (Seleção de plano para Upgrade/Downgrade)
   if (isClient) {
       return (
         <div className="p-4 md:p-12 w-full">
@@ -149,74 +158,11 @@ const Vendas: React.FC = () => {
   }
 
 
-  // Renderização para Usuário Público (Adesão e Trial)
+  // Este bloco não deve ser alcançado se a lógica de redirecionamento estiver correta,
+  // mas é mantido como fallback para o fluxo de adesão pública (que agora é tratado no CheckoutPlano).
   return (
-    <div className="p-4 md:p-12 w-full">
-      <div className="max-w-6xl mx-auto text-center">
-        
-        {/* Seção de Planos */}
-        <div className="pt-8">
-            <h2 className="text-3xl font-bold mb-8">Escolha o Plano Ideal</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {planos.map((plano) => (
-                    <Card 
-                        key={plano.id} 
-                        className={cn(
-                            "p-4 flex flex-col items-center text-center transition-all duration-300",
-                            plano.tipo_cliente === 'PJ' ? "border-primary shadow-lg" : "border-secondary"
-                        )}
-                    >
-                        {plano.tipo_cliente === 'PJ' ? (
-                            <Building2 className="w-8 h-8 text-primary mb-3" />
-                        ) : (
-                            <User className="w-8 h-8 text-primary mb-3" />
-                        )}
-                        
-                        <h3 className="text-xl font-semibold mb-1">{plano.nome} ({plano.tipo_cliente})</h3>
-                        <p className="text-sm text-muted-foreground mb-4 h-10 overflow-hidden">
-                            {plano.descricao || (plano.tipo_cliente === 'PJ' ? 'Gestão completa para empresas.' : 'Uso pessoal e microempreendedores.')}
-                        </p>
-                        
-                        <div className="text-3xl font-extrabold text-foreground mb-4">
-                            {formatCurrency(plano.preco_mensal)}
-                            <span className="text-base font-medium text-muted-foreground">/mês</span>
-                        </div>
-                        
-                        <div className="space-y-3 flex-1 text-left w-full">
-                            <h4 className="font-semibold flex items-center text-primary mb-2">
-                                Módulos Incluídos:
-                            </h4>
-                            <div className="space-y-1">
-                                {permissoesMap.map(p => {
-                                    const isIncluded = plano.permissoes[p.key] === true;
-                                    return (
-                                        <div key={p.key} className="flex items-center space-x-2">
-                                            {isIncluded ? (
-                                                <Check className="w-4 h-4 text-green-500 flex-shrink-0" />
-                                            ) : (
-                                                <X className="w-4 h-4 text-red-500 flex-shrink-0" />
-                                            )}
-                                            <span className={cn("text-sm", !isIncluded && "text-muted-foreground line-through")}>
-                                                {p.label}
-                                            </span>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                        
-                        <Button 
-                            onClick={() => handleSelectPlan(plano)} 
-                            className="w-full mt-6"
-                        >
-                            Iniciar Adesão
-                        </Button>
-                    </Card>
-                ))}
-            </div>
-        </div>
-        
-      </div>
+    <div className="flex items-center justify-center h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
     </div>
   );
 };

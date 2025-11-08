@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 const NAV_ITEMS = [
   { name: 'Início', href: '/' },
   { name: 'Sistema', href: '/#sistema' },
-  { name: 'Preços', href: '/vendas' },
+  { name: 'Preços', href: '/#precos' }, // ALTERADO PARA ÂNCORA
   { name: 'Suporte', href: '/#suporte' },
   { name: 'Sobre Nós', href: '/#sobre' },
 ];
@@ -43,7 +43,6 @@ const SiteHeader: React.FC = () => {
         setSheetOpen(false);
       } else {
         // Se estiver em outra página, navega para a raiz e usa o hash para que o scroll ocorra após o carregamento.
-        // Nota: O navegador lida com o scroll para o hash após a navegação.
         navigate(href);
       }
     }
