@@ -15,6 +15,7 @@ import { useNavigate } from 'react-router-dom';
 interface FluxoData {
     receber: number;
     pagar: number;
+    isGeral: boolean; // Novo campo para indicar se os dados são de parcelas ou lançamentos
 }
 
 interface ContaMensalData {
@@ -31,7 +32,7 @@ const DashboardFinanceiro: React.FC = () => {
     const navigate = useNavigate();
     
     const [filtroContaId, setFiltroContaId] = useState('todos'); // 'todos' ou ID da conta
-    const [fluxoData, setFluxoData] = useState<FluxoData>({ receber: 0, pagar: 0 });
+    const [fluxoData, setFluxoData] = useState<FluxoData>({ receber: 0, pagar: 0, isGeral: true });
     const [contaMensalData, setContaMensalData] = useState<ContaMensalData | null>(null);
     const [loadingFluxo, setLoadingFluxo] = useState(true);
     const [totalAReceber30Dias, setTotalAReceber30Dias] = useState(0);
@@ -103,7 +104,7 @@ const DashboardFinanceiro: React.FC = () => {
         });
         
         // Atualiza o fluxo de caixa para o gráfico (Entradas vs Saídas do mês)
-        setFluxoData({ receber: entradas, pagar: saidas });
+        setFluxoData({ receber: entradas, pagar: saidas, isGeral: false });
         setLoadingFluxo(false);
 
     }, [ownerId, contas]);
@@ -141,7 +142,7 @@ const DashboardFinanceiro: React.FC = () => {
         if (cpError) { showError('Erro ao buscar CP: ' + cpError.message); return; }
         const totalPagar = (cpData || []).reduce((sum, p) => sum + p.valor_parcela, 0);
         
-        setFluxoData({ receber: totalReceber, pagar: totalPagar });
+        setFluxoData({ receber: totalReceber, pagar: totalPagar, isGeral: true });
         setLoadingFluxo(false);
     }, [ownerId]);
     
@@ -202,10 +203,10 @@ const DashboardFinanceiro: React.FC = () => {
             fill: c.saldo_atual >= 0 ? COLORS[0] : COLORS[3],
         }));
         
-    // Dados para o gráfico de Fluxo (Receitas vs Despesas)
+    // Dados para o gráfico de Fluxo (A Receber/Entradas vs A Pagar/Saídas)
     const fluxoChartData = [
-        { name: 'Entradas (Mês)', valor: fluxoData.receber, fill: COLORS[1] },
-        { name: 'Saídas (Mês)', valor: fluxoData.pagar, fill: COLORS[3] },
+        { name: fluxoData.isGeral ? 'A Receber (Mês)' : 'Entradas (Mês)', valor: fluxoData.receber, fill: COLORS[1] },
+        { name: fluxoData.isGeral ? 'A Pagar (Mês)' : 'Saídas (Mês)', valor: fluxoData.pagar, fill: COLORS[3] },
     ];
     
     // Dados para o gráfico de Lucro/Prejuízo
@@ -228,7 +229,7 @@ const DashboardFinanceiro: React.FC = () => {
             {/* Indicadores Chave (KPIs) */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                 
-                {/* KPI 1: Saldo Total / Detalhe da Conta */}
+                {/* KPIs Dinâmicos */}
                 {isContaFiltrada && contaMensalData ? (
                     <>
                         <Card 
@@ -442,7 +443,7 @@ const DashboardFinanceiro: React.FC = () => {
                     className="lg:col-span-3 cursor-pointer hover:shadow-xl transition-shadow"
                     onClick={() => navigate('/relatorios/fluxo-caixa')}
                 >
-                    <CardHeader><CardTitle className="text-xl flex items-center"><TrendingUp className="w-5 h-5 mr-2" /> Fluxo de Caixa (Entradas vs Saídas - Mês)</CardTitle></CardHeader>
+                    <CardHeader><CardTitle className="text-xl flex items-center"><TrendingUp className="w-5 h-5 mr-2" /> Fluxo de Caixa ({fluxoData.isGeral ? 'A Receber vs A Pagar' : 'Entradas vs Saídas'} - Mês)</CardTitle></CardHeader>
                     <CardContent className="h-80">
                         <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={fluxoChartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
