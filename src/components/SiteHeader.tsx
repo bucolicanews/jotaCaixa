@@ -6,7 +6,7 @@ import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
 
 const NAV_ITEMS = [
-  { name: 'Início', href: '/' },
+  { name: 'Início', href: '/' }, // Rota raiz
   { name: 'Sistema', href: '/#sistema' },
   { name: 'Preços', href: '/vendas' },
   { name: 'Suporte', href: '/#suporte' },
@@ -18,12 +18,13 @@ const SiteHeader: React.FC = () => {
   const location = useLocation();
 
   const handleScrollToSection = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
-    // Se o link for para outra página (ex: /vendas), deixa o React Router lidar com isso
+    const targetId = href.substring(2); // Remove '/#'
+    const targetElement = document.getElementById(targetId);
+
+    // Se o link for para a rota raiz ou para uma rota externa, deixa o Link/Router lidar com isso.
     if (!href.startsWith('/#')) return;
 
     e.preventDefault();
-    const targetId = href.substring(2); // Remove '/#'
-    const targetElement = document.getElementById(targetId);
 
     if (targetElement) {
       // Se já estiver na Landing Page, faz o scroll suave
@@ -31,24 +32,36 @@ const SiteHeader: React.FC = () => {
         targetElement.scrollIntoView({ behavior: 'smooth' });
         setSheetOpen(false); // Fecha o menu mobile
       } else {
-        // Se estiver em outra página, navega para a raiz e o scroll será feito no próximo render
-        // Nota: O scroll suave após a navegação é mais complexo e geralmente requer um useEffect no destino.
-        // Para simplificar, navegamos e confiamos que o usuário verá a seção.
+        // Se estiver em outra página, navega para a raiz e adiciona o hash para que o scroll ocorra após o carregamento.
         window.location.href = href;
       }
     }
   };
   
-  // Função auxiliar para determinar se o link deve ser um Link ou um <a>
+  // Função auxiliar para renderizar links de navegação
   const renderNavLink = (item: typeof NAV_ITEMS[0]) => {
       const isAnchor = item.href.startsWith('/#');
+      const isHome = item.href === '/';
+      
+      const classes = "text-sm font-medium text-muted-foreground hover:text-foreground transition-colors";
+      
+      if (isHome) {
+          return (
+              <Link 
+                  to={item.href} 
+                  className={classes}
+              >
+                  {item.name}
+              </Link>
+          );
+      }
       
       if (isAnchor) {
           return (
               <a
                   href={item.href}
                   onClick={(e) => handleScrollToSection(e, item.href)}
-                  className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+                  className={classes}
               >
                   {item.name}
               </a>
@@ -58,7 +71,7 @@ const SiteHeader: React.FC = () => {
       return (
           <Link 
               to={item.href} 
-              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+              className={classes}
           >
               {item.name}
           </Link>
@@ -72,7 +85,10 @@ const SiteHeader: React.FC = () => {
           return (
               <a
                   href={item.href}
-                  onClick={(e) => handleScrollToSection(e, item.href)}
+                  onClick={(e) => {
+                      handleScrollToSection(e, item.href);
+                      setSheetOpen(false);
+                  }}
                   className="text-lg font-medium text-foreground hover:text-primary transition-colors"
               >
                   {item.name}
