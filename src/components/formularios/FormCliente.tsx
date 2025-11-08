@@ -155,7 +155,8 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
                       onClick={() => toggleAllTags(true)} 
                       disabled={loadingBulk || form.formState.isSubmitting || isAllActive || !clienteId}
                   >
-                      {loadingBulk ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Marcar Todas'}
+                      {loadingBulk && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      Marcar Todas
                   </Button>
                   <Button 
                       type="button" 
@@ -164,7 +165,8 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
                       onClick={() => toggleAllTags(false)} 
                       disabled={loadingBulk || form.formState.isSubmitting || !isAllActive || !clienteId}
                   >
-                      {loadingBulk ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Desmarcar Todas'}
+                      {loadingBulk && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      Desmarcar Todas
                   </Button>
               </div>
           </div>
