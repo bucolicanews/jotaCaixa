@@ -507,14 +507,13 @@ const ClientesPage = () => {
                     </TableRow>
                 ) : (
                     empresas.map((empresa) => {
-                        const isAprovado = empresa.aprovado;
                         const dataFimAcesso = empresa.data_fim_acesso ? parseISO(empresa.data_fim_acesso) : null;
-                        const isAtivo = dataFimAcesso && isPast(new Date()) === false; // Data de fim de acesso é futura ou hoje
-                        const isAvulso = empresa.tipo_cliente?.endsWith('_Avulso') ?? false; // Verifica o novo sufixo
-                        const isBlocked = dataFimAcesso === null && isAprovado; // Aprovado, mas sem data de fim (desativado)
+                        const isAtivo = dataFimAcesso && isPast(new Date()) === false;
+                        const isAvulso = empresa.tipo_cliente?.endsWith('_Avulso') ?? false;
+                        const isBlocked = dataFimAcesso === null && empresa.aprovado;
                         
                         let statusBadge;
-                        if (!isAprovado) {
+                        if (!empresa.aprovado) {
                             statusBadge = <Badge variant="warning">Pendente</Badge>;
                         } else if (isBlocked) {
                             statusBadge = <Badge variant="destructive">Bloqueado</Badge>;
@@ -531,7 +530,7 @@ const ClientesPage = () => {
                         const planoNome = empresa.plano_id ? planosMap[empresa.plano_id] || 'N/A' : 'N/A';
 
                         return (
-                            <TableRow key={empresa.id} className={cn(!isAprovado && "bg-yellow-500/10", isBlocked && "bg-red-500/10")}>
+                            <TableRow key={empresa.id} className={cn(!empresa.aprovado && "bg-yellow-500/10", isBlocked && "bg-red-500/10")}>
                                 <TableCell className="font-medium">{empresa.nome}</TableCell>
                                 <TableCell>{empresa.email}</TableCell>
                                 <TableCell className="text-sm text-muted-foreground">{planoNome}</TableCell>
