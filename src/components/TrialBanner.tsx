@@ -46,9 +46,9 @@ const TrialBanner: React.FC = () => {
         setDataFimAcesso(dataFim);
         setPlanoInfo(planoData as PlanoInfo);
         
-        // 2. Determinar se é Trial (Regra: Acesso futuro E data_fim_acesso <= (criado_em + 7 dias))
+        // 2. Determinar se é Trial (Regra: Acesso futuro E data_fim_acesso está dentro do período de 7 dias da criação)
         const isFutureAccess = isFuture(dataFim);
-        const dataLimiteTrial = addDays(dataCriacao, 7);
+        const dataLimiteTrial = addDays(dataCriacao, 7); // 7 dias de trial
         
         // Compara se a data de fim de acesso é igual ou anterior à data limite do trial (criado_em + 7 dias)
         // Usamos isSameDay para evitar problemas de fuso horário na comparação de datas

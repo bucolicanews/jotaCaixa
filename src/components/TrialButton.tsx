@@ -6,6 +6,7 @@ import { showError, showSuccess } from '@/utils/toast';
 import { ClienteProfile } from '@/types/usuario';
 import { addDays } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
+import { PERMISSOES_TRIAL_COMPLETO } from '@/config/permissoes-padrao'; // Importando as novas permissões
 
 interface TrialButtonProps {
   clienteProfile: ClienteProfile;
@@ -24,7 +25,7 @@ const TrialButton: React.FC<TrialButtonProps> = ({ clienteProfile, onTrialActiva
     // 1. Buscar o Plano de Trial (assumindo que o plano mais barato é o de trial, ou o primeiro)
     const { data: planos, error: planosError } = await supabase
         .from('planos')
-        .select('id, permissoes, tipo_cliente')
+        .select('id, tipo_cliente')
         .order('preco_mensal', { ascending: true })
         .limit(1);
         
@@ -48,14 +49,14 @@ const TrialButton: React.FC<TrialButtonProps> = ({ clienteProfile, onTrialActiva
                 aprovado: true, // Aprova o cliente
                 plano_id: planoTrial.id,
                 data_fim_acesso: dataFimAcesso,
-                permissoes: planoTrial.permissoes,
+                permissoes: PERMISSOES_TRIAL_COMPLETO, // APLICA PERMISSÕES TOTAIS
                 tipo_cliente: planoTrial.tipo_cliente,
             })
             .eq('id', clienteProfile.id);
 
         if (updateError) throw updateError;
         
-        showSuccess(`Trial de ${days} dias ativado com sucesso!`);
+        showSuccess(`Trial de ${days} dias ativado com acesso completo!`);
         onTrialActivated(); // Força o refetch da sessão no LayoutPrincipal
         navigate('/painel', { replace: true });
 
@@ -105,7 +106,7 @@ const TrialButton: React.FC<TrialButtonProps> = ({ clienteProfile, onTrialActiva
         disabled={loading}
       >
         {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
-        Iniciar Trial Grátis de 7 Dias
+        Iniciar Trial Grátis de 7 Dias (Acesso Completo)
       </Button>
       
       <Button 
