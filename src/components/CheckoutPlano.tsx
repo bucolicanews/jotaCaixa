@@ -12,7 +12,8 @@ import { format, addDays } from 'date-fns';
 import { useStripeConfigClient } from '@/integrations/stripe/use-stripe-config-client';
 import { useSessao } from '@/hooks/use-sessao';
 import { ClienteProfile } from '@/types/usuario';
-import { BASE_URL } from '@/config/app-config'; // Importando BASE_URL
+import { BASE_URL } from '@/config/app-config';
+import { useAdminId } from '@/hooks/use-admin-id'; // IMPORTADO
 
 interface CheckoutPlanoProps {
   plano: Plano;
@@ -29,13 +30,16 @@ const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano, isUpgrade = false,
   const navigate = useNavigate();
   
   const { usuario, perfil, role, carregando: carregandoSessao, refetch } = useSessao();
-  
+  const { adminId: primaryAdminId, loading: loadingAdminId } = useAdminId(); // NOVO HOOK
+
   // Determina o proprietário das chaves Stripe
   const proprietarioId = React.useMemo(() => {
     if (role === 'Admin') return usuario?.id || null;
-    if (role === 'Cliente') return (perfil as ClienteProfile)?.admin_id || null;
-    return null;
-  }, [role, usuario, perfil]);
+    if (role === 'Cliente') return (perfil as ClienteProfile)?.admin_id || primaryAdminId; // Usa admin_id do cliente ou o primaryAdminId
+    
+    // Se não estiver logado (fluxo de adesão pública), usa o ID do Admin principal
+    return primaryAdminId;
+  }, [role, usuario, perfil, primaryAdminId]);
 
   const { loading: loadingStripe } = useStripeConfigClient(proprietarioId);
 
@@ -93,7 +97,7 @@ const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano, isUpgrade = false,
   };
   
   const handleCheckout = async (emailCliente?: string, clienteId?: string) => {
-    if (loadingStripe) {
+    if (loadingStripe || loadingAdminId) {
         showError('Sistema de pagamento ainda não carregado.');
         return;
     }
@@ -178,7 +182,7 @@ const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano, isUpgrade = false,
   
   const valorParaExibir = contaPagarId && valorCobrado !== undefined ? valorCobrado : plano.preco_mensal;
 
-  if (loadingStripe || carregandoSessao) {
+  if (loadingStripe || carregandoSessao || loadingAdminId) {
       return (
         <Card className="w-full max-w-md mx-auto">
             <CardHeader><CardTitle className="text-xl">Carregando Pagamento...</CardTitle></CardHeader>
@@ -232,15 +236,12 @@ const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano, isUpgrade = false,
         </CardHeader>
         <CardContent className="space-y-6">
           
-          {/* Removido o bloco "Próxima Etapa: Pagamento" */}
-          
           {/* No fluxo de adesão, o usuário está logado temporariamente. Usamos o ID e email da sessão. */}
           <Button onClick={() => handleCheckout(usuario?.email, usuario?.id)} className="w-full" disabled={isSubmitting}>
             {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CreditCard className="mr-2 h-4 w-4" />}
             Ir para o Checkout (R$ {plano.preco_mensal.toFixed(2)})
           </Button>
           
-          {/* Removido o botão "Ir para o Login" */}
         </CardContent>
       </Card>
     );
