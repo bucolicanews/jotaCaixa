@@ -37,7 +37,7 @@ const TaggedFormField: React.FC<TaggedFormFieldProps> = ({ control, fieldName, l
         );
     }
     
-    const { isTagActive, loading, toggleTag } = useTagManager(clienteId, { label: fieldMap.label, tag: fieldMap.tag, field: fieldMap.field }, tagRefreshKey);
+    const { isTagActive, loading, toggleTag } = useTagManager(clienteId, fieldMap, tagRefreshKey);
 
     const handleToggle = async (checked: boolean) => {
         await toggleTag(checked);
