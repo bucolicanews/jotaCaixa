@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, ArrowUpCircle, ArrowDownCircle, Banknote, TrendingUp, Scale, Filter } from 'lucide-react';
+import { Loader2, ArrowUpCircle, ArrowDownCircle, Banknote, TrendingUp, Scale, Filter, Wallet, Landmark } from 'lucide-react';
 import { useSessao } from '@/hooks/use-sessao';
 import { supabase } from '@/integrations/supabase/client';
 import { showError } from '@/utils/toast';
@@ -17,6 +17,13 @@ interface FluxoData {
     pagar: number;
 }
 
+interface ContaMensalData {
+    saldoInicial: number;
+    entradas: number;
+    saidas: number;
+    saldoFinal: number;
+}
+
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
 
 const DashboardFinanceiro: React.FC = () => {
@@ -25,6 +32,7 @@ const DashboardFinanceiro: React.FC = () => {
     
     const [filtroContaId, setFiltroContaId] = useState('todos'); // 'todos' ou ID da conta
     const [fluxoData, setFluxoData] = useState<FluxoData>({ receber: 0, pagar: 0 });
+    const [contaMensalData, setContaMensalData] = useState<ContaMensalData | null>(null);
     const [loadingFluxo, setLoadingFluxo] = useState(true);
     const [totalAReceber30Dias, setTotalAReceber30Dias] = useState(0);
     const [totalAPagar30Dias, setTotalAPagar30Dias] = useState(0);
@@ -40,52 +48,84 @@ const DashboardFinanceiro: React.FC = () => {
         return contas.filter(c => c.id === filtroContaId);
     }, [contas, filtroContaId]);
 
-    const fetchFluxoData = useCallback(async () => {
+    const fetchContaMensalData = useCallback(async (contaId: string) => {
         if (!ownerId) return;
         setLoadingFluxo(true);
+
+        const startOfMonthISO = format(startOfMonth(new Date()), 'yyyy-MM-dd');
+        const endOfMonthISO = format(endOfMonth(new Date()), 'yyyy-MM-dd');
+        
+        const contaSelecionada = contas.find(c => c.id === contaId);
+        const saldoInicialConta = contaSelecionada?.saldo_inicial || 0;
+
+        // 1. Buscar Lançamentos do Mês Atual
+        const { data: lancamentosData, error: lError } = await supabase
+            .from('lancamentos')
+            .select('valor, tipo')
+            .eq('proprietario_id', ownerId)
+            .eq('conta_bancaria_id', contaId)
+            .gte('data_movimentacao', startOfMonthISO)
+            .lte('data_movimentacao', endOfMonthISO);
+            
+        if (lError) {
+            showError('Erro ao buscar lançamentos mensais: ' + lError.message);
+            setContaMensalData(null);
+            setLoadingFluxo(false);
+            return;
+        }
+        
+        const entradas = (lancamentosData || []).filter(l => l.tipo === 'Entrada').reduce((sum, l) => sum + l.valor, 0);
+        const saidas = (lancamentosData || []).filter(l => l.tipo === 'Saida').reduce((sum, l) => sum + l.valor, 0);
+        
+        // 2. Calcular Saldo Inicial (antes do mês atual)
+        const { data: lancamentosAnteriores, error: laError } = await supabase
+            .from('lancamentos')
+            .select('valor, tipo')
+            .eq('proprietario_id', ownerId)
+            .eq('conta_bancaria_id', contaId)
+            .lt('data_movimentacao', startOfMonthISO);
+            
+        if (laError) {
+            console.error('Erro ao buscar lançamentos anteriores:', laError);
+        }
+        
+        const entradasAnteriores = (lancamentosAnteriores || []).filter(l => l.tipo === 'Entrada').reduce((sum, l) => sum + l.valor, 0);
+        const saidasAnteriores = (lancamentosAnteriores || []).filter(l => l.tipo === 'Saida').reduce((sum, l) => sum + l.valor, 0);
+        
+        const saldoInicialCalculado = saldoInicialConta + entradasAnteriores - saidasAnteriores;
+        const saldoFinal = saldoInicialCalculado + entradas - saidas;
+
+        setContaMensalData({
+            saldoInicial: saldoInicialCalculado,
+            entradas: entradas,
+            saidas: saidas,
+            saldoFinal: saldoFinal,
+        });
+        
+        // Atualiza o fluxo de caixa para o gráfico (Entradas vs Saídas do mês)
+        setFluxoData({ receber: entradas, pagar: saidas });
+        setLoadingFluxo(false);
+
+    }, [ownerId, contas]);
+
+
+    const fetchFluxoDataGeral = useCallback(async () => {
+        if (!ownerId) return;
+        setLoadingFluxo(true);
+        setContaMensalData(null); // Limpa dados mensais se for geral
 
         const start = format(startOfMonth(new Date()), 'yyyy-MM-dd');
         const end = format(endOfMonth(new Date()), 'yyyy-MM-dd');
         
         // 1. Buscar Contas a Receber (Admin) no mês atual
-        let crQuery = supabase
+        const { data: crData, error: crError } = await supabase
             .from('admin_parcelas_receber')
             .select('valor_parcela, status')
             .eq('admin_id', ownerId)
             .gte('data_vencimento', start)
             .lte('data_vencimento', end)
             .neq('status', 'cancelada');
-            
-        if (filtroContaId !== 'todos') {
-            // Se uma conta específica for selecionada, filtramos os lançamentos que usam essa conta
-            
-            const { data: entradasData } = await supabase
-                .from('lancamentos')
-                .select('valor')
-                .eq('proprietario_id', ownerId)
-                .eq('conta_bancaria_id', filtroContaId)
-                .eq('tipo', 'Entrada')
-                .gte('data_movimentacao', start)
-                .lte('data_movimentacao', end);
-                
-            const { data: saidasData } = await supabase
-                .from('lancamentos')
-                .select('valor')
-                .eq('proprietario_id', ownerId)
-                .eq('conta_bancaria_id', filtroContaId)
-                .eq('tipo', 'Saida')
-                .gte('data_movimentacao', start)
-                .lte('data_movimentacao', end);
-                
-            const totalReceber = (entradasData || []).reduce((sum, l) => sum + l.valor, 0);
-            const totalPagar = (saidasData || []).reduce((sum, l) => sum + l.valor, 0);
-            
-            setFluxoData({ receber: totalReceber, pagar: totalPagar });
-            setLoadingFluxo(false);
-            return;
-        }
 
-        const { data: crData, error: crError } = await crQuery;
         if (crError) { showError('Erro ao buscar CR: ' + crError.message); return; }
         const totalReceber = (crData || []).reduce((sum, p) => sum + p.valor_parcela, 0);
         
@@ -103,7 +143,7 @@ const DashboardFinanceiro: React.FC = () => {
         
         setFluxoData({ receber: totalReceber, pagar: totalPagar });
         setLoadingFluxo(false);
-    }, [ownerId, filtroContaId]);
+    }, [ownerId]);
     
     const fetchKPIs = useCallback(async () => {
         if (!ownerId) return;
@@ -141,10 +181,14 @@ const DashboardFinanceiro: React.FC = () => {
 
     useEffect(() => {
         if (ownerId) {
-            fetchFluxoData();
             fetchKPIs();
+            if (filtroContaId === 'todos') {
+                fetchFluxoDataGeral();
+            } else {
+                fetchContaMensalData(filtroContaId);
+            }
         }
-    }, [ownerId, fetchFluxoData, fetchKPIs]);
+    }, [ownerId, filtroContaId, fetchKPIs, fetchFluxoDataGeral, fetchContaMensalData]);
 
     const loading = carregandoSessao || carregandoSaldos || loadingFluxo;
     const lucroPrejuizo = fluxoData.receber - fluxoData.pagar;
@@ -160,8 +204,8 @@ const DashboardFinanceiro: React.FC = () => {
         
     // Dados para o gráfico de Fluxo (Receitas vs Despesas)
     const fluxoChartData = [
-        { name: 'A Receber (Mês)', valor: fluxoData.receber, fill: COLORS[1] },
-        { name: 'A Pagar (Mês)', valor: fluxoData.pagar, fill: COLORS[3] },
+        { name: 'Entradas (Mês)', valor: fluxoData.receber, fill: COLORS[1] },
+        { name: 'Saídas (Mês)', valor: fluxoData.pagar, fill: COLORS[3] },
     ];
     
     // Dados para o gráfico de Lucro/Prejuízo
@@ -176,50 +220,126 @@ const DashboardFinanceiro: React.FC = () => {
             </div>
         );
     }
+    
+    const isContaFiltrada = filtroContaId !== 'todos';
 
     return (
         <div className="space-y-6">
             {/* Indicadores Chave (KPIs) */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <Card 
-                    className={cn("border-l-4 cursor-pointer hover:shadow-xl transition-shadow", totalSaldo >= 0 ? "border-green-500" : "border-red-500")}
-                    onClick={() => navigate('/bancos')}
-                >
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium flex items-center"><Banknote className="w-4 h-4 mr-2" /> Saldo Total (Contas)</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className={cn("text-2xl font-bold", totalSaldo >= 0 ? "text-green-600" : "text-red-600")}>
-                            {formatCurrency(totalSaldo)}
-                        </div>
-                    </CardContent>
-                </Card>
-                <Card 
-                    className="border-l-4 border-blue-500 cursor-pointer hover:shadow-xl transition-shadow"
-                    onClick={() => navigate('/contas-receber')}
-                >
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium flex items-center"><ArrowUpCircle className="w-4 h-4 mr-2" /> A Receber (30 dias)</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold text-blue-600">
-                            {formatCurrency(totalAReceber30Dias)}
-                        </div>
-                    </CardContent>
-                </Card>
-                <Card 
-                    className="border-l-4 border-red-500 cursor-pointer hover:shadow-xl transition-shadow"
-                    onClick={() => navigate('/contas-pagar')}
-                >
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium flex items-center"><ArrowDownCircle className="w-4 h-4 mr-2" /> A Pagar (30 dias)</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold text-red-600">
-                            {formatCurrency(totalAPagar30Dias)}
-                        </div>
-                    </CardContent>
-                </Card>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                
+                {/* KPI 1: Saldo Total / Detalhe da Conta */}
+                {isContaFiltrada && contaMensalData ? (
+                    <>
+                        <Card 
+                            className="border-l-4 border-gray-500 cursor-pointer hover:shadow-xl transition-shadow"
+                            onClick={() => navigate('/bancos')}
+                        >
+                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                <CardTitle className="text-sm font-medium flex items-center"><Wallet className="w-4 h-4 mr-2" /> Saldo Inicial (Mês)</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="text-2xl font-bold">
+                                    {formatCurrency(contaMensalData.saldoInicial)}
+                                </div>
+                            </CardContent>
+                        </Card>
+                        <Card 
+                            className="border-l-4 border-green-500 cursor-pointer hover:shadow-xl transition-shadow"
+                            onClick={() => navigate('/relatorios/fluxo-caixa')}
+                        >
+                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                <CardTitle className="text-sm font-medium flex items-center"><ArrowUpCircle className="w-4 h-4 mr-2" /> Entradas (Mês)</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="text-2xl font-bold text-green-600">
+                                    {formatCurrency(contaMensalData.entradas)}
+                                </div>
+                            </CardContent>
+                        </Card>
+                        <Card 
+                            className="border-l-4 border-red-500 cursor-pointer hover:shadow-xl transition-shadow"
+                            onClick={() => navigate('/relatorios/fluxo-caixa')}
+                        >
+                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                <CardTitle className="text-sm font-medium flex items-center"><ArrowDownCircle className="w-4 h-4 mr-2" /> Saídas (Mês)</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="text-2xl font-bold text-red-600">
+                                    {formatCurrency(contaMensalData.saidas)}
+                                </div>
+                            </CardContent>
+                        </Card>
+                        <Card 
+                            className={cn("border-l-4 cursor-pointer hover:shadow-xl transition-shadow", contaMensalData.saldoFinal >= 0 ? "border-blue-500" : "border-red-500")}
+                            onClick={() => navigate('/bancos')}
+                        >
+                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                <CardTitle className="text-sm font-medium flex items-center"><Landmark className="w-4 h-4 mr-2" /> Saldo Final (Conta)</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className={cn("text-2xl font-bold", contaMensalData.saldoFinal >= 0 ? "text-blue-600" : "text-red-600")}>
+                                    {formatCurrency(contaMensalData.saldoFinal)}
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </>
+                ) : (
+                    <>
+                        <Card 
+                            className={cn("border-l-4 cursor-pointer hover:shadow-xl transition-shadow", totalSaldo >= 0 ? "border-green-500" : "border-red-500")}
+                            onClick={() => navigate('/bancos')}
+                        >
+                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                <CardTitle className="text-sm font-medium flex items-center"><Banknote className="w-4 h-4 mr-2" /> Saldo Total (Contas)</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className={cn("text-2xl font-bold", totalSaldo >= 0 ? "text-green-600" : "text-red-600")}>
+                                    {formatCurrency(totalSaldo)}
+                                </div>
+                            </CardContent>
+                        </Card>
+                        <Card 
+                            className="border-l-4 border-blue-500 cursor-pointer hover:shadow-xl transition-shadow"
+                            onClick={() => navigate('/contas-receber')}
+                        >
+                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                <CardTitle className="text-sm font-medium flex items-center"><ArrowUpCircle className="w-4 h-4 mr-2" /> A Receber (30 dias)</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="text-2xl font-bold text-blue-600">
+                                    {formatCurrency(totalAReceber30Dias)}
+                                </div>
+                            </CardContent>
+                        </Card>
+                        <Card 
+                            className="border-l-4 border-red-500 cursor-pointer hover:shadow-xl transition-shadow"
+                            onClick={() => navigate('/contas-pagar')}
+                        >
+                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                <CardTitle className="text-sm font-medium flex items-center"><ArrowDownCircle className="w-4 h-4 mr-2" /> A Pagar (30 dias)</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="text-2xl font-bold text-red-600">
+                                    {formatCurrency(totalAPagar30Dias)}
+                                </div>
+                            </CardContent>
+                        </Card>
+                        <Card 
+                            className={cn("border-l-4 cursor-pointer hover:shadow-xl transition-shadow", lucroPrejuizo >= 0 ? "border-green-500" : "border-red-500")}
+                            onClick={() => navigate('/relatorios/dre')}
+                        >
+                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                <CardTitle className="text-sm font-medium flex items-center"><TrendingUp className="w-4 h-4 mr-2" /> Resultado Mensal</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className={cn("text-2xl font-bold", lucroPrejuizo >= 0 ? "text-green-600" : "text-red-600")}>
+                                    {formatCurrency(lucroPrejuizo)}
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </>
+                )}
             </div>
             
             {/* Filtro de Contexto */}
@@ -322,7 +442,7 @@ const DashboardFinanceiro: React.FC = () => {
                     className="lg:col-span-3 cursor-pointer hover:shadow-xl transition-shadow"
                     onClick={() => navigate('/relatorios/fluxo-caixa')}
                 >
-                    <CardHeader><CardTitle className="text-xl flex items-center"><TrendingUp className="w-5 h-5 mr-2" /> Fluxo de Caixa (A Receber vs A Pagar - Mês)</CardTitle></CardHeader>
+                    <CardHeader><CardTitle className="text-xl flex items-center"><TrendingUp className="w-5 h-5 mr-2" /> Fluxo de Caixa (Entradas vs Saídas - Mês)</CardTitle></CardHeader>
                     <CardContent className="h-80">
                         <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={fluxoChartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
