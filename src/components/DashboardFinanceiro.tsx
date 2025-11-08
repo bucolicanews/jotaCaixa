@@ -5,9 +5,10 @@ import { useSessao } from '@/hooks/use-sessao';
 import { supabase } from '@/integrations/supabase/client';
 import { showError } from '@/utils/toast';
 import { formatCurrency } from '@/utils/formatters';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import useSaldoContaCalculado from '@/hooks/use-saldo-conta-calculado';
-import { startOfMonth, endOfMonth, format } from 'date-fns';
+import { startOfMonth, endOfMonth, format, addDays } from 'date-fns';
+import { cn } from '@/lib/utils';
 
 interface FluxoData {
     receber: number;
@@ -17,7 +18,7 @@ interface FluxoData {
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
 
 const DashboardFinanceiro: React.FC = () => {
-    const { usuario, role, carregando: carregandoSessao } = useSessao();
+    const { usuario, carregando: carregandoSessao } = useSessao();
     const [fluxoData, setFluxoData] = useState<FluxoData>({ receber: 0, pagar: 0 });
     const [loadingFluxo, setLoadingFluxo] = useState(true);
     const [totalAReceber30Dias, setTotalAReceber30Dias] = useState(0);
