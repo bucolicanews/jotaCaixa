@@ -5,6 +5,7 @@ import { useSessao } from './use-sessao';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 import { CAMPOS_USUARIO_MAPA } from '@/config/contrato-campos-mapeaveis';
 import { ContratoTag } from '@/types/contratos';
+import { CAMPOS_CLIENTE_MAPA } from '@/config/contrato-campos-mapeaveis'; // Importando mapeamento de cliente
 
 interface BulkTagManagerHook {
     loading: boolean;
@@ -16,32 +17,36 @@ interface BulkTagManagerHook {
 
 /**
  * Hook para gerenciar a ativação/desativação em massa de tags de contrato para um recurso (Usuário/Cliente).
- * @param resourceId O ID do recurso (Usuário ou Cliente) que possui as tags.
+ * @param resourceId O ID do recurso (Usuário, Cliente CR ou Cliente do Sistema) que possui as tags.
  */
 export function useBulkTagManager(resourceId: string | undefined): BulkTagManagerHook {
-    const { perfil, role } = useSessao();
+    const { perfil, role, usuario } = useSessao();
     const [loading, setLoading] = useState(true);
     const [activeTagsCount, setActiveTagsCount] = useState(0);
     const [refreshKey, setRefreshKey] = useState(0);
 
-    const getEmpresaId = () => {
-        if (role === 'Cliente') return (perfil as ClienteProfile)?.id;
-        if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id;
+    const isUserScope = perfil && 'cliente_id' in perfil;
+    // const isClientCRScope = perfil && 'razao_social' in perfil; // Removido TS6133
+
+    const getOwnerId = () => {
+        // 1. Se for Admin, o proprietário da tag é o próprio Admin logado.
+        if (role === 'Admin') return usuario?.id || null;
         
-        // Se for Admin, o ID da empresa para a qual a tag será criada/lida é o ID do recurso (Cliente/Usuário) que está sendo editado.
-        if (role === 'Admin' && resourceId) {
-            // Se o recurso for um Cliente (tem limite_usuarios), usa o ID dele.
-            if (perfil && 'limite_usuarios' in perfil) return resourceId;
-            // Se o recurso for um Usuário (tem cliente_id), precisamos buscar o cliente_id dele.
-            // No contexto do FormPerfil, o resourceId é o ID do próprio Admin, então usamos ele.
-            return resourceId;
-        }
+        // 2. Se for Cliente (do sistema), o proprietário da tag é o próprio Cliente logado.
+        if (role === 'Cliente') return (perfil as ClienteProfile)?.id;
+        
+        // 3. Se for Usuário (funcionário), o proprietário da tag é o Cliente_ID.
+        if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id;
         
         return null;
     };
     
-    const empresaId = getEmpresaId();
-    const allMappableTags = CAMPOS_USUARIO_MAPA.map(m => m.tag);
+    const empresaId = getOwnerId();
+    
+    // Determina qual mapa de tags usar (assumindo que este hook é usado para Usuário/Cliente do Sistema)
+    // No FormCliente (Cliente CR), o mapeamento é feito manualmente no TaggedFormField.
+    // Aqui, focamos no mapeamento de Usuário (tbl_usuarios) e Cliente do Sistema (tbl_clientes)
+    const allMappableTags = isUserScope ? CAMPOS_USUARIO_MAPA.map(m => m.tag) : CAMPOS_CLIENTE_MAPA.map(m => m.tag);
     const isAllActive = activeTagsCount === allMappableTags.length;
 
     const refetchStatus = useCallback(() => {
@@ -70,7 +75,7 @@ export function useBulkTagManager(resourceId: string | undefined): BulkTagManage
             setActiveTagsCount(data?.length || 0);
         }
         setLoading(false);
-    }, [resourceId, empresaId, refreshKey]);
+    }, [resourceId, empresaId, refreshKey, allMappableTags]);
 
     useEffect(() => {
         fetchTagStatus();
@@ -85,12 +90,15 @@ export function useBulkTagManager(resourceId: string | undefined): BulkTagManage
         setLoading(true);
         
         try {
+            const targetMap = isUserScope ? CAMPOS_USUARIO_MAPA : CAMPOS_CLIENTE_MAPA;
+            const origemDado = isUserScope ? `tbl_usuarios` : `clientes`; // Usamos 'clientes' para o Cliente CR
+            
             if (activate) {
                 // Inserir todas as tags que não estão ativas
-                const tagsToInsert: Partial<ContratoTag>[] = CAMPOS_USUARIO_MAPA.map(m => ({
+                const tagsToInsert: Partial<ContratoTag>[] = targetMap.map(m => ({
                     nome_tag: m.tag,
                     descricao: m.label,
-                    origem_dado: `tbl_usuarios.${m.field}`,
+                    origem_dado: `${origemDado}.${m.field}`,
                     empresa_id: empresaId,
                 }));
                 
@@ -123,7 +131,7 @@ export function useBulkTagManager(resourceId: string | undefined): BulkTagManage
         } finally {
             setLoading(false);
         }
-    }, [resourceId, empresaId, refetchStatus]);
+    }, [resourceId, empresaId, isUserScope, refetchStatus, allMappableTags]);
 
     return { loading, isAllActive, toggleAllTags, refetchStatus, refreshKey };
 }
