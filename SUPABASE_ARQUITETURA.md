@@ -178,7 +178,7 @@ CREATE POLICY "Allow authenticated users to manage their own plan of accounts" O
 -- Tabela de Contas/Caixas (Saldo Contas)
 CREATE TABLE public.saldo_contas (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  proprietario_id UUID, -- RENOMEADO DE empresa_id PARA proprietario_id
+  proprietario_id UUID,
   nome TEXT,
   saldo_inicial NUMERIC DEFAULT 0,
   conta_contabil_id UUID REFERENCES public.plano_contas(id) ON DELETE SET NULL,
@@ -325,7 +325,42 @@ CREATE POLICY "Admins can manage all ferias" ON public.ferias FOR ALL TO authent
 
 
 -- ----------------------------------------------------------------
--- 5. FUNÇÕES RPC (Remote Procedure Calls)
+-- 5. MÓDULO CONTRATOS
+-- ----------------------------------------------------------------
+
+-- Tabela de Contratos Gerados
+CREATE TABLE public.contratos_gerados (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  modelo_id UUID,
+  cliente_id UUID,
+  proprietario_id UUID, -- RENOMEADO: empresa_id -> proprietario_id
+  status TEXT NOT NULL DEFAULT 'rascunho'::text,
+  valor_total NUMERIC NOT NULL,
+  data_inicio DATE NOT NULL,
+  numero_parcelas INTEGER NOT NULL DEFAULT 1,
+  dia_vencimento_parcela INTEGER,
+  valores_tags_preenchidos JSONB,
+  conteudo_renderizado TEXT,
+  link_assinatura_externo TEXT,
+  documento_assinado_url TEXT,
+  assinatura_nome TEXT,
+  assinatura_selfie_url TEXT,
+  criado_em TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  atualizado_em TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+ALTER TABLE public.contratos_gerados ENABLE ROW LEVEL SECURITY;
+-- Políticas recriadas usando proprietario_id
+CREATE POLICY "Restrict client view to own contracts, admin views all" ON public.contratos_gerados FOR SELECT TO authenticated USING ((EXISTS ( SELECT 1 FROM tbl_admins WHERE (tbl_admins.id = auth.uid()))) OR (proprietario_id = auth.uid()) OR (proprietario_id IN ( SELECT tbl_usuarios.cliente_id FROM tbl_usuarios WHERE (tbl_usuarios.id = auth.uid()))));
+CREATE POLICY "Admin select own generated contracts" ON public.contratos_gerados FOR SELECT TO authenticated USING (auth.uid() = proprietario_id);
+CREATE POLICY "Admin update own generated contracts" ON public.contratos_gerados FOR UPDATE TO authenticated USING (auth.uid() = proprietario_id);
+CREATE POLICY "Admin delete own generated contracts" ON public.contratos_gerados FOR DELETE TO authenticated USING (auth.uid() = proprietario_id);
+CREATE POLICY "Admin insert own generated contracts" ON public.contratos_gerados FOR INSERT TO authenticated WITH CHECK (auth.uid() = proprietario_id);
+CREATE POLICY "Clients and users can manage their generated contracts" ON public.contratos_gerados FOR ALL TO authenticated USING ((proprietario_id IN ( SELECT tbl_clientes.id FROM tbl_clientes WHERE (tbl_clientes.id = auth.uid()))) OR (proprietario_id IN ( SELECT tbl_usuarios.cliente_id FROM tbl_usuarios WHERE (tbl_usuarios.id = auth.uid())))) WITH CHECK ((proprietario_id IN ( SELECT tbl_clientes.id FROM tbl_clientes WHERE (tbl_clientes.id = auth.uid()))) OR (proprietario_id IN ( SELECT tbl_usuarios.cliente_id FROM tbl_usuarios WHERE (tbl_usuarios.id = auth.uid()))));
+
+
+-- ----------------------------------------------------------------
+-- 6. FUNÇÕES RPC (Remote Procedure Calls)
 -- ----------------------------------------------------------------
 
 -- Função para rotear novos usuários para a tabela correta (Admin, Cliente, Usuario)
@@ -366,7 +401,7 @@ BEGIN
         p_plano_id,
         p_limite_usuarios,
         v_admin_id,
-        (new.raw_user_meta_data ->> 'data_fim_acesso')::timestamp with time zone -- Novo campo
+        (new.raw_user_meta_data ->> 'data_fim_acesso')::timestamp with time zone
     );
   ELSIF user_role = 'Usuario' THEN
     INSERT INTO public.tbl_usuarios (id, nome, email, cliente_id) VALUES (new.id, user_nome, new.email, p_cliente_id);

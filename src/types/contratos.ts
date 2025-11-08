@@ -19,7 +19,7 @@ export interface ContratoGerado {
   id: string;
   modelo_id: string;
   cliente_id: string;
-  empresa_id: string;
+  proprietario_id: string; // RENOMEADO: empresa_id -> proprietario_id
   status: 'rascunho' | 'pendente_assinatura' | 'ativo' | 'cancelado' | 'concluido' | 'bloqueado';
   valor_total: number;
   data_inicio: string;

@@ -69,7 +69,7 @@ const ContratosTable: React.FC<ContratosTableProps> = ({
                     ) : (
                         list.map(c => {
                             const canEdit = c.status === 'rascunho' || c.status === 'pendente_assinatura';
-                            const isMyContract = c.empresa_id === empresaId;
+                            const isMyContract = c.proprietario_id === empresaId;
                             const isCanceledOrBlocked = c.status === 'cancelado' || c.status === 'bloqueado';
                             
                             return (

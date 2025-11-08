@@ -38,7 +38,7 @@ const ContratoAcoesDialog: React.FC<ContratoAcoesDialogProps> = ({ contrato, ope
   const [isBlocking, setIsBlocking] = useState(false);
   const { printContent } = usePrint();
   
-  const ownerId = contrato?.empresa_id; // O proprietário do contrato é quem define a configuração
+  const ownerId = contrato?.proprietario_id; // O proprietário do contrato é quem define a configuração
   const isMyContract = ownerId === usuario?.id || (role === 'Cliente' && ownerId === (usuario as any)?.cliente_id);
   const isCanceledOrBlocked = contrato?.status === 'cancelado' || contrato?.status === 'bloqueado';
 

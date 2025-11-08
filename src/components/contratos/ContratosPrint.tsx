@@ -41,7 +41,7 @@ const ContratosPrint: React.FC<ContratosPrintProps> = ({ data, titulo, isSupervi
                     <tbody>
                         {data.map((c) => {
                             const clienteNome = (c as any).clientes?.nome || 'N/A';
-                            const empresaProprietaria = c.empresa_id || 'Admin'; // Simplificação
+                            const empresaProprietaria = c.proprietario_id || 'Admin'; // Usando proprietario_id
                             
                             return (
                                 <tr key={c.id}>

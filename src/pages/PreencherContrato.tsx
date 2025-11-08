@@ -63,7 +63,7 @@ const PreencherContrato: React.FC = () => {
   const [clienteSelecionadoId, setClienteSelecionadoId] = useState<string>('');
   const [valorTotal, setValorTotal] = useState<number>(0); // Inicializado como 0
   
-  const [empresaContratoId, setEmpresaContratoId] = useState<string | null>(null); 
+  const [proprietarioContratoId, setProprietarioContratoId] = useState<string | null>(null); 
   
   const [tipoLancamento, setTipoLancamento] = useState<TipoLancamento>('unico');
   const [dataVencimentoUnico, setDataVencimentoUnico] = useState<Date | undefined>(undefined);
@@ -129,7 +129,7 @@ const PreencherContrato: React.FC = () => {
     setEmpresaLogada(currentEmpresaLogada);
     
     // 3. Configurar Empresas Contratantes (Apenas Admin)
-    let initialEmpresaContratoId = ownerIdLogado;
+    let initialProprietarioContratoId = ownerIdLogado;
     if (isAdmin) {
         const { data: clientesData, error: clientesError } = await supabase
             .from('tbl_clientes')
@@ -143,7 +143,7 @@ const PreencherContrato: React.FC = () => {
             const adminOption: EmpresaContrato = { id: ownerIdLogado, nome: 'Meus Contratos (Admin)' };
             const allClients = [adminOption, ...(clientesData as EmpresaContrato[])];
             setEmpresasContrato(allClients);
-            initialEmpresaContratoId = allClients[0].id;
+            initialProprietarioContratoId = allClients[0].id;
         }
     }
     
@@ -163,7 +163,7 @@ const PreencherContrato: React.FC = () => {
         
         const contrato = contratoData as ContratoGerado;
         setContratoInicial(contrato);
-        initialEmpresaContratoId = contrato.empresa_id; // Sobrescreve o ID inicial
+        initialProprietarioContratoId = contrato.proprietario_id; // Sobrescreve o ID inicial
         
         setClienteSelecionadoId(contrato.cliente_id);
         setValorTotal(contrato.valor_total); // Define o valor total
@@ -172,7 +172,7 @@ const PreencherContrato: React.FC = () => {
         const numParcelas = contrato.numero_parcelas;
         const valorTotalContrato = contrato.valor_total;
         
-        const isContractOwnerAdmin = contrato.empresa_id === ownerIdLogado && isAdmin;
+        const isContractOwnerAdmin = contrato.proprietario_id === ownerIdLogado && isAdmin;
         const tabelaContasReceber = isContractOwnerAdmin ? 'admin_contas_receber' : 'contas_receber';
         const tabelaParcelas = isContractOwnerAdmin ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
         
@@ -259,9 +259,9 @@ const PreencherContrato: React.FC = () => {
         setValorTotal(0);
     }
     
-    setEmpresaContratoId(initialEmpresaContratoId);
+    setProprietarioContratoId(initialProprietarioContratoId);
     
-    // A lista de clientes e tags será carregada no próximo useEffect (monitorando empresaContratoId)
+    // A lista de clientes e tags será carregada no próximo useEffect (monitorando proprietarioContratoId)
     setCarregandoDados(false);
   }, [modeloId, ownerIdLogado, navigate, role, perfil, usuario, isAdmin, isCliente, contratoId]);
   
@@ -274,7 +274,7 @@ const PreencherContrato: React.FC = () => {
         .from('contrato_tags')
         .select('*')
         .eq('empresa_id', targetEmpresaId)
-        .order('nome_tag');
+        .order('nome_tag', { ascending: true });
         
     if (tagsData) {
         setTags(tagsData as ContratoTag[]);
@@ -348,12 +348,12 @@ const PreencherContrato: React.FC = () => {
     }
   }, [carregandoSessao, isAdmin, isCliente, role, ownerIdLogado, buscarDados, navigate]);
   
-  // Efeito para monitorar a mudança do proprietário do contrato (empresaContratoId)
+  // Efeito para monitorar a mudança do proprietário do contrato (proprietarioContratoId)
   useEffect(() => {
-      if (empresaContratoId) {
-          fetchDependentData(empresaContratoId);
+      if (proprietarioContratoId) {
+          fetchDependentData(proprietarioContratoId);
       }
-  }, [empresaContratoId, fetchDependentData]);
+  }, [proprietarioContratoId, fetchDependentData]);
 
 
   useEffect(() => {
@@ -506,7 +506,7 @@ const PreencherContrato: React.FC = () => {
     const valorNumerico = Number(valorTotal);
     const numParcelas = Number(numeroParcelas);
     
-    if (!modelo || !clienteSelecionadoId || valorNumerico <= 0 || !empresaContratoId) {
+    if (!modelo || !clienteSelecionadoId || valorNumerico <= 0 || !proprietarioContratoId) {
         showError('Preencha Cliente, Valor Total e Proprietário.');
         return;
     }
@@ -537,13 +537,13 @@ const PreencherContrato: React.FC = () => {
         const clienteSelecionado = clientes.find(c => c.id === clienteSelecionadoId);
         if (!clienteSelecionado) throw new Error('Cliente selecionado não foi encontrado na lista.');
 
-        const isContractOwnerAdmin = empresaContratoId === ownerIdLogado && isAdmin;
+        const isContractOwnerAdmin = proprietarioContratoId === ownerIdLogado && isAdmin;
 
         // CORREÇÃO: Se for Admin, garantir que o cliente (de tbl_clientes) também exista na tabela 'clientes'
         if (isContractOwnerAdmin) {
             const clienteDataParaUpsert = {
                 id: clienteSelecionado.id,
-                proprietario_id: empresaContratoId, // AJUSTE AQUI
+                proprietario_id: proprietarioContratoId, // AJUSTE AQUI
                 nome: clienteSelecionado.nome,
                 razao_social: clienteSelecionado.razao_social,
                 nome_fantasia: clienteSelecionado.nome_fantasia,
@@ -588,7 +588,7 @@ const PreencherContrato: React.FC = () => {
         const contratoData = {
             modelo_id: modelo.id,
             cliente_id: clienteSelecionadoId,
-            empresa_id: empresaContratoId,
+            proprietario_id: proprietarioContratoId, // RENOMEADO: empresa_id -> proprietario_id
             status: 'pendente_assinatura',
             valor_total: valorFinalContrato,
             data_inicio: format(new Date(), 'yyyy-MM-dd'), 
@@ -645,7 +645,7 @@ const PreencherContrato: React.FC = () => {
         
         const clienteNome = clientes.find(c => c.id === clienteSelecionadoId)?.nome || 'Cliente Desconhecido';
         
-        const baseData = isContractOwnerAdmin ? { admin_id: empresaContratoId, cliente_id: clienteSelecionadoId } : { empresa_id: empresaContratoId, cliente_id: clienteSelecionadoId };
+        const baseData = isContractOwnerAdmin ? { admin_id: proprietarioContratoId, cliente_id: clienteSelecionadoId } : { empresa_id: proprietarioContratoId, cliente_id: clienteSelecionadoId };
         
         const contaReceberPayload = {
             ...baseData,
@@ -681,7 +681,7 @@ const PreencherContrato: React.FC = () => {
         const parcelasComId = parcelasParaInserir.map(p => ({ 
             ...p, 
             conta_receber_id: contaReceberId, 
-            ...(isContractOwnerAdmin ? { admin_id: empresaContratoId } : { empresa_id: empresaContratoId })
+            ...(isContractOwnerAdmin ? { admin_id: proprietarioContratoId } : { empresa_id: proprietarioContratoId })
         }));
         
         const { error: parcelError } = await supabase
@@ -747,8 +747,8 @@ const PreencherContrato: React.FC = () => {
                     <div className="space-y-2">
                         <Label htmlFor="empresa-contrato">Empresa Proprietária do Contrato</Label>
                         <Select 
-                            value={empresaContratoId || ''} 
-                            onValueChange={setEmpresaContratoId}
+                            value={proprietarioContratoId || ''} 
+                            onValueChange={setProprietarioContratoId}
                             disabled={isEditing}
                         >
                             <SelectTrigger id="empresa-contrato">
@@ -766,7 +766,7 @@ const PreencherContrato: React.FC = () => {
                 
                 <div className="space-y-2">
                     <Label htmlFor="cliente">Cliente</Label>
-                    <Select value={clienteSelecionadoId} onValueChange={setClienteSelecionadoId} disabled={!empresaContratoId}>
+                    <Select value={clienteSelecionadoId} onValueChange={setClienteSelecionadoId} disabled={!proprietarioContratoId}>
                         <SelectTrigger id="cliente">
                             <SelectValue placeholder="Selecione o Cliente" />
                         </SelectTrigger>

@@ -81,7 +81,7 @@ export function useContratos(): ContratosHook {
             
         // Se for Cliente/Usuário, filtra apenas pelos seus contratos
         if (!isAdmin && empresaId) {
-            query = query.eq('empresa_id', empresaId);
+            query = query.eq('proprietario_id', empresaId);
         }
         
         // Aplica ordenação
@@ -148,7 +148,7 @@ export function useContratos(): ContratosHook {
         setCarregando(true);
         
         try {
-            const isContractOwnerAdmin = isAdmin && contrato.empresa_id === empresaId;
+            const isContractOwnerAdmin = isAdmin && contrato.proprietario_id === empresaId;
             const tabelaContasReceber = isContractOwnerAdmin ? 'admin_contas_receber' : 'contas_receber';
             
             const { data: contaReceber, error: fetchError } = await supabase
@@ -234,8 +234,8 @@ export function useContratos(): ContratosHook {
 
     // --- Agrupamento para as Tabs ---
     const contratosAgrupados = useMemo(() => {
-        const meusContratos = contratos.filter(c => c.empresa_id === empresaId);
-        const contratosClientes = contratos.filter(c => c.empresa_id !== empresaId);
+        const meusContratos = contratos.filter(c => c.proprietario_id === empresaId);
+        const contratosClientes = contratos.filter(c => c.proprietario_id !== empresaId);
         
         const pendentes = meusContratos.filter(c => c.status === 'pendente_assinatura' || c.status === 'rascunho');
         const ativos = meusContratos.filter(c => c.status === 'ativo' || c.status === 'concluido');
