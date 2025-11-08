@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Menu, Zap, LogIn } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
 
 const NAV_ITEMS = [
-  { name: 'Início', href: '/' }, // Rota raiz
+  { name: 'Início', href: '/' },
   { name: 'Sistema', href: '/#sistema' },
   { name: 'Preços', href: '/vendas' },
   { name: 'Suporte', href: '/#suporte' },
@@ -16,24 +16,35 @@ const NAV_ITEMS = [
 const SiteHeader: React.FC = () => {
   const [sheetOpen, setSheetOpen] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
 
   const handleScrollToSection = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
-    const targetId = href.substring(2); // Remove '/#'
-    const targetElement = document.getElementById(targetId);
-
-    // Se o link for para a rota raiz ou para uma rota externa, deixa o Link/Router lidar com isso.
-    if (!href.startsWith('/#')) return;
-
     e.preventDefault();
+    
+    const targetId = href.substring(href.indexOf('#') + 1);
+    const targetElement = document.getElementById(targetId);
+    
+    // Se for o link de Início (href='/'), forçamos o scroll para o topo
+    if (href === '/') {
+        if (location.pathname === '/') {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        } else {
+            navigate('/');
+        }
+        setSheetOpen(false);
+        return;
+    }
 
+    // Se for um link de âncora
     if (targetElement) {
-      // Se já estiver na Landing Page, faz o scroll suave
       if (location.pathname === '/') {
+        // Se já estiver na Landing Page, faz o scroll suave
         targetElement.scrollIntoView({ behavior: 'smooth' });
-        setSheetOpen(false); // Fecha o menu mobile
+        setSheetOpen(false);
       } else {
-        // Se estiver em outra página, navega para a raiz e adiciona o hash para que o scroll ocorra após o carregamento.
-        window.location.href = href;
+        // Se estiver em outra página, navega para a raiz e usa o hash para que o scroll ocorra após o carregamento.
+        // Nota: O navegador lida com o scroll para o hash após a navegação.
+        navigate(href);
       }
     }
   };
@@ -45,18 +56,7 @@ const SiteHeader: React.FC = () => {
       
       const classes = "text-sm font-medium text-muted-foreground hover:text-foreground transition-colors";
       
-      if (isHome) {
-          return (
-              <Link 
-                  to={item.href} 
-                  className={classes}
-              >
-                  {item.name}
-              </Link>
-          );
-      }
-      
-      if (isAnchor) {
+      if (isHome || isAnchor) {
           return (
               <a
                   href={item.href}
@@ -79,31 +79,17 @@ const SiteHeader: React.FC = () => {
   };
   
   const renderMobileNavLink = (item: typeof NAV_ITEMS[0]) => {
-      const isAnchor = item.href.startsWith('/#');
-      
-      if (isAnchor) {
-          return (
-              <a
-                  href={item.href}
-                  onClick={(e) => {
-                      handleScrollToSection(e, item.href);
-                      setSheetOpen(false);
-                  }}
-                  className="text-lg font-medium text-foreground hover:text-primary transition-colors"
-              >
-                  {item.name}
-              </a>
-          );
-      }
-      
       return (
-          <Link 
-              to={item.href} 
-              onClick={() => setSheetOpen(false)}
+          <a
+              href={item.href}
+              onClick={(e) => {
+                  handleScrollToSection(e, item.href);
+                  setSheetOpen(false);
+              }}
               className="text-lg font-medium text-foreground hover:text-primary transition-colors"
           >
               {item.name}
-          </Link>
+          </a>
       );
   };
 
