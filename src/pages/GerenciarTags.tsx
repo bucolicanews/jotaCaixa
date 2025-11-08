@@ -3,7 +3,7 @@ import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Edit, Trash2, PlusCircle, Tag } from 'lucide-react';
+import { Loader2, Edit, Trash2, PlusCircle, Tag, Search } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
@@ -11,6 +11,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import FormContratoTag from '@/components/formularios/FormContratoTag';
 import { ContratoTag } from '@/types/contratos';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
+import { useDebounce } from '@/hooks/use-debounce';
 
 const GerenciarTags = () => {
   const { role, perfil, carregando: carregandoSessao } = useSessao();
@@ -18,6 +22,12 @@ const GerenciarTags = () => {
   const [carregandoTags, setCarregandoTags] = useState(true);
   const [tagSelecionada, setTagSelecionada] = useState<ContratoTag | null>(null);
   const [dialogAberto, setDialogAberto] = useState(false);
+  
+  // NOVO ESTADO: Seleção em massa
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isDeletingBulk, setIsDeletingBulk] = useState(false);
+  const [filtroTexto, setFiltroTexto] = useState('');
+  const filtroTextoDebounced = useDebounce(filtroTexto, 500);
 
   const isAdmin = role === 'Admin';
   const isCliente = role === 'Cliente';
@@ -29,7 +39,7 @@ const GerenciarTags = () => {
     return null;
   };
   
-  const empresaId = getEmpresaId();
+  const ownerId = getEmpresaId();
 
   const buscarTags = useCallback(async () => {
     if (!role) return;
@@ -42,9 +52,14 @@ const GerenciarTags = () => {
       
     if (isCliente || isUsuario) {
         // Clientes e Usuários veem apenas tags da sua empresa
-        query = query.eq('empresa_id', empresaId);
+        query = query.eq('empresa_id', ownerId);
     } else if (isAdmin) {
         // Admin vê todas (RLS garante)
+    }
+    
+    if (filtroTextoDebounced) {
+        const termo = `%${filtroTextoDebounced}%`;
+        query = query.or(`nome_tag.ilike.${termo},descricao.ilike.${termo}`);
     }
 
     const { data, error } = await query;
@@ -56,15 +71,20 @@ const GerenciarTags = () => {
       setTags(data as ContratoTag[]);
     }
     setCarregandoTags(false);
-  }, [role, isCliente, isUsuario, isAdmin, empresaId]);
+  }, [role, isCliente, isUsuario, isAdmin, ownerId, filtroTextoDebounced]);
 
   useEffect(() => {
-    if (!carregandoSessao && (isAdmin || isCliente || (isUsuario && empresaId))) {
+    if (!carregandoSessao && (isAdmin || isCliente || (isUsuario && ownerId))) {
       buscarTags();
     } else if (!carregandoSessao) {
         setCarregandoTags(false);
     }
-  }, [carregandoSessao, isAdmin, isCliente, isUsuario, empresaId, buscarTags]);
+  }, [carregandoSessao, isAdmin, isCliente, isUsuario, ownerId, buscarTags]);
+  
+  // Limpa a seleção ao recarregar os dados
+  useEffect(() => {
+      setSelectedIds([]);
+  }, [tags]);
 
   const handleSaveComplete = () => {
     setDialogAberto(false);
@@ -92,6 +112,46 @@ const GerenciarTags = () => {
       buscarTags();
     }
   };
+  
+  // --- Lógica de Seleção em Massa ---
+  const handleToggleSelect = (id: string, checked: boolean) => {
+      setSelectedIds(prev => 
+          checked ? [...prev, id] : prev.filter(prevId => prevId !== id)
+      );
+  };
+  
+  const handleSelectAll = (checked: boolean) => {
+      if (checked) {
+          setSelectedIds(tags.map(h => h.id));
+      } else {
+          setSelectedIds([]);
+      }
+  };
+  
+  const handleDeleteSelected = async () => {
+      if (selectedIds.length === 0 || !ownerId) return;
+      
+      setIsDeletingBulk(true);
+      
+      try {
+          const { error } = await supabase
+              .from('contrato_tags')
+              .delete()
+              .in('id', selectedIds)
+              .eq('empresa_id', ownerId); // RLS check
+              
+          if (error) throw error;
+          
+          showSuccess(`${selectedIds.length} tags excluídas com sucesso.`);
+          setSelectedIds([]);
+          buscarTags();
+      } catch (error: any) {
+          showError('Falha ao excluir tags: ' + error.message);
+      } finally {
+          setIsDeletingBulk(false);
+      }
+  };
+  // -----------------------------------
 
   if (carregandoSessao || carregandoTags) {
     return (
@@ -103,7 +163,7 @@ const GerenciarTags = () => {
     );
   }
   
-  if (!isAdmin && !isCliente && !(isUsuario && empresaId)) {
+  if (!ownerId && !isAdmin) {
     return <LayoutPrincipal><Card><CardHeader><CardTitle>Acesso Negado</CardTitle></CardHeader><CardContent><p>Você não tem permissão para gerenciar tags de contrato.</p></CardContent></Card></LayoutPrincipal>;
   }
 
@@ -137,10 +197,59 @@ const GerenciarTags = () => {
           <CardTitle className="text-xl">Tags Cadastradas ({tags.length})</CardTitle>
         </CardHeader>
         <CardContent>
+            <div className="flex flex-col sm:flex-row justify-between items-center mb-4 gap-4">
+                <div className="relative w-full sm:w-auto flex-1">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                        placeholder="Buscar por tag ou descrição..."
+                        value={filtroTexto}
+                        onChange={(e) => setFiltroTexto(e.target.value)}
+                        className="pl-10 max-w-sm"
+                    />
+                </div>
+                
+                {selectedIds.length > 0 && (
+                    <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                            <Button 
+                                variant="destructive" 
+                                size="sm" 
+                                disabled={isDeletingBulk}
+                                className="w-full sm:w-auto"
+                            >
+                                {isDeletingBulk ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                                Excluir Selecionadas ({selectedIds.length})
+                            </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                            <AlertDialogHeader>
+                                <AlertDialogTitle>Confirmar Exclusão em Massa</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                    Você tem certeza que deseja excluir {selectedIds.length} tags? Esta ação não pode ser desfeita e pode quebrar modelos de contrato existentes.
+                                </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                                <AlertDialogCancel disabled={isDeletingBulk}>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction onClick={handleDeleteSelected} disabled={isDeletingBulk}>
+                                    {isDeletingBulk ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Excluir'}
+                                </AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
+                )}
+            </div>
+            
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
+                    <TableHead className="w-[40px] text-center">
+                        <Checkbox 
+                            checked={selectedIds.length === tags.length && tags.length > 0}
+                            onCheckedChange={(checked) => handleSelectAll(!!checked)}
+                            disabled={tags.length === 0}
+                        />
+                    </TableHead>
                   <TableHead className="w-[200px]">Tag</TableHead>
                   <TableHead>Descrição</TableHead>
                   <TableHead className="w-[200px] hidden md:table-cell">Origem do Dado</TableHead>
@@ -150,28 +259,37 @@ const GerenciarTags = () => {
               <TableBody>
                 {tags.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center py-4 text-muted-foreground">
+                    <TableCell colSpan={5} className="text-center py-4 text-muted-foreground">
                       Nenhuma tag cadastrada.
                     </TableCell>
                   </TableRow>
                 ) : (
-                  tags.map((tag) => (
-                    <TableRow key={tag.id}>
-                      <TableCell className="font-mono text-sm font-semibold text-primary">{tag.nome_tag}</TableCell>
-                      <TableCell>{tag.descricao}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground hidden md:table-cell">{tag.origem_dado || '-'}</TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end space-x-2">
-                          <Button variant="ghost" size="sm" onClick={() => handleEdit(tag)}>
-                            <Edit className="w-4 h-4" />
-                          </Button>
-                          <Button variant="ghost" size="sm" onClick={() => handleDelete(tag.id)}>
-                            <Trash2 className="w-4 h-4 text-red-500" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
+                  tags.map((tag) => {
+                    const isSelected = selectedIds.includes(tag.id);
+                    return (
+                      <TableRow key={tag.id} className={isSelected ? 'bg-secondary/50' : ''}>
+                        <TableCell className="text-center">
+                            <Checkbox 
+                                checked={isSelected}
+                                onCheckedChange={(checked) => handleToggleSelect(tag.id, !!checked)}
+                            />
+                        </TableCell>
+                        <TableCell className="font-mono text-sm font-semibold text-primary">{tag.nome_tag}</TableCell>
+                        <TableCell>{tag.descricao}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground hidden md:table-cell">{tag.origem_dado || '-'}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end space-x-2">
+                            <Button variant="ghost" size="sm" onClick={() => handleEdit(tag)}>
+                              <Edit className="w-4 h-4" />
+                            </Button>
+                            <Button variant="ghost" size="sm" onClick={() => handleDelete(tag.id)}>
+                              <Trash2 className="w-4 h-4 text-red-500" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
                 )}
               </TableBody>
             </Table>
