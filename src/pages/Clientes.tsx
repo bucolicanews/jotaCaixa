@@ -3,7 +3,7 @@ import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Edit, Trash2, PlusCircle, Filter, Building2, CheckCircle, Users as UsersIcon, Mail, PowerOff, Printer, ArrowRight, Check } from 'lucide-react';
+import { Loader2, Edit, Trash2, PlusCircle, Filter, Building2, CheckCircle, Users as UsersIcon, Mail, PowerOff, Printer, ArrowRight, Check, LogIn } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
@@ -50,6 +50,7 @@ interface PlanoSimples {
 // NOVO TIPO: Cliente CR com status de sistema
 interface ClienteCRComStatus extends Cliente {
     is_system_client: boolean;
+    system_client_status?: 'Ativo' | 'Pendente' | 'Bloqueado' | 'Expirado'; // NOVO CAMPO
 }
 
 const ClientesPage = () => {
@@ -132,7 +133,34 @@ const ClientesPage = () => {
   const buscarDados = useCallback(async () => {
     setCarregandoDados(true);
     
-    // 1. Buscar Clientes de Contas a Receber (clientes)
+    // 1. Buscar Empresas do Sistema (tbl_clientes)
+    let systemClientsMap: Record<string, EmpresaSistema> = {};
+    let systemClientsList: EmpresaSistema[] = [];
+    
+    const { data: dataEmpresas, error: errorEmpresas } = await supabase
+        .from('tbl_clientes')
+        .select('*')
+        .order('nome', { ascending: true });
+        
+    if (errorEmpresas) {
+        showError('Erro ao carregar empresas do sistema: ' + errorEmpresas.message);
+    } else {
+        systemClientsList = dataEmpresas as EmpresaSistema[];
+        systemClientsMap = systemClientsList.reduce((acc, e) => {
+            acc[e.id] = e;
+            return acc;
+        }, {} as Record<string, EmpresaSistema>);
+        
+        if (isAdmin) {
+            const filteredEmpresas = systemClientsList.filter(e => 
+                e.nome.toLowerCase().includes(filtroNome.toLowerCase()) ||
+                e.email.toLowerCase().includes(filtroNome.toLowerCase())
+            );
+            setEmpresasSistema(filteredEmpresas);
+        }
+    }
+    
+    // 2. Buscar Clientes de Contas a Receber (clientes)
     let queryCR = supabase
       .from('clientes')
       .select('id, proprietario_id, nome, razao_social, nome_fantasia, documento, email, telefone, telefone_fixo, cep, endereco, numero, complemento, bairro, cidade, estado, created_at, updated_at')
@@ -160,42 +188,47 @@ const ClientesPage = () => {
         (c.documento?.toLowerCase() || '').includes(filtroNome.toLowerCase())
       );
       
-      // 1.1. Verificar quais clientes CR já são clientes do sistema (tbl_clientes)
-      const clienteIdsCR = fetchedData.map(c => c.id);
-      const { data: systemClients, error: systemClientsError } = await supabase
-          .from('tbl_clientes')
-          .select('id')
-          .in('id', clienteIdsCR);
+      // Filtra duplicatas visuais (mantém apenas o primeiro registro com o mesmo email)
+      const uniqueEmails = new Set<string>();
+      fetchedData = fetchedData.filter(c => {
+          if (c.email && uniqueEmails.has(c.email)) {
+              return false;
+          }
+          if (c.email) {
+              uniqueEmails.add(c.email);
+          }
+          return true;
+      });
+      
+      // 2.1. Adicionar status do sistema
+      const clientesComStatus: ClienteCRComStatus[] = fetchedData.map(c => {
+          const systemClient = systemClientsMap[c.id];
+          let systemStatus: ClienteCRComStatus['system_client_status'] = undefined;
           
-      if (systemClientsError) console.error('Erro ao buscar clientes do sistema para status:', systemClientsError);
-      
-      const systemClientIds = new Set(systemClients?.map(c => c.id) || []);
-      
-      const clientesComStatus: ClienteCRComStatus[] = fetchedData.map(c => ({
-          ...c,
-          is_system_client: systemClientIds.has(c.id),
-      }));
+          if (systemClient) {
+              const dataFimAcesso = systemClient.data_fim_acesso ? parseISO(systemClient.data_fim_acesso) : null;
+              const isAtivo = dataFimAcesso && isPast(new Date()) === false;
+              const isBlocked = dataFimAcesso === null && systemClient.aprovado;
+              
+              if (!systemClient.aprovado) {
+                  systemStatus = 'Pendente';
+              } else if (isBlocked) {
+                  systemStatus = 'Bloqueado';
+              } else if (isAtivo) {
+                  systemStatus = 'Ativo';
+              } else {
+                  systemStatus = 'Expirado';
+              }
+          }
+          
+          return {
+              ...c,
+              is_system_client: !!systemClient,
+              system_client_status: systemStatus,
+          };
+      });
       
       setClientesCR(clientesComStatus);
-    }
-    
-    // 2. Buscar Empresas do Sistema (tbl_clientes) - Apenas Admin
-    if (isAdmin) {
-        const { data: dataEmpresas, error: errorEmpresas } = await supabase
-            .from('tbl_clientes')
-            .select('*')
-            .order('nome', { ascending: true });
-            
-        if (errorEmpresas) {
-            showError('Erro ao carregar empresas do sistema: ' + errorEmpresas.message);
-            setEmpresasSistema([]);
-        } else {
-            const filteredEmpresas = (dataEmpresas as EmpresaSistema[]).filter(e => 
-                e.nome.toLowerCase().includes(filtroNome.toLowerCase()) ||
-                e.email.toLowerCase().includes(filtroNome.toLowerCase())
-            );
-            setEmpresasSistema(filteredEmpresas);
-        }
     }
 
     setCarregandoDados(false);
@@ -529,6 +562,7 @@ const ClientesPage = () => {
                     <TableHead className="hidden md:table-cell">Razão Social</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Telefone</TableHead>
+                    <TableHead className="w-[120px]">Status Sistema</TableHead> {/* NOVO CABEÇALHO */}
                     {isAdmin && <TableHead>Proprietário ID</TableHead>}
                     <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
@@ -536,7 +570,7 @@ const ClientesPage = () => {
             <TableBody>
                 {clientesCR.length === 0 ? (
                     <TableRow>
-                        <TableCell colSpan={isAdmin ? 6 : 5} className="text-center py-4 text-muted-foreground">
+                        <TableCell colSpan={isAdmin ? 7 : 6} className="text-center py-4 text-muted-foreground">
                             Nenhum cliente de Contas a Receber cadastrado.
                         </TableCell>
                     </TableRow>
@@ -544,13 +578,25 @@ const ClientesPage = () => {
                     clientesCR.map((cliente) => {
                         const isPromoted = promotedClients.has(cliente.id);
                         const isSystemClient = cliente.is_system_client || isPromoted;
+                        const systemStatus = cliente.system_client_status;
                         
+                        const statusBadge = systemStatus ? (
+                            <Badge variant={systemStatus === 'Ativo' ? 'default' : systemStatus === 'Pendente' ? 'warning' : 'destructive'}>
+                                {systemStatus}
+                            </Badge>
+                        ) : (
+                            <Badge variant="secondary">CR</Badge>
+                        );
+                        
+                        const isActionDisabled = carregandoDados || isSystemClient;
+
                         return (
                             <TableRow key={cliente.id}>
                                 <TableCell className="font-medium">{cliente.nome_fantasia || cliente.nome}</TableCell>
                                 <TableCell className="hidden md:table-cell text-sm text-muted-foreground">{cliente.razao_social || '-'}</TableCell>
                                 <TableCell>{cliente.email || '-'}</TableCell>
                                 <TableCell>{cliente.telefone || '-'}</TableCell>
+                                <TableCell>{statusBadge}</TableCell> {/* NOVO CAMPO */}
                                 {isAdmin && <TableCell className="text-sm text-muted-foreground">{cliente.proprietario_id || 'N/A'}</TableCell>}
                                 <TableCell className="text-right">
                                     <div className="flex justify-end space-x-1">
@@ -558,32 +604,43 @@ const ClientesPage = () => {
                                         {/* BOTÃO PROMOVER PARA SISTEMA (Sem Convite) */}
                                         {(isAdmin || isClient) && cliente.email && !isSystemClient && (
                                             <Button 
-                                                variant={isPromoted ? 'default' : 'default'} 
+                                                variant="default" 
                                                 size="sm" 
                                                 onClick={() => handlePromoteToSystem(cliente)}
                                                 title="Promover para Cliente do Sistema (Sem Convite de Login)"
-                                                disabled={carregandoDados || isPromoted}
+                                                disabled={isActionDisabled}
                                                 className={cn("h-8", isPromoted && "bg-green-600 hover:bg-green-700")}
                                             >
-                                                {carregandoDados && !isPromoted ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : (
-                                                    isPromoted ? <Check className="w-4 h-4 mr-1" /> : <ArrowRight className="w-4 h-4 mr-1" />
-                                                )}
+                                                {isPromoted ? <Check className="w-4 h-4 mr-1" /> : <ArrowRight className="w-4 h-4 mr-1" />}
                                                 {isPromoted ? 'Promovido' : 'Promover'}
                                             </Button>
                                         )}
                                         
-                                        {/* BOTÃO CONVITE: Aparece se tiver email E NÃO for um cliente do sistema */}
-                                        {isAdmin && cliente.email && !isSystemClient && (
-                                            <Button 
-                                                variant="secondary" 
-                                                size="sm" 
-                                                onClick={() => handleSendInvite(cliente)}
-                                                title="Enviar Convite de Acesso (Cria perfil no sistema)"
-                                                disabled={carregandoDados || isPromoted}
-                                                className="h-8"
-                                            >
-                                                <Mail className="w-4 h-4 mr-1" /> Convite
-                                            </Button>
+                                        {/* BOTÃO CONVITE / ACESSO */}
+                                        {isAdmin && cliente.email && (
+                                            isSystemClient ? (
+                                                <Button 
+                                                    variant="secondary" 
+                                                    size="sm" 
+                                                    onClick={() => handleResendInvite(cliente.email!, cliente.nome)}
+                                                    title="Reenviar Link de Acesso"
+                                                    disabled={carregandoDados}
+                                                    className="h-8"
+                                                >
+                                                    <LogIn className="w-4 h-4 mr-1" /> Acesso
+                                                </Button>
+                                            ) : (
+                                                <Button 
+                                                    variant="secondary" 
+                                                    size="sm" 
+                                                    onClick={() => handleSendInvite(cliente)}
+                                                    title="Enviar Convite de Acesso (Cria perfil no sistema)"
+                                                    disabled={isActionDisabled}
+                                                    className="h-8"
+                                                >
+                                                    <Mail className="w-4 h-4 mr-1" /> Convite
+                                                </Button>
+                                            )
                                         )}
                                         {/* BOTÃO DE EDIÇÃO */}
                                         <Button variant="ghost" size="icon" onClick={() => handleEditCR(cliente)}>
