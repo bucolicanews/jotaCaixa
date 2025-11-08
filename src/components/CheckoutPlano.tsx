@@ -103,7 +103,15 @@ const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano, isUpgrade = false,
 
         const { data, error } = await supabase.functions.invoke(functionName, { body });
         
-        if (error) throw error;
+        if (error) {
+            // Se for um erro de invocação (rede, timeout, etc.)
+            throw error;
+        }
+        
+        // Se a Edge Function retornou um erro no corpo (status 200, mas erro lógico)
+        if (data?.error) {
+            throw new Error(data.error);
+        }
         
         const { url } = data;
         if (!url) throw new Error('URL de checkout não recebida.');
@@ -113,6 +121,7 @@ const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano, isUpgrade = false,
         
     } catch (error: any) {
       console.error('Erro no checkout:', error);
+      // Exibe a mensagem de erro da Edge Function, se disponível
       showError('Falha ao iniciar o checkout: ' + (error.message || 'Erro desconhecido.'));
     } finally {
       setIsSubmitting(false);
