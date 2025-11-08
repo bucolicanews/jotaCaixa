@@ -546,13 +546,23 @@ const ClientesPage = () => {
       printContent(htmlContent, `Relatório Clientes - ${tituloRelatorio}`, orientation);
   };
 
+  // NOVO: Verificação de permissão
+  const canAccessPage = isAdmin || (role === 'Cliente' && (perfil as ClienteProfile)?.permissoes?.contas_receber === true);
 
-  if (carregandoSessao || carregandoDados) {
+  if (carregandoSessao) {
     return (
       <LayoutPrincipal>
         <div className="flex justify-center items-center h-64">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
+      </LayoutPrincipal>
+    );
+  }
+  
+  if (!canAccessPage) {
+    return (
+      <LayoutPrincipal>
+        <Card><CardHeader><CardTitle>Acesso Negado</CardTitle></CardHeader><CardContent><p>Você não tem permissão para gerenciar clientes.</p></CardContent></Card>
       </LayoutPrincipal>
     );
   }
