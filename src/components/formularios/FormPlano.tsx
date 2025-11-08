@@ -12,7 +12,7 @@ import { Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { Plano } from '@/types/plano';
-import { PERMISSOES_DISPONIVEIS } from '@/config/permissoes';
+import { PERMISSOES_DISPONIVEIS, Permissao } from '@/config/permissoes';
 
 const formSchema = z.object({
   nome: z.string().min(1, 'O nome é obrigatório.'),
@@ -33,7 +33,7 @@ interface FormPlanoProps {
 const FormPlano: React.FC<FormPlanoProps> = ({ planoInicial, onSaveComplete }) => {
   const isEditing = !!planoInicial;
 
-  const defaultPermissoes = PERMISSOES_DISPONIVEIS.reduce((acc: Record<string, boolean>, p) => {
+  const defaultPermissoes = PERMISSOES_DISPONIVEIS.reduce((acc: Record<string, boolean>, p: Permissao) => {
     // Exclui permissões de usuário final (ponto) e visualização própria
     if (p.key === 'ponto_eletronico' || p.key === 'visualizar_proprio_ponto') {
         return acc;

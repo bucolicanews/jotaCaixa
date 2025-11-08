@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
-import { AnyProfile, ClienteProfile, UsuarioProfile, AdminProfile } from '@/types/usuario';
+import { AnyProfile, ClienteProfile, UsuarioProfile, AdminProfile, UserRole } from '@/types/usuario';
 import { PERMISSOES_DISPONIVEIS, Permissao } from '@/config/permissoes';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { format } from 'date-fns';
@@ -21,7 +21,7 @@ import { Input } from '../ui/input';
 import { FormField, FormItem, FormLabel, FormControl, FormMessage } from '../ui/form';
 import { Separator } from '../ui/separator';
 import { useBulkTagManager } from '@/hooks/use-bulk-tag-manager'; // Importando o hook de bulk tag
-import { Switch } from '../ui/switch'; // Adicionado Switch para o campo de folga
+// import { Switch } from '../ui/switch'; // Removido: TS6133
 
 // Esquema de validação para os campos de URL (opcional)
 const urlSchema = z.string().url('URL inválida.').optional().or(z.literal(''));
@@ -183,6 +183,10 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
       form.setValue(`permissoes.${p.key}`, select, { shouldDirty: true });
     });
   };
+  
+  // FIX: Definindo as variáveis de escopo que estavam faltando
+  const isUserBeingManagedByClient = isUser;
+  const isContractEditable = role === 'Admin' || role === 'Cliente';
 
   const onSubmit = async (values: FormValues) => {
     try {

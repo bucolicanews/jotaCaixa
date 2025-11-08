@@ -11,7 +11,7 @@ import { useSessao } from '@/hooks/use-sessao';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { PlanoContas } from '@/types/plano-contas';
 import { Separator } from '../ui/separator';
-import { Input } from '../ui/input';
+// import { Input } from '../ui/input'; // Removido: TS6133
 
 // Tipos de registro que precisam de mapeamento contábil para CP
 const TIPOS_REGISTRO = [
@@ -90,7 +90,7 @@ const FormConfiguracoesCP: React.FC = () => {
     if (error) {
       showError('Erro ao carregar configurações de CP: ' + error.message);
     } else if (data) {
-      const mappedData = data.reduce((acc, item) => {
+      const mappedData = data.reduce((acc: Partial<FormValues>, item: { tipo_registro: string, conta_contabil_id: string | null }) => {
         acc[item.tipo_registro as keyof FormValues] = item.conta_contabil_id;
         return acc;
       }, {} as Partial<FormValues>);
