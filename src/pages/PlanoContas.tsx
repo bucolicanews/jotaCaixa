@@ -9,13 +9,13 @@ import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
 import { PlanoContas } from '@/types/plano-contas';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import FormPlanoContas from '@/components/FormPlanoContas';
+import FormPlanoContas from '@/components/formularios/FormPlanoContas';
 import ImportarPlanoContas from '@/components/ImportarPlanoContas';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useDebounce } from '@/hooks/use-debounce';
-import EditableCell from '@/components/EditableCell'; // Importando o novo componente
+import EditableCell from '@/components/contabilidade/EditableCell'; // Importando o novo componente
 
 const PlanoContasPage = () => {
   const { usuario, perfil, role, carregando: carregandoSessao } = useSessao();

@@ -11,9 +11,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { ContratoModelo, ContratoTag } from '@/types/contratos';
 import { TAGS_FINANCEIRAS_OBRIGATORIAS } from '@/config/contrato-tags-padrao';
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
-import ModeloPreviewDialog from './ModeloPreviewDialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
+import ModeloPreviewDialog from '../ModeloPreviewDialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { useSessao } from '@/hooks/use-sessao';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 // import { cn } from '@/lib/utils'; // Removido: TS6133

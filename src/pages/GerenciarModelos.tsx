@@ -8,7 +8,7 @@ import { showError, showSuccess } from '@/utils/toast';
 import { ContratoModelo } from '@/types/contratos';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import FormContratoModelo from '@/components/FormContratoModelo';
+import FormContratoModelo from '@/components/formularios/FormContratoModelo';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 import ImportarModeloContrato from '@/components/ImportarModeloContrato';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';

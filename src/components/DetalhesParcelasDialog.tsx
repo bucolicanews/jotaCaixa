@@ -7,7 +7,7 @@ import { ContaReceber } from '@/types/contas-receber';
 import { showError } from '@/utils/toast';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
-import RegistrarPagamentoDialog from './RegistrarPagamentoDialog';
+import RegistrarPagamentoDialog from '@/components/formularios/RegistrarPagamentoDialog';
 import { useSessao } from '@/hooks/use-sessao';
 import { cn } from '@/lib/utils';
 import { Card, CardContent } from './ui/card';

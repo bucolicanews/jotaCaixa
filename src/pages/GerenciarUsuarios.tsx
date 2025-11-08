@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import FormUsuario from '@/components/FormUsuario';
+import FormUsuario from '@/components/formularios/FormUsuario';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { AnyProfile, UsuarioProfile, UserRole } from '@/types/usuario';
@@ -61,28 +61,34 @@ const GerenciarUsuarios: React.FC = () => {
     let fetchedUsuarios: UsuarioComEmpresa[] = [];
 
     if (isAdmin) {
-      // ADMIN: Busca TODOS os Clientes (Empresas) do sistema para o filtro
+      // 1. Admin: Busca todos os clientes
       const { data: clientesData, error: clientesError } = await supabase
         .from('tbl_clientes')
-        .select('id, nome')
-        .eq('aprovado', true)
-        .order('nome', { ascending: true });
+        .select('id, nome');
 
       if (clientesError) {
         showError('Erro ao carregar clientes para filtro: ' + clientesError.message);
-      } else {
-        fetchedClientes = clientesData as EmpresaFiltro[];
+        setCarregandoDados(false);
+        return;
       }
       
-      // Configura opções de filtro para o Admin
-      const adminFilterOption: EmpresaFiltro = { id: usuario.id, nome: 'Meus Usuários (Admin)' };
-      const clientFilterOptions: EmpresaFiltro[] = fetchedClientes.map(c => ({ id: c.id, nome: c.nome }));
-      setEmpresasFiltro([adminFilterOption, ...clientFilterOptions]);
+      fetchedClientes = clientesData as EmpresaFiltro[];
       
+      // Adiciona o próprio Admin como um "cliente" para seus próprios usuários
+      if (usuario.id) {
+          fetchedClientes.unshift({ id: usuario.id, nome: 'Meus Usuários (Admin)' } as EmpresaFiltro);
+      }
+      
+      // IDs permitidos: Admin's ID + todos os IDs de clientes
+      const allowedClientIds = fetchedClientes.map(c => c.id);
+      
+      setEmpresasFiltro(fetchedClientes);
+
       // ADMIN: Busca TODOS os Usuários (Funcionários) do sistema
       const { data: usuariosData, error: usuariosError } = await supabase
         .from('tbl_usuarios')
         .select('*, tbl_clientes(nome)')
+        .in('cliente_id', allowedClientIds)
         .order('nome', { ascending: true });
 
       if (usuariosError) {
@@ -90,7 +96,7 @@ const GerenciarUsuarios: React.FC = () => {
         setUsuarios([]);
       } else {
         fetchedUsuarios = (usuariosData as any[]).map(item => {
-          const nomeEmpresa = item.tbl_clientes?.nome || (item.cliente_id === usuario.id ? 'Meus Usuários (Admin)' : 'N/A');
+          const nomeEmpresa = fetchedClientes.find(c => c.id === item.cliente_id)?.nome || 'N/A';
           return { ...item, nome_empresa: nomeEmpresa } as UsuarioComEmpresa;
         });
         

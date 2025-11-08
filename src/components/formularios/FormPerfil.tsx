@@ -7,20 +7,21 @@ import { Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { AnyProfile, ClienteProfile, UsuarioProfile, AdminProfile } from '@/types/usuario';
-import { PERMISSOES_DISPONIVEIS, Permissao } from '../config/permissoes';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
+import { PERMISSOES_DISPONIVEIS, Permissao } from '@/config/permissoes';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { format } from 'date-fns';
 import { useSessao } from '@/hooks/use-sessao';
-import FormGeral from './usuario-forms/FormGeral';
-import FormFolgasFerias from './usuario-forms/FormFolgasFerias';
-import FormDadosCadastrais from './usuario-forms/FormDadosCadastrais';
-import FormDocumentos from './usuario-forms/FormDocumentos';
-import FormDadosContratuais from './usuario-forms/FormDadosContratuais';
+import FormGeral from '../usuario-forms/FormGeral';
+import FormFolgasFerias from '../usuario-forms/FormFolgasFerias';
+import FormDadosCadastrais from '../usuario-forms/FormDadosCadastrais';
+import FormDocumentos from '../usuario-forms/FormDocumentos';
+import FormDadosContratuais from '../usuario-forms/FormDadosContratuais';
 import { Form } from '@/components/ui/form';
-import { Input } from './ui/input';
-import { FormField, FormItem, FormLabel, FormControl, FormMessage } from './ui/form';
-import { Separator } from './ui/separator';
+import { Input } from '../ui/input';
+import { FormField, FormItem, FormLabel, FormControl, FormMessage } from '../ui/form';
+import { Separator } from '../ui/separator';
 import { useBulkTagManager } from '@/hooks/use-bulk-tag-manager'; // Importando o hook de bulk tag
+import { Switch } from '../ui/switch'; // Adicionado Switch para o campo de folga
 
 // Esquema de validação para os campos de URL (opcional)
 const urlSchema = z.string().url('URL inválida.').optional().or(z.literal(''));
@@ -177,8 +178,8 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
   });
 
   const handleSelectAll = (select: boolean) => {
-    const permissoes = isClient ? PERMISSOES_DISPONIVEIS.filter(p => p.key !== 'ponto_eletronico' && p.key !== 'visualizar_proprio_ponto') : PERMISSOES_DISPONIVEIS;
-    permissoes.forEach(p => {
+    const permissoes = isClient ? PERMISSOES_DISPONIVEIS.filter((p: Permissao) => p.key !== 'ponto_eletronico' && p.key !== 'visualizar_proprio_ponto') : PERMISSOES_DISPONIVEIS;
+    permissoes.forEach((p: Permissao) => {
       form.setValue(`permissoes.${p.key}`, select, { shouldDirty: true });
     });
   };
@@ -305,7 +306,7 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
   };
   
   // Permissões visíveis para o próprio usuário (apenas as que ele pode ter)
-  const permissoesVisiveis = PERMISSOES_DISPONIVEIS.filter(p => 
+  const permissoesVisiveis = PERMISSOES_DISPONIVEIS.filter((p: Permissao) => 
     p.key === 'ponto_eletronico' || p.key === 'visualizar_proprio_ponto'
   );
   
@@ -332,7 +333,7 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
                         isUserScope={false}
                         isSubmitting={form.formState.isSubmitting}
                         criadorRole={role!}
-                        permissoesVisiveis={PERMISSOES_DISPONIVEIS.filter(p => p.key !== 'ponto_eletronico' && p.key !== 'visualizar_proprio_ponto')}
+                        permissoesVisiveis={PERMISSOES_DISPONIVEIS.filter((p: Permissao) => p.key !== 'ponto_eletronico' && p.key !== 'visualizar_proprio_ponto')}
                         handleSelectAll={handleSelectAll}
                     />
                 </TabsContent>
@@ -417,41 +418,49 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
             </TabsContent>
             
             {/* TAB 2: FOLGAS E FÉRIAS */}
-            <TabsContent value="folgas" className="mt-4 space-y-6 p-4">
-                <FormFolgasFerias
-                    control={form.control}
-                    isSubmitting={form.formState.isSubmitting}
-                    usuarioInicial={profileToEdit as UsuarioProfile}
-                />
-            </TabsContent>
+            {isUserBeingManagedByClient && (
+                <TabsContent value="folgas" className="mt-4 space-y-6 p-4">
+                    <FormFolgasFerias
+                        control={form.control}
+                        isSubmitting={form.formState.isSubmitting}
+                        usuarioInicial={profileToEdit as UsuarioProfile}
+                    />
+                </TabsContent>
+            )}
 
             {/* TAB 3: DADOS CADASTRAIS */}
-            <TabsContent value="cadastrais" className="mt-4 space-y-6 p-4">
-                <FormDadosCadastrais
-                    control={form.control}
-                    isSubmitting={form.formState.isSubmitting}
-                    resourceId={perfilInicial.id}
-                    tagRefreshKey={refreshKey} // Passando o refreshKey do bulk manager
-                />
-            </TabsContent>
+            {isUserBeingManagedByClient && (
+                <TabsContent value="cadastrais" className="mt-4 space-y-6 p-4">
+                    <FormDadosCadastrais
+                        control={form.control}
+                        isSubmitting={form.formState.isSubmitting}
+                        resourceId={resourceId}
+                        tagRefreshKey={refreshKey}
+                    />
+                </TabsContent>
+            )}
 
             {/* TAB 4: DOCUMENTOS DE ADMISSÃO */}
-            <TabsContent value="documentos" className="mt-4 space-y-6 p-4">
-                <FormDocumentos
-                    control={form.control}
-                    isSubmitting={form.formState.isSubmitting}
-                    resourceId={perfilInicial.id}
-                />
-            </TabsContent>
+            {isUserBeingManagedByClient && (
+                <TabsContent value="documentos" className="mt-4 space-y-6 p-4">
+                    <FormDocumentos
+                        control={form.control}
+                        isSubmitting={form.formState.isSubmitting}
+                        resourceId={resourceId}
+                    />
+                </TabsContent>
+            )}
 
             {/* TAB 5: DADOS CONTRATUAIS (RH) */}
-            <TabsContent value="contrato" className="mt-4 space-y-6 p-4">
-                <FormDadosContratuais
-                    control={form.control}
-                    isSubmitting={form.formState.isSubmitting}
-                    isContractEditable={false} // O próprio usuário não pode editar
-                />
-            </TabsContent>
+            {isUserBeingManagedByClient && (
+                <TabsContent value="contrato" className="mt-4 space-y-6 p-4">
+                    <FormDadosContratuais
+                        control={form.control}
+                        isSubmitting={form.formState.isSubmitting}
+                        isContractEditable={isContractEditable}
+                    />
+                </TabsContent>
+            )}
           </Tabs>
 
           <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>

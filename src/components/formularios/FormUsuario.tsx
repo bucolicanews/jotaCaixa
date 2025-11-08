@@ -7,18 +7,18 @@ import { Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { AnyProfile, ClienteProfile, UsuarioProfile, UserRole } from '@/types/usuario';
-import { PERMISSOES_DISPONIVEIS, Permissao } from '../config/permissoes';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
+import { PERMISSOES_DISPONIVEIS, Permissao } from '@/config/permissoes';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { format } from 'date-fns';
-import FormGeral from './usuario-forms/FormGeral';
-import FormFolgasFerias from './usuario-forms/FormFolgasFerias';
-import FormDadosCadastrais from './usuario-forms/FormDadosCadastrais';
-import FormDocumentos from './usuario-forms/FormDocumentos';
-import FormDadosContratuais from './usuario-forms/FormDadosContratuais';
-import { Input } from './ui/input';
-import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from './ui/form';
-import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
-import { Calendar } from './ui/calendar';
+import FormGeral from '../usuario-forms/FormGeral';
+import FormFolgasFerias from '../usuario-forms/FormFolgasFerias';
+import FormDadosCadastrais from '../usuario-forms/FormDadosCadastrais';
+import FormDocumentos from '../usuario-forms/FormDocumentos';
+import FormDadosContratuais from '../usuario-forms/FormDadosContratuais';
+import { Input } from '../ui/input';
+import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from '../ui/form';
+import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
+import { Calendar } from '../ui/calendar';
 import { CalendarIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ptBR } from 'date-fns/locale';
@@ -190,7 +190,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
 
   const handleSelectAll = (select: boolean) => {
     const permissoes = isClientScope ? permissoesClienteAdmin : permissoesVisiveis;
-    permissoes.forEach(p => {
+    permissoes.forEach((p: Permissao) => {
       form.setValue(`permissoes.${p.key}`, select, { shouldDirty: true });
     });
   };
@@ -348,8 +348,8 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
     }
   };
   
-  const permissoesClienteAdmin = PERMISSOES_DISPONIVEIS.filter(p => p.key !== 'ponto_eletronico' && p.key !== 'visualizar_proprio_ponto');
-  const permissoesVisiveis = PERMISSOES_DISPONIVEIS.filter(p => {
+  const permissoesClienteAdmin = PERMISSOES_DISPONIVEIS.filter((p: Permissao) => p.key !== 'ponto_eletronico' && p.key !== 'visualizar_proprio_ponto');
+  const permissoesVisiveis = PERMISSOES_DISPONIVEIS.filter((p: Permissao) => {
     if (criadorRole === 'Admin') return true;
     const permissoesCliente = (criadorPerfil as ClienteProfile)?.permissoes || {};
     return permissoesCliente[p.key] === true || p.key === 'visualizar_proprio_ponto' || p.key === 'ponto_eletronico';

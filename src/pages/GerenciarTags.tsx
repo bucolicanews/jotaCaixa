@@ -8,7 +8,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import FormContratoTag from '@/components/FormContratoTag';
+import FormContratoTag from '@/components/formularios/FormContratoTag';
 import { ContratoTag } from '@/types/contratos';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 

@@ -9,7 +9,7 @@ import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
 import { SaldoContaDetalhada } from '@/types/saldo-conta';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import FormSaldoConta from '@/components/FormSaldoConta';
+import FormSaldoConta from '@/components/formularios/FormSaldoConta';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';

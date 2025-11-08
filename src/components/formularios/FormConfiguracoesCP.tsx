@@ -8,9 +8,10 @@ import { Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { useSessao } from '@/hooks/use-sessao';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { PlanoContas } from '@/types/plano-contas';
-import { Separator } from './ui/separator';
+import { Separator } from '../ui/separator';
+import { Input } from '../ui/input';
 
 // Tipos de registro que precisam de mapeamento contábil para CP
 const TIPOS_REGISTRO = [

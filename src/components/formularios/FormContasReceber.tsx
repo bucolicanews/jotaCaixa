@@ -5,6 +5,7 @@ import * as z from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { CalendarIcon, Loader2, PlusCircle } from 'lucide-react';
@@ -13,15 +14,16 @@ import { format, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
-import { AdminContaPagar } from '@/types/contas-pagar';
+import { ContaReceber } from '@/types/contas-receber';
+import { Cliente } from '@/types/cliente';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Separator } from './ui/separator';
+import { Separator } from '../ui/separator';
 import { useSessao } from '@/hooks/use-sessao';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { UsuarioProfile } from '@/types/usuario';
 import { Historico } from '@/types/historico'; // Importando Historico
 
 const formSchema = z.object({
-  fornecedor: z.string().min(1, 'O nome do fornecedor é obrigatório.'),
+  cliente_id: z.string({ required_error: 'Selecione um cliente.' }).uuid('Cliente inválido.'),
   descricao: z.string().min(1, 'A descrição é obrigatória.'),
   
   tipo_lancamento: z.enum(['unico', 'repetir', 'parcelar'], { required_error: 'Selecione o tipo de lançamento.' }),
@@ -48,31 +50,45 @@ const formSchema = z.object({
 
 type FormValues = z.infer<typeof formSchema>;
 
-interface FormContasPagarProps {
-  contaInicial?: AdminContaPagar | null;
+interface FormContasReceberProps {
+  contaInicial?: ContaReceber | null;
   onSaveComplete: () => void;
 }
 
-const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveComplete }) => {
-  const { usuario, role } = useSessao();
+interface ClienteCombinado {
+  id: string;
+  nome: string;
+  tipo: 'CR' | 'Sistema';
+}
+
+const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onSaveComplete }) => {
+  const { perfil, role } = useSessao();
+  const [clientes, setClientes] = useState<ClienteCombinado[]>([]);
+  const [loadingClientes, setLoadingClientes] = useState(true);
   const [mapeamentoContabil, setMapeamentoContabil] = useState<Record<string, string | null>>({});
   const [historicos, setHistoricos] = useState<Historico[]>([]); // NOVO ESTADO
   const [isCreatingHistorico, setIsCreatingHistorico] = useState(false); // NOVO ESTADO
   const isEditing = !!contaInicial;
 
+  const getOwnerId = () => {
+    if (role === 'Admin' || role === 'Cliente') return (perfil as any)?.id;
+    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id;
+    return null;
+  };
+  
+  const ownerId = getOwnerId();
   const isAdmin = role === 'Admin';
-  const adminId = usuario?.id;
 
   const fetchMapeamentoContabil = useCallback(async () => {
-    if (!isAdmin || !adminId) return;
+    if (!isAdmin || !ownerId) return;
     
     const { data, error } = await supabase
-        .from('configuracao_contas_pagar')
+        .from('configuracao_contas_receber')
         .select('tipo_registro, conta_contabil_id')
-        .eq('proprietario_id', adminId);
+        .eq('proprietario_id', ownerId);
         
     if (error) {
-        console.error('Erro ao buscar mapeamento contábil CP:', error);
+        console.error('Erro ao buscar mapeamento contábil:', error);
         setMapeamentoContabil({});
     } else {
         const map = (data as { tipo_registro: string, conta_contabil_id: string | null }[]).reduce((acc, item) => {
@@ -81,14 +97,14 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
         }, {} as Record<string, string | null>);
         setMapeamentoContabil(map);
     }
-  }, [isAdmin, adminId]);
+  }, [isAdmin, ownerId]);
   
   const fetchHistoricos = useCallback(async () => {
-    if (!adminId) return;
+    if (!ownerId) return;
     const { data, error } = await supabase
         .from('historicos')
         .select('id, descricao, codigo') // Selecionando 'codigo'
-        .eq('proprietario_id', adminId)
+        .eq('proprietario_id', ownerId)
         .order('descricao');
         
     if (error) {
@@ -97,45 +113,86 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
     } else {
         setHistoricos(data as Historico[]);
     }
-  }, [adminId]);
+  }, [ownerId]);
 
   useEffect(() => {
+    const fetchClientes = async () => {
+      if (!ownerId) {
+        setLoadingClientes(false);
+        return;
+      }
+      setLoadingClientes(true);
+      
+      let combinedClients: ClienteCombinado[] = [];
+      
+      if (role === 'Admin') {
+          // ADMIN: Busca APENAS Empresas do Sistema (tbl_clientes)
+          const { data: dataSistema, error: errorSistema } = await supabase
+              .from('tbl_clientes')
+              .select('id, nome')
+              .eq('aprovado', true)
+              .order('nome');
+              
+          if (errorSistema) {
+              showError('Erro ao carregar empresas do sistema.');
+          } else {
+              combinedClients = (dataSistema as any[]).map(c => ({ id: c.id, nome: c.nome, tipo: 'Sistema' as const }));
+          }
+      } else {
+          // Cliente/Usuário: Busca APENAS Clientes de Contas a Receber (clientes)
+          let queryCR = supabase.from('clientes').select('id, nome').order('nome');
+          
+          // Se não for Admin, filtra pelo ownerId
+          queryCR = queryCR.eq('proprietario_id', ownerId); // AJUSTE AQUI
+          
+          const { data: dataCR, error: errorCR } = await queryCR;
+          
+          if (errorCR) {
+              showError('Erro ao carregar clientes CR.');
+          } else {
+              combinedClients.push(...(dataCR as Cliente[]).map(c => ({ id: c.id, nome: c.nome, tipo: 'CR' as const })));
+          }
+      }
+      
+      // 3. Ordenar e definir estado
+      combinedClients.sort((a, b) => a.nome.localeCompare(b.nome));
+      setClientes(combinedClients);
+      setLoadingClientes(false);
+    };
+    
+    fetchClientes();
+    fetchHistoricos(); // Busca históricos
     if (isAdmin) {
         fetchMapeamentoContabil();
     }
-    if (adminId) {
-        fetchHistoricos();
-    }
-  }, [isAdmin, adminId, fetchMapeamentoContabil, fetchHistoricos]);
+  }, [perfil, role, ownerId, isAdmin, fetchMapeamentoContabil, fetchHistoricos]);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      fornecedor: contaInicial?.fornecedor || '',
+      cliente_id: contaInicial?.cliente_id || undefined,
       descricao: contaInicial?.descricao || '',
       tipo_lancamento: 'unico',
       valor: contaInicial?.valor_total || undefined,
       data_vencimento: contaInicial?.data_vencimento ? new Date(contaInicial.data_vencimento + 'T00:00:00') : undefined,
       numero_parcelas: 1,
       intervalo_dias: 30,
-      historico_id: contaInicial?.historico_id || null, // Carrega histórico inicial
+      historico_id: contaInicial?.historico_id || null, // Inicializa com null
       novo_historico: '',
     },
   });
-  
-  const { isSubmitting } = form.formState; // Desestruturando isSubmitting
 
   const tipoLancamento = form.watch('tipo_lancamento');
   const novoHistoricoValue = form.watch('novo_historico');
   
   const handleCreateHistorico = async () => {
-    if (!novoHistoricoValue || !adminId) return;
+    if (!novoHistoricoValue || !ownerId) return;
     
     setIsCreatingHistorico(true);
     try {
         const { data, error } = await supabase
             .from('historicos')
-            .insert({ proprietario_id: adminId, descricao: novoHistoricoValue })
+            .insert({ proprietario_id: ownerId, descricao: novoHistoricoValue })
             .select('id, descricao, codigo')
             .single();
             
@@ -154,13 +211,33 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
   };
 
   const onSubmit = async (values: FormValues) => {
-    if (!adminId) { showError('ID do administrador não pôde ser determinado.'); return; }
+    const ownerId = getOwnerId();
+    if (!ownerId) { showError('ID da empresa/admin não pôde ser determinado.'); return; }
     
-    // Contas Contábeis Mapeadas
-    const contaAPagar = isAdmin ? mapeamentoContabil['a_pagar'] : null;
-    const contaParcelaPagar = isAdmin ? mapeamentoContabil['parcela_pagar'] : null;
+    // Contas Contábeis Mapeadas (apenas Admin)
+    const contaAReceber = isAdmin ? mapeamentoContabil['a_receber'] : null;
+    const contaParcela = isAdmin ? mapeamentoContabil['parcela'] : null;
     
     try {
+      // 0. GARANTIR QUE O CLIENTE EXISTA NA TABELA 'clientes' (para FK)
+      const clienteSelecionado = clientes.find(c => c.id === values.cliente_id);
+      if (!clienteSelecionado) throw new Error('Cliente selecionado não encontrado.');
+      
+      const clienteData = {
+          id: values.cliente_id,
+          proprietario_id: ownerId, // AJUSTE AQUI
+          nome: clienteSelecionado.nome,
+          documento: 'N/A', // Placeholder
+          email: 'N/A', // Placeholder
+      };
+      
+      // Upsert na tabela 'clientes'
+      const { error: upsertError } = await supabase
+          .from('clientes')
+          .upsert(clienteData, { onConflict: 'id' });
+          
+      if (upsertError) throw new Error('Falha ao garantir a existência do cliente na tabela CR: ' + upsertError.message);
+      
       // 1. Calcular valores e parcelas
       let valorTotal: number;
       let parcelasParaInserir = [];
@@ -177,43 +254,43 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
         }
       }
       
-      let contaPagarId: string;
-      const tabelaContasPagar = 'admin_contas_pagar';
-      const tabelaParcelasPagar = 'admin_parcelas_pagar';
+      let contaReceberId: string;
+      let tabelaContasReceber = isAdmin ? 'admin_contas_receber' : 'contas_receber';
+      let tabelaParcelasReceber = isAdmin ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
       
-      const contaPagarPayload = {
-          admin_id: adminId,
-          fornecedor: values.fornecedor,
+      const baseData = isAdmin ? { admin_id: ownerId, cliente_id: values.cliente_id, id_conta_contabil: contaAReceber, historico_id: values.historico_id } : { empresa_id: ownerId, cliente_id: values.cliente_id };
+      
+      const contaReceberPayload = {
+          ...baseData,
           descricao: values.descricao,
           valor_total: valorTotal,
+          data_emissao: format(new Date(), 'yyyy-MM-dd'),
           data_vencimento: parcelasParaInserir[0].data_vencimento,
-          status: 'pendente',
+          tipo_receita: 'única',
+          status: 'aberta',
           origem: 'manual',
-          id_conta_contabil: contaAPagar,
-          historico_id: values.historico_id, // NOVO CAMPO
       };
 
-      if (isEditing && contaInicial) {
-        const { data, error } = await supabase.from(tabelaContasPagar).update(contaPagarPayload).eq('id', contaInicial.id).select('id').single();
+      if (isEditing) {
+        const { data, error } = await supabase.from(tabelaContasReceber).update(contaReceberPayload).eq('id', contaInicial.id).select('id').single();
         if (error) throw error;
-        contaPagarId = data.id;
+        contaReceberId = data.id;
         
-        const { error: deleteError } = await supabase.from(tabelaParcelasPagar).delete().eq('conta_pagar_id', contaPagarId);
+        const { error: deleteError } = await supabase.from(tabelaParcelasReceber).delete().eq('conta_receber_id', contaReceberId);
         if (deleteError) throw deleteError;
       } else {
-        const { data, error } = await supabase.from(tabelaContasPagar).insert(contaPagarPayload).select('id').single();
+        const { data, error } = await supabase.from(tabelaContasReceber).insert(contaReceberPayload).select('id').single();
         if (error) throw error;
-        contaPagarId = data.id;
+        contaReceberId = data.id;
       }
 
       const parcelasComId = parcelasParaInserir.map(p => ({ 
           ...p, 
-          conta_pagar_id: contaPagarId, 
-          admin_id: adminId,
-          id_conta_contabil: contaParcelaPagar,
+          conta_receber_id: contaReceberId, 
+          ...(isAdmin ? { admin_id: ownerId, id_conta_contabil: contaParcela } : { empresa_id: ownerId })
       }));
       
-      const { error: parcelError } = await supabase.from(tabelaParcelasPagar).insert(parcelasComId);
+      const { error: parcelError } = await supabase.from(tabelaParcelasReceber).insert(parcelasComId);
       if (parcelError) throw parcelError;
 
       showSuccess(`Conta ${isEditing ? 'atualizada' : 'salva'} com sucesso!`);
@@ -226,12 +303,18 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-        <FormField control={form.control} name="fornecedor" render={({ field }) => (
-          <FormItem><FormLabel>1. Fornecedor</FormLabel><FormControl><Input placeholder="Ex: Fornecedor X" {...field} /></FormControl><FormMessage /></FormItem>
+        <FormField control={form.control} name="cliente_id" render={({ field }) => (
+          <FormItem><FormLabel>1. Cliente</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value} disabled={loadingClientes || isEditing}><FormControl><SelectTrigger><SelectValue placeholder={loadingClientes ? "Carregando..." : "Selecione um cliente"} /></SelectTrigger></FormControl><SelectContent>
+            {clientes.map((c) => (
+              <SelectItem key={c.id} value={c.id}>
+                {c.nome} {c.tipo === 'Sistema' && <span className="text-xs text-muted-foreground">(Empresa do Sistema)</span>}
+              </SelectItem>
+            ))}
+          </SelectContent></Select><FormMessage /></FormItem>
         )} />
         <Separator />
         <FormField control={form.control} name="descricao" render={({ field }) => (
-          <FormItem><FormLabel>2. Descrição do Lançamento</FormLabel><FormControl><Input placeholder="Ex: Compra de material de escritório" {...field} /></FormControl><FormMessage /></FormItem>
+          <FormItem><FormLabel>2. Descrição do Lançamento</FormLabel><FormControl><Input placeholder="Ex: Venda de produto X" {...field} /></FormControl><FormMessage /></FormItem>
         )} />
         <Separator />
         
@@ -272,12 +355,12 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
                 <div className="flex space-x-2 pt-2">
                     <FormField control={form.control} name="novo_historico" render={({ field }) => (
                         <FormItem className="flex-1">
-                            <FormControl><Input placeholder="Novo Histórico" {...field} disabled={isSubmitting} /></FormControl>
+                            <FormControl><Input placeholder="Novo Histórico" {...field} disabled={form.formState.isSubmitting} /></FormControl>
                             <FormMessage />
                         </FormItem>
                     )} />
-                    <Button type="button" onClick={handleCreateHistorico} disabled={isSubmitting || !novoHistoricoValue}>
-                        {isCreatingHistorico ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Criar'}
+                    <Button type="button" onClick={handleCreateHistorico} disabled={form.formState.isSubmitting || !novoHistoricoValue}>
+                        {form.formState.isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Criar'}
                     </Button>
                 </div>
             )}
@@ -304,13 +387,13 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
                 <FormItem><FormLabel>Intervalo (dias)</FormLabel><FormControl><Input type="number" placeholder="30" {...field} /></FormControl><FormMessage /></FormItem>
               )} />
               <FormField control={form.control} name="data_primeiro_vencimento" render={({ field }) => (
-                <FormItem><FormLabel>1º Vencimento</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("w-full text-left font-normal", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "dd/MM/yy") : <span>Data</span>}<CalendarIcon className="ml-auto h-4 w-4 opacity-50" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus /></PopoverContent></Popover><FormMessage /></FormItem>
+                <FormItem className="flex flex-col"><FormLabel>1º Vencimento</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "PPP", { locale: ptBR }) : <span>Escolha uma data</span>}<CalendarIcon className="ml-auto h-4 w-4 opacity-50" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus /></PopoverContent></Popover><FormMessage /></FormItem>
               )} />
             </div>
           )}
         </div>
-        <Button type="submit" className="w-full" disabled={isSubmitting}>
-          {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+        <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
+          {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           {isEditing ? 'Salvar Alterações' : 'Salvar Lançamento'}
         </Button>
       </form>
@@ -318,4 +401,4 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
   );
 };
 
-export default FormContasPagar;
+export default FormContasReceber;

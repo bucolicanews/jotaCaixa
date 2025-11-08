@@ -2,7 +2,7 @@ import React from 'react';
 import { Control } from 'react-hook-form';
 import { FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/components/ui/form';
 import { Checkbox } from '@/components/ui/checkbox';
-import GerenciarFerias from '@/components/GerenciarFerias';
+import GerenciarFerias from '@/components/formularios/GerenciarFerias';
 import { UsuarioProfile } from '@/types/usuario';
 
 interface FormFolgasFeriasProps {

@@ -94,7 +94,7 @@ const FormPlano: React.FC<FormPlanoProps> = ({ planoInicial, onSaveComplete }) =
   };
 
   // Filtra as permissões que são relevantes para o plano (módulos de empresa)
-  const permissoesModulos = PERMISSOES_DISPONIVEIS.filter(p => 
+  const permissoesModulos = PERMISSOES_DISPONIVEIS.filter((p: Permissao) => 
     p.key !== 'ponto_eletronico' && p.key !== 'visualizar_proprio_ponto'
   );
 
@@ -163,7 +163,7 @@ const FormPlano: React.FC<FormPlanoProps> = ({ planoInicial, onSaveComplete }) =
         
         <h3 className="font-semibold mt-6 border-t pt-4">Módulos Liberados (Permissões)</h3>
         <div className="grid grid-cols-2 gap-4 rounded-lg border p-4">
-          {permissoesModulos.map((p) => (
+          {permissoesModulos.map((p: Permissao) => (
             <FormField key={p.key} control={form.control} name={`permissoes.${p.key}`} render={({ field }) => (
               <FormItem className="flex flex-row items-start space-x-3 space-y-0">
                 <FormControl>

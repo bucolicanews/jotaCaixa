@@ -2,7 +2,7 @@ import React from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { useSessao } from '@/hooks/use-sessao';
 import { Loader2 } from 'lucide-react';
-import FormPerfil from '@/components/FormPerfil';
+import FormPerfil from '@/components/formularios/FormPerfil';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { showSuccess } from '@/utils/toast'; // showError e supabase removidos
 import { AnyProfile } from '@/types/usuario';

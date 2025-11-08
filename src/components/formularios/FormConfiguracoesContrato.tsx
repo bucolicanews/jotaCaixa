@@ -10,7 +10,7 @@ import { Loader2, Link, MessageSquare, Mail } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { useSessao } from '@/hooks/use-sessao';
-import { Separator } from './ui/separator';
+import { Separator } from '../ui/separator';
 
 const formSchema = z.object({
   url_base_assinatura: z.string().url('URL base inválida. Deve incluir http:// ou https://.'),

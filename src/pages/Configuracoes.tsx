@@ -2,10 +2,10 @@ import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useSessao } from '@/hooks/use-sessao';
-import FormConfiguracoesStripe from '@/components/FormConfiguracoesStripe';
-import FormConfiguracoesCR from '@/components/FormConfiguracoesCR';
-import FormConfiguracoesCP from '@/components/FormConfiguracoesCP';
-import FormConfiguracoesContrato from '@/components/FormConfiguracoesContrato'; // Importando o novo componente
+import FormConfiguracoesStripe from '@/components/formularios/FormConfiguracoesStripe';
+import FormConfiguracoesCR from '@/components/formularios/FormConfiguracoesCR';
+import FormConfiguracoesCP from '@/components/formularios/FormConfiguracoesCP';
+import FormConfiguracoesContrato from '@/components/formularios/FormConfiguracoesContrato'; // Importando o novo componente
 import { Key, Settings, DollarSign, ArrowDownCircle, FileSignature } from 'lucide-react';
 
 const Configuracoes = () => {

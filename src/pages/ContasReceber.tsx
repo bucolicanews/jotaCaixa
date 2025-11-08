@@ -8,12 +8,12 @@ import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
 import { ContaReceber, ExtendedParcelaDetalhada, ContaReceberComProgresso, AdminRecebimento } from '@/types/contas-receber';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import FormContasReceber from '@/components/FormContasReceber';
+import FormContasReceber from '@/components/formularios/FormContasReceber';
 import DetalhesParcelasDialog from '@/components/DetalhesParcelasDialog';
 import { DateRange } from 'react-day-picker';
 import { isToday, isPast, parseISO, format } from 'date-fns';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
-import RegistrarPagamentoDialog from '@/components/RegistrarPagamentoDialog';
+import RegistrarPagamentoDialog from '@/components/formularios/RegistrarPagamentoDialog';
 import ContasReceberAcoes from '@/components/contas-receber/ContasReceberAcoes';
 import ContasReceberResumo from '@/components/contas-receber/ContasReceberResumo';
 import TabelaSintetica from '@/components/contas-receber/TabelaSintetica';
@@ -365,7 +365,7 @@ const ContasReceber = () => {
   const contasFiltradas = useMemo(() => {
     const dateFiltered = filterData(contas, 'data_vencimento') as ContaReceberComProgresso[];
     return filterByStatus(dateFiltered, true) as ContaReceberComProgresso[];
-  }, [contas, filtroPeriodo, filtroStatus, filtroOrigem]);
+  }, [contas, filtroPeriodo, filtroStatus, filtroOrigem, filtroTextoDebounced]);
 
   const parcelasFiltradas = useMemo(() => {
     const dateFiltered = filterData(parcelas, 'data_vencimento') as ExtendedParcelaDetalhada[];

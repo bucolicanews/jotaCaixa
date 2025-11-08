@@ -2,7 +2,7 @@ import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import FormConciliacaoConfig from '@/components/FormConciliacaoConfig';
+import FormConciliacaoConfig from '@/components/formularios/FormConciliacaoConfig';
 import HistoricoConciliacaoDialog from '@/components/HistoricoConciliacaoDialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 

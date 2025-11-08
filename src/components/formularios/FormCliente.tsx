@@ -10,9 +10,9 @@ import { showError, showSuccess } from '@/utils/toast';
 import { Cliente } from '@/types/cliente';
 import { useSessao } from '@/hooks/use-sessao';
 import { UsuarioProfile, ClienteProfile } from '@/types/usuario';
-import FormIdentificacao from './cliente-forms/FormIdentificacao';
-import FormContato from './cliente-forms/FormContato';
-import FormEndereco from './cliente-forms/FormEndereco';
+import FormIdentificacao from '../cliente-forms/FormIdentificacao';
+import FormContato from '../cliente-forms/FormContato';
+import FormEndereco from '../cliente-forms/FormEndereco';
 import { useBulkTagManager } from '@/hooks/use-bulk-tag-manager'; // Importando o hook de bulk tag
 
 const textOptional = z.string().optional().or(z.literal(''));

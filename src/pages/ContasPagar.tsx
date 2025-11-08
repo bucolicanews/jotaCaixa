@@ -7,9 +7,9 @@ import { getBadgeVariant } from '@/utils/badge-variants';
 import { DateRange } from 'react-day-picker';
 import { format } from 'date-fns';
 import { ContaPagar, ContaPagarComProgresso, AdminParcelaPagar, ExtendedParcelaPagar } from '@/types/contas-pagar';
-import FormContasPagarDialog from '@/components/FormContasPagarDialog';
+import FormContasPagarDialog from '@/components/formularios/FormContasPagarDialog';
 import DetalhesParcelasCPDialog from '@/components/DetalhesParcelasCPDialog';
-import RegistrarPagamentoCPDialog from '@/components/RegistrarPagamentoCPDialog';
+import RegistrarPagamentoCPDialog from '@/components/formularios/RegistrarPagamentoCPDialog';
 import { formatCurrency, formatarData } from '@/utils/formatters';
 
 // Componentes Modulares

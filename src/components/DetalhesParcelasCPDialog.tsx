@@ -10,7 +10,7 @@ import { useSessao } from '@/hooks/use-sessao';
 import { getBadgeVariant } from '@/utils/badge-variants';
 import { Badge } from './ui/badge';
 import { DollarSign, Undo2, Loader2 } from 'lucide-react';
-import RegistrarPagamentoCPDialog from './RegistrarPagamentoCPDialog';
+import RegistrarPagamentoCPDialog from '@/components/formularios/RegistrarPagamentoCPDialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
 
 interface DetalhesParcelasCPDialogProps {
@@ -97,7 +97,7 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
             .delete()
             .ilike('descricao', expectedDescription) // Filtra pela descrição que contém o ID
             .eq('tipo', 'Saida')
-            .eq('empresa_id', usuario.id); 
+            .eq('proprietario_id', usuario.id); 
             
         if (deleteLancamentosError) throw deleteLancamentosError;
         
@@ -219,7 +219,7 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
           {pagamentoDialog.parcela && (
               <RegistrarPagamentoCPDialog
                   open={pagamentoDialog.open}
-                  onOpenChange={(open) => setPagamentoDialog({ open, parcela: null })}
+                  onOpenChange={(open: boolean) => setPagamentoDialog({ open, parcela: null })}
                   parcela={pagamentoDialog.parcela}
                   onSaveComplete={handlePagamentoComplete}
               />

@@ -9,7 +9,7 @@ import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
 import { Plano } from '@/types/plano';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import FormPlano from '@/components/FormPlano';
+import FormPlano from '@/components/formularios/FormPlano';
 import { Badge } from '@/components/ui/badge';
 
 const GerenciarPlanos: React.FC = () => {
