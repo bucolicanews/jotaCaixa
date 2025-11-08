@@ -14,6 +14,7 @@ import FormIdentificacao from '../cliente-forms/FormIdentificacao';
 import FormContato from '../cliente-forms/FormContato';
 import FormEndereco from '../cliente-forms/FormEndereco';
 import { useBulkTagManager } from '@/hooks/use-bulk-tag-manager'; // Importando o hook de bulk tag
+// import { cn } from '@/lib/utils'; // Importando cn
 
 const textOptional = z.string().optional().or(z.literal(''));
 
@@ -46,9 +47,7 @@ interface FormClienteProps {
 const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplete }) => {
   const { perfil, role, usuario } = useSessao();
   const clienteId = clienteInicial?.id;
-  // Removendo o estado local tagRefreshKey, pois usaremos o do useBulkTagManager
-  // const [tagRefreshKey, setTagRefreshKey] = useState(0); 
-
+  
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -136,7 +135,6 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
       showError(`Falha ao salvar cliente: ${error.message}`);
     } else {
       showSuccess(`Cliente salvo com sucesso!`);
-      // setTagRefreshKey(prev => prev + 1); // Não é mais necessário
       onSaveComplete();
     }
   };
