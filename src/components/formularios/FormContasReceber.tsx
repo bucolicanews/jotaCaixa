@@ -125,8 +125,8 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
       
       let combinedClients: ClienteCombinado[] = [];
       
-      if (role === 'Admin') {
-          // ADMIN: Busca APENAS Empresas do Sistema (tbl_clientes)
+      if (isAdmin) {
+          // ADMIN: Busca Clientes do Sistema (tbl_clientes)
           const { data: dataSistema, error: errorSistema } = await supabase
               .from('tbl_clientes')
               .select('id, nome')
@@ -138,12 +138,32 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
           } else {
               combinedClients = (dataSistema as any[]).map(c => ({ id: c.id, nome: c.nome, tipo: 'Sistema' as const }));
           }
+          
+          // ADMIN: Busca Clientes Diretos (clientes)
+          const { data: dataCR, error: errorCR } = await supabase
+              .from('clientes')
+              .select('id, nome')
+              .eq('proprietario_id', ownerId)
+              .order('nome');
+              
+          if (errorCR) {
+              showError('Erro ao carregar clientes CR.');
+          } else {
+              // Adiciona clientes CR, evitando duplicidade se o ID for o mesmo (embora improvável)
+              const existingIds = new Set(combinedClients.map(c => c.id));
+              (dataCR as Cliente[]).forEach(c => {
+                  if (!existingIds.has(c.id)) {
+                      combinedClients.push({ id: c.id, nome: c.nome, tipo: 'CR' as const });
+                  }
+              });
+          }
+          
       } else {
           // Cliente/Usuário: Busca APENAS Clientes de Contas a Receber (clientes)
           let queryCR = supabase.from('clientes').select('id, nome').order('nome');
           
           // Se não for Admin, filtra pelo ownerId
-          queryCR = queryCR.eq('proprietario_id', ownerId); // AJUSTE AQUI
+          queryCR = queryCR.eq('proprietario_id', ownerId);
           
           const { data: dataCR, error: errorCR } = await queryCR;
           
@@ -223,20 +243,9 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
       const clienteSelecionado = clientes.find(c => c.id === values.cliente_id);
       if (!clienteSelecionado) throw new Error('Cliente selecionado não encontrado.');
       
-      const clienteData = {
-          id: values.cliente_id,
-          proprietario_id: ownerId, // AJUSTE AQUI
-          nome: clienteSelecionado.nome,
-          documento: 'N/A', // Placeholder
-          email: 'N/A', // Placeholder
-      };
-      
-      // Upsert na tabela 'clientes'
-      const { error: upsertError } = await supabase
-          .from('clientes')
-          .upsert(clienteData, { onConflict: 'id' });
-          
-      if (upsertError) throw new Error('Falha ao garantir a existência do cliente na tabela CR: ' + upsertError.message);
+      // Se o cliente for do tipo 'Sistema', ele já existe na tabela 'clientes' (criado pelo activate_subscription)
+      // Se for do tipo 'CR', ele já existe na tabela 'clientes' (criado pelo Admin)
+      // Não precisamos de um upsert aqui, pois a FK já deve estar garantida.
       
       // 1. Calcular valores e parcelas
       let valorTotal: number;
@@ -266,7 +275,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
           valor_total: valorTotal,
           data_emissao: format(new Date(), 'yyyy-MM-dd'),
           data_vencimento: parcelasParaInserir[0].data_vencimento,
-          tipo_receita: 'única',
+          tipo_receita: tipoLancamento === 'unico' ? 'única' : 'recorrente',
           status: 'aberta',
           origem: 'manual',
       };
@@ -302,12 +311,13 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
         <FormField control={form.control} name="cliente_id" render={({ field }) => (
           <FormItem><FormLabel>1. Cliente</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value} disabled={loadingClientes || isEditing}><FormControl><SelectTrigger><SelectValue placeholder={loadingClientes ? "Carregando..." : "Selecione um cliente"} /></SelectTrigger></FormControl><SelectContent>
             {clientes.map((c) => (
               <SelectItem key={c.id} value={c.id}>
                 {c.nome} {c.tipo === 'Sistema' && <span className="text-xs text-muted-foreground">(Empresa do Sistema)</span>}
+                {c.tipo === 'CR' && <span className="text-xs text-muted-foreground">(Cliente Direto)</span>}
               </SelectItem>
             ))}
           </SelectContent></Select><FormMessage /></FormItem>
@@ -376,7 +386,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
             <FormItem><FormLabel>{tipoLancamento === 'parcelar' ? 'Valor Total a Parcelar' : 'Valor da Parcela'}</FormLabel><FormControl><Input type="number" step="0.01" placeholder="0,00" {...field} /></FormControl><FormMessage /></FormItem>
           )} />
           {tipoLancamento === 'unico' && <FormField control={form.control} name="data_vencimento" render={({ field }) => (
-            <FormItem className="flex flex-col"><FormLabel>Data de Vencimento</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "PPP", { locale: ptBR }) : <span>Escolha uma data</span>}<CalendarIcon className="ml-auto h-4 w-4 opacity-50" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus /></PopoverContent></Popover><FormMessage /></FormItem>
+            <FormItem className="flex flex-col"><FormLabel>Data de Vencimento</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "PPP", { locale: ptBR }) : <span>Escolha uma data</span>}<CalendarIcon className="ml-auto h-4 w-4 opacity-50" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus locale={ptBR} /></PopoverContent></Popover><FormMessage /></FormItem>
           )} />}
           {tipoLancamento !== 'unico' && (
             <div className="grid grid-cols-3 gap-4">
@@ -387,7 +397,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
                 <FormItem><FormLabel>Intervalo (dias)</FormLabel><FormControl><Input type="number" placeholder="30" {...field} /></FormControl><FormMessage /></FormItem>
               )} />
               <FormField control={form.control} name="data_primeiro_vencimento" render={({ field }) => (
-                <FormItem className="flex flex-col"><FormLabel>1º Vencimento</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "PPP", { locale: ptBR }) : <span>Escolha uma data</span>}<CalendarIcon className="ml-auto h-4 w-4 opacity-50" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus /></PopoverContent></Popover><FormMessage /></FormItem>
+                <FormItem className="flex flex-col"><FormLabel>1º Vencimento</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "PPP", { locale: ptBR }) : <span>Escolha uma data</span>}<CalendarIcon className="ml-auto h-4 w-4 opacity-50" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus locale={ptBR} /></PopoverContent></Popover><FormMessage /></FormItem>
               )} />
             </div>
           )}
