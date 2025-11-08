@@ -47,18 +47,16 @@ export function useBulkTagManager(resourceId: string | undefined): BulkTagManage
     const isAllActive = activeTagsCount === allMappableTags.length && allMappableTags.length > 0;
 
     const refetchStatus = useCallback(() => {
-        console.log(`[BulkTagManager] Forçando re-busca de status. Key: ${refreshKey + 1}`);
+        // Esta função é usada para forçar a re-execução do useEffect abaixo
         setRefreshKey(prev => prev + 1);
-    }, []); // Removendo [refreshKey] para evitar stale closure na função
+    }, []);
 
     const fetchTagStatus = useCallback(async () => {
         if (!resourceId || !empresaId) {
-            console.log('[BulkTagManager] Status: Skipping fetch (no resourceId or empresaId).');
             setLoading(false);
             return;
         }
         
-        console.log(`[BulkTagManager] Status: Fetching active tags for ${empresaId}.`);
         setLoading(true);
         
         try {
@@ -67,9 +65,9 @@ export function useBulkTagManager(resourceId: string | undefined): BulkTagManage
                 .from('contrato_tags')
                 .select('id', { count: 'exact', head: true })
                 .eq('empresa_id', empresaId)
-                .in('nome_tag', allMappableTags); // Usando IN para evitar problemas de codificação
+                .in('nome_tag', allMappableTags);
 
-            if (error && error.code !== 'PGRST116') { // PGRST116 = No rows found
+            if (error && error.code !== 'PGRST116') { 
                 if (error.code === '406') {
                     console.error(`[BulkTagManager] Erro 406 ao buscar tags. Verifique a codificação.`, error);
                 } else {
@@ -79,18 +77,17 @@ export function useBulkTagManager(resourceId: string | undefined): BulkTagManage
             } else {
                 const countValue = count || 0;
                 setActiveTagsCount(countValue);
-                console.log(`[BulkTagManager] Status: Found ${countValue} active tags out of ${allMappableTags.length}.`);
             }
         } catch (e) {
             console.error('[BulkTagManager] Erro inesperado ao buscar status das tags:', e);
             setActiveTagsCount(0);
         } finally {
             setLoading(false);
-            console.log('[BulkTagManager] Status: Fetch finished. Loading set to false.');
         }
-    }, [resourceId, empresaId, allMappableTags, refreshKey]); // Mantendo refreshKey aqui para que o useEffect reaja
+    }, [resourceId, empresaId, allMappableTags]);
 
     useEffect(() => {
+        // Re-executa o fetch quando o refreshKey muda
         fetchTagStatus();
     }, [fetchTagStatus, refreshKey]);
 
@@ -100,15 +97,13 @@ export function useBulkTagManager(resourceId: string | undefined): BulkTagManage
             return;
         }
         
-        console.log(`[BulkTagManager] ToggleAllTags: Starting operation (activate: ${activate}).`);
         setLoading(true);
         
         try {
             const targetMap = isUserScope ? CAMPOS_USUARIO_MAPA : CAMPOS_CLIENTE_MAPA;
-            const origemDado = isUserScope ? `tbl_usuarios` : `clientes`; // Usamos 'clientes' para o Cliente CR
+            const origemDado = isUserScope ? `tbl_usuarios` : `clientes`;
             
             if (activate) {
-                // Inserir todas as tags que não estão ativas
                 const tagsToInsert: Partial<ContratoTag>[] = targetMap.map(m => ({
                     nome_tag: m.tag,
                     descricao: m.label,
@@ -116,9 +111,6 @@ export function useBulkTagManager(resourceId: string | undefined): BulkTagManage
                     empresa_id: empresaId,
                 }));
                 
-                console.log(`[BulkTagManager] Inserting/Upserting ${tagsToInsert.length} tags.`);
-                
-                // Usamos upsert para garantir que não haja duplicatas
                 const { error } = await supabase
                     .from('contrato_tags')
                     .upsert(tagsToInsert, { onConflict: 'nome_tag, empresa_id' });
@@ -127,9 +119,6 @@ export function useBulkTagManager(resourceId: string | undefined): BulkTagManage
                 
                 showSuccess('Todas as tags ativas foram marcadas!');
             } else {
-                // Remover todas as tags mapeáveis
-                console.log(`[BulkTagManager] Deleting all ${allMappableTags.length} mappable tags.`);
-                
                 const { error } = await supabase
                     .from('contrato_tags')
                     .delete()
@@ -141,15 +130,15 @@ export function useBulkTagManager(resourceId: string | undefined): BulkTagManage
                 showSuccess('Todas as tags ativas foram desmarcadas.');
             }
             
-            // Força a re-busca do status, que irá limpar o estado de loading
-            refetchStatus();
+            // Força a re-busca do status para atualizar a UI
+            setRefreshKey(prev => prev + 1);
             
         } catch (error: any) {
             console.error('[BulkTagManager] FATAL ERROR during toggle:', error);
             showError(`Falha ao alterar tags: ${error.message}`);
-            setLoading(false); // Limpa o loading apenas em caso de falha
+            setLoading(false); // Garante que o loading seja limpo em caso de erro
         }
-    }, [resourceId, empresaId, isUserScope, refetchStatus, allMappableTags]);
+    }, [resourceId, empresaId, isUserScope, allMappableTags]);
 
     return { loading, isAllActive, toggleAllTags, refetchStatus, refreshKey };
 }
