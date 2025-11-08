@@ -83,8 +83,8 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
     return { proprietarioId };
   };
   
-  // Usando o useBulkTagManager para a lista de tags do Cliente CR
-  const { loading: loadingBulk, isAllActive, toggleAllTags, refetchStatus, refreshKey } = useBulkTagManager(clienteId);
+  // Mantendo o hook useBulkTagManager para que o FormCliente continue sendo o provedor do refreshKey
+  const { refetchStatus, refreshKey } = useBulkTagManager(clienteId);
   
   // Função de callback para forçar a atualização do status das tags em massa
   const handleTagToggle = useCallback(() => {
@@ -147,26 +147,7 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
           
           <div className="flex justify-between items-center pt-4 border-t">
               <h3 className="font-semibold text-lg flex items-center"><Tag className="w-5 h-5 mr-2" /> Tags de Contrato</h3>
-              <div className="flex space-x-2">
-                  <Button 
-                      type="button" 
-                      variant="outline" 
-                      size="sm" 
-                      onClick={() => toggleAllTags(true)} 
-                      disabled={loadingBulk || form.formState.isSubmitting || isAllActive || !clienteId}
-                  >
-                      Marcar Todas
-                  </Button>
-                  <Button 
-                      type="button" 
-                      variant="outline" 
-                      size="sm" 
-                      onClick={() => toggleAllTags(false)} 
-                      disabled={loadingBulk || form.formState.isSubmitting || !isAllActive || !clienteId}
-                  >
-                      Desmarcar Todas
-                  </Button>
-              </div>
+              {/* BOTÕES REMOVIDOS */}
           </div>
           <p className="text-sm text-muted-foreground">
               Marque os campos abaixo que devem ser usados como tags dinâmicas em modelos de contrato.

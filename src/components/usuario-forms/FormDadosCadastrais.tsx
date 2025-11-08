@@ -11,7 +11,6 @@ import { Loader2, Tag } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { showError } from '@/utils/toast';
 import { useBulkTagManager } from '@/hooks/use-bulk-tag-manager';
-import { Button } from '@/components/ui/button';
 
 interface TaggedFormFieldProps {
     fieldName: string;
@@ -132,9 +131,9 @@ interface FormDadosCadastraisProps {
 }
 
 const FormDadosCadastrais: React.FC<FormDadosCadastraisProps> = ({ isSubmitting, resourceId }) => {
-    const { watch } = useFormContext();
-    const { loading: loadingBulk, isAllActive, toggleAllTags, refetchStatus, refreshKey } = useBulkTagManager(resourceId);
+    const { refetchStatus, refreshKey } = useBulkTagManager(resourceId);
     
+    const { watch } = useFormContext();
     const isAddressLoading = watch('endereco') === 'Buscando...';
     
     // Função de callback para forçar a atualização do status das tags em massa
@@ -147,26 +146,7 @@ const FormDadosCadastrais: React.FC<FormDadosCadastraisProps> = ({ isSubmitting,
         <div className="space-y-6">
             <div className="flex justify-between items-center">
                 <h3 className="font-semibold text-lg">Dados Cadastrais (Tags de Contrato)</h3>
-                <div className="flex space-x-2">
-                    <Button 
-                        type="button" 
-                        variant="outline" 
-                        size="sm" 
-                        onClick={() => toggleAllTags(true)} 
-                        disabled={loadingBulk || isSubmitting || isAllActive}
-                    >
-                        Marcar Todas
-                    </Button>
-                    <Button 
-                        type="button" 
-                        variant="outline" 
-                        size="sm" 
-                        onClick={() => toggleAllTags(false)} 
-                        disabled={loadingBulk || isSubmitting || !isAllActive}
-                    >
-                        Desmarcar Todas
-                    </Button>
-                </div>
+                {/* BOTÕES REMOVIDOS */}
             </div>
             <p className="text-sm text-muted-foreground">Dados pessoais e de contato do funcionário.</p>
             
