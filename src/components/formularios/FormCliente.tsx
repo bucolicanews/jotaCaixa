@@ -13,8 +13,7 @@ import { UsuarioProfile, ClienteProfile } from '@/types/usuario';
 import FormIdentificacao from '../cliente-forms/FormIdentificacao';
 import FormContato from '../cliente-forms/FormContato';
 import FormEndereco from '../cliente-forms/FormEndereco';
-import { useBulkTagManager } from '@/hooks/use-bulk-tag-manager'; // Importando o hook de bulk tag
-// import { cn } from '@/lib/utils'; // Importando cn
+import { useBulkTagManager } from '@/hooks/use-bulk-tag-manager';
 
 const textOptional = z.string().optional().or(z.literal(''));
 

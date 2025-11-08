@@ -10,8 +10,8 @@ import { Label } from '@/components/ui/label';
 import { Loader2, Tag } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { showError } from '@/utils/toast';
-import { useBulkTagManager } from '@/hooks/use-bulk-tag-manager'; // NOVO IMPORT
-import { Button } from '@/components/ui/button'; // NOVO IMPORT
+import { useBulkTagManager } from '@/hooks/use-bulk-tag-manager';
+import { Button } from '@/components/ui/button';
 
 interface TaggedFormFieldProps {
     fieldName: string;
