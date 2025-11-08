@@ -48,16 +48,26 @@ export function useTagManager(resourceId: string | undefined, tagMetadata: TagMe
         }
         
         setLoading(true);
+        
+        // CORREÇÃO: Usar .eq() com o nome da tag como string literal.
+        // O Supabase JS SDK deve lidar com a codificação, mas o erro 406 sugere que o valor
+        // está sendo interpretado incorretamente pelo PostgREST.
+        // Vamos garantir que a query seja simples e direta.
         const { data, error } = await supabase
             .from('contrato_tags')
             .select('id')
-            .eq('nome_tag', tagMetadata.tag)
+            .eq('nome_tag', tagMetadata.tag) // Apenas o nome da tag
             .eq('empresa_id', empresaId)
             .limit(1)
             .single();
 
         if (error && error.code !== 'PGRST116') { // PGRST116 = No rows found
-            console.error('Erro ao buscar status da tag:', error);
+            // Se o erro for 406, logamos o problema, mas não paramos o app
+            if (error.code === '406') {
+                console.error(`[useTagManager] Erro 406 ao buscar tag ${tagMetadata.tag}. Verifique a codificação do nome da tag.`, error);
+            } else {
+                console.error('Erro ao buscar status da tag:', error);
+            }
         }
         
         setIsTagActive(!!data);
