@@ -13,6 +13,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { Plano } from '@/types/plano';
 import { PERMISSOES_DISPONIVEIS, Permissao } from '@/config/permissoes';
+import { cn } from '@/lib/utils';
 
 const formSchema = z.object({
   nome: z.string().min(1, 'O nome é obrigatório.'),
@@ -21,6 +22,7 @@ const formSchema = z.object({
   // dias_trial removido
   tipo_cliente: z.enum(['PF', 'PJ'], { required_error: 'O tipo de cliente é obrigatório.' }),
   permissoes: z.record(z.boolean()).optional(),
+  visivel_vendas: z.boolean().optional(), // NOVO CAMPO
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -57,6 +59,7 @@ const FormPlano: React.FC<FormPlanoProps> = ({ planoInicial, onSaveComplete }) =
       // dias_trial removido
       tipo_cliente: planoInicial?.tipo_cliente || 'PJ',
       permissoes: defaultPermissoes,
+      visivel_vendas: planoInicial?.visivel_vendas ?? true, // Valor padrão TRUE
     },
   });
 
@@ -68,6 +71,7 @@ const FormPlano: React.FC<FormPlanoProps> = ({ planoInicial, onSaveComplete }) =
       // dias_trial removido
       tipo_cliente: values.tipo_cliente,
       permissoes: values.permissoes,
+      visivel_vendas: values.visivel_vendas ?? true, // Salva o novo campo
     };
 
     let error = null;
@@ -160,6 +164,30 @@ const FormPlano: React.FC<FormPlanoProps> = ({ planoInicial, onSaveComplete }) =
           />
           {/* Campo dias_trial removido */}
         </div>
+        
+        {/* NOVO CAMPO: VISÍVEL PARA VENDAS */}
+        <FormField
+            control={form.control}
+            name="visivel_vendas"
+            render={({ field }) => (
+                <FormItem className={cn("flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4")}>
+                    <FormControl>
+                        <Checkbox
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                        />
+                    </FormControl>
+                    <div className="space-y-1 leading-none">
+                        <FormLabel>
+                            Visível na Página de Vendas (Público)
+                        </FormLabel>
+                        <p className="text-sm text-muted-foreground">
+                            Se desmarcado, o plano só poderá ser atribuído manualmente pelo Administrador (Plano Interno).
+                        </p>
+                    </div>
+                </FormItem>
+            )}
+        />
         
         <h3 className="font-semibold mt-6 border-t pt-4">Módulos Liberados (Permissões)</h3>
         <div className="grid grid-cols-2 gap-4 rounded-lg border p-4">
