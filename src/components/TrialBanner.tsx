@@ -2,19 +2,18 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useSessao } from '@/hooks/use-sessao';
 import { ClienteProfile } from '@/types/usuario';
 import { supabase } from '@/integrations/supabase/client';
-import { format, parseISO, isFuture, addDays, isSameDay } from 'date-fns';
+import { format, parseISO, isFuture } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Plano } from '@/types/plano'; // Importando a interface Plano atualizada
+import { Plano } from '@/types/plano';
 
-interface PlanoInfo extends Plano {} // Usando a interface Plano diretamente
+interface PlanoInfo extends Plano {}
 
 const TrialBanner: React.FC = () => {
     const { perfil, role, carregando } = useSessao();
     const [planoInfo, setPlanoInfo] = useState<PlanoInfo | null>(null);
     const [dataFimAcesso, setDataFimAcesso] = useState<Date | null>(null);
-    const [isTrial, setIsTrial] = useState(false);
     const [loading, setLoading] = useState(true);
 
     const isClient = role === 'Cliente';
@@ -31,7 +30,7 @@ const TrialBanner: React.FC = () => {
         // 1. Buscar detalhes do Plano
         const { data: planoData, error: planoError } = await supabase
             .from('planos')
-            .select('*') // Busca todas as colunas
+            .select('*')
             .eq('id', clienteProfile.plano_id)
             .single();
 
@@ -42,20 +41,12 @@ const TrialBanner: React.FC = () => {
         }
         
         const dataFim = parseISO(clienteProfile.data_fim_acesso);
-        const dataCriacao = parseISO(clienteProfile.criado_em);
         setDataFimAcesso(dataFim);
         setPlanoInfo(planoData as PlanoInfo);
         
-        // 2. Determinar se é Trial (Regra: Acesso futuro E data_fim_acesso está dentro do período de 7 dias da criação)
-        const isFutureAccess = isFuture(dataFim);
-        const dataLimiteTrial = addDays(dataCriacao, 7); // 7 dias de trial
+        // 2. Determinar se é Trial (Simplificado: Acesso futuro)
+        // A lógica de isTrial foi movida para a condição de renderização final.
         
-        // Compara se a data de fim de acesso é igual ou anterior à data limite do trial (criado_em + 7 dias)
-        // Usamos isSameDay para evitar problemas de fuso horário na comparação de datas
-        const isWithinTrialPeriod = isSameDay(dataFim, dataLimiteTrial) || dataFim < dataLimiteTrial;
-
-        // O banner só aparece se o acesso for futuro E estiver dentro do período de trial inicial
-        setIsTrial(isFutureAccess && isWithinTrialPeriod);
         setLoading(false);
 
     }, [isClient, clienteProfile]);
@@ -66,8 +57,8 @@ const TrialBanner: React.FC = () => {
         }
     }, [carregando, fetchPlanoDetails]);
 
-    // O banner só é exibido se for um cliente E estiver em período de trial (curto prazo)
-    if (loading || carregando || !isClient || !planoInfo || !dataFimAcesso || !isTrial) {
+    // O banner só é exibido se for um cliente E o acesso for futuro
+    if (loading || carregando || !isClient || !planoInfo || !dataFimAcesso || !isFuture(dataFimAcesso)) {
         return null; 
     }
 
@@ -81,7 +72,7 @@ const TrialBanner: React.FC = () => {
         )}>
             <AlertTriangle className="w-4 h-4 mr-2 flex-shrink-0" />
             <p className="font-medium">
-                Aproveite seu teste gratuito com acesso completo até <span className="font-bold">{dataCobranca}</span>! Depois, o plano <span className="font-bold">{planoInfo.nome}</span> será ativado por <span className="font-bold">{precoFormatado}</span>/mês.
+                Aproveite seu teste gratuito com acesso completo até <span className="font-bold">{dataCobranca}</span>! Depois, o plano <span className="font-bold">{planoInfo.nome}</span> será ativado e a cobrança de <span className="font-bold">{precoFormatado}</span> será aplicada a partir desta data.
             </p>
         </div>
     );
