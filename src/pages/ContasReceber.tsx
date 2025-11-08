@@ -13,7 +13,7 @@ import DetalhesParcelasDialog from '@/components/DetalhesParcelasDialog';
 import { DateRange } from 'react-day-picker';
 import { isToday, isPast, parseISO, format } from 'date-fns';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
-import RegistrarPagamentoDialog from '@/components/formularios/RegistrarPagamentoDialog';
+import RegistrarPagamentoDialog from '@/components/contas-receber/RegistrarPagamentoDialog';
 import ContasReceberAcoes from '@/components/contas-receber/ContasReceberAcoes';
 import ContasReceberResumo from '@/components/contas-receber/ContasReceberResumo';
 import TabelaSintetica from '@/components/contas-receber/TabelaSintetica';

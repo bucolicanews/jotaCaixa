@@ -10,7 +10,7 @@ import { useSessao } from '@/hooks/use-sessao';
 import { getBadgeVariant } from '@/utils/badge-variants';
 import { Badge } from './ui/badge';
 import { DollarSign, Undo2, Loader2 } from 'lucide-react';
-import RegistrarPagamentoCPDialog from '@/components/formularios/RegistrarPagamentoCPDialog';
+import RegistrarPagamentoCPDialog from '@/components/contas-pagar/RegistrarPagamentoCPDialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
 
 interface DetalhesParcelasCPDialogProps {

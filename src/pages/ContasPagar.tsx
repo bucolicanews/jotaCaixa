@@ -9,7 +9,7 @@ import { format } from 'date-fns';
 import { ContaPagar, ContaPagarComProgresso, AdminParcelaPagar, ExtendedParcelaPagar } from '@/types/contas-pagar';
 import FormContasPagarDialog from '@/components/formularios/FormContasPagarDialog';
 import DetalhesParcelasCPDialog from '@/components/DetalhesParcelasCPDialog';
-import RegistrarPagamentoCPDialog from '@/components/formularios/RegistrarPagamentoCPDialog';
+import RegistrarPagamentoCPDialog from '@/components/contas-pagar/RegistrarPagamentoCPDialog';
 import { formatCurrency, formatarData } from '@/utils/formatters';
 
 // Componentes Modulares
@@ -73,14 +73,6 @@ const ContasPagar: React.FC = () => {
     if (isSupervisao && filtroOrigem !== 'todos') {
         query = query.eq('origem', filtroOrigem);
     }
-    
-    // Aplica filtros de status (simplificado para o sintético)
-    // NOTA: O filtro de status será aplicado no frontend para permitir a busca por texto
-    // if (filtroStatus === 'quitado') {
-    //     query = query.eq('status', 'pago');
-    // } else if (filtroStatus === 'nao_quitado') {
-    //     query = query.neq('status', 'pago');
-    // }
     
     // REMOVIDO: Filtro de texto no backend para evitar erro de operador em UUID
     // if (filtroTextoDebounced) {
