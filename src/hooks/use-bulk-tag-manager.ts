@@ -47,39 +47,43 @@ export function useBulkTagManager(resourceId: string | undefined): BulkTagManage
     const isAllActive = activeTagsCount === allMappableTags.length && allMappableTags.length > 0;
 
     const refetchStatus = useCallback(() => {
+        console.log(`[BulkTagManager] Forçando re-busca de status. Key: ${refreshKey + 1}`);
         setRefreshKey(prev => prev + 1);
-    }, []);
+    }, [refreshKey]);
 
     const fetchTagStatus = useCallback(async () => {
         if (!resourceId || !empresaId) {
+            console.log('[BulkTagManager] Status: Skipping fetch (no resourceId or empresaId).');
             setLoading(false);
             return;
         }
         
+        console.log(`[BulkTagManager] Status: Fetching active tags for ${empresaId}.`);
         setLoading(true);
         
         try {
-            // Busca todas as tags ativas que correspondem às tags mapeáveis
-            const { data, error } = await supabase
+            const { count, error } = await supabase
                 .from('contrato_tags')
-                .select('id')
+                .select('id', { count: 'exact', head: true })
                 .eq('empresa_id', empresaId)
                 .in('nome_tag', allMappableTags);
 
-            if (error && error.code !== 'PGRST116') {
-                console.error('Erro ao buscar status das tags:', error);
+            if (error && error.code !== 'PGRST116') { // PGRST116 = No rows found
+                console.error('[BulkTagManager] Erro ao buscar status da tag:', error);
                 setActiveTagsCount(0);
             } else {
-                setActiveTagsCount(data?.length || 0);
+                const countValue = count || 0;
+                setActiveTagsCount(countValue);
+                console.log(`[BulkTagManager] Status: Found ${countValue} active tags out of ${allMappableTags.length}.`);
             }
         } catch (e) {
-            console.error('Erro inesperado ao buscar status das tags:', e);
+            console.error('[BulkTagManager] Erro inesperado ao buscar status das tags:', e);
             setActiveTagsCount(0);
         } finally {
-            // Garante que o loading seja desativado após a busca de status
             setLoading(false);
+            console.log('[BulkTagManager] Status: Fetch finished. Loading set to false.');
         }
-    }, [resourceId, empresaId, allMappableTags]);
+    }, [resourceId, empresaId, allMappableTags, refreshKey]); // Adicionando refreshKey aqui para forçar a re-execução
 
     useEffect(() => {
         fetchTagStatus();
@@ -91,6 +95,7 @@ export function useBulkTagManager(resourceId: string | undefined): BulkTagManage
             return;
         }
         
+        console.log(`[BulkTagManager] ToggleAllTags: Starting operation (activate: ${activate}).`);
         setLoading(true);
         
         try {
@@ -106,6 +111,8 @@ export function useBulkTagManager(resourceId: string | undefined): BulkTagManage
                     empresa_id: empresaId,
                 }));
                 
+                console.log(`[BulkTagManager] Inserting/Upserting ${tagsToInsert.length} tags.`);
+                
                 // Usamos upsert para garantir que não haja duplicatas
                 const { error } = await supabase
                     .from('contrato_tags')
@@ -116,6 +123,8 @@ export function useBulkTagManager(resourceId: string | undefined): BulkTagManage
                 showSuccess('Todas as tags ativas foram marcadas!');
             } else {
                 // Remover todas as tags mapeáveis
+                console.log(`[BulkTagManager] Deleting all ${allMappableTags.length} mappable tags.`);
+                
                 const { error } = await supabase
                     .from('contrato_tags')
                     .delete()
@@ -131,6 +140,7 @@ export function useBulkTagManager(resourceId: string | undefined): BulkTagManage
             refetchStatus();
             
         } catch (error: any) {
+            console.error('[BulkTagManager] FATAL ERROR during toggle:', error);
             showError(`Falha ao alterar tags: ${error.message}`);
             setLoading(false); // Limpa o loading apenas em caso de falha
         }

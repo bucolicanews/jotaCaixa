@@ -141,6 +141,8 @@ const FormDadosCadastrais: React.FC<FormDadosCadastraisProps> = ({ isSubmitting,
     const handleTagToggle = useCallback(() => {
         refetchStatus();
     }, [refetchStatus]);
+    
+    console.log(`[FormDadosCadastrais] Bulk Loading: ${loadingBulk}, All Active: ${isAllActive}, Submitting: ${isSubmitting}`);
 
 
     return (
@@ -170,7 +172,7 @@ const FormDadosCadastrais: React.FC<FormDadosCadastraisProps> = ({ isSubmitting,
                     </Button>
                 </div>
             </div>
-            <p className="text-sm text-muted-foreground">Dados pessoais e de contato do funcionário.</p>
+            <p className="text-sm text-muted-foreground mb-4">Dados pessoais e de contato do funcionário.</p>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <TaggedFormField 
