@@ -49,14 +49,11 @@ export function useTagManager(resourceId: string | undefined, tagMetadata: TagMe
         
         setLoading(true);
         
-        // CORREÇÃO: Usar .eq() com o nome da tag como string literal.
-        // O Supabase JS SDK deve lidar com a codificação, mas o erro 406 sugere que o valor
-        // está sendo interpretado incorretamente pelo PostgREST.
-        // Vamos garantir que a query seja simples e direta.
+        // CORREÇÃO: Usando 'in' com um array de um único item para forçar a interpretação literal da string da tag.
         const { data, error } = await supabase
             .from('contrato_tags')
             .select('id')
-            .eq('nome_tag', tagMetadata.tag) // Apenas o nome da tag
+            .in('nome_tag', [tagMetadata.tag]) // Usando IN
             .eq('empresa_id', empresaId)
             .limit(1)
             .single();

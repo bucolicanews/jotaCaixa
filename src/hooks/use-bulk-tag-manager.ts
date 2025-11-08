@@ -62,11 +62,12 @@ export function useBulkTagManager(resourceId: string | undefined): BulkTagManage
         setLoading(true);
         
         try {
+            // CORREÇÃO: Usando 'in' para buscar a contagem de tags ativas
             const { count, error } = await supabase
                 .from('contrato_tags')
                 .select('id', { count: 'exact', head: true })
                 .eq('empresa_id', empresaId)
-                .in('nome_tag', allMappableTags);
+                .in('nome_tag', allMappableTags); // Usando IN para evitar problemas de codificação
 
             if (error && error.code !== 'PGRST116') { // PGRST116 = No rows found
                 if (error.code === '406') {
