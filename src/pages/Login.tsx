@@ -49,25 +49,31 @@ const Login = () => {
                 email_label: 'Email',
                 password_label: 'Senha',
                 button_label: 'Entrar',
-                // Login -> Link para Cadastro
                 link_text: 'Já tenho Conta? Entrar', 
                 social_provider_text: 'Entrar com {{provider}}',
+                // NOVO: Placeholders em Português
+                email_input_placeholder: 'Seu endereço de email',
+                password_input_placeholder: 'Sua senha',
               },
               sign_up: {
                 email_label: 'Email',
                 password_label: 'Criar Senha',
                 button_label: 'Cadastrar',
-                // Cadastro -> Link para Login
                 link_text: 'Não tenho conta? Cadastre-se', 
+                // NOVO: Placeholders em Português
+                email_input_placeholder: 'Seu endereço de email',
+                password_input_placeholder: 'Crie uma senha',
               },
               forgotten_password: {
                 email_label: 'Email',
                 button_label: 'Enviar instruções de recuperação',
                 link_text: 'Esqueceu sua senha?',
+                email_input_placeholder: 'Seu endereço de email',
               },
               update_password: {
                 password_label: 'Nova Senha',
                 button_label: 'Atualizar Senha',
+                password_input_placeholder: 'Sua nova senha',
               },
             },
           }}
