@@ -17,7 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import FormUsuario from '@/components/formularios/FormUsuario';
-import { parseISO, isPast, format } from 'date-fns';
+import { parseISO, isPast, format, addDays } from 'date-fns';
 import FormEmpresaAvulsa from '@/components/formularios/FormEmpresaAvulsa';
 import { usePrint } from '@/hooks/use-print';
 import ReactDOMServer from 'react-dom/server';
@@ -290,7 +290,8 @@ const ClientesPage = () => {
     const planoTrial = planos[0];
     
     // 2. Calcular a data de fim de acesso (7 dias de trial)
-    const dataFimAcesso = parseISO(new Date().toISOString());
+    const dataAtual = new Date();
+    const dataFimAcesso = addDays(dataAtual, 7);
     const dataFimISO = format(dataFimAcesso, 'yyyy-MM-dd') + 'T12:00:00Z'; // Usando a data de hoje + 7 dias
     
     // 3. Atualizar o perfil do cliente
@@ -452,9 +453,9 @@ const ClientesPage = () => {
                     empresas.map((empresa) => {
                         const isAprovado = empresa.aprovado;
                         const dataFimAcesso = empresa.data_fim_acesso ? parseISO(empresa.data_fim_acesso) : null;
-                        const isAtivo = dataFimAcesso && isPast(new Date()) === false;
-                        const isAvulso = empresa.tipo_cliente?.endsWith('_Avulso') ?? false;
-                        const isBlocked = dataFimAcesso === null && isAprovado;
+                        const isAtivo = dataFimAcesso && isPast(new Date()) === false; // Data de fim de acesso é futura ou hoje
+                        const isAvulso = empresa.tipo_cliente?.endsWith('_Avulso') ?? false; // Verifica o novo sufixo
+                        const isBlocked = dataFimAcesso === null && isAprovado; // Aprovado, mas sem data de fim (desativado)
                         
                         let statusBadge;
                         if (!isAprovado) {
@@ -554,7 +555,7 @@ const ClientesPage = () => {
               ...e,
               plano_id: e.plano_id ? planosMap[e.plano_id] || e.plano_id : 'N/A', // Passa o nome do plano
           }));
-          tituloRelatorio = `Empresas do Sistema - ${activeEmpresaTab.charAt(0).toUpperCase() + activeEmpresaTab.slice(1)}`;
+          tituloRelatorio = `Clientes Sistema - ${activeEmpresaTab.charAt(0).toUpperCase() + activeEmpresaTab.slice(1)}`;
       }
       
       if (dataToPrint.length === 0) {
@@ -624,7 +625,7 @@ const ClientesPage = () => {
               <DialogTrigger asChild>
                 <Button onClick={handleNewCR} className="w-full sm:w-auto" disabled={isAdmin && activeTab === 'empresas_sistema'}>
                   <PlusCircle className="w-4 h-4 mr-2" />
-                  Novo Cliente (CR)
+                  Cliente Direto
                 </Button>
               </DialogTrigger>
               <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -644,7 +645,7 @@ const ClientesPage = () => {
                     <DialogTrigger asChild>
                         <Button variant="secondary" onClick={() => setDialogAvulsaAberto(true)} className="w-full sm:w-auto">
                             <Building2 className="w-4 h-4 mr-2" />
-                            Nova Empresa Avulsa
+                            Cliente Sistema
                         </Button>
                     </DialogTrigger>
                     <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
@@ -661,8 +662,8 @@ const ClientesPage = () => {
       {isAdmin ? (
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full mb-6">
             <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="clientes_cr" className="flex items-center"><UsersIcon className="w-4 h-4 mr-2" /> Clientes de Contas a Receber</TabsTrigger>
-                <TabsTrigger value="empresas_sistema" className="flex items-center"><Building2 className="w-4 h-4 mr-2" /> Empresas do Sistema (tbl_clientes)</TabsTrigger>
+                <TabsTrigger value="clientes_cr" className="flex items-center"><UsersIcon className="w-4 h-4 mr-2" /> Diretos/Contratos</TabsTrigger>
+                <TabsTrigger value="empresas_sistema" className="flex items-center"><Building2 className="w-4 h-4 mr-2" /> Clientes Sistema</TabsTrigger>
             </TabsList>
             
             <TabsContent value="clientes_cr">
@@ -692,7 +693,7 @@ const ClientesPage = () => {
                     </CardContent>
                 </Card>
                 <Card className="mt-4">
-                    <CardHeader><CardTitle className="text-xl">Clientes CR Cadastrados ({clientesCR.length})</CardTitle></CardHeader>
+                    <CardHeader><CardTitle className="text-xl">Clientes Diretos/Contratos Cadastrados ({clientesCR.length})</CardTitle></CardHeader>
                     <CardContent>{renderClientesCRTable()}</CardContent>
                 </Card>
             </TabsContent>
