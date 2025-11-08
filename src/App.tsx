@@ -42,6 +42,7 @@ import DRE from "./pages/DRE";
 import GerenciarHistoricos from "./pages/GerenciarHistoricos";
 import Exportar from "./pages/Exportar"; // NOVO IMPORT
 import LancamentosNaoMapeados from "./pages/LancamentosNaoMapeados";
+import ClientesPage from "./pages/Clientes"; // IMPORTAÇÃO CORRIGIDA
 
 const queryClient = new QueryClient();
 
@@ -218,7 +219,7 @@ const App = () => (
             <Route path="/bancos" element={<Bancos />} />
             <Route path="/conciliacao" element={<Conciliacao />} />
             <Route path="/importar" element={<Importar />} />
-            <Route path="/exportar" element={<Exportar />} /> {/* NOVA ROTA */}
+            <Route path="/exportar" element={<Exportar />} />
             <Route path="/relatorios" element={<Relatorios />} />
             <Route path="/relatorios/fluxo-caixa" element={<FluxoCaixa />} />
             <Route path="/relatorios/balanco" element={<BalancoPatrimonial />} />
@@ -240,6 +241,7 @@ const App = () => (
             <Route path="/minha-assinatura" element={<MinhaAssinatura />} />
             <Route path="/renovacao" element={<SelecaoPagamentoRenovacao />} />
             <Route path="/historicos" element={<GerenciarHistoricos />} />
+            <Route path="/clientes" element={<ClientesPage />} /> {/* ROTA CORRIGIDA */}
 
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
