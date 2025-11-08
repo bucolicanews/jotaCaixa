@@ -47,10 +47,11 @@ serve(async (req: Request) => {
     
     const clientEmail = clienteCr.email;
     const clientName = clienteCr.nome;
-    let userId = clienteCrId; // Tentativa inicial de usar o mesmo ID
+    let userId = clienteCrId; 
+    let userAlreadyExists = false;
 
     // 2. Tentar criar o usuário no Auth
-    const { error: signUpError } = await supabaseService.auth.admin.createUser({
+    const { data: signUpData, error: signUpError } = await supabaseService.auth.admin.createUser({
         email: clientEmail,
         email_confirm: true, // Confirma o email automaticamente
         user_metadata: { 
@@ -63,9 +64,11 @@ serve(async (req: Request) => {
     // Se houver erro, verifica se é de duplicidade
     if (signUpError) {
         if (signUpError.message === 'User already registered') {
+            userAlreadyExists = true;
             // Usuário já existe, buscar o ID real
             const { data: authUser, error: authError } = await supabaseService.auth.admin.getUserByEmail(clientEmail);
             if (authError || !authUser?.user) {
+                console.error('Auth Get User Error:', authError);
                 return new Response(JSON.stringify({ error: 'Usuário já registrado, mas não foi possível obter o ID.' }), {
                     status: 500,
                     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -125,6 +128,7 @@ serve(async (req: Request) => {
     }
 
     // 4. Enviar o link de redefinição de senha (convite)
+    // Enviamos o link de redefinição de senha mesmo se o usuário já existia, para garantir o acesso.
     const { error: resetError } = await supabaseService.auth.admin.generateLink({
         type: 'recovery',
         email: clientEmail,
@@ -149,7 +153,11 @@ serve(async (req: Request) => {
         // Não é um erro fatal, apenas um aviso
     }
 
-    return new Response(JSON.stringify({ success: true, message: 'Convite enviado e cliente promovido.' }), {
+    // Retorno 200 OK
+    return new Response(JSON.stringify({ 
+        success: true, 
+        message: userAlreadyExists ? 'Cliente já existia, perfil atualizado e convite reenviado.' : 'Convite enviado e cliente promovido.' 
+    }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
