@@ -84,7 +84,7 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
   };
   
   // Mantendo o hook useBulkTagManager para que o FormCliente continue sendo o provedor do refreshKey
-  const { refetchStatus, refreshKey, toggleAllTags, isAllActive, loading: loadingBulk } = useBulkTagManager(clienteId);
+  const { refetchStatus, refreshKey } = useBulkTagManager(clienteId);
   
   // Função de callback para forçar a atualização do status das tags em massa
   const handleTagToggle = useCallback(() => {
@@ -147,28 +147,7 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
           
           <div className="flex justify-between items-center pt-4 border-t">
               <h3 className="font-semibold text-lg flex items-center"><Tag className="w-5 h-5 mr-2" /> Tags de Contrato</h3>
-              <div className="space-x-2">
-                    <Button 
-                        type="button" 
-                        variant="link" 
-                        size="sm" 
-                        onClick={() => toggleAllTags(true)} 
-                        disabled={form.formState.isSubmitting || loadingBulk || isAllActive}
-                        className="p-0 h-auto"
-                    >
-                        {loadingBulk && isAllActive ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : 'Marcar Todos'}
-                    </Button>
-                    <Button 
-                        type="button" 
-                        variant="link" 
-                        size="sm" 
-                        onClick={() => toggleAllTags(false)} 
-                        disabled={form.formState.isSubmitting || loadingBulk || !isAllActive}
-                        className="p-0 h-auto text-destructive"
-                    >
-                        {loadingBulk && !isAllActive ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : 'Desmarcar Todos'}
-                    </Button>
-              </div>
+              {/* Botões de Marcar/Desmarcar Todos Removidos */}
           </div>
           <p className="text-sm text-muted-foreground">
               Marque os campos abaixo que devem ser usados como tags dinâmicas em modelos de contrato.

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useForm, FormProvider } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -101,11 +101,13 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
   const isLoggedUserAdmin = role === 'Admin';
   
   const [activeTab, setActiveTab] = useState('pessoal');
+  const [isSubmitting, setIsSubmitting] = useState(false); // ADICIONADO
+  
   // Usamos o ID do perfil logado como resourceId para o bulk manager
   const resourceId = perfilInicial.id; 
   
-  // Inicializa o hook de bulk tag
-  const { refetchStatus, refreshKey, toggleAllTags, isAllActive, loading: loadingBulk } = useBulkTagManager(resourceId);
+  // Inicializa o hook de bulk tag (apenas para obter o refreshKey)
+  const { refetchStatus, refreshKey } = useBulkTagManager(resourceId);
 
   const parseDate = (dateString: string | null | undefined) => 
     dateString ? new Date(dateString + 'T00:00:00') : undefined;
@@ -183,11 +185,17 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
     });
   };
   
+  // Função de callback para forçar a atualização do status das tags individuais
+  const handleTagToggle = useCallback(() => {
+      refetchStatus();
+  }, [refetchStatus]);
+  
   // FIX: Definindo as variáveis de escopo que estavam faltando
   const isUserBeingManagedByClient = isUser;
   const isContractEditable = role === 'Admin' || role === 'Cliente';
 
   const onSubmit = async (values: FormValues) => {
+    setIsSubmitting(true);
     try {
       
       const dataToUpdate: any = { nome: values.nome };
@@ -305,6 +313,8 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
       onSaveComplete();
     } catch (error: any) {
       showError(`Falha ao salvar: ${error.message}`);
+    } finally {
+      setIsSubmitting(false);
     }
   };
   
@@ -334,7 +344,7 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
                         control={form.control}
                         isEditing={true}
                         isUserScope={false}
-                        isSubmitting={form.formState.isSubmitting}
+                        isSubmitting={isSubmitting}
                         criadorRole={role!}
                         permissoesVisiveis={PERMISSOES_DISPONIVEIS.filter((p: Permissao) => p.key !== 'ponto_eletronico' && p.key !== 'visualizar_proprio_ponto')}
                         handleSelectAll={handleSelectAll}
@@ -345,28 +355,7 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
                 <TabsContent value="cadastrais" className="mt-4 space-y-6 p-4">
                     <div className="flex justify-between items-center">
                         <h3 className="font-semibold text-lg flex items-center"><Tag className="w-5 h-5 mr-2" /> Tags de Contrato</h3>
-                        <div className="space-x-2">
-                            <Button 
-                                type="button" 
-                                variant="link" 
-                                size="sm" 
-                                onClick={() => toggleAllTags(true)} 
-                                disabled={form.formState.isSubmitting || loadingBulk || isAllActive}
-                                className="p-0 h-auto"
-                            >
-                                {loadingBulk && isAllActive ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : 'Marcar Todos'}
-                            </Button>
-                            <Button 
-                                type="button" 
-                                variant="link" 
-                                size="sm" 
-                                onClick={() => toggleAllTags(false)} 
-                                disabled={form.formState.isSubmitting || loadingBulk || !isAllActive}
-                                className="p-0 h-auto text-destructive"
-                            >
-                                {loadingBulk && !isAllActive ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : 'Desmarcar Todos'}
-                            </Button>
-                        </div>
+                        {/* Botões de Marcar/Desmarcar Todos Removidos */}
                     </div>
                     <p className="text-sm text-muted-foreground mb-4">Estes campos são usados para preencher tags dinâmicas em contratos.</p>
                     
@@ -385,9 +374,10 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
                     
                     <FormDadosCadastrais 
                         control={form.control}
-                        isSubmitting={form.formState.isSubmitting}
+                        isSubmitting={isSubmitting}
                         resourceId={resourceId}
                         tagRefreshKey={refreshKey} // Passando o refreshKey do bulk manager
+                        onTagToggle={handleTagToggle}
                     />
                 </TabsContent>
                 
@@ -399,15 +389,15 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
                         
                         <FormDocumentos
                             control={form.control}
-                            isSubmitting={form.formState.isSubmitting}
+                            isSubmitting={isSubmitting}
                             resourceId={perfilInicial.id}
                         />
                     </TabsContent>
                 )}
             </Tabs>
 
-            <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
-              {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            <Button type="submit" className="w-full" disabled={isSubmitting}>
+              {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Salvar Alterações
             </Button>
           </form>
@@ -437,7 +427,7 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
                   control={form.control}
                   isEditing={true}
                   isUserScope={true}
-                  isSubmitting={form.formState.isSubmitting}
+                  isSubmitting={isSubmitting}
                   criadorRole={role!}
                   permissoesVisiveis={permissoesVisiveis}
                   handleSelectAll={handleSelectAll}
@@ -449,7 +439,7 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
                 <TabsContent value="folgas" className="mt-4 space-y-6 p-4">
                     <FormFolgasFerias
                         control={form.control}
-                        isSubmitting={form.formState.isSubmitting}
+                        isSubmitting={isSubmitting}
                         usuarioInicial={profileToEdit as UsuarioProfile}
                     />
                 </TabsContent>
@@ -460,35 +450,15 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
                 <TabsContent value="cadastrais" className="mt-4 space-y-6 p-4">
                     <div className="flex justify-between items-center">
                         <h3 className="font-semibold text-lg flex items-center"><Tag className="w-5 h-5 mr-2" /> Tags de Contrato</h3>
-                        <div className="space-x-2">
-                            <Button 
-                                type="button" 
-                                variant="link" 
-                                size="sm" 
-                                onClick={() => toggleAllTags(true)} 
-                                disabled={form.formState.isSubmitting || loadingBulk || isAllActive}
-                                className="p-0 h-auto"
-                            >
-                                {loadingBulk && isAllActive ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : 'Marcar Todos'}
-                            </Button>
-                            <Button 
-                                type="button" 
-                                variant="link" 
-                                size="sm" 
-                                onClick={() => toggleAllTags(false)} 
-                                disabled={form.formState.isSubmitting || loadingBulk || !isAllActive}
-                                className="p-0 h-auto text-destructive"
-                            >
-                                {loadingBulk && !isAllActive ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : 'Desmarcar Todos'}
-                            </Button>
-                        </div>
+                        {/* Botões de Marcar/Desmarcar Todos Removidos */}
                     </div>
                     <p className="text-sm text-muted-foreground mb-4">Dados pessoais e de contato do funcionário.</p>
                     <FormDadosCadastrais
                         control={form.control}
-                        isSubmitting={form.formState.isSubmitting}
+                        isSubmitting={isSubmitting}
                         resourceId={resourceId}
                         tagRefreshKey={refreshKey}
+                        onTagToggle={handleTagToggle}
                     />
                 </TabsContent>
             )}
@@ -498,7 +468,7 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
                 <TabsContent value="documentos" className="mt-4 space-y-6 p-4">
                     <FormDocumentos
                         control={form.control}
-                        isSubmitting={form.formState.isSubmitting}
+                        isSubmitting={isSubmitting}
                         resourceId={resourceId}
                     />
                 </TabsContent>
@@ -509,15 +479,15 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
                 <TabsContent value="contrato" className="mt-4 space-y-6 p-4">
                     <FormDadosContratuais
                         control={form.control}
-                        isSubmitting={form.formState.isSubmitting}
+                        isSubmitting={isSubmitting}
                         isContractEditable={isContractEditable}
                     />
                 </TabsContent>
             )}
           </Tabs>
 
-          <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
-            {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          <Button type="submit" className="w-full" disabled={isSubmitting}>
+            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Salvar Alterações
           </Button>
         </form>

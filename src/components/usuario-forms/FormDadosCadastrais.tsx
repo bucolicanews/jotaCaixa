@@ -11,7 +11,6 @@ import { Loader2, Tag } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { showError } from '@/utils/toast';
 import { useBulkTagManager } from '@/hooks/use-bulk-tag-manager';
-import { Button } from '../ui/button'; // Importando Button
 
 interface TaggedFormFieldProps {
     fieldName: string;
@@ -129,12 +128,13 @@ interface FormDadosCadastraisProps {
     isSubmitting: boolean;
     resourceId: string | undefined;
     tagRefreshKey: number; // Este prop não será mais usado diretamente, mas mantido para compatibilidade
+    onTagToggle: () => void; // ADICIONADO
 }
 
-const FormDadosCadastrais: React.FC<FormDadosCadastraisProps> = ({ isSubmitting, resourceId }) => {
-    const { refetchStatus, refreshKey, toggleAllTags, isAllActive, loading: loadingBulk } = useBulkTagManager(resourceId);
-    
+const FormDadosCadastrais: React.FC<FormDadosCadastraisProps> = ({ isSubmitting, resourceId, tagRefreshKey, onTagToggle }) => {
     const { watch } = useFormContext();
+    const { refetchStatus } = useBulkTagManager(resourceId); // Mantendo a chamada para refetchStatus
+    
     const isAddressLoading = watch('endereco') === 'Buscando...';
     
     // Função de callback para forçar a atualização do status das tags em massa
@@ -142,35 +142,13 @@ const FormDadosCadastrais: React.FC<FormDadosCadastraisProps> = ({ isSubmitting,
         refetchStatus();
     }, [refetchStatus]);
     
-    console.log(`[FormDadosCadastrais] Bulk Loading: ${loadingBulk}, All Active: ${isAllActive}, Submitting: ${isSubmitting}`);
-
+    // Removendo a lógica de bulk toggle e os botões
 
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center">
                 <h3 className="font-semibold text-lg">Dados Cadastrais (Tags de Contrato)</h3>
-                <div className="space-x-2">
-                    <Button 
-                        type="button" 
-                        variant="link" 
-                        size="sm" 
-                        onClick={() => toggleAllTags(true)} 
-                        disabled={isSubmitting || loadingBulk || isAllActive}
-                        className="p-0 h-auto"
-                    >
-                        {loadingBulk && isAllActive ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : 'Marcar Todos'}
-                    </Button>
-                    <Button 
-                        type="button" 
-                        variant="link" 
-                        size="sm" 
-                        onClick={() => toggleAllTags(false)} 
-                        disabled={isSubmitting || loadingBulk || !isAllActive}
-                        className="p-0 h-auto text-destructive"
-                    >
-                        {loadingBulk && !isAllActive ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : 'Desmarcar Todos'}
-                    </Button>
-                </div>
+                {/* Botões de Marcar/Desmarcar Todos Removidos */}
             </div>
             <p className="text-sm text-muted-foreground mb-4">Dados pessoais e de contato do funcionário.</p>
             
@@ -181,7 +159,7 @@ const FormDadosCadastrais: React.FC<FormDadosCadastraisProps> = ({ isSubmitting,
                     placeholder="000.000.000-00" 
                     resourceId={resourceId} 
                     disabled={isSubmitting}
-                    tagRefreshKey={refreshKey} // Passando o refreshKey do bulk manager
+                    tagRefreshKey={tagRefreshKey}
                     onTagToggle={handleTagToggle}
                 />
                 <TaggedFormField 
@@ -190,7 +168,7 @@ const FormDadosCadastrais: React.FC<FormDadosCadastraisProps> = ({ isSubmitting,
                     placeholder="00.000.000-0" 
                     resourceId={resourceId} 
                     disabled={isSubmitting}
-                    tagRefreshKey={refreshKey} // Passando o refreshKey do bulk manager
+                    tagRefreshKey={tagRefreshKey}
                     onTagToggle={handleTagToggle}
                 />
             </div>
@@ -202,7 +180,7 @@ const FormDadosCadastrais: React.FC<FormDadosCadastraisProps> = ({ isSubmitting,
                 resourceId={resourceId} 
                 disabled={isSubmitting}
                 isOptional={false}
-                tagRefreshKey={refreshKey} // Passando o refreshKey do bulk manager
+                tagRefreshKey={tagRefreshKey}
                 onTagToggle={handleTagToggle}
             />
             <TaggedFormField 
@@ -211,7 +189,7 @@ const FormDadosCadastrais: React.FC<FormDadosCadastraisProps> = ({ isSubmitting,
                 placeholder="Nome completo do pai" 
                 resourceId={resourceId} 
                 disabled={isSubmitting}
-                tagRefreshKey={refreshKey} // Passando o refreshKey do bulk manager
+                tagRefreshKey={tagRefreshKey}
                 onTagToggle={handleTagToggle}
             />
             <TaggedFormField 
@@ -220,7 +198,7 @@ const FormDadosCadastrais: React.FC<FormDadosCadastraisProps> = ({ isSubmitting,
                 placeholder="(00) 90000-0000" 
                 resourceId={resourceId} 
                 disabled={isSubmitting}
-                tagRefreshKey={refreshKey} // Passando o refreshKey do bulk manager
+                tagRefreshKey={tagRefreshKey}
                 onTagToggle={handleTagToggle}
             />
 
@@ -233,7 +211,7 @@ const FormDadosCadastrais: React.FC<FormDadosCadastraisProps> = ({ isSubmitting,
                     placeholder="00000-000" 
                     resourceId={resourceId} 
                     disabled={isSubmitting}
-                    tagRefreshKey={refreshKey} // Passando o refreshKey do bulk manager
+                    tagRefreshKey={tagRefreshKey}
                     onTagToggle={handleTagToggle}
                 />
                 <TaggedFormField 
@@ -242,7 +220,7 @@ const FormDadosCadastrais: React.FC<FormDadosCadastraisProps> = ({ isSubmitting,
                     placeholder="São Paulo" 
                     resourceId={resourceId} 
                     disabled={isSubmitting || isAddressLoading}
-                    tagRefreshKey={refreshKey} // Passando o refreshKey do bulk manager
+                    tagRefreshKey={tagRefreshKey}
                     onTagToggle={handleTagToggle}
                 />
                 <TaggedFormField 
@@ -251,7 +229,7 @@ const FormDadosCadastrais: React.FC<FormDadosCadastraisProps> = ({ isSubmitting,
                     placeholder="SP" 
                     resourceId={resourceId} 
                     disabled={isSubmitting || isAddressLoading}
-                    tagRefreshKey={refreshKey} // Passando o refreshKey do bulk manager
+                    tagRefreshKey={tagRefreshKey}
                     onTagToggle={handleTagToggle}
                 />
             </div>
@@ -262,7 +240,7 @@ const FormDadosCadastrais: React.FC<FormDadosCadastraisProps> = ({ isSubmitting,
                     placeholder="Rua Exemplo" 
                     resourceId={resourceId} 
                     disabled={isSubmitting || isAddressLoading}
-                    tagRefreshKey={refreshKey} // Passando o refreshKey do bulk manager
+                    tagRefreshKey={tagRefreshKey}
                     onTagToggle={handleTagToggle}
                 />
                 <TaggedFormField 
@@ -271,7 +249,7 @@ const FormDadosCadastrais: React.FC<FormDadosCadastraisProps> = ({ isSubmitting,
                     placeholder="123" 
                     resourceId={resourceId} 
                     disabled={isSubmitting}
-                    tagRefreshKey={refreshKey} // Passando o refreshKey do bulk manager
+                    tagRefreshKey={tagRefreshKey}
                     onTagToggle={handleTagToggle}
                 />
                 <TaggedFormField 
@@ -280,7 +258,7 @@ const FormDadosCadastrais: React.FC<FormDadosCadastraisProps> = ({ isSubmitting,
                     placeholder="Apto 101" 
                     resourceId={resourceId} 
                     disabled={isSubmitting}
-                    tagRefreshKey={refreshKey} // Passando o refreshKey do bulk manager
+                    tagRefreshKey={tagRefreshKey}
                     onTagToggle={handleTagToggle}
                 />
             </div>
@@ -290,7 +268,7 @@ const FormDadosCadastrais: React.FC<FormDadosCadastraisProps> = ({ isSubmitting,
                 placeholder="Centro" 
                 resourceId={resourceId} 
                 disabled={isSubmitting || isAddressLoading}
-                tagRefreshKey={refreshKey} // Passando o refreshKey do bulk manager
+                tagRefreshKey={tagRefreshKey}
                 onTagToggle={handleTagToggle}
             />
         </div>

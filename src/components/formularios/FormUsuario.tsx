@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useForm, FormProvider } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from '@/components/ui/button';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Tag } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { AnyProfile, ClienteProfile, UsuarioProfile, UserRole } from '@/types/usuario';
@@ -23,6 +23,7 @@ import { CalendarIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ptBR } from 'date-fns/locale';
 import { BASE_URL } from '@/config/app-config'; // Importando BASE_URL
+import { useBulkTagManager } from '@/hooks/use-bulk-tag-manager'; // Importando useBulkTagManager
 
 const textOptional = z.string().optional().or(z.literal(''));
 const urlSchema = z.string().url('URL inválida.').optional().or(z.literal(''));
@@ -46,7 +47,7 @@ const formSchema = z.object({
   // Novos Dados Cadastrais (Comum a Cliente e Usuário)
   cpf: textOptional,
   rg: textOptional,
-  nome_mae: z.string().min(1, 'O nome da mãe é obrigatório.').optional().or(z.literal('')),
+  nome_mae: textOptional,
   nome_pai: textOptional,
   telefone: textOptional,
   cep: textOptional,
@@ -108,7 +109,9 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
   
   const [activeTab, setActiveTab] = useState('pessoal');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [tagRefreshKey, setTagRefreshKey] = useState(0);
+  
+  const resourceId = usuarioInicial?.id;
+  const { refetchStatus, refreshKey } = useBulkTagManager(resourceId); // Mantendo a chamada para refetchStatus
 
   const parseDate = (dateString: string | null | undefined): Date | undefined => {
     if (!dateString) return undefined;
@@ -186,7 +189,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
   
   const isClientScope = isClientBeingManagedByAdmin || isNewClient;
   const isContractEditable = criadorRole === 'Admin' || criadorRole === 'Cliente';
-  const resourceId = usuarioInicial?.id;
+  
 
   const handleSelectAll = (select: boolean) => {
     const permissoes = isClientScope ? permissoesClienteAdmin : permissoesVisiveis;
@@ -194,6 +197,12 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
       form.setValue(`permissoes.${p.key}`, select, { shouldDirty: true });
     });
   };
+  
+  // Função de callback para forçar a atualização do status das tags individuais
+  const handleTagToggle = useCallback(() => {
+      refetchStatus();
+  }, [refetchStatus]);
+
 
   const getTableName = (profile: AnyProfile | null, isNewClient: boolean, isNewUser: boolean): 'tbl_clientes' | 'tbl_usuarios' | null => {
     if (isNewClient) return 'tbl_clientes';
@@ -339,7 +348,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
       }
       
       showSuccess('Perfil atualizado com sucesso!');
-      setTagRefreshKey(prev => prev + 1);
+      refetchStatus();
       onSaveComplete();
     } catch (error: any) {
       showError(`Falha ao salvar: ${error.message}`);
@@ -443,7 +452,8 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                 control={form.control}
                 isSubmitting={isSubmitting}
                 resourceId={resourceId}
-                tagRefreshKey={tagRefreshKey}
+                tagRefreshKey={refreshKey}
+                onTagToggle={handleTagToggle}
             />
 
             <Button type="submit" className="w-full" disabled={isSubmitting}>
@@ -498,11 +508,17 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
             {/* TAB 3: DADOS CADASTRAIS */}
             {isUserBeingManagedByClient && (
                 <TabsContent value="cadastrais" className="mt-4 space-y-6 p-4">
+                    <div className="flex justify-between items-center">
+                        <h3 className="font-semibold text-lg flex items-center"><Tag className="w-5 h-5 mr-2" /> Tags de Contrato</h3>
+                        {/* Botões de Marcar/Desmarcar Todos Removidos */}
+                    </div>
+                    <p className="text-sm text-muted-foreground mb-4">Dados pessoais e de contato do funcionário.</p>
                     <FormDadosCadastrais
                         control={form.control}
                         isSubmitting={isSubmitting}
                         resourceId={resourceId}
-                        tagRefreshKey={tagRefreshKey}
+                        tagRefreshKey={refreshKey}
+                        onTagToggle={handleTagToggle}
                     />
                 </TabsContent>
             )}
@@ -532,7 +548,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
 
           <Button type="submit" className="w-full" disabled={isSubmitting}>
             {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {isEditing ? 'Salvar Alterações' : 'Enviar Convite de Cadastro'}
+            Salvar Alterações
           </Button>
         </form>
       </Form>
