@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useSessao } from '@/hooks/use-sessao';
 import { ClienteProfile } from '@/types/usuario';
 import { supabase } from '@/integrations/supabase/client';
-import { format, parseISO, isFuture, differenceInDays } from 'date-fns';
+import { format, parseISO, isFuture } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -20,7 +20,7 @@ const TrialBanner: React.FC = () => {
     const clienteProfile = perfil as ClienteProfile;
 
     const fetchPlanoDetails = useCallback(async () => {
-        if (!isClient || !clienteProfile?.plano_id || !clienteProfile.data_fim_acesso || !clienteProfile.criado_em) {
+        if (!isClient || !clienteProfile?.plano_id || !clienteProfile.data_fim_acesso) {
             setLoading(false);
             return;
         }
@@ -59,31 +59,18 @@ const TrialBanner: React.FC = () => {
         return null; 
     }
     
-    // Lógica de Trial/Alerta:
-    // 1. Calcula quantos dias se passaram desde a criação do perfil.
-    const diasDesdeCriacao = differenceInDays(new Date(), parseISO(clienteProfile.criado_em));
-    
-    // 2. Determina se o cliente está no PRIMEIRO ciclo (30 dias após a criação).
-    const isInitialCycle = diasDesdeCriacao <= 30; 
-    
-    // 3. Se o plano é pago E já passou do primeiro ciclo, não exibe o banner.
-    if (planoInfo.preco_mensal > 0 && !isInitialCycle) {
+    // REGRA PRINCIPAL: Ocultar o banner se o plano for pago (preço > 0).
+    if (planoInfo.preco_mensal > 0) {
         return null;
     }
 
+    // Se chegou aqui, o plano é gratuito (preço 0) e o acesso é futuro.
     const dataCobranca = format(dataFimAcesso, 'dd/MM/yyyy', { locale: ptBR });
-    const precoFormatado = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(planoInfo.preco_mensal);
     
     let message: string;
 
-    if (planoInfo.preco_mensal > 0) {
-        // Cenário 1: Plano pago, mas ainda no ciclo inicial (Trial de 7 dias ou primeiro mês pago)
-        // A mensagem deve ser de alerta de cobrança futura, mas sem a palavra "gratuito" se o preço for > 0.
-        message = `Seu plano <span class="font-bold">${planoInfo.nome}</span> está ativo. A próxima cobrança de <span class="font-bold">${precoFormatado}</span> será aplicada em <span class="font-bold">${dataCobranca}</span>.`;
-    } else {
-        // Cenário 2: Plano gratuito (Preço zero)
-        message = `Aproveite seu teste gratuito com acesso completo até <span class="font-bold">${dataCobranca}</span>! ${planoInfo.descricao || 'O acesso será desativado após esta data.'}`;
-    }
+    // Cenário: Plano gratuito (Preço zero)
+    message = `Aproveite seu teste gratuito com acesso completo até <span class="font-bold">${dataCobranca}</span>! ${planoInfo.descricao || 'O acesso será desativado após esta data.'}`;
 
     return (
         <div className={cn(
