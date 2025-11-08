@@ -227,16 +227,12 @@ const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano, isUpgrade = false,
             <CheckCircle className="w-6 h-6 mr-2" /> Adesão Concluída!
           </CardTitle>
           <CardDescription>
-            Seu trial de 30 dias começa agora. Verifique seu email para definir a senha.
+            Seu plano <span className="font-bold">{plano.nome}</span> terá validade por 30 dias com vencimento dia <span className="font-bold">{dataVencimentoTrial}</span>. Verifique seu email para definir a senha.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="p-4 border rounded-md bg-yellow-50 dark:bg-yellow-900/20">
-            <p className="font-semibold">Próxima Etapa: Pagamento</p>
-            <p className="text-sm mt-1">
-              Seu período de teste termina em <strong>{dataVencimentoTrial}</strong>. Inicie o checkout para garantir a continuidade.
-            </p>
-          </div>
+          
+          {/* Removido o bloco "Próxima Etapa: Pagamento" */}
           
           {/* No fluxo de adesão, o usuário está logado temporariamente. Usamos o ID e email da sessão. */}
           <Button onClick={() => handleCheckout(usuario?.email, usuario?.id)} className="w-full" disabled={isSubmitting}>
@@ -244,9 +240,7 @@ const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano, isUpgrade = false,
             Ir para o Checkout (R$ {plano.preco_mensal.toFixed(2)})
           </Button>
           
-          <Button onClick={() => navigate('/login')} variant="secondary" className="w-full">
-            Ir para o Login
-          </Button>
+          {/* Removido o botão "Ir para o Login" */}
         </CardContent>
       </Card>
     );
