@@ -44,9 +44,7 @@ const TrialBanner: React.FC = () => {
         setDataFimAcesso(dataFim);
         setPlanoInfo(planoData as PlanoInfo);
         
-        // 2. Determinar se é Trial (Simplificado: Acesso futuro)
-        // A lógica de isTrial foi movida para a condição de renderização final.
-        
+        // O banner só aparece se o acesso for futuro
         setLoading(false);
 
     }, [isClient, clienteProfile]);
@@ -64,6 +62,16 @@ const TrialBanner: React.FC = () => {
 
     const dataCobranca = format(dataFimAcesso, 'dd/MM/yyyy', { locale: ptBR });
     const precoFormatado = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(planoInfo.preco_mensal);
+    
+    let message: string;
+
+    if (planoInfo.preco_mensal > 0) {
+        // Cenário 1: Plano pago (Mensagem de cobrança futura)
+        message = `Aproveite seu teste gratuito com acesso completo até <span class="font-bold">${dataCobranca}</span>! Depois, o plano <span class="font-bold">${planoInfo.nome}</span> será ativado e a cobrança de <span class="font-bold">${precoFormatado}</span> será aplicada a partir desta data.`;
+    } else {
+        // Cenário 2: Plano de teste (Preço zero, usa a descrição do plano)
+        message = `Aproveite seu teste gratuito com acesso completo até <span class="font-bold">${dataCobranca}</span>! ${planoInfo.descricao || 'O acesso será desativado após esta data.'}`;
+    }
 
     return (
         <div className={cn(
@@ -71,9 +79,7 @@ const TrialBanner: React.FC = () => {
             "flex items-center justify-center text-center text-yellow-800 dark:text-yellow-300"
         )}>
             <AlertTriangle className="w-4 h-4 mr-2 flex-shrink-0" />
-            <p className="font-medium">
-                Aproveite seu teste gratuito com acesso completo até <span className="font-bold">{dataCobranca}</span>! Depois, o plano <span className="font-bold">{planoInfo.nome}</span> será ativado e a cobrança de <span className="font-bold">{precoFormatado}</span> será aplicada a partir desta data.
-            </p>
+            <p className="font-medium" dangerouslySetInnerHTML={{ __html: message }} />
         </div>
     );
 };

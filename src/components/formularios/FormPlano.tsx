@@ -18,7 +18,7 @@ import { cn } from '@/lib/utils';
 const formSchema = z.object({
   nome: z.string().min(1, 'O nome é obrigatório.'),
   descricao: z.string().optional(),
-  preco_mensal: z.coerce.number().positive('O preço deve ser positivo.'),
+  preco_mensal: z.coerce.number().min(0, 'O preço deve ser zero ou positivo.'),
   // dias_trial removido
   tipo_cliente: z.enum(['PF', 'PJ'], { required_error: 'O tipo de cliente é obrigatório.' }),
   permissoes: z.record(z.boolean()).optional(),
