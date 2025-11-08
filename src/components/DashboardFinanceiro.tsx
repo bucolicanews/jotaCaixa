@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, ArrowUpCircle, ArrowDownCircle, Banknote, TrendingUp, Scale } from 'lucide-react';
+import { Loader2, ArrowUpCircle, ArrowDownCircle, Banknote, TrendingUp, Scale, Filter } from 'lucide-react';
 import { useSessao } from '@/hooks/use-sessao';
 import { supabase } from '@/integrations/supabase/client';
 import { showError } from '@/utils/toast';
@@ -9,6 +9,8 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import useSaldoContaCalculado from '@/hooks/use-saldo-conta-calculado';
 import { startOfMonth, endOfMonth, format, addDays } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useNavigate } from 'react-router-dom';
 
 interface FluxoData {
     receber: number;
@@ -19,6 +21,9 @@ const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'
 
 const DashboardFinanceiro: React.FC = () => {
     const { usuario, carregando: carregandoSessao } = useSessao();
+    const navigate = useNavigate();
+    
+    const [filtroContaId, setFiltroContaId] = useState('todos'); // 'todos' ou ID da conta
     const [fluxoData, setFluxoData] = useState<FluxoData>({ receber: 0, pagar: 0 });
     const [loadingFluxo, setLoadingFluxo] = useState(true);
     const [totalAReceber30Dias, setTotalAReceber30Dias] = useState(0);
@@ -28,6 +33,12 @@ const DashboardFinanceiro: React.FC = () => {
 
     // Hook para buscar saldos de contas (Ativo/Passivo)
     const { contas, totalSaldo, carregando: carregandoSaldos } = useSaldoContaCalculado('todos', 'todos', '');
+    
+    // Filtra as contas para o gráfico de Saldo por Conta
+    const contasFiltradas = useMemo(() => {
+        if (filtroContaId === 'todos') return contas;
+        return contas.filter(c => c.id === filtroContaId);
+    }, [contas, filtroContaId]);
 
     const fetchFluxoData = useCallback(async () => {
         if (!ownerId) return;
@@ -37,20 +48,45 @@ const DashboardFinanceiro: React.FC = () => {
         const end = format(endOfMonth(new Date()), 'yyyy-MM-dd');
         
         // 1. Buscar Contas a Receber (Admin) no mês atual
-        const { data: crData, error: crError } = await supabase
+        let crQuery = supabase
             .from('admin_parcelas_receber')
             .select('valor_parcela, status')
             .eq('admin_id', ownerId)
             .gte('data_vencimento', start)
             .lte('data_vencimento', end)
             .neq('status', 'cancelada');
-
-        if (crError) {
-            showError('Erro ao buscar CR: ' + crError.message);
-            setFluxoData({ receber: 0, pagar: 0 });
+            
+        if (filtroContaId !== 'todos') {
+            // Se uma conta específica for selecionada, filtramos os lançamentos que usam essa conta
+            
+            const { data: entradasData } = await supabase
+                .from('lancamentos')
+                .select('valor')
+                .eq('proprietario_id', ownerId)
+                .eq('conta_bancaria_id', filtroContaId)
+                .eq('tipo', 'Entrada')
+                .gte('data_movimentacao', start)
+                .lte('data_movimentacao', end);
+                
+            const { data: saidasData } = await supabase
+                .from('lancamentos')
+                .select('valor')
+                .eq('proprietario_id', ownerId)
+                .eq('conta_bancaria_id', filtroContaId)
+                .eq('tipo', 'Saida')
+                .gte('data_movimentacao', start)
+                .lte('data_movimentacao', end);
+                
+            const totalReceber = (entradasData || []).reduce((sum, l) => sum + l.valor, 0);
+            const totalPagar = (saidasData || []).reduce((sum, l) => sum + l.valor, 0);
+            
+            setFluxoData({ receber: totalReceber, pagar: totalPagar });
+            setLoadingFluxo(false);
             return;
         }
-        
+
+        const { data: crData, error: crError } = await crQuery;
+        if (crError) { showError('Erro ao buscar CR: ' + crError.message); return; }
         const totalReceber = (crData || []).reduce((sum, p) => sum + p.valor_parcela, 0);
         
         // 2. Buscar Contas a Pagar (Admin) no mês atual
@@ -62,17 +98,12 @@ const DashboardFinanceiro: React.FC = () => {
             .lte('data_vencimento', end)
             .neq('status', 'cancelada');
 
-        if (cpError) {
-            showError('Erro ao buscar CP: ' + cpError.message);
-            setFluxoData({ receber: 0, pagar: 0 });
-            return;
-        }
-        
+        if (cpError) { showError('Erro ao buscar CP: ' + cpError.message); return; }
         const totalPagar = (cpData || []).reduce((sum, p) => sum + p.valor_parcela, 0);
         
         setFluxoData({ receber: totalReceber, pagar: totalPagar });
         setLoadingFluxo(false);
-    }, [ownerId]);
+    }, [ownerId, filtroContaId]);
     
     const fetchKPIs = useCallback(async () => {
         if (!ownerId) return;
@@ -119,7 +150,7 @@ const DashboardFinanceiro: React.FC = () => {
     const lucroPrejuizo = fluxoData.receber - fluxoData.pagar;
 
     // Dados para o gráfico de Saldo por Conta
-    const saldoData = contas
+    const saldoData = contasFiltradas
         .filter(c => c.saldo_atual !== 0)
         .map(c => ({
             name: c.nome,
@@ -150,7 +181,10 @@ const DashboardFinanceiro: React.FC = () => {
         <div className="space-y-6">
             {/* Indicadores Chave (KPIs) */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <Card className={cn("border-l-4", totalSaldo >= 0 ? "border-green-500" : "border-red-500")}>
+                <Card 
+                    className={cn("border-l-4 cursor-pointer hover:shadow-xl transition-shadow", totalSaldo >= 0 ? "border-green-500" : "border-red-500")}
+                    onClick={() => navigate('/bancos')}
+                >
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium flex items-center"><Banknote className="w-4 h-4 mr-2" /> Saldo Total (Contas)</CardTitle>
                     </CardHeader>
@@ -160,7 +194,10 @@ const DashboardFinanceiro: React.FC = () => {
                         </div>
                     </CardContent>
                 </Card>
-                <Card className="border-l-4 border-blue-500">
+                <Card 
+                    className="border-l-4 border-blue-500 cursor-pointer hover:shadow-xl transition-shadow"
+                    onClick={() => navigate('/contas-receber')}
+                >
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium flex items-center"><ArrowUpCircle className="w-4 h-4 mr-2" /> A Receber (30 dias)</CardTitle>
                     </CardHeader>
@@ -170,7 +207,10 @@ const DashboardFinanceiro: React.FC = () => {
                         </div>
                     </CardContent>
                 </Card>
-                <Card className="border-l-4 border-red-500">
+                <Card 
+                    className="border-l-4 border-red-500 cursor-pointer hover:shadow-xl transition-shadow"
+                    onClick={() => navigate('/contas-pagar')}
+                >
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium flex items-center"><ArrowDownCircle className="w-4 h-4 mr-2" /> A Pagar (30 dias)</CardTitle>
                     </CardHeader>
@@ -181,13 +221,36 @@ const DashboardFinanceiro: React.FC = () => {
                     </CardContent>
                 </Card>
             </div>
+            
+            {/* Filtro de Contexto */}
+            <Card>
+                <CardHeader className="pb-2">
+                    <CardTitle className="text-lg flex items-center"><Filter className="w-4 h-4 mr-2" /> Filtro de Visualização</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <Select value={filtroContaId} onValueChange={setFiltroContaId}>
+                        <SelectTrigger className="w-full md:w-[300px]">
+                            <SelectValue placeholder="Filtrar por Conta/Caixa ou Geral" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="todos">Geral (Todas as Contas)</SelectItem>
+                            {contas.map(c => (
+                                <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </CardContent>
+            </Card>
 
             {/* Gráficos */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 
                 {/* Gráfico 1: Saldo por Conta */}
-                <Card className="lg:col-span-2">
-                    <CardHeader><CardTitle className="text-xl flex items-center"><Scale className="w-5 h-5 mr-2" /> Saldo por Conta/Caixa</CardTitle></CardHeader>
+                <Card 
+                    className="lg:col-span-2 cursor-pointer hover:shadow-xl transition-shadow"
+                    onClick={() => navigate('/bancos')}
+                >
+                    <CardHeader><CardTitle className="text-xl flex items-center"><Scale className="w-5 h-5 mr-2" /> Saldo por Conta/Caixa ({filtroContaId === 'todos' ? 'Geral' : contas.find(c => c.id === filtroContaId)?.nome})</CardTitle></CardHeader>
                     <CardContent className="h-80">
                         {saldoData.length > 0 ? (
                             <ResponsiveContainer width="100%" height="100%">
@@ -218,7 +281,10 @@ const DashboardFinanceiro: React.FC = () => {
                 </Card>
                 
                 {/* Gráfico 2: Lucro/Prejuízo Mensal */}
-                <Card className="lg:col-span-1">
+                <Card 
+                    className="lg:col-span-1 cursor-pointer hover:shadow-xl transition-shadow"
+                    onClick={() => navigate('/relatorios/dre')}
+                >
                     <CardHeader><CardTitle className="text-xl flex items-center"><TrendingUp className="w-5 h-5 mr-2" /> Resultado Mensal ({format(new Date(), 'MMM')})</CardTitle></CardHeader>
                     <CardContent className="h-80 flex flex-col justify-center items-center">
                         <ResponsiveContainer width="100%" height={150}>
@@ -252,7 +318,10 @@ const DashboardFinanceiro: React.FC = () => {
                 </Card>
                 
                 {/* Gráfico 3: Receitas vs Despesas (Barra) */}
-                <Card className="lg:col-span-3">
+                <Card 
+                    className="lg:col-span-3 cursor-pointer hover:shadow-xl transition-shadow"
+                    onClick={() => navigate('/relatorios/fluxo-caixa')}
+                >
                     <CardHeader><CardTitle className="text-xl flex items-center"><TrendingUp className="w-5 h-5 mr-2" /> Fluxo de Caixa (A Receber vs A Pagar - Mês)</CardTitle></CardHeader>
                     <CardContent className="h-80">
                         <ResponsiveContainer width="100%" height="100%">
