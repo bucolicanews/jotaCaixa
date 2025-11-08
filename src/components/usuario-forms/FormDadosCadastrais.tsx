@@ -155,7 +155,8 @@ const FormDadosCadastrais: React.FC<FormDadosCadastraisProps> = ({ isSubmitting,
                         onClick={() => toggleAllTags(true)} 
                         disabled={loadingBulk || isSubmitting || isAllActive}
                     >
-                        {loadingBulk ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Marcar Todas'}
+                        {loadingBulk && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Marcar Todas
                     </Button>
                     <Button 
                         type="button" 
@@ -164,7 +165,8 @@ const FormDadosCadastrais: React.FC<FormDadosCadastraisProps> = ({ isSubmitting,
                         onClick={() => toggleAllTags(false)} 
                         disabled={loadingBulk || isSubmitting || !isAllActive}
                     >
-                        {loadingBulk ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Desmarcar Todas'}
+                        {loadingBulk && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Desmarcar Todas
                     </Button>
                 </div>
             </div>
