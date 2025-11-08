@@ -52,7 +52,7 @@ export function useBulkTagManager(resourceId: string | undefined): BulkTagManage
 
     const fetchTagStatus = useCallback(async () => {
         if (!resourceId || !empresaId) {
-            setLoading(false); // CORREÇÃO 1: Resolve o loading se IDs estiverem faltando
+            setLoading(false);
             return;
         }
         
@@ -76,13 +76,13 @@ export function useBulkTagManager(resourceId: string | undefined): BulkTagManage
             console.error('Erro inesperado ao buscar status das tags:', e);
             setActiveTagsCount(0);
         } finally {
-            setLoading(false); // CORREÇÃO 2: Sempre resolve o loading
+            setLoading(false);
         }
-    }, [resourceId, empresaId, refreshKey, allMappableTags]);
+    }, [resourceId, empresaId, allMappableTags]); // Removendo refreshKey das dependências
 
     useEffect(() => {
         fetchTagStatus();
-    }, [fetchTagStatus]);
+    }, [fetchTagStatus, refreshKey]); // Adicionando refreshKey aqui para forçar a re-execução
 
     const toggleAllTags = useCallback(async (activate: boolean) => {
         if (!resourceId || !empresaId) {
@@ -132,7 +132,7 @@ export function useBulkTagManager(resourceId: string | undefined): BulkTagManage
         } catch (error: any) {
             showError(`Falha ao alterar tags: ${error.message}`);
         } finally {
-            setLoading(false); // CORREÇÃO 3: Sempre resolve o loading após a mutação
+            setLoading(false);
         }
     }, [resourceId, empresaId, isUserScope, refetchStatus, allMappableTags]);
 
