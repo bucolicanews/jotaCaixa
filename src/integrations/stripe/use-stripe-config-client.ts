@@ -39,7 +39,9 @@ export function useStripeConfigClient(proprietarioId: string | null): StripeConf
     const fetchStripeKey = async () => {
       setLoading(true);
       try {
-        // Acesso direto à tabela, dependendo da política RLS "Authenticated users can read stripe configs"
+        // Acesso direto à tabela, usando o cliente Supabase padrão (chave anon)
+        // A política RLS deve permitir a leitura para usuários autenticados ou anônimos,
+        // mas como o fluxo de adesão é público, confiamos que a chave publicável pode ser lida.
         const { data, error } = await supabase
           .from('configuracoes_stripe')
           .select('stripe_publishable_key')
@@ -47,11 +49,11 @@ export function useStripeConfigClient(proprietarioId: string | null): StripeConf
           .single();
 
         if (error || !data?.stripe_publishable_key) {
-          // Não mostra erro se for PGRST116 (No rows found), apenas se for erro de permissão ou outro.
           if (error && error.code !== 'PGRST116') {
             console.error('Erro ao buscar chave publicável do Stripe:', error);
-            showError('Falha ao carregar a configuração de pagamento.');
           }
+          // Dispara o erro no frontend se a chave não for encontrada
+          showError('Configuração de pagamento do administrador não encontrada.');
           setLoading(false);
           return;
         }
