@@ -76,9 +76,10 @@ export function useBulkTagManager(resourceId: string | undefined): BulkTagManage
             console.error('Erro inesperado ao buscar status das tags:', e);
             setActiveTagsCount(0);
         } finally {
+            // Garante que o loading seja desativado após a busca de status
             setLoading(false);
         }
-    }, [resourceId, empresaId, allMappableTags]); // Removendo refreshKey das dependências
+    }, [resourceId, empresaId, allMappableTags]);
 
     useEffect(() => {
         fetchTagStatus();
@@ -126,13 +127,12 @@ export function useBulkTagManager(resourceId: string | undefined): BulkTagManage
                 showSuccess('Todas as tags ativas foram desmarcadas.');
             }
             
-            // Força a re-busca do status e dos componentes individuais
+            // Força a re-busca do status, que irá limpar o estado de loading
             refetchStatus();
             
         } catch (error: any) {
             showError(`Falha ao alterar tags: ${error.message}`);
-        } finally {
-            setLoading(false);
+            setLoading(false); // Limpa o loading apenas em caso de falha
         }
     }, [resourceId, empresaId, isUserScope, refetchStatus, allMappableTags]);
 
