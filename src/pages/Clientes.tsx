@@ -3,7 +3,7 @@ import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Edit, Trash2, PlusCircle, Filter, Building2, CheckCircle, Users as UsersIcon, Mail, PowerOff, Printer } from 'lucide-react';
+import { Loader2, Edit, Trash2, PlusCircle, Filter, Building2, CheckCircle, Users as UsersIcon, Mail, PowerOff, Printer, ArrowRight } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
@@ -75,6 +75,7 @@ const ClientesPage = () => {
   const [activeEmpresaTab, setActiveEmpresaTab] = useState('ativos'); // Novo estado para sub-aba
 
   const isAdmin = role === 'Admin';
+  const isClient = role === 'Cliente';
 
   const getOwnerId = () => {
     if (role === 'Admin') return usuario?.id || null; // Admin usa seu próprio ID
@@ -365,6 +366,47 @@ const ClientesPage = () => {
       setDialogAberto(true);
   };
   
+  // NOVO HANDLER: Promover Cliente CR para Cliente Sistema (Sem Convite)
+  const handlePromoteToSystem = async (cliente: Cliente) => {
+    if (!cliente.email) {
+        showError('O cliente deve ter um email cadastrado para ser promovido.');
+        return;
+    }
+    
+    if (!window.confirm(`Tem certeza que deseja PROMOVER ${cliente.nome} para Cliente do Sistema? Isso criará um perfil de usuário sem enviar um convite de login.`)) return;
+    
+    setCarregandoDados(true);
+    
+    try {
+        // 1. Chamar a Edge Function para criar o usuário no Auth e na tbl_clientes
+        const { data, error: invokeError } = await supabase.functions.invoke('promote-client-to-system', {
+            body: { 
+                email: cliente.email, 
+                nome: cliente.nome, 
+                clienteId: cliente.id, 
+                proprietarioId: ownerId 
+            },
+        });
+        
+        if (invokeError) throw invokeError;
+        if (data?.error) throw new Error(data.error);
+        
+        showSuccess(`Cliente ${cliente.nome} promovido para Cliente do Sistema com sucesso!`);
+        
+        // 2. Opcional: Deletar o registro antigo da tabela 'clientes' (CR) se o ID for diferente
+        // Como o novo ID é gerado pelo Auth, o registro CR original pode ser mantido ou deletado.
+        // Vamos manter o registro CR, mas o Admin pode deletá-lo manualmente se quiser.
+        
+        buscarDados();
+        
+    } catch (error: any) {
+        console.error('Erro ao promover cliente:', error);
+        showError('Falha ao promover cliente: ' + error.message);
+    } finally {
+        setCarregandoDados(false);
+    }
+  };
+  
   // NOVO HANDLER: Enviar Convite de Acesso (Substitui PromoteToSystem)
   const handleSendInvite = async (cliente: Cliente) => {
     if (!cliente.email) {
@@ -505,6 +547,20 @@ const ClientesPage = () => {
                             {isAdmin && <TableCell className="text-sm text-muted-foreground">{cliente.proprietario_id || 'N/A'}</TableCell>}
                             <TableCell className="text-right">
                                 <div className="flex justify-end space-x-1">
+                                    {/* BOTÃO PROMOVER PARA SISTEMA (Sem Convite) */}
+                                    {(isAdmin || isClient) && cliente.email && !cliente.is_system_client && (
+                                        <Button 
+                                            variant="default" 
+                                            size="sm" 
+                                            onClick={() => handlePromoteToSystem(cliente)}
+                                            title="Promover para Cliente do Sistema (Sem Convite de Login)"
+                                            disabled={carregandoDados}
+                                            className="h-8"
+                                        >
+                                            <ArrowRight className="w-4 h-4 mr-1" /> Promover
+                                        </Button>
+                                    )}
+                                    
                                     {/* BOTÃO CONVITE: Aparece se tiver email E NÃO for um cliente do sistema */}
                                     {isAdmin && cliente.email && !cliente.is_system_client && (
                                         <Button 
@@ -513,16 +569,17 @@ const ClientesPage = () => {
                                             onClick={() => handleSendInvite(cliente)}
                                             title="Enviar Convite de Acesso (Cria perfil no sistema)"
                                             disabled={carregandoDados}
+                                            className="h-8"
                                         >
                                             <Mail className="w-4 h-4 mr-1" /> Convite
                                         </Button>
                                     )}
                                     {/* BOTÃO DE EDIÇÃO */}
-                                    <Button variant="ghost" size="sm" onClick={() => handleEditCR(cliente)}>
+                                    <Button variant="ghost" size="icon" onClick={() => handleEditCR(cliente)}>
                                         <Edit className="w-4 h-4" />
                                     </Button>
                                     {/* BOTÃO DE DELETAR */}
-                                    <Button variant="ghost" size="sm" onClick={() => handleDeleteCR(cliente.id)}>
+                                    <Button variant="ghost" size="icon" onClick={() => handleDeleteCR(cliente.id)}>
                                         <Trash2 className="w-4 h-4 text-red-500" />
                                     </Button>
                                 </div>
