@@ -343,7 +343,7 @@ const ClientesPage = () => {
   };
   
   // --- Lógica de Filtragem de Empresas do Sistema ---
-  const filterEmpresasSistema = (status: 'ativos' | 'inativos' | 'avulsos') => {
+  const filterEmpresasSistema = (status: 'pendentes' | 'ativos' | 'inativos' | 'avulsos') => {
       
       return empresasSistema.filter((e: EmpresaSistema) => {
           const dataFimAcesso = e.data_fim_acesso ? parseISO(e.data_fim_acesso) : null;
@@ -351,13 +351,17 @@ const ClientesPage = () => {
           const isAvulso = e.tipo_cliente?.endsWith('_Avulso') ?? false; // Verifica o novo sufixo
           const isBlocked = dataFimAcesso === null && e.aprovado; // Aprovado, mas sem data de fim (desativado)
           
+          if (status === 'pendentes') {
+              return !e.aprovado;
+          }
+          
           if (status === 'ativos') {
-              // Ativos: Aprovados, não avulsos e com acesso futuro
-              return e.aprovado && !isAvulso && isAtivo;
+              // Ativos: Aprovados, e com acesso futuro (inclui avulsos ativos)
+              return e.aprovado && isAtivo && !isBlocked;
           }
           if (status === 'inativos') {
-              // Inativos: Aprovados, não avulsos e com acesso expirado OU bloqueado
-              return e.aprovado && !isAvulso && (!isAtivo || isBlocked);
+              // Inativos: Aprovados, e com acesso expirado OU bloqueado
+              return e.aprovado && (!isAtivo || isBlocked);
           }
           if (status === 'avulsos') {
               // Avulsos: Aprovados e com o sufixo _Avulso
@@ -367,6 +371,7 @@ const ClientesPage = () => {
       });
   };
   
+  const empresasPendentes = filterEmpresasSistema('pendentes');
   const empresasAtivas = filterEmpresasSistema('ativos');
   const empresasInativas = filterEmpresasSistema('inativos');
   const empresasAvulsas = filterEmpresasSistema('avulsos');
@@ -378,8 +383,8 @@ const ClientesPage = () => {
           ? empresasInativas 
           : activeEmpresaTab === 'avulsos' 
           ? empresasAvulsas
-          : empresasSistema.filter((e: EmpresaSistema) => !e.aprovado); // Pendentes
-  }, [activeEmpresaTab, empresasAtivas, empresasInativas, empresasAvulsas, empresasSistema]);
+          : empresasPendentes;
+  }, [activeEmpresaTab, empresasAtivas, empresasInativas, empresasAvulsas, empresasPendentes]);
 
   // Renderização do conteúdo da tabela de Clientes CR
   const renderClientesCRTable = () => (
@@ -451,19 +456,19 @@ const ClientesPage = () => {
                     </TableRow>
                 ) : (
                     empresas.map((empresa) => {
-                        const isAprovado = empresa.aprovado;
                         const dataFimAcesso = empresa.data_fim_acesso ? parseISO(empresa.data_fim_acesso) : null;
-                        const isAtivo = dataFimAcesso && isPast(new Date()) === false; // Data de fim de acesso é futura ou hoje
-                        const isAvulso = empresa.tipo_cliente?.endsWith('_Avulso') ?? false; // Verifica o novo sufixo
-                        const isBlocked = dataFimAcesso === null && isAprovado; // Aprovado, mas sem data de fim (desativado)
+                        const isAtivo = dataFimAcesso && isPast(new Date()) === false;
+                        const isAvulso = empresa.tipo_cliente?.endsWith('_Avulso') ?? false;
+                        const isBlocked = dataFimAcesso === null && empresa.aprovado;
                         
                         let statusBadge;
-                        if (!isAprovado) {
+                        if (!empresa.aprovado) {
                             statusBadge = <Badge variant="warning">Pendente</Badge>;
                         } else if (isBlocked) {
                             statusBadge = <Badge variant="destructive">Bloqueado</Badge>;
                         } else if (isAvulso) {
-                            statusBadge = <Badge variant="secondary">Avulso</Badge>;
+                            // Se for avulso, o status reflete se o acesso está ativo ou expirado
+                            statusBadge = <Badge variant={isAtivo ? 'default' : 'destructive'}>{isAtivo ? 'Avulso Ativo' : 'Avulso Expirado'}</Badge>;
                         } else if (isAtivo) {
                             statusBadge = <Badge variant="default">Ativo</Badge>;
                         } else {
@@ -474,14 +479,14 @@ const ClientesPage = () => {
                         const planoNome = empresa.plano_id ? planosMap[empresa.plano_id] || 'N/A' : 'N/A';
 
                         return (
-                            <TableRow key={empresa.id} className={cn(!isAprovado && "bg-yellow-500/10", isBlocked && "bg-red-500/10")}>
+                            <TableRow key={empresa.id} className={cn(!empresa.aprovado && "bg-yellow-500/10", isBlocked && "bg-red-500/10")}>
                                 <TableCell className="font-medium">{empresa.nome}</TableCell>
                                 <TableCell>{empresa.email}</TableCell>
                                 <TableCell className="text-sm text-muted-foreground">{planoNome}</TableCell>
                                 <TableCell>{dataExpiracaoDisplay}</TableCell>
                                 <TableCell>{statusBadge}</TableCell>
                                 <TableCell className="text-right space-x-2 min-w-[150px]">
-                                    {!isAprovado && (
+                                    {!empresa.aprovado && (
                                         <Button 
                                             variant="default" 
                                             size="sm" 
@@ -548,7 +553,7 @@ const ClientesPage = () => {
       
       if (activeTab === 'clientes_cr') {
           dataToPrint = clientesCR;
-          tituloRelatorio = 'Clientes de Contas a Receber';
+          tituloRelatorio = 'Clientes Diretos / Contratos';
       } else {
           // Mapeia o plano_id para o nome do plano antes de imprimir
           dataToPrint = empresasParaExibir.map(e => ({
@@ -701,7 +706,7 @@ const ClientesPage = () => {
             <TabsContent value="empresas_sistema">
                 <Tabs value={activeEmpresaTab} onValueChange={setActiveEmpresaTab} className="w-full">
                     <TabsList className="grid w-full grid-cols-4">
-                        <TabsTrigger value="pendentes">Pendentes ({empresasSistema.filter((e: EmpresaSistema) => !e.aprovado).length})</TabsTrigger>
+                        <TabsTrigger value="pendentes">Pendentes ({empresasPendentes.length})</TabsTrigger>
                         <TabsTrigger value="ativos">Ativos ({empresasAtivas.length})</TabsTrigger>
                         <TabsTrigger value="inativos">Inativos ({empresasInativas.length})</TabsTrigger>
                         <TabsTrigger value="avulsos">Avulsos ({empresasAvulsas.length})</TabsTrigger>
@@ -723,7 +728,7 @@ const ClientesPage = () => {
                     
                     <TabsContent value="pendentes" className="mt-4">
                         <Card>
-                            <CardHeader><CardTitle className="text-xl">Empresas Pendentes de Aprovação ({empresasSistema.filter((e: EmpresaSistema) => !e.aprovado).length})</CardTitle></CardHeader>
+                            <CardHeader><CardTitle className="text-xl">Empresas Pendentes de Aprovação ({empresasPendentes.length})</CardTitle></CardHeader>
                             <CardContent>{renderEmpresasSistemaTable(empresasParaExibir.filter((e: EmpresaSistema) => !e.aprovado))}</CardContent>
                         </Card>
                     </TabsContent>
