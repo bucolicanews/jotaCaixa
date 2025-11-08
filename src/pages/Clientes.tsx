@@ -21,7 +21,7 @@ import { parseISO, isPast, format } from 'date-fns';
 import FormEmpresaAvulsa from '@/components/formularios/FormEmpresaAvulsa';
 import { usePrint } from '@/hooks/use-print';
 import ReactDOMServer from 'react-dom/server';
-import ClientesPrint from '@/components/ClientesPrint'; // NOVO IMPORT
+import ClientesPrint from '@/components/ClientesPrint';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 
 // Tipo para o filtro de empresa (inclui o Admin)
@@ -40,6 +40,12 @@ export interface EmpresaSistema extends ClienteProfile {
     plano_id?: string | null;
 }
 
+// NOVO TIPO
+interface PlanoSimples {
+    id: string;
+    nome: string;
+}
+
 const ClientesPage = () => {
   const { usuario, perfil, role, carregando: carregandoSessao } = useSessao();
   const { printContent } = usePrint();
@@ -47,9 +53,12 @@ const ClientesPage = () => {
   const [empresasSistema, setEmpresasSistema] = useState<EmpresaSistema[]>([]); // Empresas do sistema (tbl_clientes)
   const [carregandoDados, setCarregandoDados] = useState(true);
   const [clienteSelecionado, setClienteSelecionado] = useState<Cliente | null>(null);
-  const [dialogAberto, setDialogAberto] = useState(false);
   const [perfilParaEditar, setPerfilParaEditar] = useState<AnyProfile | null>(null);
+  const [dialogAberto, setDialogAberto] = useState(false);
   const [dialogAvulsaAberto, setDialogAvulsaAberto] = useState(false); // Novo estado para dialog avulsa
+  
+  // NOVO ESTADO
+  const [planosMap, setPlanosMap] = useState<Record<string, string>>({});
   
   // Filtros para Admin
   const [empresasFiltro, setEmpresasFiltro] = useState<EmpresaFiltro[]>([]);
@@ -69,6 +78,23 @@ const ClientesPage = () => {
   };
   
   const ownerId = getOwnerId();
+
+  const fetchPlanos = useCallback(async () => {
+    const { data, error } = await supabase
+        .from('planos')
+        .select('id, nome');
+        
+    if (error) {
+        console.error('Erro ao carregar planos:', error);
+        return;
+    }
+    
+    const map = (data as PlanoSimples[]).reduce((acc, p) => {
+        acc[p.id] = p.nome;
+        return acc;
+    }, {} as Record<string, string>);
+    setPlanosMap(map);
+  }, []);
 
   const fetchEmpresasFiltro = useCallback(async () => {
     if (!isAdmin || !usuario?.id) return;
@@ -152,10 +178,11 @@ const ClientesPage = () => {
     if (!carregandoSessao && usuario) {
       if (isAdmin) {
         fetchEmpresasFiltro();
+        fetchPlanos();
       }
       buscarDados();
     }
-  }, [carregandoSessao, usuario, isAdmin, buscarDados, fetchEmpresasFiltro]);
+  }, [carregandoSessao, usuario, isAdmin, buscarDados, fetchEmpresasFiltro, fetchPlanos]);
   
   // Re-busca quando os filtros mudam
   useEffect(() => {
@@ -316,11 +343,10 @@ const ClientesPage = () => {
   
   // --- Lógica de Filtragem de Empresas do Sistema ---
   const filterEmpresasSistema = (status: 'ativos' | 'inativos' | 'avulsos') => {
-      const now = new Date();
       
       return empresasSistema.filter((e: EmpresaSistema) => {
           const dataFimAcesso = e.data_fim_acesso ? parseISO(e.data_fim_acesso) : null;
-          const isAtivo = dataFimAcesso && isPast(now) === false; // Data de fim de acesso é futura ou hoje
+          const isAtivo = dataFimAcesso && isPast(new Date()) === false; // Data de fim de acesso é futura ou hoje
           const isAvulso = e.tipo_cliente?.endsWith('_Avulso') ?? false; // Verifica o novo sufixo
           const isBlocked = dataFimAcesso === null && e.aprovado; // Aprovado, mas sem data de fim (desativado)
           
@@ -444,12 +470,13 @@ const ClientesPage = () => {
                         }
                         
                         const dataExpiracaoDisplay = dataFimAcesso ? format(dataFimAcesso, 'dd/MM/yyyy') : 'N/A';
+                        const planoNome = empresa.plano_id ? planosMap[empresa.plano_id] || 'N/A' : 'N/A';
 
                         return (
                             <TableRow key={empresa.id} className={cn(!isAprovado && "bg-yellow-500/10", isBlocked && "bg-red-500/10")}>
                                 <TableCell className="font-medium">{empresa.nome}</TableCell>
                                 <TableCell>{empresa.email}</TableCell>
-                                <TableCell className="text-sm text-muted-foreground">{empresa.plano_id || 'N/A'}</TableCell>
+                                <TableCell className="text-sm text-muted-foreground">{planoNome}</TableCell>
                                 <TableCell>{dataExpiracaoDisplay}</TableCell>
                                 <TableCell>{statusBadge}</TableCell>
                                 <TableCell className="text-right space-x-2 min-w-[150px]">
@@ -522,7 +549,11 @@ const ClientesPage = () => {
           dataToPrint = clientesCR;
           tituloRelatorio = 'Clientes de Contas a Receber';
       } else {
-          dataToPrint = empresasParaExibir;
+          // Mapeia o plano_id para o nome do plano antes de imprimir
+          dataToPrint = empresasParaExibir.map(e => ({
+              ...e,
+              plano_id: e.plano_id ? planosMap[e.plano_id] || e.plano_id : 'N/A', // Passa o nome do plano
+          }));
           tituloRelatorio = `Empresas do Sistema - ${activeEmpresaTab.charAt(0).toUpperCase() + activeEmpresaTab.slice(1)}`;
       }
       
@@ -589,7 +620,7 @@ const ClientesPage = () => {
                 </DropdownMenuContent>
             </DropdownMenu>
             {/* Botão para Novo Cliente CR */}
-            <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
+            <Dialog open={dialogAberto && !perfilParaEditar} onOpenChange={setDialogAberto}>
               <DialogTrigger asChild>
                 <Button onClick={handleNewCR} className="w-full sm:w-auto" disabled={isAdmin && activeTab === 'empresas_sistema'}>
                   <PlusCircle className="w-4 h-4 mr-2" />
