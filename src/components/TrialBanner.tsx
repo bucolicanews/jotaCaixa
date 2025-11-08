@@ -81,9 +81,7 @@ const TrialBanner: React.FC = () => {
         )}>
             <AlertTriangle className="w-4 h-4 mr-2 flex-shrink-0" />
             <p className="font-medium">
-                Você está no **TESTE GRÁTIS** do plano <span className="font-bold">{planoInfo.nome}</span>. 
-                O trial termina em <span className="font-bold">{dataCobranca}</span>. 
-                A cobrança de {precoFormatado} será aplicada a partir desta data.
+                Aproveite seu teste gratuito com acesso completo até <span className="font-bold">{dataCobranca}</span>! Depois, o plano <span className="font-bold">{planoInfo.nome}</span> será ativado por <span className="font-bold">{precoFormatado}</span>/mês.
             </p>
         </div>
     );

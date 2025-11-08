@@ -374,14 +374,15 @@ const ClientesPage = () => {
         }
         
         // 2. Enviar o link de redefinição de senha (convite)
-        const { data: resetData, error: resetError } = await supabase.auth.resetPasswordForEmail(cliente.email, {
+        const { data, error: resetError } = await supabase.auth.resetPasswordForEmail(cliente.email, {
             redirectTo: `${BASE_URL}/atualizar-senha`, 
         });
         
         if (resetError) throw resetError;
         
-        // CORREÇÃO DO ERRO 3: Acessando action_link diretamente de resetData.data
-        const resetLink = resetData.action_link || `${BASE_URL}/atualizar-senha`;
+        // CORREÇÃO DO ERRO 3: Acessando action_link da resposta de dados
+        // Forçando a tipagem para resolver o TS2339
+        const resetLink = (data as { action_link: string | null }).action_link || `${BASE_URL}/atualizar-senha`;
         
         showSuccess('Convite de acesso enviado! Use o botão de Ações para enviar o link.');
         
