@@ -55,9 +55,7 @@ interface FormContasReceberProps {
   onSaveComplete: () => void;
 }
 
-interface ClienteCombinado {
-  id: string;
-  nome: string;
+interface ClienteCombinado extends Cliente {
   tipo: 'CR' | 'Sistema';
 }
 
@@ -129,40 +127,48 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
           // ADMIN: Busca Clientes do Sistema (tbl_clientes)
           const { data: dataSistema, error: errorSistema } = await supabase
               .from('tbl_clientes')
-              .select('id, nome')
+              .select('id, nome, email, cpf, rg, nome_mae, nome_pai, telefone, cep, endereco, numero, complemento, bairro, cidade, estado')
               .eq('aprovado', true)
               .order('nome');
               
           if (errorSistema) {
               showError('Erro ao carregar empresas do sistema.');
           } else {
-              combinedClients = (dataSistema as any[]).map(c => ({ id: c.id, nome: c.nome, tipo: 'Sistema' as const }));
+              // Mapeia para o tipo ClienteCombinado (que estende Cliente)
+              combinedClients = (dataSistema as any[]).map(c => ({ 
+                  id: c.id, 
+                  proprietario_id: ownerId, // Define o Admin como proprietário
+                  nome: c.nome, 
+                  email: c.email,
+                  documento: c.cpf || c.rg,
+                  tipo: 'Sistema' as const,
+                  // Adiciona todos os campos de endereço/documento para o upsert
+                  razao_social: c.nome, nome_fantasia: c.nome, telefone: c.telefone, telefone_fixo: null, cep: c.cep, endereco: c.endereco, numero: c.numero, complemento: c.complemento, bairro: c.bairro, cidade: c.cidade, estado: c.estado, created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+              }));
           }
           
           // ADMIN: Busca Clientes Diretos (clientes)
           const { data: dataCR, error: errorCR } = await supabase
               .from('clientes')
-              .select('id, nome')
+              .select('*')
               .eq('proprietario_id', ownerId)
               .order('nome');
               
           if (errorCR) {
               showError('Erro ao carregar clientes CR.');
           } else {
-              // Adiciona clientes CR, evitando duplicidade se o ID for o mesmo (embora improvável)
+              // Adiciona clientes CR, evitando duplicidade se o ID for o mesmo
               const existingIds = new Set(combinedClients.map(c => c.id));
               (dataCR as Cliente[]).forEach(c => {
                   if (!existingIds.has(c.id)) {
-                      combinedClients.push({ id: c.id, nome: c.nome, tipo: 'CR' as const });
+                      combinedClients.push({ ...c, tipo: 'CR' as const });
                   }
               });
           }
           
       } else {
           // Cliente/Usuário: Busca APENAS Clientes de Contas a Receber (clientes)
-          let queryCR = supabase.from('clientes').select('id, nome').order('nome');
-          
-          // Se não for Admin, filtra pelo ownerId
+          let queryCR = supabase.from('clientes').select('*').order('nome');
           queryCR = queryCR.eq('proprietario_id', ownerId);
           
           const { data: dataCR, error: errorCR } = await queryCR;
@@ -170,7 +176,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
           if (errorCR) {
               showError('Erro ao carregar clientes CR.');
           } else {
-              combinedClients.push(...(dataCR as Cliente[]).map(c => ({ id: c.id, nome: c.nome, tipo: 'CR' as const })));
+              combinedClients.push(...(dataCR as Cliente[]).map(c => ({ ...c, tipo: 'CR' as const })));
           }
       }
       
@@ -243,9 +249,35 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
       const clienteSelecionado = clientes.find(c => c.id === values.cliente_id);
       if (!clienteSelecionado) throw new Error('Cliente selecionado não encontrado.');
       
-      // Se o cliente for do tipo 'Sistema', ele já existe na tabela 'clientes' (criado pelo activate_subscription)
-      // Se for do tipo 'CR', ele já existe na tabela 'clientes' (criado pelo Admin)
-      // Não precisamos de um upsert aqui, pois a FK já deve estar garantida.
+      // Se o cliente for do tipo 'Sistema', precisamos garantir que ele exista na tabela 'clientes' (CR)
+      if (clienteSelecionado.tipo === 'Sistema') {
+          const clienteDataParaUpsert: Partial<Cliente> = {
+              id: clienteSelecionado.id,
+              proprietario_id: ownerId,
+              nome: clienteSelecionado.nome,
+              email: clienteSelecionado.email,
+              documento: clienteSelecionado.documento,
+              razao_social: clienteSelecionado.razao_social,
+              nome_fantasia: clienteSelecionado.nome_fantasia,
+              telefone: clienteSelecionado.telefone,
+              telefone_fixo: clienteSelecionado.telefone_fixo,
+              cep: clienteSelecionado.cep,
+              endereco: clienteSelecionado.endereco,
+              numero: clienteSelecionado.numero,
+              complemento: clienteSelecionado.complemento,
+              bairro: clienteSelecionado.bairro,
+              cidade: clienteSelecionado.cidade,
+              estado: clienteSelecionado.estado,
+          };
+          
+          const { error: upsertError } = await supabase
+              .from('clientes')
+              .upsert(clienteDataParaUpsert, { onConflict: 'id' });
+              
+          if (upsertError) {
+              throw new Error('Falha ao garantir a existência do cliente na tabela CR: ' + upsertError.message);
+          }
+      }
       
       // 1. Calcular valores e parcelas
       let valorTotal: number;
