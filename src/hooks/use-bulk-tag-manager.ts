@@ -26,8 +26,7 @@ export function useBulkTagManager(resourceId: string | undefined): BulkTagManage
     const [refreshKey, setRefreshKey] = useState(0);
 
     const isUserScope = perfil && 'cliente_id' in perfil;
-    // const isClientCRScope = perfil && 'razao_social' in perfil; // Removido TS6133
-
+    
     const getOwnerId = () => {
         // 1. Se for Admin, o proprietário da tag é o próprio Admin logado.
         if (role === 'Admin') return usuario?.id || null;
@@ -43,11 +42,9 @@ export function useBulkTagManager(resourceId: string | undefined): BulkTagManage
     
     const empresaId = getOwnerId();
     
-    // Determina qual mapa de tags usar (assumindo que este hook é usado para Usuário/Cliente do Sistema)
-    // No FormCliente (Cliente CR), o mapeamento é feito manualmente no TaggedFormField.
-    // Aqui, focamos no mapeamento de Usuário (tbl_usuarios) e Cliente do Sistema (tbl_clientes)
+    // Determina qual mapa de tags usar
     const allMappableTags = isUserScope ? CAMPOS_USUARIO_MAPA.map(m => m.tag) : CAMPOS_CLIENTE_MAPA.map(m => m.tag);
-    const isAllActive = activeTagsCount === allMappableTags.length;
+    const isAllActive = activeTagsCount === allMappableTags.length && allMappableTags.length > 0;
 
     const refetchStatus = useCallback(() => {
         setRefreshKey(prev => prev + 1);
@@ -55,26 +52,32 @@ export function useBulkTagManager(resourceId: string | undefined): BulkTagManage
 
     const fetchTagStatus = useCallback(async () => {
         if (!resourceId || !empresaId) {
-            setLoading(false);
+            setLoading(false); // CORREÇÃO 1: Resolve o loading se IDs estiverem faltando
             return;
         }
         
         setLoading(true);
         
-        // Busca todas as tags ativas que correspondem às tags mapeáveis
-        const { data, error } = await supabase
-            .from('contrato_tags')
-            .select('id')
-            .eq('empresa_id', empresaId)
-            .in('nome_tag', allMappableTags);
+        try {
+            // Busca todas as tags ativas que correspondem às tags mapeáveis
+            const { data, error } = await supabase
+                .from('contrato_tags')
+                .select('id')
+                .eq('empresa_id', empresaId)
+                .in('nome_tag', allMappableTags);
 
-        if (error && error.code !== 'PGRST116') {
-            console.error('Erro ao buscar status das tags:', error);
+            if (error && error.code !== 'PGRST116') {
+                console.error('Erro ao buscar status das tags:', error);
+                setActiveTagsCount(0);
+            } else {
+                setActiveTagsCount(data?.length || 0);
+            }
+        } catch (e) {
+            console.error('Erro inesperado ao buscar status das tags:', e);
             setActiveTagsCount(0);
-        } else {
-            setActiveTagsCount(data?.length || 0);
+        } finally {
+            setLoading(false); // CORREÇÃO 2: Sempre resolve o loading
         }
-        setLoading(false);
     }, [resourceId, empresaId, refreshKey, allMappableTags]);
 
     useEffect(() => {
@@ -129,7 +132,7 @@ export function useBulkTagManager(resourceId: string | undefined): BulkTagManage
         } catch (error: any) {
             showError(`Falha ao alterar tags: ${error.message}`);
         } finally {
-            setLoading(false);
+            setLoading(false); // CORREÇÃO 3: Sempre resolve o loading após a mutação
         }
     }, [resourceId, empresaId, isUserScope, refetchStatus, allMappableTags]);
 
