@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
-import { AnyProfile, ClienteProfile, UsuarioProfile, AdminProfile, UserRole } from '@/types/usuario';
+import { AnyProfile, ClienteProfile, UsuarioProfile, AdminProfile } from '@/types/usuario';
 import { PERMISSOES_DISPONIVEIS, Permissao } from '@/config/permissoes';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { format } from 'date-fns';
