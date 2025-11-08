@@ -1,19 +1,8 @@
-import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import LandingPage from './LandingPage';
 
 const Index = () => {
-  const navegar = useNavigate();
-  
-  useEffect(() => {
-    // Redireciona a rota raiz para a página de vendas
-    navegar('/vendas');
-  }, [navegar]);
-
-  return (
-    <div className="min-h-screen flex items-center justify-center">
-      Redirecionando para a Página de Vendas...
-    </div>
-  );
+  // A rota raiz agora renderiza a LandingPage
+  return <LandingPage />;
 };
 
 export default Index;

@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
-import { Zap, Loader2, User, Building2, Check, X } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Loader2, User, Building2, Check, X } from 'lucide-react';
 import { Card } from '@/components/ui/card'; // Apenas Card é mantido
 import { supabase } from '@/integrations/supabase/client';
 import { showError } from '@/utils/toast';
@@ -60,7 +59,7 @@ const Vendas: React.FC = () => {
 
   if (carregandoPlanos || carregandoSessao) {
     return (
-        <div className="min-h-screen flex items-center justify-center bg-background p-4">
+        <div className="flex items-center justify-center h-screen">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
     );
@@ -68,7 +67,7 @@ const Vendas: React.FC = () => {
   
   if (planoSelecionado) {
       return (
-        <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
+        <div className="flex flex-col items-center justify-center p-4 w-full">
             <Button variant="link" onClick={handleBackToPlans} className="mb-4 self-start md:self-center">
                 &larr; Voltar para a seleção de planos
             </Button>
@@ -81,8 +80,8 @@ const Vendas: React.FC = () => {
   // Renderização para Cliente Logado (Apenas seleção de plano)
   if (isClient) {
       return (
-        <div className="min-h-screen bg-background p-4 md:p-12">
-            <div className="max-w-6xl mx-auto text-center pt-16">
+        <div className="p-4 md:p-12 w-full">
+            <div className="max-w-6xl mx-auto text-center pt-8">
                 <h1 className="text-3xl md:text-4xl font-bold mb-8">Selecione seu Novo Plano</h1>
                 <p className="text-lg text-muted-foreground mb-12">
                     Escolha um plano para iniciar o processo de pagamento e atualização.
@@ -152,35 +151,11 @@ const Vendas: React.FC = () => {
 
   // Renderização para Usuário Público (Adesão e Trial)
   return (
-    <div className="min-h-screen bg-background p-4 md:p-12">
+    <div className="p-4 md:p-12 w-full">
       <div className="max-w-6xl mx-auto text-center">
         
-        {/* Seção de Apresentação (Hero) */}
-        <div className="min-h-[30vh] flex flex-col items-center justify-center pt-16 pb-16">
-            <Zap className="w-12 h-12 text-primary mb-4" />
-            <h1 className="text-5xl md:text-6xl font-extrabold mb-4 text-foreground leading-tight">
-                O Fluxo de Caixa que sua Empresa Merece.
-            </h1>
-            <p className="text-xl text-muted-foreground max-w-3xl mb-8">
-                Gerencie contas a pagar, a receber, folha de ponto e contratos em uma única plataforma multi-tenant, segura e eficiente.
-            </p>
-            
-            <Link to="/login">
-                <Button 
-                    size="lg" 
-                    className="text-lg px-8 py-6 shadow-lg hover:shadow-xl transition-all"
-                >
-                    Fazer Login ou Cadastrar
-                </Button>
-            </Link>
-            
-            <div className="mt-12 text-center">
-                <p className="text-sm text-muted-foreground">Já é cliente? <Link to="/login" className="text-primary hover:underline">Faça login aqui.</Link></p>
-            </div>
-        </div>
-        
         {/* Seção de Planos */}
-        <div className="pt-16">
+        <div className="pt-8">
             <h2 className="text-3xl font-bold mb-8">Escolha o Plano Ideal</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {planos.map((plano) => (

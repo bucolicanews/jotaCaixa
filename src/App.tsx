@@ -43,6 +43,8 @@ import GerenciarHistoricos from "./pages/GerenciarHistoricos";
 import Exportar from "./pages/Exportar";
 import LancamentosNaoMapeados from "./pages/LancamentosNaoMapeados";
 import ClientesPage from "./pages/Clientes";
+import SiteLayout from "./components/SiteLayout"; // Importando SiteLayout
+import Index from "./pages/Index"; // Importando Index (que agora é a LandingPage)
 
 const queryClient = new QueryClient();
 
@@ -204,11 +206,17 @@ const App = () => (
           <Toaster />
           <Sonner />
           <Routes>
-            {/* Rotas Públicas/Auth */}
-            <Route path="/" element={<Vendas />} />
-            <Route path="/vendas" element={<Vendas />} />
+            {/* Rotas Públicas/Site (Usam SiteLayout) */}
+            <Route element={<SiteLayout />}>
+                <Route path="/" element={<Index />} />
+                <Route path="/vendas" element={<Vendas />} />
+            </Route>
+            
+            {/* Rotas de Auth (Não usam layout) */}
             <Route path="/login" element={<Login />} />
             <Route path="/atualizar-senha" element={<AtualizarSenha />} />
+            
+            {/* Rotas de Contrato (Não usam layout) */}
             <Route path="/assinar-contrato/:id" element={<AssinarContrato />} />
             <Route path="/contrato-link/:id" element={<ContratoLinkPage />} />
             
