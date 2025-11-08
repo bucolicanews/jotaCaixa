@@ -38,8 +38,8 @@ const ContasPagar: React.FC = () => {
     from: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
     to: new Date(),
   });
-  const [filtroOrigem, setFiltroOrigem] = useState('todos');
-  const [filtroStatus, setFiltroStatus] = useState('nao_quitado');
+  const [filtroOrigem, setFiltroOrigem] = useState('todos'); // ALTERADO: Padrão 'todos'
+  const [filtroStatus, setFiltroStatus] = useState('todos'); // ALTERADO: Padrão 'todos'
   const [filtroTexto, setFiltroTexto] = useState(''); // NOVO ESTADO
   const filtroTextoDebounced = useDebounce(filtroTexto, 500); // NOVO DEBOUNCE
 
