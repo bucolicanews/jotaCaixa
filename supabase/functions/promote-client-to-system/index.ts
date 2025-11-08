@@ -49,7 +49,7 @@ serve(async (req: Request) => {
     const clientName = clienteCr.nome;
     let userId = clienteCrId; // Tentativa inicial de usar o mesmo ID
 
-    // 2. Tentar criar o usuário no Auth (se já existir, o Supabase retorna o erro 'User already registered')
+    // 2. Tentar criar o usuário no Auth
     const { error: signUpError } = await supabaseService.auth.admin.createUser({
         email: clientEmail,
         email_confirm: true, // Confirma o email automaticamente
@@ -60,24 +60,36 @@ serve(async (req: Request) => {
         }
     });
     
-    if (signUpError && signUpError.message !== 'User already registered') {
-        console.error('Auth Sign Up Error:', signUpError);
-        return new Response(JSON.stringify({ error: 'Falha ao criar usuário no Auth: ' + signUpError.message }), {
-            status: 500,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-    }
-    
-    // Se o usuário já existia, precisamos buscar o ID real dele no Auth
-    if (signUpError?.message === 'User already registered') {
-        const { data: authUser, error: authError } = await supabaseService.auth.admin.getUserByEmail(clientEmail);
-        if (authError || !authUser?.user) {
-            return new Response(JSON.stringify({ error: 'Usuário já registrado, mas não foi possível obter o ID.' }), {
+    // Se houver erro, verifica se é de duplicidade
+    if (signUpError) {
+        if (signUpError.message === 'User already registered') {
+            // Usuário já existe, buscar o ID real
+            const { data: authUser, error: authError } = await supabaseService.auth.admin.getUserByEmail(clientEmail);
+            if (authError || !authUser?.user) {
+                return new Response(JSON.stringify({ error: 'Usuário já registrado, mas não foi possível obter o ID.' }), {
+                    status: 500,
+                    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                });
+            }
+            userId = authUser.user.id;
+        } else {
+            // Outro erro fatal
+            console.error('Auth Sign Up Error:', signUpError);
+            return new Response(JSON.stringify({ error: 'Falha ao criar usuário no Auth: ' + signUpError.message }), {
                 status: 500,
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             });
         }
-        userId = authUser.user.id;
+    } else {
+        // Se a criação foi bem-sucedida, usa o ID do novo usuário
+        userId = signUpData.user.id;
+    }
+    
+    if (!userId) {
+        return new Response(JSON.stringify({ error: 'ID do usuário não pôde ser determinado após Auth.' }), {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
     }
     
     // 3. Mover dados cadastrais para tbl_clientes (Upsert)
@@ -123,10 +135,7 @@ serve(async (req: Request) => {
     
     if (resetError) {
         console.error('Reset Password Link Error:', resetError);
-        return new Response(JSON.stringify({ error: 'Falha ao gerar link de convite: ' + resetError.message }), {
-            status: 500,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
+        // Não é um erro fatal, mas deve ser reportado
     }
     
     // 5. Deletar o registro da tabela 'clientes' (CR)
