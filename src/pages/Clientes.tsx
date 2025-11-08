@@ -47,10 +47,15 @@ interface PlanoSimples {
     nome: string;
 }
 
+// NOVO TIPO: Cliente CR com status de sistema
+interface ClienteCRComStatus extends Cliente {
+    is_system_client: boolean;
+}
+
 const ClientesPage = () => {
   const { usuario, perfil, role, carregando: carregandoSessao } = useSessao();
   const { printContent } = usePrint();
-  const [clientesCR, setClientesCR] = useState<Cliente[]>([]); // Clientes de Contas a Receber
+  const [clientesCR, setClientesCR] = useState<ClienteCRComStatus[]>([]); // Clientes de Contas a Receber
   const [empresasSistema, setEmpresasSistema] = useState<EmpresaSistema[]>([]); // Empresas do sistema (tbl_clientes)
   const [carregandoDados, setCarregandoDados] = useState(true);
   const [clienteSelecionado, setClienteSelecionado] = useState<Cliente | null>(null);
@@ -126,7 +131,7 @@ const ClientesPage = () => {
     // 1. Buscar Clientes de Contas a Receber (clientes)
     let queryCR = supabase
       .from('clientes')
-      .select('*')
+      .select('id, proprietario_id, nome, razao_social, nome_fantasia, documento, email, telefone, telefone_fixo, cep, endereco, numero, complemento, bairro, cidade, estado, created_at, updated_at')
       .order('nome', { ascending: true });
 
     if (isAdmin) {
@@ -145,12 +150,29 @@ const ClientesPage = () => {
       showError('Erro ao carregar clientes CR: ' + errorCR.message);
       setClientesCR([]);
     } else {
-      const filteredData = (dataCR as Cliente[]).filter(c => 
+      let fetchedData = (dataCR as Cliente[]).filter(c => 
         c.nome.toLowerCase().includes(filtroNome.toLowerCase()) ||
         (c.razao_social?.toLowerCase() || '').includes(filtroNome.toLowerCase()) ||
         (c.documento?.toLowerCase() || '').includes(filtroNome.toLowerCase())
       );
-      setClientesCR(filteredData);
+      
+      // 1.1. Verificar quais clientes CR já são clientes do sistema (tbl_clientes)
+      const clienteIdsCR = fetchedData.map(c => c.id);
+      const { data: systemClients, error: systemClientsError } = await supabase
+          .from('tbl_clientes')
+          .select('id')
+          .in('id', clienteIdsCR);
+          
+      if (systemClientsError) console.error('Erro ao buscar clientes do sistema para status:', systemClientsError);
+      
+      const systemClientIds = new Set(systemClients?.map(c => c.id) || []);
+      
+      const clientesComStatus: ClienteCRComStatus[] = fetchedData.map(c => ({
+          ...c,
+          is_system_client: systemClientIds.has(c.id),
+      }));
+      
+      setClientesCR(clientesComStatus);
     }
     
     // 2. Buscar Empresas do Sistema (tbl_clientes) - Apenas Admin
@@ -483,21 +505,23 @@ const ClientesPage = () => {
                             {isAdmin && <TableCell className="text-sm text-muted-foreground">{cliente.proprietario_id || 'N/A'}</TableCell>}
                             <TableCell className="text-right">
                                 <div className="flex justify-end space-x-1">
-                                    {/* NOVO BOTÃO: Enviar Convite de Acesso */}
-                                    {isAdmin && cliente.email && (
+                                    {/* BOTÃO CONVITE: Aparece se tiver email E NÃO for um cliente do sistema */}
+                                    {isAdmin && cliente.email && !cliente.is_system_client && (
                                         <Button 
                                             variant="secondary" 
                                             size="sm" 
                                             onClick={() => handleSendInvite(cliente)}
-                                            title="Enviar Convite de Acesso (Login/Senha)"
+                                            title="Enviar Convite de Acesso (Cria perfil no sistema)"
                                             disabled={carregandoDados}
                                         >
                                             <Mail className="w-4 h-4 mr-1" /> Convite
                                         </Button>
                                     )}
+                                    {/* BOTÃO DE EDIÇÃO */}
                                     <Button variant="ghost" size="sm" onClick={() => handleEditCR(cliente)}>
                                         <Edit className="w-4 h-4" />
                                     </Button>
+                                    {/* BOTÃO DE DELETAR */}
                                     <Button variant="ghost" size="sm" onClick={() => handleDeleteCR(cliente.id)}>
                                         <Trash2 className="w-4 h-4 text-red-500" />
                                     </Button>
