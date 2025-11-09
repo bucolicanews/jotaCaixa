@@ -447,6 +447,13 @@ const ClientesPage = () => {
         return;
     }
     
+    // 1. VERIFICAÇÃO DE DUPLICIDADE NA TBL_CLIENTES
+    const existingSystemClient = empresasSistema.find(e => e.email === cliente.email);
+    if (existingSystemClient) {
+        showError(`O email ${cliente.email} já está em uso pela empresa ${existingSystemClient.nome} (ID: ${existingSystemClient.id.substring(0, 8)}...). Por favor, corrija o email do cliente CR antes de promover.`);
+        return;
+    }
+    
     if (!window.confirm(`Tem certeza que deseja PROMOVER ${cliente.nome} para Cliente do Sistema? Isso criará um perfil de usuário sem enviar um convite de login.`)) return;
     
     setCarregandoDados(true);
@@ -482,6 +489,13 @@ const ClientesPage = () => {
   const handleSendInvite = async (cliente: Cliente) => {
     if (!cliente.email) {
         showError('O cliente deve ter um email cadastrado para enviar o convite.');
+        return;
+    }
+    
+    // 1. VERIFICAÇÃO DE DUPLICIDADE NA TBL_CLIENTES
+    const existingSystemClient = empresasSistema.find(e => e.email === cliente.email);
+    if (existingSystemClient) {
+        showError(`O email ${cliente.email} já está em uso pela empresa ${existingSystemClient.nome} (ID: ${existingSystemClient.id.substring(0, 8)}...). Por favor, corrija o email do cliente CR antes de enviar o convite.`);
         return;
     }
     
