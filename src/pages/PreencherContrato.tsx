@@ -692,7 +692,8 @@ const PreencherContrato: React.FC = () => {
         }
 
         showSuccess(`Contrato ${isEditing ? 'atualizado' : 'salvo'} como ${status} com sucesso!`);
-        navigate('/contratos');
+        // ALTERAÇÃO AQUI: Usando window.location.href
+        window.location.href = '/contratos';
         
     } catch (error: any) {
         console.error('Erro ao salvar contrato:', error);
@@ -733,9 +734,9 @@ const PreencherContrato: React.FC = () => {
 
   return (
     <LayoutPrincipal>
-      <div className="flex items-center mb-6">
+       <div className="flex items-center mb-6">
         <Button 
-            onClick={() => { navigate('/contratos'); }} 
+            onClick={() => { window.location.href = '/contratos';  }} 
             variant="link" 
             type="button"
             className="text-muted-foreground hover:text-primary flex items-center mr-4 p-0 h-auto"
@@ -744,7 +745,7 @@ const PreencherContrato: React.FC = () => {
             Voltar
         </Button>
         <h1 className="text-2xl md:text-3xl font-bold flex items-center">
-          <FileSignature className="w-6 h-6 mr-2" /> {isEditing ? 'Editar' : 'Gerar'} Contrato: {modelo.titulo}
+          <FileSignature className="w-6 h-6 mr-2" /> {isEditing ? 'Editar Contrato' : 'Preencher Contrato'}: {modelo.titulo}
         </h1>
       </div>
       

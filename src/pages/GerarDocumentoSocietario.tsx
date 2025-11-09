@@ -395,7 +395,7 @@ const GerarDocumentoSocietario: React.FC = () => {
     <LayoutPrincipal>
       <div className="flex items-center mb-6">
         <Button 
-            onClick={() => { navigate('/documentos-societarios/modelos'); }} 
+            onClick={() => { window.location.href = '/contratos';  }} 
             variant="link" 
             type="button"
             className="text-muted-foreground hover:text-primary flex items-center mr-4 p-0 h-auto"
