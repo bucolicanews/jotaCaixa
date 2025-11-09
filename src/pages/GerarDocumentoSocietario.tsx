@@ -24,9 +24,8 @@ interface EmpresaContrato {
     nome: string;
 }
 
-// NOVO TIPO: Cliente do Sistema com todos os campos de tag (ajustado para tbl_clientes)
+// NOVO TIPO: Cliente do Sistema com todos os campos de tag
 interface ClienteSistemaCompleto extends ClienteProfile {
-    // Mantemos os campos opcionais que podem ser preenchidos via mapeamento de tags
     razao_social?: string | null;
     nome_fantasia?: string | null;
     documento?: string | null;
@@ -102,7 +101,6 @@ const GerarDocumentoSocietario: React.FC = () => {
     setBlocos(blocosData as BlocoSocietario[] || []);
     
     // 2. Buscar Clientes (Contratados) - APENAS EMPRESAS DO SISTEMA (tbl_clientes)
-    // Buscando apenas as colunas que realmente existem em tbl_clientes
     const { data: clientesSistemaData, error: errorSistema } = await supabase
         .from('tbl_clientes')
         .select('id, nome, email, cpf, rg, nome_mae, nome_pai, telefone, cep, endereco, numero, complemento, bairro, cidade, estado')
@@ -117,7 +115,6 @@ const GerarDocumentoSocietario: React.FC = () => {
         // Mapeia para o tipo ClienteSistemaCompleto, usando 'nome' como fallback para campos ausentes
         const mappedClients = (clientesSistemaData as any[]).map(c => ({
             ...c,
-            // Campos que não existem em tbl_clientes, mas são necessários para o mapeamento de tags
             razao_social: c.nome, // Usando nome como fallback
             nome_fantasia: c.nome, // Usando nome como fallback
             documento: c.cpf || c.rg, // Usando CPF/RG como documento
@@ -297,6 +294,38 @@ const GerarDocumentoSocietario: React.FC = () => {
     setIsSubmitting(true);
     
     try {
+        // 0. GARANTIR QUE O CLIENTE EXISTA NA TABELA 'clientes' (para FK)
+        if (clienteSelecionado) {
+            const clienteDataParaUpsert = {
+                id: clienteSelecionado.id,
+                proprietario_id: proprietarioContratoId,
+                nome: clienteSelecionado.nome,
+                razao_social: clienteSelecionado.razao_social || clienteSelecionado.nome,
+                nome_fantasia: clienteSelecionado.nome_fantasia || clienteSelecionado.nome,
+                documento: clienteSelecionado.documento || clienteSelecionado.cpf || clienteSelecionado.rg,
+                email: clienteSelecionado.email,
+                telefone: clienteSelecionado.telefone,
+                telefone_fixo: clienteSelecionado.telefone_fixo,
+                cep: clienteSelecionado.cep,
+                endereco: clienteSelecionado.endereco,
+                numero: clienteSelecionado.numero,
+                complemento: clienteSelecionado.complemento,
+                bairro: clienteSelecionado.bairro,
+                cidade: clienteSelecionado.cidade,
+                estado: clienteSelecionado.estado,
+            };
+            
+            // Nota: A tabela 'clientes' tem FKs para tbl_clientes, mas a tabela 'documentos_societarios_gerados'
+            // tem FK para 'clientes'. Precisamos garantir que o cliente exista em 'clientes'.
+            const { error: upsertError } = await supabase
+                .from('clientes')
+                .upsert(clienteDataParaUpsert, { onConflict: 'id' });
+                
+            if (upsertError) {
+                throw new Error('Falha ao garantir a existência do cliente na tabela CR: ' + upsertError.message);
+            }
+        }
+        
         const conteudoRenderizado = renderizarConteudo(modelo.conteudo_template, valoresTags);
         
         const documentoData = {
