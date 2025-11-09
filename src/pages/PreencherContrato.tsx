@@ -537,19 +537,19 @@ const PreencherContrato: React.FC = () => {
             id: clienteSelecionado.id,
             proprietario_id: proprietarioContratoId, // Usando o proprietário do contrato
             nome: clienteSelecionado.nome,
-            email: clienteSelecionado.email,
-            documento: clienteSelecionado.documento,
-            razao_social: clienteSelecionado.razao_social,
-            nome_fantasia: clienteSelecionado.nome_fantasia,
-            telefone: clienteSelecionado.telefone,
-            telefone_fixo: clienteSelecionado.telefone_fixo,
-            cep: clienteSelecionado.cep,
-            endereco: clienteSelecionado.endereco,
-            numero: clienteSelecionado.numero,
-            complemento: clienteSelecionado.complemento,
-            bairro: clienteSelecionado.bairro,
-            cidade: clienteSelecionado.cidade,
-            estado: clienteSelecionado.estado,
+            email: clienteSelecionado.email || null, // Garante que o email seja NULL se vazio
+            documento: clienteSelecionado.documento || null,
+            razao_social: clienteSelecionado.razao_social || null,
+            nome_fantasia: clienteSelecionado.nome_fantasia || null,
+            telefone: clienteSelecionado.telefone || null,
+            telefone_fixo: clienteSelecionado.telefone_fixo || null,
+            cep: clienteSelecionado.cep || null,
+            endereco: clienteSelecionado.endereco || null,
+            numero: clienteSelecionado.numero || null,
+            complemento: clienteSelecionado.complemento || null,
+            bairro: clienteSelecionado.bairro || null,
+            cidade: clienteSelecionado.cidade || null,
+            estado: clienteSelecionado.estado || null,
         };
         
         const { error: upsertError } = await supabase
