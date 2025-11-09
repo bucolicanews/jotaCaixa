@@ -157,7 +157,7 @@ const FormModeloSocietario: React.FC<FormModeloSocietarioProps> = ({ modeloInici
                     </div>
                 </div>
                 
-                {/* Coluna 3: Tags e Blocos Disponíveis */}
+                {/* Coluna 3: Tags e Blocos Disponíveis (REESTRUTURADO) */}
                 <Card className="lg:col-span-1 max-h-[600px] overflow-y-auto">
                     <CardHeader className="p-3 border-b">
                         <CardTitle className="text-sm">Referências (Arraste ou Copie)</CardTitle>
@@ -168,62 +168,72 @@ const FormModeloSocietario: React.FC<FormModeloSocietarioProps> = ({ modeloInici
                     <ScrollArea className="h-[500px]">
                         <CardContent className="p-3 space-y-3">
                             
-                            <h4 className="font-semibold text-sm border-b pb-1">Tags de Cliente/Empresa</h4>
-                            {tagsDisponiveis.map((tag) => (
-                                <div 
-                                    key={tag.id} 
-                                    className="flex flex-col space-y-1 border-b pb-2 last:border-b-0 cursor-grab active:cursor-grabbing"
-                                    draggable
-                                    onDragStart={(e) => handleDragStart(e, tag.nome_tag)}
-                                >
-                                    <div className="flex justify-between items-center">
-                                        <span className="font-mono text-xs font-semibold text-primary">{tag.nome_tag}</span>
-                                        <Button 
-                                            type="button" 
-                                            variant="ghost" 
-                                            size="icon" 
-                                            className="h-6 w-6"
-                                            onClick={() => handleCopyTag(tag.nome_tag)}
+                            {/* Tags e Blocos em Duas Colunas */}
+                            <div className="grid grid-cols-2 gap-3">
+                                
+                                {/* Coluna de Tags */}
+                                <div className="space-y-3 border-r pr-3">
+                                    <h4 className="font-semibold text-sm border-b pb-1">Tags de Cliente/Empresa</h4>
+                                    {tagsDisponiveis.map((tag) => (
+                                        <div 
+                                            key={tag.id} 
+                                            className="flex flex-col space-y-1 border-b pb-2 last:border-b-0 cursor-grab active:cursor-grabbing"
+                                            draggable
+                                            onDragStart={(e) => handleDragStart(e, tag.nome_tag)}
                                         >
-                                            <Copy className="w-3 h-3" />
-                                        </Button>
-                                    </div>
-                                    <p className="text-xs text-muted-foreground flex items-center">
-                                        <Tag className="w-3 h-3 mr-1 text-muted-foreground" />
-                                        {tag.descricao}
-                                    </p>
-                                </div>
-                            ))}
-                            
-                            <h4 className="font-semibold text-sm border-b pb-1 pt-3">Blocos Reutilizáveis</h4>
-                            {blocosTags.length === 0 ? (
-                                <p className="text-xs text-muted-foreground">Nenhum bloco cadastrado.</p>
-                            ) : (
-                                blocosTags.map((bloco) => (
-                                    <div 
-                                        key={bloco.id} 
-                                        className="flex flex-col space-y-1 border-b pb-2 last:border-b-0 cursor-grab active:cursor-grabbing"
-                                        draggable
-                                        onDragStart={(e) => handleDragStart(e, bloco.nome_tag)}
-                                    >
-                                        <div className="flex justify-between items-center">
-                                            <span className="font-mono text-xs font-semibold text-blue-500">{bloco.nome_tag}</span>
-                                            <Button 
-                                                type="button" 
-                                                variant="ghost" 
-                                                size="icon" 
-                                                className="h-6 w-6"
-                                                onClick={() => handleCopyTag(bloco.nome_tag)}
-                                            >
-                                                <Copy className="w-3 h-3" />
-                                            </Button>
+                                            <div className="flex justify-between items-center">
+                                                <span className="font-mono text-xs font-semibold text-primary">{tag.nome_tag}</span>
+                                                <Button 
+                                                    type="button" 
+                                                    variant="ghost" 
+                                                    size="icon" 
+                                                    className="h-6 w-6"
+                                                    onClick={() => handleCopyTag(tag.nome_tag)}
+                                                >
+                                                    <Copy className="w-3 h-3" />
+                                                </Button>
+                                            </div>
+                                            <p className="text-xs text-muted-foreground line-clamp-1">
+                                                <Tag className="w-3 h-3 mr-1 text-muted-foreground" />
+                                                {tag.descricao}
+                                            </p>
                                         </div>
-                                        <p className="text-xs text-muted-foreground line-clamp-1">
-                                            {bloco.descricao}
-                                        </p>
-                                    </div>
-                                ))
-                            )}
+                                    ))}
+                                </div>
+                                
+                                {/* Coluna de Blocos */}
+                                <div className="space-y-3 pl-3">
+                                    <h4 className="font-semibold text-sm border-b pb-1">Blocos Reutilizáveis</h4>
+                                    {blocosTags.length === 0 ? (
+                                        <p className="text-xs text-muted-foreground">Nenhum bloco cadastrado.</p>
+                                    ) : (
+                                        blocosTags.map((bloco) => (
+                                            <div 
+                                                key={bloco.id} 
+                                                className="flex flex-col space-y-1 border-b pb-2 last:border-b-0 cursor-grab active:cursor-grabbing"
+                                                draggable
+                                                onDragStart={(e) => handleDragStart(e, bloco.nome_tag)}
+                                            >
+                                                <div className="flex justify-between items-center">
+                                                    <span className="font-mono text-xs font-semibold text-blue-500">{bloco.nome_tag}</span>
+                                                    <Button 
+                                                        type="button" 
+                                                        variant="ghost" 
+                                                        size="icon" 
+                                                        className="h-6 w-6"
+                                                        onClick={() => handleCopyTag(bloco.nome_tag)}
+                                                    >
+                                                        <Copy className="w-3 h-3" />
+                                                    </Button>
+                                                </div>
+                                                <p className="text-xs text-muted-foreground line-clamp-1">
+                                                    {bloco.descricao}
+                                                </p>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </div>
                         </CardContent>
                     </ScrollArea>
                 </Card>
