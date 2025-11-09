@@ -154,20 +154,20 @@ const FormBlocoSocietario: React.FC<FormBlocoSocietarioProps> = ({ blocoInicial,
                                     draggable
                                     onDragStart={(e) => handleDragStart(e, tag.nome_tag)}
                                 >
-                                    <div className="flex justify-between items-center">
-                                        <span className="font-mono text-xs font-semibold text-primary">{tag.nome_tag}</span>
+                                    <div className="flex justify-between items-start"> {/* Alterado para items-start */}
+                                        <span className="font-mono text-xs font-semibold text-primary break-all pr-2">{tag.nome_tag}</span> {/* Adicionado break-all e pr-2 */}
                                         <Button 
                                             type="button" 
                                             variant="ghost" 
                                             size="icon" 
-                                            className="h-6 w-6"
+                                            className="h-6 w-6 flex-shrink-0"
                                             onClick={() => handleCopyTag(tag.nome_tag)}
                                         >
                                             <Copy className="w-3 h-3" />
                                         </Button>
                                     </div>
                                     <p className="text-xs text-muted-foreground">
-                                        <Tag className="w-3 h-3 mr-1 text-muted-foreground" />
+                                        <Tag className="w-3 h-3 mr-1 text-muted-foreground inline-block align-text-bottom" />
                                         {tag.descricao}
                                     </p>
                                 </div>
