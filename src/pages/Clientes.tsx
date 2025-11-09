@@ -3,7 +3,7 @@ import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Edit, Trash2, PlusCircle, Filter, Building2, CheckCircle, Users as UsersIcon, Mail, PowerOff, Printer, ArrowRight, LogIn } from 'lucide-react';
+import { Loader2, Edit, Trash2, PlusCircle, Filter, Building2, CheckCircle, Users as UsersIcon, Mail, PowerOff, Printer, ArrowRight, LogIn, Undo2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
@@ -140,7 +140,7 @@ const ClientesPage = () => {
     
     const { data: dataEmpresas, error: errorEmpresas } = await supabase
         .from('tbl_clientes')
-        .select('*')
+        .select('*, cliente_id_promovido') // Incluindo cliente_id_promovido
         .order('nome', { ascending: true });
         
     if (errorEmpresas) {
@@ -573,6 +573,42 @@ const ClientesPage = () => {
     }
   };
   
+  // NOVO HANDLER: Despromover Cliente Sistema para Cliente CR
+  const handleDemoteClient = async (cliente: EmpresaSistema) => {
+    if (!window.confirm(`Tem certeza que deseja DESPROMOVER a empresa ${cliente.nome}? Isso removerá o perfil de Cliente do Sistema e o usuário do Auth, se não houver vínculos.`)) return;
+    
+    setCarregandoDados(true);
+    
+    try {
+        // 1. Chamar a função RPC para verificar vínculos e despromover
+        const { data, error: rpcError } = await supabase.rpc('demote_system_client', {
+            p_client_id: cliente.id,
+        });
+        
+        if (rpcError) throw rpcError;
+        
+        // O RPC retorna uma tabela com { success: boolean, message: text }
+        const result = data?.[0];
+        
+        if (result && !result.success) {
+            // Se a despromoção falhou devido a vínculos
+            showError(result.message);
+        } else if (result && result.success) {
+            showSuccess(result.message);
+            // 2. Re-busca os dados
+            buscarDados();
+        } else {
+            showError('Resposta inesperada do servidor.');
+        }
+        
+    } catch (error: any) {
+        console.error('Erro ao despromover cliente:', error);
+        showError('Falha ao despromover cliente: ' + error.message);
+    } finally {
+        setCarregandoDados(false);
+    }
+  };
+  
   // --- Lógica de Filtragem de Empresas do Sistema ---
   const filterEmpresasSistema = (status: 'pendentes' | 'ativos' | 'inativos' | 'avulsos') => {
       
@@ -805,6 +841,9 @@ const ClientesPage = () => {
                         
                         const dataExpiracaoDisplay = dataFimAcesso ? format(dataFimAcesso, 'dd/MM/yyyy') : 'N/A';
                         const planoNome = empresa.plano_id ? planosMap[empresa.plano_id] || 'N/A' : 'N/A';
+                        
+                        // Verifica se o cliente foi promovido de um cliente CR (cliente_id_promovido não é nulo)
+                        const isPromoted = !!(empresa as any).cliente_id_promovido;
 
                         return (
                             <TableRow key={empresa.id} className={cn(!empresa.aprovado && "bg-yellow-500/10", isBlocked && "bg-red-500/10")}>
@@ -822,6 +861,19 @@ const ClientesPage = () => {
                                             className="h-8"
                                         >
                                             <CheckCircle className="h-4 w-4 mr-1" /> Aprovar
+                                        </Button>
+                                    )}
+                                    
+                                    {/* BOTÃO DESPROMOVER (Apenas Admin e se não for o Admin logado) */}
+                                    {isAdmin && empresa.id !== usuario?.id && isPromoted && (
+                                        <Button 
+                                            variant="outline" 
+                                            size="icon" 
+                                            onClick={() => handleDemoteClient(empresa)}
+                                            title="Despromover Cliente (Reverte para CR)"
+                                            disabled={carregandoDados}
+                                        >
+                                            <Undo2 className="h-4 w-4" />
                                         </Button>
                                     )}
                                     
