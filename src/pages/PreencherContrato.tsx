@@ -354,7 +354,6 @@ const PreencherContrato: React.FC = () => {
   }, [modeloId, ownerIdLogado, navigate, role, perfil, usuario, isAdmin, isCliente, contratoId]);
   
   // Efeito 1: Carregamento inicial e verificação de permissão (CORRIGIDO)
-// ✅ CORREÇÃO DEFINITIVA
 useEffect(() => {
   if (carregandoSessao || role === undefined) return;
 
@@ -785,7 +784,7 @@ useEffect(() => {
     <LayoutPrincipal>
       <div className="flex items-center mb-6">
         <Button 
-            onClick={() => navigate(-1)} 
+            onClick={() => navigate('/contratos', { replace: true })} 
             variant="link" 
             type="button"
             className="text-muted-foreground hover:text-primary flex items-center mr-4 p-0 h-auto"
