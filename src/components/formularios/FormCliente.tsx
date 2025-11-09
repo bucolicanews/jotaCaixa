@@ -52,7 +52,7 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
     defaultValues: {
       nome: clienteInicial?.nome || '',
       razao_social: clienteInicial?.razao_social || '',
-      nome_fantasia: clienteInicial?.nome_fantasia || '',
+      nome_fantasia: clienteInicial?.nome_fantasia || '', // ADICIONADO
       documento: clienteInicial?.documento || '',
       email: clienteInicial?.email || '',
       telefone: clienteInicial?.telefone || '',
@@ -102,7 +102,7 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
     const dataToSave = {
       nome: values.nome,
       razao_social: values.razao_social || null,
-      nome_fantasia: values.nome_fantasia || null,
+      nome_fantasia: values.nome_fantasia || null, // SALVANDO NOME FANTASIA
       documento: values.documento || null,
       email: values.email || null,
       telefone: values.telefone || null,

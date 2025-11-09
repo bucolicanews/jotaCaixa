@@ -18,8 +18,8 @@ const FormIdentificacao: React.FC<FormIdentificacaoProps> = ({ control, clienteI
       <TaggedFormField 
           control={control} 
           fieldName="nome" 
-          label="Nome Fantasia / Nome Pessoal" 
-          placeholder="Nome Fantasia ou Nome Completo" 
+          label="Nome Principal / Nome Pessoal" 
+          placeholder="Nome Principal ou Nome Completo" 
           clienteId={clienteId} 
           disabled={isSubmitting}
           isOptional={false}
@@ -28,8 +28,18 @@ const FormIdentificacao: React.FC<FormIdentificacaoProps> = ({ control, clienteI
       />
       <TaggedFormField 
           control={control} 
+          fieldName="nome_fantasia" 
+          label="Nome Fantasia (Opcional)" 
+          placeholder="Nome Fantasia da Empresa" 
+          clienteId={clienteId} 
+          disabled={isSubmitting}
+          tagRefreshKey={tagRefreshKey}
+          onTagToggle={onTagToggle}
+      />
+      <TaggedFormField 
+          control={control} 
           fieldName="razao_social" 
-          label="Razão Social" 
+          label="Razão Social (Opcional)" 
           placeholder="Razão Social da Empresa" 
           clienteId={clienteId} 
           disabled={isSubmitting}
