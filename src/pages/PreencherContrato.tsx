@@ -57,7 +57,7 @@ const PreencherContrato: React.FC = () => {
   
   const [modelo, setModelo] = useState<ContratoModelo | null>(null);
   const [contratoInicial, setContratoInicial] = useState<ContratoGerado | null>(null);
-  const [tagsCustomizadas, setTagsCustomizadas] = useState<ContratoTag[]>([]); // Tags customizadas (sem as padrão)
+  const [tagsCustomizadas, setTagsCustomizadas] = useState<ContratoTag[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [empresasContrato, setEmpresasContrato] = useState<EmpresaContrato[]>([]);
   const [empresaLogada, setEmpresaLogada] = useState<EmpresaLogada | null>(null);
@@ -72,7 +72,7 @@ const PreencherContrato: React.FC = () => {
   const [tipoConteudo, setTipoConteudo] = useState<TipoConteudo>('html'); 
   
   const [clienteSelecionadoId, setClienteSelecionadoId] = useState<string>('');
-  const [valorTotal, setValorTotal] = useState<number>(0); // Inicializado como 0
+  const [valorTotal, setValorTotal] = useState<number>(0);
   
   const [proprietarioContratoId, setProprietarioContratoId] = useState<string | null>(null); 
   
@@ -98,219 +98,6 @@ const PreencherContrato: React.FC = () => {
   const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
   const formatDate = (date: Date) => format(date, 'dd/MM/yyyy');
 
-  // --- FUNÇÃO PRINCIPAL DE BUSCA DE DADOS INICIAIS ---
-  const buscarDados = useCallback(async () => {
-    if (!modeloId || !ownerIdLogado) {
-        setCarregandoDados(false);
-        return;
-    }
-    
-    setCarregandoDados(true);
-    
-    // 1. Buscar Modelo
-    const { data: modeloData, error: modeloError } = await supabase
-        .from('contrato_modelos')
-        .select('*')
-        .eq('id', modeloId)
-        .single();
-        
-    if (modeloError) {
-        showError('Modelo não encontrado ou acesso negado.');
-        navigate('/contratos', { replace: true });
-        return;
-    }
-    setModelo(modeloData as ContratoModelo);
-    
-    // 2. Configurar Empresa Logada (Contratante)
-    let currentEmpresaLogada: EmpresaLogada | null = null;
-    if (isAdmin) {
-        const profile = perfil as AdminProfile;
-        currentEmpresaLogada = {
-            nome: profile.nome,
-            email: profile.email,
-            documento: profile.cnpj || profile.cpf,
-            endereco_completo: `${profile.endereco || ''}, ${profile.numero || ''} ${profile.complemento || ''} - ${profile.bairro || ''}, ${profile.cidade || ''}/${profile.estado || ''}`,
-            cpf: profile.cpf,
-            cnpj: profile.cnpj, // ADICIONADO
-            rg: profile.rg,
-            telefone: profile.telefone,
-            cep: profile.cep,
-            endereco: profile.endereco,
-            numero: profile.numero,
-            complemento: profile.complemento,
-            bairro: profile.bairro,
-            cidade: profile.cidade,
-            estado: profile.estado,
-        };
-    } else if (isCliente) {
-        const profile = perfil as ClienteProfile;
-        currentEmpresaLogada = {
-            nome: profile.nome,
-            email: profile.email,
-            documento: profile.documento || profile.cpf,
-            endereco_completo: `${profile.endereco || ''}, ${profile.numero || ''} ${profile.complemento || ''} - ${profile.bairro || ''}, ${profile.cidade || ''}/${profile.estado || ''}`,
-            cpf: profile.cpf,
-            cnpj: null, // Clientes não têm CNPJ na tabela de perfil
-            rg: profile.rg,
-            telefone: profile.telefone,
-            cep: profile.cep,
-            endereco: profile.endereco,
-            numero: profile.numero,
-            complemento: profile.complemento,
-            bairro: profile.bairro,
-            cidade: profile.cidade,
-            estado: profile.estado,
-        };
-    } else if (role === 'Usuario' && ownerIdLogado) {
-        const { data: empresaData } = await supabase.from('tbl_clientes').select('nome, email, documento, cpf, rg, telefone, cep, endereco, numero, complemento, bairro, cidade, estado').eq('id', ownerIdLogado).single();
-        if (empresaData) {
-            currentEmpresaLogada = {
-                ...empresaData,
-                documento: empresaData.documento || empresaData.cpf,
-                endereco_completo: `${empresaData.endereco || ''}, ${empresaData.numero || ''} ${empresaData.complemento || ''} - ${empresaData.bairro || ''}, ${empresaData.cidade || ''}/${empresaData.estado || ''}`,
-                cnpj: null,
-            };
-        }
-    }
-    setEmpresaLogada(currentEmpresaLogada);
-    
-    // 3. Configurar Empresas Contratantes (Apenas Admin)
-    let initialProprietarioContratoId = ownerIdLogado;
-    if (isAdmin) {
-        const { data: clientesData, error: clientesError } = await supabase
-            .from('tbl_clientes')
-            .select('id, nome')
-            .eq('aprovado', true)
-            .order('nome');
-            
-        if (clientesError) {
-            showError('Erro ao carregar clientes do sistema: ' + clientesError.message);
-        } else {
-            const adminOption: EmpresaContrato = { id: ownerIdLogado, nome: 'Meus Contratos (Admin)' };
-            const allClients = [adminOption, ...(clientesData as EmpresaContrato[])];
-            setEmpresasContrato(allClients);
-            initialProprietarioContratoId = allClients[0].id;
-        }
-    }
-    
-    // 4. Carregar Contrato Inicial (se for edição)
-    if (contratoId) {
-        const { data: contratoData, error: contratoLoadError } = await supabase
-            .from('contratos_gerados')
-            .select('*')
-            .eq('id', contratoId)
-            .single();
-            
-        if (contratoLoadError) {
-            showError('Contrato para edição não encontrado ou acesso negado.');
-            navigate('/contratos', { replace: true });
-            return;
-        }
-        
-        const contrato = contratoData as ContratoGerado;
-        setContratoInicial(contrato);
-        initialProprietarioContratoId = contrato.proprietario_id; // Sobrescreve o ID inicial
-        
-        setClienteSelecionadoId(contrato.cliente_id);
-        setValorTotal(contrato.valor_total); // Define o valor total
-        setValoresTags(contrato.valores_tags_preenchidos || {});
-        
-        const numParcelas = contrato.numero_parcelas;
-        const valorTotalContrato = contrato.valor_total;
-        
-        const isContractOwnerAdmin = contrato.proprietario_id === ownerIdLogado && isAdmin;
-        const tabelaContasReceber = isContractOwnerAdmin ? 'admin_contas_receber' : 'contas_receber';
-        const tabelaParcelas = isContractOwnerAdmin ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
-        
-        // Busca a conta sintética para obter o ID da conta a receber
-        const { data: contaReceberData, error: contaReceberError } = await supabase
-            .from(tabelaContasReceber)
-            .select('id')
-            .eq('contrato_gerado_id', contrato.id)
-            .limit(1)
-            .single();
-            
-        if (contaReceberError && contaReceberError.code !== 'PGRST116') {
-            console.error(`Erro ao buscar conta sintética na tabela ${tabelaContasReceber}:`, contaReceberError);
-        }
-            
-        const contaReceberId = contaReceberData?.id;
-
-        if (contaReceberId) {
-            const { data: primeiraParcela, error: parcelaError } = await supabase
-                .from(tabelaParcelas)
-                .select('valor_parcela, data_vencimento')
-                .eq('conta_receber_id', contaReceberId)
-                .order('numero_parcela', { ascending: true })
-                .limit(1)
-                .single();
-                
-            if (parcelaError && parcelaError.code !== 'PGRST116') {
-                console.error(`Erro ao buscar primeira parcela na tabela ${tabelaParcelas}:`, parcelaError);
-            }
-                
-            if (primeiraParcela) {
-                if (numParcelas === 1) {
-                    setTipoLancamento('unico');
-                    setDataVencimentoUnico(primeiraParcela.data_vencimento ? parseISO(primeiraParcela.data_vencimento) : undefined);
-                    setNumeroParcelas(1);
-                } else {
-                    const valorParcela = primeiraParcela.valor_parcela || 0;
-                    
-                    // Determina se é parcelar ou repetir
-                    if (Math.abs(valorTotalContrato - (valorParcela * numParcelas)) < 0.01) {
-                        setTipoLancamento('parcelar');
-                    } else {
-                        setTipoLancamento('repetir');
-                    }
-                    
-                    setNumeroParcelas(numParcelas);
-                    setDataPrimeiroVencimento(primeiraParcela.data_vencimento ? parseISO(primeiraParcela.data_vencimento) : undefined);
-                    setIntervaloDias(contrato.dia_vencimento_parcela || 30);
-                }
-            } else {
-                // Se a conta sintética existe, mas não tem parcelas (erro de integridade)
-                console.error('LOG: Conta sintética encontrada, mas sem parcelas associadas. Usando dados do contrato.');
-                // Fallback: Usa os dados do contrato para preencher o formulário
-                if (numParcelas === 1) {
-                    setTipoLancamento('unico');
-                    setDataVencimentoUnico(contrato.data_inicio ? parseISO(contrato.data_inicio) : undefined);
-                } else {
-                    setTipoLancamento('parcelar'); // Assume parcelar como padrão para múltiplos
-                    setNumeroParcelas(numParcelas);
-                    setDataPrimeiroVencimento(contrato.data_inicio ? parseISO(contrato.data_inicio) : undefined);
-                    setIntervaloDias(contrato.dia_vencimento_parcela || 30);
-                }
-            }
-        } else {
-            // Se não encontrou a conta a receber (registro ausente)
-            console.error('LOG: Conta sintética não encontrada. Usando dados do contrato.');
-            // Fallback: Usa os dados do contrato para preencher o formulário
-            if (numParcelas === 1) {
-                setTipoLancamento('unico');
-                setDataVencimentoUnico(contrato.data_inicio ? parseISO(contrato.data_inicio) : undefined);
-            } else {
-                setTipoLancamento('parcelar');
-                setNumeroParcelas(numParcelas);
-                setDataPrimeiroVencimento(contrato.data_inicio ? parseISO(contrato.data_inicio) : undefined);
-                setIntervaloDias(contrato.dia_vencimento_parcela || 30);
-            }
-        }
-        
-        setTipoConteudo(contrato.valores_tags_preenchidos?.tipo_conteudo || 'html');
-    } else {
-        // Novo Contrato
-        const isHtmlContent = modeloData?.conteudo_template?.trim().startsWith('<') ?? true;
-        setTipoConteudo(isHtmlContent ? 'html' : 'texto');
-        setValorTotal(0);
-    }
-    
-    setProprietarioContratoId(initialProprietarioContratoId);
-    
-    // A lista de clientes e tags será carregada no próximo useEffect (monitorando proprietarioContratoId)
-    setCarregandoDados(false);
-  }, [modeloId, ownerIdLogado, navigate, role, perfil, usuario, isAdmin, isCliente, contratoId]);
-  
   // --- FUNÇÃO DE BUSCA DE CLIENTES E TAGS DEPENDENTE DO PROPRIETÁRIO ---
   const fetchDependentData = useCallback(async (targetEmpresaId: string) => {
     if (!targetEmpresaId) return;
@@ -326,66 +113,214 @@ const PreencherContrato: React.FC = () => {
         setTagsCustomizadas(tagsData as ContratoTag[]);
     }
     
-    // 2. Buscar Clientes (Contratados)
-    let combinedClients: Cliente[] = [];
-    
-    // Regra 1: Se o proprietário do contrato for o Admin logado ('Meus Contratos (Admin)')
-    if (isAdmin && targetEmpresaId === ownerIdLogado) {
-        // Busca na tbl_clientes onde admin_id é o ID do Admin logado
-        const { data: systemClientsData, error: systemClientsError } = await supabase
-            .from('tbl_clientes')
-            .select('id, nome, email, cpf, rg, nome_mae, nome_pai, telefone, cep, endereco, numero, complemento, bairro, cidade, estado, criado_em')
-            .eq('admin_id', ownerIdLogado) // FILTRO CORRIGIDO
-            .eq('aprovado', true)
-            .order('nome');
-            
-        if (systemClientsError) {
-            showError('Erro ao carregar clientes do sistema: ' + systemClientsError.message);
-        } else if (systemClientsData) {
-            // Mapeamento para o tipo Cliente[]
-            combinedClients = (systemClientsData as any[]).map(sc => ({
-                id: sc.id,
-                proprietario_id: ownerIdLogado, // AJUSTE AQUI
-                nome: sc.nome,
-                razao_social: sc.nome, // Usando nome como fallback
-                nome_fantasia: sc.nome, // Usando nome como fallback
-                documento: sc.cpf || null, 
-                email: sc.email || null,
-                telefone: sc.telefone || null,
-                telefone_fixo: null, 
-                cep: sc.cep || null,
-                endereco: sc.endereco || null,
-                numero: sc.numero || null,
-                complemento: sc.complemento || null,
-                bairro: sc.bairro || null,
-                cidade: sc.cidade || null,
-                estado: sc.estado || null,
-                created_at: sc.criado_em,
-                updated_at: sc.criado_em,
-            }));
-        }
-    } else {
-        // Regra 2: Se o proprietário for um Cliente (ou o Admin selecionou um Cliente), os clientes são da tabela 'clientes' (CR)
-        const { data: clientesCRData, error: _ } = await supabase
-            .from('clientes')
-            .select('*')
-            .eq('proprietario_id', targetEmpresaId); // AJUSTE AQUI
-        if (clientesCRData) {
-            combinedClients.push(...(clientesCRData as Cliente[]));
-        }
+    // 2. Buscar Clientes (Contratados) - Sempre da tabela 'clientes' (CR)
+    const { data: clientesCRData, error: clientesCRError } = await supabase
+        .from('clientes')
+        .select('*')
+        .eq('proprietario_id', targetEmpresaId)
+        .order('nome');
+        
+    if (clientesCRError) {
+        showError('Erro ao carregar clientes de Contas a Receber: ' + clientesCRError.message);
+        setClientes([]);
+        return;
     }
+    
+    let combinedClients = clientesCRData as Cliente[];
     
     combinedClients.sort((a, b) => a.nome.localeCompare(b.nome));
     setClientes(combinedClients);
     
     // Se o cliente selecionado não estiver mais na lista, limpa a seleção
-    if (clienteSelecionadoId && !combinedClients.some(c => c.id === clienteSelecionadoId)) {
-        setClienteSelecionadoId('');
+    // Nota: clienteSelecionadoId é um estado externo, mas é usado aqui para manter a seleção
+    // se o cliente ainda estiver na lista após a mudança de proprietário.
+    // Se o clienteSelecionadoId for definido no contratoInicial, ele será mantido.
+    // Se for um novo contrato, ele será limpo.
+    // Não precisamos limpar aqui, pois o useEffect abaixo lida com a dependência.
+    
+  }, []);
+
+
+  // --- FUNÇÃO PRINCIPAL DE BUSCA DE DADOS INICIAIS ---
+  const buscarDados = useCallback(async () => {
+    if (!modeloId || !ownerIdLogado) {
+        setCarregandoDados(false);
+        return;
     }
     
-  }, [isAdmin, ownerIdLogado, clienteSelecionadoId]);
+    setCarregandoDados(true);
+    
+    try {
+        // 1. Buscar Modelo
+        const { data: modeloData, error: modeloError } = await supabase
+            .from('contrato_modelos')
+            .select('*')
+            .eq('id', modeloId)
+            .single();
+            
+        if (modeloError) {
+            showError('Modelo não encontrado ou acesso negado.');
+            navigate('/contratos', { replace: true });
+            return;
+        }
+        setModelo(modeloData as ContratoModelo);
+        
+        // 2. Configurar Empresa Logada (Contratante)
+        let currentEmpresaLogada: EmpresaLogada | null = null;
+        if (isAdmin) {
+            const profile = perfil as AdminProfile;
+            currentEmpresaLogada = {
+                nome: profile.nome, email: profile.email, documento: profile.cnpj || profile.cpf,
+                endereco_completo: `${profile.endereco || ''}, ${profile.numero || ''} ${profile.complemento || ''} - ${profile.bairro || ''}, ${profile.cidade || ''}/${profile.estado || ''}`,
+                cpf: profile.cpf, cnpj: profile.cnpj, rg: profile.rg, telefone: profile.telefone, cep: profile.cep, endereco: profile.endereco, numero: profile.numero, complemento: profile.complemento, bairro: profile.bairro, cidade: profile.cidade, estado: profile.estado,
+            };
+        } else if (isCliente) {
+            const profile = perfil as ClienteProfile;
+            currentEmpresaLogada = {
+                nome: profile.nome, email: profile.email, documento: profile.documento || profile.cpf,
+                endereco_completo: `${profile.endereco || ''}, ${profile.numero || ''} ${profile.complemento || ''} - ${profile.bairro || ''}, ${profile.cidade || ''}/${profile.estado || ''}`,
+                cpf: profile.cpf, cnpj: null, rg: profile.rg, telefone: profile.telefone, cep: profile.cep, endereco: profile.endereco, numero: profile.numero, complemento: profile.complemento, bairro: profile.bairro, cidade: profile.cidade, estado: profile.estado,
+            };
+        } else if (role === 'Usuario' && ownerIdLogado) {
+            const { data: empresaData } = await supabase.from('tbl_clientes').select('nome, email, documento, cpf, rg, telefone, cep, endereco, numero, complemento, bairro, cidade, estado').eq('id', ownerIdLogado).single();
+            if (empresaData) {
+                currentEmpresaLogada = {
+                    ...empresaData,
+                    documento: empresaData.documento || empresaData.cpf,
+                    endereco_completo: `${empresaData.endereco || ''}, ${empresaData.numero || ''} ${empresaData.complemento || ''} - ${empresaData.bairro || ''}, ${empresaData.cidade || ''}/${empresaData.estado || ''}`,
+                    cnpj: null,
+                };
+            }
+        }
+        setEmpresaLogada(currentEmpresaLogada);
+        
+        // 3. Configurar Empresas Contratantes (Apenas Admin)
+        let initialProprietarioContratoId = ownerIdLogado;
+        if (isAdmin) {
+            const { data: clientesData } = await supabase
+                .from('tbl_clientes')
+                .select('id, nome')
+                .eq('aprovado', true)
+                .order('nome');
+                
+            if (clientesData) {
+                const adminOption: EmpresaContrato = { id: ownerIdLogado, nome: 'Meus Contratos (Admin)' };
+                const allClients = [adminOption, ...(clientesData as EmpresaContrato[])];
+                setEmpresasContrato(allClients);
+                initialProprietarioContratoId = allClients[0].id;
+            }
+        }
+        
+        // 4. Carregar Contrato Inicial (se for edição)
+        if (contratoId) {
+            const { data: contratoData, error: contratoLoadError } = await supabase
+                .from('contratos_gerados')
+                .select('*')
+                .eq('id', contratoId)
+                .single();
+                
+            if (contratoLoadError) {
+                showError('Contrato para edição não encontrado ou acesso negado.');
+                navigate('/contratos', { replace: true });
+                return;
+            }
+            
+            const contrato = contratoData as ContratoGerado;
+            setContratoInicial(contrato);
+            initialProprietarioContratoId = contrato.proprietario_id;
+            
+            setClienteSelecionadoId(contrato.cliente_id);
+            setValorTotal(contrato.valor_total);
+            setValoresTags(contrato.valores_tags_preenchidos || {});
+            
+            const numParcelas = contrato.numero_parcelas;
+            const valorTotalContrato = contrato.valor_total;
+            
+            const isContractOwnerAdmin = contrato.proprietario_id === ownerIdLogado && isAdmin;
+            const tabelaContasReceber = isContractOwnerAdmin ? 'admin_contas_receber' : 'contas_receber';
+            const tabelaParcelas = isContractOwnerAdmin ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
+            
+            // Busca a conta sintética para obter o ID da conta a receber
+            const { data: contaReceberData } = await supabase
+                .from(tabelaContasReceber)
+                .select('id')
+                .eq('contrato_gerado_id', contrato.id)
+                .limit(1)
+                .single();
+                
+            const contaReceberId = contaReceberData?.id;
 
-
+            if (contaReceberId) {
+                const { data: primeiraParcela } = await supabase
+                    .from(tabelaParcelas)
+                    .select('valor_parcela, data_vencimento')
+                    .eq('conta_receber_id', contaReceberId)
+                    .order('numero_parcela', { ascending: true })
+                    .limit(1)
+                    .single();
+                    
+                if (primeiraParcela) {
+                    if (numParcelas === 1) {
+                        setTipoLancamento('unico');
+                        setDataVencimentoUnico(primeiraParcela.data_vencimento ? parseISO(primeiraParcela.data_vencimento) : undefined);
+                        setNumeroParcelas(1);
+                    } else {
+                        const valorParcela = primeiraParcela.valor_parcela || 0;
+                        
+                        if (Math.abs(valorTotalContrato - (valorParcela * numParcelas)) < 0.01) {
+                            setTipoLancamento('parcelar');
+                        } else {
+                            setTipoLancamento('repetir');
+                        }
+                        
+                        setNumeroParcelas(numParcelas);
+                        setDataPrimeiroVencimento(primeiraParcela.data_vencimento ? parseISO(primeiraParcela.data_vencimento) : undefined);
+                        setIntervaloDias(contrato.dia_vencimento_parcela || 30);
+                    }
+                } else {
+                    // Fallback: Usa os dados do contrato para preencher o formulário
+                    if (numParcelas === 1) {
+                        setTipoLancamento('unico');
+                        setDataVencimentoUnico(contrato.data_inicio ? parseISO(contrato.data_inicio) : undefined);
+                    } else {
+                        setTipoLancamento('parcelar');
+                        setNumeroParcelas(numParcelas);
+                        setDataPrimeiroVencimento(contrato.data_inicio ? parseISO(contrato.data_inicio) : undefined);
+                        setIntervaloDias(contrato.dia_vencimento_parcela || 30);
+                    }
+                }
+            } else {
+                // Fallback: Usa os dados do contrato para preencher o formulário
+                if (numParcelas === 1) {
+                    setTipoLancamento('unico');
+                    setDataVencimentoUnico(contrato.data_inicio ? parseISO(contrato.data_inicio) : undefined);
+                } else {
+                    setTipoLancamento('parcelar');
+                    setNumeroParcelas(numParcelas);
+                    setDataPrimeiroVencimento(contrato.data_inicio ? parseISO(contrato.data_inicio) : undefined);
+                    setIntervaloDias(contrato.dia_vencimento_parcela || 30);
+                }
+            }
+            
+            setTipoConteudo(contrato.valores_tags_preenchidos?.tipo_conteudo || 'html');
+        } else {
+            // Novo Contrato
+            const isHtmlContent = modeloData?.conteudo_template?.trim().startsWith('<') ?? true;
+            setTipoConteudo(isHtmlContent ? 'html' : 'texto');
+            setValorTotal(0);
+        }
+        
+        setProprietarioContratoId(initialProprietarioContratoId);
+        
+    } catch (error) {
+        console.error('Erro fatal em buscarDados:', error);
+        showError('Erro fatal ao carregar dados iniciais.');
+    } finally {
+        setCarregandoDados(false);
+    }
+  }, [modeloId, ownerIdLogado, navigate, role, perfil, usuario, isAdmin, isCliente, contratoId]);
+  
+  // Efeito 1: Carregamento inicial
   useEffect(() => {
     if (!carregandoSessao && (isAdmin || isCliente || (role === 'Usuario' && ownerIdLogado))) {
       buscarDados();
@@ -394,7 +329,7 @@ const PreencherContrato: React.FC = () => {
     }
   }, [carregandoSessao, isAdmin, isCliente, role, ownerIdLogado, buscarDados, navigate]);
   
-  // Efeito para monitorar a mudança do proprietário do contrato (proprietarioContratoId)
+  // Efeito 2: Monitorar a mudança do proprietário do contrato (proprietarioContratoId)
   useEffect(() => {
       if (proprietarioContratoId) {
           fetchDependentData(proprietarioContratoId);
@@ -644,12 +579,12 @@ const PreencherContrato: React.FC = () => {
             cliente_id: clienteSelecionadoId,
             proprietario_id: proprietarioContratoId, // RENOMEADO: empresa_id -> proprietario_id
             status: 'pendente_assinatura',
-            valor_total: valorFinalContrato,
             data_inicio: format(new Date(), 'yyyy-MM-dd'), 
             numero_parcelas: numParcelas,
             dia_vencimento_parcela: tipoLancamento === 'unico' ? null : intervaloDias, 
             valores_tags_preenchidos: { ...valoresTags, tipo_conteudo: tipoConteudo }, 
             conteudo_renderizado: conteudoRenderizado,
+            valor_total: valorFinalContrato, // Movido para o final
         };
         
         let contratoGeradoId: string;
