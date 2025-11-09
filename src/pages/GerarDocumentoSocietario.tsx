@@ -355,7 +355,8 @@ const GerarDocumentoSocietario: React.FC = () => {
         if (error) throw error;
 
         showSuccess(`Documento '${tituloDocumento}' gerado e salvo com sucesso!`);
-        navigate('/documentos-societarios');
+        // ALTERAÇÃO AQUI: Usando window.location.href
+        window.location.href = '/documentos-societarios';
         
     } catch (error: any) {
         console.error('Erro ao salvar documento:', error);
@@ -395,7 +396,7 @@ const GerarDocumentoSocietario: React.FC = () => {
     <LayoutPrincipal>
       <div className="flex items-center mb-6">
         <Button 
-            onClick={() => { window.location.href = '/contratos';  }} 
+            onClick={() => { window.location.href = '/documentos-societarios';  }} 
             variant="link" 
             type="button"
             className="text-muted-foreground hover:text-primary flex items-center mr-4 p-0 h-auto"
