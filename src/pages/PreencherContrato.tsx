@@ -818,6 +818,28 @@ const PreencherContrato: React.FC = () => {
         </h1>
       </div>
       
+      {/* DUPLICATE BUTTONS FOR TOP NAVIGATION */}
+      <div className="flex flex-col sm:flex-row gap-4 mb-6">
+          <Button 
+              onClick={handlePreview} 
+              variant="outline"
+              className="flex-1 h-12"
+              disabled={!modelo || !clienteSelecionadoId || valorTotal <= 0}
+          >
+              <Eye className="mr-2 h-4 w-4" />
+              Pré-visualizar Contrato
+          </Button>
+          <Button 
+              onClick={handleSalvarContrato} 
+              className="flex-1 h-12"
+              disabled={isSubmitting || !clienteSelecionadoId || valorTotal <= 0}
+          >
+              {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+              {isEditing ? 'Salvar Edição e Reajustar Contas' : 'Salvar e Gerar Contas a Receber'}
+          </Button>
+      </div>
+      {/* END DUPLICATE BUTTONS */}
+      
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         <Card className="lg:col-span-1 h-fit">
