@@ -746,14 +746,14 @@ const PreencherContrato: React.FC = () => {
 
         showSuccess(`Contrato ${isEditing ? 'atualizado' : 'gerado'} e contas a receber ${isEditing ? 'reajustadas' : 'criadas'}!`);
         
-        // CORREÇÃO CRÍTICA: Limpa o estado de submissão e navega
-        setIsSubmitting(false);
-        navigate('/contratos', { replace: true });
+        // REMOVENDO A NAVEGAÇÃO FORÇADA AQUI
+        // navigate('/contratos', { replace: true });
         
     } catch (error: any) {
         console.error('Erro ao salvar contrato:', error);
         showError('Falha ao salvar contrato e gerar contas: ' + error.message);
-        setIsSubmitting(false); // Garante que o botão seja reativado em caso de erro
+    } finally {
+        setIsSubmitting(false);
     }
   };
   
@@ -818,7 +818,7 @@ const PreencherContrato: React.FC = () => {
     <LayoutPrincipal>
       <div className="flex items-center mb-6">
         <Button 
-            onClick={() => { navigate('/contratos'); }} 
+            onClick={() => { navigate(-1); }} // CORREÇÃO AQUI: Usando navigate(-1)
             variant="link" 
             type="button"
             className="text-muted-foreground hover:text-primary flex items-center mr-4 p-0 h-auto"
