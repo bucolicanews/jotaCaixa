@@ -745,9 +745,7 @@ const PreencherContrato: React.FC = () => {
         if (parcelError) throw parcelError;
 
         showSuccess(`Contrato ${isEditing ? 'atualizado' : 'gerado'} e contas a receber ${isEditing ? 'reajustadas' : 'criadas'}!`);
-        
-        // REMOVENDO A NAVEGAÇÃO FORÇADA AQUI
-        // navigate('/contratos', { replace: true });
+        navigate('/contratos');
         
     } catch (error: any) {
         console.error('Erro ao salvar contrato:', error);
@@ -756,17 +754,6 @@ const PreencherContrato: React.FC = () => {
         setIsSubmitting(false);
     }
   };
-  
-  // --- Handlers de Atalho de Data ---
-  const handleSetDate = (days: number) => {
-    const newDate = addDays(new Date(), days);
-    if (tipoLancamento === 'unico') {
-        setDataVencimentoUnico(newDate);
-    } else {
-        setDataPrimeiroVencimento(newDate);
-    }
-  };
-  // ---------------------------------
 
   if (carregandoSessao || carregandoDados) {
     return (
@@ -818,7 +805,7 @@ const PreencherContrato: React.FC = () => {
     <LayoutPrincipal>
       <div className="flex items-center mb-6">
         <Button 
-            onClick={() => { navigate(-1); }} // CORREÇÃO AQUI: Usando navigate(-1)
+            onClick={() => { window.location.href = '/contratos'; }} 
             variant="link" 
             type="button"
             className="text-muted-foreground hover:text-primary flex items-center mr-4 p-0 h-auto"
@@ -830,15 +817,6 @@ const PreencherContrato: React.FC = () => {
           <FileSignature className="w-6 h-6 mr-2" /> {isEditing ? 'Editar Contrato' : 'Preencher Contrato'}: {modelo.titulo}
         </h1>
       </div>
-      
-      {/* Botões de Atalho de Data (Topo) */}
-      <Card className="mb-6">
-        <CardHeader className="pb-2"><CardTitle className="text-lg">Atalhos de Data</CardTitle></CardHeader>
-        <CardContent className="flex space-x-4">
-            <Button variant="secondary" onClick={() => handleSetDate(0)}>Hoje</Button>
-            <Button variant="secondary" onClick={() => handleSetDate(30)}>30 Dias</Button>
-        </CardContent>
-      </Card>
       
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
