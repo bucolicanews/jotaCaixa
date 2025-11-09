@@ -251,6 +251,28 @@ const GerarDocumentoSocietario: React.FC = () => {
         </h1>
       </div>
       
+      {/* DUPLICATE BUTTONS FOR TOP NAVIGATION */}
+      <div className="flex flex-col sm:flex-row gap-4 mb-6">
+          <Button 
+              onClick={handlePreview} 
+              variant="outline"
+              className="flex-1 h-12"
+              disabled={!modelo || !clienteSelecionadoId || !tituloDocumento}
+          >
+              <Eye className="mr-2 h-4 w-4" />
+              Pré-visualizar Documento
+          </Button>
+          <Button 
+              onClick={handleSalvarDocumento} 
+              className="flex-1 h-12"
+              disabled={isSubmitting || !clienteSelecionadoId || !tituloDocumento}
+          >
+              {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+              Salvar Documento Finalizado
+          </Button>
+      </div>
+      {/* END DUPLICATE BUTTONS */}
+      
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         <Card className="lg:col-span-1 h-fit">
@@ -324,25 +346,7 @@ const GerarDocumentoSocietario: React.FC = () => {
             </CardContent>
         </Card>
         
-        <div className="lg:col-span-3 flex flex-col sm:flex-row gap-4">
-            <Button 
-                onClick={handlePreview} 
-                variant="outline"
-                className="flex-1 h-12"
-                disabled={!modelo || !clienteSelecionadoId || !tituloDocumento}
-            >
-                <Eye className="mr-2 h-4 w-4" />
-                Pré-visualizar Documento
-            </Button>
-            <Button 
-                onClick={handleSalvarDocumento} 
-                className="flex-1 h-12"
-                disabled={isSubmitting || !clienteSelecionadoId || !tituloDocumento}
-            >
-                {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                Salvar Documento Finalizado
-            </Button>
-        </div>
+        {/* REMOVIDO: Botões duplicados no final da página */}
         
       </div>
       
