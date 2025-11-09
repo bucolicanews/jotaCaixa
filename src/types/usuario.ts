@@ -43,6 +43,7 @@ export interface ClienteProfile {
   
   // Campos cadastrais adicionados para tags de contrato (Erro 8)
   cpf?: string | null;
+  cnpj?: string | null; // NOVO CAMPO
   rg?: string | null;
   nome_mae?: string | null;
   nome_pai?: string | null;
