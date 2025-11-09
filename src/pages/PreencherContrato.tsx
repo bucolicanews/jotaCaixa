@@ -315,7 +315,7 @@ const PreencherContrato: React.FC = () => {
   const fetchDependentData = useCallback(async (targetEmpresaId: string) => {
     if (!targetEmpresaId) return;
     
-    // 1. Buscar Tags Customizadas
+    // 1. Buscar Tags Customizadas ATIVAS
     const { data: tagsData } = await supabase
         .from('contrato_tags')
         .select('*')
@@ -419,29 +419,30 @@ const PreencherContrato: React.FC = () => {
         primeiroVencimento = dataPrimeiroVencimento;
     }
     
-    // Combina tags padrão e customizadas para iteração
+    // Combina tags padrão e customizadas ativas
     const allActiveTags = [...TAGS_PADRAO, ...tagsCustomizadas];
 
     allActiveTags.forEach(tag => {
         const tagKey = tag.nome_tag;
+        let tagValue: string | null = null;
         
         // 1. Tenta preencher tags financeiras (TAGS_PADRAO)
         switch (tagKey) {
             case '{{VALOR_TOTAL_CONTRATO}}':
-                newTags[tagKey] = formatCurrency(valorFinalContrato);
-                return;
+                tagValue = formatCurrency(valorFinalContrato);
+                break;
             case '{{VALOR_PARCELA}}':
-                newTags[tagKey] = formatCurrency(valorParcela);
-                return;
+                tagValue = formatCurrency(valorParcela);
+                break;
             case '{{NUMERO_PARCELAS}}':
-                newTags[tagKey] = String(numParcelas);
-                return;
+                tagValue = String(numParcelas);
+                break;
             case '{{PRIMEIRO_VENCIMENTO}}':
-                newTags[tagKey] = primeiroVencimento ? formatDate(primeiroVencimento) : 'N/A';
-                return;
+                tagValue = primeiroVencimento ? formatDate(primeiroVencimento) : 'N/A';
+                break;
             case '{{DATA_EMISSAO}}':
-                newTags[tagKey] = formatDate(new Date());
-                return;
+                tagValue = formatDate(new Date());
+                break;
         }
         
         // 2. Tenta preencher tags de sistema (EMPRESA_NOME, CLIENTE_NOME, etc.)
@@ -452,8 +453,7 @@ const PreencherContrato: React.FC = () => {
             if (sourceTable === 'tbl_clientes' || sourceTable === 'tbl_admins') {
                 const empresaData = empresaLogada as any;
                 if (empresaData && empresaData[sourceField]) {
-                    newTags[tagKey] = String(empresaData[sourceField]);
-                    return;
+                    tagValue = String(empresaData[sourceField]);
                 }
             } 
             
@@ -461,24 +461,26 @@ const PreencherContrato: React.FC = () => {
             else if (sourceTable === 'clientes' && cliente) {
                 const clienteData = cliente as any;
                 if (clienteData && clienteData[sourceField]) {
-                    newTags[tagKey] = String(clienteData[sourceField]);
-                    return;
+                    tagValue = String(clienteData[sourceField]);
                 }
             } 
             
             // Mapeamento de dados do Usuário (Funcionário) - Se a tag for USUARIO_*
             else if (sourceTable === 'tbl_usuarios' && perfil && 'cliente_id' in perfil) {
-                // Se o usuário logado for um funcionário, usa os dados dele
                 const usuarioData = perfil as UsuarioProfile;
                 if (usuarioData && (usuarioData as any)[sourceField]) {
-                    newTags[tagKey] = String((usuarioData as any)[sourceField]);
-                    return;
+                    tagValue = String((usuarioData as any)[sourceField]);
                 }
             }
         }
         
-        // 3. Se não for preenchida automaticamente, usa o valor salvo anteriormente (se edição) ou o valor digitado.
-        newTags[tagKey] = valoresTags[tagKey] || '';
+        // 3. Se o valor foi preenchido automaticamente, usa-o.
+        if (tagValue !== null) {
+            newTags[tagKey] = tagValue;
+        } else {
+            // 4. Caso contrário, usa o valor salvo anteriormente (se edição) ou o valor digitado.
+            newTags[tagKey] = valoresTags[tagKey] || '';
+        }
     });
     
     setValoresTags(newTags);
@@ -767,29 +769,28 @@ const PreencherContrato: React.FC = () => {
   
   // Filtra tags que já foram preenchidas automaticamente (para não pedir valor manual)
   const tagsParaPreenchimentoManual = tagsCustomizadasECliente.filter(tag => {
+      // Tags financeiras e tags de empresa logada (EMPRESA_*) são sempre preenchidas automaticamente
+      if (TAGS_PADRAO.some(t => t.nome_tag === tag.nome_tag && t.origem_dado?.startsWith('contas_receber'))) {
+          return false;
+      }
+      if (TAGS_PADRAO.some(t => t.nome_tag === tag.nome_tag && t.origem_dado?.startsWith('tbl_clientes'))) {
+          return false;
+      }
+      if (TAGS_PADRAO.some(t => t.nome_tag === tag.nome_tag && t.origem_dado?.startsWith('tbl_admins'))) {
+          return false;
+      }
+      
       // Se a tag tem origem de dado e o valor foi preenchido automaticamente, não precisa de input manual
       if (tag.origem_dado && valoresTags[tag.nome_tag]) {
           return false;
       }
-      // Se a tag é uma tag de usuário (USUARIO_*) e não foi preenchida, precisa de input manual
-      if (tag.nome_tag.startsWith('{{USUARIO_')) {
-          return true;
-      }
-      // Se a tag é customizada e não tem origem de dado, precisa de input manual
-      if (!tag.origem_dado && !TAGS_PADRAO.some(t => t.nome_tag === tag.nome_tag)) {
-          return true;
-      }
-      // Se a tag é de cliente (CLIENTE_*) e não foi preenchida, precisa de input manual
-      if (tag.nome_tag.startsWith('{{CLIENTE_') && !valoresTags[tag.nome_tag]) {
+      
+      // Se a tag é customizada ou de cliente (CLIENTE_*) e não foi preenchida, precisa de input manual
+      if (tag.nome_tag.startsWith('{{CLIENTE_') || !tag.origem_dado) {
           return true;
       }
       
-      // Tags financeiras e tags de empresa logada (EMPRESA_*) são sempre preenchidas automaticamente
-      if (TAGS_PADRAO.some(t => t.nome_tag === tag.nome_tag)) {
-          return false;
-      }
-      
-      return true;
+      return false;
   });
 
   return (
