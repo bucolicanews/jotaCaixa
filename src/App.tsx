@@ -3,7 +3,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, useSearchParams, useNavigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useSearchParams, useNavigate, useParams } from "react-router-dom";
 import { SessionProvider } from "@/contexts/SessionContext";
 import NotFound from "./pages/NotFound";
 import Login from "./pages/Login";
@@ -47,6 +47,19 @@ import SiteLayout from "./components/SiteLayout"; // Importando SiteLayout
 import Index from "./pages/Index"; // Importando Index (que agora é a LandingPage)
 
 const queryClient = new QueryClient();
+
+// Componente Wrapper para extrair parâmetros e passar como key
+const PreencherContratoWrapper = () => {
+    const { modeloId } = useParams<{ modeloId: string }>();
+    const [searchParams] = useSearchParams();
+    const contratoId = searchParams.get('contratoId');
+    
+    // A chave força a remontagem do componente quando os parâmetros mudam
+    const key = `${modeloId}-${contratoId || 'new'}`;
+    
+    return <PreencherContrato key={key} />;
+};
+
 
 // Componente para lidar com o redirecionamento pós-pagamento de ADESÃO
 const PaymentSuccessHandler = () => {
@@ -245,7 +258,8 @@ const App = () => (
             <Route path="/contratos/tags" element={<GerenciarTags />} />
             <Route path="/contratos/modelos" element={<GerenciarModelos />} />
             <Route path="/contratos/novo" element={<NovoContrato />} />
-            <Route path="/contratos/preencher/:modeloId" element={<PreencherContrato />} />
+            {/* Usando o Wrapper para forçar a remontagem */}
+            <Route path="/contratos/preencher/:modeloId" element={<PreencherContratoWrapper />} />
             <Route path="/minha-assinatura" element={<MinhaAssinatura />} />
             <Route path="/renovacao" element={<SelecaoPagamentoRenovacao />} />
             <Route path="/historicos" element={<GerenciarHistoricos />} />
