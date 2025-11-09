@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -10,7 +10,7 @@ import { Loader2, Copy, Eye, X, Tag } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { ContratoModelo, ContratoTag } from '@/types/contratos';
-import { TAGS_FINANCEIRAS_OBRIGATORIAS } from '@/config/contrato-tags-padrao';
+import { TAGS_PADRAO } from '@/config/contrato-tags-padrao'; // Importando TAGS_PADRAO
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import ModeloPreviewDialog from '../ModeloPreviewDialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
@@ -34,7 +34,7 @@ interface FormContratoModeloProps {
 const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, onSaveComplete }) => {
   const isEditing = !!modeloInicial;
   const [previewOpen, setPreviewOpen] = useState(false);
-  const [tagsAtivas, setTagsAtivas] = useState<ContratoTag[]>(TAGS_FINANCEIRAS_OBRIGATORIAS);
+  const [tagsCustomizadas, setTagsCustomizadas] = useState<ContratoTag[]>([]);
   const [carregandoTags, setCarregandoTags] = useState(true);
   const { role, perfil, usuario } = useSessao();
   // Tipagem explícita para MutableRefObject
@@ -66,7 +66,7 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
         query = query.eq('empresa_id', ownerId);
     } else {
         // Se não houver ownerId (ex: Usuário não vinculado), mostra apenas padrão
-        setTagsAtivas(TAGS_FINANCEIRAS_OBRIGATORIAS);
+        setTagsCustomizadas([]);
         setCarregandoTags(false);
         return;
     }
@@ -75,12 +75,10 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
 
     if (error) {
       showError('Erro ao carregar tags customizadas: ' + error.message);
-      setTagsAtivas(TAGS_FINANCEIRAS_OBRIGATORIAS);
+      setTagsCustomizadas([]);
     } else {
-      // Combina tags financeiras obrigatórias com as tags customizadas ativas
-      const customTags = data as ContratoTag[];
-      const combinedTags = [...TAGS_FINANCEIRAS_OBRIGATORIAS, ...customTags];
-      setTagsAtivas(combinedTags);
+      // A lista de tags customizadas é separada das tags padrão
+      setTagsCustomizadas(data as ContratoTag[]);
     }
     setCarregandoTags(false);
   }, [ownerId]);
@@ -88,6 +86,29 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
   useEffect(() => {
       buscarTagsAtivas();
   }, [buscarTagsAtivas]);
+  
+  // Combina TAGS_PADRAO (sistema + financeiras) com as tags customizadas do usuário
+  const allAvailableTags = useMemo(() => {
+      const customTagsMap = tagsCustomizadas.reduce((acc, tag) => {
+          acc[tag.nome_tag] = tag;
+          return acc;
+      }, {} as Record<string, ContratoTag>);
+      
+      // Adiciona todas as TAGS_PADRAO e sobrescreve com as customizadas se houver conflito
+      const combined = [...TAGS_PADRAO, ...tagsCustomizadas];
+      
+      // Remove duplicatas e ordena
+      const uniqueTags = Array.from(new Set(combined.map(t => t.nome_tag)))
+          .map(tagKey => {
+              const customTag = customTagsMap[tagKey];
+              const defaultTag = TAGS_PADRAO.find(t => t.nome_tag === tagKey);
+              return customTag || defaultTag;
+          })
+          .filter((t): t is ContratoTag => !!t)
+          .sort((a, b) => a.nome_tag.localeCompare(b.nome_tag));
+          
+      return uniqueTags;
+  }, [tagsCustomizadas]);
 
 
   const form = useForm<FormValues>({
@@ -152,7 +173,8 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
   };
   
   const handleCopyAllTags = () => {
-      const allTags = tagsAtivas.map(t => t.nome_tag).join(' ');
+      // Corrigido: Tipagem explícita para 't'
+      const allTags = allAvailableTags.map((t: ContratoTag) => t.nome_tag).join(' ');
       navigator.clipboard.writeText(allTags);
       showSuccess('Todas as tags ativas copiadas!');
   };
@@ -280,7 +302,7 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
                       <CardTitle className="text-sm">Tags Ativas (Arraste para o Template)</CardTitle>
                       {/* 2. Botões de Tags: Empilha em mobile */}
                       <div className="flex flex-col sm:flex-row gap-2 mt-2"> 
-                          <Button type="button" variant="outline" size="sm" onClick={handleCopyAllTags} disabled={tagsAtivas.length === 0} className="w-full">
+                          <Button type="button" variant="outline" size="sm" onClick={handleCopyAllTags} disabled={allAvailableTags.length === 0} className="w-full">
                               <Copy className="w-3 h-3 mr-1" /> Copiar Todas
                           </Button>
                           <Button type="button" variant="destructive" size="sm" onClick={handleClearTemplate} className="w-full">
@@ -292,7 +314,8 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
                       {carregandoTags ? (
                           <div className="flex justify-center items-center h-20"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>
                       ) : (
-                          tagsAtivas.map(tag => (
+                          // Corrigido: Tipagem explícita para 'tag'
+                          allAvailableTags.map((tag: ContratoTag) => (
                               <div 
                                   key={tag.id} 
                                   className="flex flex-col space-y-1 border-b pb-2 last:border-b-0 cursor-grab active:cursor-grabbing"
