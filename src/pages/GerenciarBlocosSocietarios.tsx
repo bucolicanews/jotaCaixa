@@ -82,7 +82,7 @@ const FormBlocoSocietario: React.FC<FormBlocoSocietarioProps> = ({ blocoInicial,
             const textarea = textareaRef.current;
             const start = textarea.selectionStart;
             const end = textarea.selectionEnd;
-            const currentValue = textarea.value;
+            const currentValue = conteudo;
             
             const newValue = currentValue.substring(0, start) + tag + currentValue.substring(end);
             setConteudo(newValue);
@@ -166,7 +166,7 @@ const FormBlocoSocietario: React.FC<FormBlocoSocietarioProps> = ({ blocoInicial,
                                             <Copy className="w-3 h-3" />
                                         </Button>
                                     </div>
-                                    <p className="text-xs text-muted-foreground flex items-center">
+                                    <p className="text-xs text-muted-foreground line-clamp-2">
                                         <Tag className="w-3 h-3 mr-1 text-muted-foreground" />
                                         {tag.descricao}
                                     </p>
