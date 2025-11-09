@@ -445,11 +445,11 @@ const PreencherContrato: React.FC = () => {
                 break;
         }
         
-        // 2. Tenta preencher tags de sistema (EMPRESA_NOME, CLIENTE_NOME, etc.)
+        // 2. Tenta preencher tags de sistema (EMPRESA_NOME, CLIENTE_NOME, USUARIO_NOME, etc.)
         if (tag.origem_dado) {
             const [sourceTable, sourceField] = tag.origem_dado.split('.');
             
-            // Mapeamento de dados da Empresa Logada (Contratada)
+            // Mapeamento de dados da Empresa Logada (Contratada) - tbl_clientes / tbl_admins
             if (sourceTable === 'tbl_clientes' || sourceTable === 'tbl_admins') {
                 const empresaData = empresaLogada as any;
                 if (empresaData && empresaData[sourceField]) {
@@ -457,7 +457,7 @@ const PreencherContrato: React.FC = () => {
                 }
             } 
             
-            // Mapeamento de dados do Cliente Selecionado (Contratante)
+            // Mapeamento de dados do Cliente Selecionado (Contratante) - clientes
             else if (sourceTable === 'clientes' && cliente) {
                 const clienteData = cliente as any;
                 if (clienteData && clienteData[sourceField]) {
@@ -465,11 +465,19 @@ const PreencherContrato: React.FC = () => {
                 }
             } 
             
-            // Mapeamento de dados do Usuário (Funcionário) - Se a tag for USUARIO_*
+            // Mapeamento de dados do Usuário (Funcionário) - tbl_usuarios
             else if (sourceTable === 'tbl_usuarios' && perfil && 'cliente_id' in perfil) {
                 const usuarioData = perfil as UsuarioProfile;
                 if (usuarioData && (usuarioData as any)[sourceField]) {
-                    tagValue = String((usuarioData as any)[sourceField]);
+                    // Formatação especial para valores numéricos/data
+                    if (sourceField.includes('salario') || sourceField.includes('horas')) {
+                        tagValue = String((usuarioData as any)[sourceField] || 'N/A');
+                    } else if (sourceField.includes('data')) {
+                        const dateValue = (usuarioData as any)[sourceField];
+                        tagValue = dateValue ? formatDate(parseISO(dateValue)) : 'N/A';
+                    } else {
+                        tagValue = String((usuarioData as any)[sourceField] || 'N/A');
+                    }
                 }
             }
         }
@@ -786,7 +794,7 @@ const PreencherContrato: React.FC = () => {
       }
       
       // Se a tag é customizada ou de cliente (CLIENTE_*) e não foi preenchida, precisa de input manual
-      if (tag.nome_tag.startsWith('{{CLIENTE_') || !tag.origem_dado) {
+      if (tag.nome_tag.startsWith('{{CLIENTE_') || tag.nome_tag.startsWith('{{USUARIO_') || !tag.origem_dado) {
           return true;
       }
       

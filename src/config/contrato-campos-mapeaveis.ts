@@ -4,6 +4,7 @@ import { ContratoTag } from "@/types/contratos";
 export const CAMPOS_CLIENTE_MAPA: { field: string, label: string, tag: string }[] = [
     { field: 'nome', label: 'Nome Fantasia / Pessoal', tag: '{{CLIENTE_NOME}}' },
     { field: 'razao_social', label: 'Razão Social', tag: '{{CLIENTE_RAZAO_SOCIAL}}' },
+    { field: 'nome_fantasia', label: 'Nome Fantasia', tag: '{{CLIENTE_NOME_FANTASIA}}' },
     { field: 'documento', label: 'Documento (CPF/CNPJ)', tag: '{{CLIENTE_DOCUMENTO}}' },
     { field: 'email', label: 'Email', tag: '{{CLIENTE_EMAIL}}' },
     { field: 'telefone', label: 'Telefone Principal', tag: '{{CLIENTE_TELEFONE}}' },
@@ -15,14 +16,16 @@ export const CAMPOS_CLIENTE_MAPA: { field: string, label: string, tag: string }[
     { field: 'bairro', label: 'Bairro', tag: '{{CLIENTE_BAIRRO}}' },
     { field: 'cidade', label: 'Cidade', tag: '{{CLIENTE_CIDADE}}' },
     { field: 'estado', label: 'Estado (UF)', tag: '{{CLIENTE_ESTADO}}' },
-    // Novos mapeamentos para CPF e CNPJ
     { field: 'cpf', label: 'CPF', tag: '{{CLIENTE_CPF}}' },
     { field: 'cnpj', label: 'CNPJ', tag: '{{CLIENTE_CNPJ}}' },
     { field: 'rg', label: 'RG', tag: '{{CLIENTE_RG}}' },
+    // Adicionando campos de data (se existirem na tabela clientes)
+    { field: 'data_nascimento', label: 'Data de Nascimento/Abertura', tag: '{{CLIENTE_DATA_NASCIMENTO}}' },
 ];
 
 export const CAMPOS_USUARIO_MAPA: { field: string, label: string, tag: string }[] = [
     { field: 'nome', label: 'Nome Completo', tag: '{{USUARIO_NOME}}' },
+    { field: 'email', label: 'Email', tag: '{{USUARIO_EMAIL}}' },
     { field: 'cpf', label: 'CPF', tag: '{{USUARIO_CPF}}' },
     { field: 'rg', label: 'RG', tag: '{{USUARIO_RG}}' },
     { field: 'nome_mae', label: 'Nome da Mãe', tag: '{{USUARIO_NOME_MAE}}' },
@@ -35,6 +38,11 @@ export const CAMPOS_USUARIO_MAPA: { field: string, label: string, tag: string }[
     { field: 'bairro', label: 'Bairro', tag: '{{USUARIO_BAIRRO}}' },
     { field: 'cidade', label: 'Cidade', tag: '{{USUARIO_CIDADE}}' },
     { field: 'estado', label: 'Estado (UF)', tag: '{{USUARIO_ESTADO}}' },
+    // Campos de RH/Contrato
+    { field: 'salario', label: 'Salário Mensal', tag: '{{USUARIO_SALARIO}}' },
+    { field: 'horas_mensais', label: 'Horas Mensais', tag: '{{USUARIO_HORAS_MENSAIS}}' },
+    { field: 'data_inicio_contrato', label: 'Início do Contrato', tag: '{{USUARIO_DATA_INICIO_CONTRATO}}' },
+    { field: 'data_fim_contrato', label: 'Fim do Contrato', tag: '{{USUARIO_DATA_FIM_CONTRATO}}' },
 ];
 
 // Tags obrigatórias de Contas a Receber (já são tags padrão, mas listamos aqui para referência)
