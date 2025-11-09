@@ -128,15 +128,48 @@ const PreencherContrato: React.FC = () => {
     
     let combinedClients = clientesCRData as Cliente[];
     
+    // NOVO: Incluir clientes do sistema (tbl_clientes) que são aprovados e não estão na lista CR
+    const { data: systemClientsData, error: systemClientsError } = await supabase
+        .from('tbl_clientes')
+        .select('id, nome, email, cpf, rg, telefone, cep, endereco, numero, complemento, bairro, cidade, estado')
+        .eq('aprovado', true)
+        .order('nome');
+        
+    if (systemClientsError) {
+        console.error('Erro ao carregar clientes do sistema:', systemClientsError);
+    } else {
+        const existingCrIds = new Set(combinedClients.map(c => c.id));
+        
+        // Filtra clientes do sistema que ainda não estão na lista CR
+        const newSystemClients = (systemClientsData as ClienteProfile[]).filter(sc => !existingCrIds.has(sc.id));
+        
+        const mappedSystemClients: Cliente[] = newSystemClients.map(sc => ({
+            id: sc.id,
+            proprietario_id: targetEmpresaId, // Define o proprietário do contrato como proprietário
+            nome: sc.nome,
+            email: sc.email,
+            documento: sc.cpf || sc.rg,
+            // Mapeamento de endereço
+            cep: sc.cep,
+            endereco: sc.endereco,
+            numero: sc.numero,
+            complemento: sc.complemento,
+            bairro: sc.bairro,
+            cidade: sc.cidade,
+            estado: sc.estado,
+            // Campos opcionais da interface Cliente (para evitar TS errors)
+            razao_social: sc.nome,
+            nome_fantasia: sc.nome,
+            telefone_fixo: null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+        }));
+        
+        combinedClients = [...combinedClients, ...mappedSystemClients];
+    }
+    
     combinedClients.sort((a, b) => a.nome.localeCompare(b.nome));
     setClientes(combinedClients);
-    
-    // Se o cliente selecionado não estiver mais na lista, limpa a seleção
-    // Nota: clienteSelecionadoId é um estado externo, mas é usado aqui para manter a seleção
-    // se o cliente ainda estiver na lista após a mudança de proprietário.
-    // Se o clienteSelecionadoId for definido no contratoInicial, ele será mantido.
-    // Se for um novo contrato, ele será limpo.
-    // Não precisamos limpar aqui, pois o useEffect abaixo lida com a dependência.
     
   }, []);
 
