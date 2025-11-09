@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useSessao } from '@/hooks/use-sessao';
 import { useNavigate } from 'react-router-dom';
 import { Loader2, Package, Phone } from 'lucide-react';
@@ -20,6 +20,13 @@ const LayoutPrincipal: React.FC<LayoutPrincipalProps> = ({ children }) => {
   const { usuario, carregando, role, perfil, refetch } = useSessao();
   const navegar = useNavigate();
 
+  // ✅ CORREÇÃO: Move a navegação para o useEffect
+  useEffect(() => {
+    if (!carregando && !usuario) {
+      navegar('/login', { replace: true });
+    }
+  }, [carregando, usuario, navegar]);
+
   if (carregando) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-4">
@@ -28,9 +35,14 @@ const LayoutPrincipal: React.FC<LayoutPrincipalProps> = ({ children }) => {
     );
   }
 
+  // ✅ CORREÇÃO: Se não houver usuário (e não estiver carregando), retorna um loader
+  // O useEffect acima cuidará do redirecionamento.
   if (!usuario) {
-    navegar('/login', { replace: true });
-    return null;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
   }
 
   const isClient = role === 'Cliente';

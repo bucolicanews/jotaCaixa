@@ -356,21 +356,17 @@ const PreencherContrato: React.FC = () => {
   // Efeito 1: Carregamento inicial e verificação de permissão (CORRIGIDO)
 // ✅ CORREÇÃO DEFINITIVA
 useEffect(() => {
-  if (carregandoSessao) return;
+  if (carregandoSessao || role === undefined) return;
 
   const allowedRoles = ['Admin', 'Cliente', 'Usuario'];
 
-  // Usuário sem role não deve redirecionar (evita travamento)
-  if (!role) return;
-
-  if (!allowedRoles.includes(role)) {
+  if (role === null || !allowedRoles.includes(role)) {
     navigate('/painel', { replace: true });
     return;
   }
 
-  // Só chama buscarDados 1 única vez, e nunca mais
   buscarDados();
-}, [carregandoSessao]);
+}, [carregandoSessao, role, navigate, buscarDados]);
 
   
   // Efeito 2: Monitorar a mudança do proprietário do contrato (proprietarioContratoId)
