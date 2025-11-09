@@ -1,4 +1,3 @@
-import { useContext } from "react";
 import { useTheme as useNextTheme } from "next-themes";
 
 interface ThemeContextType {
@@ -12,11 +11,13 @@ export function useTheme(): ThemeContextType {
   const context = useNextTheme();
   
   if (!context) {
+    // Isso só deve acontecer se o hook for chamado fora do ThemeProvider
     throw new Error("useTheme must be used within ThemeProvider");
   }
   
   const { theme, setTheme, resolvedTheme } = context;
   
+  // Determina o tema atual (se for 'system', usa o resolvedTheme)
   const currentTheme = theme === 'system' ? resolvedTheme : theme;
 
   const toggleTheme = () => {

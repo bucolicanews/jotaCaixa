@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 import { useEffect } from 'react';
 import { useSessao } from '@/hooks/use-sessao';
-import { useTheme } from '@/contexts/ThemeProvider'; // Importando useTheme
+import { useTheme } from '@/hooks/use-theme'; // Importando useTheme do local correto
 import { BASE_URL } from '@/config/app-config'; // Importando BASE_URL
 
 /**
