@@ -13,7 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { UsuarioProfile } from '@/types/usuario';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import ModeloPreviewDialog from '@/components/ModeloPreviewDialog';
 
 // Componente de Formulário Simples para Modelo

@@ -9,7 +9,7 @@ import { DocumentoSocietarioGerado } from '@/types/documentos-societarios';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { UsuarioProfile } from '@/types/usuario';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { format, parseISO } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import ContratoPreviewDialog from '@/components/contratos/ContratoPreviewDialog';
@@ -21,7 +21,6 @@ interface DocumentoComCliente extends DocumentoSocietarioGerado {
 
 const DocumentosSocietarios: React.FC = () => {
   const { role, perfil, carregando: carregandoSessao } = useSessao();
-  const navigate = useNavigate();
   const [documentos, setDocumentos] = useState<DocumentoComCliente[]>([]);
   const [carregandoDocumentos, setCarregandoDocumentos] = useState(true);
   
