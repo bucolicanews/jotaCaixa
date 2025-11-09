@@ -24,7 +24,7 @@ interface EmpresaContrato {
     nome: string;
 }
 
-// NOVO TIPO: Cliente do Sistema com todos os campos de tag
+// NOVO TIPO: Cliente do Sistema com todos os campos de tag (ajustado para tbl_clientes)
 interface ClienteSistemaCompleto extends ClienteProfile {
     razao_social?: string | null;
     nome_fantasia?: string | null;
@@ -231,11 +231,17 @@ const GerarDocumentoSocietario: React.FC = () => {
             else if (sourceTable === 'clientes' && clienteSelecionado) {
                 const clienteData = clienteSelecionado as any;
                 
-                // CORREÇÃO: Se o campo for 'razao_social' ou 'nome_fantasia', usa 'nome' como fallback
-                if (sourceField === 'razao_social' || sourceField === 'nome_fantasia') {
-                    tagValue = String(clienteData.nome || '');
-                } else if (clienteData && clienteData[sourceField]) {
+                // CORREÇÃO: Mapeamento de tags de cliente (tbl_clientes)
+                // Usamos o nome do campo da tag (sourceField) para buscar no objeto clienteSelecionado
+                if (clienteData && clienteData[sourceField]) {
                     tagValue = String(clienteData[sourceField]);
+                } else if (sourceField === 'razao_social' || sourceField === 'nome_fantasia' || sourceField === 'documento') {
+                    // Fallback para campos que não existem em tbl_clientes, mas são mapeados
+                    if (sourceField === 'razao_social' || sourceField === 'nome_fantasia') {
+                        tagValue = String(clienteData.nome || '');
+                    } else if (sourceField === 'documento') {
+                        tagValue = String(clienteData.cpf || clienteData.rg || '');
+                    }
                 }
             } 
             
@@ -248,7 +254,7 @@ const GerarDocumentoSocietario: React.FC = () => {
         }
         
         // 2. Se o valor foi preenchido automaticamente, usa-o.
-        if (tagValue !== null && tagValue !== undefined) {
+        if (tagValue !== null && tagValue !== undefined && tagValue !== 'N/A') {
             newTags[tagKey] = tagValue;
         } else {
             // 3. Caso contrário, usa o valor salvo anteriormente ou o valor digitado.
