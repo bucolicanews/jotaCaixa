@@ -275,10 +275,24 @@ const GerarDocumentoSocietario: React.FC = () => {
   
   const renderizarConteudo = (template: string, tags: Record<string, string>): string => {
     let conteudoRenderizado = template;
-    for (const tag in tags) {
-        const regex = new RegExp(tag, 'g');
-        conteudoRenderizado = conteudoRenderizado.replace(regex, tags[tag]);
-    }
+    
+    // 1. Substituição de Blocos (Primeira Passagem)
+    const blocoTags = Object.keys(tags).filter(tag => tag.startsWith('{{BLOCO_'));
+    
+    blocoTags.forEach(blocoTag => {
+        const regex = new RegExp(blocoTag, 'g');
+        // O valor da tag de bloco já contém o conteúdo do bloco (que pode ter tags de dados)
+        conteudoRenderizado = conteudoRenderizado.replace(regex, tags[blocoTag]);
+    });
+    
+    // 2. Substituição de Tags de Dados (Segunda Passagem)
+    const dataTags = Object.keys(tags).filter(tag => !tag.startsWith('{{BLOCO_'));
+    
+    dataTags.forEach(dataTag => {
+        const regex = new RegExp(dataTag, 'g');
+        // Substitui a tag de dados pelo seu valor
+        conteudoRenderizado = conteudoRenderizado.replace(regex, tags[dataTag]);
+    });
     
     return conteudoRenderizado;
   };
