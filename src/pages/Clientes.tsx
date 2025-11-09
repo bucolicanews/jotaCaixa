@@ -3,7 +3,7 @@ import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Edit, Trash2, PlusCircle, Filter, Building2, CheckCircle, Users as UsersIcon, Mail, PowerOff, Printer, ArrowRight, LogIn } from 'lucide-react';
+import { Loader2, Edit, Trash2, PlusCircle, Filter, Building2, CheckCircle, Users as UsersIcon, Mail, PowerOff, Printer, ArrowRight, LogIn, FileSignature, FileText } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
@@ -47,10 +47,12 @@ interface PlanoSimples {
     nome: string;
 }
 
-// NOVO TIPO: Cliente CR com status de sistema
+// NOVO TIPO: Cliente CR com status de sistema e contagens
 interface ClienteCRComStatus extends Cliente {
     is_system_client: boolean;
     system_client_status?: 'Ativo' | 'Pendente' | 'Bloqueado' | 'Expirado' | 'CR'; // Adicionado 'CR'
+    contratos_count: number; // NOVO
+    documentos_societarios_count: number; // NOVO
 }
 
 const ClientesPage = () => {
@@ -74,6 +76,7 @@ const ClientesPage = () => {
   
   const [activeTab, setActiveTab] = useState('clientes_cr');
   const [activeEmpresaTab, setActiveEmpresaTab] = useState('ativos'); // Novo estado para sub-aba
+  const [activeCRTab, setActiveCRTab] = useState('novos_cr'); // NOVO ESTADO PARA SUB-ABA CR
 
   const isAdmin = role === 'Admin';
   const isClient = role === 'Cliente';
@@ -185,12 +188,38 @@ const ClientesPage = () => {
         (c.documento?.toLowerCase() || '').includes(filtroNome.toLowerCase())
       );
       
-      // 2.1. Adicionar status do sistema e desduplicar
+      // 2.1. Adicionar status do sistema e contagens
       const clientesComStatus: ClienteCRComStatus[] = [];
       
-      // Mapeia os clientes CR, adicionando o status do sistema
-      const mappedCR = fetchedData.map(c => {
-          const systemClient = systemClientsMap[c.id];
+      // IDs de todos os clientes CR
+      const clienteCRIds = fetchedData.map(c => c.id);
+      
+      // 3. Buscar Contagens de Contratos e Documentos Societários
+      const [contratosCountRes, documentosCountRes] = await Promise.all([
+          supabase
+              .from('contratos_gerados')
+              .select('cliente_id', { count: 'exact', head: false })
+              .in('cliente_id', clienteCRIds),
+          supabase
+              .from('documentos_societarios_gerados')
+              .select('cliente_id', { count: 'exact', head: false })
+              .in('cliente_id', clienteCRIds),
+      ]);
+      
+      const contratosMap = (contratosCountRes.data || []).reduce((acc, c) => {
+          acc[c.cliente_id] = (acc[c.cliente_id] || 0) + 1;
+          return acc;
+      }, {} as Record<string, number>);
+      
+      const documentosMap = (documentosCountRes.data || []).reduce((acc, d) => {
+          acc[d.cliente_id] = (acc[d.cliente_id] || 0) + 1;
+          return acc;
+      }, {} as Record<string, number>);
+      
+      const processedEmails = new Set<string>();
+      
+      for (const cliente of fetchedData) {
+          const systemClient = systemClientsMap[cliente.id];
           const isSystemClient = !!systemClient;
           
           let systemStatus: ClienteCRComStatus['system_client_status'] = 'CR';
@@ -211,33 +240,30 @@ const ClientesPage = () => {
               }
           }
           
-          return {
-              ...c,
+          const clienteComStatus: ClienteCRComStatus = {
+              ...cliente,
               is_system_client: isSystemClient,
               system_client_status: systemStatus,
-          } as ClienteCRComStatus;
-      });
-      
-      // 2.2. Desduplicação: Se o cliente CR tem o mesmo ID de um cliente do sistema, ele é o registro principal.
-      const processedEmails = new Set<string>();
-      
-      for (const cliente of mappedCR) {
-          // Se o ID do cliente CR é o ID de um cliente do sistema, ele é o registro principal.
-          if (cliente.is_system_client) {
-              clientesComStatus.push(cliente);
-              if (cliente.email) processedEmails.add(cliente.email);
+              contratos_count: contratosMap[cliente.id] || 0,
+              documentos_societarios_count: documentosMap[cliente.id] || 0,
+          };
+          
+          // Desduplicação: Se o ID do cliente CR é o ID de um cliente do sistema, ele é o registro principal.
+          if (clienteComStatus.is_system_client) {
+              clientesComStatus.push(clienteComStatus);
+              if (clienteComStatus.email) processedEmails.add(clienteComStatus.email);
               continue;
           }
           
           // Se não é cliente do sistema, e tem email, verifica se o email já foi processado
-          if (cliente.email && processedEmails.has(cliente.email)) {
+          if (clienteComStatus.email && processedEmails.has(clienteComStatus.email)) {
               // Ignora duplicata de email (o registro do sistema já foi adicionado)
               continue;
           }
           
           // Se não é cliente do sistema, e o email não foi processado, adiciona (é um cliente CR puro)
-          clientesComStatus.push(cliente);
-          if (cliente.email) processedEmails.add(cliente.email);
+          clientesComStatus.push(clienteComStatus);
+          if (clienteComStatus.email) processedEmails.add(clienteComStatus.email);
       }
       
       setClientesCR(clientesComStatus);
@@ -560,6 +586,27 @@ const ClientesPage = () => {
           ? empresasAvulsas
           : empresasPendentes;
   }, [activeEmpresaTab, empresasAtivas, empresasInativas, empresasAvulsas, empresasPendentes]);
+  
+  // --- Lógica de Filtragem de Clientes CR ---
+  const clientesCRAgrupados = useMemo(() => {
+      const promovidos = clientesCR.filter(c => c.is_system_client);
+      const comContratos = clientesCR.filter(c => !c.is_system_client && c.contratos_count > 0);
+      const comDocSocietario = clientesCR.filter(c => !c.is_system_client && c.documentos_societarios_count > 0 && c.contratos_count === 0);
+      const novosCR = clientesCR.filter(c => !c.is_system_client && c.contratos_count === 0 && c.documentos_societarios_count === 0);
+      
+      return { promovidos, comContratos, comDocSocietario, novosCR };
+  }, [clientesCR]);
+  
+  const clientesCRParaExibir = useMemo(() => {
+      switch (activeCRTab) {
+          case 'promovidos': return clientesCRAgrupados.promovidos;
+          case 'com_contratos': return clientesCRAgrupados.comContratos;
+          case 'com_doc_societario': return clientesCRAgrupados.comDocSocietario;
+          case 'novos_cr':
+          default: return clientesCRAgrupados.novosCR;
+      }
+  }, [activeCRTab, clientesCRAgrupados]);
+
 
   // Renderização do conteúdo da tabela de Clientes CR
   const renderClientesCRTable = () => (
@@ -572,19 +619,21 @@ const ClientesPage = () => {
                     <TableHead>Email</TableHead>
                     <TableHead>Telefone</TableHead>
                     <TableHead className="w-[120px]">Status Sistema</TableHead> {/* NOVO CABEÇALHO */}
+                    <TableHead className="w-[100px] text-center">Contratos</TableHead> {/* NOVO */}
+                    <TableHead className="w-[100px] text-center">Doc. Societário</TableHead> {/* NOVO */}
                     {isAdmin && <TableHead>Proprietário ID</TableHead>}
                     <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
             </TableHeader>
             <TableBody>
-                {clientesCR.length === 0 ? (
+                {clientesCRParaExibir.length === 0 ? (
                     <TableRow>
-                        <TableCell colSpan={isAdmin ? 7 : 6} className="text-center py-4 text-muted-foreground">
-                            Nenhum cliente de Contas a Receber cadastrado.
+                        <TableCell colSpan={isAdmin ? 9 : 8} className="text-center py-4 text-muted-foreground">
+                            Nenhum cliente encontrado nesta categoria.
                         </TableCell>
                     </TableRow>
                 ) : (
-                    clientesCR.map((cliente) => {
+                    clientesCRParaExibir.map((cliente) => {
                         // Verifica se o cliente CR já é um cliente do sistema (tbl_clientes)
                         const isSystemClient = cliente.is_system_client;
                         const systemStatus = cliente.system_client_status;
@@ -614,6 +663,16 @@ const ClientesPage = () => {
                                 <TableCell>{cliente.email || '-'}</TableCell>
                                 <TableCell>{cliente.telefone || '-'}</TableCell>
                                 <TableCell>{statusBadge}</TableCell> {/* NOVO CAMPO */}
+                                <TableCell className="text-center">
+                                    {cliente.contratos_count > 0 ? (
+                                        <Badge variant="default">{cliente.contratos_count}</Badge>
+                                    ) : '-'}
+                                </TableCell>
+                                <TableCell className="text-center">
+                                    {cliente.documentos_societarios_count > 0 ? (
+                                        <Badge variant="secondary">{cliente.documentos_societarios_count}</Badge>
+                                    ) : '-'}
+                                </TableCell>
                                 {isAdmin && <TableCell className="text-sm text-muted-foreground">{cliente.proprietario_id || 'N/A'}</TableCell>}
                                 <TableCell className="text-right">
                                     <div className="flex justify-end space-x-1">
@@ -798,8 +857,8 @@ const ClientesPage = () => {
       let tituloRelatorio = '';
       
       if (activeTab === 'clientes_cr') {
-          dataToPrint = clientesCR;
-          tituloRelatorio = 'Clientes Diretos / Contratos';
+          dataToPrint = clientesCRParaExibir; // Usando a lista filtrada
+          tituloRelatorio = `Clientes Diretos / Contratos - ${activeCRTab.replace('_', ' ').toUpperCase()}`;
       } else {
           // Mapeia o plano_id para o nome do plano antes de imprimir
           dataToPrint = empresasParaExibir.map(e => ({
@@ -918,35 +977,44 @@ const ClientesPage = () => {
             </TabsList>
             
             <TabsContent value="clientes_cr">
-                <Card className="mt-4">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-lg flex items-center"><Filter className="w-4 h-4 mr-2" /> Filtros</CardTitle>
-                    </CardHeader>
-                    <CardContent className="flex flex-col md:flex-row gap-4">
-                        <Input
-                            placeholder="Buscar por nome, documento ou razão social..."
-                            value={filtroNome}
-                            onChange={(e) => setFiltroNome(e.target.value)}
-                            className="w-full md:max-w-xs"
-                        />
-                        <Select value={filtroEmpresaId} onValueChange={setFiltroEmpresaId} disabled={empresasFiltro.length === 0}>
-                            <SelectTrigger className="w-full md:w-[250px]">
-                                <Building2 className="w-4 h-4 mr-2" />
-                                <SelectValue placeholder="Filtrar por Empresa do Sistema" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="todos">Todos os Clientes CR</SelectItem>
-                                {empresasFiltro.map(e => (
-                                    <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </CardContent>
-                </Card>
-                <Card className="mt-4">
-                    <CardHeader><CardTitle className="text-xl">Clientes Diretos / Contratos Cadastrados ({clientesCR.length})</CardTitle></CardHeader>
-                    <CardContent>{renderClientesCRTable()}</CardContent>
-                </Card>
+                <Tabs value={activeCRTab} onValueChange={setActiveCRTab} className="w-full">
+                    <TabsList className="grid w-full grid-cols-4">
+                        <TabsTrigger value="novos_cr">Novos/CR ({clientesCRAgrupados.novosCR.length})</TabsTrigger>
+                        <TabsTrigger value="promovidos">Promovidos ({clientesCRAgrupados.promovidos.length})</TabsTrigger>
+                        <TabsTrigger value="com_contratos" className="flex items-center"><FileSignature className="w-4 h-4 mr-1" /> Contratos ({clientesCRAgrupados.comContratos.length})</TabsTrigger>
+                        <TabsTrigger value="com_doc_societario" className="flex items-center"><FileText className="w-4 h-4 mr-1" /> Doc. Societário ({clientesCRAgrupados.comDocSocietario.length})</TabsTrigger>
+                    </TabsList>
+                    
+                    <Card className="mt-4">
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-lg flex items-center"><Filter className="w-4 h-4 mr-2" /> Filtros</CardTitle>
+                        </CardHeader>
+                        <CardContent className="flex flex-col md:flex-row gap-4">
+                            <Input
+                                placeholder="Buscar por nome, documento ou razão social..."
+                                value={filtroNome}
+                                onChange={(e) => setFiltroNome(e.target.value)}
+                                className="w-full md:max-w-xs"
+                            />
+                            <Select value={filtroEmpresaId} onValueChange={setFiltroEmpresaId} disabled={empresasFiltro.length === 0}>
+                                <SelectTrigger className="w-full md:w-[250px]">
+                                    <Building2 className="w-4 h-4 mr-2" />
+                                    <SelectValue placeholder="Filtrar por Empresa do Sistema" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="todos">Todos os Clientes CR</SelectItem>
+                                    {empresasFiltro.map(e => (
+                                        <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </CardContent>
+                    </Card>
+                    <Card className="mt-4">
+                        <CardHeader><CardTitle className="text-xl">Clientes Diretos / Contratos Cadastrados ({clientesCRParaExibir.length})</CardTitle></CardHeader>
+                        <CardContent>{renderClientesCRTable()}</CardContent>
+                    </Card>
+                </Tabs>
             </TabsContent>
             
             <TabsContent value="empresas_sistema">
