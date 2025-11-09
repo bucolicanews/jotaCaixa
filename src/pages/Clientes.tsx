@@ -700,7 +700,7 @@ const ClientesPage = () => {
                             }
                         }
                         
-                        const isActionDisabled = carregandoDados || isSystemClient;
+                        const isActionDisabled = carregandoDados;
                         
                         // NOVO: Classe de destaque para clientes promovidos
                         const rowClassName = isSystemClient ? 'bg-green-500/10' : '';
@@ -734,7 +734,7 @@ const ClientesPage = () => {
                                                 onClick={() => handlePromoteToSystem(cliente)}
                                                 title="Promover para Cliente do Sistema (Sem Convite de Login)"
                                                 disabled={isActionDisabled}
-                                                className="h-8"
+                                                className="h-8 bg-orange-500 hover:bg-orange-600"
                                             >
                                                 <ArrowRight className="w-4 h-4 mr-1" /> Promover
                                             </Button>
