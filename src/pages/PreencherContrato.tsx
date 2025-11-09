@@ -958,24 +958,26 @@ const PreencherContrato: React.FC = () => {
                     </div>
                 )}
                 
-                {/* BOTÕES DUPLICADOS AQUI */}
-                <div className="flex flex-col sm:flex-row gap-4 pt-4 border-t">
+                {/* BOTÕES DUPLICADOS AQUI (AJUSTADOS) */}
+                <div className="flex flex-col sm:flex-row gap-2 pt-4 border-t">
                     <Button 
                         onClick={handlePreview} 
                         variant="outline"
-                        className="flex-1 h-12"
+                        size="sm" // Tamanho menor
+                        className="flex-1 h-8" // Altura menor
                         disabled={!modelo || !clienteSelecionadoId || valorTotal <= 0}
                     >
-                        <Eye className="mr-2 h-4 w-4" />
-                        Pré-visualizar Contrato
+                        <Eye className="mr-1 h-3 w-3" />
+                        Pré-visualizar
                     </Button>
                     <Button 
                         onClick={handleSalvarContrato} 
-                        className="flex-1 h-12"
+                        size="sm" // Tamanho menor
+                        className="flex-1 h-8" // Altura menor
                         disabled={isSubmitting || !isReadyToSave}
                     >
-                        {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                        {isEditing ? 'Salvar Edição' : 'Salvar e Gerar Contas'}
+                        {isSubmitting ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Save className="mr-1 h-3 w-3" />}
+                        {isEditing ? 'Salvar Edição' : 'Salvar e Gerar'}
                     </Button>
                 </div>
                 {/* FIM BOTÕES DUPLICADOS */}
@@ -1016,7 +1018,7 @@ const PreencherContrato: React.FC = () => {
             </CardContent>
         </Card>
         
-        {/* BOTÕES ORIGINAIS NO RODAPÉ */}
+        {/* BOTÕES ORIGINAIS NO RODAPÉ (MANTIDOS GRANDES) */}
         <div className="lg:col-span-3 flex flex-col sm:flex-row gap-4 pt-4 border-t">
             <Button 
                 onClick={handlePreview} 
