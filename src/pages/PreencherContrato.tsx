@@ -1,26 +1,23 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, FileSignature, ChevronLeft, Save, CalendarIcon, Eye, Building2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { ContratoModelo, ContratoTag, ContratoGerado } from '@/types/contratos';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { ClienteProfile, UsuarioProfile, AdminProfile } from '@/types/usuario';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Cliente } from '@/types/cliente';
 import { format, addDays, parseISO } from 'date-fns';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Calendar } from '@/components/ui/calendar';
-import { cn } from '@/lib/utils';
-import { ptBR } from 'date-fns/locale';
 import { TAGS_PADRAO } from '@/config/contrato-tags-padrao';
 import ContratoPreviewDialog from '@/components/contratos/ContratoPreviewDialog';
 import { useSessao } from '@/hooks/use-sessao';
+
+// Componentes Modulares
+import ContratoHeader from '@/components/contratos/ContratoHeader';
+import FormFinanceiro from '@/components/contratos/FormFinanceiro';
+import FormTagsManuais from '@/components/contratos/FormTagsManuais';
+import ContratoAcoesRodape from '@/components/contratos/ContratoAcoesRodape';
 
 type TipoLancamento = 'unico' | 'repetir' | 'parcelar';
 type TipoConteudo = 'html' | 'texto';
@@ -57,7 +54,7 @@ const PreencherContrato: React.FC = () => {
   
   const [modelo, setModelo] = useState<ContratoModelo | null>(null);
   const [contratoInicial, setContratoInicial] = useState<ContratoGerado | null>(null);
-  const [tagsCustomizadas, setTagsCustomizadas] = useState<ContratoTag[]>([]); // Tags customizadas (sem as padrão)
+  const [tagsCustomizadas, setTagsCustomizadas] = useState<ContratoTag[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [empresasContrato, setEmpresasContrato] = useState<EmpresaContrato[]>([]);
   const [empresaLogada, setEmpresaLogada] = useState<EmpresaLogada | null>(null);
@@ -72,7 +69,7 @@ const PreencherContrato: React.FC = () => {
   const [tipoConteudo, setTipoConteudo] = useState<TipoConteudo>('html'); 
   
   const [clienteSelecionadoId, setClienteSelecionadoId] = useState<string>('');
-  const [valorTotal, setValorTotal] = useState<number>(0); // Inicializado como 0
+  const [valorTotal, setValorTotal] = useState<number>(0);
   
   const [proprietarioContratoId, setProprietarioContratoId] = useState<string | null>(null); 
   
@@ -131,7 +128,7 @@ const PreencherContrato: React.FC = () => {
             documento: profile.cnpj || profile.cpf,
             endereco_completo: `${profile.endereco || ''}, ${profile.numero || ''} ${profile.complemento || ''} - ${profile.bairro || ''}, ${profile.cidade || ''}/${profile.estado || ''}`,
             cpf: profile.cpf,
-            cnpj: profile.cnpj, // ADICIONADO
+            cnpj: profile.cnpj,
             rg: profile.rg,
             telefone: profile.telefone,
             cep: profile.cep,
@@ -150,7 +147,7 @@ const PreencherContrato: React.FC = () => {
             documento: profile.documento || profile.cpf,
             endereco_completo: `${profile.endereco || ''}, ${profile.numero || ''} ${profile.complemento || ''} - ${profile.bairro || ''}, ${profile.cidade || ''}/${profile.estado || ''}`,
             cpf: profile.cpf,
-            cnpj: null, // Clientes não têm CNPJ na tabela de perfil
+            cnpj: null,
             rg: profile.rg,
             telefone: profile.telefone,
             cep: profile.cep,
@@ -209,10 +206,10 @@ const PreencherContrato: React.FC = () => {
         
         const contrato = contratoData as ContratoGerado;
         setContratoInicial(contrato);
-        initialProprietarioContratoId = contrato.proprietario_id; // Sobrescreve o ID inicial
+        initialProprietarioContratoId = contrato.proprietario_id;
         
         setClienteSelecionadoId(contrato.cliente_id);
-        setValorTotal(contrato.valor_total); // Define o valor total
+        setValorTotal(contrato.valor_total);
         setValoresTags(contrato.valores_tags_preenchidos || {});
         
         const numParcelas = contrato.numero_parcelas;
@@ -222,7 +219,6 @@ const PreencherContrato: React.FC = () => {
         const tabelaContasReceber = isContractOwnerAdmin ? 'admin_contas_receber' : 'contas_receber';
         const tabelaParcelas = isContractOwnerAdmin ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
         
-        // Busca a conta sintética para obter o ID da conta a receber
         const { data: contaReceberData, error: contaReceberError } = await supabase
             .from(tabelaContasReceber)
             .select('id')
@@ -257,7 +253,6 @@ const PreencherContrato: React.FC = () => {
                 } else {
                     const valorParcela = primeiraParcela.valor_parcela || 0;
                     
-                    // Determina se é parcelar ou repetir
                     if (Math.abs(valorTotalContrato - (valorParcela * numParcelas)) < 0.01) {
                         setTipoLancamento('parcelar');
                     } else {
@@ -269,23 +264,19 @@ const PreencherContrato: React.FC = () => {
                     setIntervaloDias(contrato.dia_vencimento_parcela || 30);
                 }
             } else {
-                // Se a conta sintética existe, mas não tem parcelas (erro de integridade)
                 console.error('LOG: Conta sintética encontrada, mas sem parcelas associadas. Usando dados do contrato.');
-                // Fallback: Usa os dados do contrato para preencher o formulário
                 if (numParcelas === 1) {
                     setTipoLancamento('unico');
                     setDataVencimentoUnico(contrato.data_inicio ? parseISO(contrato.data_inicio) : undefined);
                 } else {
-                    setTipoLancamento('parcelar'); // Assume parcelar como padrão para múltiplos
+                    setTipoLancamento('parcelar');
                     setNumeroParcelas(numParcelas);
                     setDataPrimeiroVencimento(contrato.data_inicio ? parseISO(contrato.data_inicio) : undefined);
                     setIntervaloDias(contrato.dia_vencimento_parcela || 30);
                 }
             }
         } else {
-            // Se não encontrou a conta a receber (registro ausente)
             console.error('LOG: Conta sintética não encontrada. Usando dados do contrato.');
-            // Fallback: Usa os dados do contrato para preencher o formulário
             if (numParcelas === 1) {
                 setTipoLancamento('unico');
                 setDataVencimentoUnico(contrato.data_inicio ? parseISO(contrato.data_inicio) : undefined);
@@ -306,8 +297,6 @@ const PreencherContrato: React.FC = () => {
     }
     
     setProprietarioContratoId(initialProprietarioContratoId);
-    
-    // A lista de clientes e tags será carregada no próximo useEffect (monitorando proprietarioContratoId)
     setCarregandoDados(false);
   }, [modeloId, ownerIdLogado, navigate, role, perfil, usuario, isAdmin, isCliente, contratoId]);
   
@@ -329,26 +318,23 @@ const PreencherContrato: React.FC = () => {
     // 2. Buscar Clientes (Contratados)
     let combinedClients: Cliente[] = [];
     
-    // Regra 1: Se o proprietário do contrato for o Admin logado ('Meus Contratos (Admin)')
     if (isAdmin && targetEmpresaId === ownerIdLogado) {
-        // Busca na tbl_clientes onde admin_id é o ID do Admin logado
         const { data: systemClientsData, error: systemClientsError } = await supabase
             .from('tbl_clientes')
             .select('id, nome, email, cpf, rg, nome_mae, nome_pai, telefone, cep, endereco, numero, complemento, bairro, cidade, estado, criado_em')
-            .eq('admin_id', ownerIdLogado) // FILTRO CORRIGIDO
+            .eq('admin_id', ownerIdLogado)
             .eq('aprovado', true)
             .order('nome');
             
         if (systemClientsError) {
             showError('Erro ao carregar clientes do sistema: ' + systemClientsError.message);
         } else if (systemClientsData) {
-            // Mapeamento para o tipo Cliente[]
             combinedClients = (systemClientsData as any[]).map(sc => ({
                 id: sc.id,
-                proprietario_id: ownerIdLogado, // AJUSTE AQUI
+                proprietario_id: ownerIdLogado,
                 nome: sc.nome,
-                razao_social: sc.nome, // Usando nome como fallback
-                nome_fantasia: sc.nome, // Usando nome como fallback
+                razao_social: sc.nome,
+                nome_fantasia: sc.nome,
                 documento: sc.cpf || null, 
                 email: sc.email || null,
                 telefone: sc.telefone || null,
@@ -365,11 +351,10 @@ const PreencherContrato: React.FC = () => {
             }));
         }
     } else {
-        // Regra 2: Se o proprietário for um Cliente (ou o Admin selecionou um Cliente), os clientes são da tabela 'clientes' (CR)
         const { data: clientesCRData, error: _ } = await supabase
             .from('clientes')
             .select('*')
-            .eq('proprietario_id', targetEmpresaId); // AJUSTE AQUI
+            .eq('proprietario_id', targetEmpresaId);
         if (clientesCRData) {
             combinedClients.push(...(clientesCRData as Cliente[]));
         }
@@ -378,7 +363,6 @@ const PreencherContrato: React.FC = () => {
     combinedClients.sort((a, b) => a.nome.localeCompare(b.nome));
     setClientes(combinedClients);
     
-    // Se o cliente selecionado não estiver mais na lista, limpa a seleção
     if (clienteSelecionadoId && !combinedClients.some(c => c.id === clienteSelecionadoId)) {
         setClienteSelecionadoId('');
     }
@@ -394,7 +378,6 @@ const PreencherContrato: React.FC = () => {
     }
   }, [carregandoSessao, isAdmin, isCliente, role, ownerIdLogado, buscarDados, navigate]);
   
-  // Efeito para monitorar a mudança do proprietário do contrato (proprietarioContratoId)
   useEffect(() => {
       if (proprietarioContratoId) {
           fetchDependentData(proprietarioContratoId);
@@ -419,7 +402,6 @@ const PreencherContrato: React.FC = () => {
         primeiroVencimento = dataPrimeiroVencimento;
     }
     
-    // Combina tags padrão e customizadas ativas
     const allActiveTags = [...TAGS_PADRAO, ...tagsCustomizadas];
 
     allActiveTags.forEach(tag => {
@@ -449,7 +431,6 @@ const PreencherContrato: React.FC = () => {
         if (tag.origem_dado) {
             const [sourceTable, sourceField] = tag.origem_dado.split('.');
             
-            // Mapeamento de dados da Empresa Logada (Contratada) - tbl_clientes / tbl_admins
             if (sourceTable === 'tbl_clientes' || sourceTable === 'tbl_admins') {
                 const empresaData = empresaLogada as any;
                 if (empresaData && empresaData[sourceField]) {
@@ -457,7 +438,6 @@ const PreencherContrato: React.FC = () => {
                 }
             } 
             
-            // Mapeamento de dados do Cliente Selecionado (Contratante) - clientes
             else if (sourceTable === 'clientes' && cliente) {
                 const clienteData = cliente as any;
                 if (clienteData && clienteData[sourceField]) {
@@ -465,11 +445,9 @@ const PreencherContrato: React.FC = () => {
                 }
             } 
             
-            // Mapeamento de dados do Usuário (Funcionário) - tbl_usuarios
             else if (sourceTable === 'tbl_usuarios' && perfil && 'cliente_id' in perfil) {
                 const usuarioData = perfil as UsuarioProfile;
                 if (usuarioData && (usuarioData as any)[sourceField]) {
-                    // Formatação especial para valores numéricos/data
                     if (sourceField.includes('salario') || sourceField.includes('horas')) {
                         tagValue = String((usuarioData as any)[sourceField] || 'N/A');
                     } else if (sourceField.includes('data')) {
@@ -482,11 +460,9 @@ const PreencherContrato: React.FC = () => {
             }
         }
         
-        // 3. Se o valor foi preenchido automaticamente, usa-o.
         if (tagValue !== null) {
             newTags[tagKey] = tagValue;
         } else {
-            // 4. Caso contrário, usa o valor salvo anteriormente (se edição) ou o valor digitado.
             newTags[tagKey] = valoresTags[tagKey] || '';
         }
     });
@@ -496,15 +472,10 @@ const PreencherContrato: React.FC = () => {
 
 
   useEffect(() => {
-    // Este efeito agora só chama a função de atualização
     updateTags();
   }, [updateTags]);
 
 
-  const handleTagChange = (tag: string, value: string) => {
-    setValoresTags(prev => ({ ...prev, [tag]: value }));
-  };
-  
   const renderizarConteudo = (template: string, tags: Record<string, string>): string => {
     let conteudoRenderizado = template;
     for (const tag in tags) {
@@ -593,11 +564,10 @@ const PreencherContrato: React.FC = () => {
 
         const isContractOwnerAdmin = proprietarioContratoId === ownerIdLogado && isAdmin;
 
-        // CORREÇÃO: Se for Admin, garantir que o cliente (de tbl_clientes) também exista na tabela 'clientes'
         if (isContractOwnerAdmin) {
             const clienteDataParaUpsert = {
                 id: clienteSelecionado.id,
-                proprietario_id: proprietarioContratoId, // AJUSTE AQUI
+                proprietario_id: proprietarioContratoId,
                 nome: clienteSelecionado.nome,
                 razao_social: clienteSelecionado.razao_social,
                 nome_fantasia: clienteSelecionado.nome_fantasia,
@@ -642,7 +612,7 @@ const PreencherContrato: React.FC = () => {
         const contratoData = {
             modelo_id: modelo.id,
             cliente_id: clienteSelecionadoId,
-            proprietario_id: proprietarioContratoId, // RENOMEADO: empresa_id -> proprietario_id
+            proprietario_id: proprietarioContratoId,
             status: 'pendente_assinatura',
             valor_total: valorFinalContrato,
             data_inicio: format(new Date(), 'yyyy-MM-dd'), 
@@ -667,7 +637,6 @@ const PreencherContrato: React.FC = () => {
             if (updateError) throw updateError;
             contratoGeradoId = contratoInicial.id;
             
-            // 1. Buscar a conta sintética existente
             const { data: existingConta } = await supabase
                 .from(tabelaContasReceber)
                 .select('id')
@@ -678,7 +647,6 @@ const PreencherContrato: React.FC = () => {
             if (existingConta) {
                 contaReceberId = existingConta.id;
                 
-                // 2. Deletar parcelas antigas
                 const { error: deleteParcelasError } = await supabase
                     .from(tabelaParcelasReceber)
                     .delete()
@@ -714,14 +682,12 @@ const PreencherContrato: React.FC = () => {
         };
         
         if (contaReceberId) {
-            // Atualiza a conta sintética existente
             const { error: updateContaError } = await supabase
                 .from(tabelaContasReceber)
                 .update(contaReceberPayload)
                 .eq('id', contaReceberId);
             if (updateContaError) throw updateContaError;
         } else {
-            // Cria uma nova conta sintética
             const { data: contaReceber, error: contaReceberError } = await supabase
                 .from(tabelaContasReceber)
                 .insert(contaReceberPayload)
@@ -745,7 +711,8 @@ const PreencherContrato: React.FC = () => {
         if (parcelError) throw parcelError;
 
         showSuccess(`Contrato ${isEditing ? 'atualizado' : 'gerado'} e contas a receber ${isEditing ? 'reajustadas' : 'criadas'}!`);
-        navigate('/contratos');
+        
+        navigate('/contratos', { replace: true });
         
     } catch (error: any) {
         console.error('Erro ao salvar contrato:', error);
@@ -754,6 +721,11 @@ const PreencherContrato: React.FC = () => {
         setIsSubmitting(false);
     }
   };
+
+  const isReadyToSave = !!modelo && !!clienteSelecionadoId && valorTotal > 0 && (
+      (tipoLancamento === 'unico' && !!dataVencimentoUnico) ||
+      (tipoLancamento !== 'unico' && numeroParcelas >= 1 && !!dataPrimeiroVencimento && intervaloDias >= 1)
+  );
 
   if (carregandoSessao || carregandoDados) {
     return (
@@ -769,244 +741,52 @@ const PreencherContrato: React.FC = () => {
       return <LayoutPrincipal><Card><CardHeader><CardTitle>Erro</CardTitle></CardHeader><CardContent><p>Modelo de contrato não encontrado.</p></CardContent></Card></LayoutPrincipal>;
   }
 
-  const isRepetirOuParcelar = tipoLancamento !== 'unico';
-  const valorLabel = tipoLancamento === 'parcelar' ? 'Valor Total a Parcelar' : 'Valor da Parcela';
-  
-  // Combina tags customizadas e tags padrão que não são financeiras
-  const tagsCustomizadasECliente = [...tagsCustomizadas, ...TAGS_PADRAO.filter(t => t.origem_dado && !t.origem_dado.startsWith('contas_receber'))];
-  
-  // Filtra tags que já foram preenchidas automaticamente (para não pedir valor manual)
-  const tagsParaPreenchimentoManual = tagsCustomizadasECliente.filter(tag => {
-      // Tags financeiras e tags de empresa logada (EMPRESA_*) são sempre preenchidas automaticamente
-      if (TAGS_PADRAO.some(t => t.nome_tag === tag.nome_tag && t.origem_dado?.startsWith('contas_receber'))) {
-          return false;
-      }
-      if (TAGS_PADRAO.some(t => t.nome_tag === tag.nome_tag && t.origem_dado?.startsWith('tbl_clientes'))) {
-          return false;
-      }
-      if (TAGS_PADRAO.some(t => t.nome_tag === tag.nome_tag && t.origem_dado?.startsWith('tbl_admins'))) {
-          return false;
-      }
-      
-      // Se a tag tem origem de dado e o valor foi preenchido automaticamente, não precisa de input manual
-      if (tag.origem_dado && valoresTags[tag.nome_tag]) {
-          return false;
-      }
-      
-      // Se a tag é customizada ou de cliente (CLIENTE_*) e não foi preenchida, precisa de input manual
-      if (tag.nome_tag.startsWith('{{CLIENTE_') || tag.nome_tag.startsWith('{{USUARIO_') || !tag.origem_dado) {
-          return true;
-      }
-      
-      return false;
-  });
-
   return (
     <LayoutPrincipal>
-      <div className="flex items-center mb-6">
-        <Button 
-            onClick={() => { window.location.href = '/contratos'; }} 
-            variant="link" 
-            type="button"
-            className="text-muted-foreground hover:text-primary flex items-center mr-4 p-0 h-auto"
-        >
-            <ChevronLeft className="w-5 h-5" />
-            Voltar
-        </Button>
-        <h1 className="text-2xl md:text-3xl font-bold flex items-center">
-          <FileSignature className="w-6 h-6 mr-2" /> {isEditing ? 'Editar Contrato' : 'Preencher Contrato'}: {modelo.titulo}
-        </h1>
-      </div>
+      
+      <ContratoHeader title={modelo.titulo} isEditing={isEditing} />
       
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        <Card className="lg:col-span-1 h-fit">
-            <CardHeader><CardTitle className="text-xl">Dados Financeiros</CardTitle></CardHeader>
-            <CardContent className="space-y-6">
-                
-                {isAdmin && (
-                    <div className="space-y-2">
-                        <Label htmlFor="empresa-contrato">Empresa Proprietária do Contrato</Label>
-                        <Select 
-                            value={proprietarioContratoId || ''} 
-                            onValueChange={setProprietarioContratoId}
-                            disabled={isEditing}
-                        >
-                            <SelectTrigger id="empresa-contrato">
-                                <Building2 className="w-4 h-4 mr-2 text-muted-foreground" />
-                                <SelectValue placeholder="Selecione a Empresa" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {empresasContrato.map(e => (
-                                    <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                )}
-                
-                <div className="space-y-2">
-                    <Label htmlFor="cliente">Cliente</Label>
-                    <Select value={clienteSelecionadoId} onValueChange={setClienteSelecionadoId} disabled={!proprietarioContratoId}>
-                        <SelectTrigger id="cliente">
-                            <SelectValue placeholder="Selecione o Cliente" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {clientes.map(c => (
-                                <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                </div>
-                
-                <div className="space-y-4">
-                    <Label className="font-semibold">Forma de Pagamento</Label>
-                    <RadioGroup 
-                        value={tipoLancamento} 
-                        onValueChange={(value: TipoLancamento) => setTipoLancamento(value)} 
-                        className="flex space-x-4 pt-2"
-                        disabled={isEditing}
-                    >
-                        <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="unico" id="unico" />
-                            <Label htmlFor="unico" className="font-normal">Único</Label>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="repetir" id="repetir" />
-                            <Label htmlFor="repetir" className="font-normal">Repetir Valor</Label>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="parcelar" id="parcelar" />
-                            <Label htmlFor="parcelar" className="font-normal">Parcelar Valor</Label>
-                        </div>
-                    </RadioGroup>
-                </div>
-
-                <div className="space-y-2">
-                    <Label htmlFor="valor-total">{valorLabel}</Label>
-                    <Input 
-                        id="valor-total"
-                        type="number"
-                        step="0.01"
-                        value={valorTotal}
-                        onChange={(e) => setValorTotal(Number(e.target.value))}
-                        placeholder="0.00"
-                    />
-                </div>
-
-                {tipoLancamento === 'unico' && (
-                    <div className="space-y-2">
-                        <Label htmlFor="data-vencimento">Data de Vencimento</Label>
-                        <Popover>
-                            <PopoverTrigger asChild>
-                                <Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !dataVencimentoUnico && "text-muted-foreground")}>
-                                    {dataVencimentoUnico ? format(dataVencimentoUnico, "PPP", { locale: ptBR }) : <span>Escolha uma data</span>}
-                                    <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                                </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0" align="start">
-                                <Calendar mode="single" selected={dataVencimentoUnico} onSelect={setDataVencimentoUnico} initialFocus />
-                            </PopoverContent>
-                        </Popover>
-                    </div>
-                )}
-                
-                {isRepetirOuParcelar && (
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <Label htmlFor="parcelas">Nº de Repetições/Parcelas</Label>
-                            <Input 
-                                id="parcelas"
-                                type="number"
-                                min="1"
-                                value={numeroParcelas}
-                                onChange={(e) => setNumeroParcelas(Number(e.target.value))}
-                                disabled={isEditing}
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="intervalo-dias">Intervalo (dias)</Label>
-                            <Input 
-                                id="intervalo-dias"
-                                type="number"
-                                min="1"
-                                value={intervaloDias}
-                                onChange={(e) => setIntervaloDias(Number(e.target.value))}
-                                placeholder="30"
-                                disabled={isEditing}
-                            />
-                        </div>
-                        <div className="space-y-2 col-span-2">
-                            <Label htmlFor="data-primeiro-vencimento">Data do 1º Vencimento</Label>
-                            <Popover>
-                                <PopoverTrigger asChild>
-                                    <Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !dataPrimeiroVencimento && "text-muted-foreground")}>
-                                        {dataPrimeiroVencimento ? format(dataPrimeiroVencimento, "PPP", { locale: ptBR }) : <span>Escolha uma data</span>}
-                                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                                    </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-auto p-0" align="start">
-                                    <Calendar mode="single" selected={dataPrimeiroVencimento} onSelect={setDataPrimeiroVencimento} initialFocus />
-                                </PopoverContent>
-                            </Popover>
-                        </div>
-                    </div>
-                )}
-            </CardContent>
-        </Card>
+        <FormFinanceiro
+            isAdmin={isAdmin}
+            isEditing={isEditing}
+            proprietarioContratoId={proprietarioContratoId}
+            setProprietarioContratoId={setProprietarioContratoId}
+            empresasContrato={empresasContrato}
+            clienteSelecionadoId={clienteSelecionadoId}
+            setClienteSelecionadoId={setClienteSelecionadoId}
+            clientes={clientes}
+            valorTotal={valorTotal}
+            setValorTotal={setValorTotal}
+            tipoLancamento={tipoLancamento}
+            setTipoLancamento={setTipoLancamento}
+            dataVencimentoUnico={dataVencimentoUnico}
+            setDataVencimentoUnico={setDataVencimentoUnico}
+            numeroParcelas={numeroParcelas}
+            setNumeroParcelas={setNumeroParcelas}
+            dataPrimeiroVencimento={dataPrimeiroVencimento}
+            setDataPrimeiroVencimento={setDataPrimeiroVencimento}
+            intervaloDias={intervaloDias}
+            setIntervaloDias={setIntervaloDias}
+        />
         
-        <Card className="lg:col-span-2">
-            <CardHeader><CardTitle className="text-xl">2. Preenchimento das Tags Dinâmicas</CardTitle></CardHeader>
-            <CardContent className="space-y-4">
-                <div className="p-3 bg-secondary rounded-md">
-                    <h3 className="font-semibold text-sm mb-1">Tags Padrão (Preenchimento Automático)</h3>
-                    <div className="flex flex-wrap gap-2">
-                        {TAGS_PADRAO.map(tag => (
-                            <span key={tag.id} className="text-xs font-mono bg-primary/10 text-primary px-2 py-1 rounded">
-                                {tag.nome_tag}
-                            </span>
-                        ))}
-                    </div>
-                </div>
-                
-                {tagsParaPreenchimentoManual.length === 0 ? (
-                    <p className="text-muted-foreground">Nenhuma tag customizada ou de cliente requer preenchimento manual.</p>
-                ) : (
-                    tagsParaPreenchimentoManual.map(tag => (
-                        <div key={tag.id} className="space-y-1">
-                            <Label htmlFor={tag.nome_tag} className="font-semibold">{tag.descricao || tag.nome_tag} ({tag.nome_tag})</Label>
-                            <Input 
-                                id={tag.nome_tag}
-                                value={valoresTags[tag.nome_tag] || ''}
-                                onChange={(e) => handleTagChange(tag.nome_tag, e.target.value)}
-                                placeholder={`Insira o valor para ${tag.nome_tag}`}
-                            />
-                            {tag.origem_dado && <p className="text-xs text-muted-foreground mt-1">Sugestão de origem: {tag.origem_dado}</p>}
-                        </div>
-                    ))
-                )}
-            </CardContent>
-        </Card>
+        <FormTagsManuais
+            tagsCustomizadas={tagsCustomizadas}
+            valoresTags={valoresTags}
+            setValoresTags={setValoresTags}
+            clienteSelecionadoId={clienteSelecionadoId}
+            valorTotal={valorTotal}
+            isSubmitting={isSubmitting}
+        />
         
-        <div className="lg:col-span-3 flex flex-col sm:flex-row gap-4">
-            <Button 
-                onClick={handlePreview} 
-                variant="outline"
-                className="flex-1 h-12"
-                disabled={!modelo || !clienteSelecionadoId || valorTotal <= 0}
-            >
-                <Eye className="mr-2 h-4 w-4" />
-                Pré-visualizar Contrato
-            </Button>
-            <Button 
-                onClick={handleSalvarContrato} 
-                className="flex-1 h-12"
-                disabled={isSubmitting || !clienteSelecionadoId || valorTotal <= 0}
-            >
-                {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                {isEditing ? 'Salvar Edição e Reajustar Contas' : 'Salvar e Gerar Contas a Receber'}
-            </Button>
-        </div>
+        <ContratoAcoesRodape
+            isEditing={isEditing}
+            isSubmitting={isSubmitting}
+            isReadyToSave={isReadyToSave}
+            handlePreview={handlePreview}
+            handleSalvarContrato={handleSalvarContrato}
+        />
         
       </div>
       
