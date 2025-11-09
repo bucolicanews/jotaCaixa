@@ -157,7 +157,7 @@ const FormModeloSocietario: React.FC<FormModeloSocietarioProps> = ({ modeloInici
                     </div>
                 </div>
                 
-                {/* Coluna 3: Tags e Blocos Disponíveis (REESTRUTURADO) */}
+                {/* Coluna 3: Tags e Blocos Disponíveis */}
                 <Card className="lg:col-span-1 max-h-[600px] overflow-y-auto">
                     <CardHeader className="p-3 border-b">
                         <CardTitle className="text-sm">Referências (Arraste ou Copie)</CardTitle>
@@ -168,9 +168,8 @@ const FormModeloSocietario: React.FC<FormModeloSocietarioProps> = ({ modeloInici
                     <ScrollArea className="h-[500px]">
                         <CardContent className="p-3 space-y-3">
                             
-                            {/* Tags e Blocos em Coluna Única */}
+                            {/* Tags de Cliente/Empresa */}
                             <div className="space-y-3">
-                                
                                 <h4 className="font-semibold text-sm border-b pb-1">Tags de Cliente/Empresa</h4>
                                 {tagsDisponiveis.map((tag) => (
                                     <div 
@@ -197,8 +196,11 @@ const FormModeloSocietario: React.FC<FormModeloSocietarioProps> = ({ modeloInici
                                         </p>
                                     </div>
                                 ))}
-                                
-                                <h4 className="font-semibold text-sm border-b pb-1 pt-3">Blocos Reutilizáveis</h4>
+                            </div>
+                            
+                            {/* Blocos Reutilizáveis */}
+                            <div className="space-y-3 pt-3 border-t">
+                                <h4 className="font-semibold text-sm border-b pb-1">Blocos Reutilizáveis</h4>
                                 {blocosTags.length === 0 ? (
                                     <p className="text-xs text-muted-foreground">Nenhum bloco cadastrado.</p>
                                 ) : (
@@ -209,13 +211,13 @@ const FormModeloSocietario: React.FC<FormModeloSocietarioProps> = ({ modeloInici
                                             draggable
                                             onDragStart={(e) => handleDragStart(e, bloco.nome_tag)}
                                         >
-                                            <div className="flex justify-between items-center">
-                                                <span className="font-mono text-xs font-semibold text-blue-500">{bloco.nome_tag}</span>
+                                            <div className="flex justify-between items-start">
+                                                <span className="font-mono text-xs font-semibold text-blue-500 break-all pr-2">{bloco.nome_tag}</span>
                                                 <Button 
                                                     type="button" 
                                                     variant="ghost" 
                                                     size="icon" 
-                                                    className="h-6 w-6"
+                                                    className="h-6 w-6 flex-shrink-0"
                                                     onClick={() => handleCopyTag(bloco.nome_tag)}
                                                 >
                                                     <Copy className="w-3 h-3" />
