@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, FileSignature, ChevronLeft, Save, Eye } from 'lucide-react';
+import { Loader2, FileSignature, ChevronLeft, Save, Eye, Building2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { ModeloSocietario, BlocoSocietario } from '@/types/documentos-societarios';
@@ -19,6 +19,11 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { format } from 'date-fns';
 
+interface EmpresaContrato {
+    id: string;
+    nome: string;
+}
+
 const GerarDocumentoSocietario: React.FC = () => {
   const { modeloId } = useParams<{ modeloId: string }>();
   const navigate = useNavigate();
@@ -27,6 +32,7 @@ const GerarDocumentoSocietario: React.FC = () => {
   const [modelo, setModelo] = useState<ModeloSocietario | null>(null);
   const [blocos, setBlocos] = useState<BlocoSocietario[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [empresasContrato, setEmpresasContrato] = useState<EmpresaContrato[]>([]); 
   
   const [valoresTags, setValoresTags] = useState<Record<string, string>>({});
   const [carregandoDados, setCarregandoDados] = useState(true);
@@ -37,6 +43,8 @@ const GerarDocumentoSocietario: React.FC = () => {
   
   const [clienteSelecionadoId, setClienteSelecionadoId] = useState<string>('');
   const [tituloDocumento, setTituloDocumento] = useState('');
+  
+  const [proprietarioContratoId, setProprietarioContratoId] = useState<string | null>(null); 
 
   const isAdmin = role === 'Admin';
   const isCliente = role === 'Cliente';
@@ -73,6 +81,41 @@ const GerarDocumentoSocietario: React.FC = () => {
     return null;
   }, [perfil, isAdmin, isCliente]);
 
+  // --- FUNÇÃO DE BUSCA DE CLIENTES E TAGS DEPENDENTE DO PROPRIETÁRIO ---
+  const fetchDependentData = useCallback(async (targetEmpresaId: string) => {
+    if (!targetEmpresaId) return;
+    
+    // 1. Buscar Blocos Reutilizáveis
+    const { data: blocosData } = await supabase
+        .from('blocos_societarios')
+        .select('*')
+        .eq('proprietario_id', targetEmpresaId)
+        .order('titulo');
+    setBlocos(blocosData as BlocoSocietario[] || []);
+    
+    // 2. Buscar Clientes (Contratados) - Sempre da tabela 'clientes' (CR)
+    const { data: clientesCRData, error: errorCR } = await supabase
+        .from('clientes')
+        .select('*')
+        .eq('proprietario_id', targetEmpresaId)
+        .order('nome');
+        
+    if (errorCR) {
+        showError('Erro ao carregar clientes CR: ' + errorCR.message);
+        setClientes([]);
+    } else {
+        const combinedClients = (clientesCRData as Cliente[]).sort((a, b) => a.nome.localeCompare(b.nome));
+        setClientes(combinedClients);
+        
+        // Se o cliente selecionado não estiver mais na lista, limpa a seleção
+        if (clienteSelecionadoId && !combinedClients.some(c => c.id === clienteSelecionadoId)) {
+            setClienteSelecionadoId('');
+        }
+    }
+    
+  }, [clienteSelecionadoId]);
+
+
   // --- FUNÇÃO PRINCIPAL DE BUSCA DE DADOS INICIAIS ---
   const buscarDados = useCallback(async () => {
     if (!modeloId || !ownerIdLogado) {
@@ -98,41 +141,45 @@ const GerarDocumentoSocietario: React.FC = () => {
     setModelo(modeloData as ModeloSocietario);
     setTituloDocumento(modeloData.titulo);
     
-    // 2. Buscar Blocos Reutilizáveis
-    const { data: blocosData } = await supabase
-        .from('blocos_societarios')
-        .select('*')
-        .eq('proprietario_id', ownerIdLogado)
-        .order('titulo');
-    setBlocos(blocosData as BlocoSocietario[] || []);
-    
-    // 3. Buscar Clientes (Contratados)
-    let combinedClients: Cliente[] = [];
-    
-    // Se for Admin ou Cliente, buscamos clientes da tabela 'clientes' (CR)
-    const { data: clientesCRData, error: errorCR } = await supabase
-        .from('clientes')
-        .select('*')
-        .eq('proprietario_id', ownerIdLogado)
-        .order('nome');
-        
-    if (errorCR) {
-        showError('Erro ao carregar clientes CR: ' + errorCR.message);
-    } else {
-        combinedClients.push(...(clientesCRData as Cliente[]));
+    // 2. Configurar Empresas Contratantes (Apenas Admin)
+    let initialProprietarioContratoId = ownerIdLogado;
+    if (isAdmin) {
+        const { data: clientesData, error: clientesError } = await supabase
+            .from('tbl_clientes')
+            .select('id, nome')
+            .eq('aprovado', true)
+            .order('nome');
+            
+        if (clientesError) {
+            showError('Erro ao carregar clientes do sistema: ' + clientesError.message);
+        } else {
+            const adminOption: EmpresaContrato = { id: ownerIdLogado, nome: 'Meus Documentos (Admin)' };
+            const allClients = [adminOption, ...(clientesData as EmpresaContrato[])];
+            setEmpresasContrato(allClients);
+            initialProprietarioContratoId = allClients[0].id;
+        }
     }
     
-    combinedClients.sort((a, b) => a.nome.localeCompare(b.nome));
-    setClientes(combinedClients);
+    setProprietarioContratoId(initialProprietarioContratoId);
     
     setCarregandoDados(false);
-  }, [modeloId, ownerIdLogado, navigate]);
+  }, [modeloId, ownerIdLogado, navigate, isAdmin]);
   
+  // Efeito para monitorar a mudança do proprietário do contrato (proprietarioContratoId)
+  useEffect(() => {
+      if (proprietarioContratoId) {
+          fetchDependentData(proprietarioContratoId);
+      }
+  }, [proprietarioContratoId, fetchDependentData]);
+
+
   useEffect(() => {
     if (!carregandoSessao && ownerIdLogado) {
       buscarDados();
+    } else if (!carregandoSessao && !isAdmin && !isCliente) {
+        navigate('/painel', { replace: true });
     }
-  }, [carregandoSessao, ownerIdLogado, buscarDados]);
+  }, [carregandoSessao, ownerIdLogado, buscarDados, navigate, isAdmin, isCliente]);
 
   // --- Lógica de Preenchimento de Tags ---
   const updateTags = useCallback(() => {
@@ -161,7 +208,7 @@ const GerarDocumentoSocietario: React.FC = () => {
         if (tag.origem_dado) {
             const [sourceTable, sourceField] = tag.origem_dado.split('.');
             
-            // Mapeamento de dados da Empresa Logada (Contratante) - tbl_clientes / tbl_admins
+            // Mapeamento de dados da Empresa Logada (Contratada) - tbl_clientes / tbl_admins
             if ((sourceTable === 'tbl_clientes' || sourceTable === 'tbl_admins') && empresaLogada) {
                 const empresaData = empresaLogada as any;
                 if (empresaData && empresaData[sourceField]) {
@@ -223,7 +270,7 @@ const GerarDocumentoSocietario: React.FC = () => {
   };
 
   const handleSalvarDocumento = async () => {
-    if (!modelo || !clienteSelecionadoId || !ownerIdLogado || !tituloDocumento) {
+    if (!modelo || !clienteSelecionadoId || !ownerIdLogado || !tituloDocumento || !proprietarioContratoId) {
         showError('Preencha Título, Cliente e Proprietário.');
         return;
     }
@@ -236,7 +283,7 @@ const GerarDocumentoSocietario: React.FC = () => {
         const documentoData = {
             modelo_id: modelo.id,
             cliente_id: clienteSelecionadoId,
-            proprietario_id: ownerIdLogado,
+            proprietario_id: proprietarioContratoId, // Usando o proprietário selecionado
             status: 'finalizado',
             valores_tags_preenchidos: { ...valoresTags, titulo: tituloDocumento },
             conteudo_renderizado: conteudoRenderizado,
@@ -328,6 +375,26 @@ const GerarDocumentoSocietario: React.FC = () => {
             <CardHeader><CardTitle className="text-xl">Dados do Documento</CardTitle></CardHeader>
             <CardContent className="space-y-6">
                 
+                {isAdmin && (
+                    <div className="space-y-2">
+                        <Label htmlFor="empresa-contrato">Empresa Proprietária do Documento</Label>
+                        <Select 
+                            value={proprietarioContratoId || ''} 
+                            onValueChange={setProprietarioContratoId}
+                        >
+                            <SelectTrigger id="empresa-contrato">
+                                <Building2 className="w-4 h-4 mr-2 text-muted-foreground" />
+                                <SelectValue placeholder="Selecione a Empresa" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {empresasContrato.map(e => (
+                                    <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                )}
+                
                 <div className="space-y-2">
                     <Label htmlFor="titulo-documento">Título do Documento Gerado</Label>
                     <Input 
@@ -340,7 +407,7 @@ const GerarDocumentoSocietario: React.FC = () => {
                 
                 <div className="space-y-2">
                     <Label htmlFor="cliente">Cliente (Contratado)</Label>
-                    <Select value={clienteSelecionadoId} onValueChange={setClienteSelecionadoId}>
+                    <Select value={clienteSelecionadoId} onValueChange={setClienteSelecionadoId} disabled={!proprietarioContratoId}>
                         <SelectTrigger id="cliente">
                             <SelectValue placeholder="Selecione o Cliente" />
                         </SelectTrigger>
