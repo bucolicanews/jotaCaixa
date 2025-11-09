@@ -12,6 +12,7 @@ import { Link } from 'react-router-dom';
 import { format, parseISO } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import ContratoPreviewDialog from '@/components/contratos/ContratoPreviewDialog';
+import { useSessao } from '@/hooks/use-sessao';
 
 interface DocumentoComCliente extends DocumentoSocietarioGerado {
     tbl_clientes: { nome: string } | null; // CORRIGIDO: Usando tbl_clientes

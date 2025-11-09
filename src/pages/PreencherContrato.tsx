@@ -5,7 +5,7 @@ import { Loader2, FileSignature, ChevronLeft, Save, CalendarIcon, Eye, Building2
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { ContratoModelo, ContratoTag, ContratoGerado } from '@/types/contratos';
-import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -18,11 +18,8 @@ import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { TAGS_PADRAO } from '@/config/contrato-tags-padrao';
 import ContratoPreviewDialog from '@/components/contratos/ContratoPreviewDialog';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { useSessao } from '@/hooks/use-sessao';
 import { BlocoSocietario } from '@/types/documentos-societarios';
-import { ptBR } from 'date-fns/locale';
-import BlocoSocietarioCard from '@/components/modelos-societarios/BlocoSocietarioCard';
 
 type TipoLancamento = 'unico' | 'repetir' | 'parcelar';
 type TipoConteudo = 'html' | 'texto';
@@ -100,7 +97,7 @@ const PreencherContrato: React.FC = () => {
   
   const [proprietarioContratoId, setProprietarioContratoId] = useState<string | null>(null); 
   const [empresasContrato, setEmpresasContrato] = useState<EmpresaContrato[]>([]);
-  const [empresaLogada, setEmpresaLogada] = useState<EmpresaLogada | null>(null); // Declarado corretamente
+  const [empresaLogada, setEmpresaLogada] = useState<EmpresaLogada | null>(null);
 
   const isAdmin = role === 'Admin';
   const isCliente = role === 'Cliente';
