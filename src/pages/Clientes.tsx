@@ -53,6 +53,8 @@ interface ClienteCRComStatus extends Cliente {
     system_client_status?: 'Ativo' | 'Pendente' | 'Bloqueado' | 'Expirado' | 'CR'; // Adicionado 'CR'
     contratos_count: number; // NOVO
     documentos_societarios_count: number; // NOVO
+    // NOVO CAMPO PARA CATEGORIZAÇÃO VISUAL
+    origem_cr: 'Promovido' | 'Contrato' | 'Doc Societário' | 'Novo/CR' | 'Bloqueado';
 }
 
 const ClientesPage = () => {
@@ -223,6 +225,7 @@ const ClientesPage = () => {
           const isSystemClient = !!systemClient;
           
           let systemStatus: ClienteCRComStatus['system_client_status'] = 'CR';
+          let origemCR: ClienteCRComStatus['origem_cr'] = 'Novo/CR';
           
           if (isSystemClient) {
               const dataFimAcesso = systemClient.data_fim_acesso ? parseISO(systemClient.data_fim_acesso) : null;
@@ -233,10 +236,23 @@ const ClientesPage = () => {
                   systemStatus = 'Pendente';
               } else if (isBlocked) {
                   systemStatus = 'Bloqueado';
+                  origemCR = 'Bloqueado';
               } else if (isAtivo) {
                   systemStatus = 'Ativo';
               } else {
                   systemStatus = 'Expirado';
+              }
+              
+              // Se é cliente do sistema, a origem é Promovido
+              origemCR = 'Promovido';
+          } else {
+              // Cliente CR puro
+              if (contratosMap[cliente.id] > 0) {
+                  origemCR = 'Contrato';
+              } else if (documentosMap[cliente.id] > 0) {
+                  origemCR = 'Doc Societário';
+              } else {
+                  origemCR = 'Novo/CR';
               }
           }
           
@@ -246,6 +262,7 @@ const ClientesPage = () => {
               system_client_status: systemStatus,
               contratos_count: contratosMap[cliente.id] || 0,
               documentos_societarios_count: documentosMap[cliente.id] || 0,
+              origem_cr: origemCR, // NOVO CAMPO
           };
           
           // Desduplicação: Se o ID do cliente CR é o ID de um cliente do sistema, ele é o registro principal.
@@ -603,10 +620,10 @@ const ClientesPage = () => {
   
   // --- Lógica de Filtragem de Clientes CR ---
   const clientesCRAgrupados = useMemo(() => {
-      const promovidos = clientesCR.filter(c => c.is_system_client);
-      const comContratos = clientesCR.filter(c => !c.is_system_client && c.contratos_count > 0);
-      const comDocSocietario = clientesCR.filter(c => !c.is_system_client && c.documentos_societarios_count > 0 && c.contratos_count === 0);
-      const novosCR = clientesCR.filter(c => !c.is_system_client && c.contratos_count === 0 && c.documentos_societarios_count === 0);
+      const promovidos = clientesCR.filter(c => c.origem_cr === 'Promovido' || c.origem_cr === 'Bloqueado');
+      const comContratos = clientesCR.filter(c => c.origem_cr === 'Contrato');
+      const comDocSocietario = clientesCR.filter(c => c.origem_cr === 'Doc Societário');
+      const novosCR = clientesCR.filter(c => c.origem_cr === 'Novo/CR');
       
       return { promovidos, comContratos, comDocSocietario, novosCR };
   }, [clientesCR]);
@@ -650,25 +667,33 @@ const ClientesPage = () => {
                     clientesCRParaExibir.map((cliente) => {
                         // Verifica se o cliente CR já é um cliente do sistema (tbl_clientes)
                         const isSystemClient = cliente.is_system_client;
-                        const systemStatus = cliente.system_client_status;
                         
                         let statusBadge;
-                        if (isSystemClient) {
-                            // Se é cliente do sistema, exibe o status real
-                            statusBadge = (
-                                <Badge variant={systemStatus === 'Ativo' ? 'default' : systemStatus === 'Pendente' ? 'warning' : 'destructive'}>
-                                    {systemStatus}
-                                </Badge>
-                            );
-                        } else {
-                            // Se não é cliente do sistema, exibe apenas CR
-                            statusBadge = <Badge variant="secondary">CR</Badge>;
+                        
+                        // Define o status baseado na origem_cr
+                        switch (cliente.origem_cr) {
+                            case 'Promovido':
+                                statusBadge = <Badge variant="default">Promovido</Badge>;
+                                break;
+                            case 'Bloqueado':
+                                statusBadge = <Badge variant="destructive">Bloqueado</Badge>;
+                                break;
+                            case 'Contrato':
+                                statusBadge = <Badge variant="secondary">Contrato</Badge>;
+                                break;
+                            case 'Doc Societário':
+                                statusBadge = <Badge variant="secondary">Doc Societário</Badge>;
+                                break;
+                            case 'Novo/CR':
+                            default:
+                                statusBadge = <Badge variant="outline">CR</Badge>;
+                                break;
                         }
                         
                         const isActionDisabled = carregandoDados || isSystemClient;
                         
                         // NOVO: Classe de destaque para clientes promovidos
-                        const rowClassName = isSystemClient ? 'bg-green-500/10' : '';
+                        const rowClassName = cliente.origem_cr === 'Promovido' ? 'bg-green-500/10' : '';
 
                         return (
                             <TableRow key={cliente.id} className={rowClassName}>
