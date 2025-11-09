@@ -736,18 +736,31 @@ const ClientesPage = () => {
                                 <TableCell className="text-right">
                                     <div className="flex justify-end space-x-1">
                                         
-                                        {/* BOTÃO PROMOVER PARA SISTEMA (Sem Convite) - SÓ APARECE SE NÃO FOR CLIENTE DO SISTEMA */}
-                                        {(isAdmin || isClient) && cliente.email && !isSystemClient && (
-                                            <Button 
-                                                variant="default" 
-                                                size="sm" 
-                                                onClick={() => handlePromoteToSystem(cliente)}
-                                                title="Promover para Cliente do Sistema (Sem Convite de Login)"
-                                                disabled={isActionDisabled}
-                                                className="h-8 bg-orange-500 hover:bg-orange-600"
-                                            >
-                                                <ArrowRight className="w-4 h-4 mr-1" /> Promover
-                                            </Button>
+                                        {/* BOTÃO PROMOVER / DESPROMOVER */}
+                                        {(isAdmin || isClient) && cliente.email && (
+                                            isSystemClient ? (
+                                                <Button 
+                                                    variant="destructive" 
+                                                    size="sm" 
+                                                    onClick={() => handleDemoteClient(cliente as unknown as EmpresaSistema)}
+                                                    title="Despromover Cliente (Reverte para CR)"
+                                                    disabled={isActionDisabled}
+                                                    className="h-8"
+                                                >
+                                                    <Undo2 className="w-4 h-4 mr-1" /> Despromover
+                                                </Button>
+                                            ) : (
+                                                <Button 
+                                                    variant="default" 
+                                                    size="sm" 
+                                                    onClick={() => handlePromoteToSystem(cliente)}
+                                                    title="Promover para Cliente do Sistema (Sem Convite de Login)"
+                                                    disabled={isActionDisabled}
+                                                    className="h-8 bg-orange-500 hover:bg-orange-600"
+                                                >
+                                                    <ArrowRight className="w-4 h-4 mr-1" /> Promover
+                                                </Button>
+                                            )
                                         )}
                                         
                                         {/* BOTÃO CONVITE / ACESSO - SÓ APARECE SE FOR CLIENTE DO SISTEMA */}
