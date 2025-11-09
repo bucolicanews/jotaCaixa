@@ -733,9 +733,9 @@ const ClientesPage = () => {
                         // NOVO: Classe de destaque para clientes promovidos
                         const rowClassName = isSystemClient ? 'bg-green-500/10' : '';
                         
-                        // NOVO: Condição para ocultar o botão Despromover
+                        // NOVO: Condição para ocultar o botão Despromover e Acesso
                         const hasActiveLinks = cliente.contratos_count > 0 || cliente.documentos_societarios_count > 0;
-                        const shouldHideDemote = isSystemClient && hasActiveLinks;
+                        const shouldHideDemoteOrAccess = isSystemClient && hasActiveLinks;
 
                         return (
                             <TableRow key={cliente.id} className={rowClassName}>
@@ -761,7 +761,7 @@ const ClientesPage = () => {
                                         {/* BOTÃO PROMOVER / DESPROMOVER */}
                                         {(isAdmin || isClient) && cliente.email && (
                                             isSystemClient ? (
-                                                !shouldHideDemote && (
+                                                !shouldHideDemoteOrAccess && (
                                                     <Button 
                                                         variant="destructive" 
                                                         size="sm" 
@@ -787,8 +787,8 @@ const ClientesPage = () => {
                                             )
                                         )}
                                         
-                                        {/* BOTÃO CONVITE / ACESSO - SÓ APARECE SE FOR CLIENTE DO SISTEMA */}
-                                        {isAdmin && cliente.email && isSystemClient && (
+                                        {/* BOTÃO CONVITE / ACESSO - SÓ APARECE SE FOR CLIENTE DO SISTEMA E NÃO TIVER VÍNCULOS */}
+                                        {isAdmin && cliente.email && isSystemClient && !shouldHideDemoteOrAccess && (
                                             <Button 
                                                 variant="secondary" 
                                                 size="sm" 
