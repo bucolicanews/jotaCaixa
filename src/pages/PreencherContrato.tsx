@@ -745,7 +745,9 @@ const PreencherContrato: React.FC = () => {
         if (parcelError) throw parcelError;
 
         showSuccess(`Contrato ${isEditing ? 'atualizado' : 'gerado'} e contas a receber ${isEditing ? 'reajustadas' : 'criadas'}!`);
-        navigate('/contratos');
+        
+        // CORREÇÃO CRÍTICA: Força a navegação para a página de contratos
+        navigate('/contratos', { replace: true });
         
     } catch (error: any) {
         console.error('Erro ao salvar contrato:', error);
