@@ -18,7 +18,7 @@ import ModeloPreviewDialog from '@/components/ModeloPreviewDialog';
 import { TAGS_PADRAO } from '@/config/contrato-tags-padrao';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
-// Componente de Formulário Simples para Modelo
+// Componente de Formulário Simples para Bloco
 interface FormModeloSocietarioProps {
     modeloInicial?: ModeloSocietario | null;
     proprietarioId: string;
@@ -158,7 +158,7 @@ const FormModeloSocietario: React.FC<FormModeloSocietarioProps> = ({ modeloInici
                 </div>
                 
                 {/* Coluna 3: Tags e Blocos Disponíveis */}
-                <Card className="lg:col-span-1 max-h-[600px] overflow-y-auto">
+                <Card className="lg:col-span-1">
                     <CardHeader className="p-3 border-b">
                         <CardTitle className="text-sm">Referências (Arraste ou Copie)</CardTitle>
                         <Button type="button" variant="destructive" size="sm" onClick={handleClearTemplate} className="w-full">
@@ -178,20 +178,20 @@ const FormModeloSocietario: React.FC<FormModeloSocietarioProps> = ({ modeloInici
                                         draggable
                                         onDragStart={(e) => handleDragStart(e, tag.nome_tag)}
                                     >
-                                        <div className="flex justify-between items-center">
-                                            <span className="font-mono text-xs font-semibold text-primary">{tag.nome_tag}</span>
+                                        <div className="flex justify-between items-start">
+                                            <span className="font-mono text-xs font-semibold text-primary break-all pr-2">{tag.nome_tag}</span>
                                             <Button 
                                                 type="button" 
                                                 variant="ghost" 
                                                 size="icon" 
-                                                className="h-6 w-6"
+                                                className="h-6 w-6 flex-shrink-0"
                                                 onClick={() => handleCopyTag(tag.nome_tag)}
                                             >
                                                 <Copy className="w-3 h-3" />
                                             </Button>
                                         </div>
                                         <p className="text-xs text-muted-foreground">
-                                            <Tag className="w-3 h-3 mr-1 text-muted-foreground" />
+                                            <Tag className="w-3 h-3 mr-1 text-muted-foreground inline-block align-text-bottom" />
                                             {tag.descricao}
                                         </p>
                                     </div>
