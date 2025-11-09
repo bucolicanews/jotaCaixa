@@ -236,10 +236,10 @@ const ClientesPage = () => {
                   systemStatus = 'Pendente';
               } else if (isBlocked) {
                   systemStatus = 'Bloqueado';
-                  origemCR = 'Bloqueado';
+                  origemCR = 'Promovido'; // Promovido Ativo
               } else if (isAtivo) {
                   systemStatus = 'Ativo';
-                  origemCR = 'Promovido'; // Promovido Ativo
+                  origemCR = 'Promovido'; // Promovido Expirado
               } else {
                   systemStatus = 'Expirado';
                   origemCR = 'Promovido'; // Promovido Expirado
@@ -495,7 +495,7 @@ const ClientesPage = () => {
             .update({ is_system_client: true })
             .eq('id', cliente.id);
             
-        if (updateCRError) throw updateCRError;
+        if (updateCRError) console.error('Aviso: Falha ao atualizar is_system_client na tabela clientes:', updateCRError);
         
         showSuccess(`Cliente ${cliente.nome} promovido para Cliente do Sistema com sucesso!`);
         
@@ -732,6 +732,10 @@ const ClientesPage = () => {
                         
                         // NOVO: Classe de destaque para clientes promovidos
                         const rowClassName = isSystemClient ? 'bg-green-500/10' : '';
+                        
+                        // NOVO: Condição para ocultar o botão Despromover
+                        const hasActiveLinks = cliente.contratos_count > 0 || cliente.documentos_societarios_count > 0;
+                        const shouldHideDemote = isSystemClient && hasActiveLinks;
 
                         return (
                             <TableRow key={cliente.id} className={rowClassName}>
@@ -757,16 +761,18 @@ const ClientesPage = () => {
                                         {/* BOTÃO PROMOVER / DESPROMOVER */}
                                         {(isAdmin || isClient) && cliente.email && (
                                             isSystemClient ? (
-                                                <Button 
-                                                    variant="destructive" 
-                                                    size="sm" 
-                                                    onClick={() => handleDemoteClient(cliente as unknown as EmpresaSistema)}
-                                                    title="Despromover Cliente (Reverte para CR)"
-                                                    disabled={isActionDisabled}
-                                                    className="h-8"
-                                                >
-                                                    <Undo2 className="w-4 h-4 mr-1" /> Despromover
-                                                </Button>
+                                                !shouldHideDemote && (
+                                                    <Button 
+                                                        variant="destructive" 
+                                                        size="sm" 
+                                                        onClick={() => handleDemoteClient(cliente as unknown as EmpresaSistema)}
+                                                        title="Despromover Cliente (Reverte para CR)"
+                                                        disabled={isActionDisabled}
+                                                        className="h-8"
+                                                    >
+                                                        <Undo2 className="w-4 h-4 mr-1" /> Despromover
+                                                    </Button>
+                                                )
                                             ) : (
                                                 <Button 
                                                     variant="default" 
