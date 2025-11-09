@@ -239,12 +239,12 @@ const ClientesPage = () => {
                   origemCR = 'Bloqueado';
               } else if (isAtivo) {
                   systemStatus = 'Ativo';
+                  origemCR = 'Promovido'; // Promovido Ativo
               } else {
                   systemStatus = 'Expirado';
+                  origemCR = 'Promovido'; // Promovido Expirado
               }
               
-              // Se é cliente do sistema, a origem é Promovido
-              origemCR = 'Promovido';
           } else {
               // Cliente CR puro
               if (contratosMap[cliente.id] > 0) {
@@ -620,10 +620,15 @@ const ClientesPage = () => {
   
   // --- Lógica de Filtragem de Clientes CR ---
   const clientesCRAgrupados = useMemo(() => {
-      const promovidos = clientesCR.filter(c => c.origem_cr === 'Promovido' || c.origem_cr === 'Bloqueado');
-      const comContratos = clientesCR.filter(c => c.origem_cr === 'Contrato');
-      const comDocSocietario = clientesCR.filter(c => c.origem_cr === 'Doc Societário');
-      const novosCR = clientesCR.filter(c => c.origem_cr === 'Novo/CR');
+      // Promovidos: Clientes CR que são clientes do sistema (is_system_client: true)
+      const promovidos = clientesCR.filter(c => c.is_system_client);
+      
+      // Clientes CR Puros (não são clientes do sistema)
+      const clientesCRPuros = clientesCR.filter(c => !c.is_system_client);
+      
+      const comContratos = clientesCRPuros.filter(c => c.contratos_count > 0);
+      const comDocSocietario = clientesCRPuros.filter(c => c.documentos_societarios_count > 0 && c.contratos_count === 0);
+      const novosCR = clientesCRPuros.filter(c => c.contratos_count === 0 && c.documentos_societarios_count === 0);
       
       return { promovidos, comContratos, comDocSocietario, novosCR };
   }, [clientesCR]);
@@ -667,33 +672,38 @@ const ClientesPage = () => {
                     clientesCRParaExibir.map((cliente) => {
                         // Verifica se o cliente CR já é um cliente do sistema (tbl_clientes)
                         const isSystemClient = cliente.is_system_client;
+                        const systemStatus = cliente.system_client_status;
                         
                         let statusBadge;
                         
                         // Define o status baseado na origem_cr
-                        switch (cliente.origem_cr) {
-                            case 'Promovido':
-                                statusBadge = <Badge variant="default">Promovido</Badge>;
-                                break;
-                            case 'Bloqueado':
-                                statusBadge = <Badge variant="destructive">Bloqueado</Badge>;
-                                break;
-                            case 'Contrato':
-                                statusBadge = <Badge variant="secondary">Contrato</Badge>;
-                                break;
-                            case 'Doc Societário':
-                                statusBadge = <Badge variant="secondary">Doc Societário</Badge>;
-                                break;
-                            case 'Novo/CR':
-                            default:
-                                statusBadge = <Badge variant="outline">CR</Badge>;
-                                break;
+                        if (isSystemClient) {
+                            // Se é cliente do sistema, exibe o status real (Ativo, Bloqueado, Expirado)
+                            let variant: 'default' | 'warning' | 'destructive' = 'default';
+                            if (systemStatus === 'Pendente') variant = 'warning';
+                            if (systemStatus === 'Bloqueado' || systemStatus === 'Expirado') variant = 'destructive';
+                            
+                            statusBadge = <Badge variant={variant}>{systemStatus}</Badge>;
+                        } else {
+                            // Se não é cliente do sistema, exibe a origem CR
+                            switch (cliente.origem_cr) {
+                                case 'Contrato':
+                                    statusBadge = <Badge variant="secondary">Contrato</Badge>;
+                                    break;
+                                case 'Doc Societário':
+                                    statusBadge = <Badge variant="secondary">Doc Societário</Badge>;
+                                    break;
+                                case 'Novo/CR':
+                                default:
+                                    statusBadge = <Badge variant="outline">CR</Badge>;
+                                    break;
+                            }
                         }
                         
                         const isActionDisabled = carregandoDados || isSystemClient;
                         
                         // NOVO: Classe de destaque para clientes promovidos
-                        const rowClassName = cliente.origem_cr === 'Promovido' ? 'bg-green-500/10' : '';
+                        const rowClassName = isSystemClient ? 'bg-green-500/10' : '';
 
                         return (
                             <TableRow key={cliente.id} className={rowClassName}>
