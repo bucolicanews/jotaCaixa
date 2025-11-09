@@ -9,7 +9,7 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
+import { ClienteProfile, UsuarioProfile, AdminProfile } from '@/types/usuario';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Cliente } from '@/types/cliente';
 import { format, addDays, parseISO } from 'date-fns';
@@ -30,6 +30,17 @@ interface EmpresaLogada {
     email: string;
     documento?: string | null;
     endereco_completo?: string | null;
+    cpf?: string | null;
+    cnpj?: string | null;
+    rg?: string | null;
+    telefone?: string | null;
+    cep?: string | null;
+    endereco?: string | null;
+    numero?: string | null;
+    complemento?: string | null;
+    bairro?: string | null;
+    cidade?: string | null;
+    estado?: string | null;
 }
 
 interface EmpresaContrato {
@@ -46,7 +57,7 @@ const PreencherContrato: React.FC = () => {
   
   const [modelo, setModelo] = useState<ContratoModelo | null>(null);
   const [contratoInicial, setContratoInicial] = useState<ContratoGerado | null>(null);
-  const [tags, setTags] = useState<ContratoTag[]>([]);
+  const [tagsCustomizadas, setTagsCustomizadas] = useState<ContratoTag[]>([]); // Tags customizadas (sem as padrão)
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [empresasContrato, setEmpresasContrato] = useState<EmpresaContrato[]>([]);
   const [empresaLogada, setEmpresaLogada] = useState<EmpresaLogada | null>(null);
@@ -112,18 +123,51 @@ const PreencherContrato: React.FC = () => {
     
     // 2. Configurar Empresa Logada (Contratante)
     let currentEmpresaLogada: EmpresaLogada | null = null;
-    if (isAdmin || isCliente) {
+    if (isAdmin) {
+        const profile = perfil as AdminProfile;
+        currentEmpresaLogada = {
+            nome: profile.nome,
+            email: profile.email,
+            documento: profile.cnpj || profile.cpf,
+            endereco_completo: `${profile.endereco || ''}, ${profile.numero || ''} ${profile.complemento || ''} - ${profile.bairro || ''}, ${profile.cidade || ''}/${profile.estado || ''}`,
+            cpf: profile.cpf,
+            cnpj: profile.cnpj,
+            rg: profile.rg,
+            telefone: profile.telefone,
+            cep: profile.cep,
+            endereco: profile.endereco,
+            numero: profile.numero,
+            complemento: profile.complemento,
+            bairro: profile.bairro,
+            cidade: profile.cidade,
+            estado: profile.estado,
+        };
+    } else if (isCliente) {
         const profile = perfil as ClienteProfile;
         currentEmpresaLogada = {
             nome: profile.nome,
             email: profile.email,
-            documento: profile.documento,
-            endereco_completo: profile.endereco_completo,
+            documento: profile.documento || profile.cpf,
+            endereco_completo: `${profile.endereco || ''}, ${profile.numero || ''} ${profile.complemento || ''} - ${profile.bairro || ''}, ${profile.cidade || ''}/${profile.estado || ''}`,
+            cpf: profile.cpf,
+            rg: profile.rg,
+            telefone: profile.telefone,
+            cep: profile.cep,
+            endereco: profile.endereco,
+            numero: profile.numero,
+            complemento: profile.complemento,
+            bairro: profile.bairro,
+            cidade: profile.cidade,
+            estado: profile.estado,
         };
     } else if (role === 'Usuario' && ownerIdLogado) {
-        const { data: empresaData } = await supabase.from('tbl_clientes').select('nome, email, documento, endereco_completo').eq('id', ownerIdLogado).single();
+        const { data: empresaData } = await supabase.from('tbl_clientes').select('nome, email, documento, cpf, rg, telefone, cep, endereco, numero, complemento, bairro, cidade, estado').eq('id', ownerIdLogado).single();
         if (empresaData) {
-            currentEmpresaLogada = empresaData;
+            currentEmpresaLogada = {
+                ...empresaData,
+                documento: empresaData.documento || empresaData.cpf,
+                endereco_completo: `${empresaData.endereco || ''}, ${empresaData.numero || ''} ${empresaData.complemento || ''} - ${empresaData.bairro || ''}, ${empresaData.cidade || ''}/${empresaData.estado || ''}`,
+            };
         }
     }
     setEmpresaLogada(currentEmpresaLogada);
@@ -277,7 +321,7 @@ const PreencherContrato: React.FC = () => {
         .order('nome_tag', { ascending: true });
         
     if (tagsData) {
-        setTags(tagsData as ContratoTag[]);
+        setTagsCustomizadas(tagsData as ContratoTag[]);
     }
     
     // 2. Buscar Clientes (Contratados)
@@ -356,95 +400,93 @@ const PreencherContrato: React.FC = () => {
   }, [proprietarioContratoId, fetchDependentData]);
 
 
-  useEffect(() => {
-    const updateTags = () => {
-        const newTags: Record<string, string> = {};
-        const cliente = clientes.find(c => c.id === clienteSelecionadoId);
-        
-        const valorNumerico = Number(valorTotal);
-        const numParcelas = Number(numeroParcelas);
-        
-        const valorFinalContrato = tipoLancamento === 'repetir' ? valorNumerico * numParcelas : valorNumerico;
-        const valorParcela = tipoLancamento === 'parcelar' ? (valorNumerico / numParcelas) : valorNumerico;
-        
-        let primeiroVencimento: Date | undefined;
-        if (tipoLancamento === 'unico') {
-            primeiroVencimento = dataVencimentoUnico;
-        } else {
-            primeiroVencimento = dataPrimeiroVencimento;
-        }
-
-        TAGS_PADRAO.forEach(tag => {
-            switch (tag.nome_tag) {
-                case '{{EMPRESA_NOME}}':
-                    newTags[tag.nome_tag] = empresaLogada?.nome || 'N/A';
-                    break;
-                case '{{EMPRESA_EMAIL}}':
-                    newTags[tag.nome_tag] = empresaLogada?.email || 'N/A';
-                    break;
-                case '{{EMPRESA_DOCUMENTO}}':
-                    newTags[tag.nome_tag] = empresaLogada?.documento || 'N/A';
-                    break;
-                case '{{EMPRESA_ENDERECO}}':
-                    newTags[tag.nome_tag] = empresaLogada?.endereco_completo || 'N/A';
-                    break;
-                case '{{CLIENTE_NOME}}':
-                    newTags[tag.nome_tag] = cliente?.nome_fantasia || cliente?.nome || 'N/A';
-                    break;
-                case '{{CLIENTE_RAZAO_SOCIAL}}':
-                    newTags[tag.nome_tag] = cliente?.razao_social || 'N/A';
-                    break;
-                case '{{CLIENTE_DOCUMENTO}}':
-                    newTags[tag.nome_tag] = cliente?.documento || 'N/A';
-                    break;
-                case '{{CLIENTE_EMAIL}}':
-                    newTags[tag.nome_tag] = cliente?.email || 'N/A';
-                    break;
-                case '{{CLIENTE_ENDERECO}}':
-                    newTags[tag.nome_tag] = cliente?.endereco && cliente?.numero ? `${cliente.endereco}, ${cliente.numero}` : 'N/A';
-                    break;
-                case '{{CLIENTE_BAIRRO}}':
-                    newTags[tag.nome_tag] = cliente?.bairro || 'N/A';
-                    break;
-                case '{{CLIENTE_CIDADE}}':
-                    newTags[tag.nome_tag] = cliente?.cidade || 'N/A';
-                    break;
-                case '{{CLIENTE_ESTADO}}':
-                    newTags[tag.nome_tag] = cliente?.estado || 'N/A';
-                    break;
-                case '{{VALOR_TOTAL_CONTRATO}}':
-                    newTags[tag.nome_tag] = formatCurrency(valorFinalContrato);
-                    break;
-                case '{{VALOR_PARCELA}}':
-                    newTags[tag.nome_tag] = formatCurrency(valorParcela);
-                    break;
-                case '{{NUMERO_PARCELAS}}':
-                    newTags[tag.nome_tag] = String(numParcelas);
-                    break;
-                case '{{PRIMEIRO_VENCIMENTO}}':
-                    newTags[tag.nome_tag] = primeiroVencimento ? formatDate(primeiroVencimento) : 'N/A';
-                    break;
-                case '{{DATA_EMISSAO}}':
-                    newTags[tag.nome_tag] = formatDate(new Date());
-                    break;
-                default:
-                    newTags[tag.nome_tag] = valoresTags[tag.nome_tag] || '';
-                    break;
-            }
-        });
-        
-        setValoresTags(prev => {
-            const customTags = tags.map(t => t.nome_tag).filter(key => !TAGS_PADRAO.some(t => t.nome_tag === key));
-            const updatedTags = { ...newTags };
-            customTags.forEach(key => {
-                updatedTags[key] = prev[key] || '';
-            });
-            return updatedTags;
-        });
-    };
+  const updateTags = useCallback(() => {
+    const newTags: Record<string, string> = {};
+    const cliente = clientes.find(c => c.id === clienteSelecionadoId);
     
+    const valorNumerico = Number(valorTotal);
+    const numParcelas = Number(numeroParcelas);
+    
+    const valorFinalContrato = tipoLancamento === 'repetir' ? valorNumerico * numParcelas : valorNumerico;
+    const valorParcela = tipoLancamento === 'parcelar' ? (valorNumerico / numParcelas) : valorNumerico;
+    
+    let primeiroVencimento: Date | undefined;
+    if (tipoLancamento === 'unico') {
+        primeiroVencimento = dataVencimentoUnico;
+    } else {
+        primeiroVencimento = dataPrimeiroVencimento;
+    }
+    
+    // Combina tags padrão e customizadas para iteração
+    const allActiveTags = [...TAGS_PADRAO, ...tagsCustomizadas];
+
+    allActiveTags.forEach(tag => {
+        const tagKey = tag.nome_tag;
+        
+        // 1. Tenta preencher tags financeiras (TAGS_PADRAO)
+        switch (tagKey) {
+            case '{{VALOR_TOTAL_CONTRATO}}':
+                newTags[tagKey] = formatCurrency(valorFinalContrato);
+                return;
+            case '{{VALOR_PARCELA}}':
+                newTags[tagKey] = formatCurrency(valorParcela);
+                return;
+            case '{{NUMERO_PARCELAS}}':
+                newTags[tagKey] = String(numParcelas);
+                return;
+            case '{{PRIMEIRO_VENCIMENTO}}':
+                newTags[tagKey] = primeiroVencimento ? formatDate(primeiroVencimento) : 'N/A';
+                return;
+            case '{{DATA_EMISSAO}}':
+                newTags[tagKey] = formatDate(new Date());
+                return;
+        }
+        
+        // 2. Tenta preencher tags de sistema (EMPRESA_NOME, CLIENTE_NOME, etc.)
+        if (tag.origem_dado) {
+            const [sourceTable, sourceField] = tag.origem_dado.split('.');
+            
+            // Mapeamento de dados da Empresa Logada (Contratada)
+            if (sourceTable === 'tbl_clientes' || sourceTable === 'tbl_admins') {
+                const empresaData = empresaLogada as any;
+                if (empresaData && empresaData[sourceField]) {
+                    newTags[tagKey] = String(empresaData[sourceField]);
+                    return;
+                }
+            } 
+            
+            // Mapeamento de dados do Cliente Selecionado (Contratante)
+            else if (sourceTable === 'clientes' && cliente) {
+                const clienteData = cliente as any;
+                if (clienteData && clienteData[sourceField]) {
+                    newTags[tagKey] = String(clienteData[sourceField]);
+                    return;
+                }
+            } 
+            
+            // Mapeamento de dados do Usuário (Funcionário) - Se a tag for USUARIO_*
+            else if (sourceTable === 'tbl_usuarios' && perfil && 'cliente_id' in perfil) {
+                // Se o usuário logado for um funcionário, usa os dados dele
+                const usuarioData = perfil as UsuarioProfile;
+                if (usuarioData && (usuarioData as any)[sourceField]) {
+                    newTags[tagKey] = String((usuarioData as any)[sourceField]);
+                    return;
+                }
+            }
+        }
+        
+        // 3. Se não for preenchida automaticamente, usa o valor salvo anteriormente (se edição) ou o valor digitado.
+        newTags[tagKey] = valoresTags[tagKey] || '';
+    });
+    
+    setValoresTags(newTags);
+  }, [clienteSelecionadoId, valorTotal, tipoLancamento, numeroParcelas, dataVencimentoUnico, dataPrimeiroVencimento, clientes, empresaLogada, tagsCustomizadas, valoresTags, intervaloDias, tipoConteudo, perfil]);
+
+
+  useEffect(() => {
+    // Este efeito agora só chama a função de atualização
     updateTags();
-  }, [clienteSelecionadoId, valorTotal, tipoLancamento, numeroParcelas, dataVencimentoUnico, dataPrimeiroVencimento, clientes, empresaLogada, intervaloDias, tipoConteudo, tags, valoresTags]);
+  }, [updateTags]);
 
 
   const handleTagChange = (tag: string, value: string) => {
@@ -718,7 +760,35 @@ const PreencherContrato: React.FC = () => {
   const isRepetirOuParcelar = tipoLancamento !== 'unico';
   const valorLabel = tipoLancamento === 'parcelar' ? 'Valor Total a Parcelar' : 'Valor da Parcela';
   
-  const tagsCustomizadas = tags.filter(tag => !TAGS_PADRAO.some(t => t.nome_tag === tag.nome_tag));
+  // Combina tags customizadas e tags padrão que não são financeiras
+  const tagsCustomizadasECliente = [...tagsCustomizadas, ...TAGS_PADRAO.filter(t => t.origem_dado && !t.origem_dado.startsWith('contas_receber'))];
+  
+  // Filtra tags que já foram preenchidas automaticamente (para não pedir valor manual)
+  const tagsParaPreenchimentoManual = tagsCustomizadasECliente.filter(tag => {
+      // Se a tag tem origem de dado e o valor foi preenchido automaticamente, não precisa de input manual
+      if (tag.origem_dado && valoresTags[tag.nome_tag]) {
+          return false;
+      }
+      // Se a tag é uma tag de usuário (USUARIO_*) e não foi preenchida, precisa de input manual
+      if (tag.nome_tag.startsWith('{{USUARIO_')) {
+          return true;
+      }
+      // Se a tag é customizada e não tem origem de dado, precisa de input manual
+      if (!tag.origem_dado && !TAGS_PADRAO.some(t => t.nome_tag === tag.nome_tag)) {
+          return true;
+      }
+      // Se a tag é de cliente (CLIENTE_*) e não foi preenchida, precisa de input manual
+      if (tag.nome_tag.startsWith('{{CLIENTE_') && !valoresTags[tag.nome_tag]) {
+          return true;
+      }
+      
+      // Tags financeiras e tags de empresa logada (EMPRESA_*) são sempre preenchidas automaticamente
+      if (TAGS_PADRAO.some(t => t.nome_tag === tag.nome_tag)) {
+          return false;
+      }
+      
+      return true;
+  });
 
   return (
     <LayoutPrincipal>
@@ -888,12 +958,12 @@ const PreencherContrato: React.FC = () => {
                     </div>
                 </div>
                 
-                {tagsCustomizadas.length === 0 ? (
-                    <p className="text-muted-foreground">Nenhuma tag customizada cadastrada para esta empresa.</p>
+                {tagsParaPreenchimentoManual.length === 0 ? (
+                    <p className="text-muted-foreground">Nenhuma tag customizada ou de cliente requer preenchimento manual.</p>
                 ) : (
-                    tagsCustomizadas.map(tag => (
+                    tagsParaPreenchimentoManual.map(tag => (
                         <div key={tag.id} className="space-y-1">
-                            <Label htmlFor={tag.nome_tag} className="font-semibold">{tag.descricao} ({tag.nome_tag})</Label>
+                            <Label htmlFor={tag.nome_tag} className="font-semibold">{tag.descricao || tag.nome_tag} ({tag.nome_tag})</Label>
                             <Input 
                                 id={tag.nome_tag}
                                 value={valoresTags[tag.nome_tag] || ''}
