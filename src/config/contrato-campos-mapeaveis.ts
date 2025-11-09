@@ -15,8 +15,9 @@ export const CAMPOS_CLIENTE_MAPA: { field: string, label: string, tag: string }[
     { field: 'bairro', label: 'Bairro', tag: '{{CLIENTE_BAIRRO}}' },
     { field: 'cidade', label: 'Cidade', tag: '{{CLIENTE_CIDADE}}' },
     { field: 'estado', label: 'Estado (UF)', tag: '{{CLIENTE_ESTADO}}' },
-    // Adicionando mapeamentos para CPF e RG que estavam faltando
-    { field: 'cpf', label: 'CPF/CNPJ', tag: '{{CLIENTE_CPF_CNPJ}}' },
+    // Novos mapeamentos para CPF e CNPJ
+    { field: 'cpf', label: 'CPF', tag: '{{CLIENTE_CPF}}' },
+    { field: 'cnpj', label: 'CNPJ', tag: '{{CLIENTE_CNPJ}}' },
     { field: 'rg', label: 'RG', tag: '{{CLIENTE_RG}}' },
 ];
 

@@ -131,7 +131,7 @@ const PreencherContrato: React.FC = () => {
             documento: profile.cnpj || profile.cpf,
             endereco_completo: `${profile.endereco || ''}, ${profile.numero || ''} ${profile.complemento || ''} - ${profile.bairro || ''}, ${profile.cidade || ''}/${profile.estado || ''}`,
             cpf: profile.cpf,
-            cnpj: profile.cnpj,
+            cnpj: profile.cnpj, // ADICIONADO
             rg: profile.rg,
             telefone: profile.telefone,
             cep: profile.cep,
@@ -150,6 +150,7 @@ const PreencherContrato: React.FC = () => {
             documento: profile.documento || profile.cpf,
             endereco_completo: `${profile.endereco || ''}, ${profile.numero || ''} ${profile.complemento || ''} - ${profile.bairro || ''}, ${profile.cidade || ''}/${profile.estado || ''}`,
             cpf: profile.cpf,
+            cnpj: null, // Clientes não têm CNPJ na tabela de perfil
             rg: profile.rg,
             telefone: profile.telefone,
             cep: profile.cep,
@@ -167,6 +168,7 @@ const PreencherContrato: React.FC = () => {
                 ...empresaData,
                 documento: empresaData.documento || empresaData.cpf,
                 endereco_completo: `${empresaData.endereco || ''}, ${empresaData.numero || ''} ${empresaData.complemento || ''} - ${empresaData.bairro || ''}, ${empresaData.cidade || ''}/${empresaData.estado || ''}`,
+                cnpj: null,
             };
         }
     }

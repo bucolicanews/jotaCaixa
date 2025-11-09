@@ -230,6 +230,7 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
         
         const { error } = await supabase.from('tbl_clientes').update(dataToUpdate).eq('id', perfilInicial.id);
         if (error) throw error;
+        
       } else if (isUser) {
         // Edição de Usuário (Funcionário)
         
