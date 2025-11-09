@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, PlusCircle, FileText, Edit, Trash2, Eye } from 'lucide-react';
+import { Loader2, PlusCircle, FileText, Edit, Trash2, Eye, Copy, Tag, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
-import { ModeloSocietario } from '@/types/documentos-societarios';
+import { ModeloSocietario, BlocoSocietario } from '@/types/documentos-societarios';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -15,20 +15,24 @@ import { Label } from '@/components/ui/label';
 import { UsuarioProfile } from '@/types/usuario';
 import { useNavigate } from 'react-router-dom';
 import ModeloPreviewDialog from '@/components/ModeloPreviewDialog';
+import { TAGS_PADRAO } from '@/config/contrato-tags-padrao';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 // Componente de Formulário Simples para Modelo
 interface FormModeloSocietarioProps {
     modeloInicial?: ModeloSocietario | null;
     proprietarioId: string;
     onSaveComplete: () => void;
+    blocosDisponiveis: BlocoSocietario[]; // NOVO PROP
 }
 
-const FormModeloSocietario: React.FC<FormModeloSocietarioProps> = ({ modeloInicial, proprietarioId, onSaveComplete }) => {
+const FormModeloSocietario: React.FC<FormModeloSocietarioProps> = ({ modeloInicial, proprietarioId, onSaveComplete, blocosDisponiveis }) => {
     const [titulo, setTitulo] = useState(modeloInicial?.titulo || '');
     const [conteudoTemplate, setConteudoTemplate] = useState(modeloInicial?.conteudo_template || '');
     const [tipoDocumento, setTipoDocumento] = useState(modeloInicial?.tipo_documento || 'Ata');
     const [loading, setLoading] = useState(false);
     const isEditing = !!modeloInicial;
+    const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -63,21 +67,168 @@ const FormModeloSocietario: React.FC<FormModeloSocietarioProps> = ({ modeloInici
         }
         setLoading(false);
     };
+    
+    const handleCopyTag = (tag: string) => {
+        navigator.clipboard.writeText(tag);
+        showSuccess(`Tag ${tag} copiada!`);
+    };
+    
+    const handleDragStart = (e: React.DragEvent<HTMLDivElement>, tag: string) => {
+        e.dataTransfer.setData('text/plain', tag);
+    };
+    
+    const handleDrop = (e: React.DragEvent<HTMLTextAreaElement>) => {
+        e.preventDefault();
+        const tag = e.dataTransfer.getData('text/plain');
+        
+        if (tag && textareaRef.current) {
+            const textarea = textareaRef.current;
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            const currentValue = conteudoTemplate;
+            
+            const newValue = currentValue.substring(0, start) + tag + currentValue.substring(end);
+            setConteudoTemplate(newValue);
+            
+            setTimeout(() => {
+                textarea.focus();
+                textarea.selectionStart = start + tag.length;
+                textarea.selectionEnd = start + tag.length;
+            }, 0);
+        }
+    };
+    
+    const handleDragOver = (e: React.DragEvent<HTMLTextAreaElement>) => {
+        e.preventDefault();
+    };
+    
+    const handleClearTemplate = () => {
+        if (window.confirm('Tem certeza que deseja limpar todo o conteúdo do template?')) {
+            setConteudoTemplate('');
+            showSuccess('Template limpo.');
+        }
+    };
+    
+    // Filtra tags de sistema (excluindo as financeiras)
+    const tagsDisponiveis = useMemo(() => {
+        return TAGS_PADRAO.filter(t => 
+            !t.origem_dado?.startsWith('contas_receber')
+        ).sort((a, b) => a.nome_tag.localeCompare(b.nome_tag));
+    }, []);
+    
+    // Mapeia blocos para tags arrastáveis
+    const blocosTags = useMemo(() => {
+        return blocosDisponiveis.map(b => ({
+            id: b.id,
+            nome_tag: `{{BLOCO_${b.id}}}`,
+            descricao: `Bloco: ${b.titulo}`,
+            conteudo: b.conteudo,
+        }));
+    }, [blocosDisponiveis]);
+
 
     return (
         <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-                <Label htmlFor="titulo">Título do Documento</Label>
-                <Input id="titulo" placeholder="Ex: Contrato Social Padrão" value={titulo} onChange={(e) => setTitulo(e.target.value)} disabled={loading} />
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                
+                {/* Coluna 1 & 2: Formulário e Conteúdo */}
+                <div className="lg:col-span-2 space-y-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="titulo">Título do Documento</Label>
+                        <Input id="titulo" placeholder="Ex: Contrato Social Padrão" value={titulo} onChange={(e) => setTitulo(e.target.value)} disabled={loading} />
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="tipo">Tipo de Documento</Label>
+                        <Input id="tipo" placeholder="Ex: Ata, Estatuto, Contrato Social" value={tipoDocumento} onChange={(e) => setTipoDocumento(e.target.value)} disabled={loading} />
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="conteudo">Conteúdo do Template (Use tags como {'{{CLIENTE_NOME}}'} e blocos como {'{{BLOCO_ID}}'})</Label>
+                        <Textarea 
+                            ref={textareaRef}
+                            id="conteudo" 
+                            rows={15} 
+                            placeholder="Insira o template completo aqui..." 
+                            value={conteudoTemplate} 
+                            onChange={(e) => setConteudoTemplate(e.target.value)} 
+                            disabled={loading}
+                            onDrop={handleDrop}
+                            onDragOver={handleDragOver}
+                        />
+                    </div>
+                </div>
+                
+                {/* Coluna 3: Tags e Blocos Disponíveis */}
+                <Card className="lg:col-span-1 max-h-[600px] overflow-y-auto">
+                    <CardHeader className="p-3 border-b">
+                        <CardTitle className="text-sm">Referências (Arraste ou Copie)</CardTitle>
+                        <Button type="button" variant="destructive" size="sm" onClick={handleClearTemplate} className="w-full">
+                            <X className="w-3 h-3 mr-1" /> Limpar Template
+                        </Button>
+                    </CardHeader>
+                    <ScrollArea className="h-[500px]">
+                        <CardContent className="p-3 space-y-3">
+                            
+                            <h4 className="font-semibold text-sm border-b pb-1">Tags de Cliente/Empresa</h4>
+                            {tagsDisponiveis.map((tag) => (
+                                <div 
+                                    key={tag.id} 
+                                    className="flex flex-col space-y-1 border-b pb-2 last:border-b-0 cursor-grab active:cursor-grabbing"
+                                    draggable
+                                    onDragStart={(e) => handleDragStart(e, tag.nome_tag)}
+                                >
+                                    <div className="flex justify-between items-center">
+                                        <span className="font-mono text-xs font-semibold text-primary">{tag.nome_tag}</span>
+                                        <Button 
+                                            type="button" 
+                                            variant="ghost" 
+                                            size="icon" 
+                                            className="h-6 w-6"
+                                            onClick={() => handleCopyTag(tag.nome_tag)}
+                                        >
+                                            <Copy className="w-3 h-3" />
+                                        </Button>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground flex items-center">
+                                        <Tag className="w-3 h-3 mr-1 text-muted-foreground" />
+                                        {tag.descricao}
+                                    </p>
+                                </div>
+                            ))}
+                            
+                            <h4 className="font-semibold text-sm border-b pb-1 pt-3">Blocos Reutilizáveis</h4>
+                            {blocosTags.length === 0 ? (
+                                <p className="text-xs text-muted-foreground">Nenhum bloco cadastrado.</p>
+                            ) : (
+                                blocosTags.map((bloco) => (
+                                    <div 
+                                        key={bloco.id} 
+                                        className="flex flex-col space-y-1 border-b pb-2 last:border-b-0 cursor-grab active:cursor-grabbing"
+                                        draggable
+                                        onDragStart={(e) => handleDragStart(e, bloco.nome_tag)}
+                                    >
+                                        <div className="flex justify-between items-center">
+                                            <span className="font-mono text-xs font-semibold text-blue-500">{bloco.nome_tag}</span>
+                                            <Button 
+                                                type="button" 
+                                                variant="ghost" 
+                                                size="icon" 
+                                                className="h-6 w-6"
+                                                onClick={() => handleCopyTag(bloco.nome_tag)}
+                                            >
+                                                <Copy className="w-3 h-3" />
+                                            </Button>
+                                        </div>
+                                        <p className="text-xs text-muted-foreground line-clamp-1">
+                                            {bloco.descricao}
+                                        </p>
+                                    </div>
+                                ))
+                            )}
+                        </CardContent>
+                    </ScrollArea>
+                </Card>
             </div>
-            <div className="space-y-2">
-                <Label htmlFor="tipo">Tipo de Documento</Label>
-                <Input id="tipo" placeholder="Ex: Ata, Estatuto, Contrato Social" value={tipoDocumento} onChange={(e) => setTipoDocumento(e.target.value)} disabled={loading} />
-            </div>
-            <div className="space-y-2">
-                <Label htmlFor="conteudo">Conteúdo do Template (Use tags como {'{{CLIENTE_NOME}}'} e blocos como {'{{BLOCO_ID}}'})</Label>
-                <Textarea id="conteudo" rows={10} placeholder="Insira o template completo aqui..." value={conteudoTemplate} onChange={(e) => setConteudoTemplate(e.target.value)} disabled={loading} />
-            </div>
+            
             <Button type="submit" className="w-full" disabled={loading}>
                 {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : (isEditing ? 'Salvar Alterações' : 'Criar Modelo')}
             </Button>
@@ -90,6 +241,7 @@ const GerenciarModelosSocietarios: React.FC = () => {
   const { perfil, role, carregando: carregandoSessao } = useSessao();
   const navigate = useNavigate();
   const [modelos, setModelos] = useState<ModeloSocietario[]>([]);
+  const [blocos, setBlocos] = useState<BlocoSocietario[]>([]); // NOVO ESTADO
   const [carregandoModelos, setCarregandoModelos] = useState(true);
   const [dialogAberto, setDialogAberto] = useState(false);
   const [modeloSelecionado, setModeloSocietarioSelecionado] = useState<ModeloSocietario | null>(null);
@@ -104,40 +256,48 @@ const GerenciarModelosSocietarios: React.FC = () => {
   
   const ownerId = getOwnerId();
 
-  const buscarModelos = useCallback(async () => {
+  const buscarDados = useCallback(async () => {
     if (!ownerId) {
         setCarregandoModelos(false);
         return;
     }
     setCarregandoModelos(true);
     
-    let query = supabase
+    // 1. Buscar Modelos
+    const { data: modelosData, error: modelosError } = await supabase
       .from('modelos_societarios')
       .select('*')
       .eq('proprietario_id', ownerId)
       .order('titulo', { ascending: true });
 
-    const { data, error } = await query;
-
-    if (error) {
-      showError('Erro ao carregar modelos: ' + error.message);
+    if (modelosError) {
+      showError('Erro ao carregar modelos: ' + modelosError.message);
       setModelos([]);
     } else {
-      setModelos(data as ModeloSocietario[]);
+      setModelos(modelosData as ModeloSocietario[]);
     }
+    
+    // 2. Buscar Blocos
+    const { data: blocosData } = await supabase
+        .from('blocos_societarios')
+        .select('*')
+        .eq('proprietario_id', ownerId)
+        .order('titulo');
+    setBlocos(blocosData as BlocoSocietario[] || []);
+    
     setCarregandoModelos(false);
   }, [ownerId]);
 
   useEffect(() => {
     if (!carregandoSessao && ownerId) {
-      buscarModelos();
+      buscarDados();
     }
-  }, [carregandoSessao, ownerId, buscarModelos]);
+  }, [carregandoSessao, ownerId, buscarDados]);
   
   const handleSaveComplete = () => {
     setDialogAberto(false);
     setModeloSocietarioSelecionado(null);
-    buscarModelos();
+    buscarDados();
   };
 
   const handleEdit = (modelo: ModeloSocietario) => {
@@ -157,7 +317,7 @@ const GerenciarModelosSocietarios: React.FC = () => {
       showError('Erro ao excluir modelo: ' + error.message);
     } else {
       showSuccess('Modelo excluído com sucesso.');
-      buscarModelos();
+      buscarDados();
     }
   };
   
@@ -167,7 +327,6 @@ const GerenciarModelosSocietarios: React.FC = () => {
   };
   
   const handleGenerate = (modelo: ModeloSocietario) => {
-      // Redireciona para a página de geração (que será criada em breve)
       navigate(`/documentos-societarios/gerar/${modelo.id}`);
   };
 
@@ -198,7 +357,7 @@ const GerenciarModelosSocietarios: React.FC = () => {
               Novo Modelo
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
+          <DialogContent className="sm:max-w-7xl max-h-[95vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{modeloSelecionado ? 'Editar Modelo' : 'Novo Modelo'}</DialogTitle>
             </DialogHeader>
@@ -206,6 +365,7 @@ const GerenciarModelosSocietarios: React.FC = () => {
               modeloInicial={modeloSelecionado}
               proprietarioId={ownerId}
               onSaveComplete={handleSaveComplete}
+              blocosDisponiveis={blocos}
             />
           </DialogContent>
         </Dialog>
