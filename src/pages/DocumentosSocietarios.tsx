@@ -112,15 +112,16 @@ const DocumentosSocietarios: React.FC = () => {
         <h1 className="text-2xl md:text-3xl font-bold flex items-center">
           <FileText className="w-6 h-6 mr-2" /> Documentos Societários
         </h1>
-        <div className="flex space-x-2 w-full sm:w-auto">
-            <Link to="/documentos-societarios/modelos">
-                <Button variant="secondary" className="w-full sm:w-auto">
+        {/* Ajuste de responsividade para os botões de ação */}
+        <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2 w-full sm:w-auto">
+            <Link to="/documentos-societarios/modelos" className="w-full sm:w-auto">
+                <Button variant="secondary" className="w-full">
                     <Building2 className="w-4 h-4 mr-2" />
                     Gerenciar Modelos
                 </Button>
             </Link>
-            <Link to="/documentos-societarios/blocos">
-                <Button variant="secondary" className="w-full sm:w-auto">
+            <Link to="/documentos-societarios/blocos" className="w-full sm:w-auto">
+                <Button variant="secondary" className="w-full">
                     <FileText className="w-4 h-4 mr-2" />
                     Gerenciar Blocos
                 </Button>
@@ -137,9 +138,9 @@ const DocumentosSocietarios: React.FC = () => {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[250px]">Título</TableHead>
-                  <TableHead className="w-[150px]">Modelo Base</TableHead>
-                  <TableHead className="w-[150px]">Cliente</TableHead>
+                  <TableHead className="min-w-[200px]">Título</TableHead>
+                  <TableHead className="min-w-[150px] hidden md:table-cell">Modelo Base</TableHead>
+                  <TableHead className="min-w-[150px]">Cliente</TableHead>
                   <TableHead className="w-[100px]">Data Registro</TableHead>
                   <TableHead className="w-[100px]">Status</TableHead>
                   <TableHead className="w-[150px] text-right">Ações</TableHead>
@@ -156,7 +157,7 @@ const DocumentosSocietarios: React.FC = () => {
                   documentos.map((doc) => (
                     <TableRow key={doc.id}>
                       <TableCell className="font-medium">{doc.valores_tags_preenchidos?.titulo || doc.modelos_societarios?.titulo || 'Documento Sem Título'}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{doc.modelos_societarios?.titulo || 'N/A'}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground hidden md:table-cell">{doc.modelos_societarios?.titulo || 'N/A'}</TableCell>
                       <TableCell className="text-sm">{doc.tbl_clientes?.nome || 'N/A'}</TableCell>
                       <TableCell className="text-sm">{format(parseISO(doc.data_registro), 'dd/MM/yyyy')}</TableCell>
                       <TableCell>
