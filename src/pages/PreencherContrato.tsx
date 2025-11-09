@@ -354,20 +354,24 @@ const PreencherContrato: React.FC = () => {
   }, [modeloId, ownerIdLogado, navigate, role, perfil, usuario, isAdmin, isCliente, contratoId]);
   
   // Efeito 1: Carregamento inicial e verificação de permissão (CORRIGIDO)
-  useEffect(() => {
-    if (carregandoSessao) return;
+// ✅ CORREÇÃO DEFINITIVA
+useEffect(() => {
+  if (carregandoSessao) return;
 
-    // Permissão para esta página: Admin OU Cliente OU Usuário vinculado
-    const isAllowed = role === 'Admin' || role === 'Cliente' || (role === 'Usuario' && !!ownerIdLogado);
+  const allowedRoles = ['Admin', 'Cliente', 'Usuario'];
 
-    if (isAllowed) {
-      // Se permitido, carrega os dados
-      buscarDados();
-    } else {
-      // Se a sessão está carregada, mas o usuário não tem permissão (ex: Usuário não vinculado)
-      navigate('/painel', { replace: true });
-    }
-  }, [carregandoSessao, role, ownerIdLogado, buscarDados, navigate]);
+  // Usuário sem role não deve redirecionar (evita travamento)
+  if (!role) return;
+
+  if (!allowedRoles.includes(role)) {
+    navigate('/painel', { replace: true });
+    return;
+  }
+
+  // Só chama buscarDados 1 única vez, e nunca mais
+  buscarDados();
+}, [carregandoSessao]);
+
   
   // Efeito 2: Monitorar a mudança do proprietário do contrato (proprietarioContratoId)
   useEffect(() => {
