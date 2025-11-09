@@ -746,14 +746,14 @@ const PreencherContrato: React.FC = () => {
 
         showSuccess(`Contrato ${isEditing ? 'atualizado' : 'gerado'} e contas a receber ${isEditing ? 'reajustadas' : 'criadas'}!`);
         
-        // CORREÇÃO CRÍTICA: Força a navegação para a página de contratos
+        // CORREÇÃO CRÍTICA: Limpa o estado de submissão e navega
+        setIsSubmitting(false);
         navigate('/contratos', { replace: true });
         
     } catch (error: any) {
         console.error('Erro ao salvar contrato:', error);
         showError('Falha ao salvar contrato e gerar contas: ' + error.message);
-    } finally {
-        setIsSubmitting(false);
+        setIsSubmitting(false); // Garante que o botão seja reativado em caso de erro
     }
   };
   
