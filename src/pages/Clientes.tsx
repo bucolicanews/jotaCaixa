@@ -50,7 +50,7 @@ interface PlanoSimples {
 // NOVO TIPO: Cliente CR com status de sistema
 interface ClienteCRComStatus extends Cliente {
     is_system_client: boolean;
-    system_client_status?: 'Ativo' | 'Pendente' | 'Bloqueado' | 'Expirado'; // NOVO CAMPO
+    system_client_status?: 'Ativo' | 'Pendente' | 'Bloqueado' | 'Expirado' | 'CR'; // Adicionado 'CR'
 }
 
 const ClientesPage = () => {
@@ -185,46 +185,22 @@ const ClientesPage = () => {
         (c.documento?.toLowerCase() || '').includes(filtroNome.toLowerCase())
       );
       
-      // Filtra duplicatas visuais (mantém apenas o primeiro registro com o mesmo email)
-      const uniqueEmails = new Set<string>();
-      fetchedData = fetchedData.filter(c => {
-          // Se o cliente CR tem um ID que corresponde a um cliente do sistema, ele não é duplicata
-          if (systemClientsMap[c.id]) return true; 
-          
-          // Se o email for nulo, não podemos verificar duplicidade por email
-          if (!c.email) return true; 
-          
-          // Se o email já foi visto, e não é um cliente do sistema, é duplicata
-          if (uniqueEmails.has(c.email)) {
-              return false;
-          }
-          uniqueEmails.add(c.email);
-          return true;
-      });
+      // 2.1. Adicionar status do sistema e desduplicar
+      const clientesComStatus: ClienteCRComStatus[] = [];
       
-      // 2.1. Adicionar status do sistema
-      const clientesComStatus: ClienteCRComStatus[] = fetchedData.map(c => {
-          // A verificação agora usa o ID do cliente CR para buscar o cliente do sistema
+      // Mapeia os clientes CR, adicionando o status do sistema
+      const mappedCR = fetchedData.map(c => {
           const systemClient = systemClientsMap[c.id];
+          const isSystemClient = !!systemClient;
           
-          // Se o cliente CR tem um email, verificamos se existe um cliente do sistema com o mesmo email
-          let systemClientByEmail: EmpresaSistema | undefined;
-          if (c.email) {
-              systemClientByEmail = systemClientsList.find(e => e.email === c.email);
-          }
+          let systemStatus: ClienteCRComStatus['system_client_status'] = 'CR';
           
-          // O cliente é considerado "do sistema" se o ID for o mesmo OU se o email for o mesmo
-          const isSystemClient = !!systemClient || !!systemClientByEmail;
-          const finalSystemClient = systemClient || systemClientByEmail;
-          
-          let systemStatus: ClienteCRComStatus['system_client_status'] = undefined;
-          
-          if (finalSystemClient) {
-              const dataFimAcesso = finalSystemClient.data_fim_acesso ? parseISO(finalSystemClient.data_fim_acesso) : null;
+          if (isSystemClient) {
+              const dataFimAcesso = systemClient.data_fim_acesso ? parseISO(systemClient.data_fim_acesso) : null;
               const isAtivo = dataFimAcesso && isPast(new Date()) === false;
-              const isBlocked = dataFimAcesso === null && finalSystemClient.aprovado;
+              const isBlocked = dataFimAcesso === null && systemClient.aprovado;
               
-              if (!finalSystemClient.aprovado) {
+              if (!systemClient.aprovado) {
                   systemStatus = 'Pendente';
               } else if (isBlocked) {
                   systemStatus = 'Bloqueado';
@@ -239,8 +215,30 @@ const ClientesPage = () => {
               ...c,
               is_system_client: isSystemClient,
               system_client_status: systemStatus,
-          };
+          } as ClienteCRComStatus;
       });
+      
+      // 2.2. Desduplicação: Se o cliente CR tem o mesmo ID de um cliente do sistema, ele é o registro principal.
+      const processedEmails = new Set<string>();
+      
+      for (const cliente of mappedCR) {
+          // Se o ID do cliente CR é o ID de um cliente do sistema, ele é o registro principal.
+          if (cliente.is_system_client) {
+              clientesComStatus.push(cliente);
+              if (cliente.email) processedEmails.add(cliente.email);
+              continue;
+          }
+          
+          // Se não é cliente do sistema, e tem email, verifica se o email já foi processado
+          if (cliente.email && processedEmails.has(cliente.email)) {
+              // Ignora duplicata de email (o registro do sistema já foi adicionado)
+              continue;
+          }
+          
+          // Se não é cliente do sistema, e o email não foi processado, adiciona (é um cliente CR puro)
+          clientesComStatus.push(cliente);
+          if (cliente.email) processedEmails.add(cliente.email);
+      }
       
       setClientesCR(clientesComStatus);
     }
@@ -366,7 +364,7 @@ const ClientesPage = () => {
     // 2. Calcular a data de fim de acesso (7 dias de trial)
     const dataAtual = new Date();
     const dataFimAcesso = addDays(dataAtual, 7);
-    const dataFimISO = format(dataFimAcesso, 'yyyy-MM-dd') + 'T12:00:00Z'; // Usando a data de hoje + 7 dias
+    const dataFimISO = format(dataFimAcesso, 'yyyy-MM-dd') + 'T12:00:00Z'; // Meio-dia UTC
     
     // 3. Atualizar o perfil do cliente
     const { error } = await supabase
