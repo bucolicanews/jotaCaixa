@@ -166,7 +166,7 @@ const FormBlocoSocietario: React.FC<FormBlocoSocietarioProps> = ({ blocoInicial,
                                             <Copy className="w-3 h-3" />
                                         </Button>
                                     </div>
-                                    <p className="text-xs text-muted-foreground line-clamp-2">
+                                    <p className="text-xs text-muted-foreground">
                                         <Tag className="w-3 h-3 mr-1 text-muted-foreground" />
                                         {tag.descricao}
                                     </p>
