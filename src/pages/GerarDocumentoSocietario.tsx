@@ -87,13 +87,25 @@ const GerarDocumentoSocietario: React.FC = () => {
     if (!perfil) return null;
     const profile = perfil as AdminProfile | ClienteProfile;
     
+    // CORREÇÃO: Acessando 'documento' diretamente do ClienteProfile
+    const documentoCliente = (profile as ClienteProfile).documento || (profile as ClienteProfile).cpf;
+    const documentoAdmin = (profile as AdminProfile).cnpj || (profile as AdminProfile).cpf;
+    
     return {
-        nome: profile.nome, email: profile.email, documento: (profile as AdminProfile).cnpj || (profile as AdminProfile).cpf || (profile as ClienteProfile).documento || (profile as ClienteProfile).cpf,
+        nome: profile.nome, 
+        email: profile.email, 
+        documento: isAdmin ? documentoAdmin : documentoCliente,
         cpf: (profile as AdminProfile).cpf || (profile as ClienteProfile).cpf, 
         cnpj: (profile as AdminProfile).cnpj, 
-        rg: profile.rg, telefone: profile.telefone,
-        cep: profile.cep, endereco: profile.endereco, numero: profile.numero, complemento: profile.complemento,
-        bairro: profile.bairro, cidade: profile.cidade, estado: profile.estado,
+        rg: profile.rg, 
+        telefone: profile.telefone,
+        cep: profile.cep, 
+        endereco: profile.endereco, 
+        numero: profile.numero, 
+        complemento: profile.complemento,
+        bairro: profile.bairro, 
+        cidade: profile.cidade, 
+        estado: profile.estado,
     };
   }, [perfil, isAdmin, isCliente]);
   
@@ -115,21 +127,31 @@ const GerarDocumentoSocietario: React.FC = () => {
         .order('titulo');
     setBlocos(blocosData as BlocoSocietario[] || []);
     
-    // 2. Buscar Clientes (Contratados) - AGORA BUSCA NA TABELA 'clientes' (CR)
-    const { data: clientesCRData, error: errorCR } = await supabase
-        .from('clientes')
-        .select('*')
-        .eq('proprietario_id', targetEmpresaId)
+    // 2. Buscar Clientes (Contratados) - AGORA BUSCA APENAS NA TBL_CLIENTES (CLIENTES DO SISTEMA)
+    // O cliente selecionado deve ser um cliente do sistema (tbl_clientes)
+    const { data: clientesSistemaData, error: errorSistema } = await supabase
+        .from('tbl_clientes')
+        .select('id, nome, email, cpf, rg, nome_mae, nome_pai, telefone, cep, endereco, numero, complemento, bairro, cidade, estado, razao_social, nome_fantasia, documento') // Selecionando todos os campos de tag
+        .eq('aprovado', true)
         .order('nome');
         
-    if (errorCR) {
-        showError('Erro ao carregar clientes: ' + errorCR.message);
+    if (errorSistema) {
+        showError('Erro ao carregar clientes do sistema: ' + errorSistema.message);
         setClientesCR([]);
     } else {
-        setClientesCR(clientesCRData as ClienteCRCompleto[]);
+        // Mapeia os dados da tbl_clientes para o formato ClienteCRCompleto
+        const mappedClients = (clientesSistemaData as any[]).map(c => ({
+            ...c,
+            // Garantindo que os campos de tag existam
+            razao_social: c.razao_social || c.nome, 
+            nome_fantasia: c.nome_fantasia || c.nome, 
+            documento: c.documento || c.cpf || c.rg, 
+        })) as ClienteCRCompleto[];
+        
+        setClientesCR(mappedClients);
         
         // Se o cliente selecionado não estiver mais na lista, limpa a seleção
-        if (clienteSelecionadoId && !clientesCRData.some(c => c.id === clienteSelecionadoId)) {
+        if (clienteSelecionadoId && !mappedClients.some(c => c.id === clienteSelecionadoId)) {
             setClienteSelecionadoId('');
         }
     }

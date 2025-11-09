@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, FileSignature, ChevronLeft, Save, CalendarIcon, Eye, Building2 } from 'lucide-react';
+import { Loader2, FileSignature, ChevronLeft, Save, Eye, Building2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { ContratoModelo, ContratoTag, ContratoGerado } from '@/types/contratos';
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,27 +13,25 @@ import { ClienteProfile, UsuarioProfile, AdminProfile } from '@/types/usuario';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Cliente } from '@/types/cliente';
 import { format, addDays, parseISO } from 'date-fns';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Calendar } from '@/components/ui/calendar';
-import { cn } from '@/lib/utils';
-import { ptBR } from 'date-fns/locale';
 import { TAGS_PADRAO } from '@/config/contrato-tags-padrao';
 import ContratoPreviewDialog from '@/components/contratos/ContratoPreviewDialog';
+import BlocoSocietarioCard from '@/components/modelos-societarios/BlocoSocietarioCard';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { useSessao } from '@/hooks/use-sessao';
+import { BlocoSocietario } from '@/types/documentos-societarios'; // Importando BlocoSocietario
 
-type TipoLancamento = 'unico' | 'repetir' | 'parcelar';
 type TipoConteudo = 'html' | 'texto';
 
-interface EmpresaLogada {
+// NOVO TIPO: Cliente CR com todos os campos de tag
+interface ClienteCRCompleto {
+    id: string;
     nome: string;
-    email: string;
+    razao_social?: string | null;
+    nome_fantasia?: string | null;
     documento?: string | null;
-    endereco_completo?: string | null;
-    cpf?: string | null;
-    cnpj?: string | null;
-    rg?: string | null;
+    email?: string | null;
     telefone?: string | null;
+    telefone_fixo?: string | null;
     cep?: string | null;
     endereco?: string | null;
     numero?: string | null;
@@ -41,11 +39,10 @@ interface EmpresaLogada {
     bairro?: string | null;
     cidade?: string | null;
     estado?: string | null;
-}
-
-interface EmpresaContrato {
-    id: string;
-    nome: string;
+    cpf?: string | null;
+    cnpj?: string | null;
+    rg?: string | null;
+    data_nascimento?: string | null;
 }
 
 const PreencherContrato: React.FC = () => {
@@ -58,9 +55,8 @@ const PreencherContrato: React.FC = () => {
   const [modelo, setModelo] = useState<ContratoModelo | null>(null);
   const [contratoInicial, setContratoInicial] = useState<ContratoGerado | null>(null);
   const [tagsCustomizadas, setTagsCustomizadas] = useState<ContratoTag[]>([]); // Tags customizadas (sem as padrão)
-  const [clientes, setClientes] = useState<Cliente[]>([]);
-  const [empresasContrato, setEmpresasContrato] = useState<EmpresaContrato[]>([]);
-  const [empresaLogada, setEmpresaLogada] = useState<EmpresaLogada | null>(null);
+  const [clientesCR, setClientesCR] = useState<ClienteCRCompleto[]>([]); // Alterado para clientesCR
+  const [blocos, setBlocos] = useState<BlocoSocietario[]>([]); // Adicionado
   
   const [valoresTags, setValoresTags] = useState<Record<string, string>>({});
   const [carregandoDados, setCarregandoDados] = useState(true);
@@ -68,19 +64,13 @@ const PreencherContrato: React.FC = () => {
   
   const [previewOpen, setPreviewOpen] = useState(false);
   const [conteudoPreview, setConteudoPreview] = useState('');
-  
-  const [tipoConteudo, setTipoConteudo] = useState<TipoConteudo>('html'); 
+  const [previewTitle, setPreviewTitle] = useState(''); // Adicionado
   
   const [clienteSelecionadoId, setClienteSelecionadoId] = useState<string>('');
-  const [valorTotal, setValorTotal] = useState<number>(0); // Inicializado como 0
+  const [tituloDocumento, setTituloDocumento] = useState(''); // Adicionado
   
   const [proprietarioContratoId, setProprietarioContratoId] = useState<string | null>(null); 
-  
-  const [tipoLancamento, setTipoLancamento] = useState<TipoLancamento>('unico');
-  const [dataVencimentoUnico, setDataVencimentoUnico] = useState<Date | undefined>(undefined);
-  const [numeroParcelas, setNumeroParcelas] = useState<number>(1);
-  const [dataPrimeiroVencimento, setDataPrimeiroVencimento] = useState<Date | undefined>(undefined);
-  const [intervaloDias, setIntervaloDias] = useState<number>(30);
+  const [empresasContrato, setEmpresasContrato] = useState<EmpresaContrato[]>([]);
 
   const isAdmin = role === 'Admin';
   const isCliente = role === 'Cliente';
@@ -129,9 +119,8 @@ const PreencherContrato: React.FC = () => {
             nome: profile.nome,
             email: profile.email,
             documento: profile.cnpj || profile.cpf,
-            endereco_completo: `${profile.endereco || ''}, ${profile.numero || ''} ${profile.complemento || ''} - ${profile.bairro || ''}, ${profile.cidade || ''}/${profile.estado || ''}`,
             cpf: profile.cpf,
-            cnpj: profile.cnpj, // ADICIONADO
+            cnpj: profile.cnpj,
             rg: profile.rg,
             telefone: profile.telefone,
             cep: profile.cep,
@@ -148,9 +137,8 @@ const PreencherContrato: React.FC = () => {
             nome: profile.nome,
             email: profile.email,
             documento: profile.documento || profile.cpf,
-            endereco_completo: `${profile.endereco || ''}, ${profile.numero || ''} ${profile.complemento || ''} - ${profile.bairro || ''}, ${profile.cidade || ''}/${profile.estado || ''}`,
             cpf: profile.cpf,
-            cnpj: null, // Clientes não têm CNPJ na tabela de perfil
+            cnpj: null,
             rg: profile.rg,
             telefone: profile.telefone,
             cep: profile.cep,
@@ -167,7 +155,6 @@ const PreencherContrato: React.FC = () => {
             currentEmpresaLogada = {
                 ...empresaData,
                 documento: empresaData.documento || empresaData.cpf,
-                endereco_completo: `${empresaData.endereco || ''}, ${empresaData.numero || ''} ${empresaData.complemento || ''} - ${empresaData.bairro || ''}, ${empresaData.cidade || ''}/${empresaData.estado || ''}`,
                 cnpj: null,
             };
         }
@@ -251,49 +238,37 @@ const PreencherContrato: React.FC = () => {
                 
             if (primeiraParcela) {
                 if (numParcelas === 1) {
-                    setTipoLancamento('unico');
-                    setDataVencimentoUnico(primeiraParcela.data_vencimento ? parseISO(primeiraParcela.data_vencimento) : undefined);
-                    setNumeroParcelas(1);
+                    // setTipoLancamento('unico'); // Removido, pois não é usado
+                    // setDataVencimentoUnico(primeiraParcela.data_vencimento ? parseISO(primeiraParcela.data_vencimento) : undefined); // Removido
+                    // setNumeroParcelas(1); // Removido
                 } else {
                     const valorParcela = primeiraParcela.valor_parcela || 0;
                     
                     // Determina se é parcelar ou repetir
-                    if (Math.abs(valorTotalContrato - (valorParcela * numParcelas)) < 0.01) {
-                        setTipoLancamento('parcelar');
-                    } else {
-                        setTipoLancamento('repetir');
-                    }
+                    // setTipoLancamento(Math.abs(valorTotalContrato - (valorParcela * numParcelas)) < 0.01 ? 'parcelar' : 'repetir'); // Removido
                     
-                    setNumeroParcelas(numParcelas);
-                    setDataPrimeiroVencimento(primeiraParcela.data_vencimento ? parseISO(primeiraParcela.data_vencimento) : undefined);
-                    setIntervaloDias(contrato.dia_vencimento_parcela || 30);
+                    // setNumeroParcelas(numParcelas); // Removido
+                    // setDataPrimeiroVencimento(primeiraParcela.data_vencimento ? parseISO(primeiraParcela.data_vencimento) : undefined); // Removido
+                    // setIntervaloDias(contrato.dia_vencimento_parcela || 30); // Removido
                 }
             } else {
-                // Se a conta sintética existe, mas não tem parcelas (erro de integridade)
-                console.error('LOG: Conta sintética encontrada, mas sem parcelas associadas. Usando dados do contrato.');
                 // Fallback: Usa os dados do contrato para preencher o formulário
                 if (numParcelas === 1) {
-                    setTipoLancamento('unico');
-                    setDataVencimentoUnico(contrato.data_inicio ? parseISO(contrato.data_inicio) : undefined);
+                    // setDataVencimentoUnico(contrato.data_inicio ? parseISO(contrato.data_inicio) : undefined); // Removido
                 } else {
-                    setTipoLancamento('parcelar'); // Assume parcelar como padrão para múltiplos
-                    setNumeroParcelas(numParcelas);
-                    setDataPrimeiroVencimento(contrato.data_inicio ? parseISO(contrato.data_inicio) : undefined);
-                    setIntervaloDias(contrato.dia_vencimento_parcela || 30);
+                    // setNumeroParcelas(numParcelas); // Removido
+                    // setDataPrimeiroVencimento(contrato.data_inicio ? parseISO(contrato.data_inicio) : undefined); // Removido
+                    // setIntervaloDias(contrato.dia_vencimento_parcela || 30); // Removido
                 }
             }
         } else {
-            // Se não encontrou a conta a receber (registro ausente)
-            console.error('LOG: Conta sintética não encontrada. Usando dados do contrato.');
             // Fallback: Usa os dados do contrato para preencher o formulário
             if (numParcelas === 1) {
-                setTipoLancamento('unico');
-                setDataVencimentoUnico(contrato.data_inicio ? parseISO(contrato.data_inicio) : undefined);
+                // setDataVencimentoUnico(contrato.data_inicio ? parseISO(contrato.data_inicio) : undefined); // Removido
             } else {
-                setTipoLancamento('parcelar');
-                setNumeroParcelas(numParcelas);
-                setDataPrimeiroVencimento(contrato.data_inicio ? parseISO(contrato.data_inicio) : undefined);
-                setIntervaloDias(contrato.dia_vencimento_parcela || 30);
+                // setNumeroParcelas(numParcelas); // Removido
+                // setDataPrimeiroVencimento(contrato.data_inicio ? parseISO(contrato.data_inicio) : undefined); // Removido
+                // setIntervaloDias(contrato.dia_vencimento_parcela || 30); // Removido
             }
         }
         
@@ -307,7 +282,6 @@ const PreencherContrato: React.FC = () => {
     
     setProprietarioContratoId(initialProprietarioContratoId);
     
-    // A lista de clientes e tags será carregada no próximo useEffect (monitorando proprietarioContratoId)
     setCarregandoDados(false);
   }, [modeloId, ownerIdLogado, navigate, role, perfil, usuario, isAdmin, isCliente, contratoId]);
   
@@ -315,191 +289,121 @@ const PreencherContrato: React.FC = () => {
   const fetchDependentData = useCallback(async (targetEmpresaId: string) => {
     if (!targetEmpresaId) return;
     
-    // 1. Buscar Tags Customizadas ATIVAS
-    const { data: tagsData } = await supabase
-        .from('contrato_tags')
+    // 1. Buscar Blocos Reutilizáveis
+    const { data: blocosData } = await supabase
+        .from('blocos_societarios')
         .select('*')
-        .eq('empresa_id', targetEmpresaId)
-        .order('nome_tag', { ascending: true });
+        .eq('proprietario_id', targetEmpresaId)
+        .order('titulo');
+    setBlocos(blocosData as BlocoSocietario[] || []);
+    
+    // 2. Buscar Clientes (Contratados) - AGORA BUSCA APENAS NA TBL_CLIENTES (CLIENTES DO SISTEMA)
+    // O cliente selecionado deve ser um cliente do sistema (tbl_clientes)
+    const { data: clientesSistemaData, error: errorSistema } = await supabase
+        .from('tbl_clientes')
+        .select('id, nome, email, cpf, rg, nome_mae, nome_pai, telefone, cep, endereco, numero, complemento, bairro, cidade, estado, razao_social, nome_fantasia, documento') // Selecionando todos os campos de tag
+        .eq('aprovado', true)
+        .order('nome');
         
-    if (tagsData) {
-        setTagsCustomizadas(tagsData as ContratoTag[]);
-    }
-    
-    // 2. Buscar Clientes (Contratados)
-    let combinedClients: Cliente[] = [];
-    
-    // Regra 1: Se o proprietário do contrato for o Admin logado ('Meus Contratos (Admin)')
-    if (isAdmin && targetEmpresaId === ownerIdLogado) {
-        // Busca na tbl_clientes onde admin_id é o ID do Admin logado
-        const { data: systemClientsData, error: systemClientsError } = await supabase
-            .from('tbl_clientes')
-            .select('id, nome, email, cpf, rg, nome_mae, nome_pai, telefone, cep, endereco, numero, complemento, bairro, cidade, estado, criado_em')
-            .eq('admin_id', ownerIdLogado) // FILTRO CORRIGIDO
-            .eq('aprovado', true)
-            .order('nome');
-            
-        if (systemClientsError) {
-            showError('Erro ao carregar clientes do sistema: ' + systemClientsError.message);
-        } else if (systemClientsData) {
-            // Mapeamento para o tipo Cliente[]
-            combinedClients = (systemClientsData as any[]).map(sc => ({
-                id: sc.id,
-                proprietario_id: ownerIdLogado, // AJUSTE AQUI
-                nome: sc.nome,
-                razao_social: sc.nome, // Usando nome como fallback
-                nome_fantasia: sc.nome, // Usando nome como fallback
-                documento: sc.cpf || null, 
-                email: sc.email || null,
-                telefone: sc.telefone || null,
-                telefone_fixo: null, 
-                cep: sc.cep || null,
-                endereco: sc.endereco || null,
-                numero: sc.numero || null,
-                complemento: sc.complemento || null,
-                bairro: sc.bairro || null,
-                cidade: sc.cidade || null,
-                estado: sc.estado || null,
-                created_at: sc.criado_em,
-                updated_at: sc.criado_em,
-            }));
-        }
+    if (errorSistema) {
+        showError('Erro ao carregar clientes do sistema: ' + errorSistema.message);
+        setClientesCR([]);
     } else {
-        // Regra 2: Se o proprietário for um Cliente (ou o Admin selecionou um Cliente), os clientes são da tabela 'clientes' (CR)
-        const { data: clientesCRData, error: _ } = await supabase
-            .from('clientes')
-            .select('*')
-            .eq('proprietario_id', targetEmpresaId); // AJUSTE AQUI
-        if (clientesCRData) {
-            combinedClients.push(...(clientesCRData as Cliente[]));
+        // Mapeia os dados da tbl_clientes para o formato ClienteCRCompleto
+        const mappedClients = (clientesSistemaData as any[]).map((c: any) => ({
+            ...c,
+            // Garantindo que os campos de tag existam
+            razao_social: c.razao_social || c.nome, 
+            nome_fantasia: c.nome_fantasia || c.nome, 
+            documento: c.documento || c.cpf || c.rg, 
+        })) as ClienteCRCompleto[];
+        
+        setClientesCR(mappedClients);
+        
+        // Se o cliente selecionado não estiver mais na lista, limpa a seleção
+        if (clienteSelecionadoId && !mappedClients.some(c => c.id === clienteSelecionadoId)) {
+            setClienteSelecionadoId('');
         }
     }
     
-    combinedClients.sort((a, b) => a.nome.localeCompare(b.nome));
-    setClientes(combinedClients);
-    
-    // Se o cliente selecionado não estiver mais na lista, limpa a seleção
-    if (clienteSelecionadoId && !combinedClients.some(c => c.id === clienteSelecionadoId)) {
-        setClienteSelecionadoId('');
-    }
-    
-  }, [isAdmin, ownerIdLogado, clienteSelecionadoId]);
+  }, [clienteSelecionadoId]);
 
 
   useEffect(() => {
-    if (!carregandoSessao && (isAdmin || isCliente || (role === 'Usuario' && ownerIdLogado))) {
+    if (!carregandoSessao && ownerIdLogado) {
       buscarDados();
     } else if (!carregandoSessao && !isAdmin && !isCliente) {
         navigate('/painel', { replace: true });
     }
-  }, [carregandoSessao, isAdmin, isCliente, role, ownerIdLogado, buscarDados, navigate]);
-  
-  // Efeito para monitorar a mudança do proprietário do contrato (proprietarioContratoId)
-  useEffect(() => {
-      if (proprietarioContratoId) {
-          fetchDependentData(proprietarioContratoId);
-      }
-  }, [proprietarioContratoId, fetchDependentData]);
+  }, [carregandoSessao, ownerIdLogado, buscarDados, navigate, isAdmin, isCliente]);
 
-
+  // --- Lógica de Preenchimento de Tags ---
   const updateTags = useCallback(() => {
     const newTags: Record<string, string> = {};
-    const cliente = clientes.find(c => c.id === clienteSelecionadoId);
     
-    const valorNumerico = Number(valorTotal);
-    const numParcelas = Number(numeroParcelas);
+    // Combina tags padrão (apenas as de Cliente/Usuário/Empresa) e tags de blocos
+    const allAvailableTags = TAGS_PADRAO.filter(t => 
+        !t.origem_dado?.startsWith('contas_receber')
+    );
     
-    const valorFinalContrato = tipoLancamento === 'repetir' ? valorNumerico * numParcelas : valorNumerico;
-    const valorParcela = tipoLancamento === 'parcelar' ? (valorNumerico / numParcelas) : valorNumerico;
+    const blocoTags = blocos.map((b: BlocoSocietario) => ({
+        id: b.id,
+        nome_tag: `{{BLOCO_${b.id}}}`,
+        descricao: `Bloco: ${b.titulo}`,
+        origem_dado: 'blocos_societarios',
+    } as ContratoTag));
     
-    let primeiroVencimento: Date | undefined;
-    if (tipoLancamento === 'unico') {
-        primeiroVencimento = dataVencimentoUnico;
-    } else {
-        primeiroVencimento = dataPrimeiroVencimento;
-    }
-    
-    // Combina tags padrão e customizadas ativas
-    const allActiveTags = [...TAGS_PADRAO, ...tagsCustomizadas];
+    const allTags = [...allAvailableTags, ...blocoTags];
 
-    allActiveTags.forEach(tag => {
+    allTags.forEach(tag => {
         const tagKey = tag.nome_tag;
         let tagValue: string | null = null;
         
-        // 1. Tenta preencher tags financeiras (TAGS_PADRAO)
-        switch (tagKey) {
-            case '{{VALOR_TOTAL_CONTRATO}}':
-                tagValue = formatCurrency(valorFinalContrato);
-                break;
-            case '{{VALOR_PARCELA}}':
-                tagValue = formatCurrency(valorParcela);
-                break;
-            case '{{NUMERO_PARCELAS}}':
-                tagValue = String(numParcelas);
-                break;
-            case '{{PRIMEIRO_VENCIMENTO}}':
-                tagValue = primeiroVencimento ? formatDate(primeiroVencimento) : 'N/A';
-                break;
-            case '{{DATA_EMISSAO}}':
-                tagValue = formatDate(new Date());
-                break;
-        }
-        
-        // 2. Tenta preencher tags de sistema (EMPRESA_NOME, CLIENTE_NOME, USUARIO_NOME, etc.)
+        // 1. Tenta preencher tags de sistema (EMPRESA_NOME, CLIENTE_NOME, etc.)
         if (tag.origem_dado) {
             const [sourceTable, sourceField] = tag.origem_dado.split('.');
             
             // Mapeamento de dados da Empresa Logada (Contratada) - tbl_clientes / tbl_admins
-            if (sourceTable === 'tbl_clientes' || sourceTable === 'tbl_admins') {
+            if ((sourceTable === 'tbl_clientes' || sourceTable === 'tbl_admins') && empresaLogada) {
                 const empresaData = empresaLogada as any;
                 if (empresaData && empresaData[sourceField]) {
                     tagValue = String(empresaData[sourceField]);
                 }
             } 
             
-            // Mapeamento de dados do Cliente Selecionado (Contratante) - clientes
-            else if (sourceTable === 'clientes' && cliente) {
-                const clienteData = cliente as any;
+            // Mapeamento de dados do Cliente Selecionado (Contratado) - clientes
+            else if (sourceTable === 'clientes' && clienteSelecionado) {
+                const clienteData = clienteSelecionado as any;
+                
+                // Busca o valor diretamente no objeto clienteSelecionado (que agora é ClienteCRCompleto)
                 if (clienteData && clienteData[sourceField]) {
                     tagValue = String(clienteData[sourceField]);
                 }
             } 
             
-            // Mapeamento de dados do Usuário (Funcionário) - tbl_usuarios
-            else if (sourceTable === 'tbl_usuarios' && perfil && 'cliente_id' in perfil) {
-                const usuarioData = perfil as UsuarioProfile;
-                if (usuarioData && (usuarioData as any)[sourceField]) {
-                    // Formatação especial para valores numéricos/data
-                    if (sourceField.includes('salario') || sourceField.includes('horas')) {
-                        tagValue = String((usuarioData as any)[sourceField] || 'N/A');
-                    } else if (sourceField.includes('data')) {
-                        const dateValue = (usuarioData as any)[sourceField];
-                        tagValue = dateValue ? formatDate(parseISO(dateValue)) : 'N/A';
-                    } else {
-                        tagValue = String((usuarioData as any)[sourceField] || 'N/A');
-                    }
-                }
+            // Mapeamento de Blocos
+            else if (sourceTable === 'blocos_societarios' && tagKey.startsWith('{{BLOCO_')) {
+                const blocoId = tagKey.replace('{{BLOCO_', '').replace('}}', '');
+                const bloco = blocos.find((b: BlocoSocietario) => b.id === blocoId);
+                tagValue = bloco?.conteudo || `[BLOCO ${blocoId} NÃO ENCONTRADO]`;
             }
         }
         
-        // 3. Se o valor foi preenchido automaticamente, usa-o.
-        if (tagValue !== null) {
+        // 2. Se o valor foi preenchido automaticamente, usa-o.
+        if (tagValue !== null && tagValue !== undefined && tagValue !== 'N/A') {
             newTags[tagKey] = tagValue;
         } else {
-            // 4. Caso contrário, usa o valor salvo anteriormente (se edição) ou o valor digitado.
+            // 3. Caso contrário, usa o valor salvo anteriormente ou o valor digitado.
             newTags[tagKey] = valoresTags[tagKey] || '';
         }
     });
     
     setValoresTags(newTags);
-  }, [clienteSelecionadoId, valorTotal, tipoLancamento, numeroParcelas, dataVencimentoUnico, dataPrimeiroVencimento, clientes, empresaLogada, tagsCustomizadas, valoresTags, intervaloDias, tipoConteudo, perfil]);
-
+  }, [clienteSelecionado, blocos, empresaLogada, valoresTags]);
 
   useEffect(() => {
-    // Este efeito agora só chama a função de atualização
     updateTags();
   }, [updateTags]);
-
 
   const handleTagChange = (tag: string, value: string) => {
     setValoresTags(prev => ({ ...prev, [tag]: value }));
@@ -507,10 +411,24 @@ const PreencherContrato: React.FC = () => {
   
   const renderizarConteudo = (template: string, tags: Record<string, string>): string => {
     let conteudoRenderizado = template;
-    for (const tag in tags) {
-        const regex = new RegExp(tag, 'g');
-        conteudoRenderizado = conteudoRenderizado.replace(regex, tags[tag]);
-    }
+    
+    // 1. Substituição de Blocos (Primeira Passagem)
+    const blocoTags = Object.keys(tags).filter(tag => tag.startsWith('{{BLOCO_'));
+    
+    blocoTags.forEach(blocoTag => {
+        const regex = new RegExp(blocoTag, 'g');
+        // O valor da tag de bloco já contém o conteúdo do bloco (que pode ter tags de dados)
+        conteudoRenderizado = conteudoRenderizado.replace(regex, tags[blocoTag]);
+    });
+    
+    // 2. Substituição de Tags de Dados (Segunda Passagem)
+    const dataTags = Object.keys(tags).filter(tag => !tag.startsWith('{{BLOCO_'));
+    
+    dataTags.forEach(dataTag => {
+        const regex = new RegExp(dataTag, 'g');
+        // Substitui a tag de dados pelo seu valor
+        conteudoRenderizado = conteudoRenderizado.replace(regex, tags[dataTag]);
+    });
     
     return conteudoRenderizado;
   };
@@ -519,89 +437,28 @@ const PreencherContrato: React.FC = () => {
       if (!modelo) return;
       const conteudoRenderizado = renderizarConteudo(modelo.conteudo_template, valoresTags);
       setConteudoPreview(conteudoRenderizado);
+      setPreviewTitle(tituloDocumento || modelo.titulo);
       setPreviewOpen(true);
   };
 
-  const gerarParcelas = (
-    valorTotal: number, 
-    tipoLancamento: TipoLancamento,
-    numParcelas: number, 
-    dataVencimentoUnico: Date | undefined,
-    dataPrimeiroVencimento: Date | undefined,
-    intervaloDias: number,
-  ) => {
-    const parcelas = [];
-    
-    if (tipoLancamento === 'unico' && dataVencimentoUnico) {
-        parcelas.push({ 
-            numero_parcela: 1, 
-            valor_parcela: valorTotal, 
-            data_vencimento: format(dataVencimentoUnico, 'yyyy-MM-dd'), 
-            status: 'aberta' 
-        });
-    } else if (tipoLancamento !== 'unico' && dataPrimeiroVencimento && numParcelas >= 1 && intervaloDias >= 1) {
-        const valorParcela = tipoLancamento === 'parcelar' ? (valorTotal / numParcelas) : valorTotal;
-        
-        for (let i = 0; i < numParcelas; i++) {
-            const dataVencimento = addDays(dataPrimeiroVencimento, i * intervaloDias);
-            
-            parcelas.push({
-                numero_parcela: i + 1,
-                valor_parcela: valorParcela,
-                data_vencimento: format(dataVencimento, 'yyyy-MM-dd'),
-                status: 'aberta'
-            });
-        }
-    }
-    return parcelas;
-  };
-
-  const handleSalvarContrato = async () => {
-    const valorNumerico = Number(valorTotal);
-    const numParcelas = Number(numeroParcelas);
-    
-    if (!modelo || !clienteSelecionadoId || valorNumerico <= 0 || !proprietarioContratoId) {
-        showError('Preencha Cliente, Valor Total e Proprietário.');
+  const handleSalvarDocumento = async () => {
+    if (!modelo || !clienteSelecionadoId || !ownerIdLogado || !tituloDocumento || !proprietarioContratoId) {
+        showError('Preencha Título, Cliente e Proprietário.');
         return;
-    }
-    
-    if (tipoLancamento === 'unico' && !dataVencimentoUnico) {
-        showError('Selecione a Data de Vencimento para o lançamento único.');
-        return;
-    }
-    
-    if (tipoLancamento !== 'unico') {
-        if (numParcelas < 1) {
-            showError('O número de parcelas deve ser pelo menos 1.');
-            return;
-        }
-        if (!dataPrimeiroVencimento) {
-            showError('Selecione a Data do Primeiro Vencimento.');
-            return;
-        }
-        if (intervaloDias < 1) {
-            showError('O intervalo de dias deve ser pelo menos 1.');
-            return;
-        }
     }
     
     setIsSubmitting(true);
     
     try {
-        const clienteSelecionado = clientes.find(c => c.id === clienteSelecionadoId);
-        if (!clienteSelecionado) throw new Error('Cliente selecionado não foi encontrado na lista.');
-
-        const isContractOwnerAdmin = proprietarioContratoId === ownerIdLogado && isAdmin;
-
-        // CORREÇÃO: Se for Admin, garantir que o cliente (de tbl_clientes) também exista na tabela 'clientes'
-        if (isContractOwnerAdmin) {
+        // 0. GARANTIR QUE O CLIENTE EXISTA NA TABELA 'clientes' (para FK)
+        if (clienteSelecionado) {
             const clienteDataParaUpsert = {
                 id: clienteSelecionado.id,
-                proprietario_id: proprietarioContratoId, // AJUSTE AQUI
+                proprietario_id: proprietarioContratoId,
                 nome: clienteSelecionado.nome,
-                razao_social: clienteSelecionado.razao_social,
-                nome_fantasia: clienteSelecionado.nome_fantasia,
-                documento: clienteSelecionado.documento,
+                razao_social: clienteSelecionado.razao_social || clienteSelecionado.nome,
+                nome_fantasia: clienteSelecionado.nome_fantasia || clienteSelecionado.nome,
+                documento: clienteSelecionado.documento || clienteSelecionado.cpf || clienteSelecionado.rg,
                 email: clienteSelecionado.email,
                 telefone: clienteSelecionado.telefone,
                 telefone_fixo: clienteSelecionado.telefone_fixo,
@@ -613,143 +470,42 @@ const PreencherContrato: React.FC = () => {
                 cidade: clienteSelecionado.cidade,
                 estado: clienteSelecionado.estado,
             };
+            
+            // Nota: A tabela 'clientes' tem FKs para tbl_clientes, mas a tabela 'documentos_societarios_gerados'
+            // tem FK para 'clientes'. Precisamos garantir que o cliente exista em 'clientes'.
             const { error: upsertError } = await supabase
                 .from('clientes')
                 .upsert(clienteDataParaUpsert, { onConflict: 'id' });
-
+                
             if (upsertError) {
-                throw new Error('Falha ao garantir a existência do cliente na tabela CR do admin: ' + upsertError.message);
+                throw new Error('Falha ao garantir a existência do cliente na tabela CR: ' + upsertError.message);
             }
         }
-        
-        const parcelasParaInserir = gerarParcelas(
-            valorNumerico, 
-            tipoLancamento, 
-            numParcelas, 
-            dataVencimentoUnico, 
-            dataPrimeiroVencimento, 
-            intervaloDias
-        );
-        
-        if (parcelasParaInserir.length === 0) {
-            throw new Error('Falha ao gerar parcelas. Verifique os dados de pagamento.');
-        }
-        
-        const valorFinalContrato = tipoLancamento === 'repetir' ? valorNumerico * numParcelas : valorNumerico;
         
         const conteudoRenderizado = renderizarConteudo(modelo.conteudo_template, valoresTags);
         
-        const contratoData = {
+        const documentoData = {
             modelo_id: modelo.id,
             cliente_id: clienteSelecionadoId,
-            proprietario_id: proprietarioContratoId, // RENOMEADO: empresa_id -> proprietario_id
-            status: 'pendente_assinatura',
-            valor_total: valorFinalContrato,
-            data_inicio: format(new Date(), 'yyyy-MM-dd'), 
-            numero_parcelas: numParcelas,
-            dia_vencimento_parcela: tipoLancamento === 'unico' ? null : intervaloDias, 
-            valores_tags_preenchidos: { ...valoresTags, tipo_conteudo: tipoConteudo }, 
+            proprietario_id: proprietarioContratoId, // Usando o proprietário selecionado
+            status: 'finalizado',
+            valores_tags_preenchidos: { ...valoresTags, titulo: tituloDocumento },
             conteudo_renderizado: conteudoRenderizado,
+            data_registro: format(new Date(), 'yyyy-MM-dd'),
         };
         
-        let contratoGeradoId: string;
-        let contaReceberId: string | null = null;
-        
-        const tabelaContasReceber = isContractOwnerAdmin ? 'admin_contas_receber' : 'contas_receber';
-        const tabelaParcelasReceber = isContractOwnerAdmin ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
-        
-        if (isEditing && contratoInicial) {
-            const { error: updateError } = await supabase
-                .from('contratos_gerados')
-                .update(contratoData)
-                .eq('id', contratoInicial.id);
-                
-            if (updateError) throw updateError;
-            contratoGeradoId = contratoInicial.id;
+        const { error } = await supabase
+            .from('documentos_societarios_gerados')
+            .insert(documentoData);
             
-            // 1. Buscar a conta sintética existente
-            const { data: existingConta } = await supabase
-                .from(tabelaContasReceber)
-                .select('id')
-                .eq('contrato_gerado_id', contratoGeradoId)
-                .limit(1)
-                .single();
-                
-            if (existingConta) {
-                contaReceberId = existingConta.id;
-                
-                // 2. Deletar parcelas antigas
-                const { error: deleteParcelasError } = await supabase
-                    .from(tabelaParcelasReceber)
-                    .delete()
-                    .eq('conta_receber_id', contaReceberId);
-                if (deleteParcelasError) throw deleteParcelasError;
-            }
-            
-        } else {
-            const { data: contratoGerado, error: contratoError } = await supabase
-                .from('contratos_gerados')
-                .insert(contratoData)
-                .select('id')
-                .single();
-                
-            if (contratoError) throw contratoError;
-            contratoGeradoId = contratoGerado.id;
-        }
-        
-        const clienteNome = clientes.find(c => c.id === clienteSelecionadoId)?.nome || 'Cliente Desconhecido';
-        
-        const baseData = isContractOwnerAdmin ? { admin_id: proprietarioContratoId, cliente_id: clienteSelecionadoId } : { empresa_id: proprietarioContratoId, cliente_id: clienteSelecionadoId };
-        
-        const contaReceberPayload = {
-            ...baseData,
-            descricao: `Contrato: ${modelo.titulo} - ${clienteNome}`,
-            valor_total: valorFinalContrato,
-            data_emissao: format(new Date(), 'yyyy-MM-dd'),
-            data_vencimento: parcelasParaInserir[0].data_vencimento, 
-            tipo_receita: tipoLancamento === 'unico' ? 'única' : 'recorrente',
-            status: 'aberta',
-            origem: 'contrato',
-            contrato_gerado_id: contratoGeradoId,
-        };
-        
-        if (contaReceberId) {
-            // Atualiza a conta sintética existente
-            const { error: updateContaError } = await supabase
-                .from(tabelaContasReceber)
-                .update(contaReceberPayload)
-                .eq('id', contaReceberId);
-            if (updateContaError) throw updateContaError;
-        } else {
-            // Cria uma nova conta sintética
-            const { data: contaReceber, error: contaReceberError } = await supabase
-                .from(tabelaContasReceber)
-                .insert(contaReceberPayload)
-                .select('id')
-                .single();
-                
-            if (contaReceberError) throw contaReceberError;
-            contaReceberId = contaReceber.id;
-        }
-        
-        const parcelasComId = parcelasParaInserir.map(p => ({ 
-            ...p, 
-            conta_receber_id: contaReceberId, 
-            ...(isContractOwnerAdmin ? { admin_id: proprietarioContratoId } : { empresa_id: proprietarioContratoId })
-        }));
-        
-        const { error: parcelError } = await supabase
-            .from(tabelaParcelasReceber)
-            .insert(parcelasComId);
-            
-        if (parcelError) throw parcelError;
+        if (error) throw error;
 
-        showSuccess(`Contrato ${isEditing ? 'atualizado' : 'gerado'} e contas a receber ${isEditing ? 'reajustadas' : 'criadas'}!`);
-        navigate('/contratos');
+        showSuccess(`Documento '${tituloDocumento}' gerado e salvo com sucesso!`);
+        navigate('/documentos-societarios');
         
     } catch (error: any) {
-        console.error('Erro ao salvar contrato:', error);
-        showError('Falha ao salvar contrato e gerar contas: ' + error.message);
+        console.error('Erro ao salvar documento:', error);
+        showError('Falha ao salvar documento: ' + error.message);
     } finally {
         setIsSubmitting(false);
     }
@@ -766,46 +522,26 @@ const PreencherContrato: React.FC = () => {
   }
   
   if (!modelo) {
-      return <LayoutPrincipal><Card><CardHeader><CardTitle>Erro</CardTitle></CardHeader><CardContent><p>Modelo de contrato não encontrado.</p></CardContent></Card></LayoutPrincipal>;
+      return <LayoutPrincipal><Card><CardHeader><CardTitle>Erro</CardTitle></CardHeader><CardContent><p>Modelo de documento não encontrado.</p></CardContent></Card></LayoutPrincipal>;
   }
-
-  const isRepetirOuParcelar = tipoLancamento !== 'unico';
-  const valorLabel = tipoLancamento === 'parcelar' ? 'Valor Total a Parcelar' : 'Valor da Parcela';
-  
-  // Combina tags customizadas e tags padrão que não são financeiras
-  const tagsCustomizadasECliente = [...tagsCustomizadas, ...TAGS_PADRAO.filter(t => t.origem_dado && !t.origem_dado.startsWith('contas_receber'))];
   
   // Filtra tags que já foram preenchidas automaticamente (para não pedir valor manual)
-  const tagsParaPreenchimentoManual = tagsCustomizadasECliente.filter(tag => {
-      // Tags financeiras e tags de empresa logada (EMPRESA_*) são sempre preenchidas automaticamente
-      if (TAGS_PADRAO.some(t => t.nome_tag === tag.nome_tag && t.origem_dado?.startsWith('contas_receber'))) {
-          return false;
-      }
-      if (TAGS_PADRAO.some(t => t.nome_tag === tag.nome_tag && t.origem_dado?.startsWith('tbl_clientes'))) {
-          return false;
-      }
-      if (TAGS_PADRAO.some(t => t.nome_tag === tag.nome_tag && t.origem_dado?.startsWith('tbl_admins'))) {
-          return false;
-      }
+  const tagsParaPreenchimentoManual = Object.keys(valoresTags).filter(tagKey => {
+      // Exclui tags de bloco (que são preenchidas com o conteúdo do bloco)
+      if (tagKey.startsWith('{{BLOCO_')) return false;
       
-      // Se a tag tem origem de dado e o valor foi preenchido automaticamente, não precisa de input manual
-      if (tag.origem_dado && valoresTags[tag.nome_tag]) {
-          return false;
-      }
+      // Exclui tags de sistema (EMPRESA_*) que foram preenchidas
+      if (tagKey.startsWith('{{EMPRESA_') && valoresTags[tagKey]) return false;
       
-      // Se a tag é customizada ou de cliente (CLIENTE_*) e não foi preenchida, precisa de input manual
-      if (tag.nome_tag.startsWith('{{CLIENTE_') || tag.nome_tag.startsWith('{{USUARIO_') || !tag.origem_dado) {
-          return true;
-      }
-      
-      return false;
+      // Inclui tags que não têm valor preenchido
+      return !valoresTags[tagKey];
   });
 
   return (
     <LayoutPrincipal>
       <div className="flex items-center mb-6">
         <Button 
-            onClick={() => { window.location.href = '/contratos'; }} 
+            onClick={() => { navigate('/documentos-societarios/modelos'); }} 
             variant="link" 
             type="button"
             className="text-muted-foreground hover:text-primary flex items-center mr-4 p-0 h-auto"
@@ -814,7 +550,7 @@ const PreencherContrato: React.FC = () => {
             Voltar
         </Button>
         <h1 className="text-2xl md:text-3xl font-bold flex items-center">
-          <FileSignature className="w-6 h-6 mr-2" /> {isEditing ? 'Editar Contrato' : 'Preencher Contrato'}: {modelo.titulo}
+          <FileSignature className="w-6 h-6 mr-2" /> Gerar Documento: {modelo.titulo}
         </h1>
       </div>
       
@@ -824,18 +560,18 @@ const PreencherContrato: React.FC = () => {
               onClick={handlePreview} 
               variant="outline"
               className="flex-1 h-12"
-              disabled={!modelo || !clienteSelecionadoId || valorTotal <= 0}
+              disabled={!modelo || !clienteSelecionadoId || !tituloDocumento}
           >
               <Eye className="mr-2 h-4 w-4" />
-              Pré-visualizar Contrato
+              Pré-visualizar Documento
           </Button>
           <Button 
-              onClick={handleSalvarContrato} 
+              onClick={handleSalvarDocumento} 
               className="flex-1 h-12"
-              disabled={isSubmitting || !clienteSelecionadoId || valorTotal <= 0}
+              disabled={isSubmitting || !clienteSelecionadoId || !tituloDocumento}
           >
               {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-              {isEditing ? 'Salvar Edição e Reajustar Contas' : 'Salvar e Gerar Contas a Receber'}
+              Salvar Documento Finalizado
           </Button>
       </div>
       {/* END DUPLICATE BUTTONS */}
@@ -843,23 +579,22 @@ const PreencherContrato: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         <Card className="lg:col-span-1 h-fit">
-            <CardHeader><CardTitle className="text-xl">Dados Financeiros</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-xl">Dados do Documento</CardTitle></CardHeader>
             <CardContent className="space-y-6">
                 
                 {isAdmin && (
                     <div className="space-y-2">
-                        <Label htmlFor="empresa-contrato">Empresa Proprietária do Contrato</Label>
+                        <Label htmlFor="empresa-contrato">Empresa Proprietária do Documento</Label>
                         <Select 
                             value={proprietarioContratoId || ''} 
                             onValueChange={setProprietarioContratoId}
-                            disabled={isEditing}
                         >
                             <SelectTrigger id="empresa-contrato">
                                 <Building2 className="w-4 h-4 mr-2 text-muted-foreground" />
                                 <SelectValue placeholder="Selecione a Empresa" />
                             </SelectTrigger>
                             <SelectContent>
-                                {empresasContrato.map(e => (
+                                {empresasContrato.map((e: EmpresaContrato) => (
                                     <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>
                                 ))}
                             </SelectContent>
@@ -868,167 +603,71 @@ const PreencherContrato: React.FC = () => {
                 )}
                 
                 <div className="space-y-2">
-                    <Label htmlFor="cliente">Cliente</Label>
+                    <Label htmlFor="titulo-documento">Título do Documento Gerado</Label>
+                    <Input 
+                        id="titulo-documento"
+                        value={tituloDocumento}
+                        onChange={(e) => setTituloDocumento(e.target.value)}
+                        placeholder={modelo.titulo}
+                    />
+                </div>
+                
+                <div className="space-y-2">
+                    <Label htmlFor="cliente">Cliente (Contratado)</Label>
                     <Select value={clienteSelecionadoId} onValueChange={setClienteSelecionadoId} disabled={!proprietarioContratoId}>
                         <SelectTrigger id="cliente">
                             <SelectValue placeholder="Selecione o Cliente" />
                         </SelectTrigger>
                         <SelectContent>
-                            {clientes.map(c => (
+                            {clientesCR.map((c: ClienteCRCompleto) => (
                                 <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
                             ))}
                         </SelectContent>
                     </Select>
                 </div>
                 
-                <div className="space-y-4">
-                    <Label className="font-semibold">Forma de Pagamento</Label>
-                    <RadioGroup 
-                        value={tipoLancamento} 
-                        onValueChange={(value: TipoLancamento) => setTipoLancamento(value)} 
-                        className="flex space-x-4 pt-2"
-                        disabled={isEditing}
-                    >
-                        <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="unico" id="unico" />
-                            <Label htmlFor="unico" className="font-normal">Único</Label>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="repetir" id="repetir" />
-                            <Label htmlFor="repetir" className="font-normal">Repetir Valor</Label>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="parcelar" id="parcelar" />
-                            <Label htmlFor="parcelar" className="font-normal">Parcelar Valor</Label>
-                        </div>
-                    </RadioGroup>
+                <div className="space-y-4 pt-4 border-t">
+                    <h3 className="font-semibold text-lg">Tags Manuais</h3>
+                    <p className="text-sm text-muted-foreground">Preencha as tags que não foram preenchidas automaticamente.</p>
+                    
+                    {tagsParaPreenchimentoManual.length === 0 ? (
+                        <p className="text-muted-foreground text-sm">Nenhuma tag manual pendente.</p>
+                    ) : (
+                        tagsParaPreenchimentoManual.map(tagKey => (
+                            <div key={tagKey} className="space-y-1">
+                                <Label htmlFor={tagKey} className="font-semibold">{tagKey}</Label>
+                                <Input 
+                                    id={tagKey}
+                                    value={valoresTags[tagKey] || ''}
+                                    onChange={(e) => handleTagChange(tagKey, e.target.value)}
+                                    placeholder={`Insira o valor para ${tagKey}`}
+                                />
+                            </div>
+                        ))
+                    )}
                 </div>
-
-                <div className="space-y-2">
-                    <Label htmlFor="valor-total">{valorLabel}</Label>
-                    <Input 
-                        id="valor-total"
-                        type="number"
-                        step="0.01"
-                        value={valorTotal}
-                        onChange={(e) => setValorTotal(Number(e.target.value))}
-                        placeholder="0.00"
-                    />
-                </div>
-
-                {tipoLancamento === 'unico' && (
-                    <div className="space-y-2">
-                        <Label htmlFor="data-vencimento">Data de Vencimento</Label>
-                        <Popover>
-                            <PopoverTrigger asChild>
-                                <Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !dataVencimentoUnico && "text-muted-foreground")}>
-                                    {dataVencimentoUnico ? format(dataVencimentoUnico, "PPP", { locale: ptBR }) : <span>Escolha uma data</span>}
-                                    <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                                </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0" align="start">
-                                <Calendar mode="single" selected={dataVencimentoUnico} onSelect={setDataVencimentoUnico} initialFocus />
-                            </PopoverContent>
-                        </Popover>
-                    </div>
-                )}
-                
-                {isRepetirOuParcelar && (
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <Label htmlFor="parcelas">Nº de Repetições/Parcelas</Label>
-                            <Input 
-                                id="parcelas"
-                                type="number"
-                                min="1"
-                                value={numeroParcelas}
-                                onChange={(e) => setNumeroParcelas(Number(e.target.value))}
-                                disabled={isEditing}
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="intervalo-dias">Intervalo (dias)</Label>
-                            <Input 
-                                id="intervalo-dias"
-                                type="number"
-                                min="1"
-                                value={intervaloDias}
-                                onChange={(e) => setIntervaloDias(Number(e.target.value))}
-                                placeholder="30"
-                                disabled={isEditing}
-                            />
-                        </div>
-                        <div className="space-y-2 col-span-2">
-                            <Label htmlFor="data-primeiro-vencimento">Data do 1º Vencimento</Label>
-                            <Popover>
-                                <PopoverTrigger asChild>
-                                    <Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !dataPrimeiroVencimento && "text-muted-foreground")}>
-                                        {dataPrimeiroVencimento ? format(dataPrimeiroVencimento, "PPP", { locale: ptBR }) : <span>Escolha uma data</span>}
-                                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                                    </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-auto p-0" align="start">
-                                    <Calendar mode="single" selected={dataPrimeiroVencimento} onSelect={setDataPrimeiroVencimento} initialFocus />
-                                </PopoverContent>
-                            </Popover>
-                        </div>
-                    </div>
-                )}
             </CardContent>
         </Card>
         
         <Card className="lg:col-span-2">
-            <CardHeader><CardTitle className="text-xl">2. Preenchimento das Tags Dinâmicas</CardTitle></CardHeader>
-            <CardContent className="space-y-4">
-                <div className="p-3 bg-secondary rounded-md">
-                    <h3 className="font-semibold text-sm mb-1">Tags Padrão (Preenchimento Automático)</h3>
-                    <div className="flex flex-wrap gap-2">
-                        {TAGS_PADRAO.map(tag => (
-                            <span key={tag.id} className="text-xs font-mono bg-primary/10 text-primary px-2 py-1 rounded">
-                                {tag.nome_tag}
-                            </span>
-                        ))}
+            <CardHeader><CardTitle className="text-xl">Blocos Reutilizáveis</CardTitle></CardHeader>
+            <CardContent>
+                <ScrollArea className="h-[400px] pr-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {blocos.length === 0 ? (
+                            <p className="text-muted-foreground col-span-2">Nenhum bloco reutilizável encontrado. Crie em <Link to="/documentos-societarios/blocos" className="text-primary underline">Gerenciar Blocos</Link>.</p>
+                        ) : (
+                            blocos.map((bloco: BlocoSocietario) => (
+                                <BlocoSocietarioCard key={bloco.id} bloco={bloco} />
+                            ))
+                        )}
                     </div>
-                </div>
-                
-                {tagsParaPreenchimentoManual.length === 0 ? (
-                    <p className="text-muted-foreground">Nenhuma tag customizada ou de cliente requer preenchimento manual.</p>
-                ) : (
-                    tagsParaPreenchimentoManual.map(tag => (
-                        <div key={tag.id} className="space-y-1">
-                            <Label htmlFor={tag.nome_tag} className="font-semibold">{tag.descricao || tag.nome_tag} ({tag.nome_tag})</Label>
-                            <Input 
-                                id={tag.nome_tag}
-                                value={valoresTags[tag.nome_tag] || ''}
-                                onChange={(e) => handleTagChange(tag.nome_tag, e.target.value)}
-                                placeholder={`Insira o valor para ${tag.nome_tag}`}
-                            />
-                            {tag.origem_dado && <p className="text-xs text-muted-foreground mt-1">Sugestão de origem: {tag.origem_dado}</p>}
-                        </div>
-                    ))
-                )}
+                </ScrollArea>
+                <p className="text-sm text-muted-foreground mt-4">
+                    Para usar um bloco, copie o conteúdo e cole no template, ou use a tag {'{{BLOCO_ID_DO_BLOCO}}'} no template.
+                </p>
             </CardContent>
         </Card>
-        
-        <div className="lg:col-span-3 flex flex-col sm:flex-row gap-4">
-            <Button 
-                onClick={handlePreview} 
-                variant="outline"
-                className="flex-1 h-12"
-                disabled={!modelo || !clienteSelecionadoId || valorTotal <= 0}
-            >
-                <Eye className="mr-2 h-4 w-4" />
-                Pré-visualizar Contrato
-            </Button>
-            <Button 
-                onClick={handleSalvarContrato} 
-                className="flex-1 h-12"
-                disabled={isSubmitting || !clienteSelecionadoId || valorTotal <= 0}
-            >
-                {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                {isEditing ? 'Salvar Edição e Reajustar Contas' : 'Salvar e Gerar Contas a Receber'}
-            </Button>
-        </div>
         
       </div>
       
@@ -1036,8 +675,8 @@ const PreencherContrato: React.FC = () => {
         open={previewOpen}
         onOpenChange={setPreviewOpen}
         conteudoHtml={conteudoPreview}
-        titulo={modelo?.titulo || 'Prévia'}
-        isHtml={tipoConteudo === 'html'} 
+        titulo={previewTitle}
+        isHtml={true} 
       />
     </LayoutPrincipal>
   );

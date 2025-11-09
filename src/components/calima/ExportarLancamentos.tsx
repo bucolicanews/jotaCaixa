@@ -65,7 +65,8 @@ const ExportarLancamentos: React.FC = () => {
               documento = adminProfile.cnpj || adminProfile.cpf || '';
           } else if (role === 'Cliente') {
               const clienteProfile = perfil as ClienteProfile;
-              documento = clienteProfile.documento || clienteProfile.cpf || '';
+              // CORREÇÃO: Acessando 'documento' que agora existe em ClienteProfile
+              documento = clienteProfile.documento || clienteProfile.cpf || ''; 
           }
           setCnpjCpf(documento.replace(/\D/g, '')); // Remove caracteres não numéricos
       }

@@ -24,6 +24,7 @@ import { cn } from '@/lib/utils';
 import { ptBR } from 'date-fns/locale';
 import { BASE_URL } from '@/config/app-config'; // Importando BASE_URL
 import { useBulkTagManager } from '@/hooks/use-bulk-tag-manager'; // Importando useBulkTagManager
+import { Separator } from '../ui/separator';
 
 const textOptional = z.string().optional().or(z.literal(''));
 const urlSchema = z.string().url('URL inválida.').optional().or(z.literal(''));
@@ -57,6 +58,11 @@ const formSchema = z.object({
   bairro: textOptional,
   cidade: textOptional,
   estado: textOptional,
+  
+  // NOVOS CAMPOS DE CLIENTE
+  razao_social: textOptional,
+  nome_fantasia: textOptional,
+  documento: textOptional,
 
   // Dados Contratuais (Apenas para UsuarioProfile)
   data_inicio_contrato: z.date().optional().nullable(),
@@ -147,18 +153,23 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
       horas_mensais: (profileToEdit as UsuarioProfile)?.horas_mensais || 220,
 
       // Dados Cadastrais (Comum a Cliente e Usuário)
-      cpf: (profileToEdit as UsuarioProfile)?.cpf || '',
-      rg: (profileToEdit as UsuarioProfile)?.rg || '',
-      nome_mae: (profileToEdit as UsuarioProfile)?.nome_mae || '',
-      nome_pai: (profileToEdit as UsuarioProfile)?.nome_pai || '',
-      telefone: (profileToEdit as UsuarioProfile)?.telefone || '',
-      cep: (profileToEdit as UsuarioProfile)?.cep || '',
-      endereco: (profileToEdit as UsuarioProfile)?.endereco || '',
-      numero: (profileToEdit as UsuarioProfile)?.numero || '',
-      complemento: (profileToEdit as UsuarioProfile)?.complemento || '',
-      bairro: (profileToEdit as UsuarioProfile)?.bairro || '',
-      cidade: (profileToEdit as UsuarioProfile)?.cidade || '',
-      estado: (profileToEdit as UsuarioProfile)?.estado || '',
+      cpf: (profileToEdit as UsuarioProfile)?.cpf || (profileToEdit as ClienteProfile)?.cpf || '',
+      rg: (profileToEdit as UsuarioProfile)?.rg || (profileToEdit as ClienteProfile)?.rg || '',
+      nome_mae: (profileToEdit as UsuarioProfile)?.nome_mae || (profileToEdit as ClienteProfile)?.nome_mae || '',
+      nome_pai: (profileToEdit as UsuarioProfile)?.nome_pai || (profileToEdit as ClienteProfile)?.nome_pai || '',
+      telefone: (profileToEdit as UsuarioProfile)?.telefone || (profileToEdit as ClienteProfile)?.telefone || '',
+      cep: (profileToEdit as UsuarioProfile)?.cep || (profileToEdit as ClienteProfile)?.cep || '',
+      endereco: (profileToEdit as UsuarioProfile)?.endereco || (profileToEdit as ClienteProfile)?.endereco || '',
+      numero: (profileToEdit as UsuarioProfile)?.numero || (profileToEdit as ClienteProfile)?.numero || '',
+      complemento: (profileToEdit as UsuarioProfile)?.complemento || (profileToEdit as ClienteProfile)?.complemento || '',
+      bairro: (profileToEdit as UsuarioProfile)?.bairro || (profileToEdit as ClienteProfile)?.bairro || '',
+      cidade: (profileToEdit as UsuarioProfile)?.cidade || (profileToEdit as ClienteProfile)?.cidade || '',
+      estado: (profileToEdit as UsuarioProfile)?.estado || (profileToEdit as ClienteProfile)?.estado || '',
+      
+      // NOVOS CAMPOS DE CLIENTE
+      razao_social: (profileToEdit as ClienteProfile)?.razao_social || '',
+      nome_fantasia: (profileToEdit as ClienteProfile)?.nome_fantasia || '',
+      documento: (profileToEdit as ClienteProfile)?.documento || '',
 
       // Contratuais (Apenas para UsuarioProfile)
       data_inicio_contrato: parseDate((profileToEdit as UsuarioProfile)?.data_inicio_contrato),
@@ -249,6 +260,11 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
             bairro: values.bairro || null,
             cidade: values.cidade || null,
             estado: values.estado || null,
+            
+            // NOVOS CAMPOS
+            razao_social: values.razao_social || null,
+            nome_fantasia: values.nome_fantasia || null,
+            documento: values.documento || null,
         };
         
         if (criadorRole === 'Admin') {
@@ -372,89 +388,119 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
       <FormProvider {...formMethods}>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormGeral
-                control={form.control}
-                isEditing={isEditing}
-                isUserScope={false}
-                isSubmitting={isSubmitting}
-                criadorRole={criadorRole!}
-                permissoesVisiveis={permissoesClienteAdmin}
-                handleSelectAll={handleSelectAll}
-            />
-            
-            {/* Campos de Acesso e Limite (Apenas Admin) */}
-            {criadorRole === 'Admin' && (
-                <div className="space-y-4 pt-4 border-t">
-                    <h4 className="font-semibold">Configurações de Acesso</h4>
-                    <FormField
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                <TabsList className="flex flex-wrap justify-start w-full h-auto p-1">
+                    <TabsTrigger value="pessoal" className="flex-1 md:flex-none md:w-1/3">Geral</TabsTrigger>
+                    <TabsTrigger value="cadastrais" className="flex-1 md:flex-none md:w-1/3">Dados Cadastrais</TabsTrigger>
+                    {/* Documentos não é relevante para o perfil de Cliente/Empresa */}
+                </TabsList>
+                
+                {/* TAB 1: GERAL */}
+                <TabsContent value="pessoal" className="mt-4 space-y-4 p-4">
+                    <FormGeral
                         control={form.control}
-                        name="data_fim_acesso"
-                        render={({ field }) => (
-                            <FormItem className="flex flex-col">
-                                <FormLabel>Data Fim Acesso (Expiração)</FormLabel>
-                                <Popover>
-                                    <PopoverTrigger asChild>
+                        isEditing={isEditing}
+                        isUserScope={false}
+                        isSubmitting={isSubmitting}
+                        criadorRole={criadorRole!}
+                        permissoesVisiveis={permissoesClienteAdmin}
+                        handleSelectAll={handleSelectAll}
+                    />
+                    
+                    {/* Campos de Acesso e Limite (Apenas Admin) */}
+                    {criadorRole === 'Admin' && (
+                        <div className="space-y-4 pt-4 border-t">
+                            <h4 className="font-semibold">Configurações de Acesso</h4>
+                            <FormField
+                                control={form.control}
+                                name="data_fim_acesso"
+                                render={({ field }) => (
+                                    <FormItem className="flex flex-col">
+                                        <FormLabel>Data Fim Acesso (Expiração)</FormLabel>
+                                        <Popover>
+                                            <PopoverTrigger asChild>
+                                                <FormControl>
+                                                    <Button
+                                                        variant={"outline"}
+                                                        className={cn(
+                                                            "w-full pl-3 text-left font-normal",
+                                                            !field.value && "text-muted-foreground"
+                                                        )}
+                                                        disabled={isSubmitting}
+                                                    >
+                                                        {field.value ? format(field.value as Date, "PPP", { locale: ptBR }) : <span>Selecione a data</span>}
+                                                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                                    </Button>
+                                                </FormControl>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-auto p-0" align="start">
+                                                <Calendar
+                                                    mode="single"
+                                                    selected={field.value as Date}
+                                                    onSelect={field.onChange}
+                                                    initialFocus
+                                                    locale={ptBR}
+                                                />
+                                            </PopoverContent>
+                                        </Popover>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                            <FormField
+                                control={form.control}
+                                name="limite_usuarios"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Limite de Usuários da Equipe</FormLabel>
                                         <FormControl>
-                                            <Button
-                                                variant={"outline"}
-                                                className={cn(
-                                                    "w-full pl-3 text-left font-normal",
-                                                    !field.value && "text-muted-foreground"
-                                                )}
-                                                disabled={isSubmitting}
-                                            >
-                                                {field.value ? format(field.value as Date, "PPP", { locale: ptBR }) : <span>Selecione a data</span>}
-                                                <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                                            </Button>
+                                            <Input 
+                                                type="number" 
+                                                placeholder="5" 
+                                                {...field} 
+                                                value={field.value === undefined || field.value === null ? '' : String(field.value)}
+                                                onChange={(e) => field.onChange(e.target.value === '' ? undefined : Number(e.target.value))}
+                                                disabled={isSubmitting} 
+                                            />
                                         </FormControl>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-auto p-0" align="start">
-                                        <Calendar
-                                            mode="single"
-                                            selected={field.value as Date}
-                                            onSelect={field.onChange}
-                                            initialFocus
-                                            locale={ptBR}
-                                        />
-                                    </PopoverContent>
-                                </Popover>
-                                <FormMessage />
-                            </FormItem>
-                        )}
-                    />
-                    <FormField
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                        </div>
+                    )}
+                </TabsContent>
+                
+                {/* TAB 2: DADOS CADASTRAIS */}
+                <TabsContent value="cadastrais" className="mt-4 space-y-6 p-4">
+                    <div className="flex justify-between items-center">
+                        <h3 className="font-semibold text-lg flex items-center"><Tag className="w-5 h-5 mr-2" /> Tags de Contrato</h3>
+                    </div>
+                    <p className="text-sm text-muted-foreground mb-4">Estes campos são usados para preencher tags dinâmicas em contratos.</p>
+                    
+                    {/* Campos de Identificação (Razão Social, Nome Fantasia, Documento) */}
+                    <div className="space-y-4">
+                        <FormField control={form.control} name="razao_social" render={({ field }) => (
+                            <FormItem><FormLabel>Razão Social (Opcional)</FormLabel><FormControl><Input placeholder="Razão Social" {...field} /></FormControl><FormMessage /></FormItem>
+                        )} />
+                        <FormField control={form.control} name="nome_fantasia" render={({ field }) => (
+                            <FormItem><FormLabel>Nome Fantasia (Opcional)</FormLabel><FormControl><Input placeholder="Nome Fantasia" {...field} /></FormControl><FormMessage /></FormItem>
+                        )} />
+                        <FormField control={form.control} name="documento" render={({ field }) => (
+                            <FormItem><FormLabel>Documento (CPF/CNPJ)</FormLabel><FormControl><Input placeholder="00.000.000/0000-00" {...field} /></FormControl><FormMessage /></FormItem>
+                        )} />
+                        <Separator />
+                    </div>
+                    
+                    <FormDadosCadastrais
                         control={form.control}
-                        name="limite_usuarios"
-                        render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Limite de Usuários da Equipe</FormLabel>
-                                <FormControl>
-                                    <Input 
-                                        type="number" 
-                                        placeholder="5" 
-                                        {...field} 
-                                        value={field.value === undefined || field.value === null ? '' : String(field.value)}
-                                        onChange={(e) => field.onChange(e.target.value === '' ? undefined : Number(e.target.value))}
-                                        disabled={isSubmitting} 
-                                    />
-                                </FormControl>
-                                <FormMessage />
-                            </FormItem>
-                        )}
+                        isSubmitting={isSubmitting}
+                        resourceId={resourceId}
+                        tagRefreshKey={refreshKey}
+                        onTagToggle={handleTagToggle}
                     />
-                </div>
-            )}
-            
-            <h3 className="font-semibold text-lg mt-6 border-t pt-4">Dados Cadastrais (Tags de Contrato)</h3>
-            <p className="text-sm text-muted-foreground mb-4">Estes campos são usados para preencher tags dinâmicas em contratos.</p>
-            
-            <FormDadosCadastrais 
-                control={form.control}
-                isSubmitting={isSubmitting}
-                resourceId={resourceId}
-                tagRefreshKey={refreshKey}
-                onTagToggle={handleTagToggle}
-            />
+                </TabsContent>
+            </Tabs>
 
             <Button type="submit" className="w-full" disabled={isSubmitting}>
               {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

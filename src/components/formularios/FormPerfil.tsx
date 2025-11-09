@@ -56,6 +56,11 @@ const formSchema = z.object({
   bairro: textOptional,
   cidade: textOptional,
   estado: textOptional,
+  
+  // NOVOS CAMPOS DE CLIENTE
+  razao_social: textOptional,
+  nome_fantasia: textOptional,
+  documento: textOptional,
 
   // Dados Contratuais (Apenas para UsuarioProfile)
   data_inicio_contrato: z.date().optional().nullable(),
@@ -153,6 +158,11 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
       bairro: (profileToEdit as UsuarioProfile)?.bairro || '',
       cidade: (profileToEdit as UsuarioProfile)?.cidade || '',
       estado: (profileToEdit as UsuarioProfile)?.estado || '',
+      
+      // NOVOS CAMPOS DE CLIENTE
+      razao_social: (profileToEdit as ClienteProfile)?.razao_social || '',
+      nome_fantasia: (profileToEdit as ClienteProfile)?.nome_fantasia || '',
+      documento: (profileToEdit as ClienteProfile)?.documento || '',
 
       // Contratuais
       data_inicio_contrato: parseDate((profileToEdit as UsuarioProfile)?.data_inicio_contrato),
@@ -227,6 +237,11 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
         dataToUpdate.bairro = values.bairro || null;
         dataToUpdate.cidade = values.cidade || null;
         dataToUpdate.estado = values.estado || null;
+        
+        // NOVOS CAMPOS
+        dataToUpdate.razao_social = values.razao_social || null;
+        dataToUpdate.nome_fantasia = values.nome_fantasia || null;
+        dataToUpdate.documento = values.documento || null;
         
         const { error } = await supabase.from('tbl_clientes').update(dataToUpdate).eq('id', perfilInicial.id);
         if (error) throw error;
@@ -368,6 +383,22 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
                             )} />
                             <FormField control={form.control} name="cnpj" render={({ field }) => (
                                 <FormItem><FormLabel>CNPJ (Opcional)</FormLabel><FormControl><Input placeholder="00.000.000/0000-00" {...field} /></FormControl><FormMessage /></FormItem>
+                            )} />
+                            <Separator />
+                        </div>
+                    )}
+                    
+                    {/* Campos de Identificação (Razão Social, Nome Fantasia, Documento) */}
+                    {isClient && (
+                        <div className="space-y-4">
+                            <FormField control={form.control} name="razao_social" render={({ field }) => (
+                                <FormItem><FormLabel>Razão Social (Opcional)</FormLabel><FormControl><Input placeholder="Razão Social" {...field} /></FormControl><FormMessage /></FormItem>
+                            )} />
+                            <FormField control={form.control} name="nome_fantasia" render={({ field }) => (
+                                <FormItem><FormLabel>Nome Fantasia (Opcional)</FormLabel><FormControl><Input placeholder="Nome Fantasia" {...field} /></FormControl><FormMessage /></FormItem>
+                            )} />
+                            <FormField control={form.control} name="documento" render={({ field }) => (
+                                <FormItem><FormLabel>Documento (CPF/CNPJ)</FormLabel><FormControl><Input placeholder="00.000.000/0000-00" {...field} /></FormControl><FormMessage /></FormItem>
                             )} />
                             <Separator />
                         </div>

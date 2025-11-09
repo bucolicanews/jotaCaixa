@@ -37,7 +37,6 @@ export interface ClienteProfile {
   data_fim_acesso?: string | null; // NOVO CAMPO: Data e hora do fim do acesso
   admin_id?: string | null; // ADICIONADO PARA CORRIGIR O ERRO
   // Novos campos para Contrato
-  documento?: string | null;
   endereco_completo?: string | null;
   criado_em: string; // ADICIONADO
   
@@ -55,6 +54,10 @@ export interface ClienteProfile {
   bairro?: string | null;
   cidade?: string | null;
   estado?: string | null;
+  
+  documento?: string | null;
+  razao_social?: string | null;
+  nome_fantasia?: string | null;
 }
 
 export interface UsuarioProfile {

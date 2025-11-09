@@ -131,7 +131,12 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
     }
 
     if (error) {
-      showError(`Falha ao salvar cliente: ${error.message}`);
+      // Verifica se o erro é de unicidade (código 23505 para unique_violation)
+      if (error.code === '23505' && error.message.includes('unique_email_clientes')) {
+          showError('Este email já está cadastrado em outro cliente. O email deve ser único.');
+      } else {
+          showError(`Falha ao salvar cliente: ${error.message}`);
+      }
     } else {
       showSuccess(`Cliente salvo com sucesso!`);
       onSaveComplete();
