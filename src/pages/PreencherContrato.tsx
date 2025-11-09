@@ -49,6 +49,7 @@ interface EmpresaContrato {
 // NOVO TIPO: Cliente CR com todos os campos de tag
 interface ClienteCRCompleto {
     id: string;
+    proprietario_id?: string | null; // Adicionado para compatibilidade com a tabela 'clientes'
     nome: string;
     razao_social?: string | null;
     nome_fantasia?: string | null;
@@ -527,7 +528,37 @@ const PreencherContrato: React.FC = () => {
     setIsSubmitting(true);
     
     try {
-        // 0. REMOVIDO: Lógica de UPSERT na tabela 'clientes' (CR)
+        // 0. GARANTIR QUE O CLIENTE EXISTA NA TABELA 'clientes' (para FK)
+        const clienteSelecionado = clientesCR.find(c => c.id === clienteSelecionadoId);
+        if (!clienteSelecionado) throw new Error('Cliente selecionado não encontrado.');
+        
+        // Como estamos buscando clientes da tbl_clientes, precisamos garantir que eles existam na tabela 'clientes' (CR)
+        const clienteDataParaUpsert: Partial<ClienteCRCompleto> = {
+            id: clienteSelecionado.id,
+            proprietario_id: proprietarioContratoId, // Usando o proprietário do contrato
+            nome: clienteSelecionado.nome,
+            email: clienteSelecionado.email,
+            documento: clienteSelecionado.documento,
+            razao_social: clienteSelecionado.razao_social,
+            nome_fantasia: clienteSelecionado.nome_fantasia,
+            telefone: clienteSelecionado.telefone,
+            telefone_fixo: clienteSelecionado.telefone_fixo,
+            cep: clienteSelecionado.cep,
+            endereco: clienteSelecionado.endereco,
+            numero: clienteSelecionado.numero,
+            complemento: clienteSelecionado.complemento,
+            bairro: clienteSelecionado.bairro,
+            cidade: clienteSelecionado.cidade,
+            estado: clienteSelecionado.estado,
+        };
+        
+        const { error: upsertError } = await supabase
+            .from('clientes')
+            .upsert(clienteDataParaUpsert, { onConflict: 'id' });
+            
+        if (upsertError) {
+            throw new Error('Falha ao garantir a existência do cliente na tabela CR: ' + upsertError.message);
+        }
         
         // 1. Renderizar Conteúdo Final
         const conteudoRenderizado = renderizarConteudo(modelo.conteudo_template, valoresTags);
