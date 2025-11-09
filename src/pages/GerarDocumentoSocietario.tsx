@@ -69,6 +69,7 @@ const GerarDocumentoSocietario: React.FC = () => {
   
   const [proprietarioContratoId, setProprietarioContratoId] = useState<string | null>(null); 
   const [empresasContrato, setEmpresasContrato] = useState<EmpresaContrato[]>([]);
+  const [empresaLogada, setEmpresaLogada] = useState<any>(null); // Declarado corretamente
 
   const isAdmin = role === 'Admin';
   const isCliente = role === 'Cliente';
@@ -83,15 +84,15 @@ const GerarDocumentoSocietario: React.FC = () => {
   const ownerIdLogado = getOwnerIdLogado();
   
   // Dados da Empresa Logada (para preenchimento de tags {{EMPRESA_*}})
-  const empresaLogada = useMemo(() => {
-    if (!perfil) return null;
+  useEffect(() => {
+    if (!perfil) return;
     const profile = perfil as AdminProfile | ClienteProfile;
     
     // CORREÇÃO: Acessando 'documento' diretamente do ClienteProfile
     const documentoCliente = (profile as ClienteProfile).documento || (profile as ClienteProfile).cpf;
     const documentoAdmin = (profile as AdminProfile).cnpj || (profile as AdminProfile).cpf;
     
-    return {
+    setEmpresaLogada({
         nome: profile.nome, 
         email: profile.email, 
         documento: isAdmin ? documentoAdmin : documentoCliente,
@@ -106,7 +107,7 @@ const GerarDocumentoSocietario: React.FC = () => {
         bairro: profile.bairro, 
         cidade: profile.cidade, 
         estado: profile.estado,
-    };
+    });
   }, [perfil, isAdmin, isCliente]);
   
   // Cliente selecionado (para preenchimento de tags)
@@ -334,43 +335,13 @@ const GerarDocumentoSocietario: React.FC = () => {
     setIsSubmitting(true);
     
     try {
-        // 0. GARANTIR QUE O CLIENTE EXISTA NA TABELA 'clientes' (para FK)
-        if (clienteSelecionado) {
-            const clienteDataParaUpsert = {
-                id: clienteSelecionado.id,
-                proprietario_id: proprietarioContratoId,
-                nome: clienteSelecionado.nome,
-                razao_social: clienteSelecionado.razao_social || clienteSelecionado.nome,
-                nome_fantasia: clienteSelecionado.nome_fantasia || clienteSelecionado.nome,
-                documento: clienteSelecionado.documento || clienteSelecionado.cpf || clienteSelecionado.rg,
-                email: clienteSelecionado.email,
-                telefone: clienteSelecionado.telefone,
-                telefone_fixo: clienteSelecionado.telefone_fixo,
-                cep: clienteSelecionado.cep,
-                endereco: clienteSelecionado.endereco,
-                numero: clienteSelecionado.numero,
-                complemento: clienteSelecionado.complemento,
-                bairro: clienteSelecionado.bairro,
-                cidade: clienteSelecionado.cidade,
-                estado: clienteSelecionado.estado,
-            };
-            
-            // Nota: A tabela 'clientes' tem FKs para tbl_clientes, mas a tabela 'documentos_societarios_gerados'
-            // tem FK para 'clientes'. Precisamos garantir que o cliente exista em 'clientes'.
-            const { error: upsertError } = await supabase
-                .from('clientes')
-                .upsert(clienteDataParaUpsert, { onConflict: 'id' });
-                
-            if (upsertError) {
-                throw new Error('Falha ao garantir a existência do cliente na tabela CR: ' + upsertError.message);
-            }
-        }
+        // REMOVIDO: Lógica de UPSERT na tabela 'clientes' (CR)
         
         const conteudoRenderizado = renderizarConteudo(modelo.conteudo_template, valoresTags);
         
         const documentoData = {
             modelo_id: modelo.id,
-            cliente_id: clienteSelecionadoId,
+            cliente_id: clienteSelecionadoId, // Agora referencia tbl_clientes(id)
             proprietario_id: proprietarioContratoId, // Usando o proprietário selecionado
             status: 'finalizado',
             valores_tags_preenchidos: { ...valoresTags, titulo: tituloDocumento },
