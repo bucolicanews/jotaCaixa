@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, FileSignature, ChevronLeft, Save, Eye } from 'lucide-react';
@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useSessao } from '@/hooks/use-sessao';
-import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
+import { ClienteProfile, UsuarioProfile, AdminProfile } from '@/types/usuario';
 import { Cliente } from '@/types/cliente';
 import { TAGS_PADRAO } from '@/config/contrato-tags-padrao';
 import ContratoPreviewDialog from '@/components/contratos/ContratoPreviewDialog';
@@ -49,6 +49,29 @@ const GerarDocumentoSocietario: React.FC = () => {
   };
   
   const ownerIdLogado = getOwnerIdLogado();
+  
+  // Dados da Empresa Logada (para preenchimento de tags {{EMPRESA_*}})
+  const empresaLogada = useMemo(() => {
+    if (!perfil) return null;
+    if (isAdmin) {
+        const profile = perfil as AdminProfile;
+        return {
+            nome: profile.nome, email: profile.email, documento: profile.cnpj || profile.cpf,
+            cpf: profile.cpf, cnpj: profile.cnpj, rg: profile.rg, telefone: profile.telefone,
+            cep: profile.cep, endereco: profile.endereco, numero: profile.numero, complemento: profile.complemento,
+            bairro: profile.bairro, cidade: profile.cidade, estado: profile.estado,
+        };
+    } else if (isCliente) {
+        const profile = perfil as ClienteProfile;
+        return {
+            nome: profile.nome, email: profile.email, documento: profile.documento || profile.cpf,
+            cpf: profile.cpf, cnpj: null, rg: profile.rg, telefone: profile.telefone,
+            cep: profile.cep, endereco: profile.endereco, numero: profile.numero, complemento: profile.complemento,
+            bairro: profile.bairro, cidade: profile.cidade, estado: profile.estado,
+        };
+    }
+    return null;
+  }, [perfil, isAdmin, isCliente]);
 
   // --- FUNÇÃO PRINCIPAL DE BUSCA DE DADOS INICIAIS ---
   const buscarDados = useCallback(async () => {
@@ -63,6 +86,7 @@ const GerarDocumentoSocietario: React.FC = () => {
     const { data: modeloData, error: modeloError } = await supabase
         .from('modelos_societarios')
         .select('*')
+        .eq('proprietario_id', ownerIdLogado)
         .eq('id', modeloId)
         .single();
         
@@ -83,12 +107,23 @@ const GerarDocumentoSocietario: React.FC = () => {
     setBlocos(blocosData as BlocoSocietario[] || []);
     
     // 3. Buscar Clientes (Contratados)
-    const { data: clientesData } = await supabase
+    let combinedClients: Cliente[] = [];
+    
+    // Se for Admin ou Cliente, buscamos clientes da tabela 'clientes' (CR)
+    const { data: clientesCRData, error: errorCR } = await supabase
         .from('clientes')
         .select('*')
         .eq('proprietario_id', ownerIdLogado)
         .order('nome');
-    setClientes(clientesData as Cliente[] || []);
+        
+    if (errorCR) {
+        showError('Erro ao carregar clientes CR: ' + errorCR.message);
+    } else {
+        combinedClients.push(...(clientesCRData as Cliente[]));
+    }
+    
+    combinedClients.sort((a, b) => a.nome.localeCompare(b.nome));
+    setClientes(combinedClients);
     
     setCarregandoDados(false);
   }, [modeloId, ownerIdLogado, navigate]);
@@ -104,10 +139,21 @@ const GerarDocumentoSocietario: React.FC = () => {
     const newTags: Record<string, string> = {};
     const cliente = clientes.find(c => c.id === clienteSelecionadoId);
     
-    // Combina tags padrão (apenas as de Cliente/Usuário/Empresa) e tags customizadas
-    const allActiveTags = [...TAGS_PADRAO, ...blocos.map(b => ({ nome_tag: `{{BLOCO_${b.id}}}`, descricao: `Bloco: ${b.titulo}`, origem_dado: 'blocos_societarios', criado_em: '' } as any))];
+    // Combina tags padrão (apenas as de Cliente/Usuário/Empresa) e tags de blocos
+    const allAvailableTags = TAGS_PADRAO.filter(t => 
+        !t.origem_dado?.startsWith('contas_receber')
+    );
+    
+    const blocoTags = blocos.map(b => ({
+        id: b.id,
+        nome_tag: `{{BLOCO_${b.id}}}`,
+        descricao: `Bloco: ${b.titulo}`,
+        origem_dado: 'blocos_societarios',
+    } as any));
+    
+    const allTags = [...allAvailableTags, ...blocoTags];
 
-    allActiveTags.forEach(tag => {
+    allTags.forEach(tag => {
         const tagKey = tag.nome_tag;
         let tagValue: string | null = null;
         
@@ -116,8 +162,8 @@ const GerarDocumentoSocietario: React.FC = () => {
             const [sourceTable, sourceField] = tag.origem_dado.split('.');
             
             // Mapeamento de dados da Empresa Logada (Contratante) - tbl_clientes / tbl_admins
-            if (sourceTable === 'tbl_clientes' || sourceTable === 'tbl_admins') {
-                const empresaData = perfil as any;
+            if ((sourceTable === 'tbl_clientes' || sourceTable === 'tbl_admins') && empresaLogada) {
+                const empresaData = empresaLogada as any;
                 if (empresaData && empresaData[sourceField]) {
                     tagValue = String(empresaData[sourceField]);
                 }
@@ -140,7 +186,7 @@ const GerarDocumentoSocietario: React.FC = () => {
         }
         
         // 2. Se o valor foi preenchido automaticamente, usa-o.
-        if (tagValue !== null) {
+        if (tagValue !== null && tagValue !== undefined) {
             newTags[tagKey] = tagValue;
         } else {
             // 3. Caso contrário, usa o valor salvo anteriormente ou o valor digitado.
@@ -149,7 +195,7 @@ const GerarDocumentoSocietario: React.FC = () => {
     });
     
     setValoresTags(newTags);
-  }, [clienteSelecionadoId, clientes, blocos, perfil, valoresTags]);
+  }, [clienteSelecionadoId, clientes, blocos, empresaLogada, valoresTags]);
 
   useEffect(() => {
     updateTags();
@@ -230,8 +276,11 @@ const GerarDocumentoSocietario: React.FC = () => {
   
   // Filtra tags que já foram preenchidas automaticamente (para não pedir valor manual)
   const tagsParaPreenchimentoManual = Object.keys(valoresTags).filter(tagKey => {
-      // Se o valor for vazio E a tag não for um bloco (blocos são preenchidos com [BLOCO ID])
-      return !tagKey.startsWith('{{BLOCO_') && !valoresTags[tagKey];
+      // Exclui tags de bloco (que são preenchidas com o conteúdo do bloco)
+      if (tagKey.startsWith('{{BLOCO_')) return false;
+      
+      // Inclui tags que não têm valor preenchido
+      return !valoresTags[tagKey];
   });
 
   return (
@@ -345,8 +394,6 @@ const GerarDocumentoSocietario: React.FC = () => {
                 </p>
             </CardContent>
         </Card>
-        
-        {/* REMOVIDO: Botões duplicados no final da página */}
         
       </div>
       
