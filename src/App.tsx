@@ -1,7 +1,7 @@
 import React from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { TooltipProvider } from "@radix-ui/react-tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, useSearchParams, useNavigate } from "react-router-dom";
 import { SessionProvider } from "@/contexts/SessionContext";
@@ -43,8 +43,12 @@ import GerenciarHistoricos from "./pages/GerenciarHistoricos";
 import Exportar from "./pages/Exportar";
 import LancamentosNaoMapeados from "./pages/LancamentosNaoMapeados";
 import ClientesPage from "./pages/Clientes";
-import SiteLayout from "./components/SiteLayout"; // Importando SiteLayout
-import Index from "./pages/Index"; // Importando Index (que agora é a LandingPage)
+import SiteLayout from "./components/SiteLayout";
+import Index from "./pages/Index";
+import DocumentosSocietarios from "./pages/DocumentosSocietarios";
+import GerenciarModelosSocietarios from "./pages/GerenciarModelosSocietarios";
+import GerenciarBlocosSocietarios from "./pages/GerenciarBlocosSocietarios";
+import GerarDocumentoSocietario from "./pages/GerarDocumentoSocietario";
 
 const queryClient = new QueryClient();
 
@@ -250,6 +254,12 @@ const App = () => (
             <Route path="/renovacao" element={<SelecaoPagamentoRenovacao />} />
             <Route path="/historicos" element={<GerenciarHistoricos />} />
             <Route path="/clientes" element={<ClientesPage />} />
+            
+            {/* NOVAS ROTAS: Documentos Societários */}
+            <Route path="/documentos-societarios" element={<DocumentosSocietarios />} />
+            <Route path="/documentos-societarios/modelos" element={<GerenciarModelosSocietarios />} />
+            <Route path="/documentos-societarios/blocos" element={<GerenciarBlocosSocietarios />} />
+            <Route path="/documentos-societarios/gerar/:modeloId" element={<GerarDocumentoSocietario />} />
 
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />

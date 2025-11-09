@@ -58,6 +58,15 @@ const SECOES_MENU: MenuSection[] = [
         ]
     },
     {
+        titulo: 'Documentos Societários',
+        perfis: ['Admin', 'Cliente'],
+        itens: [
+            { nome: 'Documentos Gerados', caminho: '/documentos-societarios', icone: FileText, perfis: ['Admin', 'Cliente'], permissionKey: 'contratos' },
+            { nome: 'Gerenciar Modelos', caminho: '/documentos-societarios/modelos', icone: FileTextIcon, perfis: ['Admin', 'Cliente'], permissionKey: 'contratos' },
+            { nome: 'Gerenciar Blocos', caminho: '/documentos-societarios/blocos', icone: Tag, perfis: ['Admin', 'Cliente'], permissionKey: 'contratos' },
+        ]
+    },
+    {
         titulo: 'Cadastros',
         perfis: ['Admin', 'Cliente', 'Usuario'],
         itens: [
