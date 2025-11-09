@@ -171,7 +171,7 @@ const PreencherContrato: React.FC = () => {
     combinedClients.sort((a, b) => a.nome.localeCompare(b.nome));
     setClientes(combinedClients);
     
-  }, []);
+  }, [setTagsCustomizadas, setClientes, showError]);
 
 
   // --- FUNÇÃO PRINCIPAL DE BUSCA DE DADOS INICIAIS ---
@@ -274,14 +274,14 @@ const PreencherContrato: React.FC = () => {
             const tabelaParcelas = isContractOwnerAdmin ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
             
             // Busca a conta sintética para obter o ID da conta a receber
-            const { data: contaReceberData } = await supabase
+            const { data: existingConta } = await supabase
                 .from(tabelaContasReceber)
                 .select('id')
                 .eq('contrato_gerado_id', contrato.id)
                 .limit(1)
                 .single();
                 
-            const contaReceberId = contaReceberData?.id;
+            const contaReceberId = existingConta?.id;
 
             if (contaReceberId) {
                 const { data: primeiraParcela } = await supabase
@@ -353,14 +353,21 @@ const PreencherContrato: React.FC = () => {
     }
   }, [modeloId, ownerIdLogado, navigate, role, perfil, usuario, isAdmin, isCliente, contratoId]);
   
-  // Efeito 1: Carregamento inicial
+  // Efeito 1: Carregamento inicial e verificação de permissão (CORRIGIDO)
   useEffect(() => {
-    if (!carregandoSessao && (isAdmin || isCliente || (role === 'Usuario' && ownerIdLogado))) {
+    if (carregandoSessao) return;
+
+    // Permissão para esta página: Admin OU Cliente OU Usuário vinculado
+    const isAllowed = role === 'Admin' || role === 'Cliente' || (role === 'Usuario' && !!ownerIdLogado);
+
+    if (isAllowed) {
+      // Se permitido, carrega os dados
       buscarDados();
-    } else if (!carregandoSessao && !isAdmin && !isCliente) {
-        navigate('/painel', { replace: true });
+    } else {
+      // Se a sessão está carregada, mas o usuário não tem permissão (ex: Usuário não vinculado)
+      navigate('/painel', { replace: true });
     }
-  }, [carregandoSessao, isAdmin, isCliente, role, ownerIdLogado, buscarDados, navigate]);
+  }, [carregandoSessao, role, ownerIdLogado, buscarDados, navigate]);
   
   // Efeito 2: Monitorar a mudança do proprietário do contrato (proprietarioContratoId)
   useEffect(() => {
@@ -936,7 +943,7 @@ const PreencherContrato: React.FC = () => {
                         disabled={!modelo || !clienteSelecionadoId || valorTotal <= 0}
                     >
                         <Eye className="mr-1 h-3 w-3" />
-                        Pré-visualizar
+                        Pré-visualizar Template
                     </Button>
                     <Button 
                         onClick={handleSalvarContrato} 
