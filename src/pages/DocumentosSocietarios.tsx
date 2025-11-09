@@ -3,7 +3,6 @@ import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, FileText, Eye, Trash2, Building2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
 import { DocumentoSocietarioGerado } from '@/types/documentos-societarios';
 import { Button } from '@/components/ui/button';
@@ -15,7 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import ContratoPreviewDialog from '@/components/contratos/ContratoPreviewDialog';
 
 interface DocumentoComCliente extends DocumentoSocietarioGerado {
-    clientes: { nome: string } | null;
+    tbl_clientes: { nome: string } | null; // CORRIGIDO: Usando tbl_clientes
     modelos_societarios: { titulo: string } | null;
 }
 
@@ -47,7 +46,7 @@ const DocumentosSocietarios: React.FC = () => {
       .from('documentos_societarios_gerados')
       .select(`
         *,
-        clientes ( nome ),
+        tbl_clientes ( nome ),
         modelos_societarios ( titulo )
       `)
       .eq('proprietario_id', ownerId)
@@ -157,7 +156,7 @@ const DocumentosSocietarios: React.FC = () => {
                     <TableRow key={doc.id}>
                       <TableCell className="font-medium">{doc.valores_tags_preenchidos?.titulo || doc.modelos_societarios?.titulo || 'Documento Sem Título'}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">{doc.modelos_societarios?.titulo || 'N/A'}</TableCell>
-                      <TableCell className="text-sm">{doc.clientes?.nome || 'N/A'}</TableCell>
+                      <TableCell className="text-sm">{doc.tbl_clientes?.nome || 'N/A'}</TableCell>
                       <TableCell className="text-sm">{format(parseISO(doc.data_registro), 'dd/MM/yyyy')}</TableCell>
                       <TableCell>
                         <Badge variant={doc.status === 'finalizado' ? 'default' : 'secondary'}>

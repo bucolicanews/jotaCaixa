@@ -69,7 +69,6 @@ const GerarDocumentoSocietario: React.FC = () => {
   
   const [proprietarioContratoId, setProprietarioContratoId] = useState<string | null>(null); 
   const [empresasContrato, setEmpresasContrato] = useState<EmpresaContrato[]>([]);
-  const [empresaLogada, setEmpresaLogada] = useState<any>(null); // Declarado corretamente
 
   const isAdmin = role === 'Admin';
   const isCliente = role === 'Cliente';
@@ -84,15 +83,15 @@ const GerarDocumentoSocietario: React.FC = () => {
   const ownerIdLogado = getOwnerIdLogado();
   
   // Dados da Empresa Logada (para preenchimento de tags {{EMPRESA_*}})
-  useEffect(() => {
-    if (!perfil) return;
+  const empresaLogada = useMemo(() => {
+    if (!perfil) return null;
     const profile = perfil as AdminProfile | ClienteProfile;
     
     // CORREÇÃO: Acessando 'documento' diretamente do ClienteProfile
     const documentoCliente = (profile as ClienteProfile).documento || (profile as ClienteProfile).cpf;
     const documentoAdmin = (profile as AdminProfile).cnpj || (profile as AdminProfile).cpf;
     
-    setEmpresaLogada({
+    return {
         nome: profile.nome, 
         email: profile.email, 
         documento: isAdmin ? documentoAdmin : documentoCliente,
@@ -107,7 +106,7 @@ const GerarDocumentoSocietario: React.FC = () => {
         bairro: profile.bairro, 
         cidade: profile.cidade, 
         estado: profile.estado,
-    });
+    };
   }, [perfil, isAdmin, isCliente]);
   
   // Cliente selecionado (para preenchimento de tags)
