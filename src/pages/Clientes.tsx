@@ -229,8 +229,8 @@ const ClientesPage = () => {
           
           if (isSystemClient && systemClient) {
               const dataFimAcesso = systemClient.data_fim_acesso ? parseISO(systemClient.data_fim_acesso) : null;
-              const isAtivo = dataFimAcesso && isPast(new Date()) === false;
-              const isBlocked = dataFimAcesso === null && systemClient.aprovado;
+              const isAtivo = dataFimAcesso && isPast(new Date()) === false; // Data de fim de acesso é futura ou hoje
+              const isBlocked = dataFimAcesso === null && systemClient.aprovado; // Aprovado, mas sem data de fim (desativado)
               
               if (!systemClient.aprovado) {
                   systemStatus = 'Pendente';
@@ -949,14 +949,14 @@ const ClientesPage = () => {
                                         size="icon" 
                                         onClick={() => handleEditEmpresaSistema(empresa)}
                                     >
-                                        <Edit className="h-4 w-4" />
+                                        <Edit className="w-4 h-4" />
                                     </Button>
                                     <Button 
                                         variant="destructive" 
                                         size="icon" 
                                         onClick={() => handleDeleteEmpresaSistema(empresa.id, empresa.nome)}
                                     >
-                                        <Trash2 className="h-4 w-4" />
+                                        <Trash2 className="w-4 h-4" />
                                     </Button>
                                 </TableCell>
                             </TableRow>
@@ -1030,7 +1030,8 @@ const ClientesPage = () => {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
         <h1 className="text-2xl md:text-3xl font-bold">Gerenciamento de Clientes</h1>
         
-        <div className="flex space-x-2 w-full sm:w-auto">
+        {/* Botões de Ação (Topo) - Ajustado para responsividade */}
+        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                     <Button variant="outline" className="w-full sm:w-auto">
@@ -1049,7 +1050,7 @@ const ClientesPage = () => {
             {/* Botão para Novo Cliente CR */}
             <Dialog open={dialogAberto && !perfilParaEditar} onOpenChange={setDialogAberto}>
               <DialogTrigger asChild>
-                <Button onClick={handleNewCR} className="w-full sm:w-auto" disabled={isAdmin && activeTab === 'empresas_sistema'}>
+                <Button onClick={handleNewCR} className="w-full sm:w-auto bg-orange-500 hover:bg-orange-600">
                   <PlusCircle className="w-4 h-4 mr-2" />
                   Cliente Direto
                 </Button>
