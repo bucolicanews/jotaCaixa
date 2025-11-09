@@ -19,7 +19,6 @@ import { cn } from '@/lib/utils';
 import { TAGS_PADRAO } from '@/config/contrato-tags-padrao';
 import ContratoPreviewDialog from '@/components/contratos/ContratoPreviewDialog';
 import { useSessao } from '@/hooks/use-sessao';
-import { BlocoSocietario } from '@/types/documentos-societarios';
 
 type TipoLancamento = 'unico' | 'repetir' | 'parcelar';
 type TipoConteudo = 'html' | 'texto';
@@ -81,7 +80,6 @@ const PreencherContrato: React.FC = () => {
   const [contratoInicial, setContratoInicial] = useState<ContratoGerado | null>(null);
   const [tagsCustomizadas, setTagsCustomizadas] = useState<ContratoTag[]>([]);
   const [clientesCR, setClientesCR] = useState<ClienteCRCompleto[]>([]);
-  const [blocos, setBlocos] = useState<BlocoSocietario[]>([]);
   
   const [valoresTags, setValoresTags] = useState<Record<string, string>>({});
   const [carregandoDados, setCarregandoDados] = useState(true);
@@ -133,15 +131,7 @@ const PreencherContrato: React.FC = () => {
   const fetchDependentData = useCallback(async (targetEmpresaId: string) => {
     if (!targetEmpresaId) return;
     
-    // 1. Buscar Blocos Reutilizáveis
-    const { data: blocosData } = await supabase
-        .from('blocos_societarios')
-        .select('*')
-        .eq('proprietario_id', targetEmpresaId)
-        .order('titulo');
-    setBlocos(blocosData as BlocoSocietario[] || []);
-    
-    // 2. Buscar Tags Customizadas ATIVAS
+    // 1. Buscar Tags Customizadas ATIVAS
     const { data: tagsData } = await supabase
         .from('contrato_tags')
         .select('*')
@@ -152,7 +142,7 @@ const PreencherContrato: React.FC = () => {
         setTagsCustomizadas(tagsData as ContratoTag[]);
     }
     
-    // 3. Buscar Clientes (Contratados) - AGORA BUSCA APENAS NA TBL_CLIENTES (CLIENTES DO SISTEMA)
+    // 2. Buscar Clientes (Contratados) - AGORA BUSCA APENAS NA TBL_CLIENTES (CLIENTES DO SISTEMA)
     const { data: clientesSistemaData, error: errorSistema } = await supabase
         .from('tbl_clientes')
         .select('id, nome, email, cpf, rg, nome_mae, nome_pai, telefone, cep, endereco, numero, complemento, bairro, cidade, estado, razao_social, nome_fantasia, documento') // Selecionando todos os campos de tag
