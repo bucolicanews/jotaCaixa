@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useSessao } from '@/hooks/use-sessao';
 import { ClienteProfile, UsuarioProfile, AdminProfile } from '@/types/usuario';
-import { ContratoTag } from '@/types/contratos'; // CORREÇÃO: Importando ContratoTag
+import { ContratoTag } from '@/types/contratos';
 import { TAGS_PADRAO } from '@/config/contrato-tags-padrao';
 import ContratoPreviewDialog from '@/components/contratos/ContratoPreviewDialog';
 import BlocoSocietarioCard from '@/components/modelos-societarios/BlocoSocietarioCard';
@@ -24,8 +24,9 @@ interface EmpresaContrato {
     nome: string;
 }
 
-// NOVO TIPO: Cliente do Sistema com todos os campos de tag
+// NOVO TIPO: Cliente do Sistema com todos os campos de tag (ajustado para tbl_clientes)
 interface ClienteSistemaCompleto extends ClienteProfile {
+    // Mantemos os campos opcionais que podem ser preenchidos via mapeamento de tags
     razao_social?: string | null;
     nome_fantasia?: string | null;
     documento?: string | null;
@@ -39,7 +40,7 @@ const GerarDocumentoSocietario: React.FC = () => {
   
   const [modelo, setModelo] = useState<ModeloSocietario | null>(null);
   const [blocos, setBlocos] = useState<BlocoSocietario[]>([]);
-  const [clientesSistema, setClientesSistema] = useState<ClienteSistemaCompleto[]>([]); // ALTERADO: Armazena clientes do sistema
+  const [clientesSistema, setClientesSistema] = useState<ClienteSistemaCompleto[]>([]);
   
   const [valoresTags, setValoresTags] = useState<Record<string, string>>({});
   const [carregandoDados, setCarregandoDados] = useState(true);
@@ -53,7 +54,7 @@ const GerarDocumentoSocietario: React.FC = () => {
   const [tituloDocumento, setTituloDocumento] = useState('');
   
   const [proprietarioContratoId, setProprietarioContratoId] = useState<string | null>(null); 
-  const [empresasContrato, setEmpresasContrato] = useState<EmpresaContrato[]>([]); // CORREÇÃO: Inicializando o estado
+  const [empresasContrato, setEmpresasContrato] = useState<EmpresaContrato[]>([]);
 
   const isAdmin = role === 'Admin';
   const isCliente = role === 'Cliente';
@@ -101,9 +102,10 @@ const GerarDocumentoSocietario: React.FC = () => {
     setBlocos(blocosData as BlocoSocietario[] || []);
     
     // 2. Buscar Clientes (Contratados) - APENAS EMPRESAS DO SISTEMA (tbl_clientes)
+    // Buscando apenas as colunas que realmente existem em tbl_clientes
     const { data: clientesSistemaData, error: errorSistema } = await supabase
         .from('tbl_clientes')
-        .select('id, nome, email, cpf, rg, nome_mae, nome_pai, telefone, cep, endereco, numero, complemento, bairro, cidade, estado, razao_social, nome_fantasia, documento, telefone_fixo')
+        .select('id, nome, email, cpf, rg, nome_mae, nome_pai, telefone, cep, endereco, numero, complemento, bairro, cidade, estado')
         .eq('admin_id', targetEmpresaId) // Filtra clientes criados por este Admin/Cliente
         .eq('aprovado', true)
         .order('nome');
@@ -112,12 +114,14 @@ const GerarDocumentoSocietario: React.FC = () => {
         showError('Erro ao carregar clientes do sistema: ' + errorSistema.message);
         setClientesSistema([]);
     } else {
-        // Mapeia para o tipo ClienteSistemaCompleto
+        // Mapeia para o tipo ClienteSistemaCompleto, usando 'nome' como fallback para campos ausentes
         const mappedClients = (clientesSistemaData as any[]).map(c => ({
             ...c,
-            razao_social: c.razao_social || c.nome,
-            nome_fantasia: c.nome_fantasia || c.nome,
-            documento: c.documento || c.cpf || c.rg,
+            // Campos que não existem em tbl_clientes, mas são necessários para o mapeamento de tags
+            razao_social: c.nome, // Usando nome como fallback
+            nome_fantasia: c.nome, // Usando nome como fallback
+            documento: c.cpf || c.rg, // Usando CPF/RG como documento
+            telefone_fixo: null,
         }));
         setClientesSistema(mappedClients);
         
@@ -206,7 +210,7 @@ const GerarDocumentoSocietario: React.FC = () => {
         nome_tag: `{{BLOCO_${b.id}}}`,
         descricao: `Bloco: ${b.titulo}`,
         origem_dado: 'blocos_societarios',
-    } as ContratoTag)); // CORREÇÃO: Tipagem explícita
+    } as ContratoTag));
     
     const allTags = [...allAvailableTags, ...blocoTags];
 
@@ -227,10 +231,13 @@ const GerarDocumentoSocietario: React.FC = () => {
             } 
             
             // Mapeamento de dados do Cliente Selecionado (Contratado) - tbl_clientes
-            // CORREÇÃO: Usar o clienteSelecionado (que é ClienteSistemaCompleto)
             else if (sourceTable === 'clientes' && clienteSelecionado) {
                 const clienteData = clienteSelecionado as any;
-                if (clienteData && clienteData[sourceField]) {
+                
+                // CORREÇÃO: Se o campo for 'razao_social' ou 'nome_fantasia', usa 'nome' como fallback
+                if (sourceField === 'razao_social' || sourceField === 'nome_fantasia') {
+                    tagValue = String(clienteData.nome || '');
+                } else if (clienteData && clienteData[sourceField]) {
                     tagValue = String(clienteData[sourceField]);
                 }
             } 
