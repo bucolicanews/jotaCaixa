@@ -48,6 +48,11 @@ interface EmpresaContrato {
     nome: string;
 }
 
+// NOVO TIPO: Cliente Combinado (CR ou Sistema)
+interface ClienteCombinado extends Cliente {
+    tipo: 'CR' | 'Sistema';
+}
+
 const PreencherContrato: React.FC = () => {
   const { modeloId } = useParams<{ modeloId: string }>();
   const [searchParams] = useSearchParams();
@@ -58,7 +63,7 @@ const PreencherContrato: React.FC = () => {
   const [modelo, setModelo] = useState<ContratoModelo | null>(null);
   const [contratoInicial, setContratoInicial] = useState<ContratoGerado | null>(null);
   const [tagsCustomizadas, setTagsCustomizadas] = useState<ContratoTag[]>([]);
-  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [clientes, setClientes] = useState<ClienteCombinado[]>([]); // UPDATED TYPE
   const [empresasContrato, setEmpresasContrato] = useState<EmpresaContrato[]>([]);
   const [empresaLogada, setEmpresaLogada] = useState<EmpresaLogada | null>(null);
   
@@ -126,7 +131,7 @@ const PreencherContrato: React.FC = () => {
         return;
     }
     
-    let combinedClients = clientesCRData as Cliente[];
+    let combinedClients: ClienteCombinado[] = (clientesCRData as Cliente[]).map(c => ({ ...c, tipo: 'CR' })); // Mapeia como CR
     
     // NOVO: Incluir clientes do sistema (tbl_clientes) que são aprovados e não estão na lista CR
     const { data: systemClientsData, error: systemClientsError } = await supabase
@@ -143,12 +148,13 @@ const PreencherContrato: React.FC = () => {
         // Filtra clientes do sistema que ainda não estão na lista CR
         const newSystemClients = (systemClientsData as ClienteProfile[]).filter(sc => !existingCrIds.has(sc.id));
         
-        const mappedSystemClients: Cliente[] = newSystemClients.map(sc => ({
+        const mappedSystemClients: ClienteCombinado[] = newSystemClients.map(sc => ({
             id: sc.id,
             proprietario_id: targetEmpresaId, // Define o proprietário do contrato como proprietário
             nome: sc.nome,
             email: sc.email,
             documento: sc.cpf || sc.rg,
+            tipo: 'Sistema' as const, // MARCA COMO SISTEMA
             // Mapeamento de endereço
             cep: sc.cep,
             endereco: sc.endereco,
@@ -567,16 +573,18 @@ useEffect(() => {
 
         const isContractOwnerAdmin = proprietarioContratoId === ownerIdLogado && isAdmin;
 
-        // CORREÇÃO: Se for Admin, garantir que o cliente (de tbl_clientes) também exista na tabela 'clientes'
-        if (isContractOwnerAdmin) {
-            const clienteDataParaUpsert = {
+        // 0. GARANTIR QUE O CLIENTE EXISTA NA TABELA 'clientes' (para FK)
+        // Se o cliente for do tipo 'Sistema' OU se o contrato for do Admin, fazemos o upsert.
+        // Se for um cliente CR (tipo: 'CR'), ele já existe na tabela 'clientes'.
+        if (clienteSelecionado.tipo === 'Sistema' || isContractOwnerAdmin) {
+            const clienteDataParaUpsert: Partial<Cliente> = {
                 id: clienteSelecionado.id,
-                proprietario_id: proprietarioContratoId, // AJUSTE AQUI
+                proprietario_id: proprietarioContratoId,
                 nome: clienteSelecionado.nome,
+                email: clienteSelecionado.email,
+                documento: clienteSelecionado.documento,
                 razao_social: clienteSelecionado.razao_social,
                 nome_fantasia: clienteSelecionado.nome_fantasia,
-                documento: clienteSelecionado.documento,
-                email: clienteSelecionado.email,
                 telefone: clienteSelecionado.telefone,
                 telefone_fixo: clienteSelecionado.telefone_fixo,
                 cep: clienteSelecionado.cep,
@@ -587,12 +595,13 @@ useEffect(() => {
                 cidade: clienteSelecionado.cidade,
                 estado: clienteSelecionado.estado,
             };
+            
             const { error: upsertError } = await supabase
                 .from('clientes')
                 .upsert(clienteDataParaUpsert, { onConflict: 'id' });
 
             if (upsertError) {
-                throw new Error('Falha ao garantir a existência do cliente na tabela CR do admin: ' + upsertError.message);
+                throw new Error('Falha ao garantir a existência do cliente na tabela CR: ' + upsertError.message);
             }
         }
         
@@ -673,7 +682,9 @@ useEffect(() => {
         
         const clienteNome = clientes.find(c => c.id === clienteSelecionadoId)?.nome || 'Cliente Desconhecido';
         
-        const baseData = isContractOwnerAdmin ? { admin_id: proprietarioContratoId, cliente_id: clienteSelecionadoId } : { empresa_id: proprietarioContratoId, cliente_id: clienteSelecionadoId };
+        const baseData = isContractOwnerAdmin 
+          ? { admin_id: proprietarioContratoId, cliente_id: clienteSelecionadoId } 
+          : { empresa_id: proprietarioContratoId, cliente_id: clienteSelecionadoId };
         
         const contaReceberPayload = {
             ...baseData,
@@ -832,7 +843,7 @@ useEffect(() => {
                         </SelectTrigger>
                         <SelectContent>
                             {clientes.map(c => (
-                                <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
+                                <SelectItem key={c.id} value={c.id}>{c.nome} {c.tipo === 'Sistema' && <span className="text-xs text-muted-foreground">(Sistema)</span>}</SelectItem>
                             ))}
                         </SelectContent>
                     </Select>
