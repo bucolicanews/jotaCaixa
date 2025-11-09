@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, PlusCircle, FileText, Edit, Trash2, Copy } from 'lucide-react';
+import { Loader2, PlusCircle, FileText, Edit, Trash2, Copy, Tag } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
@@ -13,6 +13,8 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { UsuarioProfile } from '@/types/usuario';
+import { TAGS_PADRAO } from '@/config/contrato-tags-padrao';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 // Componente de Formulário Simples para Bloco
 interface FormBlocoSocietarioProps {
@@ -27,6 +29,7 @@ const FormBlocoSocietario: React.FC<FormBlocoSocietarioProps> = ({ blocoInicial,
     const [tipoBloco, setTipoBloco] = useState(blocoInicial?.tipo_bloco || 'Paragrafo');
     const [loading, setLoading] = useState(false);
     const isEditing = !!blocoInicial;
+    const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -61,21 +64,119 @@ const FormBlocoSocietario: React.FC<FormBlocoSocietarioProps> = ({ blocoInicial,
         }
         setLoading(false);
     };
+    
+    const handleCopyTag = (tag: string) => {
+        navigator.clipboard.writeText(tag);
+        showSuccess(`Tag ${tag} copiada!`);
+    };
+    
+    const handleDragStart = (e: React.DragEvent<HTMLDivElement>, tag: string) => {
+        e.dataTransfer.setData('text/plain', tag);
+    };
+    
+    const handleDrop = (e: React.DragEvent<HTMLTextAreaElement>) => {
+        e.preventDefault();
+        const tag = e.dataTransfer.getData('text/plain');
+        
+        if (tag && textareaRef.current) {
+            const textarea = textareaRef.current;
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            const currentValue = textarea.value;
+            
+            const newValue = currentValue.substring(0, start) + tag + currentValue.substring(end);
+            setConteudo(newValue);
+            
+            setTimeout(() => {
+                textarea.focus();
+                textarea.selectionStart = start + tag.length;
+                textarea.selectionEnd = start + tag.length;
+            }, 0);
+        }
+    };
+    
+    const handleDragOver = (e: React.DragEvent<HTMLTextAreaElement>) => {
+        e.preventDefault();
+    };
+    
+    // Filtra apenas as tags de Cliente/Usuário/Empresa (excluindo as financeiras)
+    const tagsDisponiveis = useMemo(() => {
+        return TAGS_PADRAO.filter(t => 
+            !t.origem_dado?.startsWith('contas_receber')
+        ).sort((a, b) => a.nome_tag.localeCompare(b.nome_tag));
+    }, []);
+
 
     return (
         <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-                <Label htmlFor="titulo">Título</Label>
-                <Input id="titulo" placeholder="Ex: Cláusula de Rescisão" value={titulo} onChange={(e) => setTitulo(e.target.value)} disabled={loading} />
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                
+                {/* Coluna 1 & 2: Formulário e Conteúdo */}
+                <div className="lg:col-span-2 space-y-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="titulo">Título</Label>
+                        <Input id="titulo" placeholder="Ex: Cláusula de Rescisão" value={titulo} onChange={(e) => setTitulo(e.target.value)} disabled={loading} />
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="tipo">Tipo de Bloco</Label>
+                        <Input id="tipo" placeholder="Ex: Paragrafo, Inciso, Cláusula" value={tipoBloco} onChange={(e) => setTipoBloco(e.target.value)} disabled={loading} />
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="conteudo">Conteúdo (Use tags como {'{{CLIENTE_NOME}}'})</Label>
+                        <Textarea 
+                            ref={textareaRef}
+                            id="conteudo" 
+                            rows={8} 
+                            placeholder="Insira o texto completo do bloco aqui..." 
+                            value={conteudo} 
+                            onChange={(e) => setConteudo(e.target.value)} 
+                            disabled={loading}
+                            onDrop={handleDrop}
+                            onDragOver={handleDragOver}
+                        />
+                    </div>
+                </div>
+                
+                {/* Coluna 3: Tags Disponíveis */}
+                <Card className="lg:col-span-1 max-h-[500px] overflow-y-auto">
+                    <CardHeader className="p-3 border-b">
+                        <CardTitle className="text-sm">Tags de Cliente/Empresa</CardTitle>
+                        <Button type="button" variant="outline" size="sm" onClick={() => handleCopyTag(tagsDisponiveis.map(t => t.nome_tag).join(' '))} disabled={tagsDisponiveis.length === 0} className="w-full">
+                            <Copy className="w-3 h-3 mr-1" /> Copiar Todas
+                        </Button>
+                    </CardHeader>
+                    <ScrollArea className="h-[400px]">
+                        <CardContent className="p-3 space-y-2">
+                            {tagsDisponiveis.map((tag) => (
+                                <div 
+                                    key={tag.id} 
+                                    className="flex flex-col space-y-1 border-b pb-2 last:border-b-0 cursor-grab active:cursor-grabbing"
+                                    draggable
+                                    onDragStart={(e) => handleDragStart(e, tag.nome_tag)}
+                                >
+                                    <div className="flex justify-between items-center">
+                                        <span className="font-mono text-xs font-semibold text-primary">{tag.nome_tag}</span>
+                                        <Button 
+                                            type="button" 
+                                            variant="ghost" 
+                                            size="icon" 
+                                            className="h-6 w-6"
+                                            onClick={() => handleCopyTag(tag.nome_tag)}
+                                        >
+                                            <Copy className="w-3 h-3" />
+                                        </Button>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground flex items-center">
+                                        <Tag className="w-3 h-3 mr-1 text-muted-foreground" />
+                                        {tag.descricao}
+                                    </p>
+                                </div>
+                            ))}
+                        </CardContent>
+                    </ScrollArea>
+                </Card>
             </div>
-            <div className="space-y-2">
-                <Label htmlFor="tipo">Tipo de Bloco</Label>
-                <Input id="tipo" placeholder="Ex: Paragrafo, Inciso, Cláusula" value={tipoBloco} onChange={(e) => setTipoBloco(e.target.value)} disabled={loading} />
-            </div>
-            <div className="space-y-2">
-                <Label htmlFor="conteudo">Conteúdo (Use tags como {'{{CLIENTE_NOME}}'})</Label>
-                <Textarea id="conteudo" rows={8} placeholder="Insira o texto completo do bloco aqui..." value={conteudo} onChange={(e) => setConteudo(e.target.value)} disabled={loading} />
-            </div>
+            
             <Button type="submit" className="w-full" disabled={loading}>
                 {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : (isEditing ? 'Salvar Alterações' : 'Criar Bloco')}
             </Button>
@@ -188,7 +289,7 @@ const GerenciarBlocosSocietarios: React.FC = () => {
               Novo Bloco
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[600px]">
+          <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{blocoSelecionado ? 'Editar Bloco' : 'Novo Bloco'}</DialogTitle>
             </DialogHeader>
