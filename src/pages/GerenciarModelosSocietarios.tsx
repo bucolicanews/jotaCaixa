@@ -32,7 +32,8 @@ const FormModeloSocietario: React.FC<FormModeloSocietarioProps> = ({ modeloInici
     const [tipoDocumento, setTipoDocumento] = useState(modeloInicial?.tipo_documento || 'Ata');
     const [loading, setLoading] = useState(false);
     const isEditing = !!modeloInicial;
-    const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const [filtro, setFiltro] = useState("");
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -125,6 +126,19 @@ const FormModeloSocietario: React.FC<FormModeloSocietarioProps> = ({ modeloInici
             conteudo: b.conteudo,
         }));
     }, [blocosDisponiveis]);
+  const tagsFiltradas = useMemo(() => {
+    return tagsDisponiveis.filter(t =>
+        t.nome_tag.toLowerCase().includes(filtro.toLowerCase()) ||
+        t.descricao.toLowerCase().includes(filtro.toLowerCase())
+    );
+}, [filtro, tagsDisponiveis]);
+
+const blocosFiltrados = useMemo(() => {
+    return blocosTags.filter(b =>
+        b.nome_tag.toLowerCase().includes(filtro.toLowerCase()) ||
+        b.descricao.toLowerCase().includes(filtro.toLowerCase())
+    );
+}, [filtro, blocosTags]);
 
 
     return (
@@ -159,80 +173,110 @@ const FormModeloSocietario: React.FC<FormModeloSocietarioProps> = ({ modeloInici
                 
                 {/* Coluna 3: Tags e Blocos Disponíveis */}
                 <Card className="lg:col-span-1">
-                    <CardHeader className="p-3 border-b">
-                        <CardTitle className="text-sm">Referências (Arraste ou Copie)</CardTitle>
-                        <Button type="button" variant="destructive" size="sm" onClick={handleClearTemplate} className="w-full">
-                            <X className="w-3 h-3 mr-1" /> Limpar Template
-                        </Button>
-                    </CardHeader>
-                    <ScrollArea className="h-[500px]">
-                        <CardContent className="p-3 space-y-3">
-                            
-                            {/* Tags de Cliente/Empresa */}
-                            <div className="space-y-3">
-                                <h4 className="font-semibold text-sm border-b pb-1">Tags de Cliente/Empresa</h4>
-                                {tagsDisponiveis.map((tag) => (
-                                    <div 
-                                        key={tag.id} 
-                                        className="flex flex-col space-y-1 border-b pb-2 last:border-b-0 cursor-grab active:cursor-grabbing"
-                                        draggable
-                                        onDragStart={(e) => handleDragStart(e, tag.nome_tag)}
-                                    >
-                                        <div className="flex justify-between items-start">
-                                            <span className="font-mono text-xs font-semibold text-primary break-all pr-2">{tag.nome_tag}</span>
-                                            <Button 
-                                                type="button" 
-                                                variant="ghost" 
-                                                size="icon" 
-                                                className="h-6 w-6 flex-shrink-0"
-                                                onClick={() => handleCopyTag(tag.nome_tag)}
-                                            >
-                                                <Copy className="w-3 h-3" />
-                                            </Button>
-                                        </div>
-                                        <p className="text-xs text-muted-foreground">
-                                            <Tag className="w-3 h-3 mr-1 text-muted-foreground inline-block align-text-bottom" />
-                                            {tag.descricao}
-                                        </p>
-                                    </div>
-                                ))}
-                            </div>
-                            
-                            {/* Blocos Reutilizáveis */}
-                            <div className="space-y-3 pt-3 border-t">
-                                <h4 className="font-semibold text-sm border-b pb-1">Blocos Reutilizáveis</h4>
-                                {blocosTags.length === 0 ? (
-                                    <p className="text-xs text-muted-foreground">Nenhum bloco cadastrado.</p>
-                                ) : (
-                                    blocosTags.map((bloco) => (
-                                        <div 
-                                            key={bloco.id} 
-                                            className="flex flex-col space-y-1 border-b pb-2 last:border-b-0 cursor-grab active:cursor-grabbing"
-                                            draggable
-                                            onDragStart={(e) => handleDragStart(e, bloco.nome_tag)}
-                                        >
-                                            <div className="flex justify-between items-start">
-                                                <span className="font-mono text-xs font-semibold text-blue-500 break-all pr-2">{bloco.nome_tag}</span>
-                                                <Button 
-                                                    type="button" 
-                                                    variant="ghost" 
-                                                    size="icon" 
-                                                    className="h-6 w-6 flex-shrink-0"
-                                                    onClick={() => handleCopyTag(bloco.nome_tag)}
-                                                >
-                                                    <Copy className="w-3 h-3" />
-                                                </Button>
-                                            </div>
-                                            <p className="text-xs text-muted-foreground">
-                                                {bloco.descricao}
-                                            </p>
-                                        </div>
-                                    ))
-                                )}
-                            </div>
-                        </CardContent>
-                    </ScrollArea>
-                </Card>
+  <CardHeader className="p-3 border-b">
+      <CardTitle className="text-sm">Referências (Arraste ou Copie)</CardTitle>
+
+      {/* BOTÃO LIMPAR */}
+      <Button type="button" variant="destructive" size="sm" onClick={handleClearTemplate} className="w-full mb-2">
+          <X className="w-3 h-3 mr-1" /> Limpar Template
+      </Button>
+
+      {/* CAMPO DE BUSCA */}
+      <Input
+          placeholder="Buscar tags ou blocos..."
+          value={filtro}
+          onChange={(e) => setFiltro(e.target.value)}
+          className="mt-2"
+      />
+  </CardHeader>
+
+  <ScrollArea className="h-[500px]">
+      <CardContent className="p-3">
+
+          {/* GRID DE DUAS COLUNAS */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+              {/* COLUNA TAGS */}
+              <div>
+                  <h4 className="font-semibold text-sm border-b pb-1 mb-2">Tags</h4>
+
+                  {tagsFiltradas.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">Nenhuma tag encontrada.</p>
+                  ) : (
+                      tagsFiltradas.map((tag) => (
+                          <div
+                              key={tag.id}
+                              className="flex flex-col space-y-1 border-b pb-2 mb-2 cursor-grab active:cursor-grabbing"
+                              draggable
+                              onDragStart={(e) => handleDragStart(e, tag.nome_tag)}
+                          >
+                              <div className="flex justify-between items-start">
+                                  <span className="font-mono text-xs font-semibold text-primary break-all pr-2">
+                                      {tag.nome_tag}
+                                  </span>
+                                  <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-6 w-6"
+                                      onClick={() => handleCopyTag(tag.nome_tag)}
+                                  >
+                                      <Copy className="w-3 h-3" />
+                                  </Button>
+                              </div>
+
+                              <p className="text-xs text-muted-foreground">
+                                  <Tag className="w-3 h-3 mr-1 text-muted-foreground inline-block align-text-bottom" />
+                                  {tag.descricao}
+                              </p>
+                          </div>
+                      ))
+                  )}
+              </div>
+
+              {/* COLUNA BLOCOS */}
+              <div>
+                  <h4 className="font-semibold text-sm border-b pb-1 mb-2">Blocos</h4>
+
+                  {blocosFiltrados.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">Nenhum bloco encontrado.</p>
+                  ) : (
+                      blocosFiltrados.map((bloco) => (
+                          <div
+                              key={bloco.id}
+                              className="flex flex-col space-y-1 border-b pb-2 mb-2 cursor-grab active:cursor-grabbing"
+                              draggable
+                              onDragStart={(e) => handleDragStart(e, bloco.nome_tag)}
+                          >
+                              <div className="flex justify-between items-start">
+                                  <span className="font-mono text-xs font-semibold text-blue-500 break-all pr-2">
+                                      {bloco.nome_tag}
+                                  </span>
+
+                                  <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-6 w-6"
+                                      onClick={() => handleCopyTag(bloco.nome_tag)}
+                                  >
+                                      <Copy className="w-3 h-3" />
+                                  </Button>
+                              </div>
+
+                              <p className="text-xs text-muted-foreground">
+                                  {bloco.descricao}
+                              </p>
+                          </div>
+                      ))
+                  )}
+              </div>
+
+          </div>
+      </CardContent>
+  </ScrollArea>
+</Card>
+
             </div>
             
             <Button type="submit" className="w-full" disabled={loading}>

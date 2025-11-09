@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useSessao } from '@/hooks/use-sessao';
 import { ClienteProfile, UsuarioProfile, AdminProfile } from '@/types/usuario';
-import { Cliente } from '@/types/cliente';
+import { ContratoTag } from '@/types/contratos'; // CORREÇÃO: Importando ContratoTag
 import { TAGS_PADRAO } from '@/config/contrato-tags-padrao';
 import ContratoPreviewDialog from '@/components/contratos/ContratoPreviewDialog';
 import BlocoSocietarioCard from '@/components/modelos-societarios/BlocoSocietarioCard';
@@ -24,6 +24,14 @@ interface EmpresaContrato {
     nome: string;
 }
 
+// NOVO TIPO: Cliente do Sistema com todos os campos de tag
+interface ClienteSistemaCompleto extends ClienteProfile {
+    razao_social?: string | null;
+    nome_fantasia?: string | null;
+    documento?: string | null;
+    telefone_fixo?: string | null;
+}
+
 const GerarDocumentoSocietario: React.FC = () => {
   const { modeloId } = useParams<{ modeloId: string }>();
   const navigate = useNavigate();
@@ -31,8 +39,7 @@ const GerarDocumentoSocietario: React.FC = () => {
   
   const [modelo, setModelo] = useState<ModeloSocietario | null>(null);
   const [blocos, setBlocos] = useState<BlocoSocietario[]>([]);
-  const [clientes, setClientes] = useState<Cliente[]>([]);
-  const [empresasContrato, setEmpresasContrato] = useState<EmpresaContrato[]>([]); 
+  const [clientesSistema, setClientesSistema] = useState<ClienteSistemaCompleto[]>([]); // ALTERADO: Armazena clientes do sistema
   
   const [valoresTags, setValoresTags] = useState<Record<string, string>>({});
   const [carregandoDados, setCarregandoDados] = useState(true);
@@ -40,11 +47,13 @@ const GerarDocumentoSocietario: React.FC = () => {
   
   const [previewOpen, setPreviewOpen] = useState(false);
   const [conteudoPreview, setConteudoPreview] = useState('');
+  const [previewTitle, setPreviewTitle] = useState('');
   
   const [clienteSelecionadoId, setClienteSelecionadoId] = useState<string>('');
   const [tituloDocumento, setTituloDocumento] = useState('');
   
   const [proprietarioContratoId, setProprietarioContratoId] = useState<string | null>(null); 
+  const [empresasContrato, setEmpresasContrato] = useState<EmpresaContrato[]>([]); // CORREÇÃO: Inicializando o estado
 
   const isAdmin = role === 'Admin';
   const isCliente = role === 'Cliente';
@@ -61,25 +70,23 @@ const GerarDocumentoSocietario: React.FC = () => {
   // Dados da Empresa Logada (para preenchimento de tags {{EMPRESA_*}})
   const empresaLogada = useMemo(() => {
     if (!perfil) return null;
-    if (isAdmin) {
-        const profile = perfil as AdminProfile;
-        return {
-            nome: profile.nome, email: profile.email, documento: profile.cnpj || profile.cpf,
-            cpf: profile.cpf, cnpj: profile.cnpj, rg: profile.rg, telefone: profile.telefone,
-            cep: profile.cep, endereco: profile.endereco, numero: profile.numero, complemento: profile.complemento,
-            bairro: profile.bairro, cidade: profile.cidade, estado: profile.estado,
-        };
-    } else if (isCliente) {
-        const profile = perfil as ClienteProfile;
-        return {
-            nome: profile.nome, email: profile.email, documento: profile.documento || profile.cpf,
-            cpf: profile.cpf, cnpj: null, rg: profile.rg, telefone: profile.telefone,
-            cep: profile.cep, endereco: profile.endereco, numero: profile.numero, complemento: profile.complemento,
-            bairro: profile.bairro, cidade: profile.cidade, estado: profile.estado,
-        };
-    }
-    return null;
+    const profile = perfil as AdminProfile | ClienteProfile;
+    
+    return {
+        nome: profile.nome, email: profile.email, documento: (profile as AdminProfile).cnpj || (profile as AdminProfile).cpf || (profile as ClienteProfile).documento || (profile as ClienteProfile).cpf,
+        cpf: (profile as AdminProfile).cpf || (profile as ClienteProfile).cpf, 
+        cnpj: (profile as AdminProfile).cnpj, 
+        rg: profile.rg, telefone: profile.telefone,
+        cep: profile.cep, endereco: profile.endereco, numero: profile.numero, complemento: profile.complemento,
+        bairro: profile.bairro, cidade: profile.cidade, estado: profile.estado,
+    };
   }, [perfil, isAdmin, isCliente]);
+  
+  // Cliente selecionado (para preenchimento de tags)
+  const clienteSelecionado = useMemo(() => {
+      return clientesSistema.find(c => c.id === clienteSelecionadoId);
+  }, [clientesSistema, clienteSelecionadoId]);
+
 
   // --- FUNÇÃO DE BUSCA DE CLIENTES E TAGS DEPENDENTE DO PROPRIETÁRIO ---
   const fetchDependentData = useCallback(async (targetEmpresaId: string) => {
@@ -93,22 +100,29 @@ const GerarDocumentoSocietario: React.FC = () => {
         .order('titulo');
     setBlocos(blocosData as BlocoSocietario[] || []);
     
-    // 2. Buscar Clientes (Contratados) - Sempre da tabela 'clientes' (CR)
-    const { data: clientesCRData, error: errorCR } = await supabase
-        .from('clientes')
-        .select('*')
-        .eq('proprietario_id', targetEmpresaId)
+    // 2. Buscar Clientes (Contratados) - APENAS EMPRESAS DO SISTEMA (tbl_clientes)
+    const { data: clientesSistemaData, error: errorSistema } = await supabase
+        .from('tbl_clientes')
+        .select('id, nome, email, cpf, rg, nome_mae, nome_pai, telefone, cep, endereco, numero, complemento, bairro, cidade, estado, razao_social, nome_fantasia, documento, telefone_fixo')
+        .eq('admin_id', targetEmpresaId) // Filtra clientes criados por este Admin/Cliente
+        .eq('aprovado', true)
         .order('nome');
         
-    if (errorCR) {
-        showError('Erro ao carregar clientes CR: ' + errorCR.message);
-        setClientes([]);
+    if (errorSistema) {
+        showError('Erro ao carregar clientes do sistema: ' + errorSistema.message);
+        setClientesSistema([]);
     } else {
-        const combinedClients = (clientesCRData as Cliente[]).sort((a, b) => a.nome.localeCompare(b.nome));
-        setClientes(combinedClients);
+        // Mapeia para o tipo ClienteSistemaCompleto
+        const mappedClients = (clientesSistemaData as any[]).map(c => ({
+            ...c,
+            razao_social: c.razao_social || c.nome,
+            nome_fantasia: c.nome_fantasia || c.nome,
+            documento: c.documento || c.cpf || c.rg,
+        }));
+        setClientesSistema(mappedClients);
         
         // Se o cliente selecionado não estiver mais na lista, limpa a seleção
-        if (clienteSelecionadoId && !combinedClients.some(c => c.id === clienteSelecionadoId)) {
+        if (clienteSelecionadoId && !mappedClients.some(c => c.id === clienteSelecionadoId)) {
             setClienteSelecionadoId('');
         }
     }
@@ -144,20 +158,17 @@ const GerarDocumentoSocietario: React.FC = () => {
     // 2. Configurar Empresas Contratantes (Apenas Admin)
     let initialProprietarioContratoId = ownerIdLogado;
     if (isAdmin) {
-        const { data: clientesData, error: clientesError } = await supabase
+        // Busca todos os clientes do sistema para o dropdown de proprietário
+        const { data: clientesData } = await supabase
             .from('tbl_clientes')
             .select('id, nome')
             .eq('aprovado', true)
             .order('nome');
             
-        if (clientesError) {
-            showError('Erro ao carregar clientes do sistema: ' + clientesError.message);
-        } else {
-            const adminOption: EmpresaContrato = { id: ownerIdLogado, nome: 'Meus Documentos (Admin)' };
-            const allClients = [adminOption, ...(clientesData as EmpresaContrato[])];
-            setEmpresasContrato(allClients);
-            initialProprietarioContratoId = allClients[0].id;
-        }
+        const adminOption: EmpresaContrato = { id: ownerIdLogado, nome: 'Meus Documentos (Admin)' };
+        const allClients = [adminOption, ...(clientesData as EmpresaContrato[])];
+        setEmpresasContrato(allClients);
+        initialProprietarioContratoId = allClients[0].id;
     }
     
     setProprietarioContratoId(initialProprietarioContratoId);
@@ -184,7 +195,6 @@ const GerarDocumentoSocietario: React.FC = () => {
   // --- Lógica de Preenchimento de Tags ---
   const updateTags = useCallback(() => {
     const newTags: Record<string, string> = {};
-    const cliente = clientes.find(c => c.id === clienteSelecionadoId);
     
     // Combina tags padrão (apenas as de Cliente/Usuário/Empresa) e tags de blocos
     const allAvailableTags = TAGS_PADRAO.filter(t => 
@@ -196,7 +206,7 @@ const GerarDocumentoSocietario: React.FC = () => {
         nome_tag: `{{BLOCO_${b.id}}}`,
         descricao: `Bloco: ${b.titulo}`,
         origem_dado: 'blocos_societarios',
-    } as any));
+    } as ContratoTag)); // CORREÇÃO: Tipagem explícita
     
     const allTags = [...allAvailableTags, ...blocoTags];
 
@@ -208,7 +218,7 @@ const GerarDocumentoSocietario: React.FC = () => {
         if (tag.origem_dado) {
             const [sourceTable, sourceField] = tag.origem_dado.split('.');
             
-            // Mapeamento de dados da Empresa Logada (Contratada) - tbl_clientes / tbl_admins
+            // Mapeamento de dados da Empresa Logada (Contratante) - tbl_clientes / tbl_admins
             if ((sourceTable === 'tbl_clientes' || sourceTable === 'tbl_admins') && empresaLogada) {
                 const empresaData = empresaLogada as any;
                 if (empresaData && empresaData[sourceField]) {
@@ -216,9 +226,10 @@ const GerarDocumentoSocietario: React.FC = () => {
                 }
             } 
             
-            // Mapeamento de dados do Cliente Selecionado (Contratado) - clientes
-            else if (sourceTable === 'clientes' && cliente) {
-                const clienteData = cliente as any;
+            // Mapeamento de dados do Cliente Selecionado (Contratado) - tbl_clientes
+            // CORREÇÃO: Usar o clienteSelecionado (que é ClienteSistemaCompleto)
+            else if (sourceTable === 'clientes' && clienteSelecionado) {
+                const clienteData = clienteSelecionado as any;
                 if (clienteData && clienteData[sourceField]) {
                     tagValue = String(clienteData[sourceField]);
                 }
@@ -242,7 +253,7 @@ const GerarDocumentoSocietario: React.FC = () => {
     });
     
     setValoresTags(newTags);
-  }, [clienteSelecionadoId, clientes, blocos, empresaLogada, valoresTags]);
+  }, [clienteSelecionado, blocos, empresaLogada, valoresTags]);
 
   useEffect(() => {
     updateTags();
@@ -266,6 +277,7 @@ const GerarDocumentoSocietario: React.FC = () => {
       if (!modelo) return;
       const conteudoRenderizado = renderizarConteudo(modelo.conteudo_template, valoresTags);
       setConteudoPreview(conteudoRenderizado);
+      setPreviewTitle(tituloDocumento || modelo.titulo);
       setPreviewOpen(true);
   };
 
@@ -325,6 +337,9 @@ const GerarDocumentoSocietario: React.FC = () => {
   const tagsParaPreenchimentoManual = Object.keys(valoresTags).filter(tagKey => {
       // Exclui tags de bloco (que são preenchidas com o conteúdo do bloco)
       if (tagKey.startsWith('{{BLOCO_')) return false;
+      
+      // Exclui tags de sistema (EMPRESA_*) que foram preenchidas
+      if (tagKey.startsWith('{{EMPRESA_') && valoresTags[tagKey]) return false;
       
       // Inclui tags que não têm valor preenchido
       return !valoresTags[tagKey];
@@ -387,7 +402,7 @@ const GerarDocumentoSocietario: React.FC = () => {
                                 <SelectValue placeholder="Selecione a Empresa" />
                             </SelectTrigger>
                             <SelectContent>
-                                {empresasContrato.map(e => (
+                                {empresasContrato.map((e: EmpresaContrato) => (
                                     <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>
                                 ))}
                             </SelectContent>
@@ -412,7 +427,7 @@ const GerarDocumentoSocietario: React.FC = () => {
                             <SelectValue placeholder="Selecione o Cliente" />
                         </SelectTrigger>
                         <SelectContent>
-                            {clientes.map(c => (
+                            {clientesSistema.map(c => (
                                 <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
                             ))}
                         </SelectContent>
@@ -468,7 +483,7 @@ const GerarDocumentoSocietario: React.FC = () => {
         open={previewOpen}
         onOpenChange={setPreviewOpen}
         conteudoHtml={conteudoPreview}
-        titulo={tituloDocumento || modelo?.titulo || 'Prévia'}
+        titulo={previewTitle}
         isHtml={true} 
       />
     </LayoutPrincipal>
