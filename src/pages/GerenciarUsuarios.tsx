@@ -287,12 +287,13 @@ const GerenciarUsuarios: React.FC = () => {
   
   return (
     <LayoutPrincipal>
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
         <h1 className="text-2xl md:text-3xl font-bold">{title}</h1>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
             <Button 
                 onClick={() => handleOpenDialog(null)}
+                className="w-full sm:w-auto"
             >
               <Plus className="mr-2 h-4 w-4" />
               {buttonText}
@@ -314,6 +315,7 @@ const GerenciarUsuarios: React.FC = () => {
 
       {isAdmin ? (
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full mb-6">
+          {/* Ajuste: Usando grid-cols-2 para quebrar as abas em mobile */}
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="meus_funcionarios" className="flex items-center"><UsersIcon className="w-4 h-4 mr-2" /> Meus Funcionários</TabsTrigger>
             <TabsTrigger value="funcionarios_clientes" className="flex items-center"><UsersIcon className="w-4 h-4 mr-2" /> Funcionários dos Clientes</TabsTrigger>
