@@ -103,12 +103,13 @@ const Contratos = () => {
       />
 
       <Tabs value={activeContratoTab} onValueChange={setActiveContratoTab} className="w-full">
-        <TabsList className={cn("grid w-full", isAdmin ? "grid-cols-5" : "grid-cols-3")}>
-          {isAdmin && <TabsTrigger value="meus_contratos">Meus Contratos ({contratosAgrupados.meusContratos.length})</TabsTrigger>}
-          {isAdmin && <TabsTrigger value="contratos_clientes">Clientes ({contratosAgrupados.contratosClientes.length})</TabsTrigger>}
-          <TabsTrigger value="pendentes">Pendentes ({contratosAgrupados.pendentes.length})</TabsTrigger>
-          <TabsTrigger value="ativos">Ativos ({contratosAgrupados.ativos.length})</TabsTrigger>
-          <TabsTrigger value="inativos">Inativos ({contratosAgrupados.inativos.length})</TabsTrigger>
+        {/* Ajuste: Usando flex-wrap e definindo a largura dos itens para quebrar em mobile */}
+        <TabsList className={cn("flex flex-wrap justify-start w-full h-auto p-1")}>
+          {isAdmin && <TabsTrigger value="meus_contratos" className="flex-1 sm:flex-auto">Meus Contratos ({contratosAgrupados.meusContratos.length})</TabsTrigger>}
+          {isAdmin && <TabsTrigger value="contratos_clientes" className="flex-1 sm:flex-auto">Clientes ({contratosAgrupados.contratosClientes.length})</TabsTrigger>}
+          <TabsTrigger value="pendentes" className="flex-1 sm:flex-auto">Pendentes ({contratosAgrupados.pendentes.length})</TabsTrigger>
+          <TabsTrigger value="ativos" className="flex-1 sm:flex-auto">Ativos ({contratosAgrupados.ativos.length})</TabsTrigger>
+          <TabsTrigger value="inativos" className="flex-1 sm:flex-auto">Inativos ({contratosAgrupados.inativos.length})</TabsTrigger>
         </TabsList>
         
         {/* ABA DE CONTRATOS DE CLIENTES (APENAS ADMIN) */}
