@@ -211,7 +211,10 @@ const blocosFiltrados = useMemo(() => {
                               onDragStart={(e) => handleDragStart(e, tag.nome_tag)}
                           >
                               <div className="flex justify-between items-start">
-                                  <span className="font-mono text-xs font-semibold text-primary break-all pr-2">
+                                  <span 
+                                      className="font-mono text-xs font-semibold text-primary break-all pr-2 cursor-pointer"
+                                      onClick={() => handleCopyTag(tag.nome_tag)} // Adicionado onClick para copiar
+                                  >
                                       {tag.nome_tag}
                                   </span>
                                   <Button
@@ -249,7 +252,10 @@ const blocosFiltrados = useMemo(() => {
                               onDragStart={(e) => handleDragStart(e, bloco.nome_tag)}
                           >
                               <div className="flex justify-between items-start">
-                                  <span className="font-mono text-xs font-semibold text-blue-500 break-all pr-2">
+                                  <span 
+                                      className="font-mono text-xs font-semibold text-blue-500 break-all pr-2 cursor-pointer"
+                                      onClick={() => handleCopyTag(bloco.nome_tag)} // Adicionado onClick para copiar
+                                  >
                                       {bloco.nome_tag}
                                   </span>
 
@@ -479,7 +485,7 @@ const GerenciarModelosSocietarios: React.FC = () => {
         onOpenChange={setPreviewOpen}
         conteudoTemplate={previewContent}
         titulo={modeloSelecionado?.titulo || 'Prévia'}
-        isHtml={true} // Assumindo HTML para documentos societários
+        isHtml={true} 
       />
     </LayoutPrincipal>
   );
