@@ -19,14 +19,15 @@ const Configuracoes = () => {
       </h1>
       
       <Tabs defaultValue={isAdmin ? "cr" : "geral"} className="w-full">
-        <TabsList className="flex flex-wrap h-auto justify-start">
-          <TabsTrigger value="geral">Geral</TabsTrigger>
-          {isAdmin && <TabsTrigger value="cr" className="flex items-center"><DollarSign className="w-4 h-4 mr-1" /> Contas a Receber</TabsTrigger>}
-          {isAdmin && <TabsTrigger value="cp" className="flex items-center"><ArrowDownCircle className="w-4 h-4 mr-1" /> Contas a Pagar</TabsTrigger>}
-          {isAdmin && <TabsTrigger value="contratos" className="flex items-center"><FileSignature className="w-4 h-4 mr-1" /> Contratos</TabsTrigger>}
-          {isAdmin && <TabsTrigger value="stripe" className="flex items-center"><Key className="w-4 h-4 mr-1" /> Stripe</TabsTrigger>}
-          <TabsTrigger value="usuarios">Usuários</TabsTrigger>
-          <TabsTrigger value="tributarias">Tributárias</TabsTrigger>
+        {/* Ajuste: Usando flex-wrap e w-full para quebrar em várias linhas em telas pequenas */}
+        <TabsList className="flex flex-wrap h-auto justify-start w-full">
+          <TabsTrigger value="geral" className="flex-1 sm:flex-auto">Geral</TabsTrigger>
+          {isAdmin && <TabsTrigger value="cr" className="flex-1 sm:flex-auto flex items-center"><DollarSign className="w-4 h-4 mr-1" /> Contas a Receber</TabsTrigger>}
+          {isAdmin && <TabsTrigger value="cp" className="flex-1 sm:flex-auto flex items-center"><ArrowDownCircle className="w-4 h-4 mr-1" /> Contas a Pagar</TabsTrigger>}
+          {isAdmin && <TabsTrigger value="contratos" className="flex-1 sm:flex-auto flex items-center"><FileSignature className="w-4 h-4 mr-1" /> Contratos</TabsTrigger>}
+          {isAdmin && <TabsTrigger value="stripe" className="flex-1 sm:flex-auto flex items-center"><Key className="w-4 h-4 mr-1" /> Stripe</TabsTrigger>}
+          <TabsTrigger value="usuarios" className="flex-1 sm:flex-auto">Usuários</TabsTrigger>
+          <TabsTrigger value="tributarias" className="flex-1 sm:flex-auto">Tributárias</TabsTrigger>
         </TabsList>
         
         <TabsContent value="geral" className="mt-4">
