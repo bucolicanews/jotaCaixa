@@ -20,4 +20,7 @@ export interface Cliente {
   
   created_at: string;
   updated_at: string;
+  
+  // NOVO CAMPO
+  is_system_client?: boolean;
 }

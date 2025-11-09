@@ -164,7 +164,7 @@ const ClientesPage = () => {
     // 2. Buscar Clientes de Contas a Receber (clientes)
     let queryCR = supabase
       .from('clientes')
-      .select('id, proprietario_id, nome, razao_social, nome_fantasia, documento, email, telefone, telefone_fixo, cep, endereco, numero, complemento, bairro, cidade, estado, created_at, updated_at')
+      .select('id, proprietario_id, nome, razao_social, nome_fantasia, documento, email, telefone, telefone_fixo, cep, endereco, numero, complemento, bairro, cidade, estado, created_at, updated_at, is_system_client')
       .order('nome', { ascending: true });
 
     if (isAdmin) {
@@ -221,12 +221,13 @@ const ClientesPage = () => {
       
       for (const cliente of fetchedData) {
           const systemClient = systemClientsMap[cliente.id];
-          const isSystemClient = !!systemClient;
+          // CORREÇÃO: Usa o campo is_system_client do registro CR, se existir, ou verifica pelo mapa do sistema
+          const isSystemClient = cliente.is_system_client || !!systemClient; 
           
           let systemStatus: ClienteCRComStatus['system_client_status'] = 'CR';
           let origemCR: ClienteCRComStatus['origem_cr'] = 'Novo/CR';
           
-          if (isSystemClient) {
+          if (isSystemClient && systemClient) {
               const dataFimAcesso = systemClient.data_fim_acesso ? parseISO(systemClient.data_fim_acesso) : null;
               const isAtivo = dataFimAcesso && isPast(new Date()) === false;
               const isBlocked = dataFimAcesso === null && systemClient.aprovado;
@@ -488,9 +489,17 @@ const ClientesPage = () => {
         if (invokeError) throw invokeError;
         if (data?.error) throw new Error(data.error);
         
+        // 2. Atualizar o registro na tabela 'clientes' para marcar como Cliente do Sistema
+        const { error: updateCRError } = await supabase
+            .from('clientes')
+            .update({ is_system_client: true })
+            .eq('id', cliente.id);
+            
+        if (updateCRError) throw updateCRError;
+        
         showSuccess(`Cliente ${cliente.nome} promovido para Cliente do Sistema com sucesso!`);
         
-        // 2. Re-busca os dados para atualizar a lista (o cliente promovido deve sumir desta lista)
+        // 3. Re-busca os dados para atualizar a lista (o cliente promovido deve sumir desta lista)
         buscarDados();
         
     } catch (error: any) {
@@ -595,7 +604,16 @@ const ClientesPage = () => {
             showError(result.message);
         } else if (result && result.success) {
             showSuccess(result.message);
-            // 2. Re-busca os dados
+            
+            // 2. Atualizar o registro na tabela 'clientes' para marcar como Cliente CR puro
+            const { error: updateCRError } = await supabase
+                .from('clientes')
+                .update({ is_system_client: false })
+                .eq('id', cliente.id);
+                
+            if (updateCRError) console.error('Aviso: Falha ao atualizar is_system_client na tabela clientes:', updateCRError);
+            
+            // 3. Re-busca os dados
             buscarDados();
         } else {
             showError('Resposta inesperada do servidor.');
