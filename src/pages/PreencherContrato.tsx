@@ -671,7 +671,7 @@ const PreencherContrato: React.FC = () => {
             const { data: existingConta } = await supabase
                 .from(tabelaContasReceber)
                 .select('id')
-                .eq('contrato_gerado_id', contratoGeradoId)
+                .eq('contrato_gerado_id', contratoInicial.id)
                 .limit(1)
                 .single();
                 
@@ -800,12 +800,17 @@ const PreencherContrato: React.FC = () => {
       
       return false;
   });
+  
+  const isReadyToSave = clienteSelecionadoId && valorTotal > 0 && (
+      (tipoLancamento === 'unico' && dataVencimentoUnico) ||
+      (isRepetirOuParcelar && numeroParcelas >= 1 && dataPrimeiroVencimento && intervaloDias >= 1)
+  );
 
   return (
     <LayoutPrincipal>
       <div className="flex items-center mb-6">
         <Button 
-            onClick={() => { window.location.href = '/contratos'; }} 
+            onClick={() => navigate(-1)} 
             variant="link" 
             type="button"
             className="text-muted-foreground hover:text-primary flex items-center mr-4 p-0 h-auto"
@@ -952,6 +957,29 @@ const PreencherContrato: React.FC = () => {
                         </div>
                     </div>
                 )}
+                
+                {/* BOTÕES DUPLICADOS AQUI */}
+                <div className="flex flex-col sm:flex-row gap-4 pt-4 border-t">
+                    <Button 
+                        onClick={handlePreview} 
+                        variant="outline"
+                        className="flex-1 h-12"
+                        disabled={!modelo || !clienteSelecionadoId || valorTotal <= 0}
+                    >
+                        <Eye className="mr-2 h-4 w-4" />
+                        Pré-visualizar Contrato
+                    </Button>
+                    <Button 
+                        onClick={handleSalvarContrato} 
+                        className="flex-1 h-12"
+                        disabled={isSubmitting || !isReadyToSave}
+                    >
+                        {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                        {isEditing ? 'Salvar Edição' : 'Salvar e Gerar Contas'}
+                    </Button>
+                </div>
+                {/* FIM BOTÕES DUPLICADOS */}
+                
             </CardContent>
         </Card>
         
@@ -988,7 +1016,8 @@ const PreencherContrato: React.FC = () => {
             </CardContent>
         </Card>
         
-        <div className="lg:col-span-3 flex flex-col sm:flex-row gap-4">
+        {/* BOTÕES ORIGINAIS NO RODAPÉ */}
+        <div className="lg:col-span-3 flex flex-col sm:flex-row gap-4 pt-4 border-t">
             <Button 
                 onClick={handlePreview} 
                 variant="outline"
@@ -1001,7 +1030,7 @@ const PreencherContrato: React.FC = () => {
             <Button 
                 onClick={handleSalvarContrato} 
                 className="flex-1 h-12"
-                disabled={isSubmitting || !clienteSelecionadoId || valorTotal <= 0}
+                disabled={isSubmitting || !isReadyToSave}
             >
                 {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                 {isEditing ? 'Salvar Edição e Reajustar Contas' : 'Salvar e Gerar Contas a Receber'}
