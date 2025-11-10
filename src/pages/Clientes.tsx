@@ -80,7 +80,6 @@ const ClientesPage = () => {
   // Removendo activeEmpresaTab e activeCRTab
 
   const isAdmin = role === 'Admin';
-  const isClient = role === 'Cliente';
 
   const getOwnerId = () => {
     if (role === 'Admin') return usuario?.id || null; // Admin usa seu próprio ID
@@ -758,8 +757,8 @@ const ClientesPage = () => {
                                 <TableCell className="text-right">
                                     <div className="flex justify-end space-x-1">
                                         
-                                        {/* BOTÃO PROMOVER / DESPROMOVER */}
-                                        {(isAdmin || isClient) && cliente.email && (
+                                        {/* BOTÃO PROMOVER / DESPROMOVER (Apenas Admin) */}
+                                        {isAdmin && cliente.email && (
                                             isSystemClient ? (
                                                 !shouldHideDemoteOrAccess && (
                                                     <Button 
@@ -787,20 +786,6 @@ const ClientesPage = () => {
                                             )
                                         )}
                                         
-                                        {/* BOTÃO CONVITE / ACESSO - SÓ APARECE SE FOR CLIENTE DO SISTEMA E NÃO TIVER VÍNCULOS */}
-                                        {isAdmin && cliente.email && isSystemClient && !shouldHideDemoteOrAccess && (
-                                            <Button 
-                                                variant="secondary" 
-                                                size="sm" 
-                                                onClick={() => handleResendInvite(cliente.email!, cliente.nome)}
-                                                title="Reenviar Link de Acesso"
-                                                disabled={carregandoDados}
-                                                className="h-8"
-                                            >
-                                                <LogIn className="w-4 h-4 mr-1" /> Acesso
-                                            </Button>
-                                        )}
-                                        
                                         {/* BOTÃO CONVITE (Para clientes CR que não são do sistema) */}
                                         {isAdmin && cliente.email && !isSystemClient && (
                                             <Button 
@@ -812,6 +797,20 @@ const ClientesPage = () => {
                                                 className="h-8"
                                             >
                                                 <Mail className="w-4 h-4 mr-1" /> Convite
+                                            </Button>
+                                        )}
+                                        
+                                        {/* BOTÃO ACESSO - SÓ APARECE SE FOR CLIENTE DO SISTEMA E NÃO TIVER VÍNCULOS */}
+                                        {isAdmin && cliente.email && isSystemClient && !shouldHideDemoteOrAccess && (
+                                            <Button 
+                                                variant="secondary" 
+                                                size="sm" 
+                                                onClick={() => handleResendInvite(cliente.email!, cliente.nome)}
+                                                title="Reenviar Link de Acesso"
+                                                disabled={carregandoDados}
+                                                className="h-8"
+                                            >
+                                                <LogIn className="w-4 h-4 mr-1" /> Acesso
                                             </Button>
                                         )}
                                         
