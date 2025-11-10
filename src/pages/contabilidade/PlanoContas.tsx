@@ -385,7 +385,8 @@ const PlanoContasPage = () => {
             <CardTitle className="text-xl">Contas Cadastradas ({contas.length})</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="overflow-x-auto max-h-[60vh] overflow-y-auto"> {/* Adicionado overflow-y-auto */}
+            {/* CORREÇÃO: O div que define a rolagem vertical e horizontal */}
+            <div className="overflow-x-auto overflow-y-auto max-h-[60vh]"> 
               <Table>
                 <TableHeader className="sticky top-0 bg-background z-10">
                   <TableRow>
@@ -393,8 +394,8 @@ const PlanoContasPage = () => {
                     <TableHead className="w-[100px]">Cód. Reduzido</TableHead>
                     <TableHead>Descrição</TableHead>
                     <TableHead className="w-[100px] text-center">Analítica</TableHead>
-                    <TableHead className="w-[100px] text-center">Conta Caixa/Banco</TableHead> {/* RENOMEADO */}
-                    <TableHead className="w-[100px] text-center">Conta Patrimonial</TableHead> {/* NOVO CAMPO */}
+                    <TableHead className="w-[100px] text-center">Conta Caixa/Banco</TableHead>
+                    <TableHead className="w-[100px] text-center">Conta Patrimonial</TableHead>
                     <TableHead className="w-[100px] text-center">Conta de Resultado</TableHead>
                     <TableHead className="w-[100px] text-right">Ações</TableHead>
                   </TableRow>
@@ -402,13 +403,13 @@ const PlanoContasPage = () => {
                 <TableBody>
                   {carregandoContas ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center py-8"> {/* Colspan ajustado para 8 */}
+                      <TableCell colSpan={8} className="text-center py-8">
                         <Loader2 className="h-6 w-6 animate-spin mx-auto text-primary" />
                       </TableCell>
                     </TableRow>
                   ) : contas.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center py-4 text-muted-foreground"> {/* Colspan ajustado para 8 */}
+                      <TableCell colSpan={8} className="text-center py-4 text-muted-foreground">
                         Nenhuma conta encontrada com os filtros aplicados.
                       </TableCell>
                     </TableRow>
@@ -471,8 +472,8 @@ const PlanoContasPage = () => {
                                             {conta.Analitica === 'Sim' ? (
                                                 <EditableCell
                                                     id={conta.id}
-                                                    initialValue={conta.is_conta_caixa_banco} // RENOMEADO
-                                                    fieldName="is_conta_caixa_banco" // RENOMEADO
+                                                    initialValue={conta.is_conta_caixa_banco}
+                                                    fieldName="is_conta_caixa_banco"
                                                     onSaveSuccess={handleInlineSaveSuccess}
                                                     isEditable={true}
                                                 />
