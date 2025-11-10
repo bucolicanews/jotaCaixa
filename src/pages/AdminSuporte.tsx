@@ -33,7 +33,7 @@ interface EmpresaFiltro {
 }
 
 const AdminSuporte: React.FC = () => {
-  const { role, carregando: carregandoSessao } = useSessao();
+  const { role, carregando: carregandoSessao, usuario } = useSessao(); // Adicionado usuario
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [carregandoTickets, setCarregandoTickets] = useState(true);
   const [ticketSelecionado, setTicketSelecionado] = useState<Ticket | null>(null);
@@ -65,7 +65,7 @@ const AdminSuporte: React.FC = () => {
   }, [isAdmin]);
 
   const fetchTickets = useCallback(async () => {
-    if (!isAdmin) {
+    if (!isAdmin || !usuario?.id) { // Adicionado usuario?.id
         setCarregandoTickets(false);
         return;
     }
@@ -143,7 +143,7 @@ const AdminSuporte: React.FC = () => {
       setTickets(mappedData);
     }
     setCarregandoTickets(false);
-  }, [isAdmin, filtroStatus, filtroEmpresaId, filtroTextoDebounced]);
+  }, [isAdmin, filtroStatus, filtroEmpresaId, filtroTextoDebounced, usuario?.id]); // Adicionado usuario?.id
 
   useEffect(() => {
     if (!carregandoSessao && isAdmin) {

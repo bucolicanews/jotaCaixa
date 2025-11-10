@@ -1,11 +1,12 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { MessageSquare, Clock, AlertTriangle, User, Trash2, UserCheck, UserX } from 'lucide-react';
+import { MessageSquare, Clock, AlertTriangle, User, Trash2, UserCheck, UserX, CheckCircle2 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
-import { Button } from '@/components/ui/button'; // Importando Button
+import { Button } from '@/components/ui/button';
+import { useSessao } from '@/hooks/use-sessao'; // Importando useSessao
 
 interface Ticket {
   id: string;
@@ -20,17 +21,16 @@ interface Ticket {
   // Relações
   proprietario_perfil: { nome: string } | null;
   mensagens_ticket_count: number;
-  // Propriedades que estavam causando o conflito de tipos
-  ultima_mensagem_remetente_id: string | null; 
-  ultima_mensagem_destinatario_id: string | null; // NOVO CAMPO
+  ultima_mensagem_remetente_id: string | null;
+  ultima_mensagem_destinatario_id: string | null;
 }
 
 interface TicketCardProps {
   ticket: Ticket;
   onClick: (ticket: Ticket) => void;
-  onDelete: (ticketId: string, titulo: string) => void; // NOVO PROP
+  onDelete: (ticketId: string, titulo: string) => void;
   isAdminView: boolean;
-  isOwner: boolean; // NOVO PROP
+  isOwner: boolean;
 }
 
 const getStatusVariant = (status: Ticket['status']): 'default' | 'secondary' | 'warning' | 'success' | 'destructive' => {
@@ -53,28 +53,36 @@ const getPriorityColor = (prioridade: Ticket['prioridade']) => {
 };
 
 const TicketCard: React.FC<TicketCardProps> = ({ ticket, onClick, onDelete, isAdminView, isOwner }) => {
+  const { usuario } = useSessao(); // Obtém o usuário logado
   const dataAtualizacao = parseISO(ticket.atualizado_em);
   const proprietarioNome = ticket.proprietario_perfil?.nome || 'N/A';
   
-  // O ticket só pode ser deletado se estiver fechado ou se for o Admin
   const canDelete = isOwner && ticket.status === 'fechado';
+  const isClosed = ticket.status === 'fechado';
   
   // Lógica de Responsabilidade: Quem é o destinatário da última mensagem?
   const destinatarioUltimaMensagem = ticket.ultima_mensagem_destinatario_id;
-  const isClosed = ticket.status === 'fechado';
+  const isMyTurn = destinatarioUltimaMensagem === usuario?.id;
   
   let responsavelIndicator = null;
   
   if (!isClosed) {
-      if (destinatarioUltimaMensagem === ticket.empresa_id) {
-          // Se o destinatário é o Admin, o Admin é o responsável
+      if (isMyTurn) {
+          // É a vez do usuário logado (Cliente ou Admin)
+          responsavelIndicator = (
+              <span className="flex items-center text-sm font-medium text-green-500">
+                  <CheckCircle2 className="w-4 h-4 mr-1" /> Sua vez de responder
+              </span>
+          );
+      } else if (destinatarioUltimaMensagem === ticket.empresa_id) {
+          // Aguardando Admin (se o Admin não for o usuário logado)
           responsavelIndicator = (
               <span className="flex items-center text-sm font-medium text-blue-500">
                   <UserCheck className="w-4 h-4 mr-1" /> Aguardando Admin
               </span>
           );
       } else if (destinatarioUltimaMensagem === ticket.proprietario_id) {
-          // Se o destinatário é o Cliente/Proprietário, o Cliente é o responsável
+          // Aguardando Cliente/Proprietário (se o Cliente não for o usuário logado)
           responsavelIndicator = (
               <span className="flex items-center text-sm font-medium text-yellow-500">
                   <UserX className="w-4 h-4 mr-1" /> Aguardando Cliente
@@ -87,8 +95,9 @@ const TicketCard: React.FC<TicketCardProps> = ({ ticket, onClick, onDelete, isAd
   return (
     <Card 
       className={cn(
-        "cursor-pointer hover:shadow-lg transition-shadow border-l-4 relative", // Adicionado relative
-        ticket.prioridade === 'alta' ? 'border-red-500' : 'border-primary/50'
+        "cursor-pointer hover:shadow-lg transition-shadow border-l-4 relative",
+        ticket.prioridade === 'alta' ? 'border-red-500' : 'border-primary/50',
+        isMyTurn && !isClosed && 'bg-green-500/10' // Destaque se for a vez do usuário
       )}
     >
       {/* Botão de Deletar (Apenas se for o dono e o status for fechado) */}
@@ -98,7 +107,7 @@ const TicketCard: React.FC<TicketCardProps> = ({ ticket, onClick, onDelete, isAd
               size="icon" 
               className="absolute top-2 right-2 h-8 w-8 text-red-500 hover:text-red-700 z-10"
               onClick={(e) => {
-                  e.stopPropagation(); // Impede que o clique abra o detalhe
+                  e.stopPropagation();
                   onDelete(ticket.id, ticket.titulo);
               }}
               title="Excluir Ticket"

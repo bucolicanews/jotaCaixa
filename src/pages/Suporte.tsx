@@ -50,7 +50,7 @@ const Suporte: React.FC = () => {
   const empresaId = getEmpresaId(); // ID do destinatário (Admin)
 
   const fetchTickets = useCallback(async () => {
-    if (!empresaId) {
+    if (!empresaId || !usuario?.id) { // Adicionado usuario?.id
         setCarregandoTickets(false);
         return;
     }
@@ -108,7 +108,7 @@ const Suporte: React.FC = () => {
       setTickets(ticketsComNome);
     }
     setCarregandoTickets(false);
-  }, [empresaId, filtroStatus, role, perfil]);
+  }, [empresaId, filtroStatus, role, perfil, usuario?.id]); // Adicionado usuario?.id
 
   useEffect(() => {
     if (!carregandoSessao && empresaId) {
