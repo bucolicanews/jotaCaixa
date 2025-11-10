@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, MessageSquare, Filter, Building2, AlertTriangle, Clock } from 'lucide-react';
+import { Loader2, MessageSquare, Filter, Building2, AlertTriangle, Clock, Pause, CheckCircle2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
@@ -35,7 +35,7 @@ interface EmpresaFiltro {
 
 const AdminSuporte: React.FC = () => {
   const { role, carregando: carregandoSessao, usuario } = useSessao(); // Adicionado usuario
-  const { ticketsAbertos, ticketsEmProgresso, ticketsPausados, mensagensNaoLidas, carregando: carregandoNotificacoes, refetch: refetchNotifications } = useTicketNotifications(); // Usando o hook
+  const { ticketsAbertos, ticketsEmProgresso, ticketsPausados, ticketsFechados, mensagensParaResponder, carregando: carregandoNotificacoes, refetch: refetchNotifications } = useTicketNotifications(); // Usando o hook
   
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [carregandoTickets, setCarregandoTickets] = useState(true);
@@ -100,7 +100,8 @@ const AdminSuporte: React.FC = () => {
     }
     
     if (filtroEmpresaId !== 'todos') {
-        query = query.eq('empresa_id', filtroEmpresaId);
+        // Admin filtra por tickets onde o proprietario_id (o cliente) é o ID do filtro
+        query = query.eq('proprietario_id', filtroEmpresaId);
     }
 
     const { data, error } = await query;
@@ -228,11 +229,11 @@ const AdminSuporte: React.FC = () => {
         <MessageSquare className="w-6 h-6 mr-2" /> Gestão de Tickets (Admin)
       </h1>
       
-      {/* CARDS DE RESUMO */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      {/* CARDS DE RESUMO (5 Cards) */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
           <Card className="border-l-4 border-destructive">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-destructive">Tickets Abertos (Novos)</CardTitle>
+                  <CardTitle className="text-sm font-medium text-destructive">Abertos (Novos)</CardTitle>
                   <AlertTriangle className="w-4 h-4 text-destructive" />
               </CardHeader>
               <CardContent>
@@ -241,20 +242,38 @@ const AdminSuporte: React.FC = () => {
           </Card>
           <Card className="border-l-4 border-primary">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Em Progresso / Pausado</CardTitle>
+                  <CardTitle className="text-sm font-medium">Em Progresso</CardTitle>
                   <Clock className="w-4 h-4 text-primary" />
               </CardHeader>
               <CardContent>
-                  <div className="text-2xl font-bold">{ticketsEmProgresso + ticketsPausados}</div>
+                  <div className="text-2xl font-bold">{ticketsEmProgresso}</div>
               </CardContent>
           </Card>
-          <Card className="border-l-4 border-red-500">
+          <Card className="border-l-4 border-warning">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-red-600">Mensagens Não Lidas</CardTitle>
-                  <MessageSquare className="w-4 h-4 text-red-500" />
+                  <CardTitle className="text-sm font-medium text-yellow-600">Pausados</CardTitle>
+                  <Pause className="w-4 h-4 text-yellow-600" />
               </CardHeader>
               <CardContent>
-                  <div className="text-2xl font-bold text-red-600">{mensagensNaoLidas}</div>
+                  <div className="text-2xl font-bold">{ticketsPausados}</div>
+              </CardContent>
+          </Card>
+          <Card className="border-l-4 border-secondary">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Fechados</CardTitle>
+                  <CheckCircle2 className="w-4 h-4 text-secondary" />
+              </CardHeader>
+              <CardContent>
+                  <div className="text-2xl font-bold">{ticketsFechados}</div>
+              </CardContent>
+          </Card>
+          <Card className="border-l-4 border-green-500">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium text-green-600">Para Responder</CardTitle>
+                  <MessageSquare className="w-4 h-4 text-green-500" />
+              </CardHeader>
+              <CardContent>
+                  <div className="text-2xl font-bold">{mensagensParaResponder}</div>
               </CardContent>
           </Card>
       </div>

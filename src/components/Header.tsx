@@ -42,8 +42,8 @@ const Header: React.FC = () => {
   const [tituloApp, setTituloApp] = useState('Fluxo de Caixa');
   const [planoDetalhes, setPlanoDetalhes] = useState<{ nome: string, preco: number } | null>(null);
   
-  // NOVO: Hook de Notificações
-  const { mensagensNaoLidas, carregando: carregandoNotificacoes } = useTicketNotifications();
+  // NOVO: Hook de Notificações (usando mensagensParaResponder)
+  const { mensagensParaResponder, carregando: carregandoNotificacoes } = useTicketNotifications();
 
   useEffect(() => {
     const updateTitle = async () => {
@@ -150,9 +150,9 @@ const Header: React.FC = () => {
               <Button variant="ghost" className="relative h-8 w-8 rounded-full p-0">
                 <UserAvatar profile={perfil} className="h-8 w-8" />
                 {/* Indicador de Notificação */}
-                {mensagensNaoLidas > 0 && !carregandoNotificacoes && (
+                {mensagensParaResponder > 0 && !carregandoNotificacoes && (
                     <span className="absolute top-0 right-0 h-3 w-3 rounded-full bg-red-500 border-2 border-background flex items-center justify-center text-white text-[8px] font-bold">
-                        {mensagensNaoLidas > 9 ? '9+' : mensagensNaoLidas}
+                        {mensagensParaResponder > 9 ? '9+' : mensagensParaResponder}
                     </span>
                 )}
               </Button>
@@ -173,11 +173,11 @@ const Header: React.FC = () => {
               <DropdownMenuSeparator />
               
               {/* NOVO ITEM: Notificações de Suporte */}
-              {mensagensNaoLidas > 0 && (
+              {mensagensParaResponder > 0 && (
                   <DropdownMenuItem asChild className="bg-red-500/10 text-red-600 font-semibold">
                       <Link to={role === 'Admin' ? '/admin/suporte' : '/suporte'}>
                           <MessageSquare className="mr-2 h-4 w-4" />
-                          {mensagensNaoLidas} Mensagens Não Lidas
+                          {mensagensParaResponder} Tickets para Responder
                       </Link>
                   </DropdownMenuItem>
               )}

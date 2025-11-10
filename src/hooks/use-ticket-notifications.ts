@@ -1,12 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from './use-sessao';
+import { ClienteProfile } from '@/types/usuario';
 
 interface TicketNotifications {
   ticketsAbertos: number;
   ticketsEmProgresso: number;
   ticketsPausados: number;
-  mensagensNaoLidas: number;
+  ticketsFechados: number;
+  mensagensParaResponder: number;
   carregando: boolean;
   refetch: () => void;
 }
@@ -19,73 +21,119 @@ export function useTicketNotifications(): TicketNotifications {
   const [ticketsAbertos, setTicketsAbertos] = useState(0);
   const [ticketsEmProgresso, setTicketsEmProgresso] = useState(0);
   const [ticketsPausados, setTicketsPausados] = useState(0);
-  const [mensagensNaoLidas, setMensagensNaoLidas] = useState(0);
+  const [ticketsFechados, setTicketsFechados] = useState(0);
+  const [mensagensParaResponder, setMensagensParaResponder] = useState(0);
   const [carregando, setCarregando] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
 
   const refetch = useCallback(() => {
     setRefreshKey(prev => prev + 1);
   }, []);
+  
+  // Define as variáveis de escopo que serão usadas no useEffect
+  const userId = usuario?.id;
+  
+  let targetEmpresaId: string | null = null;
+  let targetProprietarioId: string | null = null;
+
+  if (role === 'Cliente') {
+      // Cliente: empresa_id é o Admin ID, proprietario_id é o Cliente ID
+      targetEmpresaId = (perfil as ClienteProfile)?.admin_id || null;
+      targetProprietarioId = (perfil as ClienteProfile)?.id || null;
+  } else if (role === 'Admin') {
+      // Admin: empresa_id é o próprio Admin ID
+      targetEmpresaId = userId || null;
+  }
+
 
   const fetchNotifications = useCallback(async () => {
-    if (!usuario?.id || carregandoSessao) {
+    if (!userId || carregandoSessao) {
       setCarregando(false);
       return;
     }
 
     setCarregando(true);
     
-    const userId = usuario.id;
-    
-    let ticketsQuery = supabase
-        .from('tickets')
-        .select('status', { count: 'exact', head: false });
-        
-    if (role === 'Cliente') {
-        ticketsQuery = ticketsQuery.eq('proprietario_id', userId);
-    } else if (role === 'Admin') {
-        ticketsQuery = ticketsQuery.eq('empresa_id', userId);
+    if (!targetEmpresaId) {
+        setCarregando(false);
+        return;
     }
     
+    // Base query: Select tickets filtered by the Admin ID (empresa_id)
+    let query = supabase
+        .from('tickets')
+        .select('status, proprietario_id, empresa_id, ultima_mensagem:mensagens_ticket(destinatario_id)', { count: 'exact', head: false })
+        .eq('empresa_id', targetEmpresaId);
+    
+    // If Client, filter by proprietario_id (the client's ID)
+    if (targetProprietarioId) {
+        query = query.eq('proprietario_id', targetProprietarioId);
+    }
+    
+    // Apply limit to the nested relation (to get only the last message info)
+    query = query.limit(1, { foreignTable: 'ultima_mensagem' });
+
     try {
-      // 1. Contar Tickets por Status
-      const { data: ticketsData, error: ticketsError } = await ticketsQuery;
+      // 1. Fetch Tickets and Last Message Info
+      const { data: ticketsData, error: ticketsError } = await query;
       if (ticketsError) throw ticketsError;
       
-      const counts = (ticketsData || []).reduce((acc, t) => {
-          acc[t.status] = (acc[t.status] || 0) + 1;
-          return acc;
-      }, {} as Record<string, number>);
+      let abertos = 0;
+      let emProgresso = 0;
+      let pausados = 0;
+      let fechados = 0;
+      let paraResponder = 0;
       
-      setTicketsAbertos(counts['aberto'] || 0);
-      setTicketsEmProgresso(counts['em_progresso'] || 0);
-      setTicketsPausados(counts['pausado'] || 0);
-
-      // 2. Contar Mensagens Não Lidas
-      const { count: naoLidasCount, error: naoLidasError } = await supabase
-        .from('mensagens_ticket')
-        .select('id', { count: 'exact', head: true })
-        .eq('destinatario_id', userId)
-        .eq('lido', false);
-
-      if (naoLidasError) throw naoLidasError;
-      setMensagensNaoLidas(naoLidasCount || 0);
+      (ticketsData || []).forEach((t: any) => {
+          // Count by status
+          switch (t.status) {
+              case 'aberto': abertos++; break;
+              case 'em_progresso': emProgresso++; break;
+              case 'pausado': pausados++; break;
+              case 'fechado': fechados++; break;
+          }
+          
+          // Count 'Para Responder'
+          const ultimaMensagem = t.ultima_mensagem?.[0];
+          let proximoRespondenteId: string | null = null;
+          
+          if (t.status !== 'fechado') {
+              if (ultimaMensagem) {
+                  // If there is a last message, the next respondent is the last message's recipient
+                  proximoRespondenteId = ultimaMensagem.destinatario_id;
+              } else {
+                  // If no messages, the next respondent is the Admin (empresa_id)
+                  proximoRespondenteId = t.empresa_id;
+              }
+              
+              if (proximoRespondenteId === userId) {
+                  paraResponder++;
+              }
+          }
+      });
+      
+      setTicketsAbertos(abertos);
+      setTicketsEmProgresso(emProgresso);
+      setTicketsPausados(pausados);
+      setTicketsFechados(fechados);
+      setMensagensParaResponder(paraResponder);
 
     } catch (error) {
       console.error('Erro ao buscar notificações de ticket:', error);
       setTicketsAbertos(0);
       setTicketsEmProgresso(0);
       setTicketsPausados(0);
-      setMensagensNaoLidas(0);
+      setTicketsFechados(0);
+      setMensagensParaResponder(0);
     } finally {
       setCarregando(false);
     }
-  }, [usuario, role, perfil, carregandoSessao, refreshKey]);
+  }, [userId, carregandoSessao, refreshKey, targetEmpresaId, targetProprietarioId]);
 
   useEffect(() => {
     fetchNotifications();
     
-    // Opcional: Adicionar subscription para real-time updates
+    // Real-time subscription
     const channel = supabase.channel('ticket_notifications')
         .on('postgres_changes', { 
             event: 'INSERT', 
@@ -93,7 +141,14 @@ export function useTicketNotifications(): TicketNotifications {
             table: 'mensagens_ticket',
             filter: `destinatario_id=eq.${usuario?.id}`,
         }, () => {
-            // Força o refetch quando uma nova mensagem chega para o usuário logado
+            refetch();
+        })
+        .on('postgres_changes', { 
+            event: 'UPDATE', 
+            schema: 'public', 
+            table: 'tickets',
+            filter: `proprietario_id=eq.${usuario?.id}`,
+        }, () => {
             refetch();
         })
         .subscribe();
@@ -103,5 +158,5 @@ export function useTicketNotifications(): TicketNotifications {
     };
   }, [fetchNotifications, refetch, usuario?.id]);
 
-  return { ticketsAbertos, ticketsEmProgresso, ticketsPausados, mensagensNaoLidas, carregando, refetch };
+  return { ticketsAbertos, ticketsEmProgresso, ticketsPausados, ticketsFechados, mensagensParaResponder, carregando, refetch };
 }
