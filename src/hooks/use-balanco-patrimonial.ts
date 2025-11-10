@@ -65,9 +65,10 @@ const consolidateBalances = (contas: ContaBalanco[]): ContaBalanco[] => {
     const saldoConsolidadoMap: Record<string, number> = { ...saldoAnaliticoMap };
 
     // 3. Ordena as contas sintéticas do mais específico para o mais geral (ordem decrescente)
+    // Isso garante que 1.0.1 seja processado antes de 1.
     const sinteticas = contas.filter(c => c.Analitica === 'Não').sort((a, b) => compareContas(b, a));
 
-    // 4. Consolida de baixo para cima (garantindo que o saldo do filho já esteja consolidado)
+    // 4. Consolida de baixo para cima
     for (const contaSintetica of sinteticas) {
         let totalConsolidado = 0;
         
