@@ -23,6 +23,8 @@ interface Ticket {
   proprietario_id: string;
   empresa_id: string;
   proprietario_perfil: { nome: string } | null;
+  // NOVO CAMPO
+  ultima_mensagem_remetente_id: string | null;
 }
 
 interface Mensagem {
@@ -55,6 +57,24 @@ const TicketDetalhe: React.FC<TicketDetalheProps> = ({ ticket, onClose, onUpdate
   const remetenteId = usuario?.id;
   const isTicketOwner = remetenteId === ticket.proprietario_id;
   const canManage = isAdminView || isTicketOwner;
+  
+  // Determina o ID do Admin (destinatário)
+  const adminId = isAdminView ? remetenteId : ticket.empresa_id;
+  
+  // Lógica de Responsabilidade
+  const ultimaMensagemId = ticket.ultima_mensagem_remetente_id || ticket.proprietario_id;
+  const isWaitingForAdmin = ultimaMensagemId === ticket.proprietario_id;
+  const isWaitingForClient = ultimaMensagemId === adminId;
+  
+  // Bloqueia a resposta se o ticket não estiver fechado E a última mensagem for do outro lado
+  const isReplyBlocked = currentStatus !== 'fechado' && (
+      (isAdminView && isWaitingForClient) || // Admin espera pelo Cliente
+      (!isAdminView && isWaitingForAdmin)    // Cliente espera pelo Admin
+  );
+  
+  // const responsavel = isWaitingForAdmin ? 'Admin' : 'Cliente'; // REMOVIDO: TS6133
+  const responsavelNome = isWaitingForAdmin ? 'Administrador' : (ticket.proprietario_perfil?.nome || 'Cliente');
+
 
   const fetchMensagens = useCallback(async () => {
     setLoadingMensagens(true);
@@ -78,8 +98,9 @@ const TicketDetalhe: React.FC<TicketDetalheProps> = ({ ticket, onClose, onUpdate
       // Mapeamento manual do nome do remetente (simplificado)
       const mensagensComNome = await Promise.all((data as any[]).map(async (msg) => {
           let nome = 'N/A';
+          // Se o remetente for o Admin (empresa_id)
           if (msg.remetente_id === ticket.empresa_id) {
-              nome = 'Admin'; // Se o remetente for o destinatário (Admin)
+              nome = 'Admin'; 
           } else if (msg.remetente_id === ticket.proprietario_id) {
               nome = ticket.proprietario_perfil?.nome || 'Cliente';
           } else {
@@ -162,11 +183,11 @@ const TicketDetalhe: React.FC<TicketDetalheProps> = ({ ticket, onClose, onUpdate
 
       if (mensagemError) throw mensagemError;
       
-      // Atualiza o status do ticket para 'em_progresso' se estiver 'aberto'
+      // 1. Atualiza o status do ticket para 'em_progresso' se estiver 'aberto'
       if (currentStatus === 'aberto') {
           await handleUpdateStatus('em_progresso');
       } else {
-          // Apenas atualiza o campo 'atualizado_em'
+          // 2. Apenas atualiza o campo 'atualizado_em'
           await supabase.from('tickets').update({ atualizado_em: new Date().toISOString() }).eq('id', ticket.id);
       }
 
@@ -362,31 +383,44 @@ const TicketDetalhe: React.FC<TicketDetalheProps> = ({ ticket, onClose, onUpdate
         </div>
         
         {/* Área de Resposta */}
-        {!isClosed && (
-            <div className="mt-4 pt-4 border-t">
-                <h4 className="font-semibold mb-2">Responder</h4>
-                <Textarea 
-                    placeholder="Digite sua mensagem..." 
-                    value={novaMensagem}
-                    onChange={(e) => setNovaMensagem(e.target.value)}
-                    rows={3}
-                    disabled={loadingAcao}
-                />
-                <div className="flex items-center justify-between mt-2">
-                    <Input type="file" onChange={handleFileChange} disabled={loadingAcao} className="w-1/2" />
-                    <Button onClick={handleSendMensagem} disabled={loadingAcao || (!novaMensagem.trim() && !anexoFile)}>
-                        {loadingAcao ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-                        Enviar
-                    </Button>
+        <div className="mt-4 pt-4 border-t">
+            {isClosed ? (
+                <div className="p-4 bg-secondary rounded-md text-center text-muted-foreground">
+                    Este ticket está fechado. Reabra-o para enviar novas mensagens.
                 </div>
-                {anexoFile && <p className="text-xs text-muted-foreground mt-1">Anexo pronto: {anexoFile.name}</p>}
-            </div>
-        )}
-        {isClosed && (
-            <div className="mt-4 p-4 bg-secondary rounded-md text-center text-muted-foreground">
-                Este ticket está fechado. Reabra-o para enviar novas mensagens.
-            </div>
-        )}
+            ) : (
+                <>
+                    {/* Indicador de Responsabilidade */}
+                    <div className={cn("p-2 rounded-md mb-3 text-sm font-medium", isReplyBlocked ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-300" : "bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-300")}>
+                        {isReplyBlocked ? (
+                            <span>Aguardando resposta do(a) <span className="font-bold">{responsavelNome}</span>. Sua resposta está bloqueada.</span>
+                        ) : (
+                            <span>Sua vez de responder.</span>
+                        )}
+                    </div>
+                    
+                    <h4 className="font-semibold mb-2">Responder</h4>
+                    <Textarea 
+                        placeholder="Digite sua mensagem..." 
+                        value={novaMensagem}
+                        onChange={(e) => setNovaMensagem(e.target.value)}
+                        rows={3}
+                        disabled={loadingAcao || isReplyBlocked}
+                    />
+                    <div className="flex items-center justify-between mt-2">
+                        <Input type="file" onChange={handleFileChange} disabled={loadingAcao || isReplyBlocked} className="w-1/2" />
+                        <Button 
+                            onClick={handleSendMensagem} 
+                            disabled={loadingAcao || isReplyBlocked || (!novaMensagem.trim() && !anexoFile)}
+                        >
+                            {loadingAcao ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                            Enviar
+                        </Button>
+                    </div>
+                    {anexoFile && <p className="text-xs text-muted-foreground mt-1">Anexo pronto: {anexoFile.name}</p>}
+                </>
+            )}
+        </div>
       </CardContent>
     </Card>
   );

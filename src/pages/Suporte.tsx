@@ -24,6 +24,8 @@ interface Ticket {
   empresa_id: string;
   proprietario_perfil: { nome: string } | null;
   mensagens_ticket_count: number;
+  // Propriedade que estava faltando no tipo local do map
+  ultima_mensagem_remetente_id: string | null; 
 }
 
 const Suporte: React.FC = () => {
@@ -58,7 +60,8 @@ const Suporte: React.FC = () => {
       .from('tickets')
       .select(`
         *,
-        mensagens_ticket_count:mensagens_ticket(count)
+        mensagens_ticket_count:mensagens_ticket(count),
+        ultima_mensagem:mensagens_ticket(remetente_id, criado_em, ticket_id)
       `)
       .eq('empresa_id', empresaId) // Filtra pelo ID do Admin (destinatário)
       .order('atualizado_em', { ascending: false });
@@ -78,7 +81,7 @@ const Suporte: React.FC = () => {
       showError('Erro ao carregar tickets: ' + error.message);
       setTickets([]);
     } else {
-      // Mapeamento manual do nome do proprietário
+      // Mapeamento manual do nome do proprietário e da última mensagem
       const ticketsComNome = await Promise.all((data as any[]).map(async (t) => {
           let nome = 'N/A';
           // Tenta buscar o nome do proprietário na tbl_clientes ou tbl_admins
@@ -90,10 +93,14 @@ const Suporte: React.FC = () => {
               nome = adminData?.nome || 'Admin';
           }
           
+          // Extrai o ID do remetente da última mensagem (o Supabase retorna um array)
+          const ultimaMensagem = t.ultima_mensagem?.[0];
+          
           return {
               ...t,
               mensagens_ticket_count: t.mensagens_ticket_count[0].count,
-              proprietario_perfil: { nome: nome }
+              proprietario_perfil: { nome: nome },
+              ultima_mensagem_remetente_id: ultimaMensagem?.remetente_id || null,
           } as Ticket;
       }));
       

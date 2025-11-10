@@ -22,6 +22,9 @@ interface Ticket {
   empresa_id: string;
   proprietario_perfil: { nome: string } | null;
   mensagens_ticket_count: number;
+  // Propriedades que estavam faltando no tipo local do map
+  ultima_mensagem_remetente_id: string | null;
+  ultima_mensagem?: { remetente_id: string, criado_em: string, ticket_id: string }[] | null; 
 }
 
 interface EmpresaFiltro {
@@ -30,7 +33,7 @@ interface EmpresaFiltro {
 }
 
 const AdminSuporte: React.FC = () => {
-  const { role, carregando: carregandoSessao } = useSessao();
+  const { role, carregando: carregandoSessao, usuario } = useSessao();
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [carregandoTickets, setCarregandoTickets] = useState(true);
   const [ticketSelecionado, setTicketSelecionado] = useState<Ticket | null>(null);
@@ -79,7 +82,8 @@ const AdminSuporte: React.FC = () => {
         atualizado_em,
         proprietario_id,
         empresa_id,
-        mensagens_ticket_count:mensagens_ticket(count)
+        mensagens_ticket_count:mensagens_ticket(count),
+        ultima_mensagem:mensagens_ticket(remetente_id, criado_em, ticket_id)
       `)
       .order('atualizado_em', { ascending: false });
       
@@ -116,10 +120,14 @@ const AdminSuporte: React.FC = () => {
       (adminsRes.data || []).forEach(a => nomeMap[a.id] = a.nome);
       
       // 3. Mapear nomes de volta para os tickets
-      let mappedData = rawTickets.map(t => ({
-          ...t,
-          proprietario_perfil: { nome: nomeMap[t.proprietario_id] || 'N/A' }
-      }));
+      let mappedData = rawTickets.map(t => {
+          const ultimaMensagem = t.ultima_mensagem?.[0];
+          return {
+              ...t,
+              proprietario_perfil: { nome: nomeMap[t.proprietario_id] || 'N/A' },
+              ultima_mensagem_remetente_id: ultimaMensagem?.remetente_id || null,
+          } as Ticket;
+      });
       
       // 4. Filtro de texto no frontend
       if (filtroTextoDebounced) {
