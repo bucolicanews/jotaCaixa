@@ -11,7 +11,7 @@ import { Loader2, Send } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { useSessao } from '@/hooks/use-sessao';
-import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
+import { ClienteProfile } from '@/types/usuario';
 
 const formSchema = z.object({
   titulo: z.string().min(5, 'O título é obrigatório e deve ter pelo menos 5 caracteres.'),
@@ -41,14 +41,20 @@ const FormNovoTicket: React.FC<FormNovoTicketProps> = ({ onSaveComplete }) => {
   });
 
   const getEmpresaId = () => {
+    // Se for Admin, o ticket é para ele mesmo (Admin ID)
     if (role === 'Admin') return usuario?.id || null;
-    if (role === 'Cliente') return (perfil as ClienteProfile)?.id;
-    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id;
+    // Se for Cliente, o ticket é para o Admin (Admin ID)
+    if (role === 'Cliente') return (perfil as ClienteProfile)?.admin_id || null;
+    
+    // Usuários/Funcionários não devem estar aqui, mas se estiverem, não podem criar tickets.
     return null;
   };
   
-  const empresaId = getEmpresaId();
-  const remetenteId = usuario?.id;
+  const empresaId = getEmpresaId(); // ID do destinatário (Admin)
+  const remetenteId = usuario?.id; // ID do criador (Admin ou Cliente)
+  
+  // Restrição: Apenas Admin e Cliente podem criar tickets
+  const canCreateTicket = role === 'Admin' || role === 'Cliente';
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setAnexoFile(e.target.files?.[0] || null);
@@ -75,8 +81,8 @@ const FormNovoTicket: React.FC<FormNovoTicketProps> = ({ onSaveComplete }) => {
   };
 
   const onSubmit = async (values: FormValues) => {
-    if (!remetenteId || !empresaId) {
-      showError('Usuário ou empresa não identificados.');
+    if (!remetenteId || !empresaId || !canCreateTicket) {
+      showError('Acesso negado para criar tickets.');
       return;
     }
     setLoading(true);
@@ -84,8 +90,8 @@ const FormNovoTicket: React.FC<FormNovoTicketProps> = ({ onSaveComplete }) => {
     try {
       // 1. Criar o Ticket (Registro Sintético)
       const ticketPayload = {
-        proprietario_id: remetenteId,
-        empresa_id: empresaId,
+        proprietario_id: remetenteId, // Quem criou (Cliente ou Admin)
+        empresa_id: empresaId, // Destinatário (Admin ID)
         titulo: values.titulo,
         prioridade: values.prioridade,
         status: 'aberto',
@@ -132,6 +138,10 @@ const FormNovoTicket: React.FC<FormNovoTicketProps> = ({ onSaveComplete }) => {
       setLoading(false);
     }
   };
+  
+  if (!canCreateTicket) {
+      return <p className="text-red-500">Apenas Clientes do Sistema e Administradores podem abrir tickets de suporte.</p>;
+  }
 
   return (
     <Form {...form}>
