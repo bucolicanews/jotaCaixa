@@ -7,7 +7,7 @@ import { ContratoGerado } from '@/types/contratos';
 import { format, parseISO } from 'date-fns';
 // import { cn } from '@/lib/utils'; // REMOVIDO
 
-type ContratoComCliente = ContratoGerado & { tbl_empresas_clientes: { nome: string } | null }; // RENOMEADO
+type ContratoComCliente = ContratoGerado & { clientes: { nome: string } | null };
 type ContratoStatus = ContratoGerado['status'];
 
 interface ContratosTableProps {
@@ -74,8 +74,8 @@ const ContratosTable: React.FC<ContratosTableProps> = ({
                             
                             return (
                                 <TableRow key={c.id}>
-                                    {isSupervisao && <TableCell className="text-sm text-muted-foreground">{c.tbl_empresas_clientes?.nome || 'N/A'}</TableCell>}
-                                    <TableCell className="font-medium">{c.tbl_empresas_clientes?.nome || 'N/A'}</TableCell>
+                                    {isSupervisao && <TableCell className="text-sm text-muted-foreground">{c.clientes?.nome || 'N/A'}</TableCell>}
+                                    <TableCell className="font-medium">{c.clientes?.nome || 'N/A'}</TableCell>
                                     <TableCell>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(c.valor_total)}</TableCell>
                                     <TableCell>{format(parseISO(c.data_inicio), 'dd/MM/yyyy')}</TableCell>
                                     <TableCell>{getStatusBadge(c.status)}</TableCell>

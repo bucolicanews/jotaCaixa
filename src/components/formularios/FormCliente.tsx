@@ -123,10 +123,10 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
     let error = null;
 
     if (clienteInicial) {
-      const result = await supabase.from('tbl_empresas_clientes').update(dataToSave).eq('id', clienteInicial.id); // RENOMEADO
+      const result = await supabase.from('clientes').update(dataToSave).eq('id', clienteInicial.id);
       error = result.error;
     } else {
-      const result = await supabase.from('tbl_empresas_clientes').insert(dataToSave); // RENOMEADO
+      const result = await supabase.from('clientes').insert(dataToSave);
       error = result.error;
     }
 

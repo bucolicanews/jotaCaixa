@@ -5,8 +5,8 @@ import { Loader2, MessageSquare, Filter, Building2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError } from '@/utils/toast';
-import TicketCard from '@/components/suporte/TicketCard';
-import TicketDetalhe from '@/components/suporte/TicketDetalhe';
+import TicketCard from '@/components/suporte/TicketCard.tsx';
+import TicketDetalhe from '@/components/suporte/TicketDetalhe.tsx';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { useDebounce } from '@/hooks/use-debounce';
@@ -88,69 +88,8 @@ const AdminSuporte: React.FC = () => {
     const { data, error } = await query;
 
     if (error) {
-      // Se o erro for 400, tentamos a consulta sem a relação implícita
-      if (error.code === '400' || error.message.includes('relationship')) {
-          console.warn('Tentando buscar tickets sem relação implícita de perfil...');
-          
-          const { data: simpleData, error: simpleError } = await supabase
-              .from('tickets')
-              .select(`
-                *,
-                mensagens_ticket_count:mensagens_ticket(count)
-              `)
-              .order('atualizado_em', { ascending: false });
-              
-          if (simpleError) {
-              showError('Erro ao carregar tickets: ' + simpleError.message);
-              setTickets([]);
-              setCarregandoTickets(false);
-              return;
-          }
-          
-          // Mapeamento manual do nome do proprietário
-          const ticketsComNome = await Promise.all((simpleData as any[]).map(async (t) => {
-              let nome = 'N/A';
-              // Tenta buscar o nome do proprietário na tbl_clientes ou tbl_admins
-              const { data: perfilData } = await supabase.from('tbl_clientes').select('nome').eq('id', t.proprietario_id).single();
-              if (perfilData) {
-                  nome = perfilData.nome;
-              } else {
-                  const { data: adminData } = await supabase.from('tbl_admins').select('nome').eq('id', t.proprietario_id).single();
-                  nome = adminData?.nome || 'Admin';
-              }
-              
-              return {
-                  ...t,
-                  mensagens_ticket_count: t.mensagens_ticket_count[0].count,
-                  proprietario_perfil: { nome: nome }
-              } as Ticket;
-          }));
-          
-          let mappedData = ticketsComNome;
-          
-          // Aplica filtros de status e empresa no frontend
-          mappedData = mappedData.filter(t => {
-              const statusMatch = filtroStatus === 'todos' || t.status === filtroStatus;
-              const empresaMatch = filtroEmpresaId === 'todos' || t.empresa_id === filtroEmpresaId;
-              return statusMatch && empresaMatch;
-          });
-          
-          // Filtro de texto no frontend
-          if (filtroTextoDebounced) {
-              const termo = filtroTextoDebounced.toLowerCase();
-              mappedData = mappedData.filter(t => 
-                  t.titulo.toLowerCase().includes(termo) ||
-                  t.proprietario_perfil?.nome.toLowerCase().includes(termo) ||
-                  t.id.toLowerCase().includes(termo)
-              );
-          }
-          
-          setTickets(mappedData);
-          
-      } else {
-          showError('Erro ao carregar tickets: ' + error.message);
-          setTickets([]);
-      }
+      showError('Erro ao carregar tickets: ' + error.message);
+      setTickets([]);
     } else {
       let mappedData = (data as any[]).map(t => ({
           ...t,

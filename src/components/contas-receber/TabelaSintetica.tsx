@@ -98,7 +98,7 @@ const TabelaSintetica: React.FC<TabelaSinteticaProps> = ({
                                                 </div>
                                             </TableCell>
                                             <TableCell className="font-mono text-xs text-muted-foreground truncate max-w-[100px]" title={conta.id}>{conta.id.substring(0, 8)}...</TableCell>
-                                            <TableCell className="font-medium">{conta.tbl_empresas_clientes?.nome || 'N/A'}</TableCell>
+                                            <TableCell className="font-medium">{conta.clientes?.nome || 'N/A'}</TableCell>
                                             <TableCell>{conta.descricao}</TableCell>
                                             <TableCell>{formatDate(conta.data_vencimento)}</TableCell>
                                             <TableCell className="font-semibold">{formatCurrency(conta.valor_total)}</TableCell>

@@ -27,7 +27,6 @@ interface EmpresaContrato {
 // NOVO TIPO: Cliente CR com todos os campos de tag
 interface ClienteCRCompleto {
     id: string;
-    proprietario_id?: string | null;
     nome: string;
     razao_social?: string | null;
     nome_fantasia?: string | null;
@@ -131,16 +130,16 @@ const GerarDocumentoSocietario: React.FC = () => {
     // 2. Buscar Clientes (Contratados) - AGORA BUSCA APENAS NA TBL_CLIENTES (CLIENTES DO SISTEMA)
     // O cliente selecionado deve ser um cliente do sistema (tbl_clientes)
     const { data: clientesSistemaData, error: errorSistema } = await supabase
-        .from('tbl_empresas_clientes') // RENOMEADO
-        .select('id, proprietario_id, nome, email, cpf, rg, nome_mae, nome_pai, telefone, cep, endereco, numero, complemento, bairro, cidade, estado, razao_social, nome_fantasia, documento') // Selecionando todos os campos de tag
-        .eq('proprietario_id', targetEmpresaId) // Filtra pelos clientes CR do proprietário
+        .from('tbl_clientes')
+        .select('id, nome, email, cpf, rg, nome_mae, nome_pai, telefone, cep, endereco, numero, complemento, bairro, cidade, estado, razao_social, nome_fantasia, documento') // Selecionando todos os campos de tag
+        .eq('aprovado', true)
         .order('nome');
         
     if (errorSistema) {
         showError('Erro ao carregar clientes do sistema: ' + errorSistema.message);
         setClientesCR([]);
     } else {
-        // Mapeia os dados da tbl_empresas_clientes para o formato ClienteCRCompleto
+        // Mapeia os dados da tbl_clientes para o formato ClienteCRCompleto
         const mappedClients = (clientesSistemaData as any[]).map(c => ({
             ...c,
             // Garantindo que os campos de tag existam
@@ -256,7 +255,7 @@ const GerarDocumentoSocietario: React.FC = () => {
                 }
             } 
             
-            // Mapeamento de dados do Cliente Selecionado (Contratado) - tbl_empresas_clientes
+            // Mapeamento de dados do Cliente Selecionado (Contratado) - clientes
             else if (sourceTable === 'clientes' && clienteSelecionado) {
                 const clienteData = clienteSelecionado as any;
                 
@@ -335,44 +334,13 @@ const GerarDocumentoSocietario: React.FC = () => {
     setIsSubmitting(true);
     
     try {
-        // 0. GARANTIR QUE O CLIENTE EXISTA NA TABELA 'tbl_empresas_clientes' (para FK)
-        const clienteSelecionado = clientesCR.find(c => c.id === clienteSelecionadoId);
-        if (!clienteSelecionado) throw new Error('Cliente selecionado não encontrado.');
-        
-        // Como estamos buscando clientes da tbl_clientes, precisamos garantir que eles existam na tabela 'tbl_empresas_clientes' (CR)
-        // O upsert aqui é crucial para garantir que o cliente exista na tabela de clientes CR do proprietário do contrato.
-        const clienteDataParaUpsert: Partial<ClienteCRCompleto> = {
-            id: clienteSelecionado.id,
-            proprietario_id: proprietarioContratoId, // Usando o proprietário do contrato
-            nome: clienteSelecionado.nome,
-            email: clienteSelecionado.email || null, // Garante que o email seja NULL se vazio
-            documento: clienteSelecionado.documento || null,
-            razao_social: clienteSelecionado.razao_social || null,
-            nome_fantasia: clienteSelecionado.nome_fantasia || null,
-            telefone: clienteSelecionado.telefone || null,
-            telefone_fixo: clienteSelecionado.telefone_fixo || null,
-            cep: clienteSelecionado.cep || null,
-            endereco: clienteSelecionado.endereco || null,
-            numero: clienteSelecionado.numero || null,
-            complemento: clienteSelecionado.complemento || null,
-            bairro: clienteSelecionado.bairro || null,
-            cidade: clienteSelecionado.cidade || null,
-            estado: clienteSelecionado.estado || null,
-        };
-        
-        const { error: upsertError } = await supabase
-            .from('tbl_empresas_clientes') // RENOMEADO
-            .upsert(clienteDataParaUpsert, { onConflict: 'id' });
-            
-        if (upsertError) {
-            throw new Error('Falha ao garantir a existência do cliente na tabela CR: ' + upsertError.message);
-        }
+        // REMOVIDO: Lógica de UPSERT na tabela 'clientes' (CR)
         
         const conteudoRenderizado = renderizarConteudo(modelo.conteudo_template, valoresTags);
         
         const documentoData = {
             modelo_id: modelo.id,
-            cliente_id: clienteSelecionadoId, // Agora referencia tbl_empresas_clientes(id)
+            cliente_id: clienteSelecionadoId, // Agora referencia tbl_clientes(id)
             proprietario_id: proprietarioContratoId, // Usando o proprietário selecionado
             status: 'finalizado',
             valores_tags_preenchidos: { ...valoresTags, titulo: tituloDocumento },

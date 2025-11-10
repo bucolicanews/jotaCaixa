@@ -123,16 +123,42 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
       
       let combinedClients: ClienteCombinado[] = [];
       
-      // Busca clientes da tabela tbl_empresas_clientes (clientes CR)
-      let queryCR = supabase.from('tbl_empresas_clientes').select('*').order('nome'); // RENOMEADO
-      queryCR = queryCR.eq('proprietario_id', ownerId);
-      
-      const { data: dataCR, error: errorCR } = await queryCR;
-      
-      if (errorCR) {
-          showError('Erro ao carregar clientes CR.');
+      // NOVO: Se for Admin ou Cliente, busca APENAS clientes da tbl_clientes (Empresas do Sistema)
+      // Isso garante que o ID selecionado seja sempre um ID de usuário válido.
+      if (isAdmin || role === 'Cliente') {
+          const { data: dataSistema, error: errorSistema } = await supabase
+              .from('tbl_clientes')
+              .select('id, nome, email, cpf, rg, nome_mae, nome_pai, telefone, cep, endereco, numero, complemento, bairro, cidade, estado')
+              .eq('aprovado', true)
+              .order('nome');
+              
+          if (errorSistema) {
+              showError('Erro ao carregar empresas do sistema.');
+          } else {
+              // Mapeia para o tipo ClienteCombinado (que estende Cliente)
+              combinedClients = (dataSistema as any[]).map(c => ({ 
+                  id: c.id, 
+                  proprietario_id: ownerId, // Define o Admin/Cliente logado como proprietário
+                  nome: c.nome, 
+                  email: c.email,
+                  documento: c.cpf || c.rg,
+                  tipo: 'Sistema' as const,
+                  // Adiciona todos os campos de endereço/documento para o upsert
+                  razao_social: c.nome, nome_fantasia: c.nome, telefone: c.telefone, telefone_fixo: null, cep: c.cep, endereco: c.endereco, numero: c.numero, complemento: c.complemento, bairro: c.bairro, cidade: c.cidade, estado: c.estado, created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+              }));
+          }
       } else {
-          combinedClients.push(...(dataCR as Cliente[]).map(c => ({ ...c, tipo: 'CR' as const })));
+          // Usuário: Busca APENAS Clientes de Contas a Receber (clientes)
+          let queryCR = supabase.from('clientes').select('*').order('nome');
+          queryCR = queryCR.eq('proprietario_id', ownerId);
+          
+          const { data: dataCR, error: errorCR } = await queryCR;
+          
+          if (errorCR) {
+              showError('Erro ao carregar clientes CR.');
+          } else {
+              combinedClients.push(...(dataCR as Cliente[]).map(c => ({ ...c, tipo: 'CR' as const })));
+          }
       }
       
       // 3. Ordenar e definir estado
@@ -200,16 +226,16 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
     const contaParcela = isAdmin ? mapeamentoContabil['parcela'] : null;
     
     try {
-      // 0. GARANTIR QUE O CLIENTE EXISTA NA TABELA 'tbl_empresas_clientes' (para FK)
+      // 0. GARANTIR QUE O CLIENTE EXISTA NA TABELA 'clientes' (para FK)
       const clienteSelecionado = clientes.find(c => c.id === values.cliente_id);
       if (!clienteSelecionado) throw new Error('Cliente selecionado não encontrado.');
       
-      // Se o cliente for do tipo 'Sistema', precisamos garantir que ele exista na tabela 'tbl_empresas_clientes' (CR)
+      // Se o cliente for do tipo 'Sistema', precisamos garantir que ele exista na tabela 'clientes' (CR)
       // Esta lógica é crucial para resolver o erro de FK.
       if (clienteSelecionado.tipo === 'Sistema') {
           const clienteDataParaUpsert: Partial<Cliente> = {
               id: clienteSelecionado.id,
-              proprietario_id: ownerId, // Define o Admin/Cliente logado como proprietário
+              proprietario_id: ownerId,
               nome: clienteSelecionado.nome,
               email: clienteSelecionado.email,
               documento: clienteSelecionado.documento,
@@ -224,11 +250,10 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
               bairro: clienteSelecionado.bairro,
               cidade: clienteSelecionado.cidade,
               estado: clienteSelecionado.estado,
-              is_system_client: true, // Marca como cliente do sistema
           };
           
           const { error: upsertError } = await supabase
-              .from('tbl_empresas_clientes') // RENOMEADO
+              .from('clientes')
               .upsert(clienteDataParaUpsert, { onConflict: 'id' });
               
           if (upsertError) {
@@ -266,8 +291,8 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
           valor_total: valorTotal,
           data_emissao: format(new Date(), 'yyyy-MM-dd'),
           data_vencimento: parcelasParaInserir[0].data_vencimento,
-          status: 'aberta',
           tipo_receita: tipoLancamento === 'unico' ? 'única' : 'recorrente',
+          status: 'aberta',
           origem: 'manual',
       };
 

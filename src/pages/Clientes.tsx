@@ -118,7 +118,7 @@ const ClientesPage = () => {
         .order('nome');
 
     if (error) {
-        showError('Erro ao carregar lista de empresas para filtro: ' + error.message);
+        showError('Erro ao carregar lista de empresas: ' + error.message);
         setEmpresasFiltro([]);
     } else {
         const clientData = data as EmpresaFiltro[];
@@ -161,9 +161,9 @@ const ClientesPage = () => {
         }
     }
     
-    // 2. Buscar Clientes de Contas a Receber (tbl_empresas_clientes)
+    // 2. Buscar Clientes de Contas a Receber (clientes)
     let queryCR = supabase
-      .from('tbl_empresas_clientes') // RENOMEADO
+      .from('clientes')
       .select('id, proprietario_id, nome, razao_social, nome_fantasia, documento, email, telefone, telefone_fixo, cep, endereco, numero, complemento, bairro, cidade, estado, created_at, updated_at, is_system_client')
       .order('nome', { ascending: true });
 
@@ -221,7 +221,7 @@ const ClientesPage = () => {
       
       for (const cliente of fetchedData) {
           const systemClient = systemClientsMap[cliente.id];
-          // CORREÇÃO: Acessa a propriedade is_system_client diretamente do objeto cliente
+          // CORREÇÃO: Usa o campo is_system_client do registro CR, se existir, ou verifica pelo mapa do sistema
           const isSystemClient = cliente.is_system_client || !!systemClient; 
           
           let systemStatus: ClienteCRComStatus['system_client_status'] = 'CR';
@@ -330,7 +330,7 @@ const ClientesPage = () => {
   const handleDeleteCR = async (id: string) => {
     if (!window.confirm('Tem certeza que deseja excluir este cliente de Contas a Receber?')) return;
 
-    const { error } = await supabase.from('tbl_empresas_clientes').delete().eq('id', id); // RENOMEADO
+    const { error } = await supabase.from('clientes').delete().eq('id', id);
 
     if (error) {
       showError('Erro ao excluir cliente: ' + error.message);
@@ -489,13 +489,13 @@ const ClientesPage = () => {
         if (invokeError) throw invokeError;
         if (data?.error) throw new Error(data.error);
         
-        // 2. Atualizar o registro na tabela 'tbl_empresas_clientes' para marcar como Cliente do Sistema
+        // 2. Atualizar o registro na tabela 'clientes' para marcar como Cliente do Sistema
         const { error: updateCRError } = await supabase
-            .from('tbl_empresas_clientes') // RENOMEADO
+            .from('clientes')
             .update({ is_system_client: true })
             .eq('id', cliente.id);
             
-        if (updateCRError) console.error('Aviso: Falha ao atualizar is_system_client na tabela tbl_empresas_clientes:', updateCRError);
+        if (updateCRError) console.error('Aviso: Falha ao atualizar is_system_client na tabela clientes:', updateCRError);
         
         showSuccess(`Cliente ${cliente.nome} promovido para Cliente do Sistema com sucesso!`);
         
@@ -605,13 +605,13 @@ const ClientesPage = () => {
         } else if (result && result.success) {
             showSuccess(result.message);
             
-            // 2. Atualizar o registro na tabela 'tbl_empresas_clientes' para marcar como Cliente CR puro
+            // 2. Atualizar o registro na tabela 'clientes' para marcar como Cliente CR puro
             const { error: updateCRError } = await supabase
-                .from('tbl_empresas_clientes') // RENOMEADO
+                .from('clientes')
                 .update({ is_system_client: false })
                 .eq('id', cliente.id);
                 
-            if (updateCRError) console.error('Aviso: Falha ao atualizar is_system_client na tabela tbl_empresas_clientes:', updateCRError);
+            if (updateCRError) console.error('Aviso: Falha ao atualizar is_system_client na tabela clientes:', updateCRError);
             
             // 3. Re-busca os dados
             buscarDados();

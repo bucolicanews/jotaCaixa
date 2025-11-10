@@ -78,9 +78,9 @@ const SECOES_MENU: MenuSection[] = [
     },
     {
         titulo: 'Suporte', // NOVA SEÇÃO
-        perfis: ['Admin', 'Cliente'], // REMOVIDO USUARIO
+        perfis: ['Admin', 'Cliente', 'Usuario'],
         itens: [
-            { nome: 'Meus Tickets', caminho: '/suporte', icone: MessageSquare, perfis: ['Cliente'] }, // APENAS CLIENTE
+            { nome: 'Meus Tickets', caminho: '/suporte', icone: MessageSquare, perfis: ['Cliente', 'Usuario'] },
             { nome: 'Gestão de Tickets', caminho: '/admin/suporte', icone: MessageSquare, perfis: ['Admin'] },
         ]
     },

@@ -86,7 +86,7 @@ const ContasReceber = () => {
     // --- 1. Buscar Contas Sintéticas ---
     let contasQuery = supabase
         .from(tabelaContasReceber)
-        .select(`*, tbl_empresas_clientes(nome)`) // RENOMEADO
+        .select(`*, clientes(nome)`)
         .eq(ownerKey, ownerId)
         .order('data_vencimento', { ascending: true });
         
@@ -101,7 +101,7 @@ const ContasReceber = () => {
     // Aplica filtro de texto (busca apenas por descrição no backend)
     if (filtroTextoDebounced) {
         const termo = `%${filtroTextoDebounced}%`;
-        // CORREÇÃO: Remove a busca por ID (UUID) e tbl_empresas_clientes.nome (relação)
+        // CORREÇÃO: Remove a busca por ID (UUID) e clientes.nome (relação)
         contasQuery = contasQuery.ilike('descricao', termo);
     }
     
@@ -117,7 +117,7 @@ const ContasReceber = () => {
             id,
             descricao,
             cliente_id,
-            tbl_empresas_clientes ( nome ),
+            clientes ( nome ),
             origem
           )
         `)
@@ -163,14 +163,13 @@ const ContasReceber = () => {
             };
         });
         
-        // FILTRAGEM DE TEXTO NO FRONTEND (para tbl_empresas_clientes.nome e id)
+        // FILTRAGEM DE TEXTO NO FRONTEND (para clientes.nome e id)
         if (filtroTextoDebounced) {
             const termo = filtroTextoDebounced.toLowerCase();
-            fetchedContas = fetchedContas.filter(c => {
-                const clienteNome = c.tbl_empresas_clientes?.nome || ''; // RENOMEADO
-                return c.id.toLowerCase().includes(termo) ||
-                       clienteNome.toLowerCase().includes(termo);
-            });
+            fetchedContas = fetchedContas.filter(c => 
+                c.id.toLowerCase().includes(termo) ||
+                c.clientes?.nome?.toLowerCase().includes(termo)
+            );
         }
         
         setContas(fetchedContas);
@@ -256,7 +255,7 @@ const ContasReceber = () => {
         data_vencimento: conta.data_vencimento,
         status: conta.status,
         tipo_receita: conta.tipo_receita,
-        tbl_empresas_clientes: conta.tbl_empresas_clientes, // RENOMEADO
+        clientes: conta.clientes,
         created_at: conta.created_at,
         updated_at: conta.updated_at,
     };
@@ -378,7 +377,7 @@ const ContasReceber = () => {
         filteredByText = filteredByText.filter(p => {
             const contaId = p.contas_receber?.id || '';
             const descricao = p.contas_receber?.descricao || '';
-            const clienteNome = p.contas_receber?.tbl_empresas_clientes?.nome || ''; // RENOMEADO
+            const clienteNome = p.contas_receber?.clientes?.nome || '';
             
             return p.id.toLowerCase().includes(termo) ||
                    contaId.toLowerCase().includes(termo) ||

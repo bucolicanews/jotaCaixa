@@ -11,6 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import { AnyProfile } from '@/types/usuario';
 import { Badge } from '@/components/ui/badge'; // Adicionado import do Badge
 
 interface Ticket {
@@ -31,7 +32,7 @@ interface Mensagem {
   conteudo: string;
   anexo_url: string | null;
   criado_em: string;
-  remetente_perfil: { nome: string } | null; // CORRIGIDO: Tipagem simplificada
+  remetente_perfil: AnyProfile | null;
 }
 
 interface TicketDetalheProps {
@@ -59,26 +60,11 @@ const TicketDetalhe: React.FC<TicketDetalheProps> = ({ ticket, onClose, onUpdate
   const fetchMensagens = useCallback(async () => {
     setLoadingMensagens(true);
     
-    // CORREÇÃO: A relação deve ser feita com a tabela de perfis que contém o nome.
-    // Como o remetente pode ser Admin, Cliente ou Usuário, vamos tentar buscar o nome
-    // diretamente da tabela de perfis que o remetente_id referencia.
-    // Se a FK for para auth.users, o PostgREST não consegue inferir o nome.
-    // Vamos remover a relação implícita e buscar o nome do perfil manualmente no frontend
-    // ou confiar que a FK para auth.users é suficiente para o PostgREST.
-    // Para evitar o erro de PostgREST, vamos tentar referenciar a tabela de perfis mais genérica (tbl_clientes ou tbl_admins)
-    // Mas como o remetente pode ser qualquer um, vamos usar a relação implícita com auth.users e tratar o nome no frontend.
-    
-    // Se a FK foi adicionada para auth.users, a relação implícita não funcionará.
-    // Vamos buscar apenas os campos e depois buscar o nome do remetente.
-    
     const { data, error } = await supabase
       .from('mensagens_ticket')
       .select(`
-        id,
-        remetente_id,
-        conteudo,
-        anexo_url,
-        criado_em
+        *,
+        remetente_perfil:remetente_id ( nome, email, avatar_url )
       `)
       .eq('ticket_id', ticket.id)
       .order('criado_em', { ascending: true });
@@ -87,29 +73,10 @@ const TicketDetalhe: React.FC<TicketDetalheProps> = ({ ticket, onClose, onUpdate
       showError('Erro ao carregar mensagens: ' + error.message);
       setMensagens([]);
     } else {
-      // Mapeamento manual do nome do remetente (simplificado)
-      const mensagensComNome = await Promise.all((data as any[]).map(async (msg) => {
-          let nome = 'N/A';
-          if (msg.remetente_id === ticket.empresa_id) {
-              nome = 'Admin'; // Se o remetente for o destinatário (Admin)
-          } else if (msg.remetente_id === ticket.proprietario_id) {
-              nome = ticket.proprietario_perfil?.nome || 'Cliente';
-          } else {
-              // Tenta buscar o nome do usuário/cliente
-              const { data: userData } = await supabase.from('tbl_usuarios').select('nome').eq('id', msg.remetente_id).single();
-              nome = userData?.nome || 'Usuário';
-          }
-          
-          return {
-              ...msg,
-              remetente_perfil: { nome: nome }
-          } as Mensagem;
-      }));
-      
-      setMensagens(mensagensComNome);
+      setMensagens(data as Mensagem[]);
     }
     setLoadingMensagens(false);
-  }, [ticket.id, ticket.empresa_id, ticket.proprietario_id, ticket.proprietario_perfil?.nome]);
+  }, [ticket.id]);
 
   useEffect(() => {
     fetchMensagens();
@@ -128,154 +95,12 @@ const TicketDetalhe: React.FC<TicketDetalheProps> = ({ ticket, onClose, onUpdate
     setAnexoFile(e.target.files?.[0] || null);
   };
 
-  // CORREÇÃO: Adicionando ticketId como argumento
-  const uploadAnexo = async (file: File, ticketId: string): Promise<string> => {
-    const fileExt = file.name.split('.<dyad-problem-report summary="2 problems">
-<problem file="src/components/suporte/TicketDetalhe.tsx" line="14" column="1" code="6133">'AnyProfile' is declared but its value is never read.</problem>
-<problem file="src/components/suporte/TicketDetalhe.tsx" line="159" column="49" code="2554">Expected 1 arguments, but got 2.</problem>
-</dyad-problem-report>Mil desculpas por ter deixado a correção incompleta no bloco anterior! Vou corrigir os dois erros de compilação no `src/components/suporte/TicketDetalhe.tsx` de forma concisa.
-
-1.  Removendo a importação não utilizada de `AnyProfile`.
-2.  Corrigindo a assinatura da função `uploadAnexo` para aceitar o `ticketId` e completando sua implementação.
-
-<dyad-write path="src/components/suporte/TicketDetalhe.tsx" description="Removendo importação não utilizada e corrigindo a assinatura e implementação da função uploadAnexo.">
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Loader2, Send, MessageSquare, AlertTriangle, User, Download, X, Pause, CheckCircle2, Undo2 } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
-import { showError, showSuccess } from '@/utils/toast';
-import { useSessao } from '@/hooks/use-sessao';
-import { format, parseISO } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
-import { Textarea } from '@/components/ui/textarea';
-import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { cn } from '@/lib/utils';
-import { Badge } from '@/components/ui/badge'; // Adicionado import do Badge
-
-interface Ticket {
-  id: string;
-  titulo: string;
-  status: 'aberto' | 'em_progresso' | 'pausado' | 'fechado';
-  prioridade: 'baixa' | 'media' | 'alta';
-  criado_em: string;
-  atualizado_em: string;
-  proprietario_id: string;
-  empresa_id: string;
-  proprietario_perfil: { nome: string } | null;
-}
-
-interface Mensagem {
-  id: string;
-  remetente_id: string;
-  conteudo: string;
-  anexo_url: string | null;
-  criado_em: string;
-  remetente_perfil: { nome: string } | null; // CORRIGIDO: Tipagem simplificada
-}
-
-interface TicketDetalheProps {
-  ticket: Ticket;
-  onClose: () => void;
-  onUpdate: () => void;
-  isAdminView: boolean;
-}
-
-const TicketDetalhe: React.FC<TicketDetalheProps> = ({ ticket, onClose, onUpdate, isAdminView }) => {
-  const { usuario } = useSessao();
-  const [mensagens, setMensagens] = useState<Mensagem[]>([]);
-  const [loadingMensagens, setLoadingMensagens] = useState(true);
-  const [loadingAcao, setLoadingAcao] = useState(false);
-  const [novaMensagem, setNovaMensagem] = useState('');
-  const [anexoFile, setAnexoFile] = useState<File | null>(null);
-  const [currentStatus, setCurrentStatus] = useState(ticket.status);
-  const [currentPrioridade, setCurrentPrioridade] = useState(ticket.prioridade);
-  const scrollRef = useRef<HTMLDivElement>(null);
-
-  const remetenteId = usuario?.id;
-  const isTicketOwner = remetenteId === ticket.proprietario_id;
-  const canManage = isAdminView || isTicketOwner;
-
-  const fetchMensagens = useCallback(async () => {
-    setLoadingMensagens(true);
-    
-    // CORREÇÃO: A relação deve ser feita com a tabela de perfis que contém o nome.
-    // Como o remetente pode ser Admin, Cliente ou Usuário, vamos tentar buscar o nome
-    // diretamente da tabela de perfis que o remetente_id referencia.
-    // Se a FK for para auth.users, o PostgREST não consegue inferir o nome.
-    // Vamos remover a relação implícita e buscar o nome do perfil manualmente no frontend
-    // ou confiar que a FK para auth.users é suficiente para o PostgREST.
-    // Para evitar o erro de PostgREST, vamos tentar referenciar a tabela de perfis mais genérica (tbl_clientes ou tbl_admins)
-    // Mas como o remetente pode ser qualquer um, vamos usar a relação implícita com auth.users e tratar o nome no frontend.
-    
-    // Se a FK foi adicionada para auth.users, a relação implícita não funcionará.
-    // Vamos buscar apenas os campos e depois buscar o nome do remetente.
-    
-    const { data, error } = await supabase
-      .from('mensagens_ticket')
-      .select(`
-        id,
-        remetente_id,
-        conteudo,
-        anexo_url,
-        criado_em
-      `)
-      .eq('ticket_id', ticket.id)
-      .order('criado_em', { ascending: true });
-
-    if (error) {
-      showError('Erro ao carregar mensagens: ' + error.message);
-      setMensagens([]);
-    } else {
-      // Mapeamento manual do nome do remetente (simplificado)
-      const mensagensComNome = await Promise.all((data as any[]).map(async (msg) => {
-          let nome = 'N/A';
-          if (msg.remetente_id === ticket.empresa_id) {
-              nome = 'Admin'; // Se o remetente for o destinatário (Admin)
-          } else if (msg.remetente_id === ticket.proprietario_id) {
-              nome = ticket.proprietario_perfil?.nome || 'Cliente';
-          } else {
-              // Tenta buscar o nome do usuário/cliente
-              const { data: userData } = await supabase.from('tbl_usuarios').select('nome').eq('id', msg.remetente_id).single();
-              nome = userData?.nome || 'Usuário';
-          }
-          
-          return {
-              ...msg,
-              remetente_perfil: { nome: nome }
-          } as Mensagem;
-      }));
-      
-      setMensagens(mensagensComNome);
-    }
-    setLoadingMensagens(false);
-  }, [ticket.id, ticket.empresa_id, ticket.proprietario_id, ticket.proprietario_perfil?.nome]);
-
-  useEffect(() => {
-    fetchMensagens();
-    setCurrentStatus(ticket.status);
-    setCurrentPrioridade(ticket.prioridade);
-  }, [ticket, fetchMensagens]);
-  
-  // Scroll para o final das mensagens
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [mensagens]);
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setAnexoFile(e.target.files?.[0] || null);
-  };
-
-  // CORREÇÃO: Adicionando ticketId como argumento e completando a implementação
-  const uploadAnexo = async (file: File, ticketId: string): Promise<string> => {
+  const uploadAnexo = async (file: File): Promise<string> => {
     const fileExt = file.name.split('.').pop();
-    const filePath = `tickets/${ticketId}/${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
+    const filePath = `tickets/${ticket.id}/${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
 
     const { error } = await supabase.storage
-      .from('documentos-admissao') // Reutilizando o bucket de documentos
+      .from('documentos-admissao')
       .upload(filePath, file, {
         cacheControl: '3600',
         upsert: false,
@@ -297,7 +122,7 @@ const TicketDetalhe: React.FC<TicketDetalheProps> = ({ ticket, onClose, onUpdate
     try {
       let anexoUrl: string | null = null;
       if (anexoFile) {
-        anexoUrl = await uploadAnexo(anexoFile, ticket.id);
+        anexoUrl = await uploadAnexo(anexoFile);
       }
 
       const mensagemPayload = {
@@ -470,7 +295,7 @@ const TicketDetalhe: React.FC<TicketDetalheProps> = ({ ticket, onClose, onUpdate
           ) : (
             mensagens.map((msg) => {
               const isMyMessage = msg.remetente_id === remetenteId;
-              const remetenteNome = msg.remetente_perfil?.nome || 'N/A';
+              const remetenteNome = msg.remetente_perfil?.nome || 'Admin';
               
               return (
                 <div 

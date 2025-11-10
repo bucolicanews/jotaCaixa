@@ -6,7 +6,7 @@ import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 import { useSessao } from './use-sessao';
 import { useDebounce } from './use-debounce';
 
-type ContratoComCliente = ContratoGerado & { tbl_empresas_clientes: { nome: string } | null }; // RENOMEADO
+type ContratoComCliente = ContratoGerado & { clientes: { nome: string } | null };
 export type ContratoStatus = ContratoGerado['status'] | 'todos'; // EXPORTADO
 export type Ordenacao = 'criado_em_desc' | 'vencimento_asc' | 'cliente_asc'; // EXPORTADO
 
@@ -77,7 +77,7 @@ export function useContratos(): ContratosHook {
         
         let query = supabase
             .from('contratos_gerados')
-            .select('*, tbl_empresas_clientes(nome)'); // RENOMEADO
+            .select('*, clientes(nome)');
             
         // Se for Cliente/Usuário, filtra apenas pelos seus contratos
         if (!isAdmin && empresaId) {
@@ -117,7 +117,7 @@ export function useContratos(): ContratosHook {
             const termoBusca = filtroTextoDebounced.toLowerCase();
             if (termoBusca) {
                 fetchedContratos = fetchedContratos.filter(c => {
-                    const clienteNome = c.tbl_empresas_clientes?.nome || ''; // RENOMEADO
+                    const clienteNome = c.clientes?.nome || '';
                     return c.conteudo_renderizado?.toLowerCase().includes(termoBusca) ||
                            clienteNome.toLowerCase().includes(termoBusca) ||
                            c.id.toLowerCase().includes(termoBusca);
@@ -126,7 +126,7 @@ export function useContratos(): ContratosHook {
             
             // Ordenação por cliente (se selecionado)
             if (ordenacao === 'cliente_asc') {
-                fetchedContratos.sort((a, b) => (a.tbl_empresas_clientes?.nome || '').localeCompare(b.tbl_empresas_clientes?.nome || '')); // RENOMEADO
+                fetchedContratos.sort((a, b) => (a.clientes?.nome || '').localeCompare(b.clientes?.nome || ''));
             }
             
             setContratos(fetchedContratos);

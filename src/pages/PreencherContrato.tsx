@@ -49,7 +49,7 @@ interface EmpresaContrato {
 // NOVO TIPO: Cliente CR com todos os campos de tag
 interface ClienteCRCompleto {
     id: string;
-    proprietario_id?: string | null; // Adicionado para compatibilidade com a tabela 'tbl_empresas_clientes'
+    proprietario_id?: string | null; // Adicionado para compatibilidade com a tabela 'clientes'
     nome: string;
     razao_social?: string | null;
     nome_fantasia?: string | null;
@@ -145,16 +145,16 @@ const PreencherContrato: React.FC = () => {
     
     // 2. Buscar Clientes (Contratados) - AGORA BUSCA APENAS NA TBL_CLIENTES (CLIENTES DO SISTEMA)
     const { data: clientesSistemaData, error: errorSistema } = await supabase
-        .from('tbl_empresas_clientes') // RENOMEADO
-        .select('id, proprietario_id, nome, email, cpf, rg, nome_mae, nome_pai, telefone, cep, endereco, numero, complemento, bairro, cidade, estado, razao_social, nome_fantasia, documento') // Selecionando todos os campos de tag
-        .eq('proprietario_id', targetEmpresaId) // Filtra pelos clientes CR do proprietário
+        .from('tbl_clientes')
+        .select('id, nome, email, cpf, rg, nome_mae, nome_pai, telefone, cep, endereco, numero, complemento, bairro, cidade, estado, razao_social, nome_fantasia, documento') // Selecionando todos os campos de tag
+        .eq('aprovado', true)
         .order('nome');
         
     if (errorSistema) {
         showError('Erro ao carregar clientes do sistema: ' + errorSistema.message);
         setClientesCR([]);
     } else {
-        // Mapeia os dados da tbl_empresas_clientes para o formato ClienteCRCompleto
+        // Mapeia os dados da tbl_clientes para o formato ClienteCRCompleto
         const mappedClients = (clientesSistemaData as any[]).map((c: any) => ({
             ...c,
             // Garantindo que os campos de tag existam
@@ -528,12 +528,11 @@ const PreencherContrato: React.FC = () => {
     setIsSubmitting(true);
     
     try {
-        // 0. GARANTIR QUE O CLIENTE EXISTA NA TABELA 'tbl_empresas_clientes' (para FK)
+        // 0. GARANTIR QUE O CLIENTE EXISTA NA TABELA 'clientes' (para FK)
         const clienteSelecionado = clientesCR.find(c => c.id === clienteSelecionadoId);
         if (!clienteSelecionado) throw new Error('Cliente selecionado não encontrado.');
         
-        // Como estamos buscando clientes da tbl_clientes, precisamos garantir que eles existam na tabela 'tbl_empresas_clientes' (CR)
-        // O upsert aqui é crucial para garantir que o cliente exista na tabela de clientes CR do proprietário do contrato.
+        // Como estamos buscando clientes da tbl_clientes, precisamos garantir que eles existam na tabela 'clientes' (CR)
         const clienteDataParaUpsert: Partial<ClienteCRCompleto> = {
             id: clienteSelecionado.id,
             proprietario_id: proprietarioContratoId, // Usando o proprietário do contrato
@@ -554,7 +553,7 @@ const PreencherContrato: React.FC = () => {
         };
         
         const { error: upsertError } = await supabase
-            .from('tbl_empresas_clientes') // RENOMEADO
+            .from('clientes')
             .upsert(clienteDataParaUpsert, { onConflict: 'id' });
             
         if (upsertError) {
@@ -571,7 +570,7 @@ const PreencherContrato: React.FC = () => {
             
         const contratoPayload = {
             modelo_id: modelo.id,
-            cliente_id: clienteSelecionadoId, // Referencia tbl_empresas_clientes(id)
+            cliente_id: clienteSelecionadoId, // Referencia tbl_clientes(id)
             proprietario_id: proprietarioContratoId,
             status: status,
             valor_total: valorTotal,
