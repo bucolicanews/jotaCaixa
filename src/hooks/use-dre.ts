@@ -218,9 +218,14 @@ export function useDRE(filtroPeriodo: DateRange | undefined): DREData {
   
   // 8. Calcular totais
   const getSomaPorTipo = (tipo: ContaDRE['tipo_dre']) => {
-      // Soma apenas o nível 1 (ex: 3.x.x)
+      // Soma todas as contas sintéticas que pertencem à categoria principal (3, 4 ou 5)
+      // O filtro 'Analitica === Não' garante que estamos somando apenas os totais consolidados.
+      const prefix = tipo === 'Receita' ? '3' : (tipo === 'Custo' ? '4' : (tipo === 'Despesa' ? '5' : ''));
+      
+      if (!prefix) return 0;
+      
       return contasDRE
-          .filter(c => c.tipo_dre === tipo && c.Analitica === 'Não' && c.Conta.split('.').length === 1)
+          .filter(c => c.Analitica === 'Não' && c.Conta.startsWith(prefix))
           .reduce((sum, c) => sum + c.saldo_final, 0);
   };
   
