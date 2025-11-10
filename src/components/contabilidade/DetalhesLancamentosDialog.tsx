@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, ArrowUpCircle, ArrowDownCircle, Printer, Wallet, Landmark } from 'lucide-react';
+import { Loader2, ArrowUpCircle, ArrowDownCircle, Printer, Wallet, Landmark, Trash2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { showError } from '@/utils/toast';
+import { showError, showSuccess } from '@/utils/toast';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Badge } from '../ui/badge';
@@ -12,6 +12,7 @@ import { Button } from '../ui/button';
 import { usePrint } from '@/hooks/use-print';
 import { SaldoContaDetalhada } from '@/types/saldo-conta';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../ui/dropdown-menu';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '../ui/alert-dialog';
 
 interface Lancamento {
   id: string;
@@ -33,6 +34,7 @@ const formatDate = (dateString: string) => format(parseISO(dateString), 'dd/MM/y
 const DetalhesLancamentosDialog: React.FC<DetalhesLancamentosDialogProps> = ({ conta, open, onOpenChange }) => {
   const [lancamentos, setLancamentos] = useState<Lancamento[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isDeleting, setIsDeleting] = useState(false);
   const { printContent } = usePrint();
 
   const fetchLancamentos = useCallback(async () => {
@@ -41,7 +43,7 @@ const DetalhesLancamentosDialog: React.FC<DetalhesLancamentosDialogProps> = ({ c
     
     const { data, error } = await supabase
       .from('lancamentos')
-      .select('*')
+      .select('id, data_movimentacao, descricao, valor, tipo')
       .eq('conta_bancaria_id', conta.id)
       .order('data_movimentacao', { ascending: false });
 
@@ -59,6 +61,25 @@ const DetalhesLancamentosDialog: React.FC<DetalhesLancamentosDialogProps> = ({ c
       fetchLancamentos();
     }
   }, [conta, open, fetchLancamentos]);
+
+  const handleDeleteLancamento = async (lancamentoId: string) => {
+    setIsDeleting(true);
+    try {
+      const { error } = await supabase
+        .from('lancamentos')
+        .delete()
+        .eq('id', lancamentoId);
+
+      if (error) throw error;
+
+      showSuccess('Lançamento excluído com sucesso!');
+      fetchLancamentos(); // Recarrega a lista para atualizar o saldo
+    } catch (error: any) {
+      showError('Falha ao excluir lançamento: ' + error.message);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   const saldoInicial = conta?.saldo_inicial || 0;
   const totalEntradas = lancamentos.filter(l => l.tipo === 'Entrada').reduce((sum, l) => sum + l.valor, 0);
@@ -147,15 +168,16 @@ const DetalhesLancamentosDialog: React.FC<DetalhesLancamentosDialogProps> = ({ c
                 <TableHeader className="sticky top-0 bg-background">
                   <TableRow>
                     <TableHead className="w-[20%]">Data</TableHead>
-                    <TableHead className="w-[50%]">Descrição</TableHead>
+                    <TableHead className="w-[40%]">Descrição</TableHead>
                     <TableHead className="w-[15%]">Tipo</TableHead>
                     <TableHead className="w-[15%] text-right">Valor</TableHead>
+                    <TableHead className="w-[10%] text-right">Ações</TableHead> {/* NOVA COLUNA */}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {lancamentos.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
                         Nenhum lançamento encontrado para esta conta.
                       </TableCell>
                     </TableRow>
@@ -172,6 +194,29 @@ const DetalhesLancamentosDialog: React.FC<DetalhesLancamentosDialogProps> = ({ c
                         </TableCell>
                         <TableCell className={cn("text-right font-semibold", l.tipo === 'Entrada' ? 'text-green-600' : 'text-red-600')}>
                           {formatCurrency(l.valor)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                            <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                    <Button variant="ghost" size="icon" disabled={isDeleting} title="Excluir Lançamento">
+                                        <Trash2 className="w-4 h-4 text-red-500" />
+                                    </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                        <AlertDialogTitle>Tem certeza que deseja excluir?</AlertDialogTitle>
+                                        <AlertDialogDescription>
+                                            Esta ação irá remover permanentemente este lançamento do extrato e recalcular o saldo da conta.
+                                        </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                        <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
+                                        <AlertDialogAction onClick={() => handleDeleteLancamento(l.id)} disabled={isDeleting}>
+                                            {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Excluir'}
+                                        </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                </AlertDialogContent>
+                            </AlertDialog>
                         </TableCell>
                       </TableRow>
                     ))
