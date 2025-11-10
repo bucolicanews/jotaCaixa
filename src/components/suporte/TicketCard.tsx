@@ -20,6 +20,8 @@ interface Ticket {
   // Relações
   proprietario_perfil: { nome: string } | null;
   mensagens_ticket_count: number;
+  // Adicionando a propriedade que estava faltando
+  ultima_mensagem_remetente_id: string | null; 
 }
 
 interface TicketCardProps {

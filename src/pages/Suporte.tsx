@@ -24,7 +24,7 @@ interface Ticket {
   empresa_id: string;
   proprietario_perfil: { nome: string } | null;
   mensagens_ticket_count: number;
-  // Propriedade que estava faltando no tipo local do map
+  // Propriedade que estava causando o conflito de tipos
   ultima_mensagem_remetente_id: string | null; 
 }
 

@@ -22,7 +22,7 @@ interface Ticket {
   empresa_id: string;
   proprietario_perfil: { nome: string } | null;
   mensagens_ticket_count: number;
-  // Propriedades que estavam faltando no tipo local do map
+  // Propriedades que estavam causando o conflito de tipos
   ultima_mensagem_remetente_id: string | null;
   ultima_mensagem?: { remetente_id: string, criado_em: string, ticket_id: string }[] | null; 
 }
@@ -33,7 +33,7 @@ interface EmpresaFiltro {
 }
 
 const AdminSuporte: React.FC = () => {
-  const { role, carregando: carregandoSessao, usuario } = useSessao();
+  const { role, carregando: carregandoSessao } = useSessao();
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [carregandoTickets, setCarregandoTickets] = useState(true);
   const [ticketSelecionado, setTicketSelecionado] = useState<Ticket | null>(null);
