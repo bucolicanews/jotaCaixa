@@ -287,6 +287,14 @@ const TicketDetalhe: React.FC<TicketDetalheProps> = ({ ticket, onClose, onUpdate
     }
   };
   
+  // CORREÇÃO CRUCIAL: Ajustar o nome do responsável para o Admin
+  let displayResponsavelNome = responsavelNome;
+  if (proximoRespondenteId === adminId && remetenteId === adminId) {
+      displayResponsavelNome = 'Você';
+  } else if (proximoRespondenteId === adminId) {
+      displayResponsavelNome = 'Administrador';
+  }
+
 
   return (
     <Card className="h-full flex flex-col">
@@ -417,7 +425,7 @@ const TicketDetalhe: React.FC<TicketDetalheProps> = ({ ticket, onClose, onUpdate
                             <span>Sua vez de responder.</span>
                         ) : (
                             // BLOQUEADO / AGUARDANDO OUTRA PARTE
-                            <span>Aguardando resposta do(a) <span className="font-bold">{responsavelNome}</span>. Sua resposta está bloqueada.</span>
+                            <span>Aguardando resposta do(a) <span className="font-bold">{displayResponsavelNome}</span>. Sua resposta está bloqueada.</span>
                         )}
                     </div>
                     
