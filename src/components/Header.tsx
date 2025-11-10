@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '@/contexts/ThemeProvider';
 import { Button } from '@/components/ui/button';
-import { Sun, Moon, LogOut, Menu, User, Settings, Key, CalendarCheck, Package, DollarSign, MessageSquare } from 'lucide-react';
+import { Sun, Moon, LogOut, Menu, User, Settings, Key, CalendarCheck, Package, DollarSign } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
@@ -14,7 +14,6 @@ import { UsuarioProfile, ClienteProfile } from '@/types/usuario';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { BASE_URL } from '@/config/app-config'; // Importando BASE_URL
-import { useTicketStatus } from '@/hooks/use-ticket-status'; // NOVO HOOK
 
 const ThemeToggle = () => {
   const { theme, setTheme } = useTheme();
@@ -41,10 +40,6 @@ const Header: React.FC = () => {
   const { perfil, role } = useSessao();
   const [tituloApp, setTituloApp] = useState('Fluxo de Caixa');
   const [planoDetalhes, setPlanoDetalhes] = useState<{ nome: string, preco: number } | null>(null);
-  
-  // NOVO: Hook de status de ticket
-  const { mensagensNaoLidas } = useTicketStatus();
-  const isAdmin = role === 'Admin'; // FIX TS2304
 
   useEffect(() => {
     const updateTitle = async () => {
@@ -143,19 +138,6 @@ const Header: React.FC = () => {
       </div>
       
       <div className="flex items-center space-x-2">
-        
-        {/* Indicador de Mensagens Não Lidas (Ao lado do avatar) */}
-        {mensagensNaoLidas > 0 && (
-            <Link to={isAdmin ? "/admin/suporte" : "/suporte"} title={`${mensagensNaoLidas} mensagens não lidas`}>
-                <Button variant="ghost" size="icon" className="relative">
-                    <MessageSquare className="w-5 h-5 text-red-500 animate-pulse" />
-                    <span className="absolute top-0 right-0 block h-3 w-3 rounded-full ring-2 ring-background bg-red-500 text-xs text-white flex items-center justify-center">
-                        {mensagensNaoLidas > 9 ? '9+' : mensagensNaoLidas}
-                    </span>
-                </Button>
-            </Link>
-        )}
-        
         <ThemeToggle />
         
         {perfil && (

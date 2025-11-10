@@ -462,119 +462,114 @@ const GerarDocumentoSocietario: React.FC = () => {
           >
               {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
               Salvar Documento Finalizado
-<dyad-problem-report summary="6 problems">
-<problem file="src/hooks/use-ticket-status.ts" line="97" column="41" code="1005">',' expected.</problem>
-<problem file="src/hooks/use-ticket-status.ts" line="21" column="10" code="6133">'mensagensNaoLidas' is declared but its value is never read.</problem>
-<problem file="src/hooks/use-ticket-status.ts" line="97" column="28" code="2353">Object literal may only specify known properties, and 'mensagensNao' does not exist in type 'TicketStatus'.</problem>
-<problem file="src/hooks/use-ticket-status.ts" line="97" column="28" code="18004">No value exists in scope for the shorthand property 'mensagensNao'. Either declare one or provide an initializer.</problem>
-<problem file="src/hooks/use-ticket-status.ts" line="97" column="41" code="18004">No value exists in scope for the shorthand property 'Lidas'. Either declare one or provide an initializer.</problem>
-<problem file="src/components/formularios/FormContasReceber.tsx" line="232" column="11" code="6133">'ownerKey' is declared but its value is never read.</problem>
-</dyad-problem-report>Olá! Obrigado por me alertar sobre esses erros. Parece que houve um erro de digitação no nome da variável no `useTicketStatus.ts` e um erro de variável não utilizada no `FormContasReceber.tsx`.
-
-Vou corrigir os 6 erros de forma concisa:
-
-1.  **`src/hooks/use-ticket-status.ts` (TS1005, TS2353, TS18004 x 2):** O nome da variável `mensagensNaoLidas` foi digitado incorretamente como `mensagensNao Lidas` no objeto de retorno. Vou corrigir o nome da variável no retorno.
-2.  **`src/hooks/use-ticket-status.ts` (TS6133):** A variável `mensagensNaoLidas` está sendo usada no retorno, então o erro `TS6133` é um falso positivo que será resolvido pela correção do erro 1.
-3.  **`src/components/formularios/FormContasReceber.tsx` (TS6133):** A variável `ownerKey` está sendo declarada dentro do `onSubmit` mas não está sendo usada no escopo onde foi declarada. Vou garantir que ela seja usada corretamente.
-
-Aqui estão as correções:
-
-<dyad-write path="src/hooks/use-ticket-status.ts" description="Fixing variable name typo in return statement (TS1005, TS2353, TS18004).">
-import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import { useSessao } from './use-sessao';
-
-interface TicketStatus {
-  ticketsAbertos: number;
-  mensagensNaoLidas: number;
-  carregando: boolean;
-  refetch: () => void;
-}
-
-/**
- * Hook para buscar o status dos tickets de suporte para o usuário logado.
- * - Admin: Conta todos os tickets com status 'aberto' ou 'em_progresso'.
- * - Cliente: Conta tickets com status 'aberto' ou 'em_progresso' onde ele é o proprietário.
- * - Mensagens Não Lidas: Conta mensagens onde o destinatário é o usuário logado e 'lido' é false.
- */
-export function useTicketStatus(): TicketStatus {
-  const { usuario, role, carregando: carregandoSessao } = useSessao();
-  const [ticketsAbertos, setTicketsAbertos] = useState(0);
-  const [mensagensNaoLidas, setMensagensNaoLidas] = useState(0);
-  const [carregando, setCarregando] = useState(true);
-  const [refreshKey, setRefreshKey] = useState(0);
-
-  const refetch = useCallback(() => {
-    setRefreshKey(prev => prev + 1);
-  }, []);
-
-  const fetchStatus = useCallback(async () => {
-    if (!usuario?.id || carregandoSessao) {
-      setCarregando(false);
-      return;
-    }
-
-    setCarregando(true);
-    const userId = usuario.id;
-    
-    try {
-      // --- 1. Contagem de Tickets Abertos/Em Progresso ---
-      let ticketsQuery = supabase
-        .from('tickets')
-        .select('id', { count: 'exact', head: true })
-        .in('status', ['aberto', 'em_progresso', 'pausado']);
-
-      if (role === 'Cliente') {
-        // Cliente só vê os tickets que ele criou
-        ticketsQuery = ticketsQuery.eq('proprietario_id', userId);
-      } else if (role === 'Admin') {
-        // Admin vê todos os tickets onde ele é o destinatário (empresa_id)
-        ticketsQuery = ticketsQuery.eq('empresa_id', userId);
-      }
+          </Button>
+      </div>
+      {/* END DUPLICATE BUTTONS */}
       
-      const { count: openCount, error: openError } = await ticketsQuery;
-      if (openError) throw openError;
-      setTicketsAbertos(openCount || 0);
-
-      // --- 2. Contagem de Mensagens Não Lidas ---
-      const { count: unreadCount, error: unreadError } = await supabase
-        .from('mensagens_ticket')
-        .select('id', { count: 'exact', head: true })
-        .eq('destinatario_id', userId)
-        .eq('lido', false);
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-      if (unreadError) throw unreadError;
-      setMensagensNaoLidas(unreadCount || 0);
+        <Card className="lg:col-span-1 h-fit">
+            <CardHeader><CardTitle className="text-xl">Dados do Documento</CardTitle></CardHeader>
+            <CardContent className="space-y-6">
+                
+                {isAdmin && (
+                    <div className="space-y-2">
+                        <Label htmlFor="empresa-contrato">Empresa Proprietária do Documento</Label>
+                        <Select 
+                            value={proprietarioContratoId || ''} 
+                            onValueChange={setProprietarioContratoId}
+                        >
+                            <SelectTrigger id="empresa-contrato">
+                                <Building2 className="w-4 h-4 mr-2 text-muted-foreground" />
+                                <SelectValue placeholder="Selecione a Empresa" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {empresasContrato.map((e: EmpresaContrato) => (
+                                    <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                )}
+                
+                <div className="space-y-2">
+                    <Label htmlFor="titulo-documento">Título do Documento Gerado</Label>
+                    <Input 
+                        id="titulo-documento"
+                        value={tituloDocumento}
+                        onChange={(e) => setTituloDocumento(e.target.value)}
+                        placeholder={modelo.titulo}
+                    />
+                </div>
+                
+                <div className="space-y-2">
+                    <Label htmlFor="cliente">Cliente (Contratado)</Label>
+                    <Select value={clienteSelecionadoId} onValueChange={setClienteSelecionadoId} disabled={!proprietarioContratoId}>
+                        <SelectTrigger id="cliente">
+                            <SelectValue placeholder="Selecione o Cliente" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {clientesCR.map(c => (
+                                <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+                
+                <div className="space-y-4 pt-4 border-t">
+                    <h3 className="font-semibold text-lg">Tags Manuais</h3>
+                    <p className="text-sm text-muted-foreground">Preencha as tags que não foram preenchidas automaticamente.</p>
+                    
+                    {tagsParaPreenchimentoManual.length === 0 ? (
+                        <p className="text-muted-foreground text-sm">Nenhuma tag manual pendente.</p>
+                    ) : (
+                        tagsParaPreenchimentoManual.map(tagKey => (
+                            <div key={tagKey} className="space-y-1">
+                                <Label htmlFor={tagKey} className="font-semibold">{tagKey}</Label>
+                                <Input 
+                                    id={tagKey}
+                                    value={valoresTags[tagKey] || ''}
+                                    onChange={(e) => handleTagChange(tagKey, e.target.value)}
+                                    placeholder={`Insira o valor para ${tagKey}`}
+                                />
+                            </div>
+                        ))
+                    )}
+                </div>
+            </CardContent>
+        </Card>
+        
+        <Card className="lg:col-span-2">
+            <CardHeader><CardTitle className="text-xl">Blocos Reutilizáveis</CardTitle></CardHeader>
+            <CardContent>
+                <ScrollArea className="h-[400px] pr-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {blocos.length === 0 ? (
+                            <p className="text-muted-foreground col-span-2">Nenhum bloco reutilizável encontrado. Crie em <Link to="/documentos-societarios/blocos" className="text-primary underline">Gerenciar Blocos</Link>.</p>
+                        ) : (
+                            blocos.map(bloco => (
+                                <BlocoSocietarioCard key={bloco.id} bloco={bloco} />
+                            ))
+                        )}
+                    </div>
+                </ScrollArea>
+                <p className="text-sm text-muted-foreground mt-4">
+                    Para usar um bloco, copie o conteúdo e cole no template, ou use a tag {'{{BLOCO_ID_DO_BLOCO}}'} no template.
+                </p>
+            </CardContent>
+        </Card>
+        
+      </div>
+      
+      <ContratoPreviewDialog
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+        conteudoHtml={conteudoPreview}
+        titulo={previewTitle}
+        isHtml={true} 
+      />
+    </LayoutPrincipal>
+  );
+};
 
-    } catch (error) {
-      console.error('Erro ao buscar status do ticket:', error);
-      setTicketsAbertos(0);
-      setMensagensNaoLidas(0);
-    } finally {
-      setCarregando(false);
-    }
-  }, [usuario, role, carregandoSessao, refreshKey]);
-
-  useEffect(() => {
-    fetchStatus();
-    
-    // Opcional: Adicionar listener de tempo real para novas mensagens
-    const channel = supabase.channel('ticket_status_changes')
-        .on('postgres_changes', { 
-            event: 'INSERT', 
-            schema: 'public', 
-            table: 'mensagens_ticket',
-            filter: `destinatario_id=eq.${usuario?.id}`,
-        }, () => {
-            // Força o refetch quando uma nova mensagem chega para o usuário logado
-            refetch();
-        })
-        .subscribe();
-
-    return () => {
-        supabase.removeChannel(channel);
-    };
-  }, [fetchStatus, usuario?.id, refetch]);
-
-  return { ticketsAbertos, mensagensNaoLidas, carregando, refetch };
-}
+export default GerarDocumentoSocietario;
