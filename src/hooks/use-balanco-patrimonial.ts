@@ -51,39 +51,38 @@ const compareContas = (a: ContaBalanco, b: ContaBalanco): number => {
 
 /**
  * Consolida os saldos das contas analíticas para as contas sintéticas.
- * A lógica foi simplificada para somar o saldo de TODAS as contas descendentes,
- * garantindo que a consolidação suba corretamente, mesmo com níveis pulados.
+ * A lógica foi simplificada para somar o saldo de TODAS as contas descendentes ANALÍTICAS.
  */
 const consolidateBalances = (contas: ContaBalanco[]): ContaBalanco[] => {
-    // 1. Cria um mapa de saldos iniciais (apenas analíticas e PL/Resultado)
+    // 1. Cria um mapa de saldos base (apenas analíticas)
     const saldoAnaliticoMap: Record<string, number> = contas
-        .filter(c => c.Analitica === 'Sim' || c.tipo_principal === 'Resultado' || c.tipo_principal === 'Patrimonio Liquido')
+        .filter(c => c.Analitica === 'Sim') // Apenas contas analíticas têm o saldo base calculado
         .reduce((acc, c) => {
             acc[c.Conta] = c.saldo_final;
             return acc;
         }, {} as Record<string, number>);
 
-    // 2. Cria um mapa para armazenar os saldos consolidados (incluindo sintéticas)
+    // 2. Cria um mapa para armazenar os saldos consolidados (inicialmente com saldos base)
     const saldoConsolidadoMap: Record<string, number> = { ...saldoAnaliticoMap };
 
     // 3. Ordena as contas sintéticas do mais específico para o mais geral (ordem decrescente)
     const sinteticas = contas.filter(c => c.Analitica === 'Não').sort((a, b) => compareContas(b, a));
 
-    // 4. Consolida de baixo para cima
+    // 4. Consolida: Cada sintética soma o saldo de seus descendentes analíticos
     for (const contaSintetica of sinteticas) {
         let totalConsolidado = 0;
         
-        // Itera sobre todas as contas para encontrar as filhas (descendentes)
+        // Itera sobre TODAS as contas para encontrar as filhas ANALÍTICAS
         for (const conta of contas) {
-            // Verifica se é descendente (começa com o prefixo do pai + '.')
-            if (conta.Conta.startsWith(contaSintetica.Conta + '.') && conta.Conta !== contaSintetica.Conta) {
+            // Verifica se é descendente E se é ANALÍTICA
+            // A conta sintética deve ser um prefixo da conta analítica, seguida por um ponto.
+            if (conta.Analitica === 'Sim' && conta.Conta.startsWith(contaSintetica.Conta + '.')) {
                 
-                // Soma o saldo consolidado de TODAS as descendentes.
-                // O saldo do descendente já deve estar consolidado no mapa devido à ordenação.
-                const saldoFilho = saldoConsolidadoMap[conta.Conta];
+                // Soma o saldo da conta analítica (que está no saldoAnaliticoMap)
+                const saldoAnalitico = saldoAnaliticoMap[conta.Conta];
                 
-                if (saldoFilho !== undefined) {
-                    totalConsolidado += saldoFilho;
+                if (saldoAnalitico !== undefined) {
+                    totalConsolidado += saldoAnalitico;
                 }
             }
         }
