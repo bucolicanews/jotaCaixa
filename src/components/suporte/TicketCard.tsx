@@ -1,7 +1,7 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { MessageSquare, Clock, AlertTriangle, User, Trash2 } from 'lucide-react';
+import { MessageSquare, Clock, AlertTriangle, User, Trash2, UserCheck, UserX } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -57,6 +57,33 @@ const TicketCard: React.FC<TicketCardProps> = ({ ticket, onClick, onDelete, isAd
   
   // O ticket só pode ser deletado se estiver fechado ou se for o Admin
   const canDelete = isOwner && ticket.status === 'fechado';
+  
+  // Lógica de Responsabilidade
+  const ultimaMensagemId = ticket.ultima_mensagem_remetente_id || ticket.proprietario_id;
+  
+  const isWaitingForAdmin = ultimaMensagemId === ticket.proprietario_id;
+  const isClosed = ticket.status === 'fechado';
+  
+  let responsavelIndicator = null;
+  
+  if (!isClosed) {
+      if (isWaitingForAdmin) {
+          // Se a última mensagem foi do Cliente/Proprietário, o Admin é o responsável
+          responsavelIndicator = (
+              <span className="flex items-center text-sm font-medium text-blue-500">
+                  <UserCheck className="w-4 h-4 mr-1" /> Aguardando Admin
+              </span>
+          );
+      } else {
+          // Se a última mensagem foi do Admin, o Cliente/Proprietário é o responsável
+          responsavelIndicator = (
+              <span className="flex items-center text-sm font-medium text-yellow-500">
+                  <UserX className="w-4 h-4 mr-1" /> Aguardando Cliente
+              </span>
+          );
+      }
+  }
+
 
   return (
     <Card 
@@ -104,11 +131,16 @@ const TicketCard: React.FC<TicketCardProps> = ({ ticket, onClick, onDelete, isAd
             </span>
           </div>
           
-          {isAdminView && (
-              <p className="text-xs text-muted-foreground flex items-center pt-1 border-t">
-                  <User className="w-3 h-3 mr-1" /> Criado por: {proprietarioNome}
-              </p>
-          )}
+          <div className="flex justify-between items-center pt-1 border-t">
+              {isAdminView && (
+                  <p className="text-xs text-muted-foreground flex items-center">
+                      <User className="w-3 h-3 mr-1" /> Criado por: {proprietarioNome}
+                  </p>
+              )}
+              
+              {/* Indicador de Responsabilidade */}
+              {responsavelIndicator}
+          </div>
         </CardContent>
       </div>
     </Card>
