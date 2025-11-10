@@ -58,12 +58,17 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
   
   // NOVO FILTRO: Para Receita (3.x.x)
   const getContasReceita = () => {
-      return contasFiltradas.filter(c => c.tipo_principal === 'Resultado' && c.Conta.startsWith('3'));
+      return contasFiltradas.filter(c => c.tipo_principal === 'Patrimonio Liquido' && c.Conta.startsWith('3') && c.is_conta_resultado);
   };
   
   // NOVO FILTRO: Para Despesa (4.x.x e 5.x.x)
   const getContasDespesa = () => {
-      return contasFiltradas.filter(c => c.tipo_principal === 'Resultado' && (c.Conta.startsWith('4') || c.Conta.startsWith('5')));
+      return contasFiltradas.filter(c => c.tipo_principal === 'Resultado');
+  };
+  
+  // NOVO FILTRO: Apenas contas de PL (3.x.x) que não são Resultado
+  const getContasPL = () => {
+      return contasFiltradas.filter(c => c.tipo_principal === 'Patrimonio Liquido' && !c.is_conta_resultado);
   };
   
   const renderContas = (contasList: ContaBalanco[]) => {
@@ -126,7 +131,7 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
             .reduce((sum, c) => sum + c.saldo_final, 0);
             
         const resultadoLiquidoCalc = contasParaImpressao
-            .filter(c => c.tipo_principal === 'Resultado')
+            .filter(c => c.tipo_principal === 'Resultado' || (c.tipo_principal === 'Patrimonio Liquido' && c.is_conta_resultado))
             .reduce((sum, c) => sum + c.saldo_final, 0);
             
         printComponent = (
@@ -252,17 +257,14 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
                         <CardContent>
                             <Table>
                                 <TableHeader><TableRow><TableHead className="w-[150px]">Conta</TableHead><TableHead>Descrição</TableHead><TableHead className="text-right w-[150px]">Saldo</TableHead></TableRow></TableHeader>
-                                <TableBody>{renderContas(getContasPorTipo('Patrimonio Liquido'))}</TableBody>
-                            </Table>
-                        </CardContent>
-                    </Card>
-                    
-                    <Card>
-                        <CardHeader><CardTitle className="text-xl text-purple-600">Resultado do Período ({formatCurrency(resultadoLiquido)})</CardTitle></CardHeader>
-                        <CardContent>
-                            <Table>
-                                <TableHeader><TableRow><TableHead className="w-[150px]">Conta</TableHead><TableHead>Descrição</TableHead><TableHead className="text-right w-[150px]">Saldo</TableHead></TableRow></TableHeader>
-                                <TableBody>{renderContas(getContasPorTipo('Resultado'))}</TableBody>
+                                <TableBody>{renderContas(getContasPL())}</TableBody>
+                                {/* Linha do Resultado Líquido */}
+                                <TableRow className={cn("font-bold border-t-2", resultadoLiquido >= 0 ? "bg-green-500/30" : "bg-red-500/30")}>
+                                    <TableCell colSpan={2}>Resultado Líquido do Período</TableCell>
+                                    <TableCell className={cn("text-right", resultadoLiquido >= 0 ? "text-green-700" : "text-red-700")}>
+                                        {formatCurrency(resultadoLiquido)}
+                                    </TableCell>
+                                </TableRow>
                             </Table>
                         </CardContent>
                     </Card>
@@ -299,7 +301,14 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
                 <CardContent>
                     <Table>
                         <TableHeader><TableRow><TableHead className="w-[150px]">Conta</TableHead><TableHead>Descrição</TableHead><TableHead className="text-right w-[150px]">Saldo</TableHead></TableRow></TableHeader>
-                        <TableBody>{renderContas(getContasPorTipo('Patrimonio Liquido'))}</TableBody>
+                        <TableBody>{renderContas(getContasPL())}</TableBody>
+                        {/* Linha do Resultado Líquido */}
+                        <TableRow className={cn("font-bold border-t-2", resultadoLiquido >= 0 ? "bg-green-500/30" : "bg-red-500/30")}>
+                            <TableCell colSpan={2}>Resultado Líquido do Período</TableCell>
+                            <TableCell className={cn("text-right", resultadoLiquido >= 0 ? "text-green-700" : "text-red-700")}>
+                                {formatCurrency(resultadoLiquido)}
+                            </TableCell>
+                        </TableRow>
                     </Table>
                 </CardContent>
             </Card>
@@ -308,7 +317,7 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
         {/* ABA 4: RECEITA */}
         <TabsContent value="receita" className="mt-4">
             <Card>
-                <CardHeader><CardTitle className="text-xl text-green-600">Receitas</CardTitle></CardHeader>
+                <CardHeader><CardTitle className="text-xl text-green-600">Receitas (Contas 3.x.x de Resultado)</CardTitle></CardHeader>
                 <CardContent>
                     <Table>
                         <TableHeader><TableRow><TableHead className="w-[150px]">Conta</TableHead><TableHead>Descrição</TableHead><TableHead className="text-right w-[150px]">Saldo</TableHead></TableRow></TableHeader>
@@ -321,7 +330,7 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
         {/* ABA 5: DESPESA */}
         <TabsContent value="despesa" className="mt-4">
             <Card>
-                <CardHeader><CardTitle className="text-xl text-red-600">Despesas</CardTitle></CardHeader>
+                <CardHeader><CardTitle className="text-xl text-red-600">Despesas (Contas 4.x.x e 5.x.x)</CardTitle></CardHeader>
                 <CardContent>
                     <Table>
                         <TableHeader><TableRow><TableHead className="w-[150px]">Conta</TableHead><TableHead>Descrição</TableHead><TableHead className="text-right w-[150px]">Saldo</TableHead></TableRow></TableHeader>
