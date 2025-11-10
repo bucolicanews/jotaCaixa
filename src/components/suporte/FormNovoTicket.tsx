@@ -60,7 +60,7 @@ const FormNovoTicket: React.FC<FormNovoTicketProps> = ({ onSaveComplete }) => {
     const filePath = `tickets/${ticketId}/${Date.now()}.${fileExt}`;
 
     const { error } = await supabase.storage
-      .from('documentos-admissao') // Reutilizando o bucket de documentos
+      .from('suporte-anexos') // USANDO NOVO BUCKET
       .upload(filePath, file, {
         cacheControl: '3600',
         upsert: false,
@@ -71,7 +71,7 @@ const FormNovoTicket: React.FC<FormNovoTicketProps> = ({ onSaveComplete }) => {
       throw new Error('Falha ao fazer upload do anexo: ' + error.message);
     }
 
-    const { data: publicUrlData } = supabase.storage.from('documentos-admissao').getPublicUrl(filePath);
+    const { data: publicUrlData } = supabase.storage.from('suporte-anexos').getPublicUrl(filePath);
     return publicUrlData.publicUrl;
   };
 

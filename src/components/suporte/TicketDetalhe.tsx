@@ -11,7 +11,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
-import { AnyProfile } from '@/types/usuario';
 import { Badge } from '@/components/ui/badge'; // Adicionado import do Badge
 
 interface Ticket {
@@ -32,7 +31,7 @@ interface Mensagem {
   conteudo: string;
   anexo_url: string | null;
   criado_em: string;
-  remetente_perfil: AnyProfile | null;
+  remetente_perfil: { nome: string } | null; // CORRIGIDO: Tipagem simplificada
 }
 
 interface TicketDetalheProps {
@@ -63,8 +62,11 @@ const TicketDetalhe: React.FC<TicketDetalheProps> = ({ ticket, onClose, onUpdate
     const { data, error } = await supabase
       .from('mensagens_ticket')
       .select(`
-        *,
-        remetente_perfil:remetente_id ( nome, email, avatar_url )
+        id,
+        remetente_id,
+        conteudo,
+        anexo_url,
+        criado_em
       `)
       .eq('ticket_id', ticket.id)
       .order('criado_em', { ascending: true });
@@ -73,10 +75,29 @@ const TicketDetalhe: React.FC<TicketDetalheProps> = ({ ticket, onClose, onUpdate
       showError('Erro ao carregar mensagens: ' + error.message);
       setMensagens([]);
     } else {
-      setMensagens(data as Mensagem[]);
+      // Mapeamento manual do nome do remetente (simplificado)
+      const mensagensComNome = await Promise.all((data as any[]).map(async (msg) => {
+          let nome = 'N/A';
+          if (msg.remetente_id === ticket.empresa_id) {
+              nome = 'Admin'; // Se o remetente for o destinatário (Admin)
+          } else if (msg.remetente_id === ticket.proprietario_id) {
+              nome = ticket.proprietario_perfil?.nome || 'Cliente';
+          } else {
+              // Tenta buscar o nome do usuário/cliente
+              const { data: userData } = await supabase.from('tbl_usuarios').select('nome').eq('id', msg.remetente_id).single();
+              nome = userData?.nome || 'Usuário';
+          }
+          
+          return {
+              ...msg,
+              remetente_perfil: { nome: nome }
+          } as Mensagem;
+      }));
+      
+      setMensagens(mensagensComNome);
     }
     setLoadingMensagens(false);
-  }, [ticket.id]);
+  }, [ticket.id, ticket.empresa_id, ticket.proprietario_id, ticket.proprietario_perfil?.nome]);
 
   useEffect(() => {
     fetchMensagens();
@@ -95,20 +116,23 @@ const TicketDetalhe: React.FC<TicketDetalheProps> = ({ ticket, onClose, onUpdate
     setAnexoFile(e.target.files?.[0] || null);
   };
 
-  const uploadAnexo = async (file: File): Promise<string> => {
+  const uploadAnexo = async (file: File, ticketId: string): Promise<string> => {
     const fileExt = file.name.split('.').pop();
-    const filePath = `tickets/${ticket.id}/${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
+    const filePath = `tickets/${ticketId}/${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
 
     const { error } = await supabase.storage
-      .from('documentos-admissao')
+      .from('suporte-anexos') // USANDO NOVO BUCKET
       .upload(filePath, file, {
         cacheControl: '3600',
         upsert: false,
       });
 
-    if (error) throw new Error('Falha ao fazer upload do anexo: ' + error.message);
+    if (error) {
+      console.error("Erro de upload:", error);
+      throw new Error('Falha ao fazer upload do anexo: ' + error.message);
+    }
 
-    const { data: publicUrlData } = supabase.storage.from('documentos-admissao').getPublicUrl(filePath);
+    const { data: publicUrlData } = supabase.storage.from('suporte-anexos').getPublicUrl(filePath);
     return publicUrlData.publicUrl;
   };
 
@@ -122,7 +146,7 @@ const TicketDetalhe: React.FC<TicketDetalheProps> = ({ ticket, onClose, onUpdate
     try {
       let anexoUrl: string | null = null;
       if (anexoFile) {
-        anexoUrl = await uploadAnexo(anexoFile);
+        anexoUrl = await uploadAnexo(anexoFile, ticket.id);
       }
 
       const mensagemPayload = {
@@ -295,7 +319,7 @@ const TicketDetalhe: React.FC<TicketDetalheProps> = ({ ticket, onClose, onUpdate
           ) : (
             mensagens.map((msg) => {
               const isMyMessage = msg.remetente_id === remetenteId;
-              const remetenteNome = msg.remetente_perfil?.nome || 'Admin';
+              const remetenteNome = msg.remetente_perfil?.nome || 'N/A';
               
               return (
                 <div 
