@@ -70,21 +70,21 @@ const TicketCard: React.FC<TicketCardProps> = ({ ticket, onClick, onDelete, isAd
       if (isMyTurn) {
           // É a vez do usuário logado (Cliente ou Admin)
           responsavelIndicator = (
-              <span className="flex items-center text-sm font-medium text-green-600">
+              <span className="flex items-center text-sm font-medium text-green-600 ml-4">
                   <CheckCircle2 className="w-4 h-4 mr-1" /> Sua vez de responder
               </span>
           );
       } else if (destinatarioUltimaMensagem === ticket.empresa_id) {
           // Aguardando Admin (se o Admin não for o usuário logado)
           responsavelIndicator = (
-              <span className="flex items-center text-sm font-medium text-blue-600">
+              <span className="flex items-center text-sm font-medium text-blue-600 ml-4">
                   <UserCheck className="w-4 h-4 mr-1" /> Aguardando Admin
               </span>
           );
       } else if (destinatarioUltimaMensagem === ticket.proprietario_id) {
           // Aguardando Cliente/Proprietário (se o Cliente não for o usuário logado)
           responsavelIndicator = (
-              <span className="flex items-center text-sm font-medium text-yellow-600">
+              <span className="flex items-center text-sm font-medium text-yellow-600 ml-4">
                   <UserX className="w-4 h-4 mr-1" /> Aguardando Cliente
               </span>
           );
@@ -122,7 +122,10 @@ const TicketCard: React.FC<TicketCardProps> = ({ ticket, onClick, onDelete, isAd
           <CardTitle className="text-lg font-semibold truncate max-w-[80%]">
             {ticket.titulo}
           </CardTitle>
-          <Badge variant={getStatusVariant(ticket.status)}>{ticket.status}</Badge>
+          <div className="flex items-center">
+            <Badge variant={getStatusVariant(ticket.status)}>{ticket.status}</Badge>
+            {responsavelIndicator}
+          </div>
         </CardHeader>
         <CardContent className="p-6 pt-0 space-y-2">
           <div className="flex items-center justify-between text-sm text-muted-foreground">
@@ -146,8 +149,7 @@ const TicketCard: React.FC<TicketCardProps> = ({ ticket, onClick, onDelete, isAd
                   </p>
               )}
               
-              {/* Indicador de Responsabilidade */}
-              {responsavelIndicator}
+              {/* O indicador de responsabilidade foi movido para o CardHeader */}
           </div>
         </CardContent>
       </div>
