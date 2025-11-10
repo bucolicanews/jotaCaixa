@@ -51,6 +51,7 @@ import GerenciarBlocosSocietarios from "./pages/GerenciarBlocosSocietarios";
 import GerarDocumentoSocietario from "./pages/GerarDocumentoSocietario";
 import Suporte from "./pages/Suporte";
 import AdminSuporte from "./pages/AdminSuporte";
+import ContasPatrimoniais from "./pages/ContasPatrimoniais"; // NOVO IMPORT
 
 const queryClient = new QueryClient();
 
@@ -231,6 +232,7 @@ const App = () => (
             <Route path="/contas-pagar" element={<ContasPagar />} />
             <Route path="/contas-receber" element={<ContasReceber />} />
             <Route path="/bancos" element={<Bancos />} />
+            <Route path="/contas-patrimoniais" element={<ContasPatrimoniais />} /> {/* NOVA ROTA */}
             <Route path="/conciliacao" element={<Conciliacao />} />
             <Route path="/importar" element={<Importar />} />
             <Route path="/exportar" element={<Exportar />} />

@@ -9,6 +9,8 @@ interface SaldoCalculado extends SaldoContaDetalhada {
   saldo_atual: number;
 }
 
+type Scope = 'bancos' | 'patrimonial';
+
 interface SaldoContaCalculadoHook {
   contas: SaldoCalculado[];
   totalSaldo: number;
@@ -16,7 +18,7 @@ interface SaldoContaCalculadoHook {
   refetch: () => void;
 }
 
-const useSaldoContaCalculado = (filtroTipoSaldo: 'todos' | 'Credito' | 'Debito' | 'Receita' | 'Despesa', filtroContaContabilId: string, filtroNomeDebounced: string): SaldoContaCalculadoHook => {
+const useSaldoContaCalculado = (filtroTipoSaldo: 'todos' | 'Credito' | 'Debito' | 'Receita' | 'Despesa', filtroContaContabilId: string, filtroNomeDebounced: string, scope: Scope = 'bancos'): SaldoContaCalculadoHook => {
   const { usuario, perfil, role, carregando: carregandoSessao } = useSessao();
   const [contas, setContas] = useState<SaldoCalculado[]>([]);
   const [carregando, setCarregando] = useState(true);
@@ -43,7 +45,7 @@ const useSaldoContaCalculado = (filtroTipoSaldo: 'todos' | 'Credito' | 'Debito' 
         .select(`*, plano_contas ( Conta, Descricao )`)
         .eq('proprietario_id', targetEmpresaId);
         
-      // Aplicar Filtros de UI
+      // Aplica Filtros de UI
       if (filtroTipoSaldo !== 'todos') {
           contasQuery = contasQuery.eq('tipo_saldo', filtroTipoSaldo);
       }
@@ -52,6 +54,25 @@ const useSaldoContaCalculado = (filtroTipoSaldo: 'todos' | 'Credito' | 'Debito' 
       }
       if (filtroNomeDebounced) {
           contasQuery = contasQuery.ilike('nome', `%${filtroNomeDebounced}%`);
+      }
+      
+      // FILTRO DE ESCOPO: Se for 'patrimonial', exclui contas de caixa/banco (is_conta_saldo = true)
+      if (scope === 'patrimonial') {
+          // Busca todas as contas analíticas que NÃO são contas de saldo (caixa/banco)
+          // Nota: Isso requer uma busca na tabela plano_contas e um filtro de ID.
+          // Como a tabela saldo_contas armazena contas que são de saldo, vamos buscar
+          // todas as contas analíticas do plano de contas e filtrar os lançamentos.
+          
+          // Para simplificar, vamos buscar todas as contas de saldo e depois filtrar
+          // no frontend quais são de caixa/banco (is_conta_saldo) e quais não são.
+          
+          // Para o escopo 'bancos', a query acima já funciona.
+          // Para o escopo 'patrimonial', precisamos de uma abordagem diferente, pois
+          // a tabela `saldo_contas` é usada para TUDO que tem saldo inicial e lançamentos.
+          
+          // CORREÇÃO: A tabela `saldo_contas` é usada para TUDO que tem saldo.
+          // O filtro de escopo deve ser feito no frontend, verificando a natureza contábil.
+          // Vamos buscar todas as contas de saldo e filtrar depois.
       }
       
       const { data: contasData, error: contasError } = await contasQuery.order('nome', { ascending: true });
@@ -87,7 +108,6 @@ const useSaldoContaCalculado = (filtroTipoSaldo: 'todos' | 'Credito' | 'Debito' 
     setCarregando(true);
     
     try {
-      // Busca contas e lançamentos (sem data de corte, ou seja, até hoje)
       const { fetchedContas, lancamentosData } = await fetchContasAndLancamentos(empresaId);
 
       // 3. Calcular o saldo para cada conta
@@ -113,8 +133,18 @@ const useSaldoContaCalculado = (filtroTipoSaldo: 'todos' | 'Credito' | 'Debito' 
         };
       });
       
-      // 4. Aplicar filtro de nome no frontend (se a busca por ILIKE não for suficiente)
+      // 4. Aplicar filtro de ESCOPO no frontend
       let filteredContas = contasCalculadas;
+      
+      if (scope === 'bancos') {
+          // Filtra apenas contas que são de saldo (caixa/banco)
+          filteredContas = filteredContas.filter(c => c.plano_contas?.Conta.startsWith('1.0.1'));
+      } else if (scope === 'patrimonial') {
+          // Filtra contas que NÃO são de saldo (caixa/banco)
+          filteredContas = filteredContas.filter(c => !c.plano_contas?.Conta.startsWith('1.0.1'));
+      }
+      
+      // 5. Aplicar filtro de nome no frontend (se a busca por ILIKE não for suficiente)
       if (filtroNomeDebounced) {
           const termo = filtroNomeDebounced.toLowerCase();
           filteredContas = filteredContas.filter(conta => {
@@ -133,7 +163,7 @@ const useSaldoContaCalculado = (filtroTipoSaldo: 'todos' | 'Credito' | 'Debito' 
     } finally {
       setCarregando(false);
     }
-  }, [empresaId, carregandoSessao, filtroNomeDebounced, fetchContasAndLancamentos]);
+  }, [empresaId, carregandoSessao, filtroNomeDebounced, fetchContasAndLancamentos, scope]);
 
   useEffect(() => {
     buscarContas();
