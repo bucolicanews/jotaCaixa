@@ -30,6 +30,7 @@ interface ContaBalanco {
   Analitica: 'Sim' | 'Não';
   saldo_final: number;
   tipo_principal: 'Ativo' | 'Passivo' | 'Patrimonio Liquido' | 'Resultado' | 'Outros';
+  is_conta_resultado: boolean; // Adicionado para filtragem
 }
 
 const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ endDate, filtroSomenteComSaldo }) => {
@@ -51,6 +52,31 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
       
   }, [contas, filtroSomenteComSaldo]);
   
+  // Função auxiliar para filtrar contas e incluir seus pais sintéticos
+  const filterAndIncludeParents = (list: ContaBalanco[], prefix: string) => {
+      const filtered = list.filter(c => c.Conta.startsWith(prefix));
+      
+      if (!filtroSomenteComSaldo) return filtered;
+      
+      // Se o filtro SomenteComSaldo estiver ativo, precisamos garantir que os pais sintéticos
+      // das contas analíticas com saldo sejam incluídos.
+      const contasComSaldo = filtered.filter(c => Math.abs(c.saldo_final) >= 0.01);
+      const contasIncluidas = new Set(contasComSaldo.map(c => c.Conta));
+      
+      contasComSaldo.forEach(c => {
+          let currentConta = c.Conta;
+          while (currentConta.includes('.')) {
+              currentConta = currentConta.substring(0, currentConta.lastIndexOf('.'));
+              const parent = list.find(p => p.Conta === currentConta && p.Analitica === 'Não');
+              if (parent) {
+                  contasIncluidas.add(parent.Conta);
+              }
+          }
+      });
+      
+      return list.filter(c => contasIncluidas.has(c.Conta) || (c.Analitica === 'Não' && c.Conta.startsWith(prefix)));
+  };
+  
   const getContasPorTipo = (tipo: ContaBalanco['tipo_principal']) => {
     // Retorna as contas já ordenadas pelo hook
     return contasFiltradas.filter(c => c.tipo_principal === tipo);
@@ -58,18 +84,22 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
   
   // NOVO FILTRO: Para Receita (3.x.x)
   const getContasReceita = () => {
-      // Filtra contas de Resultado (4.x.x e 5.x.x) e Receita (3.x.x)
-      return contasFiltradas.filter(c => c.tipo_principal === 'Resultado' || (c.tipo_principal === 'Patrimonio Liquido' && c.is_conta_resultado));
+      // Contas de Receita são as contas 3.x.x que são marcadas como is_conta_resultado
+      const receitaContas = contas.filter(c => c.Conta.startsWith('3') && c.is_conta_resultado);
+      return filterAndIncludeParents(receitaContas, '3');
   };
   
   // NOVO FILTRO: Para Despesa (4.x.x e 5.x.x)
   const getContasDespesa = () => {
-      return contasFiltradas.filter(c => c.tipo_principal === 'Resultado' && (c.Conta.startsWith('4') || c.Conta.startsWith('5')));
+      // Contas de Despesa são as contas 4.x.x e 5.x.x (que são Resultado)
+      const despesaContas = contas.filter(c => c.tipo_principal === 'Resultado');
+      return filterAndIncludeParents(despesaContas, '4').concat(filterAndIncludeParents(despesaContas, '5'));
   };
   
   // NOVO FILTRO: Apenas contas de PL (3.x.x) que não são Resultado
   const getContasPL = () => {
-      return contasFiltradas.filter(c => c.tipo_principal === 'Patrimonio Liquido' && !c.is_conta_resultado);
+      const plContas = contas.filter(c => c.tipo_principal === 'Patrimonio Liquido' && !c.is_conta_resultado);
+      return filterAndIncludeParents(plContas, '3');
   };
   
   const renderContas = (contasList: ContaBalanco[]) => {
@@ -78,7 +108,6 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
       const isZero = Math.abs(c.saldo_final) < 0.01;
       
       // Se o filtro SomenteComSaldo está ativo, e a conta é analítica E tem saldo zero, omite.
-      // Se for sintética, sempre renderiza para manter a hierarquia.
       if (filtroSomenteComSaldo && isZero && c.Analitica === 'Sim') return null;
 
       // Calcula o nível de indentação baseado no código da conta (ex: 1.1.1.1)
