@@ -50,22 +50,26 @@ const Suporte: React.FC = () => {
   const empresaId = getEmpresaId(); // ID do destinatário (Admin)
 
   const fetchTickets = useCallback(async () => {
-    if (!empresaId || !usuario?.id) { // Adicionado usuario?.id
+    if (!empresaId || !usuario?.id) {
         setCarregandoTickets(false);
         return;
     }
     setCarregandoTickets(true);
     
-    // CORREÇÃO: Usando sintaxe de vírgula dupla (,,) para separar order e limit na sub-query
     let query = supabase
       .from('tickets')
       .select(`
         *,
         mensagens_ticket_count:mensagens_ticket(count),
-        ultima_mensagem:mensagens_ticket(remetente_id,destinatario_id,criado_em,ticket_id,order=criado_em.desc,,limit=1)
+        ultima_mensagem:mensagens_ticket(remetente_id,destinatario_id,criado_em,ticket_id)
       `)
       .eq('empresa_id', empresaId) // Filtra pelo ID do Admin (destinatário)
       .order('atualizado_em', { ascending: false });
+      
+    // Aplica ordenação e limite na relação aninhada
+    query = query
+        .order('criado_em', { foreignTable: 'ultima_mensagem', ascending: false })
+        .limit(1, { foreignTable: 'ultima_mensagem' });
       
     // Se for Cliente, filtra pelos tickets que ele criou
     if (role === 'Cliente') {
@@ -109,7 +113,7 @@ const Suporte: React.FC = () => {
       setTickets(ticketsComNome);
     }
     setCarregandoTickets(false);
-  }, [empresaId, filtroStatus, role, perfil, usuario?.id]); // Adicionado usuario?.id
+  }, [empresaId, filtroStatus, role, perfil, usuario?.id]);
 
   useEffect(() => {
     if (!carregandoSessao && empresaId) {
