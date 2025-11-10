@@ -326,7 +326,7 @@ const PlanoContasPage = () => {
 
   return (
     <LayoutPrincipal>
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
         <h1 className="text-2xl md:text-3xl font-bold">Plano de Contas</h1>
         <div className="space-x-2 w-full sm:w-auto">
           <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
@@ -350,11 +350,11 @@ const PlanoContasPage = () => {
         </div>
       </div>
 
-      <div className="space-y-4">
+      <div className="space-y-6">
         <ImportarPlanoContas onImportComplete={handleImportComplete} />
 
         <Card>
-          <CardHeader className="pb-2">
+          <CardHeader>
             <CardTitle className="text-lg flex items-center"><Filter className="w-4 h-4 mr-2" /> Filtros</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col sm:flex-row gap-4">
@@ -398,9 +398,9 @@ const PlanoContasPage = () => {
           </CardHeader>
           <CardContent>
             {/* Usando div nativo para controlar a rolagem e garantir o sticky header */}
-            <div className="overflow-x-auto overflow-y-auto max-h-[75vh]">
+            <div className="overflow-x-auto overflow-y-auto max-h-[60vh]">
               <table className="w-full caption-bottom text-sm">
-                <thead className="[&amp;_tr]:border-b sticky top-[200px] bg-background z-10">
+                <thead className="[&amp;_tr]:border-b sticky top-0 bg-background z-10">
                   <TableRow>
                     <TableHead className="w-[150px]">Conta</TableHead>
                     <TableHead className="w-[100px]">Cód. Reduzido</TableHead>
