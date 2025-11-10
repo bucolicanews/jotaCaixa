@@ -22,9 +22,9 @@ interface Ticket {
   empresa_id: string;
   proprietario_perfil: { nome: string } | null;
   mensagens_ticket_count: number;
-  // Propriedades que estavam causando o conflito de tipos
   ultima_mensagem_remetente_id: string | null;
-  ultima_mensagem?: { remetente_id: string, criado_em: string, ticket_id: string }[] | null; 
+  ultima_mensagem_destinatario_id: string | null; // NOVO CAMPO
+  ultima_mensagem?: { remetente_id: string, destinatario_id: string | null, criado_em: string, ticket_id: string }[] | null; 
 }
 
 interface EmpresaFiltro {
@@ -83,7 +83,7 @@ const AdminSuporte: React.FC = () => {
         proprietario_id,
         empresa_id,
         mensagens_ticket_count:mensagens_ticket(count),
-        ultima_mensagem:mensagens_ticket(remetente_id, criado_em, ticket_id)
+        ultima_mensagem:mensagens_ticket(remetente_id, destinatario_id, criado_em, ticket_id)
       `)
       .order('atualizado_em', { ascending: false });
       
@@ -126,6 +126,7 @@ const AdminSuporte: React.FC = () => {
               ...t,
               proprietario_perfil: { nome: nomeMap[t.proprietario_id] || 'N/A' },
               ultima_mensagem_remetente_id: ultimaMensagem?.remetente_id || null,
+              ultima_mensagem_destinatario_id: ultimaMensagem?.destinatario_id || null, // NOVO CAMPO
           } as Ticket;
       });
       

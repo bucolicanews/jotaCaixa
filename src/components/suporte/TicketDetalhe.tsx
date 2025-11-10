@@ -33,6 +33,7 @@ interface Mensagem {
   anexo_url: string | null;
   criado_em: string;
   remetente_perfil: { nome: string } | null;
+  destinatario_id: string | null; // NOVO CAMPO
 }
 
 interface TicketDetalheProps {
@@ -60,23 +61,17 @@ const TicketDetalhe: React.FC<TicketDetalheProps> = ({ ticket, onClose, onUpdate
   const canManage = isAdminView || remetenteId === clienteId;
   const isClosed = currentStatus === 'fechado';
   
-  // Lógica de Responsabilidade
-  const ultimaMensagemId = ticket.ultima_mensagem_remetente_id || clienteId;
+  // Lógica de Responsabilidade: Baseada na última mensagem
+  const ultimaMensagem = mensagens[mensagens.length - 1];
+  const destinatarioUltimaMensagem = ultimaMensagem?.destinatario_id;
   
-  const lastSenderIsAdmin = ultimaMensagemId === adminId;
-  const lastSenderIsClient = ultimaMensagemId === clienteId;
-  
-  // Quem é o responsável pela próxima ação?
-  const isWaitingForAdmin = lastSenderIsClient; // Se o cliente enviou por último, Admin deve responder
-  const isWaitingForClient = lastSenderIsAdmin; // Se o admin enviou por último, Cliente deve responder
-  
-  // É a vez do usuário logado responder?
-  const isMyTurn = (isAdminView && isWaitingForAdmin) || (!isAdminView && isWaitingForClient);
+  // Se o destinatário da última mensagem é o usuário logado, é a vez dele.
+  const isMyTurn = destinatarioUltimaMensagem === remetenteId;
   
   // A resposta está desabilitada se o ticket estiver fechado OU não for a vez do usuário
-  const isReplyDisabled = isClosed || !isMyTurn;
+  const isReplyDisabled = isClosed || (mensagens.length > 0 && !isMyTurn);
   
-  const responsavelNome = isWaitingForAdmin ? 'Administrador' : (ticket.proprietario_perfil?.nome || 'Cliente');
+  const responsavelNome = isMyTurn ? 'Você' : (destinatarioUltimaMensagem === adminId ? 'Administrador' : (ticket.proprietario_perfil?.nome || 'Cliente'));
 
 
   const fetchMensagens = useCallback(async () => {
@@ -89,7 +84,8 @@ const TicketDetalhe: React.FC<TicketDetalheProps> = ({ ticket, onClose, onUpdate
         remetente_id,
         conteudo,
         anexo_url,
-        criado_em
+        criado_em,
+        destinatario_id
       `)
       .eq('ticket_id', ticket.id)
       .order('criado_em', { ascending: true });
@@ -165,6 +161,15 @@ const TicketDetalhe: React.FC<TicketDetalheProps> = ({ ticket, onClose, onUpdate
       showError('Digite uma mensagem ou anexe um arquivo.');
       return;
     }
+    
+    // Determina o destinatário: se o remetente é o cliente, o destinatário é o admin, e vice-versa.
+    const destinatarioId = remetenteId === clienteId ? adminId : clienteId;
+    
+    if (!destinatarioId) {
+        showError('Destinatário não encontrado.');
+        return;
+    }
+    
     setLoadingAcao(true);
 
     try {
@@ -178,6 +183,7 @@ const TicketDetalhe: React.FC<TicketDetalheProps> = ({ ticket, onClose, onUpdate
         remetente_id: remetenteId,
         conteudo: novaMensagem.trim() || 'Anexo enviado.',
         anexo_url: anexoUrl,
+        destinatario_id: destinatarioId, // NOVO CAMPO
       };
 
       const { error: mensagemError } = await supabase
@@ -397,22 +403,10 @@ const TicketDetalhe: React.FC<TicketDetalheProps> = ({ ticket, onClose, onUpdate
                         
                         {isReplyDisabled ? (
                             // BLOQUEADO / AGUARDANDO OUTRA PARTE
-                            isAdminView ? (
-                                <span>Aguardando resposta do(a) <span className="font-bold">{responsavelNome}</span>. Sua resposta está bloqueada.</span>
-                            ) : (
-                                <span>
-                                    Aguardando resposta do(a) <span className="font-bold">Administrador</span>. Sua resposta está bloqueada.
-                                </span>
-                            )
+                            <span>Aguardando resposta do(a) <span className="font-bold">{responsavelNome}</span>. Sua resposta está bloqueada.</span>
                         ) : (
                             // LIBERADO / SUA VEZ
-                            isAdminView ? (
-                                <span>Sua vez de responder.</span>
-                            ) : (
-                                <span>
-                                    Mensagem retornou do suporte. Sua vez de responder.
-                                </span>
-                            )
+                            <span>Sua vez de responder.</span>
                         )}
                     </div>
                     

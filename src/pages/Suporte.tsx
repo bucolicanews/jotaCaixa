@@ -24,8 +24,8 @@ interface Ticket {
   empresa_id: string;
   proprietario_perfil: { nome: string } | null;
   mensagens_ticket_count: number;
-  // Propriedade que estava causando o conflito de tipos
-  ultima_mensagem_remetente_id: string | null; 
+  ultima_mensagem_remetente_id: string | null;
+  ultima_mensagem_destinatario_id: string | null; // NOVO CAMPO
 }
 
 const Suporte: React.FC = () => {
@@ -61,7 +61,7 @@ const Suporte: React.FC = () => {
       .select(`
         *,
         mensagens_ticket_count:mensagens_ticket(count),
-        ultima_mensagem:mensagens_ticket(remetente_id, criado_em, ticket_id)
+        ultima_mensagem:mensagens_ticket(remetente_id, destinatario_id, criado_em, ticket_id)
       `)
       .eq('empresa_id', empresaId) // Filtra pelo ID do Admin (destinatário)
       .order('atualizado_em', { ascending: false });
@@ -93,7 +93,7 @@ const Suporte: React.FC = () => {
               nome = adminData?.nome || 'Admin';
           }
           
-          // Extrai o ID do remetente da última mensagem (o Supabase retorna um array)
+          // Extrai o ID do remetente e destinatário da última mensagem (o Supabase retorna um array)
           const ultimaMensagem = t.ultima_mensagem?.[0];
           
           return {
@@ -101,6 +101,7 @@ const Suporte: React.FC = () => {
               mensagens_ticket_count: t.mensagens_ticket_count[0].count,
               proprietario_perfil: { nome: nome },
               ultima_mensagem_remetente_id: ultimaMensagem?.remetente_id || null,
+              ultima_mensagem_destinatario_id: ultimaMensagem?.destinatario_id || null, // NOVO CAMPO
           } as Ticket;
       }));
       

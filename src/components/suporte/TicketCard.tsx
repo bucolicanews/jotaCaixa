@@ -20,8 +20,9 @@ interface Ticket {
   // Relações
   proprietario_perfil: { nome: string } | null;
   mensagens_ticket_count: number;
-  // Adicionando a propriedade que estava faltando
+  // Propriedades que estavam causando o conflito de tipos
   ultima_mensagem_remetente_id: string | null; 
+  ultima_mensagem_destinatario_id: string | null; // NOVO CAMPO
 }
 
 interface TicketCardProps {
@@ -58,24 +59,22 @@ const TicketCard: React.FC<TicketCardProps> = ({ ticket, onClick, onDelete, isAd
   // O ticket só pode ser deletado se estiver fechado ou se for o Admin
   const canDelete = isOwner && ticket.status === 'fechado';
   
-  // Lógica de Responsabilidade
-  const ultimaMensagemId = ticket.ultima_mensagem_remetente_id || ticket.proprietario_id;
-  
-  const isWaitingForAdmin = ultimaMensagemId === ticket.proprietario_id;
+  // Lógica de Responsabilidade: Quem é o destinatário da última mensagem?
+  const destinatarioUltimaMensagem = ticket.ultima_mensagem_destinatario_id;
   const isClosed = ticket.status === 'fechado';
   
   let responsavelIndicator = null;
   
   if (!isClosed) {
-      if (isWaitingForAdmin) {
-          // Se a última mensagem foi do Cliente/Proprietário, o Admin é o responsável
+      if (destinatarioUltimaMensagem === ticket.empresa_id) {
+          // Se o destinatário é o Admin, o Admin é o responsável
           responsavelIndicator = (
               <span className="flex items-center text-sm font-medium text-blue-500">
                   <UserCheck className="w-4 h-4 mr-1" /> Aguardando Admin
               </span>
           );
-      } else {
-          // Se a última mensagem foi do Admin, o Cliente/Proprietário é o responsável
+      } else if (destinatarioUltimaMensagem === ticket.proprietario_id) {
+          // Se o destinatário é o Cliente/Proprietário, o Cliente é o responsável
           responsavelIndicator = (
               <span className="flex items-center text-sm font-medium text-yellow-500">
                   <UserX className="w-4 h-4 mr-1" /> Aguardando Cliente
