@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, MessageSquare, PlusCircle, Filter } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
-import { showError } from '@/utils/toast';
+import { showError, showSuccess } from '@/utils/toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import FormNovoTicket from '@/components/suporte/FormNovoTicket.tsx';
 import TicketCard from '@/components/suporte/TicketCard.tsx';
@@ -27,7 +27,7 @@ interface Ticket {
 }
 
 const Suporte: React.FC = () => {
-  const { perfil, role, carregando: carregandoSessao } = useSessao();
+  const { perfil, role, carregando: carregandoSessao, usuario } = useSessao();
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [carregandoTickets, setCarregandoTickets] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -121,6 +121,30 @@ const Suporte: React.FC = () => {
       setTicketSelecionado(null);
       fetchTickets(); // Recarrega a lista para atualizar o status
   };
+  
+  const handleDeleteTicket = async (ticketId: string, titulo: string) => {
+      if (!window.confirm(`Tem certeza que deseja excluir o ticket "${titulo}"? Esta ação é irreversível e só é permitida para tickets FECHADOS.`)) return;
+      
+      setCarregandoTickets(true);
+      
+      try {
+          // A exclusão do ticket deve cascatear para as mensagens (RLS deve permitir)
+          const { error } = await supabase
+              .from('tickets')
+              .delete()
+              .eq('id', ticketId)
+              .eq('proprietario_id', usuario?.id); // Garante que apenas o proprietário logado delete
+              
+          if (error) throw error;
+          
+          showSuccess(`Ticket "${titulo}" excluído com sucesso.`);
+          fetchTickets();
+      } catch (error: any) {
+          showError('Falha ao excluir ticket: ' + error.message);
+      } finally {
+          setCarregandoTickets(false);
+      }
+  };
 
   if (carregandoSessao || carregandoTickets) {
     return (
@@ -201,7 +225,9 @@ const Suporte: React.FC = () => {
                 key={ticket.id} 
                 ticket={ticket} 
                 onClick={handleOpenTicket} 
+                onDelete={handleDeleteTicket} // PASSANDO O HANDLER DE DELETE
                 isAdminView={false}
+                isOwner={ticket.proprietario_id === usuario?.id} // PASSANDO SE É O DONO
             />
           ))
         )}

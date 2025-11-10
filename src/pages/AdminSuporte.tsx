@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, MessageSquare, Filter, Building2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
-import { showError } from '@/utils/toast';
+import { showError, showSuccess } from '@/utils/toast';
 import TicketCard from '@/components/suporte/TicketCard.tsx';
 import TicketDetalhe from '@/components/suporte/TicketDetalhe.tsx';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -126,6 +126,30 @@ const AdminSuporte: React.FC = () => {
       setTicketSelecionado(null);
       fetchTickets(); // Recarrega a lista para atualizar o status
   };
+  
+  const handleDeleteTicket = async (ticketId: string, titulo: string) => {
+      if (!window.confirm(`Tem certeza que deseja excluir o ticket "${titulo}"? Esta ação é irreversível.`)) return;
+      
+      setCarregandoTickets(true);
+      
+      try {
+          // Admin pode deletar qualquer ticket, mas a RLS deve ser configurada para permitir isso.
+          // A RLS atual permite que o Admin gerencie todos os tickets.
+          const { error } = await supabase
+              .from('tickets')
+              .delete()
+              .eq('id', ticketId);
+              
+          if (error) throw error;
+          
+          showSuccess(`Ticket "${titulo}" excluído com sucesso.`);
+          fetchTickets();
+      } catch (error: any) {
+          showError('Falha ao excluir ticket: ' + error.message);
+      } finally {
+          setCarregandoTickets(false);
+      }
+  };
 
   if (carregandoSessao || carregandoTickets) {
     return (
@@ -207,7 +231,9 @@ const AdminSuporte: React.FC = () => {
                 key={ticket.id} 
                 ticket={ticket} 
                 onClick={handleOpenTicket} 
+                onDelete={handleDeleteTicket} // PASSANDO O HANDLER DE DELETE
                 isAdminView={true}
+                isOwner={true} // Admin é o 'dono' para fins de gerenciamento/exclusão
             />
           ))
         )}
