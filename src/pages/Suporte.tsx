@@ -56,12 +56,13 @@ const Suporte: React.FC = () => {
     }
     setCarregandoTickets(true);
     
+    // CORREÇÃO: Usando sintaxe de vírgula dupla (,,) para separar order e limit na sub-query
     let query = supabase
       .from('tickets')
       .select(`
         *,
         mensagens_ticket_count:mensagens_ticket(count),
-        ultima_mensagem:mensagens_ticket(remetente_id,destinatario_id,criado_em,ticket_id,order=criado_em.desc,limit=1)
+        ultima_mensagem:mensagens_ticket(remetente_id,destinatario_id,criado_em,ticket_id,order=criado_em.desc,,limit=1)
       `)
       .eq('empresa_id', empresaId) // Filtra pelo ID do Admin (destinatário)
       .order('atualizado_em', { ascending: false });
