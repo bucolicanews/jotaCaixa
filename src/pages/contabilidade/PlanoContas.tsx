@@ -383,9 +383,9 @@ const PlanoContasPage = () => {
             <CardTitle className="text-xl">Contas Cadastradas ({contas.length})</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto max-h-[60vh]"> {/* Adicionado max-h e overflow-x-auto */}
               <Table>
-                <TableHeader>
+                <TableHeader className="sticky top-0 bg-background z-10"> {/* Adicionado sticky top-0 bg-background z-10 */}
                   <TableRow>
                     <TableHead className="w-[150px]">Conta</TableHead>
                     <TableHead className="w-[100px]">Cód. Reduzido</TableHead>
