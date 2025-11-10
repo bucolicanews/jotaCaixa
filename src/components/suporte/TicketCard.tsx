@@ -22,7 +22,7 @@ interface Ticket {
   proprietario_perfil: { nome: string } | null;
   mensagens_ticket_count: number;
   ultima_mensagem_remetente_id: string | null;
-  ultima_mensagem_destinatario_id: string | null;
+  ultima_mensagem_destinatario_id: string | null; // NOVO CAMPO
 }
 
 interface TicketCardProps {
