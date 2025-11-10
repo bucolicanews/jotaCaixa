@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, MessageSquare, PlusCircle, Filter } from 'lucide-react';
+import { Loader2, MessageSquare, PlusCircle, Filter, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
@@ -12,6 +12,7 @@ import TicketDetalhe from '@/components/suporte/TicketDetalhe.tsx';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ClienteProfile } from '@/types/usuario';
+import { useTicketStatus } from '@/hooks/use-ticket-status'; // Importando o hook
 
 interface Ticket {
   id: string;
@@ -30,6 +31,7 @@ interface Ticket {
 
 const Suporte: React.FC = () => {
   const { perfil, role, carregando: carregandoSessao, usuario } = useSessao();
+  const { ticketsAbertos, mensagensNaoLidas, refetch: refetchStatus } = useTicketStatus(); // Usando o hook
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [carregandoTickets, setCarregandoTickets] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -39,7 +41,7 @@ const Suporte: React.FC = () => {
   const isClientOrAdmin = role === 'Cliente' || role === 'Admin';
 
   const getEmpresaId = () => {
-    // Se for Cliente, o ticket é para o Admin (Admin ID)
+    // O destinatário (empresa_id) é sempre o Admin principal
     if (role === 'Cliente') return (perfil as ClienteProfile)?.admin_id || null;
     // Se for Admin, o ticket é para ele mesmo (Admin ID)
     if (role === 'Admin') return (perfil as any)?.id || null;
@@ -77,7 +79,7 @@ const Suporte: React.FC = () => {
     }
       
     if (filtroStatus !== 'todos') {
-        query = query.eq('status', filtroStatus);
+        query = query.in('status', filtroStatus === 'aberto' ? ['aberto', 'em_progresso', 'pausado'] : [filtroStatus]);
     }
 
     const { data, error } = await query;
@@ -125,6 +127,7 @@ const Suporte: React.FC = () => {
   const handleSaveComplete = () => {
     setDialogOpen(false);
     fetchTickets();
+    refetchStatus(); // Atualiza o status do header
   };
   
   const handleOpenTicket = (ticket: Ticket) => {
@@ -134,6 +137,7 @@ const Suporte: React.FC = () => {
   const handleCloseDetalhe = () => {
       setTicketSelecionado(null);
       fetchTickets(); // Recarrega a lista para atualizar o status
+      refetchStatus(); // Atualiza o status do header
   };
   
   const handleDeleteTicket = async (ticketId: string, titulo: string) => {
@@ -210,6 +214,37 @@ const Suporte: React.FC = () => {
         </Dialog>
       </div>
       
+      {/* Cards de Resumo */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <Card className="border-l-4 border-red-500">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium flex items-center"><AlertTriangle className="w-4 h-4 mr-2" /> Tickets Abertos</CardTitle>
+              </CardHeader>
+              <CardContent>
+                  <div className="text-2xl font-bold text-red-600">{ticketsAbertos}</div>
+                  <p className="text-xs text-muted-foreground">Tickets em aberto, em progresso ou pausados.</p>
+              </CardContent>
+          </Card>
+          <Card className="border-l-4 border-green-500">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium flex items-center"><CheckCircle2 className="w-4 h-4 mr-2" /> Mensagens Não Lidas</CardTitle>
+              </CardHeader>
+              <CardContent>
+                  <div className="text-2xl font-bold text-green-600">{mensagensNaoLidas}</div>
+                  <p className="text-xs text-muted-foreground">Mensagens aguardando sua resposta.</p>
+              </CardContent>
+          </Card>
+          <Card className="border-l-4 border-primary">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium flex items-center"><MessageSquare className="w-4 h-4 mr-2" /> Total de Tickets</CardTitle>
+              </CardHeader>
+              <CardContent>
+                  <div className="text-2xl font-bold">{tickets.length}</div>
+                  <p className="text-xs text-muted-foreground">Total de tickets no histórico.</p>
+              </CardContent>
+          </Card>
+      </div>
+
       <Card className="mb-6">
         <CardHeader className="pb-2">
             <CardTitle className="text-lg flex items-center"><Filter className="w-4 h-4 mr-2" /> Filtros</CardTitle>
@@ -221,8 +256,7 @@ const Suporte: React.FC = () => {
                 </SelectTrigger>
                 <SelectContent>
                     <SelectItem value="todos">Todos os Status</SelectItem>
-                    <SelectItem value="aberto">Aberto</SelectItem>
-                    <SelectItem value="em_progresso">Em Progresso</SelectItem>
+                    <SelectItem value="aberto">Aberto/Em Progresso</SelectItem>
                     <SelectItem value="pausado">Pausado</SelectItem>
                     <SelectItem value="fechado">Fechado</SelectItem>
                 </SelectContent>
