@@ -62,16 +62,19 @@ const TicketDetalhe: React.FC<TicketDetalheProps> = ({ ticket, onClose, onUpdate
   const isClosed = currentStatus === 'fechado';
   
   // Lógica de Responsabilidade:
-  // 1. Se houver mensagens, a responsabilidade é do destinatário da última mensagem.
-  // 2. Se não houver mensagens (mensagens.length === 0), a responsabilidade é do Admin (adminId), pois o cliente é o remetente inicial.
+  // O próximo respondente é o destinatário da última mensagem.
+  // Se não houver mensagens, o destinatário é o Admin (adminId).
   const ultimaMensagem = mensagens[mensagens.length - 1];
-  const proximoRespondenteId = mensagens.length === 0 
-    ? adminId 
-    : ultimaMensagem?.destinatario_id; 
+  
+  // Se houver mensagens, o próximo respondente é o destinatário da última mensagem.
+  // Se não houver mensagens, o próximo respondente é o Admin (empresa_id).
+  const proximoRespondenteId = ultimaMensagem 
+    ? ultimaMensagem.destinatario_id 
+    : adminId; 
   
   const isMyTurn = proximoRespondenteId === remetenteId;
   
-  // NOVO: Variável para desabilitar a resposta
+  // Variável para desabilitar a resposta
   const isReplyDisabled = isClosed || !isMyTurn;
   
   // Determina o nome do próximo responsável
@@ -287,14 +290,6 @@ const TicketDetalhe: React.FC<TicketDetalheProps> = ({ ticket, onClose, onUpdate
     }
   };
   
-  // CORREÇÃO CRUCIAL: Ajustar o nome do responsável para o Admin
-  let displayResponsavelNome = responsavelNome;
-  if (proximoRespondenteId === adminId && remetenteId === adminId) {
-      displayResponsavelNome = 'Você';
-  } else if (proximoRespondenteId === adminId) {
-      displayResponsavelNome = 'Administrador';
-  }
-
 
   return (
     <Card className="h-full flex flex-col">
@@ -425,7 +420,7 @@ const TicketDetalhe: React.FC<TicketDetalheProps> = ({ ticket, onClose, onUpdate
                             <span>Sua vez de responder.</span>
                         ) : (
                             // BLOQUEADO / AGUARDANDO OUTRA PARTE
-                            <span>Aguardando resposta do(a) <span className="font-bold">{displayResponsavelNome}</span>. Sua resposta está bloqueada.</span>
+                            <span>Aguardando resposta do(a) <span className="font-bold">{responsavelNome}</span>. Sua resposta está bloqueada.</span>
                         )}
                     </div>
                     

@@ -180,7 +180,6 @@ const AdminSuporte: React.FC = () => {
           fetchTickets();
       } catch (error: any) {
           showError('Falha ao excluir ticket: ' + error.message);
-      } finally {
           setCarregandoTickets(false);
       }
   };
