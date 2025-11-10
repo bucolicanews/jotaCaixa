@@ -58,7 +58,6 @@ const Suporte: React.FC = () => {
       .from('tickets')
       .select(`
         *,
-        proprietario_perfil:proprietario_id ( nome ),
         mensagens_ticket_count:mensagens_ticket(count)
       `)
       .eq('empresa_id', empresaId) // Filtra pelo ID do Admin (destinatário)
@@ -79,11 +78,26 @@ const Suporte: React.FC = () => {
       showError('Erro ao carregar tickets: ' + error.message);
       setTickets([]);
     } else {
-      const mappedData = (data as any[]).map(t => ({
-          ...t,
-          mensagens_ticket_count: t.mensagens_ticket_count[0].count,
+      // Mapeamento manual do nome do proprietário
+      const ticketsComNome = await Promise.all((data as any[]).map(async (t) => {
+          let nome = 'N/A';
+          // Tenta buscar o nome do proprietário na tbl_clientes ou tbl_admins
+          const { data: perfilData } = await supabase.from('tbl_clientes').select('nome').eq('id', t.proprietario_id).single();
+          if (perfilData) {
+              nome = perfilData.nome;
+          } else {
+              const { data: adminData } = await supabase.from('tbl_admins').select('nome').eq('id', t.proprietario_id).single();
+              nome = adminData?.nome || 'Admin';
+          }
+          
+          return {
+              ...t,
+              mensagens_ticket_count: t.mensagens_ticket_count[0].count,
+              proprietario_perfil: { nome: nome }
+          } as Ticket;
       }));
-      setTickets(mappedData as Ticket[]);
+      
+      setTickets(ticketsComNome);
     }
     setCarregandoTickets(false);
   }, [empresaId, filtroStatus, role, perfil]);
