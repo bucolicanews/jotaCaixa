@@ -83,7 +83,7 @@ const AdminSuporte: React.FC = () => {
         proprietario_id,
         empresa_id,
         mensagens_ticket_count:mensagens_ticket(count),
-        ultima_mensagem:mensagens_ticket(remetente_id, destinatario_id, criado_em, ticket_id, order=criado_em.desc.limit.1)
+        ultima_mensagem:mensagens_ticket(remetente_id, destinatario_id, criado_em, ticket_id, order=criado_em.desc, limit=1)
       `)
       .order('atualizado_em', { ascending: false });
       
