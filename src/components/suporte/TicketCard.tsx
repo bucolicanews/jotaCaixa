@@ -60,8 +60,13 @@ const TicketCard: React.FC<TicketCardProps> = ({ ticket, onClick, onDelete, isAd
   const canDelete = isOwner && ticket.status === 'fechado';
   const isClosed = ticket.status === 'fechado';
   
-  // Lógica de Responsabilidade: O próximo a responder é o destinatário da última mensagem.
-  const proximoRespondenteId = ticket.ultima_mensagem_destinatario_id || ticket.proprietario_id;
+  // Lógica de Responsabilidade:
+  // 1. Se houver mensagens (count > 0), usa o destinatário da última mensagem.
+  // 2. Se não houver mensagens (count === 0), a responsabilidade é do Admin (empresa_id), pois o cliente acabou de criar o ticket.
+  const proximoRespondenteId = ticket.mensagens_ticket_count === 0 
+    ? ticket.empresa_id // Admin ID (Destinatário do ticket)
+    : ticket.ultima_mensagem_destinatario_id || ticket.proprietario_id; // Fallback para o proprietário se o destinatário for nulo
+    
   const isMyTurn = proximoRespondenteId === usuario?.id;
   
   let responsavelIndicator = null;
