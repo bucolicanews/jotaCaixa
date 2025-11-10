@@ -60,11 +60,12 @@ const TicketDetalhe: React.FC<TicketDetalheProps> = ({ ticket, onClose, onUpdate
   const fetchMensagens = useCallback(async () => {
     setLoadingMensagens(true);
     
+    // CORREÇÃO: Usando a relação direta com auth.users para buscar o nome do remetente
     const { data, error } = await supabase
       .from('mensagens_ticket')
       .select(`
         *,
-        remetente_perfil:remetente_id ( nome, email, avatar_url )
+        remetente_perfil:remetente_id ( nome )
       `)
       .eq('ticket_id', ticket.id)
       .order('criado_em', { ascending: true });
