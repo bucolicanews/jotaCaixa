@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '@/contexts/ThemeProvider';
 import { Button } from '@/components/ui/button';
-import { Sun, Moon, LogOut, Menu, User, Settings, Key, CalendarCheck, Package, DollarSign } from 'lucide-react';
+import { Sun, Moon, LogOut, Menu, User, Settings, Key, CalendarCheck, Package, DollarSign, MessageSquare } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
@@ -14,6 +14,7 @@ import { UsuarioProfile, ClienteProfile } from '@/types/usuario';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { BASE_URL } from '@/config/app-config'; // Importando BASE_URL
+import { useTicketNotifications } from '@/hooks/use-ticket-notifications'; // NOVO HOOK
 
 const ThemeToggle = () => {
   const { theme, setTheme } = useTheme();
@@ -40,6 +41,9 @@ const Header: React.FC = () => {
   const { perfil, role } = useSessao();
   const [tituloApp, setTituloApp] = useState('Fluxo de Caixa');
   const [planoDetalhes, setPlanoDetalhes] = useState<{ nome: string, preco: number } | null>(null);
+  
+  // NOVO: Hook de Notificações
+  const { mensagensNaoLidas, carregando: carregandoNotificacoes } = useTicketNotifications();
 
   useEffect(() => {
     const updateTitle = async () => {
@@ -145,6 +149,12 @@ const Header: React.FC = () => {
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="relative h-8 w-8 rounded-full p-0">
                 <UserAvatar profile={perfil} className="h-8 w-8" />
+                {/* Indicador de Notificação */}
+                {mensagensNaoLidas > 0 && !carregandoNotificacoes && (
+                    <span className="absolute top-0 right-0 h-3 w-3 rounded-full bg-red-500 border-2 border-background flex items-center justify-center text-white text-[8px] font-bold">
+                        {mensagensNaoLidas > 9 ? '9+' : mensagensNaoLidas}
+                    </span>
+                )}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent className="w-56" align="end" forceMount>
@@ -161,6 +171,16 @@ const Header: React.FC = () => {
               </DropdownMenuLabel>
               
               <DropdownMenuSeparator />
+              
+              {/* NOVO ITEM: Notificações de Suporte */}
+              {mensagensNaoLidas > 0 && (
+                  <DropdownMenuItem asChild className="bg-red-500/10 text-red-600 font-semibold">
+                      <Link to={role === 'Admin' ? '/admin/suporte' : '/suporte'}>
+                          <MessageSquare className="mr-2 h-4 w-4" />
+                          {mensagensNaoLidas} Mensagens Não Lidas
+                      </Link>
+                  </DropdownMenuItem>
+              )}
               
               {/* NOVO ITEM: Plano Atual */}
               {planoDetalhes && (

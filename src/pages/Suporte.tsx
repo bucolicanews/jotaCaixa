@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, MessageSquare, PlusCircle, Filter } from 'lucide-react';
+import { Loader2, MessageSquare, PlusCircle, Filter, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
@@ -12,6 +12,7 @@ import TicketDetalhe from '@/components/suporte/TicketDetalhe.tsx';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ClienteProfile } from '@/types/usuario';
+import { useTicketNotifications } from '@/hooks/use-ticket-notifications'; // Importando o hook
 
 interface Ticket {
   id: string;
@@ -30,6 +31,8 @@ interface Ticket {
 
 const Suporte: React.FC = () => {
   const { perfil, role, carregando: carregandoSessao, usuario } = useSessao();
+  const { totalTicketsAbertos, mensagensNaoLidas, carregando: carregandoNotificacoes, refetch: refetchNotifications } = useTicketNotifications(); // Usando o hook
+  
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [carregandoTickets, setCarregandoTickets] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -125,6 +128,7 @@ const Suporte: React.FC = () => {
   const handleSaveComplete = () => {
     setDialogOpen(false);
     fetchTickets();
+    refetchNotifications(); // Atualiza as notificações após criar um ticket
   };
   
   const handleOpenTicket = (ticket: Ticket) => {
@@ -134,6 +138,7 @@ const Suporte: React.FC = () => {
   const handleCloseDetalhe = () => {
       setTicketSelecionado(null);
       fetchTickets(); // Recarrega a lista para atualizar o status
+      refetchNotifications(); // Atualiza as notificações após fechar o detalhe
   };
   
   const handleDeleteTicket = async (ticketId: string, titulo: string) => {
@@ -153,6 +158,7 @@ const Suporte: React.FC = () => {
           
           showSuccess(`Ticket "${titulo}" excluído com sucesso.`);
           fetchTickets();
+          refetchNotifications();
       } catch (error: any) {
           showError('Falha ao excluir ticket: ' + error.message);
       } finally {
@@ -160,7 +166,7 @@ const Suporte: React.FC = () => {
       }
   };
 
-  if (carregandoSessao || carregandoTickets) {
+  if (carregandoSessao || carregandoTickets || carregandoNotificacoes) {
     return (
       <LayoutPrincipal>
         <div className="flex justify-center items-center h-64">
@@ -209,6 +215,38 @@ const Suporte: React.FC = () => {
           </DialogContent>
         </Dialog>
       </div>
+      
+      {/* CARDS DE RESUMO */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <Card className="border-l-4 border-primary">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Tickets Abertos</CardTitle>
+                  <MessageSquare className="w-4 h-4 text-primary" />
+              </CardHeader>
+              <CardContent>
+                  <div className="text-2xl font-bold">{totalTicketsAbertos}</div>
+              </CardContent>
+          </Card>
+          <Card className="border-l-4 border-red-500">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium text-red-600">Mensagens Não Lidas</CardTitle>
+                  <AlertTriangle className="w-4 h-4 text-red-500" />
+              </CardHeader>
+              <CardContent>
+                  <div className="text-2xl font-bold text-red-600">{mensagensNaoLidas}</div>
+              </CardContent>
+          </Card>
+          <Card className="border-l-4 border-green-500">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Tickets Fechados</CardTitle>
+                  <CheckCircle2 className="w-4 h-4 text-green-600" />
+              </CardHeader>
+              <CardContent>
+                  <div className="text-2xl font-bold">{tickets.filter(t => t.status === 'fechado').length}</div>
+              </CardContent>
+          </Card>
+      </div>
+      {/* FIM CARDS DE RESUMO */}
       
       <Card className="mb-6">
         <CardHeader className="pb-2">

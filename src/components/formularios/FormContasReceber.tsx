@@ -229,12 +229,12 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
       let tabelaContasReceber = isAdmin ? 'admin_contas_receber' : 'contas_receber';
       let tabelaParcelasReceber = isAdmin ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
       
-      // FIX TS6133: ownerKey agora é declarado e usado aqui
-      let ownerKey = isAdmin ? 'admin_id' : 'empresa_id';
+      // Usando a chave diretamente no payload
+      const ownerKey = isAdmin ? 'admin_id' : 'empresa_id';
       
       const baseData = isAdmin 
-        ? { admin_id: ownerId, cliente_id: values.cliente_id, id_conta_contabil: contaAReceber, historico_id: values.historico_id } 
-        : { empresa_id: ownerId, cliente_id: values.cliente_id };
+        ? { [ownerKey]: ownerId, cliente_id: values.cliente_id, id_conta_contabil: contaAReceber, historico_id: values.historico_id } 
+        : { [ownerKey]: ownerId, cliente_id: values.cliente_id };
       
       const contaReceberPayload = {
           ...baseData,
