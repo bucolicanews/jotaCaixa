@@ -11,6 +11,7 @@ import { startOfMonth, endOfMonth, format, addDays } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useNavigate } from 'react-router-dom';
+import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 
 interface FluxoData {
     receber: number;
@@ -28,7 +29,7 @@ interface ContaMensalData {
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
 
 const DashboardFinanceiro: React.FC = () => {
-    const { usuario, carregando: carregandoSessao } = useSessao();
+    const { usuario, perfil, role, carregando: carregandoSessao } = useSessao();
     const navigate = useNavigate();
     
     const [filtroContaId, setFiltroContaId] = useState('todos'); // 'todos' ou ID da conta
@@ -38,7 +39,17 @@ const DashboardFinanceiro: React.FC = () => {
     const [totalAReceber30Dias, setTotalAReceber30Dias] = useState(0);
     const [totalAPagar30Dias, setTotalAPagar30Dias] = useState(0);
 
-    const ownerId = usuario?.id; // O Admin é o proprietário dos dados de faturamento
+    const isAdmin = role === 'Admin';
+    
+    // Determina o ID do proprietário (Admin ID ou Cliente ID)
+    const getOwnerId = () => {
+        if (isAdmin) return usuario?.id || null;
+        if (role === 'Cliente') return (perfil as ClienteProfile)?.id || null;
+        if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id || null;
+        return null;
+    };
+    
+    const ownerId = getOwnerId();
 
     // Hook para buscar saldos de contas (Ativo/Passivo)
     const { contas, totalSaldo, carregando: carregandoSaldos } = useSaldoContaCalculado('todos', 'todos', '');
@@ -118,33 +129,38 @@ const DashboardFinanceiro: React.FC = () => {
         const start = format(startOfMonth(new Date()), 'yyyy-MM-dd');
         const end = format(endOfMonth(new Date()), 'yyyy-MM-dd');
         
-        // 1. Buscar Contas a Receber (Admin) no mês atual
+        const tabelaParcelasReceber = isAdmin ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
+        const tabelaParcelasPagar = isAdmin ? 'admin_parcelas_pagar' : 'parcelas_contas_pagar';
+        const ownerKeyCR = isAdmin ? 'admin_id' : 'empresa_id';
+        const ownerKeyCP = isAdmin ? 'admin_id' : 'empresa_id';
+        
+        // 1. Buscar Contas a Receber (Parcelas) no mês atual
         const { data: crData, error: crError } = await supabase
-            .from('admin_parcelas_receber')
+            .from(tabelaParcelasReceber)
             .select('valor_parcela, status')
-            .eq('admin_id', ownerId)
+            .eq(ownerKeyCR, ownerId)
             .gte('data_vencimento', start)
             .lte('data_vencimento', end)
             .neq('status', 'cancelada');
 
-        if (crError) { showError('Erro ao buscar CR: ' + crError.message); return; }
+        if (crError) { console.error('Erro ao buscar CR:', crError); return; }
         const totalReceber = (crData || []).reduce((sum, p) => sum + p.valor_parcela, 0);
         
-        // 2. Buscar Contas a Pagar (Admin) no mês atual
+        // 2. Buscar Contas a Pagar (Parcelas) no mês atual
         const { data: cpData, error: cpError } = await supabase
-            .from('admin_parcelas_pagar')
+            .from(tabelaParcelasPagar)
             .select('valor_parcela, status')
-            .eq('admin_id', ownerId)
+            .eq(ownerKeyCP, ownerId)
             .gte('data_vencimento', start)
             .lte('data_vencimento', end)
             .neq('status', 'cancelada');
 
-        if (cpError) { showError('Erro ao buscar CP: ' + cpError.message); return; }
+        if (cpError) { console.error('Erro ao buscar CP:', cpError); return; }
         const totalPagar = (cpData || []).reduce((sum, p) => sum + p.valor_parcela, 0);
         
         setFluxoData({ receber: totalReceber, pagar: totalPagar, isGeral: true });
         setLoadingFluxo(false);
-    }, [ownerId]);
+    }, [ownerId, isAdmin]);
     
     const fetchKPIs = useCallback(async () => {
         if (!ownerId) return;
@@ -152,11 +168,16 @@ const DashboardFinanceiro: React.FC = () => {
         const today = format(new Date(), 'yyyy-MM-dd');
         const thirtyDaysLater = format(addDays(new Date(), 30), 'yyyy-MM-dd');
         
+        const tabelaParcelasReceber = isAdmin ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
+        const tabelaParcelasPagar = isAdmin ? 'admin_parcelas_pagar' : 'parcelas_contas_pagar';
+        const ownerKeyCR = isAdmin ? 'admin_id' : 'empresa_id';
+        const ownerKeyCP = isAdmin ? 'admin_id' : 'empresa_id';
+        
         // Total a Receber (próximos 30 dias)
         const { data: cr30, error: cr30Error } = await supabase
-            .from('admin_parcelas_receber')
+            .from(tabelaParcelasReceber)
             .select('valor_parcela')
-            .eq('admin_id', ownerId)
+            .eq(ownerKeyCR, ownerId)
             .in('status', ['aberta', 'parcial', 'reprogramada'])
             .gte('data_vencimento', today)
             .lte('data_vencimento', thirtyDaysLater);
@@ -167,9 +188,9 @@ const DashboardFinanceiro: React.FC = () => {
         
         // Total a Pagar (próximos 30 dias)
         const { data: cp30, error: cp30Error } = await supabase
-            .from('admin_parcelas_pagar')
+            .from(tabelaParcelasPagar)
             .select('valor_parcela')
-            .eq('admin_id', ownerId)
+            .eq(ownerKeyCP, ownerId)
             .in('status', ['aberta', 'parcial', 'reprogramada'])
             .gte('data_vencimento', today)
             .lte('data_vencimento', thirtyDaysLater);
@@ -178,7 +199,7 @@ const DashboardFinanceiro: React.FC = () => {
         const totalCP = (cp30 || []).reduce((sum, p) => sum + p.valor_parcela, 0);
         setTotalAPagar30Dias(totalCP);
         
-    }, [ownerId]);
+    }, [ownerId, isAdmin]);
 
     useEffect(() => {
         if (ownerId) {

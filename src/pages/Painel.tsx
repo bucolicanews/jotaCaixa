@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
 import { Package } from 'lucide-react';
-import DashboardFinanceiro from '@/components/DashboardFinanceiro'; // Importando o novo componente
+import DashboardFinanceiro from '@/components/DashboardFinanceiro';
 
 const Painel = () => {
   const { role, perfil } = useSessao();
@@ -20,12 +20,12 @@ const Painel = () => {
     isClientApproved = clienteProfile?.aprovado ?? false;
     if (isClientApproved) {
       const permissoes = clienteProfile?.permissoes || {};
-      hasFinancePermissions = permissoes.contas_pagar || permissoes.contas_receber;
+      hasFinancePermissions = permissoes.contas_pagar || permissoes.contas_receber || permissoes.bancos;
     }
   } else if (role === 'Usuario') {
     const usuarioProfile = perfil as UsuarioProfile;
     const permissoes = usuarioProfile?.permissoes || {};
-    hasFinancePermissions = permissoes.contas_pagar || permissoes.contas_receber;
+    hasFinancePermissions = permissoes.contas_pagar || permissoes.contas_receber || permissoes.bancos;
   }
   
   const isClient = role === 'Cliente';
@@ -51,23 +51,9 @@ const Painel = () => {
             Bem-vindo ao {isAdmin ? 'Painel Administrativo' : 'Fluxo de Caixa'}.
           </p>
 
-          {isAdmin ? (
+          {/* Renderiza o DashboardFinanceiro se for Admin OU se tiver permissões financeiras */}
+          {isAdmin || hasFinancePermissions ? (
             <DashboardFinanceiro />
-          ) : hasFinancePermissions ? (
-            <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-6">
-              <Card>
-                <CardHeader><CardTitle className="text-xl font-semibold">Saldo Atual</CardTitle></CardHeader>
-                <CardContent><p className="text-3xl mt-2 text-green-600">R$ 0,00</p></CardContent>
-              </Card>
-              <Card>
-                <CardHeader><CardTitle className="text-xl font-semibold">Contas a Vencer (30 dias)</CardTitle></CardHeader>
-                <CardContent><p className="text-3xl mt-2 text-red-600">R$ 0,00</p></CardContent>
-              </Card>
-              <Card>
-                <CardHeader><CardTitle className="text-xl font-semibold">Conciliações Pendentes</CardTitle></CardHeader>
-                <CardContent><p className="text-3xl mt-2 text-yellow-600">0</p></CardContent>
-              </Card>
-            </div>
           ) : (
             <Card className="mt-8">
               <CardHeader>
