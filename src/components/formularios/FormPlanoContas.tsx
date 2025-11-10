@@ -28,13 +28,16 @@ type FormValues = z.infer<typeof formSchema>;
 
 interface FormPlanoContasProps {
   proprietarioId: string;
-  contaInicial?: PlanoContas | null;
+  // O tipo agora pode ser PlanoContas (com id) ou um objeto parcial (sem id)
+  contaInicial?: Partial<PlanoContas> | null; 
   onSaveComplete: () => void;
 }
 
 const FormPlanoContas: React.FC<FormPlanoContasProps> = ({ proprietarioId, contaInicial, onSaveComplete }) => {
   
-  // Se for edição, usa os valores iniciais. Se for criação, usa os valores do form.reset no componente pai.
+  // CORREÇÃO CRÍTICA: isEditing é true APENAS se houver um ID válido.
+  const isEditing = !!contaInicial && !!contaInicial.id;
+
   const defaultConta = contaInicial?.Conta || '';
   const defaultAnalitica = contaInicial?.Analitica || 'Não';
   
@@ -65,12 +68,12 @@ const FormPlanoContas: React.FC<FormPlanoContasProps> = ({ proprietarioId, conta
 
     let error = null;
 
-    if (contaInicial) {
+    if (isEditing) {
       // Atualizar
       const result = await supabase
         .from('plano_contas')
         .update(dataToSave)
-        .eq('id', contaInicial.id);
+        .eq('id', contaInicial!.id); // Usamos ! para garantir que o ID existe no modo de edição
       error = result.error;
     } else {
       // Inserir
@@ -205,7 +208,7 @@ const FormPlanoContas: React.FC<FormPlanoContasProps> = ({ proprietarioId, conta
         
         <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
           {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          Salvar Conta
+          {isEditing ? 'Salvar Alterações' : 'Salvar Conta'}
         </Button>
       </form>
     </Form>
