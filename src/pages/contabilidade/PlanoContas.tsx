@@ -49,12 +49,27 @@ const PlanoContasPage = () => {
   // NOVO ESTADO: Conta clicada para navegação hierárquica
   const [contaClicada, setContaClicada] = useState<PlanoContas | null>(null);
   const [popoverOpen, setPopoverOpen] = useState(false);
+  const [mascaraAtiva, setMascaraAtiva] = useState<string | null>(null); // NOVO ESTADO PARA MÁSCARA
 
   // Estados dos filtros
   const [filtroTexto, setFiltroTexto] = useState('');
   const filtroTextoDebounced = useDebounce(filtroTexto, 500);
   const [filtroTipoConta, setFiltroTipoConta] = useState('todos');
   const [filtroAnalitica, setFiltroAnalitica] = useState('todos');
+
+  const fetchMascara = useCallback(async (id: string) => {
+    const { data, error } = await supabase
+        .from('configuracao_plano_contas')
+        .select('mascara_codigo')
+        .eq('proprietario_id', id)
+        .limit(1)
+        .single();
+        
+    if (error && error.code !== 'PGRST116') {
+        console.error('Erro ao buscar máscara:', error);
+    }
+    setMascaraAtiva(data?.mascara_codigo || null);
+  }, []);
 
   const buscarPlanoContas = useCallback(async (id: string) => {
     setCarregandoContas(true);
@@ -113,13 +128,14 @@ const PlanoContasPage = () => {
       
       if (ownerId) {
           setProprietarioId(ownerId);
+          fetchMascara(ownerId); // Busca a máscara ao definir o proprietário
       } else {
           setCarregandoContas(false);
       }
     } else if (!carregandoSessao && !usuario) {
         setCarregandoContas(false);
     }
-  }, [carregandoSessao, usuario, perfil, role]);
+  }, [carregandoSessao, usuario, perfil, role, fetchMascara]);
 
   useEffect(() => {
     if (proprietarioId) {
@@ -186,38 +202,55 @@ const PlanoContasPage = () => {
       let novoCodigo = '';
       let novaAnalitica: 'Sim' | 'Não' = 'Não';
       
+      // 1. Determinar a máscara de padding
+      const maskParts = mascaraAtiva?.split('.') || [];
+      
       if (nivel === 'abaixo') {
-          // Nível Abaixo: Adiciona .01 ao código atual
-          novoCodigo = contaClicada.Conta + '.01';
+          // Nível Abaixo: Adiciona um novo segmento
+          
+          // O novo segmento é o próximo nível (nivelAtual + 1)
+          const proximoNivel = nivelAtual; 
+          
+          // Se a máscara não tiver um segmento para o próximo nível, usamos '0001' como fallback
+          const paddingLength = maskParts[proximoNivel]?.length || 4; 
+          const novoSegmento = String(1).padStart(paddingLength, '0');
+          
+          novoCodigo = contaClicada.Conta + '.' + novoSegmento;
           novaAnalitica = 'Sim'; // Sugere analítica para o próximo nível
+          
       } else {
           // Nível Acima: Incrementa o último segmento do código do pai
+          
+          // 1. Encontra o código do pai (se houver)
+          const codigoPai = parts.slice(0, nivelAtual - 1).join('.');
+          
+          // 2. Encontra o segmento a ser incrementado
+          const segmentoAtual = parts[nivelAtual - 1];
+          const paddingLength = segmentoAtual.length;
+          
+          // 3. Encontra a conta de mesmo nível com o maior código
+          const contasNoMesmoNivel = contas.filter(c => {
+              const cParts = c.Conta.split('.').filter(p => p.length > 0);
+              // Verifica se tem o mesmo número de segmentos E o mesmo prefixo do pai
+              return cParts.length === nivelAtual && c.Conta.startsWith(codigoPai);
+          });
+          
+          const maxSegmento = contasNoMesmoNivel.reduce((max, c) => {
+              const cParts = c.Conta.split('.').filter(p => p.length > 0);
+              return Math.max(max, parseInt(cParts[nivelAtual - 1], 10));
+          }, parseInt(segmentoAtual, 10));
+          
+          const novoSegmentoNumerico = maxSegmento + 1;
+          
+          // 4. Aplica o padding
+          const novoSegmentoFormatado = String(novoSegmentoNumerico).padStart(paddingLength, '0');
+          
           if (nivelAtual === 1) {
-              // Se for nível 1 (ex: 1), incrementa para 2
-              const primeiroDigito = parseInt(parts[0], 10);
-              novoCodigo = `${primeiroDigito + 1}`;
+              novoCodigo = novoSegmentoFormatado;
           } else {
-              // Se for nível > 1 (ex: 1.1.1), pega o pai (1.1), incrementa o último segmento (1.1.2)
-              const codigoPai = parts.slice(0, nivelAtual - 1).join('.');
-              const ultimoSegmento = parseInt(parts[nivelAtual - 1], 10);
-              
-              // Encontra a conta de mesmo nível com o maior código
-              const contasNoMesmoNivel = contas.filter(c => {
-                  const cParts = c.Conta.split('.').filter(p => p.length > 0);
-                  return cParts.length === nivelAtual && c.Conta.startsWith(codigoPai);
-              });
-              
-              const maxSegmento = contasNoMesmoNivel.reduce((max, c) => {
-                  const cParts = c.Conta.split('.').filter(p => p.length > 0);
-                  return Math.max(max, parseInt(cParts[nivelAtual - 1], 10));
-              }, ultimoSegmento);
-              
-              const novoSegmento = maxSegmento + 1;
-              
-              // Garante que o novo segmento tenha o mesmo preenchimento de zero que o segmento anterior
-              const paddingLength = parts[nivelAtual - 1].length;
-              novoCodigo = `${codigoPai}.${String(novoSegmento).padStart(paddingLength, '0')}`;
+              novoCodigo = `${codigoPai}.${novoSegmentoFormatado}`;
           }
+          
           novaAnalitica = 'Não'; // Sugere sintética para o mesmo nível
       }
       
