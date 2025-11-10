@@ -667,8 +667,12 @@ const ClientesPage = () => {
   
   // Consolidando todos os clientes CR para a aba 'Clientes CR'
   const todosClientesCR = useMemo(() => {
+      // FILTRAGEM PRINCIPAL: Se for Cliente, exclui o próprio ID da lista de clientes CR
+      if (role === 'Cliente' && ownerId) {
+          return clientesCR.filter(c => c.id !== ownerId);
+      }
       return clientesCR;
-  }, [clientesCR]);
+  }, [clientesCR, role, ownerId]);
 
 
   // Renderização do conteúdo da tabela de Clientes CR
@@ -1148,7 +1152,7 @@ const ClientesPage = () => {
         // Cliente/Usuário (apenas Clientes CR)
         <Card>
             <CardHeader>
-                <CardTitle className="text-xl">Clientes Diretos / Contratos Cadastrados ({clientesCR.length})</CardTitle>
+                <CardTitle className="text-xl">Clientes Diretos / Contratos Cadastrados ({todosClientesCR.length})</CardTitle>
             </CardHeader>
             <CardContent>{renderClientesCRTable()}</CardContent>
         </Card>
