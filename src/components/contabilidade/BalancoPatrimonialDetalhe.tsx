@@ -83,7 +83,7 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
         <TableRow 
             key={c.id} 
             className={cn(
-                isSintetica ? 'bg-secondary/50 font-semibold' : 'text-sm',
+                isSintetica ? 'bg-gray-200 dark:bg-gray-700/50 font-semibold' : 'text-sm', // ALTERADO AQUI
                 // Adiciona uma borda inferior para separar os grupos de nível 1
                 level === 1 && 'border-b-2 border-border'
             )}
