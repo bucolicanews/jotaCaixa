@@ -87,7 +87,7 @@ const AdminSuporte: React.FC = () => {
       `)
       .order('atualizado_em', { ascending: false });
       
-    // Aplica ordenação e limite na relação aninhada
+    // APLICAÇÃO CORRETA DE ORDER E LIMIT NA RELAÇÃO ANINHADA
     query = query
         .order('criado_em', { foreignTable: 'ultima_mensagem', ascending: false })
         .limit(1, { foreignTable: 'ultima_mensagem' });
@@ -108,7 +108,8 @@ const AdminSuporte: React.FC = () => {
     } else {
       let rawTickets = (data as any[]).map(t => ({
           ...t,
-          mensagens_ticket_count: t.mensagens_ticket_count[0].count,
+          // CORREÇÃO: Garante que o count seja um número
+          mensagens_ticket_count: parseInt(t.mensagens_ticket_count?.[0]?.count || '0', 10),
       })) as Ticket[];
       
       // 1. Coletar todos os proprietario_id únicos

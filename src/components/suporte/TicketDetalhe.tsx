@@ -82,6 +82,20 @@ const TicketDetalhe: React.FC<TicketDetalheProps> = ({ ticket, onClose, onUpdate
       responsavelNome = 'Você';
   }
 
+  const marcarMensagensComoLidas = useCallback(async () => {
+    if (!remetenteId) return;
+    try {
+      await supabase
+        .from('mensagens_ticket')
+        .update({ lido: true })
+        .eq('ticket_id', ticket.id)
+        .eq('destinatario_id', remetenteId)
+        .eq('lido', false);
+    } catch (err) {
+      console.warn('Falha ao marcar mensagens como lidas', err);
+    }
+  }, [remetenteId, ticket.id]);
+
 
   const fetchMensagens = useCallback(async () => {
     setLoadingMensagens(true);
@@ -129,9 +143,12 @@ const TicketDetalhe: React.FC<TicketDetalheProps> = ({ ticket, onClose, onUpdate
       });
       
       setMensagens(mensagensComNome);
+      
+      // 4. Marca mensagens como lidas para o usuário logado
+      await marcarMensagensComoLidas();
     }
     setLoadingMensagens(false);
-  }, [ticket.id]);
+  }, [ticket.id, marcarMensagensComoLidas]);
 
   useEffect(() => {
     fetchMensagens();

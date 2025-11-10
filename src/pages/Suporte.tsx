@@ -66,7 +66,7 @@ const Suporte: React.FC = () => {
       .eq('empresa_id', empresaId) // Filtra pelo ID do Admin (destinatário)
       .order('atualizado_em', { ascending: false });
       
-    // Aplica ordenação e limite na relação aninhada
+    // APLICAÇÃO CORRETA DE ORDER E LIMIT NA RELAÇÃO ANINHADA
     query = query
         .order('criado_em', { foreignTable: 'ultima_mensagem', ascending: false })
         .limit(1, { foreignTable: 'ultima_mensagem' });
@@ -103,7 +103,8 @@ const Suporte: React.FC = () => {
           
           return {
               ...t,
-              mensagens_ticket_count: t.mensagens_ticket_count[0].count,
+              // CORREÇÃO: Garante que o count seja um número
+              mensagens_ticket_count: parseInt(t.mensagens_ticket_count?.[0]?.count || '0', 10),
               proprietario_perfil: { nome: nome },
               ultima_mensagem_remetente_id: ultimaMensagem?.remetente_id || null,
               ultima_mensagem_destinatario_id: ultimaMensagem?.destinatario_id || null, // NOVO CAMPO

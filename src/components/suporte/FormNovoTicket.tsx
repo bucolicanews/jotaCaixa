@@ -112,6 +112,7 @@ const FormNovoTicket: React.FC<FormNovoTicketProps> = ({ onSaveComplete }) => {
       const mensagemPayload = {
         ticket_id: ticketId,
         remetente_id: remetenteId,
+        destinatario_id: destinatarioId, // ADICIONADO: Garante que o admin seja o destinatário inicial
         conteudo: values.conteudo,
         anexo_url: anexoUrl,
       };
