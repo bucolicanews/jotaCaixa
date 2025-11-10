@@ -25,15 +25,13 @@ interface NovaContaInicial {
     Analitica: 'Sim' | 'Não';
 }
 
-// Tipo unificado para os valores iniciais do formulário (inclui PlanoContas completo ou apenas os campos de criação)
-type FormInitialValues = Partial<PlanoContas> & {
-    Conta: string;
-    Descricao: string;
-    Analitica: 'Sim' | 'Não';
+// Tipo para os dados que o FormPlanoContas realmente precisa para inicializar
+type FormInitialData = PlanoContas | (NovaContaInicial & {
     codigo_reduzido: string;
+    Descricao: string;
     is_conta_saldo: boolean;
     is_conta_resultado: boolean;
-};
+});
 
 const PlanoContasPage = () => {
   const { usuario, perfil, role, carregando: carregandoSessao } = useSessao();
@@ -257,7 +255,7 @@ const PlanoContasPage = () => {
   }
   
   // Determina os valores iniciais do formulário de diálogo
-  const initialFormValues: PlanoContas | FormInitialValues | null = contaSelecionada 
+  const initialFormValues: PlanoContas | FormInitialData | null = contaSelecionada 
     ? contaSelecionada 
     : (novaContaInicial 
         ? { 
@@ -267,7 +265,7 @@ const PlanoContasPage = () => {
             Descricao: '', 
             is_conta_saldo: false, 
             is_conta_resultado: false 
-        } as FormInitialValues
+        } as FormInitialData
         : null);
 
   return (
@@ -288,7 +286,7 @@ const PlanoContasPage = () => {
               </DialogHeader>
               <FormPlanoContas 
                 proprietarioId={proprietarioId}
-                contaInicial={initialFormValues as PlanoContas | null} // Passa o objeto de inicialização
+                contaInicial={initialFormValues as PlanoContas | null}
                 onSaveComplete={handleSaveComplete}
               />
             </DialogContent>
