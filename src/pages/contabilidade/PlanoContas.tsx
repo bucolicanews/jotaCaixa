@@ -354,7 +354,7 @@ const PlanoContasPage = () => {
         <ImportarPlanoContas onImportComplete={handleImportComplete} />
 
         <Card>
-          <CardHeader>
+          <CardHeader className="pb-2">
             <CardTitle className="text-lg flex items-center"><Filter className="w-4 h-4 mr-2" /> Filtros</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col sm:flex-row gap-4">
@@ -398,9 +398,9 @@ const PlanoContasPage = () => {
           </CardHeader>
           <CardContent>
             {/* Usando div nativo para controlar a rolagem e garantir o sticky header */}
-            <div className="overflow-x-auto overflow-y-auto max-h-[60vh]">
+            <div className="overflow-x-auto overflow-y-auto max-h-[75vh]">
               <table className="w-full caption-bottom text-sm">
-                <thead className="[&amp;_tr]:border-b sticky top-0 bg-background z-10">
+                <thead className="[&amp;_tr]:border-b sticky top-[120px] bg-background z-10">
                   <TableRow>
                     <TableHead className="w-[150px]">Conta</TableHead>
                     <TableHead className="w-[100px]">Cód. Reduzido</TableHead>
