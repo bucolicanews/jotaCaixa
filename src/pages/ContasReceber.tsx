@@ -217,12 +217,28 @@ const ContasReceber = () => {
     buscarDados();
   };
 
-  // CORREÇÃO: Atualiza handleEdit para aceitar ContaReceberComProgresso e usa _conta para evitar TS6133
-  const handleEdit = (_conta: ContaReceberComProgresso) => {
-    showError('Funcionalidade de edição de Contas a Receber ainda não implementada.');
-    // Para abrir o formulário de edição, você precisaria converter ContaReceberComProgresso para ContaReceber
-    // setContaSelecionada(conta); 
-    // setDialogAberto(true);
+  // CORREÇÃO: Implementação da função handleEdit
+  const handleEdit = (conta: ContaReceberComProgresso) => {
+    // Converte ContaReceberComProgresso para ContaReceber (removendo os campos opcionais)
+    const baseConta: ContaReceber = {
+        id: conta.id,
+        empresa_id: (conta as any).empresa_id || (conta as any).admin_id,
+        cliente_id: conta.cliente_id,
+        origem: conta.origem,
+        descricao: conta.descricao,
+        valor_total: conta.valor_total,
+        data_emissao: conta.data_emissao,
+        data_vencimento: conta.data_vencimento,
+        status: conta.status,
+        tipo_receita: conta.tipo_receita,
+        clientes: conta.clientes,
+        created_at: conta.created_at,
+        updated_at: conta.updated_at,
+        historico_id: conta.historico_id,
+        id_conta_contabil: conta.id_conta_contabil,
+    };
+    setContaSelecionada(baseConta);
+    setDialogAberto(true);
   };
 
   const handleDelete = async (contaId: string) => {
