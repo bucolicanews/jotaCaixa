@@ -64,6 +64,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
   
   // Determina as tabelas de destino
   const tabelaRecebimentos = isAdmin ? 'admin_recebimentos' : 'recebimentos';
+  const tabelaContasReceber = isAdmin ? 'admin_contas_receber' : 'contas_receber'; // Adicionado
   const tabelaParcelas = isAdmin ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
   
   // O ID do proprietário da conta (Admin ID ou Empresa ID)
@@ -169,8 +170,27 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
     const contaRecebimento = isAdmin ? (await supabase.from('configuracao_contas_receber').select('conta_contabil_id').eq('proprietario_id', ownerId).eq('tipo_registro', 'recebimento').single()).data?.conta_contabil_id : null;
     const contaParcela = isAdmin ? (await supabase.from('configuracao_contas_receber').select('conta_contabil_id').eq('proprietario_id', ownerId).eq('tipo_registro', 'parcela').single()).data?.conta_contabil_id : null;
     
+    // 0. Buscar a Conta Contábil de Receita (DRE) da Conta Sintética
+    const { data: contaSintetica, error: csError } = await supabase
+        .from(tabelaContasReceber)
+        .select('id_conta_contabil, descricao')
+        .eq('id', parcela.conta_receber_id)
+        .single();
+        
+    if (csError) {
+        showError('Erro ao buscar conta sintética para DRE: ' + csError.message);
+        return;
+    }
+    const contaReceitaDRE = contaSintetica?.id_conta_contabil;
+    const descricaoContaSintetica = contaSintetica?.descricao || 'Recebimento';
+    
     // Payload base para recebimentos
     let recebimentoBasePayload;
+    
+    // CORREÇÃO DE FUSO HORÁRIO: Salva a data no meio do dia UTC para evitar que o fuso horário local mude o dia.
+    const dataPagamento = values.data_pagamento;
+    const dataNoonUTC = new Date(Date.UTC(dataPagamento.getFullYear(), dataPagamento.getMonth(), dataPagamento.getDate(), 12, 0, 0));
+    const dataPagamentoISO = dataNoonUTC.toISOString();
     
     if (isAdmin) {
         const clienteIdPagador = parcela.cliente_id || parcela.empresa_id;
@@ -203,19 +223,19 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
       // 1. Registrar o recebimento
       const { error: recebimentoError } = await supabase.from(tabelaRecebimentos).insert({
         ...recebimentoBasePayload,
-        data_recebimento: values.data_pagamento.toISOString(),
+        data_recebimento: dataPagamentoISO,
         forma_pagamento: values.forma_pagamento,
         tipo_recebimento: quitouComPagamentoAtual ? 'total' : 'parcial',
       });
       
       if (recebimentoError) throw recebimentoError;
       
-      // 2. Lidar com a parcela original
+      // 2. Lidar com a parcela original (lógica de reprogramação/desconto mantida)
       if (quitouComPagamentoAtual) {
         await supabase.from(tabelaParcelas).update({
           status: 'paga',
           valor_pago: novoValorPagoTotal,
-          data_pagamento: values.data_pagamento.toISOString(),
+          data_pagamento: format(dataPagamento, 'yyyy-MM-dd'),
           ...(isAdmin && { id_conta_contabil: contaParcela })
         }).eq('id', parcela.id);
       } else { // Pagamento parcial
@@ -223,7 +243,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
           await supabase.from(tabelaParcelas).update({
             status: 'paga',
             valor_pago: novoValorPagoTotal,
-            data_pagamento: values.data_pagamento.toISOString(),
+            data_pagamento: format(dataPagamento, 'yyyy-MM-dd'),
             observacao: `Recebido R$ ${valorRecebido.toFixed(2)} com R$ ${saldoRestanteCalculado.toFixed(2)} de desconto.`,
             ...(isAdmin && { id_conta_contabil: contaParcela })
           }).eq('id', parcela.id);
@@ -232,7 +252,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
           await supabase.from(tabelaParcelas).update({
             status: 'paga', 
             valor_pago: novoValorPagoTotal,
-            data_pagamento: values.data_pagamento.toISOString(),
+            data_pagamento: format(dataPagamento, 'yyyy-MM-dd'),
             observacao: `Recebido R$ ${valorRecebido.toFixed(2)}. Saldo de R$ ${saldoRestanteCalculado.toFixed(2)} ${values.acao_saldo_restante === 'reprogramar' ? 'reprogramado' : 'parcelado'}.`,
             ...(isAdmin && { id_conta_contabil: contaParcela })
           }).eq('id', parcela.id);
@@ -269,21 +289,39 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
         }
       }
       
-      // 3. Registrar o Lançamento na conta de Saldo (Movimentação de Caixa/Banco)
-      const lancamentoPayload = {
-          proprietario_id: ownerId, // ALTERADO: empresa_id -> proprietario_id
-          data_movimentacao: values.data_pagamento.toISOString(),
+      // 3. Registrar o Lançamento na conta de Saldo (Movimentação de Caixa/Banco) - DÉBITO (Ativo)
+      const lancamentoAtivoPayload = {
+          proprietario_id: ownerId,
+          data_movimentacao: dataPagamentoISO,
           descricao: `Recebimento Parcela ${parcela.id} - ${values.forma_pagamento}`,
           valor: valorRecebido,
-          tipo: 'Entrada',
+          tipo: 'Entrada' as const, // Entrada no Ativo
           conta_bancaria_id: values.conta_id,
-          conta_contabil_id: contaRecebimento,
-          historico_id: values.historico_id, // NOVO CAMPO
+          conta_contabil_id: contaRecebimento, // Conta de Ativo/Passivo (Recebimento)
+          historico_id: values.historico_id,
       };
       
-      await supabase.from('lancamentos').insert(lancamentoPayload);
+      await supabase.from('lancamentos').insert(lancamentoAtivoPayload);
       
-      // 4. Salvar Histórico Padrão (se marcado)
+      // 4. Registrar o Lançamento na conta de Receita (DRE) - CRÉDITO (Receita)
+      if (contaReceitaDRE) {
+          const lancamentoReceitaPayload = {
+              proprietario_id: ownerId,
+              data_movimentacao: dataPagamentoISO,
+              descricao: `Receita: ${descricaoContaSintetica}`,
+              valor: valorRecebido,
+              tipo: 'Entrada' as const, // Entrada na Receita (aumenta o saldo da conta 3.x.x)
+              conta_bancaria_id: null, // Não é uma conta de saldo
+              conta_contabil_id: contaReceitaDRE, // Conta de Receita (3.x.x)
+              historico_id: values.historico_id,
+          };
+          
+          await supabase.from('lancamentos').insert(lancamentoReceitaPayload);
+      } else {
+          console.warn('Aviso: Conta Contábil de Receita não mapeada na conta sintética. DRE pode estar incompleta.');
+      }
+      
+      // 5. Salvar Histórico Padrão (se marcado)
       if (isAdmin && values.salvar_como_padrao && values.historico_id) {
           await supabase.from('configuracao_contas_receber').upsert({
               proprietario_id: ownerId,

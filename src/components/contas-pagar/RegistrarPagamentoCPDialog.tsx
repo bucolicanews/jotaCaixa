@@ -200,6 +200,20 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
     const contaPagamento = mapeamentoContabil['pagamento'];
     const contaParcelaPagar = mapeamentoContabil['parcela_pagar'];
     
+    // 0. Buscar a Conta Contábil de Despesa/Custo (DRE) da Conta Sintética
+    const { data: contaSintetica, error: csError } = await supabase
+        .from(tabelaContasPagar)
+        .select('id_conta_contabil, descricao')
+        .eq('id', parcela.conta_pagar_id)
+        .single();
+        
+    if (csError) {
+        showError('Erro ao buscar conta sintética para DRE: ' + csError.message);
+        return;
+    }
+    const contaDespesaDRE = contaSintetica?.id_conta_contabil;
+    const descricaoContaSintetica = contaSintetica?.descricao || 'Pagamento';
+    
     // CORREÇÃO DE FUSO HORÁRIO: Salva a data no meio do dia UTC para evitar que o fuso horário local mude o dia.
     const dataPagamento = values.data_pagamento;
     const dataNoonUTC = new Date(Date.UTC(dataPagamento.getFullYear(), dataPagamento.getMonth(), dataPagamento.getDate(), 12, 0, 0));
@@ -207,6 +221,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
 
     try {
       for (const pagamento of values.pagamentos) {
+        // 1. Registrar Pagamento (Histórico)
         const pagamentoPayload = { 
             parcela_id: parcela.id, 
             admin_id: adminId, 
@@ -222,23 +237,43 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
         const { error: pagamentoError } = await supabase.from(tabelaPagamentos).insert(pagamentoPayload);
         if (pagamentoError) throw pagamentoError;
         
-        const lancamentoPayload = {
-            proprietario_id: adminId, // ALTERADO: empresa_id -> proprietario_id
+        // 2. Registrar o Lançamento na conta de Saldo (Movimentação de Caixa/Banco) - CRÉDITO (Ativo)
+        const lancamentoAtivoPayload = {
+            proprietario_id: adminId,
             data_movimentacao: dataPagamentoISO,
             descricao: `Pagamento Parcela ${parcela.id} - ${parcela.fornecedor}`, 
             valor: pagamento.valor_pago,
-            tipo: 'Saida' as const,
+            tipo: 'Saida' as const, // Saída do Ativo
             conta_bancaria_id: pagamento.conta_id,
-            conta_contabil_id: contaPagamento,
+            conta_contabil_id: contaPagamento, // Conta de Ativo/Passivo (Pagamento)
             origem: 'pagamento_manual',
             historico_id: values.historico_id, // NOVO CAMPO
         };
         
-        const { error: lancamentoError } = await supabase.from('lancamentos').insert(lancamentoPayload);
-        if (lancamentoError) throw lancamentoError;
+        const { error: lancamentoAtivoError } = await supabase.from('lancamentos').insert(lancamentoAtivoPayload);
+        if (lancamentoAtivoError) throw lancamentoAtivoError;
+        
+        // 3. Registrar o Lançamento na conta de Despesa/Custo (DRE) - DÉBITO (Despesa)
+        if (contaDespesaDRE) {
+            const lancamentoDespesaPayload = {
+                proprietario_id: adminId,
+                data_movimentacao: dataPagamentoISO,
+                descricao: `Despesa/Custo: ${descricaoContaSintetica}`,
+                valor: pagamento.valor_pago,
+                tipo: 'Saida' as const, // Saída na Despesa (aumenta o saldo da conta 4.x.x/5.x.x)
+                conta_bancaria_id: null, // Não é uma conta de saldo
+                conta_contabil_id: contaDespesaDRE, // Conta de Despesa/Custo (4.x.x/5.x.x)
+                historico_id: values.historico_id,
+            };
+            
+            const { error: lancamentoDespesaError } = await supabase.from('lancamentos').insert(lancamentoDespesaPayload);
+            if (lancamentoDespesaError) throw lancamentoDespesaError;
+        } else {
+            console.warn('Aviso: Conta Contábil de Despesa/Custo não mapeada na conta sintética. DRE pode estar incompleta.');
+        }
       }
 
-      // 3. Atualizar a parcela para 'paga'
+      // 4. Atualizar a parcela para 'paga'
       await supabase.from(tabelaParcelas).update({
         status: 'paga',
         valor_pago: (parcela.valor_pago || 0) + totalPago,
@@ -246,18 +281,16 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
         id_conta_contabil: contaParcelaPagar,
       }).eq('id', parcela.id);
       
-      // 4. Verificar se há parcelas que ainda exigem pagamento (aberta, parcial, reprogramada)
+      // 5. Verificar se a conta sintética está quitada
       const { count: parcelasPendentesCount, error: countError } = await supabase
           .from(tabelaParcelas)
           .select('id', { count: 'exact', head: true })
           .eq('conta_pagar_id', parcela.conta_pagar_id)
-          .in('status', ['aberta', 'parcial', 'reprogramada']); // CORREÇÃO AQUI: Apenas status que indicam necessidade de pagamento
+          .in('status', ['aberta', 'parcial', 'reprogramada']);
           
       if (countError) {
           console.error('Erro ao contar parcelas pendentes:', countError);
-          // Continua, mas não atualiza o status sintético
       } else if (parcelasPendentesCount === 0) {
-          // Se não houver parcelas que exigem pagamento, a conta sintética está quitada
           const { error: updateContaError } = await supabase
               .from(tabelaContasPagar)
               .update({ status: 'pago' })
@@ -268,7 +301,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
               }
           }
       
-      // 5. Salvar Histórico Padrão (se marcado)
+      // 6. Salvar Histórico Padrão (se marcado)
       if (isAdmin && values.salvar_como_padrao && values.historico_id) {
           await supabase.from('configuracao_contas_pagar').upsert({
               proprietario_id: adminId,
