@@ -241,16 +241,15 @@ export function useBalancoPatrimonial(endDate: Date | undefined): BalancoData {
   }, [carregandoSessao, empresaId, fetchBalanco]);
   
   // 8. Calcular totais
-  const getSomaNivel1 = (tipo: ContaBalanco['tipo_principal']) => {
-      // Soma apenas as contas de nível 1 (ex: '1', '2', '3')
-      return contasBalanco
-          .filter(c => c.tipo_principal === tipo && c.Conta.split('.').length === 1)
-          .reduce((sum, c) => sum + c.saldo_final, 0);
+  // NOVO CÁLCULO: Busca o saldo consolidado da conta de nível 1 (ex: '1')
+  const getSaldoNivel1 = (contaCodigo: string) => {
+      const contaNivel1 = contasBalanco.find(c => c.Conta === contaCodigo);
+      return contaNivel1?.saldo_final || 0;
   };
   
-  const totalAtivo = getSomaNivel1('Ativo');
-  const totalPassivo = getSomaNivel1('Passivo');
-  const totalPatrimonioLiquido = getSomaNivel1('Patrimonio Liquido');
+  const totalAtivo = getSaldoNivel1('1');
+  const totalPassivo = getSaldoNivel1('2');
+  const totalPatrimonioLiquido = getSaldoNivel1('3');
     
   const resultadoLiquido = contasBalanco
     .filter(c => c.tipo_principal === 'Resultado')
