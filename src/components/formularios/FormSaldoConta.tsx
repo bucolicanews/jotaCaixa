@@ -49,12 +49,13 @@ const FormSaldoConta: React.FC<FormSaldoContaProps> = ({ contaInicial, onSaveCom
     if (!empresaId) return;
     setLoadingContas(true);
     
+    // Busca contas analíticas que são marcadas como Caixa/Banco OU Patrimonial
     const { data, error } = await supabase
         .from('plano_contas')
-        .select('id, Conta, Descricao, Analitica, is_conta_saldo') // Incluindo is_conta_saldo
+        .select('id, Conta, Descricao, Analitica, is_conta_caixa_banco, is_conta_patrimonial') // RENOMEADO
         .eq('proprietario_id', empresaId)
         .eq('Analitica', 'Sim') // Apenas contas analíticas
-        .eq('is_conta_saldo', true) // FILTRO PRINCIPAL: Apenas contas marcadas como saldo
+        .or('is_conta_caixa_banco.eq.true,is_conta_patrimonial.eq.true') // FILTRO PRINCIPAL
         .order('Conta');
         
     if (error) {
@@ -174,7 +175,7 @@ const FormSaldoConta: React.FC<FormSaldoContaProps> = ({ contaInicial, onSaveCom
                 </FormControl>
                 <SelectContent>
                     {contasContabeis.length === 0 ? (
-                        <SelectItem value="disabled" disabled>Nenhuma conta de saldo marcada no Plano de Contas.</SelectItem>
+                        <SelectItem value="disabled" disabled>Nenhuma conta de saldo/patrimonial marcada no Plano de Contas.</SelectItem>
                     ) : (
                         contasContabeis.map(c => (
                             <SelectItem key={c.id} value={c.id}>
@@ -187,7 +188,7 @@ const FormSaldoConta: React.FC<FormSaldoContaProps> = ({ contaInicial, onSaveCom
               <FormMessage />
               {contasContabeis.length === 0 && (
                   <p className="text-sm text-red-500">
-                      Nenhuma conta contábil marcada como "Conta de Saldo". Marque as contas em <a href="/plano-contas" className="underline">Plano de Contas</a>.
+                      Nenhuma conta contábil marcada como "Conta de Saldo" ou "Conta Patrimonial". Marque as contas em <a href="/plano-contas" className="underline">Plano de Contas</a>.
                   </p>
               )}
             </FormItem>

@@ -14,5 +14,7 @@ export interface SaldoContaDetalhada extends SaldoConta {
     plano_contas: {
         Conta: string;
         Descricao: string;
+        is_conta_caixa_banco?: boolean; // ADICIONADO
+        is_conta_patrimonial?: boolean; // ADICIONADO
     } | null;
 }

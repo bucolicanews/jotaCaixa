@@ -188,8 +188,8 @@ export function useBalancoPatrimonial(endDate: Date | undefined): BalancoData {
         
         let saldo_final = 0;
         
-        // Se for conta de saldo (Ativo/Passivo), o saldo é Inicial + Movimentos
-        if (pc.is_conta_saldo) {
+        // Se for conta de saldo (Caixa/Banco) ou Patrimonial, o saldo é Inicial + Movimentos
+        if (pc.is_conta_caixa_banco || pc.is_conta_patrimonial) {
             saldo_final = saldoInicial + movimentos;
         } 
         // Se for conta de Resultado (Receita/Despesa), o saldo é apenas Movimentos

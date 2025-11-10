@@ -64,6 +64,7 @@ const ContasPatrimoniais = () => {
         .select('id, Conta, Descricao, Analitica')
         .eq('proprietario_id', empresaId)
         .eq('Analitica', 'Sim')
+        .eq('is_conta_patrimonial', true) // FILTRO PRINCIPAL: Apenas contas marcadas como patrimonial
         .order('Conta');
         
     if (error) {

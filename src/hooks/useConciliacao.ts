@@ -114,11 +114,11 @@ export function useConciliacao(): ConciliacaoHook {
         
         const { data, error } = await supabase
             .from('plano_contas')
-            .select('id, Conta, Descricao, Analitica, is_conta_saldo, is_conta_resultado')
+            .select('id, Conta, Descricao, Analitica, is_conta_caixa_banco, is_conta_patrimonial, is_conta_resultado')
             .eq('proprietario_id', proprietarioDaConfiguracao)
             .eq('Analitica', 'Sim')
             .eq('is_conta_resultado', true)
-            .order('Conta');
+            .order('Conta', { ascending: true });
             
         if (error) {
             showError('Erro ao carregar Plano de Contas: ' + error.message);

@@ -29,7 +29,8 @@ interface NovaContaInicial {
 type FormInitialData = PlanoContas | (NovaContaInicial & {
     codigo_reduzido: string;
     Descricao: string;
-    is_conta_saldo: boolean;
+    is_conta_caixa_banco: boolean; // RENOMEADO
+    is_conta_patrimonial: boolean; // NOVO CAMPO
     is_conta_resultado: boolean;
 });
 
@@ -305,7 +306,8 @@ const PlanoContasPage = () => {
             Analitica: novaContaInicial.Analitica,
             codigo_reduzido: '', 
             Descricao: '', 
-            is_conta_saldo: false, 
+            is_conta_caixa_banco: false, // RENOMEADO
+            is_conta_patrimonial: false, // NOVO CAMPO
             is_conta_resultado: false 
         } as FormInitialData
         : null);
@@ -391,7 +393,8 @@ const PlanoContasPage = () => {
                     <TableHead className="w-[100px]">Cód. Reduzido</TableHead>
                     <TableHead>Descrição</TableHead>
                     <TableHead className="w-[100px] text-center">Analítica</TableHead>
-                    <TableHead className="w-[100px] text-center">Conta de Saldo</TableHead>
+                    <TableHead className="w-[100px] text-center">Conta Caixa/Banco</TableHead> {/* RENOMEADO */}
+                    <TableHead className="w-[100px] text-center">Conta Patrimonial</TableHead> {/* NOVO CAMPO */}
                     <TableHead className="w-[100px] text-center">Conta de Resultado</TableHead>
                     <TableHead className="w-[100px] text-right">Ações</TableHead>
                   </TableRow>
@@ -399,13 +402,13 @@ const PlanoContasPage = () => {
                 <TableBody>
                   {carregandoContas ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center py-8">
+                      <TableCell colSpan={8} className="text-center py-8"> {/* Colspan ajustado para 8 */}
                         <Loader2 className="h-6 w-6 animate-spin mx-auto text-primary" />
                       </TableCell>
                     </TableRow>
                   ) : contas.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center py-4 text-muted-foreground">
+                      <TableCell colSpan={8} className="text-center py-4 text-muted-foreground"> {/* Colspan ajustado para 8 */}
                         Nenhuma conta encontrada com os filtros aplicados.
                       </TableCell>
                     </TableRow>
@@ -468,8 +471,23 @@ const PlanoContasPage = () => {
                                             {conta.Analitica === 'Sim' ? (
                                                 <EditableCell
                                                     id={conta.id}
-                                                    initialValue={conta.is_conta_saldo}
-                                                    fieldName="is_conta_saldo"
+                                                    initialValue={conta.is_conta_caixa_banco} // RENOMEADO
+                                                    fieldName="is_conta_caixa_banco" // RENOMEADO
+                                                    onSaveSuccess={handleInlineSaveSuccess}
+                                                    isEditable={true}
+                                                />
+                                            ) : (
+                                                '-'
+                                            )}
+                                        </TableCell>
+                                        
+                                        {/* NOVA COLUNA: CONTA PATRIMONIAL */}
+                                        <TableCell className="text-center">
+                                            {conta.Analitica === 'Sim' ? (
+                                                <EditableCell
+                                                    id={conta.id}
+                                                    initialValue={conta.is_conta_patrimonial}
+                                                    fieldName="is_conta_patrimonial"
                                                     onSaveSuccess={handleInlineSaveSuccess}
                                                     isEditable={true}
                                                 />

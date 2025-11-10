@@ -49,7 +49,8 @@ const formSchema = z.object({
   Analitica: z.enum(['Sim', 'Não'], {
     required_error: 'O tipo é obrigatório.',
   }),
-  is_conta_saldo: z.boolean().optional(),
+  is_conta_caixa_banco: z.boolean().optional(), // RENOMEADO
+  is_conta_patrimonial: z.boolean().optional(), // NOVO CAMPO
   is_conta_resultado: z.boolean().optional(),
 });
 
@@ -77,7 +78,8 @@ const FormPlanoContas: React.FC<FormPlanoContasProps> = ({ proprietarioId, conta
       codigo_reduzido: contaInicial?.codigo_reduzido || '',
       Descricao: contaInicial?.Descricao || '',
       Analitica: defaultAnalitica,
-      is_conta_saldo: contaInicial?.is_conta_saldo || false,
+      is_conta_caixa_banco: (contaInicial as any)?.is_conta_caixa_banco || false, // Corrigido acesso
+      is_conta_patrimonial: contaInicial?.is_conta_patrimonial || false, // NOVO CAMPO
       is_conta_resultado: contaInicial?.is_conta_resultado || false,
     },
   });
@@ -133,7 +135,8 @@ const FormPlanoContas: React.FC<FormPlanoContasProps> = ({ proprietarioId, conta
       codigo_reduzido: values.codigo_reduzido || null,
       Descricao: values.Descricao,
       Analitica: values.Analitica,
-      is_conta_saldo: values.Analitica === 'Sim' ? values.is_conta_saldo : false,
+      is_conta_caixa_banco: values.Analitica === 'Sim' ? values.is_conta_caixa_banco : false, // RENOMEADO
+      is_conta_patrimonial: values.Analitica === 'Sim' ? values.is_conta_patrimonial : false, // NOVO CAMPO
       is_conta_resultado: values.Analitica === 'Sim' ? values.is_conta_resultado : false,
     };
 
@@ -243,10 +246,10 @@ const FormPlanoContas: React.FC<FormPlanoContasProps> = ({ proprietarioId, conta
           )}
         />
         
-        {/* CAMPO: IS CONTA SALDO */}
+        {/* CAMPO: IS CONTA CAIXA/BANCO (Antigo IS CONTA SALDO) */}
         <FormField
             control={form.control}
-            name="is_conta_saldo"
+            name="is_conta_caixa_banco"
             render={({ field }) => (
                 <FormItem className={cn("flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4 transition-opacity", isAnalitica ? 'opacity-100' : 'opacity-50 pointer-events-none')}>
                     <FormControl>
@@ -268,7 +271,32 @@ const FormPlanoContas: React.FC<FormPlanoContasProps> = ({ proprietarioId, conta
             )}
         />
         
-        {/* NOVO CAMPO: IS CONTA RESULTADO */}
+        {/* NOVO CAMPO: IS CONTA PATRIMONIAL */}
+        <FormField
+            control={form.control}
+            name="is_conta_patrimonial"
+            render={({ field }) => (
+                <FormItem className={cn("flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4 transition-opacity", isAnalitica ? 'opacity-100' : 'opacity-50 pointer-events-none')}>
+                    <FormControl>
+                        <Checkbox
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                            disabled={!isAnalitica}
+                        />
+                    </FormControl>
+                    <div className="space-y-1 leading-none">
+                        <FormLabel>
+                            Usar como Conta Patrimonial (Ativo/Passivo/PL)
+                        </FormLabel>
+                        <p className="text-sm text-muted-foreground">
+                            Se marcada, esta conta será listada para cadastro de saldo na página Contas Patrimoniais.
+                        </p>
+                    </div>
+                </FormItem>
+            )}
+        />
+        
+        {/* CAMPO: IS CONTA RESULTADO */}
         <FormField
             control={form.control}
             name="is_conta_resultado"
