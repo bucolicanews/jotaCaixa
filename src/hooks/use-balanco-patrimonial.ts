@@ -119,7 +119,7 @@ export function useBalancoPatrimonial(endDate: Date | undefined): BalancoData {
       const { data: saldoContasData, error: scError } = await supabase
         .from('saldo_contas')
         .select('id, conta_contabil_id, saldo_inicial')
-        .eq('empresa_id', empresaId);
+        .eq('proprietario_id', empresaId); // CORRIGIDO: Usando proprietario_id
         
       if (scError) throw scError;
       const saldoContas = saldoContasData as SaldoConta[];
@@ -135,7 +135,7 @@ export function useBalancoPatrimonial(endDate: Date | undefined): BalancoData {
       const { data: lancamentosData, error: lError } = await supabase
         .from('lancamentos')
         .select('valor, tipo, conta_contabil_id')
-        .eq('proprietario_id', empresaId) // ALTERADO: empresa_id -> proprietario_id
+        .eq('proprietario_id', empresaId)
         .lte('data_movimentacao', endDateISO);
         
       if (lError) throw lError;
