@@ -58,12 +58,13 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
   
   // NOVO FILTRO: Para Receita (3.x.x)
   const getContasReceita = () => {
-      return contasFiltradas.filter(c => c.tipo_principal === 'Patrimonio Liquido' && c.Conta.startsWith('3') && c.is_conta_resultado);
+      // Filtra contas de Resultado (4.x.x e 5.x.x) e Receita (3.x.x)
+      return contasFiltradas.filter(c => c.tipo_principal === 'Resultado' || (c.tipo_principal === 'Patrimonio Liquido' && c.is_conta_resultado));
   };
   
   // NOVO FILTRO: Para Despesa (4.x.x e 5.x.x)
   const getContasDespesa = () => {
-      return contasFiltradas.filter(c => c.tipo_principal === 'Resultado');
+      return contasFiltradas.filter(c => c.tipo_principal === 'Resultado' && (c.Conta.startsWith('4') || c.Conta.startsWith('5')));
   };
   
   // NOVO FILTRO: Apenas contas de PL (3.x.x) que não são Resultado
@@ -76,9 +77,9 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
       const isSintetica = c.Analitica === 'Não';
       const isZero = Math.abs(c.saldo_final) < 0.01;
       
-      // Se a conta já foi filtrada pelo useMemo, não precisamos checar isZero aqui,
-      // mas mantemos a verificação para garantir que a lógica de renderização não quebre.
-      if (filtroSomenteComSaldo && isZero) return null;
+      // Se o filtro SomenteComSaldo está ativo, e a conta é analítica E tem saldo zero, omite.
+      // Se for sintética, sempre renderiza para manter a hierarquia.
+      if (filtroSomenteComSaldo && isZero && c.Analitica === 'Sim') return null;
 
       // Calcula o nível de indentação baseado no código da conta (ex: 1.1.1.1)
       const level = c.Conta.split('.').filter(p => p.length > 0).length;
@@ -88,7 +89,7 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
         <TableRow 
             key={c.id} 
             className={cn(
-                isSintetica ? 'bg-gray-200 dark:bg-gray-700/50 font-semibold' : 'text-sm', // ALTERADO AQUI
+                isSintetica ? 'bg-gray-200 dark:bg-gray-700/50 font-semibold' : 'text-sm',
                 // Adiciona uma borda inferior para separar os grupos de nível 1
                 level === 1 && 'border-b-2 border-border'
             )}
@@ -218,10 +219,11 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
       </Card>
 
       <Tabs defaultValue="completo" className="w-full">
-        <TabsList className="grid w-full grid-cols-5 h-auto p-1">
+        <TabsList className="grid w-full grid-cols-6 h-auto p-1">
             <TabsTrigger value="completo">Completo</TabsTrigger>
             <TabsTrigger value="ativo">Ativo</TabsTrigger>
-            <TabsTrigger value="passivo">Passivo / PL</TabsTrigger>
+            <TabsTrigger value="passivo">Passivo</TabsTrigger>
+            <TabsTrigger value="pl">Patrimônio Líquido</TabsTrigger>
             <TabsTrigger value="receita">Receita</TabsTrigger>
             <TabsTrigger value="despesa">Despesa</TabsTrigger>
         </TabsList>
@@ -253,7 +255,7 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
                     </Card>
                     
                     <Card>
-                        <CardHeader><CardTitle className="text-xl text-blue-600">Patrimônio Líquido ({formatCurrency(totalPatrimonioLiquido)})</CardTitle></CardHeader>
+                        <CardHeader><CardTitle className="text-xl text-blue-600">Patrimônio Líquido e Resultado</CardTitle></CardHeader>
                         <CardContent>
                             <Table>
                                 <TableHeader><TableRow><TableHead className="w-[150px]">Conta</TableHead><TableHead>Descrição</TableHead><TableHead className="text-right w-[150px]">Saldo</TableHead></TableRow></TableHeader>
@@ -285,8 +287,8 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
             </Card>
         </TabsContent>
         
-        {/* ABA 3: PASSIVO / PL */}
-        <TabsContent value="passivo" className="mt-4 space-y-6">
+        {/* ABA 3: PASSIVO */}
+        <TabsContent value="passivo" className="mt-4">
             <Card>
                 <CardHeader><CardTitle className="text-xl text-red-600">Passivo ({formatCurrency(totalPassivo)})</CardTitle></CardHeader>
                 <CardContent>
@@ -296,6 +298,10 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
                     </Table>
                 </CardContent>
             </Card>
+        </TabsContent>
+        
+        {/* NOVO ABA 4: PATRIMÔNIO LÍQUIDO */}
+        <TabsContent value="pl" className="mt-4">
             <Card>
                 <CardHeader><CardTitle className="text-xl text-blue-600">Patrimônio Líquido ({formatCurrency(totalPatrimonioLiquido)})</CardTitle></CardHeader>
                 <CardContent>
@@ -314,7 +320,7 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
             </Card>
         </TabsContent>
         
-        {/* ABA 4: RECEITA */}
+        {/* ABA 5: RECEITA */}
         <TabsContent value="receita" className="mt-4">
             <Card>
                 <CardHeader><CardTitle className="text-xl text-green-600">Receitas (Contas 3.x.x de Resultado)</CardTitle></CardHeader>
@@ -327,7 +333,7 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
             </Card>
         </TabsContent>
         
-        {/* ABA 5: DESPESA */}
+        {/* ABA 6: DESPESA */}
         <TabsContent value="despesa" className="mt-4">
             <Card>
                 <CardHeader><CardTitle className="text-xl text-red-600">Despesas (Contas 4.x.x e 5.x.x)</CardTitle></CardHeader>
