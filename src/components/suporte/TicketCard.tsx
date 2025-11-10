@@ -60,9 +60,9 @@ const TicketCard: React.FC<TicketCardProps> = ({ ticket, onClick, onDelete, isAd
   const canDelete = isOwner && ticket.status === 'fechado';
   const isClosed = ticket.status === 'fechado';
   
-  // Lógica de Responsabilidade: Quem é o destinatário da última mensagem?
-  const destinatarioUltimaMensagem = ticket.ultima_mensagem_destinatario_id;
-  const isMyTurn = destinatarioUltimaMensagem === usuario?.id;
+  // Lógica de Responsabilidade: O próximo a responder é o destinatário da última mensagem.
+  const proximoRespondenteId = ticket.ultima_mensagem_destinatario_id || ticket.proprietario_id;
+  const isMyTurn = proximoRespondenteId === usuario?.id;
   
   let responsavelIndicator = null;
   
@@ -74,15 +74,15 @@ const TicketCard: React.FC<TicketCardProps> = ({ ticket, onClick, onDelete, isAd
                   <CheckCircle2 className="w-4 h-4 mr-1" /> Sua vez de responder
               </span>
           );
-      } else if (destinatarioUltimaMensagem === ticket.empresa_id) {
+      } else if (proximoRespondenteId === ticket.empresa_id) {
           // Aguardando Admin (se o Admin não for o usuário logado)
           responsavelIndicator = (
               <span className="flex items-center text-sm font-medium text-blue-600 ml-4">
                   <UserCheck className="w-4 h-4 mr-1" /> Aguardando Admin
               </span>
           );
-      } else if (destinatarioUltimaMensagem === ticket.proprietario_id) {
-          // Aguardando Cliente/Proprietário (se o Cliente não for o usuário logado)
+      } else if (proximoRespondenteId === ticket.proprietario_id) {
+          // Aguardando Cliente/Proprietário
           responsavelIndicator = (
               <span className="flex items-center text-sm font-medium text-yellow-600 ml-4">
                   <UserX className="w-4 h-4 mr-1" /> Aguardando Cliente
@@ -138,7 +138,7 @@ const TicketCard: React.FC<TicketCardProps> = ({ ticket, onClick, onDelete, isAd
               </span>
             </div>
             <span className="flex items-center text-xs">
-              <Clock className="w-3 h-3 mr-1" /> {format(dataAtualizacao, 'dd/MM/yy HH:mm', { locale: ptBR })}
+                <Clock className="w-3 h-3 mr-1" /> Atualizado: {format(dataAtualizacao, 'dd/MM/yy HH:mm', { locale: ptBR })}
             </span>
           </div>
           
@@ -148,8 +148,6 @@ const TicketCard: React.FC<TicketCardProps> = ({ ticket, onClick, onDelete, isAd
                       <User className="w-3 h-3 mr-1" /> Criado por: {proprietarioNome}
                   </p>
               )}
-              
-              {/* O indicador de responsabilidade foi movido para o CardHeader */}
           </div>
         </CardContent>
       </div>

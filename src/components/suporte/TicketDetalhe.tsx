@@ -61,17 +61,24 @@ const TicketDetalhe: React.FC<TicketDetalheProps> = ({ ticket, onClose, onUpdate
   const canManage = isAdminView || remetenteId === clienteId;
   const isClosed = currentStatus === 'fechado';
   
-  // Lógica de Responsabilidade: Baseada na última mensagem
+  // Lógica de Responsabilidade: O próximo a responder é o destinatário da última mensagem.
   const ultimaMensagem = mensagens[mensagens.length - 1];
-  const destinatarioUltimaMensagem = ultimaMensagem?.destinatario_id;
+  const proximoRespondenteId = ultimaMensagem?.destinatario_id || clienteId; // Se não houver mensagem, o cliente (proprietário) deve responder.
   
-  // Se o destinatário da última mensagem é o usuário logado, é a vez dele.
-  const isMyTurn = destinatarioUltimaMensagem === remetenteId;
+  const isMyTurn = proximoRespondenteId === remetenteId;
   
   // A resposta está desabilitada se o ticket estiver fechado OU não for a vez do usuário
   const isReplyDisabled = isClosed || (mensagens.length > 0 && !isMyTurn);
   
-  const responsavelNome = isMyTurn ? 'Você' : (destinatarioUltimaMensagem === adminId ? 'Administrador' : (ticket.proprietario_perfil?.nome || 'Cliente'));
+  // Determina o nome do próximo responsável
+  let responsavelNome = 'N/A';
+  if (proximoRespondenteId === adminId) {
+      responsavelNome = 'Administrador';
+  } else if (proximoRespondenteId === clienteId) {
+      responsavelNome = ticket.proprietario_perfil?.nome || 'Cliente';
+  } else if (proximoRespondenteId === remetenteId) {
+      responsavelNome = 'Você';
+  }
 
 
   const fetchMensagens = useCallback(async () => {
