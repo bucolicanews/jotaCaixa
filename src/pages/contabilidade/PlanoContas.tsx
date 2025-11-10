@@ -33,6 +33,15 @@ type FormInitialData = PlanoContas | (NovaContaInicial & {
     is_conta_resultado: boolean;
 });
 
+// Mapeamento de cores para os níveis hierárquicos
+const NIVEL_COLORS: Record<number, string> = {
+    1: 'bg-blue-500/10 hover:bg-blue-500/20',
+    2: 'bg-green-500/10 hover:bg-green-500/20',
+    3: 'bg-yellow-500/10 hover:bg-yellow-500/20',
+    4: 'bg-red-500/10 hover:bg-red-500/20',
+    5: 'bg-purple-500/10 hover:bg-purple-500/20',
+};
+
 const PlanoContasPage = () => {
   const { usuario, perfil, role, carregando: carregandoSessao } = useSessao();
   const [contas, setContas] = useState<PlanoContas[]>([]);
@@ -401,96 +410,111 @@ const PlanoContasPage = () => {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    contas.map((conta) => (
-                      <Popover open={contaClicada?.id === conta.id && popoverOpen} onOpenChange={setPopoverOpen} key={conta.id}>
-                        <PopoverTrigger asChild>
-                            <TableRow 
-                                onClick={() => handleRowClick(conta)}
-                                className={cn("cursor-pointer", contaClicada?.id === conta.id && popoverOpen && "bg-secondary/50")}
-                            >
-                                <TableCell className="font-mono text-sm">
-                                    <EditableCell
-                                        id={conta.id}
-                                        initialValue={conta.Conta}
-                                        fieldName="Conta"
-                                        onSaveSuccess={handleInlineSaveSuccess}
-                                        isEditable={true}
-                                        className="font-mono text-sm"
-                                    />
-                                </TableCell>
-                                <TableCell className="text-sm">
-                                    <EditableCell
-                                        id={conta.id}
-                                        initialValue={conta.codigo_reduzido}
-                                        fieldName="codigo_reduzido"
-                                        onSaveSuccess={handleInlineSaveSuccess}
-                                        isEditable={true}
-                                        className="text-sm"
-                                    />
-                                </TableCell>
-                                <TableCell>
-                                    <EditableCell
-                                        id={conta.id}
-                                        initialValue={conta.Descricao}
-                                        fieldName="Descricao"
-                                        onSaveSuccess={handleInlineSaveSuccess}
-                                        isEditable={true}
-                                    />
-                                </TableCell>
-                                <TableCell className="text-center">
-                                    {conta.Analitica}
-                                </TableCell>
-                                
-                                <TableCell className="text-center">
-                                    {conta.Analitica === 'Sim' ? (
-                                        <EditableCell
-                                            id={conta.id}
-                                            initialValue={conta.is_conta_saldo}
-                                            fieldName="is_conta_saldo"
-                                            onSaveSuccess={handleInlineSaveSuccess}
-                                            isEditable={true}
-                                        />
-                                    ) : (
-                                        '-'
-                                    )}
-                                </TableCell>
-                                
-                                <TableCell className="text-center">
-                                    {conta.Analitica === 'Sim' ? (
-                                        <EditableCell
-                                            id={conta.id}
-                                            initialValue={conta.is_conta_resultado}
-                                            fieldName="is_conta_resultado"
-                                            onSaveSuccess={handleInlineSaveSuccess}
-                                            isEditable={true}
-                                        />
-                                    ) : (
-                                        '-'
-                                    )}
-                                </TableCell>
-                                
-                                <TableCell className="text-right">
-                                    <div className="flex justify-end space-x-2">
-                                        <Button variant="ghost" size="sm" onClick={() => handleEdit(conta)}>
-                                            <Edit className="w-4 h-4" />
-                                        </Button>
-                                        <Button variant="ghost" size="sm" onClick={() => handleDelete(conta.id)}>
-                                            <Trash2 className="w-4 h-4 text-red-500" />
-                                        </Button>
-                                    </div>
-                                </TableCell>
-                            </TableRow>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-2 flex flex-col space-y-1" align="end">
-                            <Button variant="ghost" size="sm" onClick={() => handleOpenNewConta('abaixo')}>
-                                <ArrowDown className="w-4 h-4 mr-2" /> Criar Conta Nível Abaixo
-                            </Button>
-                            <Button variant="ghost" size="sm" onClick={() => handleOpenNewConta('acima')}>
-                                <ArrowUp className="w-4 h-4 mr-2" /> Criar Conta Nível Acima
-                            </Button>
-                        </PopoverContent>
-                      </Popover>
-                    ))
+                    contas.map((conta) => {
+                        // Calcula o nível da conta (número de segmentos)
+                        const nivel = conta.Conta.split('.').filter(p => p.length > 0).length;
+                        const nivelClass = NIVEL_COLORS[nivel] || 'hover:bg-secondary/50';
+                        
+                        // Aplica indentação
+                        const paddingLeft = (nivel - 1) * 10;
+                        
+                        // Define a cor de fundo da linha
+                        const rowClassName = cn(
+                            nivelClass,
+                            contaClicada?.id === conta.id && popoverOpen && "bg-secondary/50"
+                        );
+
+                        return (
+                            <Popover open={contaClicada?.id === conta.id && popoverOpen} onOpenChange={setPopoverOpen} key={conta.id}>
+                                <PopoverTrigger asChild>
+                                    <TableRow 
+                                        onClick={() => handleRowClick(conta)}
+                                        className={cn("cursor-pointer", rowClassName)}
+                                    >
+                                        <TableCell className="font-mono text-sm" style={{ paddingLeft: `${paddingLeft + 16}px` }}>
+                                            <EditableCell
+                                                id={conta.id}
+                                                initialValue={conta.Conta}
+                                                fieldName="Conta"
+                                                onSaveSuccess={handleInlineSaveSuccess}
+                                                isEditable={true}
+                                                className="font-mono text-sm"
+                                            />
+                                        </TableCell>
+                                        <TableCell className="text-sm">
+                                            <EditableCell
+                                                id={conta.id}
+                                                initialValue={conta.codigo_reduzido}
+                                                fieldName="codigo_reduzido"
+                                                onSaveSuccess={handleInlineSaveSuccess}
+                                                isEditable={true}
+                                                className="text-sm"
+                                            />
+                                        </TableCell>
+                                        <TableCell>
+                                            <EditableCell
+                                                id={conta.id}
+                                                initialValue={conta.Descricao}
+                                                fieldName="Descricao"
+                                                onSaveSuccess={handleInlineSaveSuccess}
+                                                isEditable={true}
+                                            />
+                                        </TableCell>
+                                        <TableCell className="text-center">
+                                            {conta.Analitica}
+                                        </TableCell>
+                                        
+                                        <TableCell className="text-center">
+                                            {conta.Analitica === 'Sim' ? (
+                                                <EditableCell
+                                                    id={conta.id}
+                                                    initialValue={conta.is_conta_saldo}
+                                                    fieldName="is_conta_saldo"
+                                                    onSaveSuccess={handleInlineSaveSuccess}
+                                                    isEditable={true}
+                                                />
+                                            ) : (
+                                                '-'
+                                            )}
+                                        </TableCell>
+                                        
+                                        <TableCell className="text-center">
+                                            {conta.Analitica === 'Sim' ? (
+                                                <EditableCell
+                                                    id={conta.id}
+                                                    initialValue={conta.is_conta_resultado}
+                                                    fieldName="is_conta_resultado"
+                                                    onSaveSuccess={handleInlineSaveSuccess}
+                                                    isEditable={true}
+                                                />
+                                            ) : (
+                                                '-'
+                                            )}
+                                        </TableCell>
+                                        
+                                        <TableCell className="text-right">
+                                            <div className="flex justify-end space-x-2">
+                                                <Button variant="ghost" size="sm" onClick={() => handleEdit(conta)}>
+                                                    <Edit className="w-4 h-4" />
+                                                </Button>
+                                                <Button variant="ghost" size="sm" onClick={() => handleDelete(conta.id)}>
+                                                    <Trash2 className="w-4 h-4 text-red-500" />
+                                                </Button>
+                                            </div>
+                                        </TableCell>
+                                    </TableRow>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-2 flex flex-col space-y-1" align="end">
+                                    <Button variant="ghost" size="sm" onClick={() => handleOpenNewConta('abaixo')}>
+                                        <ArrowDown className="w-4 h-4 mr-2" /> Criar Conta Nível Abaixo
+                                    </Button>
+                                    <Button variant="ghost" size="sm" onClick={() => handleOpenNewConta('acima')}>
+                                        <ArrowUp className="w-4 h-4 mr-2" /> Criar Conta Nível Acima
+                                    </Button>
+                                </PopoverContent>
+                            </Popover>
+                        );
+                    })
                   )}
                 </TableBody>
               </Table>
