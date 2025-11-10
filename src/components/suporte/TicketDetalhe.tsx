@@ -24,6 +24,7 @@ interface Ticket {
   empresa_id: string;
   proprietario_perfil: { nome: string } | null;
   ultima_mensagem_remetente_id: string | null;
+  ultima_mensagem_destinatario_id: string | null;
 }
 
 interface Mensagem {
@@ -33,7 +34,7 @@ interface Mensagem {
   anexo_url: string | null;
   criado_em: string;
   remetente_perfil: { nome: string } | null;
-  destinatario_id: string | null; // NOVO CAMPO
+  destinatario_id: string | null;
 }
 
 interface TicketDetalheProps {
@@ -62,15 +63,9 @@ const TicketDetalhe: React.FC<TicketDetalheProps> = ({ ticket, onClose, onUpdate
   const isClosed = currentStatus === 'fechado';
   
   // Lógica de Responsabilidade:
-  // O próximo respondente é o destinatário da última mensagem.
-  // Se não houver mensagens, o destinatário é o Admin (adminId).
-  const ultimaMensagem = mensagens[mensagens.length - 1];
-  
   // Se houver mensagens, o próximo respondente é o destinatário da última mensagem.
-  // Se não houver mensagens, o próximo respondente é o Admin (empresa_id).
-  const proximoRespondenteId = ultimaMensagem 
-    ? ultimaMensagem.destinatario_id 
-    : adminId; 
+  // Se não houver mensagens, o destinatário é o Admin (empresa_id).
+  const proximoRespondenteId = ticket.ultima_mensagem_destinatario_id || adminId;
   
   const isMyTurn = proximoRespondenteId === remetenteId;
   
@@ -108,30 +103,35 @@ const TicketDetalhe: React.FC<TicketDetalheProps> = ({ ticket, onClose, onUpdate
       showError('Erro ao carregar mensagens: ' + error.message);
       setMensagens([]);
     } else {
-      // Mapeamento manual do nome do remetente (simplificado)
-      const mensagensComNome = await Promise.all((data as any[]).map(async (msg) => {
-          let nome = 'N/A';
-          // Se o remetente for o Admin (empresa_id)
-          if (msg.remetente_id === adminId) {
-              nome = 'Admin'; 
-          } else if (msg.remetente_id === clienteId) {
-              nome = ticket.proprietario_perfil?.nome || 'Cliente';
-          } else {
-              // Tenta buscar o nome do usuário/cliente
-              const { data: userData } = await supabase.from('tbl_usuarios').select('nome').eq('id', msg.remetente_id).single();
-              nome = userData?.nome || 'Usuário';
-          }
+      // 1. Coletar todos os remetente_id únicos
+      const remetenteIds = Array.from(new Set((data as any[]).map(msg => msg.remetente_id)));
+      
+      // 2. Buscar nomes dos remetentes (tentando em tbl_clientes, tbl_admins e tbl_usuarios)
+      const [clientesRes, adminsRes, usuariosRes] = await Promise.all([
+          supabase.from('tbl_clientes').select('id, nome').in('id', remetenteIds),
+          supabase.from('tbl_admins').select('id, nome').in('id', remetenteIds),
+          supabase.from('tbl_usuarios').select('id, nome').in('id', remetenteIds),
+      ]);
+      
+      const nomeMap: Record<string, string> = {};
+      (clientesRes.data || []).forEach(c => nomeMap[c.id] = c.nome);
+      (adminsRes.data || []).forEach(a => nomeMap[a.id] = a.nome);
+      (usuariosRes.data || []).forEach(u => nomeMap[u.id] = u.nome);
+      
+      // 3. Mapear nomes de volta para as mensagens
+      const mensagensComNome = (data as any[]).map((msg) => {
+          const nome = nomeMap[msg.remetente_id] || 'N/A';
           
           return {
               ...msg,
               remetente_perfil: { nome: nome }
           } as Mensagem;
-      }));
+      });
       
       setMensagens(mensagensComNome);
     }
     setLoadingMensagens(false);
-  }, [ticket.id, adminId, clienteId, ticket.proprietario_perfil?.nome]);
+  }, [ticket.id]);
 
   useEffect(() => {
     fetchMensagens();
