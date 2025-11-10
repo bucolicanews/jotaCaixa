@@ -62,7 +62,7 @@ export function useTicketNotifications(): TicketNotifications {
     // Base query: Select tickets filtered by the Admin ID (empresa_id)
     let query = supabase
         .from('tickets')
-        .select('status, proprietario_id, empresa_id, ultima_mensagem:mensagens_ticket(destinatario_id)', { count: 'exact', head: false })
+        .select('status, proprietario_id, empresa_id, mensagens_ticket_count:mensagens_ticket(count), ultima_mensagem:mensagens_ticket(destinatario_id)', { count: 'exact', head: false })
         .eq('empresa_id', targetEmpresaId);
     
     // If Client, filter by proprietario_id (the client's ID)
@@ -71,7 +71,7 @@ export function useTicketNotifications(): TicketNotifications {
     }
     
     // Apply limit to the nested relation (to get only the last message info)
-    query = query.limit(1, { foreignTable: 'ultima_mensagem' });
+    query = query.order('criado_em', { foreignTable: 'ultima_mensagem', ascending: false }).limit(1, { foreignTable: 'ultima_mensagem' });
 
     try {
       // 1. Fetch Tickets and Last Message Info
@@ -98,11 +98,12 @@ export function useTicketNotifications(): TicketNotifications {
           let proximoRespondenteId: string | null = null;
           
           if (t.status !== 'fechado') {
+              // Se houver mensagens, o próximo respondente é o destinatário da última mensagem.
               if (ultimaMensagem) {
-                  // If there is a last message, the next respondent is the last message's recipient
                   proximoRespondenteId = ultimaMensagem.destinatario_id;
               } else {
-                  // If no messages, the next respondent is the Admin (empresa_id)
+                  // Se não houver mensagens (ticket recém-criado), o destinatário é o Admin (empresa_id)
+                  // Nota: O campo empresa_id armazena o ID do Admin (destinatário)
                   proximoRespondenteId = t.empresa_id;
               }
               
