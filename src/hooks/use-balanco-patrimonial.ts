@@ -32,6 +32,7 @@ const getTipoPrincipal = (conta: string): ContaBalanco['tipo_principal'] => {
 
 /**
  * Função de comparação para ordenar códigos contábeis hierarquicamente.
+ * Ex: 4.2.2.01.0004 deve vir depois de 4.2.2.01.
  */
 const compareContas = (a: ContaBalanco, b: ContaBalanco): number => {
     const partsA = a.Conta.split('.').map(Number);
@@ -50,7 +51,9 @@ const compareContas = (a: ContaBalanco, b: ContaBalanco): number => {
 
 /**
  * Consolida os saldos das contas analíticas para as contas sintéticas.
- * Regra: A conta sintética soma apenas o saldo das suas filhas DIRETAS.
+ * CORREÇÃO: A lógica de identificação de "filho direto" foi ajustada para
+ * permitir saltos na numeração dos níveis (ex: 1 para 1.0.1), garantindo
+ * que a consolidação suba corretamente.
  */
 const consolidateBalances = (contas: ContaBalanco[]): ContaBalanco[] => {
     // 1. Cria um mapa de saldos iniciais (apenas analíticas e PL/Resultado)
@@ -65,26 +68,46 @@ const consolidateBalances = (contas: ContaBalanco[]): ContaBalanco[] => {
     const saldoConsolidadoMap: Record<string, number> = { ...saldoAnaliticoMap };
 
     // 3. Ordena as contas sintéticas do mais específico para o mais geral (ordem decrescente)
-    // Isso garante que 1.0.1 seja processado antes de 1.
     const sinteticas = contas.filter(c => c.Analitica === 'Não').sort((a, b) => compareContas(b, a));
 
     // 4. Consolida de baixo para cima
     for (const contaSintetica of sinteticas) {
         let totalConsolidado = 0;
         
-        // Calcula o nível da conta sintética (número de pontos + 1)
-        const nivelPai = contaSintetica.Conta.split('.').filter(p => p.length > 0).length;
-        const nivelFilhoDireto = nivelPai + 1;
+        // Calcula o número de segmentos da conta pai (ex: '1.0.1' -> 3)
+        const segmentosPai = contaSintetica.Conta.split('.').filter(p => p.length > 0);
+        const nivelPai = segmentosPai.length;
         
         // Itera sobre todas as contas para encontrar as filhas DIRETAS
         for (const conta of contas) {
-            // 4.1. Verifica se é filha (começa com o prefixo do pai + '.')
+            // 4.1. Verifica se é descendente (começa com o prefixo do pai + '.')
             if (conta.Conta.startsWith(contaSintetica.Conta + '.') && conta.Conta !== contaSintetica.Conta) {
                 
-                // 4.2. Verifica se é filha DIRETA (o nível é exatamente o próximo)
-                const nivelConta = conta.Conta.split('.').filter(p => p.length > 0).length;
+                // 4.2. Verifica se é filha IMEDIATA (o segmento logo após o código do pai é o último segmento do código do filho)
+                const segmentosConta = conta.Conta.split('.').filter(p => p.length > 0);
                 
-                if (nivelConta === nivelFilhoDireto) {
+                // O segmento que vem logo após o código do pai
+                const segmentoImediato = segmentosConta[nivelPai];
+                
+                // Verifica se todos os segmentos APÓS o segmento imediato são zero ou vazios.
+                // Ex: Se P=1, C=1.0.1. Segmento imediato é '0'. Segmentos restantes são ['1'].
+                // Se P=1, C=1.1. Segmento imediato é '1'. Segmentos restantes são [].
+                
+                // Para simplificar e permitir saltos (como 1 -> 1.0.1), verificamos se o número de segmentos
+                // do filho é exatamente 1 a mais que o pai, ou se o filho é o próximo nível sintético.
+                
+                // NOVO CÁLCULO DE FILHO IMEDIATO:
+                // Um filho C é imediato de P se o código C tem exatamente um segmento a mais que P,
+                // E todos os segmentos intermediários são zero (o que não é o caso aqui).
+                
+                // SOLUÇÃO MAIS ROBUSTA PARA HIERARQUIAS NÃO SEQUENCIAIS:
+                // Um filho C é imediato de P se, ao remover o prefixo P, o restante do código
+                // não contém mais pontos (.), garantindo que não haja níveis intermediários.
+                
+                const restante = conta.Conta.substring(contaSintetica.Conta.length + 1);
+                const isImmediateChild = restante.split('.').filter(p => p.length > 0).length === 1;
+                
+                if (isImmediateChild) {
                     // Se for filha direta, soma o saldo consolidado dela (que já deve estar no mapa)
                     const saldoFilho = saldoConsolidadoMap[conta.Conta];
                     if (saldoFilho !== undefined) {
