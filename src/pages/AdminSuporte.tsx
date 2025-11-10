@@ -71,8 +71,14 @@ const AdminSuporte: React.FC = () => {
     let query = supabase
       .from('tickets')
       .select(`
-        *,
-        proprietario_perfil:proprietario_id ( nome ),
+        id,
+        titulo,
+        status,
+        prioridade,
+        criado_em,
+        atualizado_em,
+        proprietario_id,
+        empresa_id,
         mensagens_ticket_count:mensagens_ticket(count)
       `)
       .order('atualizado_em', { ascending: false });
@@ -91,12 +97,31 @@ const AdminSuporte: React.FC = () => {
       showError('Erro ao carregar tickets: ' + error.message);
       setTickets([]);
     } else {
-      let mappedData = (data as any[]).map(t => ({
+      let rawTickets = (data as any[]).map(t => ({
           ...t,
           mensagens_ticket_count: t.mensagens_ticket_count[0].count,
       })) as Ticket[];
       
-      // Filtro de texto no frontend
+      // 1. Coletar todos os proprietario_id únicos
+      const proprietarioIds = Array.from(new Set(rawTickets.map(t => t.proprietario_id)));
+      
+      // 2. Buscar nomes dos proprietários (tentando em tbl_clientes e tbl_admins)
+      const [clientesRes, adminsRes] = await Promise.all([
+          supabase.from('tbl_clientes').select('id, nome').in('id', proprietarioIds),
+          supabase.from('tbl_admins').select('id, nome').in('id', proprietarioIds),
+      ]);
+      
+      const nomeMap: Record<string, string> = {};
+      (clientesRes.data || []).forEach(c => nomeMap[c.id] = c.nome);
+      (adminsRes.data || []).forEach(a => nomeMap[a.id] = a.nome);
+      
+      // 3. Mapear nomes de volta para os tickets
+      let mappedData = rawTickets.map(t => ({
+          ...t,
+          proprietario_perfil: { nome: nomeMap[t.proprietario_id] || 'N/A' }
+      }));
+      
+      // 4. Filtro de texto no frontend
       if (filtroTextoDebounced) {
           const termo = filtroTextoDebounced.toLowerCase();
           mappedData = mappedData.filter(t => 
