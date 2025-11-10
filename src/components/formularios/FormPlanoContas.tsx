@@ -85,6 +85,15 @@ const FormPlanoContas: React.FC<FormPlanoContasProps> = ({ proprietarioId, conta
   const isAnalitica = form.watch('Analitica') === 'Sim';
   const contaCodigo = form.watch('Conta');
   
+  // Efeito para preencher o Código Reduzido automaticamente
+  useEffect(() => {
+    // Se não estiver editando e o código da conta mudar, preenche o código reduzido
+    if (!isEditing && contaCodigo) {
+        const codigoSemPontos = contaCodigo.replace(/\./g, '');
+        form.setValue('codigo_reduzido', codigoSemPontos, { shouldDirty: false });
+    }
+  }, [contaCodigo, isEditing, form]);
+  
   const fetchMascara = useCallback(async () => {
     if (!proprietarioId) return;
     setLoadingMascara(true);
@@ -153,7 +162,7 @@ const FormPlanoContas: React.FC<FormPlanoContasProps> = ({ proprietarioId, conta
     }
   };
   
-  // Determina se a validação da máscara falhou (agora sempre retorna boolean)
+  // Determina se a validação da máscara falhou
   const isMaskInvalid = isAnalitica && !!mascara && !validateMask(contaCodigo, mascara);
 
   return (
