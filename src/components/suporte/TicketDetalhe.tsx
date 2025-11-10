@@ -62,12 +62,12 @@ const TicketDetalhe: React.FC<TicketDetalheProps> = ({ ticket, onClose, onUpdate
   const isClosed = currentStatus === 'fechado';
   
   // Lógica de Responsabilidade:
-  // 1. Se houver mensagens, usa o destinatário da última mensagem.
+  // 1. Se houver mensagens, a responsabilidade é do destinatário da última mensagem.
   // 2. Se não houver mensagens (mensagens.length === 0), a responsabilidade é do Admin (adminId), pois o cliente é o remetente inicial.
   const ultimaMensagem = mensagens[mensagens.length - 1];
   const proximoRespondenteId = mensagens.length === 0 
     ? adminId 
-    : ultimaMensagem?.destinatario_id || clienteId; 
+    : ultimaMensagem?.destinatario_id; 
   
   const isMyTurn = proximoRespondenteId === remetenteId;
   
@@ -412,12 +412,12 @@ const TicketDetalhe: React.FC<TicketDetalheProps> = ({ ticket, onClose, onUpdate
                     {/* Indicador de Responsabilidade */}
                     <div className={cn("p-2 rounded-md mb-3 text-sm font-medium", isReplyDisabled ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-300" : "bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-300")}>
                         
-                        {isReplyDisabled ? (
-                            // BLOQUEADO / AGUARDANDO OUTRA PARTE
-                            <span>Aguardando resposta do(a) <span className="font-bold">{responsavelNome}</span>. Sua resposta está bloqueada.</span>
-                        ) : (
+                        {isMyTurn ? (
                             // LIBERADO / SUA VEZ
                             <span>Sua vez de responder.</span>
+                        ) : (
+                            // BLOQUEADO / AGUARDANDO OUTRA PARTE
+                            <span>Aguardando resposta do(a) <span className="font-bold">{responsavelNome}</span>. Sua resposta está bloqueada.</span>
                         )}
                     </div>
                     
