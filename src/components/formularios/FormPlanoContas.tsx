@@ -33,13 +33,18 @@ interface FormPlanoContasProps {
 }
 
 const FormPlanoContas: React.FC<FormPlanoContasProps> = ({ proprietarioId, contaInicial, onSaveComplete }) => {
+  
+  // Se for edição, usa os valores iniciais. Se for criação, usa os valores do form.reset no componente pai.
+  const defaultConta = contaInicial?.Conta || '';
+  const defaultAnalitica = contaInicial?.Analitica || 'Não';
+  
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      Conta: contaInicial?.Conta || '',
+      Conta: defaultConta,
       codigo_reduzido: contaInicial?.codigo_reduzido || '',
       Descricao: contaInicial?.Descricao || '',
-      Analitica: contaInicial?.Analitica || 'Não',
+      Analitica: defaultAnalitica,
       is_conta_saldo: contaInicial?.is_conta_saldo || false,
       is_conta_resultado: contaInicial?.is_conta_resultado || false, // Valor inicial
     },

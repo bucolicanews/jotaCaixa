@@ -3,7 +3,7 @@ import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Edit, Trash2, PlusCircle, Filter, Search } from 'lucide-react';
+import { Loader2, Edit, Trash2, PlusCircle, Filter, Search, ArrowUp, ArrowDown } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
@@ -15,15 +15,42 @@ import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useDebounce } from '@/hooks/use-debounce';
-import EditableCell from '@/components/contabilidade/EditableCell'; // Importando o novo componente
+import EditableCell from '@/components/contabilidade/EditableCell';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { cn } from '@/lib/utils';
+
+// Tipo para inicializar o formulário de nova conta
+interface NovaContaInicial {
+    Conta: string;
+    Analitica: 'Sim' | 'Não';
+}
+
+// Tipo unificado para os valores iniciais do formulário (inclui PlanoContas completo ou apenas os campos de criação)
+type FormInitialValues = Partial<PlanoContas> & {
+    Conta: string;
+    Descricao: string;
+    Analitica: 'Sim' | 'Não';
+    codigo_reduzido: string;
+    is_conta_saldo: boolean;
+    is_conta_resultado: boolean;
+};
 
 const PlanoContasPage = () => {
   const { usuario, perfil, role, carregando: carregandoSessao } = useSessao();
   const [contas, setContas] = useState<PlanoContas[]>([]);
   const [carregandoContas, setCarregandoContas] = useState(true);
   const [proprietarioId, setProprietarioId] = useState<string | null>(null);
+  
+  // Estado para edição (conta existente)
   const [contaSelecionada, setContaSelecionada] = useState<PlanoContas | null>(null);
+  // Estado para criação (nova conta hierárquica)
+  const [novaContaInicial, setNovaContaInicial] = useState<NovaContaInicial | null>(null);
+  
   const [dialogAberto, setDialogAberto] = useState(false);
+  
+  // NOVO ESTADO: Conta clicada para navegação hierárquica
+  const [contaClicada, setContaClicada] = useState<PlanoContas | null>(null);
+  const [popoverOpen, setPopoverOpen] = useState(false);
 
   // Estados dos filtros
   const [filtroTexto, setFiltroTexto] = useState('');
@@ -72,7 +99,7 @@ const PlanoContasPage = () => {
       setContas(data as PlanoContas[]);
     }
     setCarregandoContas(false);
-  }, [proprietarioId, filtroTextoDebounced, filtroTipoConta, filtroAnalitica]);
+  }, [filtroTextoDebounced, filtroTipoConta, filtroAnalitica]);
 
   useEffect(() => {
     if (!carregandoSessao && usuario) {
@@ -111,6 +138,7 @@ const PlanoContasPage = () => {
   const handleSaveComplete = () => {
     setDialogAberto(false);
     setContaSelecionada(null);
+    setNovaContaInicial(null); // Limpa o estado de nova conta
     if (proprietarioId) {
       buscarPlanoContas(proprietarioId);
     }
@@ -125,6 +153,7 @@ const PlanoContasPage = () => {
 
   const handleEdit = (conta: PlanoContas) => {
     setContaSelecionada(conta);
+    setNovaContaInicial(null); // Garante que não estamos no modo de nova conta hierárquica
     setDialogAberto(true);
   };
 
@@ -143,6 +172,64 @@ const PlanoContasPage = () => {
       handleImportComplete();
     }
   };
+  
+  // --- Lógica de Criação Hierárquica ---
+  
+  const handleRowClick = (conta: PlanoContas) => {
+      setContaClicada(conta);
+      setPopoverOpen(true);
+  };
+  
+  const handleOpenNewConta = (nivel: 'acima' | 'abaixo') => {
+      if (!contaClicada) return;
+      
+      const parts = contaClicada.Conta.split('.').filter(p => p.length > 0);
+      const nivelAtual = parts.length;
+      let novoCodigo = '';
+      let novaAnalitica: 'Sim' | 'Não' = 'Não';
+      
+      if (nivel === 'abaixo') {
+          // Nível Abaixo: Adiciona .01 ao código atual
+          novoCodigo = contaClicada.Conta + '.01';
+          novaAnalitica = 'Sim'; // Sugere analítica para o próximo nível
+      } else {
+          // Nível Acima: Incrementa o último segmento do código do pai
+          if (nivelAtual === 1) {
+              // Se for nível 1 (ex: 1), incrementa para 2
+              const primeiroDigito = parseInt(parts[0], 10);
+              novoCodigo = `${primeiroDigito + 1}`;
+          } else {
+              // Se for nível > 1 (ex: 1.1.1), pega o pai (1.1), incrementa o último segmento (1.1.2)
+              const codigoPai = parts.slice(0, nivelAtual - 1).join('.');
+              const ultimoSegmento = parseInt(parts[nivelAtual - 1], 10);
+              
+              // Encontra a conta de mesmo nível com o maior código
+              const contasNoMesmoNivel = contas.filter(c => {
+                  const cParts = c.Conta.split('.').filter(p => p.length > 0);
+                  return cParts.length === nivelAtual && c.Conta.startsWith(codigoPai);
+              });
+              
+              const maxSegmento = contasNoMesmoNivel.reduce((max, c) => {
+                  const cParts = c.Conta.split('.').filter(p => p.length > 0);
+                  return Math.max(max, parseInt(cParts[nivelAtual - 1], 10));
+              }, ultimoSegmento);
+              
+              const novoSegmento = maxSegmento + 1;
+              
+              // Garante que o novo segmento tenha o mesmo preenchimento de zero que o segmento anterior
+              const paddingLength = parts[nivelAtual - 1].length;
+              novoCodigo = `${codigoPai}.${String(novoSegmento).padStart(paddingLength, '0')}`;
+          }
+          novaAnalitica = 'Não'; // Sugere sintética para o mesmo nível
+      }
+      
+      setContaSelecionada(null); // Garante que é uma nova conta
+      setNovaContaInicial({ Conta: novoCodigo, Analitica: novaAnalitica }); // Define os valores iniciais
+      setDialogAberto(true);
+      setPopoverOpen(false);
+  };
+  
+  // --- FIM Lógica de Criação Hierárquica ---
 
   if (carregandoSessao) {
     return (
@@ -168,6 +255,20 @@ const PlanoContasPage = () => {
       </LayoutPrincipal>
     );
   }
+  
+  // Determina os valores iniciais do formulário de diálogo
+  const initialFormValues: PlanoContas | FormInitialValues | null = contaSelecionada 
+    ? contaSelecionada 
+    : (novaContaInicial 
+        ? { 
+            Conta: novaContaInicial.Conta, 
+            Analitica: novaContaInicial.Analitica,
+            codigo_reduzido: '', 
+            Descricao: '', 
+            is_conta_saldo: false, 
+            is_conta_resultado: false 
+        } as FormInitialValues
+        : null);
 
   return (
     <LayoutPrincipal>
@@ -176,18 +277,18 @@ const PlanoContasPage = () => {
         <div className="space-x-2 w-full sm:w-auto">
           <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
             <DialogTrigger asChild>
-              <Button onClick={() => setContaSelecionada(null)} className="w-full sm:w-auto">
+              <Button onClick={() => { setContaSelecionada(null); setNovaContaInicial(null); }} className="w-full sm:w-auto">
                 <PlusCircle className="w-4 h-4 mr-2" />
                 Nova Conta
               </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[425px]">
               <DialogHeader>
-                <DialogTitle>{contaSelecionada ? 'Editar Conta' : 'Nova Conta'}</DialogTitle>
+                <DialogTitle>{(initialFormValues as PlanoContas)?.id ? 'Editar Conta' : 'Nova Conta'}</DialogTitle>
               </DialogHeader>
               <FormPlanoContas 
                 proprietarioId={proprietarioId}
-                contaInicial={contaSelecionada}
+                contaInicial={initialFormValues as PlanoContas | null} // Passa o objeto de inicialização
                 onSaveComplete={handleSaveComplete}
               />
             </DialogContent>
@@ -250,8 +351,8 @@ const PlanoContasPage = () => {
                     <TableHead className="w-[100px]">Cód. Reduzido</TableHead>
                     <TableHead>Descrição</TableHead>
                     <TableHead className="w-[100px] text-center">Analítica</TableHead>
-                    <TableHead className="w-[100px] text-center">Conta de Saldo</TableHead> {/* NOVO CABEÇALHO */}
-                    <TableHead className="w-[100px] text-center">Conta de Resultado</TableHead> {/* NOVO CABEÇALHO */}
+                    <TableHead className="w-[100px] text-center">Conta de Saldo</TableHead>
+                    <TableHead className="w-[100px] text-center">Conta de Resultado</TableHead>
                     <TableHead className="w-[100px] text-right">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -270,82 +371,94 @@ const PlanoContasPage = () => {
                     </TableRow>
                   ) : (
                     contas.map((conta) => (
-                      <TableRow key={conta.id}>
-                        <TableCell className="font-mono text-sm">
-                            <EditableCell
-                                id={conta.id}
-                                initialValue={conta.Conta}
-                                fieldName="Conta"
-                                onSaveSuccess={handleInlineSaveSuccess}
-                                isEditable={true}
-                                className="font-mono text-sm"
-                            />
-                        </TableCell>
-                        <TableCell className="text-sm">
-                            <EditableCell
-                                id={conta.id}
-                                initialValue={conta.codigo_reduzido}
-                                fieldName="codigo_reduzido"
-                                onSaveSuccess={handleInlineSaveSuccess}
-                                isEditable={true}
-                                className="text-sm"
-                            />
-                        </TableCell>
-                        <TableCell>
-                            <EditableCell
-                                id={conta.id}
-                                initialValue={conta.Descricao}
-                                fieldName="Descricao"
-                                onSaveSuccess={handleInlineSaveSuccess}
-                                isEditable={true}
-                            />
-                        </TableCell>
-                        <TableCell className="text-center">
-                            {/* Analítica não é editável inline, usa o botão de edição completo */}
-                            {conta.Analitica}
-                        </TableCell>
-                        
-                        {/* NOVO CAMPO: CONTA DE SALDO */}
-                        <TableCell className="text-center">
-                            {conta.Analitica === 'Sim' ? (
-                                <EditableCell
-                                    id={conta.id}
-                                    initialValue={conta.is_conta_saldo}
-                                    fieldName="is_conta_saldo"
-                                    onSaveSuccess={handleInlineSaveSuccess}
-                                    isEditable={true}
-                                />
-                            ) : (
-                                '-'
-                            )}
-                        </TableCell>
-                        
-                        {/* NOVO CAMPO: CONTA DE RESULTADO */}
-                        <TableCell className="text-center">
-                            {conta.Analitica === 'Sim' ? (
-                                <EditableCell
-                                    id={conta.id}
-                                    initialValue={conta.is_conta_resultado}
-                                    fieldName="is_conta_resultado"
-                                    onSaveSuccess={handleInlineSaveSuccess}
-                                    isEditable={true}
-                                />
-                            ) : (
-                                '-'
-                            )}
-                        </TableCell>
-                        
-                        <TableCell className="text-right">
-                          <div className="flex justify-end space-x-2">
-                            <Button variant="ghost" size="sm" onClick={() => handleEdit(conta)}>
-                              <Edit className="w-4 h-4" />
+                      <Popover open={contaClicada?.id === conta.id && popoverOpen} onOpenChange={setPopoverOpen} key={conta.id}>
+                        <PopoverTrigger asChild>
+                            <TableRow 
+                                onClick={() => handleRowClick(conta)}
+                                className={cn("cursor-pointer", contaClicada?.id === conta.id && popoverOpen && "bg-secondary/50")}
+                            >
+                                <TableCell className="font-mono text-sm">
+                                    <EditableCell
+                                        id={conta.id}
+                                        initialValue={conta.Conta}
+                                        fieldName="Conta"
+                                        onSaveSuccess={handleInlineSaveSuccess}
+                                        isEditable={true}
+                                        className="font-mono text-sm"
+                                    />
+                                </TableCell>
+                                <TableCell className="text-sm">
+                                    <EditableCell
+                                        id={conta.id}
+                                        initialValue={conta.codigo_reduzido}
+                                        fieldName="codigo_reduzido"
+                                        onSaveSuccess={handleInlineSaveSuccess}
+                                        isEditable={true}
+                                        className="text-sm"
+                                    />
+                                </TableCell>
+                                <TableCell>
+                                    <EditableCell
+                                        id={conta.id}
+                                        initialValue={conta.Descricao}
+                                        fieldName="Descricao"
+                                        onSaveSuccess={handleInlineSaveSuccess}
+                                        isEditable={true}
+                                    />
+                                </TableCell>
+                                <TableCell className="text-center">
+                                    {conta.Analitica}
+                                </TableCell>
+                                
+                                <TableCell className="text-center">
+                                    {conta.Analitica === 'Sim' ? (
+                                        <EditableCell
+                                            id={conta.id}
+                                            initialValue={conta.is_conta_saldo}
+                                            fieldName="is_conta_saldo"
+                                            onSaveSuccess={handleInlineSaveSuccess}
+                                            isEditable={true}
+                                        />
+                                    ) : (
+                                        '-'
+                                    )}
+                                </TableCell>
+                                
+                                <TableCell className="text-center">
+                                    {conta.Analitica === 'Sim' ? (
+                                        <EditableCell
+                                            id={conta.id}
+                                            initialValue={conta.is_conta_resultado}
+                                            fieldName="is_conta_resultado"
+                                            onSaveSuccess={handleInlineSaveSuccess}
+                                            isEditable={true}
+                                        />
+                                    ) : (
+                                        '-'
+                                    )}
+                                </TableCell>
+                                
+                                <TableCell className="text-right">
+                                    <div className="flex justify-end space-x-2">
+                                        <Button variant="ghost" size="sm" onClick={() => handleEdit(conta)}>
+                                            <Edit className="w-4 h-4" />
+                                        </Button>
+                                        <Button variant="ghost" size="sm" onClick={() => handleDelete(conta.id)}>
+                                            <Trash2 className="w-4 h-4 text-red-500" />
+                                        </Button>
+                                    </div>
+                                </TableCell>
+                            </TableRow>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-2 flex flex-col space-y-1" align="end">
+                            <Button variant="ghost" size="sm" onClick={() => handleOpenNewConta('abaixo')}>
+                                <ArrowDown className="w-4 h-4 mr-2" /> Criar Conta Nível Abaixo
                             </Button>
-                            <Button variant="ghost" size="sm" onClick={() => handleDelete(conta.id)}>
-                              <Trash2 className="w-4 h-4 text-red-500" />
+                            <Button variant="ghost" size="sm" onClick={() => handleOpenNewConta('acima')}>
+                                <ArrowUp className="w-4 h-4 mr-2" /> Criar Conta Nível Acima
                             </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
+                        </PopoverContent>
+                      </Popover>
                     ))
                   )}
                 </TableBody>
@@ -354,6 +467,20 @@ const PlanoContasPage = () => {
           </CardContent>
         </Card>
       </div>
+      
+      {/* Diálogo de Criação/Edição (usando o FormPlanoContas) */}
+      <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>{(initialFormValues as PlanoContas)?.id ? 'Editar Conta' : 'Nova Conta'}</DialogTitle>
+          </DialogHeader>
+          <FormPlanoContas 
+            proprietarioId={proprietarioId}
+            contaInicial={initialFormValues as PlanoContas | null}
+            onSaveComplete={handleSaveComplete}
+          />
+        </DialogContent>
+      </Dialog>
     </LayoutPrincipal>
   );
 };
