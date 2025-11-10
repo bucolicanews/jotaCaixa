@@ -31,6 +31,24 @@ const getTipoPrincipal = (conta: string): ContaBalanco['tipo_principal'] => {
 };
 
 /**
+ * Função de comparação para ordenar códigos contábeis hierarquicamente.
+ */
+const compareContas = (a: ContaBalanco, b: ContaBalanco): number => {
+    const partsA = a.Conta.split('.').map(Number);
+    const partsB = b.Conta.split('.').map(Number);
+
+    for (let i = 0; i < Math.max(partsA.length, partsB.length); i++) {
+        const numA = partsA[i] || 0;
+        const numB = partsB[i] || 0;
+
+        if (numA !== numB) {
+            return numA - numB;
+        }
+    }
+    return partsA.length - partsB.length;
+};
+
+/**
  * Consolida os saldos das contas analíticas para as contas sintéticas.
  * @param contas A lista de contas com saldos iniciais calculados.
  * @returns A lista de contas com saldos consolidados.
@@ -42,28 +60,21 @@ const consolidateBalances = (contas: ContaBalanco[]): ContaBalanco[] => {
         return acc;
     }, {} as Record<string, number>);
 
-    // 2. Ordena as contas pelo código (do mais específico para o mais geral)
-    const sortedContas = [...contas].sort((a, b) => b.Conta.localeCompare(a.Conta));
+    // 2. Ordena as contas do mais específico para o mais geral (ordem decrescente)
+    const sortedContas = [...contas].sort((a, b) => compareContas(b, a));
 
     // 3. Consolida de baixo para cima
     for (const conta of sortedContas) {
-        if (conta.Analitica === 'Sim') continue; // Ignora analíticas, elas já têm o saldo base
-
-        // Encontra o código pai (removendo o último segmento)
-        const parts = conta.Conta.split('.');
-        parts.pop();
-        const parentCode = parts.join('.');
+        if (conta.Analitica === 'Sim') continue; // Apenas contas sintéticas (Analitica='Não') consolidam
 
         // Percorre todas as contas para encontrar as filhas diretas
         for (const child of contas) {
-            if (child.Conta.startsWith(conta.Conta) && child.Conta !== conta.Conta) {
-                // Se a conta filha ainda não foi consolidada, usa o saldo dela
+            // Verifica se o filho começa com o código do pai E não é o próprio pai
+            if (child.Conta.startsWith(conta.Conta + '.') && child.Conta !== conta.Conta) {
                 const saldoFilho = saldoMap[child.id];
                 
-                // Adiciona o saldo do filho ao saldo do pai (se o filho for analítico ou já tiver sido consolidado)
-                if (child.Analitica === 'Sim' || child.Conta.startsWith(parentCode)) {
-                    saldoMap[conta.id] = (saldoMap[conta.id] || 0) + saldoFilho;
-                }
+                // Adiciona o saldo do filho ao saldo do pai
+                saldoMap[conta.id] = (saldoMap[conta.id] || 0) + saldoFilho;
             }
         }
     }
@@ -183,6 +194,9 @@ export function useBalancoPatrimonial(endDate: Date | undefined): BalancoData {
       // 6. Consolidar saldos das contas analíticas para as sintéticas
       contasCalculadas = consolidateBalances(contasCalculadas);
       
+      // 7. Ordenar as contas consolidadas pelo código
+      contasCalculadas.sort(compareContas);
+      
       setContasBalanco(contasCalculadas);
 
     } catch (error: any) {
@@ -200,7 +214,7 @@ export function useBalancoPatrimonial(endDate: Date | undefined): BalancoData {
     }
   }, [carregandoSessao, empresaId, fetchBalanco]);
   
-  // 7. Calcular totais
+  // 8. Calcular totais
   const totalAtivo = contasBalanco
     .filter(c => c.tipo_principal === 'Ativo' && c.Analitica === 'Não' && c.Conta.split('.').length === 1) // Soma apenas o nível 1 do Ativo
     .reduce((sum, c) => sum + c.saldo_final, 0);

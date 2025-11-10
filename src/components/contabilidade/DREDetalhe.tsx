@@ -48,6 +48,7 @@ const DREDetalhe: React.FC<DREDetalheProps> = ({ filtroPeriodo, filtroSomenteCom
   }, [contas, filtroSomenteComSaldo]);
   
   const getContasPorTipo = (tipo: ContaDRE['tipo_dre']) => {
+    // Retorna as contas já ordenadas pelo hook
     return contasFiltradas.filter(c => c.tipo_dre === tipo);
   };
   
@@ -77,17 +78,11 @@ const DREDetalhe: React.FC<DREDetalheProps> = ({ filtroPeriodo, filtroSomenteCom
         return;
     }
     
-    // Para a impressão, precisamos de todas as contas, mas o componente de impressão
-    // deve lidar com a omissão de linhas zero se onlyWithBalance for true.
-    // No entanto, como ajustamos a filtragem no useMemo, vamos garantir que a lista
-    // passada para a impressão seja a lista filtrada, mas adicionando as contas sintéticas
-    // de nível 1 (Receita, Custo, Despesa) se elas tiverem saldo total, para manter a estrutura.
-    
-    let contasParaImpressao = contas;
-    if (onlyWithBalance) {
-        // Se for para imprimir só com saldo, usamos a lista filtrada do useMemo
-        contasParaImpressao = contasFiltradas;
-    }
+    // Para a impressão, usamos a lista completa e deixamos o componente de impressão
+    // decidir se omite as linhas zero (se onlyWithBalance for true).
+    const contasParaImpressao = onlyWithBalance 
+        ? contas.filter(c => Math.abs(c.saldo_final) >= 0.01 || c.Analitica === 'Não')
+        : contas;
         
     if (contasParaImpressao.length === 0) {
         showError('Nenhum dado para imprimir.');

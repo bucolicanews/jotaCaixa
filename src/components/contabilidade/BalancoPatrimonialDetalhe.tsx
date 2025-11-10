@@ -52,7 +52,18 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
   }, [contas, filtroSomenteComSaldo]);
   
   const getContasPorTipo = (tipo: ContaBalanco['tipo_principal']) => {
+    // Retorna as contas já ordenadas pelo hook
     return contasFiltradas.filter(c => c.tipo_principal === tipo);
+  };
+  
+  // NOVO FILTRO: Para Receita (3.x.x)
+  const getContasReceita = () => {
+      return contasFiltradas.filter(c => c.tipo_principal === 'Resultado' && c.Conta.startsWith('3'));
+  };
+  
+  // NOVO FILTRO: Para Despesa (4.x.x e 5.x.x)
+  const getContasDespesa = () => {
+      return contasFiltradas.filter(c => c.tipo_principal === 'Resultado' && (c.Conta.startsWith('4') || c.Conta.startsWith('5')));
   };
   
   const renderContas = (contasList: ContaBalanco[]) => {
@@ -83,7 +94,7 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
   const handlePrint = (onlyWithBalance: boolean, formatType: '2colunas' | '1coluna') => {
     // A filtragem é feita aqui antes de passar para o componente de impressão
     const contasParaImpressao = onlyWithBalance 
-        ? contas.filter(c => Math.abs(c.saldo_final) >= 0.01)
+        ? contas.filter(c => Math.abs(c.saldo_final) >= 0.01 || c.Analitica === 'Não')
         : contas;
         
     let printComponent;
@@ -102,6 +113,15 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
         );
         fileName = `Balanço 2 Colunas - ${format(endDate, 'dd/MM/yyyy')}`;
     } else {
+        // Para o Balanço de 1 Coluna, precisamos do resultado líquido
+        const totalPassivo = contasParaImpressao
+            .filter(c => c.tipo_principal === 'Passivo' && c.Analitica === 'Não' && c.Conta.split('.').length === 1)
+            .reduce((sum, c) => sum + c.saldo_final, 0);
+            
+        const resultadoLiquidoCalc = contasParaImpressao
+            .filter(c => c.tipo_principal === 'Resultado')
+            .reduce((sum, c) => sum + c.saldo_final, 0);
+            
         printComponent = (
             <Balanco1ColunaPrint
                 empresaNome={empresaNome}
@@ -110,7 +130,7 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
                 totalAtivo={totalAtivo}
                 totalPassivo={totalPassivo}
                 totalPatrimonioLiquido={totalPatrimonioLiquido}
-                resultadoLiquido={resultadoLiquido}
+                resultadoLiquido={resultadoLiquidoCalc}
             />
         );
         fileName = `Balanço 1 Coluna - ${format(endDate, 'dd/MM/yyyy')}`;
@@ -285,7 +305,7 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
                 <CardContent>
                     <Table>
                         <TableHeader><TableRow><TableHead className="w-[150px]">Conta</TableHead><TableHead>Descrição</TableHead><TableHead className="text-right w-[150px]">Saldo</TableHead></TableRow></TableHeader>
-                        <TableBody>{renderContas(getContasPorTipo('Resultado').filter(c => c.Conta.startsWith('3')))}</TableBody>
+                        <TableBody>{renderContas(getContasReceita())}</TableBody>
                     </Table>
                 </CardContent>
             </Card>
@@ -298,7 +318,7 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
                 <CardContent>
                     <Table>
                         <TableHeader><TableRow><TableHead className="w-[150px]">Conta</TableHead><TableHead>Descrição</TableHead><TableHead className="text-right w-[150px]">Saldo</TableHead></TableRow></TableHeader>
-                        <TableBody>{renderContas(getContasPorTipo('Resultado').filter(c => c.Conta.startsWith('4') || c.Conta.startsWith('5')))}</TableBody>
+                        <TableBody>{renderContas(getContasDespesa())}</TableBody>
                     </Table>
                 </CardContent>
             </Card>
