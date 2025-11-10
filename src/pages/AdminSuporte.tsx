@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, MessageSquare, Filter, Building2, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Loader2, MessageSquare, Filter, Building2, AlertTriangle, Clock } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
@@ -35,7 +35,7 @@ interface EmpresaFiltro {
 
 const AdminSuporte: React.FC = () => {
   const { role, carregando: carregandoSessao, usuario } = useSessao(); // Adicionado usuario
-  const { totalTicketsAbertos, mensagensNaoLidas, carregando: carregandoNotificacoes, refetch: refetchNotifications } = useTicketNotifications(); // Usando o hook
+  const { ticketsAbertos, ticketsEmProgresso, ticketsPausados, mensagensNaoLidas, carregando: carregandoNotificacoes, refetch: refetchNotifications } = useTicketNotifications(); // Usando o hook
   
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [carregandoTickets, setCarregandoTickets] = useState(true);
@@ -230,31 +230,31 @@ const AdminSuporte: React.FC = () => {
       
       {/* CARDS DE RESUMO */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <Card className="border-l-4 border-primary">
+          <Card className="border-l-4 border-destructive">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Tickets Abertos</CardTitle>
-                  <MessageSquare className="w-4 h-4 text-primary" />
+                  <CardTitle className="text-sm font-medium text-destructive">Tickets Abertos (Novos)</CardTitle>
+                  <AlertTriangle className="w-4 h-4 text-destructive" />
               </CardHeader>
               <CardContent>
-                  <div className="text-2xl font-bold">{totalTicketsAbertos}</div>
+                  <div className="text-2xl font-bold text-destructive">{ticketsAbertos}</div>
+              </CardContent>
+          </Card>
+          <Card className="border-l-4 border-primary">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Em Progresso / Pausado</CardTitle>
+                  <Clock className="w-4 h-4 text-primary" />
+              </CardHeader>
+              <CardContent>
+                  <div className="text-2xl font-bold">{ticketsEmProgresso + ticketsPausados}</div>
               </CardContent>
           </Card>
           <Card className="border-l-4 border-red-500">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium text-red-600">Mensagens Não Lidas</CardTitle>
-                  <AlertTriangle className="w-4 h-4 text-red-500" />
+                  <MessageSquare className="w-4 h-4 text-red-500" />
               </CardHeader>
               <CardContent>
                   <div className="text-2xl font-bold text-red-600">{mensagensNaoLidas}</div>
-              </CardContent>
-          </Card>
-          <Card className="border-l-4 border-green-500">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Tickets Fechados</CardTitle>
-                  <CheckCircle2 className="w-4 h-4 text-green-600" />
-              </CardHeader>
-              <CardContent>
-                  <div className="text-2xl font-bold">{tickets.filter(t => t.status === 'fechado').length}</div>
               </CardContent>
           </Card>
       </div>

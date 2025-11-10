@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from './use-sessao';
-import { ClienteProfile } from '@/types/usuario';
 
 interface TicketNotifications {
-  totalTicketsAbertos: number;
+  ticketsAbertos: number;
+  ticketsEmProgresso: number;
+  ticketsPausados: number;
   mensagensNaoLidas: number;
   carregando: boolean;
   refetch: () => void;
@@ -15,7 +16,9 @@ interface TicketNotifications {
  */
 export function useTicketNotifications(): TicketNotifications {
   const { usuario, role, perfil, carregando: carregandoSessao } = useSessao();
-  const [totalTicketsAbertos, setTotalTicketsAbertos] = useState(0);
+  const [ticketsAbertos, setTicketsAbertos] = useState(0);
+  const [ticketsEmProgresso, setTicketsEmProgresso] = useState(0);
+  const [ticketsPausados, setTicketsPausados] = useState(0);
   const [mensagensNaoLidas, setMensagensNaoLidas] = useState(0);
   const [carregando, setCarregando] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -33,39 +36,32 @@ export function useTicketNotifications(): TicketNotifications {
     setCarregando(true);
     
     const userId = usuario.id;
-    let empresaId: string | null = null; // ID do Admin (destinatário) ou Cliente (proprietário)
-
-    if (role === 'Cliente') {
-        empresaId = (perfil as ClienteProfile)?.admin_id || null;
-    } else if (role === 'Admin') {
-        empresaId = userId;
-    }
-
-    if (!empresaId) {
-        setCarregando(false);
-        return;
-    }
-
-    try {
-      // 1. Contar Tickets Abertos (Status: aberto, em_progresso, pausado)
-      let ticketsQuery = supabase
+    
+    let ticketsQuery = supabase
         .from('tickets')
-        .select('id', { count: 'exact', head: true })
-        .in('status', ['aberto', 'em_progresso', 'pausado']);
+        .select('status', { count: 'exact', head: false });
         
-      if (role === 'Cliente') {
-          // Cliente só conta os tickets que ele criou
-          ticketsQuery = ticketsQuery.eq('proprietario_id', userId);
-      } else if (role === 'Admin') {
-          // Admin conta todos os tickets onde ele é a empresa_id
-          ticketsQuery = ticketsQuery.eq('empresa_id', userId);
-      }
+    if (role === 'Cliente') {
+        ticketsQuery = ticketsQuery.eq('proprietario_id', userId);
+    } else if (role === 'Admin') {
+        ticketsQuery = ticketsQuery.eq('empresa_id', userId);
+    }
+    
+    try {
+      // 1. Contar Tickets por Status
+      const { data: ticketsData, error: ticketsError } = await ticketsQuery;
+      if (ticketsError) throw ticketsError;
       
-      const { count: abertosCount, error: abertosError } = await ticketsQuery;
-      if (abertosError) throw abertosError;
-      setTotalTicketsAbertos(abertosCount || 0);
+      const counts = (ticketsData || []).reduce((acc, t) => {
+          acc[t.status] = (acc[t.status] || 0) + 1;
+          return acc;
+      }, {} as Record<string, number>);
+      
+      setTicketsAbertos(counts['aberto'] || 0);
+      setTicketsEmProgresso(counts['em_progresso'] || 0);
+      setTicketsPausados(counts['pausado'] || 0);
 
-      // 2. Contar Mensagens Não Lidas (Onde o usuário logado é o destinatário E lido=false)
+      // 2. Contar Mensagens Não Lidas
       const { count: naoLidasCount, error: naoLidasError } = await supabase
         .from('mensagens_ticket')
         .select('id', { count: 'exact', head: true })
@@ -77,7 +73,9 @@ export function useTicketNotifications(): TicketNotifications {
 
     } catch (error) {
       console.error('Erro ao buscar notificações de ticket:', error);
-      setTotalTicketsAbertos(0);
+      setTicketsAbertos(0);
+      setTicketsEmProgresso(0);
+      setTicketsPausados(0);
       setMensagensNaoLidas(0);
     } finally {
       setCarregando(false);
@@ -105,5 +103,5 @@ export function useTicketNotifications(): TicketNotifications {
     };
   }, [fetchNotifications, refetch, usuario?.id]);
 
-  return { totalTicketsAbertos, mensagensNaoLidas, carregando, refetch };
+  return { ticketsAbertos, ticketsEmProgresso, ticketsPausados, mensagensNaoLidas, carregando, refetch };
 }
