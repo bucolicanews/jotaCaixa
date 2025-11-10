@@ -11,7 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
-import { Badge } from '@/components/ui/badge'; // Adicionado import do Badge
+import { Badge } from '@/components/ui/badge';
 
 interface Ticket {
   id: string;
@@ -23,7 +23,6 @@ interface Ticket {
   proprietario_id: string;
   empresa_id: string;
   proprietario_perfil: { nome: string } | null;
-  // NOVO CAMPO
   ultima_mensagem_remetente_id: string | null;
 }
 
@@ -33,7 +32,7 @@ interface Mensagem {
   conteudo: string;
   anexo_url: string | null;
   criado_em: string;
-  remetente_perfil: { nome: string } | null; // CORRIGIDO: Tipagem simplificada
+  remetente_perfil: { nome: string } | null;
 }
 
 interface TicketDetalheProps {
@@ -56,26 +55,26 @@ const TicketDetalhe: React.FC<TicketDetalheProps> = ({ ticket, onClose, onUpdate
 
   const remetenteId = usuario?.id;
   const clienteId = ticket.proprietario_id;
-  const adminId = ticket.empresa_id; // O ID da empresa é o ID do Admin
+  const adminId = ticket.empresa_id;
   
   const canManage = isAdminView || remetenteId === clienteId;
+  const isClosed = currentStatus === 'fechado';
   
   // Lógica de Responsabilidade
   const ultimaMensagemId = ticket.ultima_mensagem_remetente_id || clienteId;
   
-  // Quem enviou a última mensagem?
   const lastSenderIsAdmin = ultimaMensagemId === adminId;
   const lastSenderIsClient = ultimaMensagemId === clienteId;
   
   // Quem é o responsável pela próxima ação?
-  const isWaitingForAdmin = lastSenderIsClient;
-  const isWaitingForClient = lastSenderIsAdmin;
+  const isWaitingForAdmin = lastSenderIsClient; // Se o cliente enviou por último, Admin deve responder
+  const isWaitingForClient = lastSenderIsAdmin; // Se o admin enviou por último, Cliente deve responder
   
-  // Bloqueia a resposta se o ticket não estiver fechado E a resposta for esperada do outro lado
-  const isReplyBlocked = currentStatus !== 'fechado' && (
-      (isAdminView && isWaitingForAdmin) || // Admin logado, mas a resposta é esperada dele (Admin)
-      (!isAdminView && isWaitingForClient) // Cliente logado, mas a resposta é esperada dele (Cliente)
-  );
+  // É a vez do usuário logado responder?
+  const isMyTurn = (isAdminView && isWaitingForAdmin) || (!isAdminView && isWaitingForClient);
+  
+  // A resposta está desabilitada se o ticket estiver fechado OU não for a vez do usuário
+  const isReplyDisabled = isClosed || !isMyTurn;
   
   const responsavelNome = isWaitingForAdmin ? 'Administrador' : (ticket.proprietario_perfil?.nome || 'Cliente');
 
@@ -146,7 +145,7 @@ const TicketDetalhe: React.FC<TicketDetalheProps> = ({ ticket, onClose, onUpdate
     const filePath = `tickets/${ticketId}/${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
 
     const { error } = await supabase.storage
-      .from('suporte-anexos') // USANDO NOVO BUCKET
+      .from('suporte-anexos')
       .upload(filePath, file, {
         cacheControl: '3600',
         upsert: false,
@@ -271,7 +270,6 @@ const TicketDetalhe: React.FC<TicketDetalheProps> = ({ ticket, onClose, onUpdate
     }
   };
   
-  const isClosed = currentStatus === 'fechado';
 
   return (
     <Card className="h-full flex flex-col">
@@ -395,20 +393,25 @@ const TicketDetalhe: React.FC<TicketDetalheProps> = ({ ticket, onClose, onUpdate
             ) : (
                 <>
                     {/* Indicador de Responsabilidade */}
-                    <div className={cn("p-2 rounded-md mb-3 text-sm font-medium", isReplyBlocked ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-300" : "bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-300")}>
-                        {/* Lógica de exibição da mensagem de responsabilidade */}
-                        {isAdminView ? (
-                            isWaitingForAdmin ? (
-                                <span>Sua vez de responder.</span>
-                            ) : (
+                    <div className={cn("p-2 rounded-md mb-3 text-sm font-medium", isReplyDisabled ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-300" : "bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-300")}>
+                        
+                        {isReplyDisabled ? (
+                            // BLOQUEADO / AGUARDANDO OUTRA PARTE
+                            isAdminView ? (
                                 <span>Aguardando resposta do(a) <span className="font-bold">{responsavelNome}</span>. Sua resposta está bloqueada.</span>
+                            ) : (
+                                <span>
+                                    Aguardando resposta do(a) <span className="font-bold">Administrador</span>. Sua resposta está bloqueada.
+                                </span>
                             )
                         ) : (
-                            // Visão do Cliente
-                            isWaitingForClient ? (
+                            // LIBERADO / SUA VEZ
+                            isAdminView ? (
                                 <span>Sua vez de responder.</span>
                             ) : (
-                                <span>Aguardando resposta do(a) <span className="font-bold">Administrador</span>. Sua resposta está bloqueada.</span>
+                                <span>
+                                    Mensagem retornou do suporte. Sua vez de responder.
+                                </span>
                             )
                         )}
                     </div>
@@ -419,13 +422,13 @@ const TicketDetalhe: React.FC<TicketDetalheProps> = ({ ticket, onClose, onUpdate
                         value={novaMensagem}
                         onChange={(e) => setNovaMensagem(e.target.value)}
                         rows={3}
-                        disabled={loadingAcao || isReplyBlocked}
+                        disabled={loadingAcao || isReplyDisabled}
                     />
                     <div className="flex items-center justify-between mt-2">
-                        <Input type="file" onChange={handleFileChange} disabled={loadingAcao || isReplyBlocked} className="w-1/2" />
+                        <Input type="file" onChange={handleFileChange} disabled={loadingAcao || isReplyDisabled} className="w-1/2" />
                         <Button 
                             onClick={handleSendMensagem} 
-                            disabled={loadingAcao || isReplyBlocked || (!novaMensagem.trim() && !anexoFile)}
+                            disabled={loadingAcao || isReplyDisabled || (!novaMensagem.trim() && !anexoFile)}
                         >
                             {loadingAcao ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
                             Enviar
