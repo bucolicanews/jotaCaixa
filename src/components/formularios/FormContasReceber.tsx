@@ -21,6 +21,7 @@ import { Separator } from '../ui/separator';
 import { useSessao } from '@/hooks/use-sessao';
 import { UsuarioProfile } from '@/types/usuario';
 import { Historico } from '@/types/historico'; // Importando Historico
+import { PlanoContas } from '@/types/plano-contas'; // Importando PlanoContas
 
 const formSchema = z.object({
   cliente_id: z.string({ required_error: 'Selecione um cliente.' }).uuid('Cliente inválido.'),
@@ -34,8 +35,11 @@ const formSchema = z.object({
   data_primeiro_vencimento: z.date().optional(),
   intervalo_dias: z.coerce.number().int().min(1).optional(),
   
-  historico_id: z.string().uuid('Selecione um histórico válido.').nullable(), // NOVO CAMPO
-  novo_historico: z.string().optional(), // NOVO CAMPO
+  historico_id: z.string().uuid('Selecione um histórico válido.').nullable(),
+  novo_historico: z.string().optional(),
+  
+  // NOVO CAMPO: Conta Contábil de Receita
+  conta_contabil_id: z.string().uuid('Selecione uma conta contábil de receita válida.').nullable(),
 
 }).superRefine((data, ctx) => {
   if (data.tipo_lancamento === 'unico' && !data.data_vencimento) {
@@ -68,8 +72,10 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
   const [clientes, setClientes] = useState<ClienteCRSimples[]>([]);
   const [loadingClientes, setLoadingClientes] = useState(true);
   const [mapeamentoContabil, setMapeamentoContabil] = useState<Record<string, string | null>>({});
-  const [historicos, setHistoricos] = useState<Historico[]>([]); // NOVO ESTADO
-  const [isCreatingHistorico, setIsCreatingHistorico] = useState(false); // NOVO ESTADO
+  const [historicos, setHistoricos] = useState<Historico[]>([]);
+  const [contasReceita, setContasReceita] = useState<PlanoContas[]>([]); // NOVO ESTADO
+  const [loadingContasReceita, setLoadingContasReceita] = useState(true); // NOVO ESTADO
+  const [isCreatingHistorico, setIsCreatingHistorico] = useState(false);
   const isEditing = !!contaInicial;
 
   const getOwnerId = () => {
@@ -105,7 +111,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
     if (!ownerId) return;
     const { data, error } = await supabase
         .from('historicos')
-        .select('id, descricao, codigo') // Selecionando 'codigo'
+        .select('id, descricao, codigo')
         .eq('proprietario_id', ownerId)
         .order('descricao');
         
@@ -115,6 +121,28 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
     } else {
         setHistoricos(data as Historico[]);
     }
+  }, [ownerId]);
+  
+  const fetchContasReceita = useCallback(async () => {
+    if (!ownerId) return;
+    setLoadingContasReceita(true);
+    
+    const { data, error } = await supabase
+        .from('plano_contas')
+        .select('id, Conta, Descricao')
+        .eq('proprietario_id', ownerId)
+        .eq('Analitica', 'Sim')
+        .eq('is_conta_resultado', true) // Filtra apenas contas de resultado
+        .like('Conta', '3.%') // Filtra contas de Receita (código 3)
+        .order('Conta');
+        
+    if (error) {
+        showError('Erro ao carregar contas de receita: ' + error.message);
+        setContasReceita([]);
+    } else {
+        setContasReceita(data as PlanoContas[]);
+    }
+    setLoadingContasReceita(false);
   }, [ownerId]);
 
   useEffect(() => {
@@ -147,11 +175,12 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
     };
     
     fetchClientes();
-    fetchHistoricos(); // Busca históricos
+    fetchHistoricos();
+    fetchContasReceita(); // NOVO: Busca contas de receita
     if (isAdmin) {
         fetchMapeamentoContabil();
     }
-  }, [perfil, role, ownerId, isAdmin, fetchMapeamentoContabil, fetchHistoricos]);
+  }, [perfil, role, ownerId, isAdmin, fetchMapeamentoContabil, fetchHistoricos, fetchContasReceita]);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -163,8 +192,9 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
       data_vencimento: contaInicial?.data_vencimento ? new Date(contaInicial.data_vencimento + 'T00:00:00') : undefined,
       numero_parcelas: 1,
       intervalo_dias: 30,
-      historico_id: contaInicial?.historico_id || null, // Inicializa com null
+      historico_id: contaInicial?.historico_id || null,
       novo_historico: '',
+      conta_contabil_id: contaInicial?.id_conta_contabil || null, // NOVO VALOR INICIAL
     },
   });
 
@@ -185,9 +215,9 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
         if (error) throw error;
         
         showSuccess('Histórico criado e selecionado!');
-        fetchHistoricos(); // Recarrega a lista
-        form.setValue('historico_id', data.id); // Seleciona o novo histórico
-        form.setValue('novo_historico', ''); // Limpa o campo de criação
+        fetchHistoricos();
+        form.setValue('historico_id', data.id);
+        form.setValue('novo_historico', '');
         setIsCreatingHistorico(false);
         
     } catch (error: any) {
@@ -201,7 +231,6 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
     if (!ownerId) { showError('ID da empresa/admin não pôde ser determinado.'); return; }
     
     // Contas Contábeis Mapeadas (apenas Admin)
-    const contaAReceber = isAdmin ? mapeamentoContabil['a_receber'] : null;
     const contaParcela = isAdmin ? mapeamentoContabil['parcela'] : null;
     
     try {
@@ -232,12 +261,9 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
       // Usando a chave diretamente no payload
       const ownerKey = isAdmin ? 'admin_id' : 'empresa_id';
       
-      const baseData = isAdmin 
-        ? { [ownerKey]: ownerId, cliente_id: values.cliente_id, id_conta_contabil: contaAReceber, historico_id: values.historico_id } 
-        : { [ownerKey]: ownerId, cliente_id: values.cliente_id };
-      
       const contaReceberPayload = {
-          ...baseData,
+          [ownerKey]: ownerId,
+          cliente_id: values.cliente_id,
           descricao: values.descricao,
           valor_total: valorTotal,
           data_emissao: format(new Date(), 'yyyy-MM-dd'),
@@ -245,6 +271,9 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
           tipo_receita: tipoLancamento === 'unico' ? 'única' : 'recorrente',
           status: 'aberta',
           origem: 'manual',
+          // NOVO CAMPO: Conta Contábil de Receita (para DRE)
+          id_conta_contabil: values.conta_contabil_id, 
+          historico_id: values.historico_id,
       };
 
       if (isEditing) {
@@ -294,9 +323,42 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
         )} />
         <Separator />
         
+        {/* NOVO CAMPO: Conta Contábil de Receita */}
+        <FormField
+            control={form.control}
+            name="conta_contabil_id"
+            render={({ field }) => (
+                <FormItem>
+                    <FormLabel>3. Conta Contábil de Receita (DRE)</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value || undefined} disabled={loadingContasReceita}>
+                        <FormControl>
+                            <SelectTrigger>
+                                <SelectValue placeholder={loadingContasReceita ? "Carregando Contas..." : "Selecione a conta de Receita (3.x.x)"} />
+                            </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                            <SelectItem value={null as any}>Nenhum (Não Mapear)</SelectItem>
+                            {contasReceita.map(c => (
+                                <SelectItem key={c.id} value={c.id}>
+                                    {c.Conta} - {c.Descricao}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <FormMessage />
+                    {contasReceita.length === 0 && (
+                        <p className="text-sm text-red-500">
+                            Nenhuma conta de Receita (3.x.x) marcada como "Conta de Resultado" no Plano de Contas.
+                        </p>
+                    )}
+                </FormItem>
+            )}
+        />
+        <Separator />
+        
         {/* NOVO CAMPO: Histórico */}
         <div className="space-y-2">
-            <FormLabel>3. Histórico (Opcional)</FormLabel>
+            <FormLabel>4. Histórico (Opcional)</FormLabel>
             <div className="flex space-x-2">
                 <FormField
                     control={form.control}
@@ -344,7 +406,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
         <Separator />
         
         <div className="space-y-4">
-          <FormLabel>4. Detalhes do Pagamento</FormLabel>
+          <FormLabel>5. Detalhes do Pagamento</FormLabel>
           <FormField control={form.control} name="tipo_lancamento" render={({ field }) => (
             <FormItem><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex space-x-4 pt-2"><FormItem className="flex items-center space-x-2 space-y-0"><FormControl><RadioGroupItem value="unico" /></FormControl><FormLabel className="font-normal">Único</FormLabel></FormItem><FormItem className="flex items-center space-x-2 space-y-0"><FormControl><RadioGroupItem value="repetir" /></FormControl><FormLabel className="font-normal">Repetir Valor</FormLabel></FormItem><FormItem className="flex items-center space-x-2 space-y-0"><FormControl><RadioGroupItem value="parcelar" /></FormControl><FormLabel className="font-normal">Parcelar Valor</FormLabel></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>
           )} />

@@ -18,7 +18,8 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Separator } from '../ui/separator';
 import { useSessao } from '@/hooks/use-sessao';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { Historico } from '@/types/historico'; // Importando Historico
+import { Historico } from '@/types/historico';
+import { PlanoContas } from '@/types/plano-contas'; // Importando PlanoContas
 
 const formSchema = z.object({
   fornecedor: z.string().min(1, 'O nome do fornecedor é obrigatório.'),
@@ -32,8 +33,11 @@ const formSchema = z.object({
   data_primeiro_vencimento: z.date().optional(),
   intervalo_dias: z.coerce.number().int().min(1).optional(),
   
-  historico_id: z.string().uuid('Selecione um histórico válido.').nullable(), // NOVO CAMPO
-  novo_historico: z.string().optional(), // NOVO CAMPO
+  historico_id: z.string().uuid('Selecione um histórico válido.').nullable(),
+  novo_historico: z.string().optional(),
+  
+  // NOVO CAMPO: Conta Contábil de Despesa/Custo
+  conta_contabil_id: z.string().uuid('Selecione uma conta contábil de despesa/custo válida.').nullable(),
 
 }).superRefine((data, ctx) => {
   if (data.tipo_lancamento === 'unico' && !data.data_vencimento) {
@@ -56,8 +60,10 @@ interface FormContasPagarProps {
 const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveComplete }) => {
   const { usuario, role } = useSessao();
   const [mapeamentoContabil, setMapeamentoContabil] = useState<Record<string, string | null>>({});
-  const [historicos, setHistoricos] = useState<Historico[]>([]); // NOVO ESTADO
-  const [isCreatingHistorico, setIsCreatingHistorico] = useState(false); // NOVO ESTADO
+  const [historicos, setHistoricos] = useState<Historico[]>([]);
+  const [contasDespesa, setContasDespesa] = useState<PlanoContas[]>([]); // NOVO ESTADO
+  const [loadingContasDespesa, setLoadingContasDespesa] = useState(true); // NOVO ESTADO
+  const [isCreatingHistorico, setIsCreatingHistorico] = useState(false);
   const isEditing = !!contaInicial;
 
   const isAdmin = role === 'Admin';
@@ -87,7 +93,7 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
     if (!adminId) return;
     const { data, error } = await supabase
         .from('historicos')
-        .select('id, descricao, codigo') // Selecionando 'codigo'
+        .select('id, descricao, codigo')
         .eq('proprietario_id', adminId)
         .order('descricao');
         
@@ -98,6 +104,28 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
         setHistoricos(data as Historico[]);
     }
   }, [adminId]);
+  
+  const fetchContasDespesa = useCallback(async () => {
+    if (!adminId) return;
+    setLoadingContasDespesa(true);
+    
+    const { data, error } = await supabase
+        .from('plano_contas')
+        .select('id, Conta, Descricao')
+        .eq('proprietario_id', adminId)
+        .eq('Analitica', 'Sim')
+        .eq('is_conta_resultado', true) // Filtra apenas contas de resultado
+        .or('Conta.like.4.%,Conta.like.5.%') // Filtra contas de Custo/Despesa (código 4 ou 5)
+        .order('Conta');
+        
+    if (error) {
+        showError('Erro ao carregar contas de despesa/custo: ' + error.message);
+        setContasDespesa([]);
+    } else {
+        setContasDespesa(data as PlanoContas[]);
+    }
+    setLoadingContasDespesa(false);
+  }, [adminId]);
 
   useEffect(() => {
     if (isAdmin) {
@@ -105,8 +133,9 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
     }
     if (adminId) {
         fetchHistoricos();
+        fetchContasDespesa(); // NOVO: Busca contas de despesa
     }
-  }, [isAdmin, adminId, fetchMapeamentoContabil, fetchHistoricos]);
+  }, [isAdmin, adminId, fetchMapeamentoContabil, fetchHistoricos, fetchContasDespesa]);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -118,13 +147,13 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
       data_vencimento: contaInicial?.data_vencimento ? new Date(contaInicial.data_vencimento + 'T00:00:00') : undefined,
       numero_parcelas: 1,
       intervalo_dias: 30,
-      historico_id: contaInicial?.historico_id || null, // Carrega histórico inicial
+      historico_id: contaInicial?.historico_id || null,
       novo_historico: '',
+      conta_contabil_id: contaInicial?.id_conta_contabil || null, // NOVO VALOR INICIAL
     },
   });
   
-  const { isSubmitting } = form.formState; // Desestruturando isSubmitting
-
+  const { isSubmitting } = form.formState;
   const tipoLancamento = form.watch('tipo_lancamento');
   const novoHistoricoValue = form.watch('novo_historico');
   
@@ -142,9 +171,9 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
         if (error) throw error;
         
         showSuccess('Histórico criado e selecionado!');
-        fetchHistoricos(); // Recarrega a lista
-        form.setValue('historico_id', data.id); // Seleciona o novo histórico
-        form.setValue('novo_historico', ''); // Limpa o campo de criação
+        fetchHistoricos();
+        form.setValue('historico_id', data.id);
+        form.setValue('novo_historico', '');
         setIsCreatingHistorico(false);
         
     } catch (error: any) {
@@ -157,7 +186,6 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
     if (!adminId) { showError('ID do administrador não pôde ser determinado.'); return; }
     
     // Contas Contábeis Mapeadas
-    const contaAPagar = isAdmin ? mapeamentoContabil['a_pagar'] : null;
     const contaParcelaPagar = isAdmin ? mapeamentoContabil['parcela_pagar'] : null;
     
     try {
@@ -189,8 +217,8 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
           data_vencimento: parcelasParaInserir[0].data_vencimento,
           status: 'pendente',
           origem: 'manual',
-          id_conta_contabil: contaAPagar,
-          historico_id: values.historico_id, // NOVO CAMPO
+          id_conta_contabil: values.conta_contabil_id, // NOVO CAMPO: Conta Contábil de Despesa/Custo
+          historico_id: values.historico_id,
       };
 
       if (isEditing && contaInicial) {
@@ -235,9 +263,42 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
         )} />
         <Separator />
         
+        {/* NOVO CAMPO: Conta Contábil de Despesa/Custo */}
+        <FormField
+            control={form.control}
+            name="conta_contabil_id"
+            render={({ field }) => (
+                <FormItem>
+                    <FormLabel>3. Conta Contábil de Despesa/Custo (DRE)</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value || undefined} disabled={loadingContasDespesa}>
+                        <FormControl>
+                            <SelectTrigger>
+                                <SelectValue placeholder={loadingContasDespesa ? "Carregando Contas..." : "Selecione a conta de Despesa/Custo (4.x.x ou 5.x.x)"} />
+                            </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                            <SelectItem value={null as any}>Nenhum (Não Mapear)</SelectItem>
+                            {contasDespesa.map(c => (
+                                <SelectItem key={c.id} value={c.id}>
+                                    {c.Conta} - {c.Descricao}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <FormMessage />
+                    {contasDespesa.length === 0 && (
+                        <p className="text-sm text-red-500">
+                            Nenhuma conta de Despesa/Custo (4.x.x ou 5.x.x) marcada como "Conta de Resultado" no Plano de Contas.
+                        </p>
+                    )}
+                </FormItem>
+            )}
+        />
+        <Separator />
+        
         {/* NOVO CAMPO: Histórico */}
         <div className="space-y-2">
-            <FormLabel>3. Histórico (Opcional)</FormLabel>
+            <FormLabel>4. Histórico (Opcional)</FormLabel>
             <div className="flex space-x-2">
                 <FormField
                     control={form.control}
@@ -277,7 +338,7 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
                         </FormItem>
                     )} />
                     <Button type="button" onClick={handleCreateHistorico} disabled={isSubmitting || !novoHistoricoValue}>
-                        {isCreatingHistorico ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Criar'}
+                        {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Criar'}
                     </Button>
                 </div>
             )}
@@ -285,7 +346,7 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
         <Separator />
         
         <div className="space-y-4">
-          <FormLabel>4. Detalhes do Pagamento</FormLabel>
+          <FormLabel>5. Detalhes do Pagamento</FormLabel>
           <FormField control={form.control} name="tipo_lancamento" render={({ field }) => (
             <FormItem><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex space-x-4 pt-2"><FormItem className="flex items-center space-x-2 space-y-0"><FormControl><RadioGroupItem value="unico" /></FormControl><FormLabel className="font-normal">Único</FormLabel></FormItem><FormItem className="flex items-center space-x-2 space-y-0"><FormControl><RadioGroupItem value="repetir" /></FormControl><FormLabel className="font-normal">Repetir Valor</FormLabel></FormItem><FormItem className="flex items-center space-x-2 space-y-0"><FormControl><RadioGroupItem value="parcelar" /></FormControl><FormLabel className="font-normal">Parcelar Valor</FormLabel></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>
           )} />
@@ -293,7 +354,7 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
             <FormItem><FormLabel>{tipoLancamento === 'parcelar' ? 'Valor Total a Parcelar' : 'Valor da Parcela'}</FormLabel><FormControl><Input type="number" step="0.01" placeholder="0,00" {...field} /></FormControl><FormMessage /></FormItem>
           )} />
           {tipoLancamento === 'unico' && <FormField control={form.control} name="data_vencimento" render={({ field }) => (
-            <FormItem className="flex flex-col"><FormLabel>Data de Vencimento</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "PPP", { locale: ptBR }) : <span>Escolha uma data</span>}<CalendarIcon className="ml-auto h-4 w-4 opacity-50" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus /></PopoverContent></Popover><FormMessage /></FormItem>
+            <FormItem className="flex flex-col"><FormLabel>Data de Vencimento</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "PPP", { locale: ptBR }) : <span>Escolha uma data</span>}<CalendarIcon className="ml-auto h-4 w-4 opacity-50" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus locale={ptBR} /></PopoverContent></Popover><FormMessage /></FormItem>
           )} />}
           {tipoLancamento !== 'unico' && (
             <div className="grid grid-cols-3 gap-4">
@@ -304,7 +365,7 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
                 <FormItem><FormLabel>Intervalo (dias)</FormLabel><FormControl><Input type="number" placeholder="30" {...field} /></FormControl><FormMessage /></FormItem>
               )} />
               <FormField control={form.control} name="data_primeiro_vencimento" render={({ field }) => (
-                <FormItem><FormLabel>1º Vencimento</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("w-full text-left font-normal", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "dd/MM/yy") : <span>Data</span>}<CalendarIcon className="ml-auto h-4 w-4 opacity-50" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus /></PopoverContent></Popover><FormMessage /></FormItem>
+                <FormItem><FormLabel>1º Vencimento</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("w-full text-left font-normal", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "dd/MM/yy") : <span>Data</span>}<CalendarIcon className="ml-auto h-4 w-4 opacity-50" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus locale={ptBR} /></PopoverContent></Popover><FormMessage /></FormItem>
               )} />
             </div>
           )}

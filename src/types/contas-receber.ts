@@ -18,6 +18,7 @@ export interface ContaReceber {
   updated_at: string;
   clientes: Cliente;
   historico_id?: string | null; // NOVO CAMPO
+  id_conta_contabil?: string | null; // NOVO CAMPO ADICIONADO
 }
 
 export interface Parcela {
