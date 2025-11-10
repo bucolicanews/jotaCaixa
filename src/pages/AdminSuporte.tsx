@@ -236,7 +236,7 @@ const AdminSuporte: React.FC = () => {
                   <AlertTriangle className="w-4 h-4 text-destructive" />
               </CardHeader>
               <CardContent>
-                  <div className="text-2xl font-bold text-destructive">{ticketsAbertos}</div>
+                  <div className="text-2xl font-bold">{ticketsAbertos}</div>
               </CardContent>
           </Card>
           <Card className="border-l-4 border-primary">
