@@ -11,7 +11,7 @@ import TicketCard from '@/components/suporte/TicketCard.tsx';
 import TicketDetalhe from '@/components/suporte/TicketDetalhe.tsx';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { UsuarioProfile, ClienteProfile } from '@/types/usuario';
+import { ClienteProfile } from '@/types/usuario';
 
 interface Ticket {
   id: string;
@@ -34,15 +34,18 @@ const Suporte: React.FC = () => {
   const [ticketSelecionado, setTicketSelecionado] = useState<Ticket | null>(null);
   const [filtroStatus, setFiltroStatus] = useState('aberto');
 
-  const isClientOrUser = role === 'Cliente' || role === 'Usuario';
+  const isClientOrAdmin = role === 'Cliente' || role === 'Admin';
 
   const getEmpresaId = () => {
-    if (role === 'Cliente') return (perfil as ClienteProfile)?.id;
-    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id;
+    // Se for Cliente, o ticket é para o Admin (Admin ID)
+    if (role === 'Cliente') return (perfil as ClienteProfile)?.admin_id || null;
+    // Se for Admin, o ticket é para ele mesmo (Admin ID)
+    if (role === 'Admin') return (perfil as any)?.id || null;
+    
     return null;
   };
   
-  const empresaId = getEmpresaId();
+  const empresaId = getEmpresaId(); // ID do destinatário (Admin)
 
   const fetchTickets = useCallback(async () => {
     if (!empresaId) {
@@ -55,11 +58,15 @@ const Suporte: React.FC = () => {
       .from('tickets')
       .select(`
         *,
-        proprietario_perfil:proprietario_id ( nome ),
         mensagens_ticket_count:mensagens_ticket(count)
       `)
-      .eq('empresa_id', empresaId)
+      .eq('empresa_id', empresaId) // Filtra pelo ID do Admin (destinatário)
       .order('atualizado_em', { ascending: false });
+      
+    // Se for Cliente, filtra pelos tickets que ele criou
+    if (role === 'Cliente') {
+        query = query.eq('proprietario_id', (perfil as ClienteProfile)?.id);
+    }
       
     if (filtroStatus !== 'todos') {
         query = query.eq('status', filtroStatus);
@@ -71,14 +78,29 @@ const Suporte: React.FC = () => {
       showError('Erro ao carregar tickets: ' + error.message);
       setTickets([]);
     } else {
-      const mappedData = (data as any[]).map(t => ({
-          ...t,
-          mensagens_ticket_count: t.mensagens_ticket_count[0].count,
+      // Mapeamento manual do nome do proprietário
+      const ticketsComNome = await Promise.all((data as any[]).map(async (t) => {
+          let nome = 'N/A';
+          // Tenta buscar o nome do proprietário na tbl_clientes ou tbl_admins
+          const { data: perfilData } = await supabase.from('tbl_clientes').select('nome').eq('id', t.proprietario_id).single();
+          if (perfilData) {
+              nome = perfilData.nome;
+          } else {
+              const { data: adminData } = await supabase.from('tbl_admins').select('nome').eq('id', t.proprietario_id).single();
+              nome = adminData?.nome || 'Admin';
+          }
+          
+          return {
+              ...t,
+              mensagens_ticket_count: t.mensagens_ticket_count[0].count,
+              proprietario_perfil: { nome: nome }
+          } as Ticket;
       }));
-      setTickets(mappedData as Ticket[]);
+      
+      setTickets(ticketsComNome);
     }
     setCarregandoTickets(false);
-  }, [empresaId, filtroStatus]);
+  }, [empresaId, filtroStatus, role, perfil]);
 
   useEffect(() => {
     if (!carregandoSessao && empresaId) {
@@ -110,8 +132,9 @@ const Suporte: React.FC = () => {
     );
   }
   
-  if (!isClientOrUser || !empresaId) {
-    return <LayoutPrincipal><Card><CardHeader><CardTitle>Acesso Negado</CardTitle></CardHeader><CardContent><p>Apenas clientes e usuários podem acessar o suporte.</p></CardContent></Card></LayoutPrincipal>;
+  // CORREÇÃO: Acesso negado se não for Admin ou Cliente
+  if (!isClientOrAdmin || !empresaId) {
+    return <LayoutPrincipal><Card><CardHeader><CardTitle>Acesso Negado</CardTitle></CardHeader><CardContent><p>Apenas clientes do sistema e administradores podem acessar o suporte.</p></CardContent></Card></LayoutPrincipal>;
   }
   
   if (ticketSelecionado) {

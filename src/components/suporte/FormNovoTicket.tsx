@@ -11,7 +11,7 @@ import { Loader2, Send } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { useSessao } from '@/hooks/use-sessao';
-import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
+import { ClienteProfile } from '@/types/usuario';
 
 const formSchema = z.object({
   titulo: z.string().min(5, 'O título é obrigatório e deve ter pelo menos 5 caracteres.'),
@@ -40,14 +40,15 @@ const FormNovoTicket: React.FC<FormNovoTicketProps> = ({ onSaveComplete }) => {
     },
   });
 
-  const getEmpresaId = () => {
+  const getDestinatarioId = () => {
+    // O destinatário (empresa_id) é sempre o Admin principal
+    if (role === 'Cliente') return (perfil as ClienteProfile)?.admin_id || null;
+    // Se o Admin está criando um ticket, ele é o destinatário
     if (role === 'Admin') return usuario?.id || null;
-    if (role === 'Cliente') return (perfil as ClienteProfile)?.id;
-    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id;
     return null;
   };
   
-  const empresaId = getEmpresaId();
+  const destinatarioId = getDestinatarioId();
   const remetenteId = usuario?.id;
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -75,8 +76,8 @@ const FormNovoTicket: React.FC<FormNovoTicketProps> = ({ onSaveComplete }) => {
   };
 
   const onSubmit = async (values: FormValues) => {
-    if (!remetenteId || !empresaId) {
-      showError('Usuário ou empresa não identificados.');
+    if (!remetenteId || !destinatarioId || (role !== 'Admin' && role !== 'Cliente')) {
+      showError('Apenas clientes e administradores podem criar tickets.');
       return;
     }
     setLoading(true);
@@ -84,8 +85,8 @@ const FormNovoTicket: React.FC<FormNovoTicketProps> = ({ onSaveComplete }) => {
     try {
       // 1. Criar o Ticket (Registro Sintético)
       const ticketPayload = {
-        proprietario_id: remetenteId,
-        empresa_id: empresaId,
+        proprietario_id: remetenteId, // ID do Cliente/Admin que está criando
+        empresa_id: destinatarioId, // ID do Admin (destinatário)
         titulo: values.titulo,
         prioridade: values.prioridade,
         status: 'aberto',
