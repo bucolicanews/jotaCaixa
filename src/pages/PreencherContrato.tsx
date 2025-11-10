@@ -97,10 +97,12 @@ const PreencherContrato: React.FC = () => {
   const [proprietarioContratoId, setProprietarioContratoId] = useState<string | null>(null); 
   const [empresasContrato, setEmpresasContrato] = useState<EmpresaContrato[]>([]);
   const [empresaLogada, setEmpresaLogada] = useState<EmpresaLogada | null>(null);
+  
+  // FIX TS2304: Declarando isEditing no escopo do componente
+  const isEditing = !!contratoId;
 
   const isAdmin = role === 'Admin';
   const isCliente = role === 'Cliente';
-  const isEditing = !!contratoId;
   
   const getOwnerIdLogado = () => {
     if (isAdmin) return usuario?.id || null;
@@ -128,6 +130,33 @@ const PreencherContrato: React.FC = () => {
       return clientesCR.find(c => c.id === clienteSelecionadoId);
   }, [clientesCR, clienteSelecionadoId]);
 
+  // Dados da Empresa Logada (para preenchimento de tags {{EMPRESA_*}})
+  const empresaLogadaMemo = useMemo(() => {
+    if (!perfil) return null;
+    const profile = perfil as AdminProfile | ClienteProfile;
+    
+    const documentoCliente = (profile as ClienteProfile).documento || (profile as ClienteProfile).cpf;
+    const documentoAdmin = (profile as AdminProfile).cnpj || (profile as AdminProfile).cpf;
+    
+    return {
+        nome: profile.nome, 
+        email: profile.email, 
+        documento: isAdmin ? documentoAdmin : documentoCliente,
+        cpf: (profile as AdminProfile).cpf || (profile as ClienteProfile).cpf, 
+        cnpj: (profile as AdminProfile).cnpj, 
+        rg: profile.rg, 
+        telefone: profile.telefone,
+        cep: profile.cep, 
+        endereco: profile.endereco, 
+        numero: profile.numero, 
+        complemento: profile.complemento,
+        bairro: profile.bairro, 
+        cidade: profile.cidade, 
+        estado: profile.estado,
+    };
+  }, [perfil, isAdmin, isCliente]);
+
+
   // --- FUNÇÃO DE BUSCA DE CLIENTES E TAGS DEPENDENTE DO PROPRIETÁRIO ---
   const fetchDependentData = useCallback(async (targetEmpresaId: string) => {
     if (!targetEmpresaId) return;
@@ -143,26 +172,18 @@ const PreencherContrato: React.FC = () => {
         setTagsCustomizadas(tagsData as ContratoTag[]);
     }
     
-    // 2. Buscar Clientes (Contratados) - AGORA BUSCA APENAS NA TBL_CLIENTES (CLIENTES DO SISTEMA)
-    const { data: clientesSistemaData, error: errorSistema } = await supabase
-        .from('tbl_clientes')
-        .select('id, nome, email, cpf, rg, nome_mae, nome_pai, telefone, cep, endereco, numero, complemento, bairro, cidade, estado, razao_social, nome_fantasia, documento') // Selecionando todos os campos de tag
-        .eq('aprovado', true)
+    // 2. Buscar Clientes (Contratados) - AGORA BUSCA APENAS NA TABELA 'clientes' (Clientes CR)
+    const { data: clientesCRData, error: errorCR } = await supabase
+        .from('clientes')
+        .select('*') // Seleciona todos os campos para preenchimento de tags
+        .eq('proprietario_id', targetEmpresaId)
         .order('nome');
         
-    if (errorSistema) {
-        showError('Erro ao carregar clientes do sistema: ' + errorSistema.message);
+    if (errorCR) {
+        showError('Erro ao carregar clientes CR: ' + errorCR.message);
         setClientesCR([]);
     } else {
-        // Mapeia os dados da tbl_clientes para o formato ClienteCRCompleto
-        const mappedClients = (clientesSistemaData as any[]).map((c: any) => ({
-            ...c,
-            // Garantindo que os campos de tag existam
-            razao_social: c.razao_social || c.nome, 
-            nome_fantasia: c.nome_fantasia || c.nome, 
-            documento: c.documento || c.cpf || c.rg, 
-        })) as ClienteCRCompleto[];
-        
+        const mappedClients = (clientesCRData as ClienteCRCompleto[]).filter(c => c.id !== targetEmpresaId); // Filtra o próprio proprietário
         setClientesCR(mappedClients);
         
         // Se o cliente selecionado não estiver mais na lista, limpa a seleção
@@ -199,54 +220,7 @@ const PreencherContrato: React.FC = () => {
     setTituloDocumento(modeloData.titulo);
     
     // 2. Configurar Empresa Logada (Contratante)
-    let currentEmpresaLogada: EmpresaLogada | null = null;
-    if (isAdmin) {
-        const profile = perfil as AdminProfile;
-        currentEmpresaLogada = {
-            nome: profile.nome,
-            email: profile.email,
-            documento: profile.cnpj || profile.cpf,
-            cpf: profile.cpf,
-            cnpj: profile.cnpj,
-            rg: profile.rg,
-            telefone: profile.telefone,
-            cep: profile.cep,
-            endereco: profile.endereco,
-            numero: profile.numero,
-            complemento: profile.complemento,
-            bairro: profile.bairro,
-            cidade: profile.cidade,
-            estado: profile.estado,
-        };
-    } else if (isCliente) {
-        const profile = perfil as ClienteProfile;
-        currentEmpresaLogada = {
-            nome: profile.nome,
-            email: profile.email,
-            documento: profile.documento || profile.cpf,
-            cpf: profile.cpf,
-            cnpj: null,
-            rg: profile.rg,
-            telefone: profile.telefone,
-            cep: profile.cep,
-            endereco: profile.endereco,
-            numero: profile.numero,
-            complemento: profile.complemento,
-            bairro: profile.bairro,
-            cidade: profile.cidade,
-            estado: profile.estado,
-        };
-    } else if (role === 'Usuario' && ownerIdLogado) {
-        const { data: empresaData } = await supabase.from('tbl_clientes').select('nome, email, documento, cpf, rg, telefone, cep, endereco, numero, complemento, bairro, cidade, estado').eq('id', ownerIdLogado).single();
-        if (empresaData) {
-            currentEmpresaLogada = {
-                ...empresaData,
-                documento: empresaData.documento || empresaData.cpf,
-                cnpj: null,
-            };
-        }
-    }
-    setEmpresaLogada(currentEmpresaLogada);
+    setEmpresaLogada(empresaLogadaMemo);
     
     // 3. Configurar Empresas Contratantes (Apenas Admin)
     let initialProprietarioContratoId = ownerIdLogado;
@@ -380,7 +354,7 @@ const PreencherContrato: React.FC = () => {
     setProprietarioContratoId(initialProprietarioContratoId);
     
     setCarregandoDados(false);
-  }, [modeloId, ownerIdLogado, navigate, role, perfil, usuario, isAdmin, isCliente, contratoId]);
+  }, [modeloId, ownerIdLogado, navigate, role, perfil, usuario, isAdmin, isCliente, contratoId, empresaLogadaMemo]);
   
   // Efeito para monitorar a mudança do proprietário do contrato (proprietarioContratoId)
   useEffect(() => {
@@ -532,33 +506,8 @@ const PreencherContrato: React.FC = () => {
         const clienteSelecionado = clientesCR.find(c => c.id === clienteSelecionadoId);
         if (!clienteSelecionado) throw new Error('Cliente selecionado não encontrado.');
         
-        // Como estamos buscando clientes da tbl_clientes, precisamos garantir que eles existam na tabela 'clientes' (CR)
-        const clienteDataParaUpsert: Partial<ClienteCRCompleto> = {
-            id: clienteSelecionado.id,
-            proprietario_id: proprietarioContratoId, // Usando o proprietário do contrato
-            nome: clienteSelecionado.nome,
-            email: clienteSelecionado.email || null, // Garante que o email seja NULL se vazio
-            documento: clienteSelecionado.documento || null,
-            razao_social: clienteSelecionado.razao_social || null,
-            nome_fantasia: clienteSelecionado.nome_fantasia || null,
-            telefone: clienteSelecionado.telefone || null,
-            telefone_fixo: clienteSelecionado.telefone_fixo || null,
-            cep: clienteSelecionado.cep || null,
-            endereco: clienteSelecionado.endereco || null,
-            numero: clienteSelecionado.numero || null,
-            complemento: clienteSelecionado.complemento || null,
-            bairro: clienteSelecionado.bairro || null,
-            cidade: clienteSelecionado.cidade || null,
-            estado: clienteSelecionado.estado || null,
-        };
-        
-        const { error: upsertError } = await supabase
-            .from('clientes')
-            .upsert(clienteDataParaUpsert, { onConflict: 'id' });
-            
-        if (upsertError) {
-            throw new Error('Falha ao garantir a existência do cliente na tabela CR: ' + upsertError.message);
-        }
+        // Não precisamos mais fazer upsert na tabela 'clientes' aqui, pois a lista
+        // já vem da tabela 'clientes' e a FK será validada.
         
         // 1. Renderizar Conteúdo Final
         const conteudoRenderizado = renderizarConteudo(modelo.conteudo_template, valoresTags);
@@ -747,6 +696,26 @@ const PreencherContrato: React.FC = () => {
         <h1 className="text-2xl md:text-3xl font-bold flex items-center">
           <FileSignature className="w-6 h-6 mr-2" /> {isEditing ? 'Editar Contrato' : 'Preencher Contrato'}: {modelo.titulo}
         </h1>
+      </div>
+      
+      <div className="flex flex-col sm:flex-row gap-4 mb-6">
+          <Button 
+              onClick={handlePreview} 
+              variant="outline"
+              className="flex-1 h-12"
+              disabled={!modelo || !clienteSelecionadoId}
+          >
+              <Eye className="mr-2 h-4 w-4" />
+              Pré-visualizar Documento
+          </Button>
+          <Button 
+              onClick={() => handleSalvarContrato('pendente_assinatura')} 
+              className="flex-1 h-12"
+              disabled={isSubmitting || !clienteSelecionadoId || valorTotal <= 0}
+          >
+              {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileSignature className="mr-2 h-4 w-4" />}
+              Gerar e Enviar para Assinatura
+          </Button>
       </div>
       
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

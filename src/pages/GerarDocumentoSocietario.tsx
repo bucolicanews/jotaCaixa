@@ -19,6 +19,25 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { format } from 'date-fns';
 
+// FIX TS2304: Definindo o tipo EmpresaLogada (copiado de PreencherContrato.tsx)
+interface EmpresaLogada {
+    nome: string;
+    email: string;
+    documento?: string | null;
+    endereco_completo?: string | null;
+    cpf?: string | null;
+    cnpj?: string | null;
+    rg?: string | null;
+    telefone?: string | null;
+    cep?: string | null;
+    endereco?: string | null;
+    numero?: string | null;
+    complemento?: string | null;
+    bairro?: string | null;
+    cidade?: string | null;
+    estado?: string | null;
+}
+
 interface EmpresaContrato {
     id: string;
     nome: string;
@@ -27,6 +46,7 @@ interface EmpresaContrato {
 // NOVO TIPO: Cliente CR com todos os campos de tag
 interface ClienteCRCompleto {
     id: string;
+    proprietario_id?: string | null; // Adicionado para compatibilidade com a tabela 'clientes'
     nome: string;
     razao_social?: string | null;
     nome_fantasia?: string | null;
@@ -69,6 +89,7 @@ const GerarDocumentoSocietario: React.FC = () => {
   
   const [proprietarioContratoId, setProprietarioContratoId] = useState<string | null>(null); 
   const [empresasContrato, setEmpresasContrato] = useState<EmpresaContrato[]>([]);
+  const [empresaLogada, setEmpresaLogada] = useState<EmpresaLogada | null>(null);
 
   const isAdmin = role === 'Admin';
   const isCliente = role === 'Cliente';
@@ -83,7 +104,7 @@ const GerarDocumentoSocietario: React.FC = () => {
   const ownerIdLogado = getOwnerIdLogado();
   
   // Dados da Empresa Logada (para preenchimento de tags {{EMPRESA_*}})
-  const empresaLogada = useMemo(() => {
+  const empresaLogadaMemo = useMemo(() => {
     if (!perfil) return null;
     const profile = perfil as AdminProfile | ClienteProfile;
     
@@ -127,27 +148,18 @@ const GerarDocumentoSocietario: React.FC = () => {
         .order('titulo');
     setBlocos(blocosData as BlocoSocietario[] || []);
     
-    // 2. Buscar Clientes (Contratados) - AGORA BUSCA APENAS NA TBL_CLIENTES (CLIENTES DO SISTEMA)
-    // O cliente selecionado deve ser um cliente do sistema (tbl_clientes)
-    const { data: clientesSistemaData, error: errorSistema } = await supabase
-        .from('tbl_clientes')
-        .select('id, nome, email, cpf, rg, nome_mae, nome_pai, telefone, cep, endereco, numero, complemento, bairro, cidade, estado, razao_social, nome_fantasia, documento') // Selecionando todos os campos de tag
-        .eq('aprovado', true)
+    // 2. Buscar Clientes (Contratados) - AGORA BUSCA APENAS NA TABELA 'clientes' (Clientes CR)
+    const { data: clientesCRData, error: errorCR } = await supabase
+        .from('clientes')
+        .select('*') // Seleciona todos os campos para preenchimento de tags
+        .eq('proprietario_id', targetEmpresaId)
         .order('nome');
         
-    if (errorSistema) {
-        showError('Erro ao carregar clientes do sistema: ' + errorSistema.message);
+    if (errorCR) {
+        showError('Erro ao carregar clientes CR: ' + errorCR.message);
         setClientesCR([]);
     } else {
-        // Mapeia os dados da tbl_clientes para o formato ClienteCRCompleto
-        const mappedClients = (clientesSistemaData as any[]).map(c => ({
-            ...c,
-            // Garantindo que os campos de tag existam
-            razao_social: c.razao_social || c.nome, 
-            nome_fantasia: c.nome_fantasia || c.nome, 
-            documento: c.documento || c.cpf || c.rg, 
-        })) as ClienteCRCompleto[];
-        
+        const mappedClients = (clientesCRData as ClienteCRCompleto[]).filter(c => c.id !== targetEmpresaId); // Filtra o próprio proprietário
         setClientesCR(mappedClients);
         
         // Se o cliente selecionado não estiver mais na lista, limpa a seleção
@@ -184,7 +196,10 @@ const GerarDocumentoSocietario: React.FC = () => {
     setModelo(modeloData as ModeloSocietario);
     setTituloDocumento(modeloData.titulo);
     
-    // 2. Configurar Empresas Contratantes (Apenas Admin)
+    // 2. Configurar Empresa Logada (Contratante)
+    setEmpresaLogada(empresaLogadaMemo);
+    
+    // 3. Configurar Empresas Contratantes (Apenas Admin)
     let initialProprietarioContratoId = ownerIdLogado;
     if (isAdmin) {
         // Busca todos os clientes do sistema para o dropdown de proprietário
@@ -203,7 +218,7 @@ const GerarDocumentoSocietario: React.FC = () => {
     setProprietarioContratoId(initialProprietarioContratoId);
     
     setCarregandoDados(false);
-  }, [modeloId, ownerIdLogado, navigate, isAdmin]);
+  }, [modeloId, ownerIdLogado, navigate, isAdmin, empresaLogadaMemo]);
   
   // Efeito para monitorar a mudança do proprietário do contrato (proprietarioContratoId)
   useEffect(() => {
@@ -222,24 +237,39 @@ const GerarDocumentoSocietario: React.FC = () => {
   }, [carregandoSessao, ownerIdLogado, buscarDados, navigate, isAdmin, isCliente]);
 
   // --- Lógica de Preenchimento de Tags ---
+  const allAvailableTags = useMemo(() => {
+      // Combina tags padrão (apenas as de Cliente/Usuário/Empresa) e tags de blocos
+      const allTags = TAGS_PADRAO.filter(t => 
+          !t.origem_dado?.startsWith('contas_receber')
+      );
+      
+      const blocoTags = blocos.map(b => ({
+          id: b.id,
+          nome_tag: `{{BLOCO_${b.id}}}`,
+          descricao: `Bloco: ${b.titulo}`,
+          origem_dado: 'blocos_societarios',
+      } as ContratoTag));
+      
+      const combined = [...allTags, ...blocoTags];
+      
+      // Remove duplicatas e ordena
+      const customTagsMap = combined.reduce((acc, tag) => {
+          acc[tag.nome_tag] = tag;
+          return acc;
+      }, {} as Record<string, ContratoTag>);
+      
+      const uniqueTags = Array.from(new Set(combined.map(t => t.nome_tag)))
+          .map(tagKey => customTagsMap[tagKey])
+          .filter((t): t is ContratoTag => !!t)
+          .sort((a, b) => a.nome_tag.localeCompare(b.nome_tag));
+          
+      return uniqueTags;
+  }, [blocos]); // FIX TS2304: Declarando allAvailableTags aqui
+
   const updateTags = useCallback(() => {
     const newTags: Record<string, string> = {};
     
-    // Combina tags padrão (apenas as de Cliente/Usuário/Empresa) e tags de blocos
-    const allAvailableTags = TAGS_PADRAO.filter(t => 
-        !t.origem_dado?.startsWith('contas_receber')
-    );
-    
-    const blocoTags = blocos.map(b => ({
-        id: b.id,
-        nome_tag: `{{BLOCO_${b.id}}}`,
-        descricao: `Bloco: ${b.titulo}`,
-        origem_dado: 'blocos_societarios',
-    } as ContratoTag));
-    
-    const allTags = [...allAvailableTags, ...blocoTags];
-
-    allTags.forEach(tag => {
+    allAvailableTags.forEach(tag => {
         const tagKey = tag.nome_tag;
         let tagValue: string | null = null;
         
@@ -283,7 +313,7 @@ const GerarDocumentoSocietario: React.FC = () => {
     });
     
     setValoresTags(newTags);
-  }, [clienteSelecionado, blocos, empresaLogada, valoresTags]);
+  }, [clienteSelecionado, blocos, empresaLogada, valoresTags, allAvailableTags]);
 
   useEffect(() => {
     updateTags();
@@ -334,7 +364,12 @@ const GerarDocumentoSocietario: React.FC = () => {
     setIsSubmitting(true);
     
     try {
-        // REMOVIDO: Lógica de UPSERT na tabela 'clientes' (CR)
+        // 0. GARANTIR QUE O CLIENTE EXISTA NA TABELA 'clientes' (para FK)
+        const clienteSelecionado = clientesCR.find(c => c.id === clienteSelecionadoId);
+        if (!clienteSelecionado) throw new Error('Cliente selecionado não encontrado.');
+        
+        // Não precisamos mais fazer upsert na tabela 'clientes' aqui, pois a lista
+        // já vem da tabela 'clientes' e a FK será validada.
         
         const conteudoRenderizado = renderizarConteudo(modelo.conteudo_template, valoresTags);
         

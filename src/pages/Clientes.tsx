@@ -219,6 +219,11 @@ const ClientesPage = () => {
       const processedEmails = new Set<string>();
       
       for (const cliente of fetchedData) {
+          // FILTRAGEM PRINCIPAL: Se for Cliente, exclui o próprio ID da lista de clientes CR
+          if (!isAdmin && cliente.id === ownerId) {
+              continue;
+          }
+          
           const systemClient = systemClientsMap[cliente.id];
           // CORREÇÃO: Usa o campo is_system_client do registro CR, se existir, ou verifica pelo mapa do sistema
           const isSystemClient = cliente.is_system_client || !!systemClient; 
