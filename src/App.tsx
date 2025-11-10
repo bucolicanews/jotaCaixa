@@ -4,7 +4,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@radix-ui/react-tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, useSearchParams, useNavigate } from "react-router-dom";
-import { SessionProvider } from "@/contexts/SessionContext";
+import { SessionProvider } from "./contexts/SessionContext";
 import NotFound from "./pages/NotFound";
 import Login from "./pages/Login";
 import Painel from "./pages/Painel";
@@ -49,6 +49,8 @@ import DocumentosSocietarios from "./pages/DocumentosSocietarios";
 import GerenciarModelosSocietarios from "./pages/GerenciarModelosSocietarios";
 import GerenciarBlocosSocietarios from "./pages/GerenciarBlocosSocietarios";
 import GerarDocumentoSocietario from "./pages/GerarDocumentoSocietario";
+import Suporte from "./pages/Suporte";
+import AdminSuporte from "./pages/AdminSuporte";
 
 const queryClient = new QueryClient();
 
@@ -260,6 +262,10 @@ const App = () => (
             <Route path="/documentos-societarios/modelos" element={<GerenciarModelosSocietarios />} />
             <Route path="/documentos-societarios/blocos" element={<GerenciarBlocosSocietarios />} />
             <Route path="/documentos-societarios/gerar/:modeloId" element={<GerarDocumentoSocietario />} />
+            
+            {/* NOVAS ROTAS: Suporte */}
+            <Route path="/suporte" element={<Suporte />} />
+            <Route path="/admin/suporte" element={<AdminSuporte />} />
 
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
