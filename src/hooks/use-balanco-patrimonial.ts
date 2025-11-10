@@ -50,10 +50,7 @@ const compareContas = (a: ContaBalanco, b: ContaBalanco): number => {
 
 /**
  * Consolida os saldos das contas analíticas para as contas sintéticas.
- * A consolidação agora soma apenas os saldos das contas analíticas que são filhas diretas
- * ou indiretas de uma sintética.
- * @param contas A lista de contas com saldos iniciais calculados.
- * @returns A lista de contas com saldos consolidados.
+ * Regra: A conta sintética soma apenas o saldo das suas filhas DIRETAS.
  */
 const consolidateBalances = (contas: ContaBalanco[]): ContaBalanco[] => {
     // 1. Cria um mapa de saldos iniciais (apenas analíticas e PL/Resultado)
@@ -70,22 +67,28 @@ const consolidateBalances = (contas: ContaBalanco[]): ContaBalanco[] => {
     // 3. Ordena as contas sintéticas do mais específico para o mais geral (ordem decrescente)
     const sinteticas = contas.filter(c => c.Analitica === 'Não').sort((a, b) => compareContas(b, a));
 
-    // 4. Consolida de baixo para cima
+    // 4. Consolida de baixo para cima (garantindo que o saldo do filho já esteja consolidado)
     for (const contaSintetica of sinteticas) {
         let totalConsolidado = 0;
         
-        // Itera sobre todas as contas (analíticas e sintéticas)
+        // Calcula o nível da conta sintética (número de pontos + 1)
+        const nivelPai = contaSintetica.Conta.split('.').filter(p => p.length > 0).length;
+        const nivelFilhoDireto = nivelPai + 1;
+        
+        // Itera sobre todas as contas para encontrar as filhas DIRETAS
         for (const conta of contas) {
-            // Verifica se a conta é filha da sintética atual (começa com o prefixo da sintética)
+            // 4.1. Verifica se é filha (começa com o prefixo do pai + '.')
             if (conta.Conta.startsWith(contaSintetica.Conta + '.') && conta.Conta !== contaSintetica.Conta) {
                 
-                // Se a conta filha for analítica, soma seu saldo final
-                if (conta.Analitica === 'Sim') {
-                    totalConsolidado += saldoAnaliticoMap[conta.Conta] || 0;
-                } 
-                // Se a conta filha for sintética, soma o saldo consolidado dela (que já foi calculado)
-                else if (saldoConsolidadoMap[conta.Conta] !== undefined) {
-                    totalConsolidado += saldoConsolidadoMap[conta.Conta];
+                // 4.2. Verifica se é filha DIRETA (o nível é exatamente o próximo)
+                const nivelConta = conta.Conta.split('.').filter(p => p.length > 0).length;
+                
+                if (nivelConta === nivelFilhoDireto) {
+                    // Se for filha direta, soma o saldo consolidado dela (que já deve estar no mapa)
+                    const saldoFilho = saldoConsolidadoMap[conta.Conta];
+                    if (saldoFilho !== undefined) {
+                        totalConsolidado += saldoFilho;
+                    }
                 }
             }
         }

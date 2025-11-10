@@ -57,41 +57,61 @@ const compareContas = (a: ContaDRE, b: ContaDRE): number => {
 
 /**
  * Consolida os saldos das contas analíticas para as contas sintéticas.
+ * Regra: A conta sintética soma apenas o saldo das suas filhas DIRETAS.
  */
 const consolidateBalances = (contas: ContaDRE[]): ContaDRE[] => {
-    // 1. Cria um mapa de saldos por ID
-    const saldoMap: Record<string, number> = contas.reduce((acc, c) => {
-        acc[c.id] = c.saldo_final;
-        return acc;
-    }, {} as Record<string, number>);
+    // 1. Cria um mapa de saldos iniciais (apenas analíticas)
+    const saldoAnaliticoMap: Record<string, number> = contas
+        .filter(c => c.Analitica === 'Sim')
+        .reduce((acc, c) => {
+            acc[c.Conta] = c.saldo_final;
+            return acc;
+        }, {} as Record<string, number>);
 
-    // 2. Ordena as contas do mais específico para o mais geral (ordem decrescente)
-    // Isso garante que as filhas sejam processadas antes dos pais.
-    const sortedContas = [...contas].sort((a, b) => compareContas(b, a));
+    // 2. Cria um mapa para armazenar os saldos consolidados (incluindo sintéticas)
+    const saldoConsolidadoMap: Record<string, number> = { ...saldoAnaliticoMap };
 
-    // 3. Consolida de baixo para cima
-    for (const conta of sortedContas) {
-        if (conta.Analitica === 'Sim') continue; // Apenas contas sintéticas (Analitica='Não') consolidam
+    // 3. Ordena as contas sintéticas do mais específico para o mais geral (ordem decrescente)
+    const sinteticas = contas.filter(c => c.Analitica === 'Não').sort((a, b) => compareContas(b, a));
 
-        // Percorre todas as contas para encontrar as filhas diretas
-        for (const child of contas) {
-            // Verifica se o filho começa com o código do pai E não é o próprio pai
-            if (child.Conta.startsWith(conta.Conta + '.') && child.Conta !== conta.Conta) {
-                // Se o filho for analítico, seu saldo já está no saldoMap.
-                // Se o filho for sintético, seu saldo já foi consolidado (devido à ordenação).
-                const saldoFilho = saldoMap[child.id];
+    // 4. Consolida de baixo para cima (garantindo que o saldo do filho já esteja consolidado)
+    for (const contaSintetica of sinteticas) {
+        let totalConsolidado = 0;
+        
+        // Calcula o nível da conta sintética (número de pontos + 1)
+        const nivelPai = contaSintetica.Conta.split('.').filter(p => p.length > 0).length;
+        const nivelFilhoDireto = nivelPai + 1;
+        
+        // Itera sobre todas as contas para encontrar as filhas DIRETAS
+        for (const conta of contas) {
+            // 4.1. Verifica se é filha (começa com o prefixo do pai + '.')
+            if (conta.Conta.startsWith(contaSintetica.Conta + '.') && conta.Conta !== contaSintetica.Conta) {
                 
-                // Adiciona o saldo do filho ao saldo do pai
-                saldoMap[conta.id] = (saldoMap[conta.id] || 0) + saldoFilho;
+                // 4.2. Verifica se é filha DIRETA (o nível é exatamente o próximo)
+                const nivelConta = conta.Conta.split('.').filter(p => p.length > 0).length;
+                
+                if (nivelConta === nivelFilhoDireto) {
+                    // Se for filha direta, soma o saldo consolidado dela (que já deve estar no mapa)
+                    const saldoFilho = saldoConsolidadoMap[conta.Conta];
+                    if (saldoFilho !== undefined) {
+                        totalConsolidado += saldoFilho;
+                    }
+                }
             }
         }
+        
+        // Armazena o saldo consolidado da sintética
+        saldoConsolidadoMap[contaSintetica.Conta] = totalConsolidado;
     }
     
-    // 4. Atualiza a lista de contas com os saldos consolidados
-    return contas.map(c => ({
-        ...c,
-        saldo_final: saldoMap[c.id] !== undefined ? saldoMap[c.id] : c.saldo_final,
-    }));
+    // 5. Atualiza a lista de contas com os saldos consolidados
+    return contas.map(c => {
+        const saldo = saldoConsolidadoMap[c.Conta];
+        return {
+            ...c,
+            saldo_final: saldo !== undefined ? saldo : c.saldo_final,
+        };
+    });
 };
 
 
@@ -218,14 +238,9 @@ export function useDRE(filtroPeriodo: DateRange | undefined): DREData {
   
   // 8. Calcular totais
   const getSomaPorTipo = (tipo: ContaDRE['tipo_dre']) => {
-      // Soma todas as contas sintéticas que pertencem à categoria principal (3, 4 ou 5)
-      // O filtro 'Analitica === Não' garante que estamos somando apenas os totais consolidados.
-      const prefix = tipo === 'Receita' ? '3' : (tipo === 'Custo' ? '4' : (tipo === 'Despesa' ? '5' : ''));
-      
-      if (!prefix) return 0;
-      
+      // Soma apenas as contas de nível 1 (ex: '3', '4', '5')
       return contasDRE
-          .filter(c => c.Analitica === 'Não' && c.Conta.startsWith(prefix))
+          .filter(c => c.Analitica === 'Não' && c.Conta.split('.').length === 1 && c.tipo_dre === tipo)
           .reduce((sum, c) => sum + c.saldo_final, 0);
   };
   
