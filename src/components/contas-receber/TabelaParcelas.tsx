@@ -21,7 +21,7 @@ interface ExtendedParcelaDetalhada {
     contas_receber: {
         id: string;
         descricao: string;
-        clientes: { nome: string } | null;
+        tbl_empresas_clientes: { nome: string } | null; // RENOMEADO
     } | null;
 }
 
@@ -67,7 +67,7 @@ const TabelaParcelas: React.FC<TabelaParcelasProps> = ({
                                 parcelasFiltradas.map((p) => {
                                     const statusVariant = getBadgeVariant(p.status, p.data_vencimento);
                                     const isPaga = p.status === 'paga';
-                                    const clienteNome = p.contas_receber?.clientes?.nome || 'N/A';
+                                    const clienteNome = p.contas_receber?.tbl_empresas_clientes?.nome || 'N/A'; // RENOMEADO
                                     const descricao = p.contas_receber?.descricao || 'N/A';
                                     const contaId = p.contas_receber?.id || 'N/A';
 
@@ -80,7 +80,7 @@ const TabelaParcelas: React.FC<TabelaParcelasProps> = ({
                                                     onClick={() => handleOpenPagamento(p)} 
                                                     disabled={isPaga || p.status === 'bloqueada'}
                                                 >
-                                                    <BadgeDollarSign className="w-4 h-4 mr-2" /> Receber
+                                                    <BadgeDollarSign className="w-4 h-4 mr-2 inline-block" /> Receber
                                                 </Button>
                                             </TableCell>
                                             <TableCell className="font-mono text-xs text-muted-foreground truncate max-w-[100px]" title={contaId}>{contaId.substring(0, 8)}...</TableCell>

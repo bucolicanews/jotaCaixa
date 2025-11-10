@@ -16,7 +16,7 @@ export interface ContaReceber {
   observacoes?: string | null;
   created_at: string;
   updated_at: string;
-  clientes: Cliente;
+  tbl_empresas_clientes: Cliente; // RENOMEADO
   historico_id?: string | null; // NOVO CAMPO
 }
 
@@ -33,7 +33,7 @@ export interface Parcela {
 export interface ParcelaDetalhada extends Parcela {
   contas_receber: {
     descricao: string;
-    clientes: {
+    tbl_empresas_clientes: { // RENOMEADO
       nome: string;
     } | null;
   } | null;
@@ -52,7 +52,7 @@ export interface ExtendedParcelaDetalhada extends ParcelaDetalhada {
         descricao: string;
         cliente_id: string | null;
         origem: ContaReceber['origem'];
-        clientes: { nome: string } | null;
+        tbl_empresas_clientes: { nome: string } | null; // RENOMEADO
     } | null;
 }
 

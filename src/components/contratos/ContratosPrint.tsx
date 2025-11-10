@@ -40,7 +40,7 @@ const ContratosPrint: React.FC<ContratosPrintProps> = ({ data, titulo, isSupervi
                     </thead>
                     <tbody>
                         {data.map((c) => {
-                            const clienteNome = (c as any).clientes?.nome || 'N/A';
+                            const clienteNome = (c as any).tbl_empresas_clientes?.nome || 'N/A'; // RENOMEADO
                             const empresaProprietaria = c.proprietario_id || 'Admin'; // Usando proprietario_id
                             
                             return (

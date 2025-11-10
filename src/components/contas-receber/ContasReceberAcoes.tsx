@@ -88,7 +88,7 @@ const ContasReceberAcoes: React.FC<ContasReceberAcoesProps> = ({
         
         return {
             'ID Conta': c.id,
-            'Cliente': c.clientes?.nome || 'N/A',
+            'Cliente': c.tbl_empresas_clientes?.nome || 'N/A', // RENOMEADO
             'Descrição': c.descricao,
             'Vencimento': formatarData(c.data_vencimento),
             'Valor Total': c.valor_total, // Mantém como número para cálculo de total
@@ -102,7 +102,7 @@ const ContasReceberAcoes: React.FC<ContasReceberAcoesProps> = ({
       data = parcelasFiltradas.map(p => ({
         'ID Parcela': p.id,
         'ID Conta': p.contas_receber?.id || 'N/A',
-        'Cliente': p.contas_receber?.clientes?.nome || 'N/A',
+        'Cliente': p.contas_receber?.tbl_empresas_clientes?.nome || 'N/A', // RENOMEADO
         'Descrição': p.contas_receber?.descricao || 'N/A',
         'Nº Parcela': p.numero_parcela,
         'Vencimento': formatarData(p.data_vencimento),

@@ -122,7 +122,7 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
           <DialogHeader>
             <DialogTitle className="truncate">Detalhes do Lançamento</DialogTitle>
             <DialogDescription className="truncate">
-                <strong>{conta?.descricao}</strong> para o cliente <strong>{conta?.clientes?.nome || 'N/A'}</strong>
+                <strong>{conta?.descricao}</strong> para o cliente <strong>{conta?.tbl_empresas_clientes?.nome || 'N/A'}</strong>
             </DialogDescription>
           </DialogHeader>
           

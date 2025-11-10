@@ -46,7 +46,6 @@ const NovoContrato: React.FC = () => {
         // Para simplificar, Admin vê todos os modelos (RLS deve garantir isso, mas a query explícita é mais segura)
         // Vamos buscar todos os modelos onde empresa_id é o ID do Admin OU onde empresa_id é diferente do ID do Admin (supervisão)
         // No entanto, para a tela de Novo Contrato, o Admin só deve usar modelos que ele criou (ownerId) ou modelos globais (null).
-        // Modelos criados por Clientes não devem ser usados pelo Admin para criar contratos.
         query = query.or(`empresa_id.eq.${ownerId},empresa_id.is.null`);
     }
 
