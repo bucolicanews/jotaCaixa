@@ -50,40 +50,58 @@ const compareContas = (a: ContaBalanco, b: ContaBalanco): number => {
 
 /**
  * Consolida os saldos das contas analíticas para as contas sintéticas.
+ * A consolidação agora soma apenas os saldos das contas analíticas que são filhas diretas
+ * ou indiretas de uma sintética.
  * @param contas A lista de contas com saldos iniciais calculados.
  * @returns A lista de contas com saldos consolidados.
  */
 const consolidateBalances = (contas: ContaBalanco[]): ContaBalanco[] => {
-    // 1. Cria um mapa de saldos por ID
-    const saldoMap: Record<string, number> = contas.reduce((acc, c) => {
-        acc[c.id] = c.saldo_final;
-        return acc;
-    }, {} as Record<string, number>);
+    // 1. Cria um mapa de saldos iniciais (apenas analíticas e PL/Resultado)
+    const saldoAnaliticoMap: Record<string, number> = contas
+        .filter(c => c.Analitica === 'Sim' || c.tipo_principal === 'Resultado' || c.tipo_principal === 'Patrimonio Liquido')
+        .reduce((acc, c) => {
+            acc[c.Conta] = c.saldo_final;
+            return acc;
+        }, {} as Record<string, number>);
 
-    // 2. Ordena as contas do mais específico para o mais geral (ordem decrescente)
-    const sortedContas = [...contas].sort((a, b) => compareContas(b, a));
+    // 2. Cria um mapa para armazenar os saldos consolidados (incluindo sintéticas)
+    const saldoConsolidadoMap: Record<string, number> = { ...saldoAnaliticoMap };
 
-    // 3. Consolida de baixo para cima
-    for (const conta of sortedContas) {
-        if (conta.Analitica === 'Sim') continue; // Apenas contas sintéticas (Analitica='Não') consolidam
+    // 3. Ordena as contas sintéticas do mais específico para o mais geral (ordem decrescente)
+    const sinteticas = contas.filter(c => c.Analitica === 'Não').sort((a, b) => compareContas(b, a));
 
-        // Percorre todas as contas para encontrar as filhas diretas
-        for (const child of contas) {
-            // Verifica se o filho começa com o código do pai E não é o próprio pai
-            if (child.Conta.startsWith(conta.Conta + '.') && child.Conta !== conta.Conta) {
-                const saldoFilho = saldoMap[child.id];
+    // 4. Consolida de baixo para cima
+    for (const contaSintetica of sinteticas) {
+        let totalConsolidado = 0;
+        
+        // Itera sobre todas as contas (analíticas e sintéticas)
+        for (const conta of contas) {
+            // Verifica se a conta é filha da sintética atual (começa com o prefixo da sintética)
+            if (conta.Conta.startsWith(contaSintetica.Conta + '.') && conta.Conta !== contaSintetica.Conta) {
                 
-                // Adiciona o saldo do filho ao saldo do pai
-                saldoMap[conta.id] = (saldoMap[conta.id] || 0) + saldoFilho;
+                // Se a conta filha for analítica, soma seu saldo final
+                if (conta.Analitica === 'Sim') {
+                    totalConsolidado += saldoAnaliticoMap[conta.Conta] || 0;
+                } 
+                // Se a conta filha for sintética, soma o saldo consolidado dela (que já foi calculado)
+                else if (saldoConsolidadoMap[conta.Conta] !== undefined) {
+                    totalConsolidado += saldoConsolidadoMap[conta.Conta];
+                }
             }
         }
+        
+        // Armazena o saldo consolidado da sintética
+        saldoConsolidadoMap[contaSintetica.Conta] = totalConsolidado;
     }
     
-    // 4. Atualiza a lista de contas com os saldos consolidados
-    return contas.map(c => ({
-        ...c,
-        saldo_final: saldoMap[c.id] !== undefined ? saldoMap[c.id] : c.saldo_final,
-    }));
+    // 5. Atualiza a lista de contas com os saldos consolidados
+    return contas.map(c => {
+        const saldo = saldoConsolidadoMap[c.Conta];
+        return {
+            ...c,
+            saldo_final: saldo !== undefined ? saldo : c.saldo_final,
+        };
+    });
 };
 
 
@@ -154,13 +172,14 @@ export function useBalancoPatrimonial(endDate: Date | undefined): BalancoData {
       // 4. Calcular o saldo de cada conta contábil (apenas analíticas e sintéticas que podem ter saldo inicial)
       const movimentosMap = lancamentosData.reduce((acc, l) => {
         if (l.conta_contabil_id) {
+          // O valor é sempre somado/subtraído do saldo da conta contábil
           const valor = l.tipo === 'Entrada' ? l.valor : -l.valor;
           acc[l.conta_contabil_id] = (acc[l.conta_contabil_id] || 0) + valor;
         }
         return acc;
       }, {} as Record<string, number>);
       
-      // 5. Calcular o saldo base (apenas analíticas e sintéticas que podem ter saldo inicial)
+      // 5. Calcular o saldo base (apenas analíticas e PL/Resultado)
       let contasCalculadas: ContaBalanco[] = planoContas.map(pc => {
         const saldoInicial = saldoInicialMap[pc.id] || 0;
         const movimentos = movimentosMap[pc.id] || 0;
@@ -178,6 +197,10 @@ export function useBalancoPatrimonial(endDate: Date | undefined): BalancoData {
         // Se for Patrimônio Líquido (PL), o saldo é Inicial + Movimentos
         else if (getTipoPrincipal(pc.Conta) === 'Patrimonio Liquido') {
             saldo_final = saldoInicial + movimentos;
+        }
+        // Se for analítica, mas não é saldo/resultado/PL, o saldo é apenas Movimentos
+        else if (pc.Analitica === 'Sim') {
+            saldo_final = movimentos;
         }
         // Se for sintética pura, o saldo base é 0 (será consolidado depois)
         else {
@@ -215,17 +238,16 @@ export function useBalancoPatrimonial(endDate: Date | undefined): BalancoData {
   }, [carregandoSessao, empresaId, fetchBalanco]);
   
   // 8. Calcular totais
-  const totalAtivo = contasBalanco
-    .filter(c => c.tipo_principal === 'Ativo' && c.Analitica === 'Não' && c.Conta.split('.').length === 1) // Soma apenas o nível 1 do Ativo
-    .reduce((sum, c) => sum + c.saldo_final, 0);
-    
-  const totalPassivo = contasBalanco
-    .filter(c => c.tipo_principal === 'Passivo' && c.Analitica === 'Não' && c.Conta.split('.').length === 1) // Soma apenas o nível 1 do Passivo
-    .reduce((sum, c) => sum + c.saldo_final, 0);
-    
-  const totalPatrimonioLiquido = contasBalanco
-    .filter(c => c.tipo_principal === 'Patrimonio Liquido' && c.Analitica === 'Não' && c.Conta.split('.').length === 1) // Soma apenas o nível 1 do PL
-    .reduce((sum, c) => sum + c.saldo_final, 0);
+  const getSomaNivel1 = (tipo: ContaBalanco['tipo_principal']) => {
+      // Soma apenas as contas de nível 1 (ex: '1', '2', '3')
+      return contasBalanco
+          .filter(c => c.tipo_principal === tipo && c.Conta.split('.').length === 1)
+          .reduce((sum, c) => sum + c.saldo_final, 0);
+  };
+  
+  const totalAtivo = getSomaNivel1('Ativo');
+  const totalPassivo = getSomaNivel1('Passivo');
+  const totalPatrimonioLiquido = getSomaNivel1('Patrimonio Liquido');
     
   const resultadoLiquido = contasBalanco
     .filter(c => c.tipo_principal === 'Resultado')

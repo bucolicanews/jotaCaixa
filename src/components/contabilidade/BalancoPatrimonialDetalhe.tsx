@@ -80,7 +80,14 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
       const paddingLeft = (level - 1) * 10;
 
       return (
-        <TableRow key={c.id} className={cn(isSintetica ? 'bg-secondary/50 font-semibold' : 'text-sm')}>
+        <TableRow 
+            key={c.id} 
+            className={cn(
+                isSintetica ? 'bg-secondary/50 font-semibold' : 'text-sm',
+                // Adiciona uma borda inferior para separar os grupos de nível 1
+                level === 1 && 'border-b-2 border-border'
+            )}
+        >
           <TableCell className="pl-4" style={{ paddingLeft: `${paddingLeft}px` }}>{c.Conta}</TableCell>
           <TableCell className={cn(isSintetica ? 'pl-4' : 'pl-8')}>{c.Descricao}</TableCell>
           <TableCell className={cn("text-right", c.saldo_final < 0 && 'text-red-600')}>
