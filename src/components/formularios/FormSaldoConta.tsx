@@ -45,41 +45,70 @@ const FormSaldoConta: React.FC<FormSaldoContaProps> = ({ contaInicial, onSaveCom
   
   const empresaId = getEmpresaId();
 
-  const fetchContasContabeis = useCallback(async () => {
+  const form = useForm<FormValues>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      nome: contaInicial?.nome || '',
+      tipo_saldo: contaInicial?.tipo_saldo || 'Debito', // Alterado o padrão para Debito
+      conta_contabil_id: contaInicial?.conta_contabil_id || null,
+      saldo_inicial: contaInicial?.saldo_inicial || 0,
+    },
+  });
+  
+  const tipoSaldoWatch = form.watch('tipo_saldo');
+
+  const fetchContasContabeis = useCallback(async (tipo: FormValues['tipo_saldo']) => {
     if (!empresaId) return;
     setLoadingContas(true);
     
-    // Busca contas analíticas que são marcadas como Caixa/Banco OU Patrimonial
+    let filterCondition: string;
+    
+    // Lógica de filtragem baseada no tipo de saldo (natureza)
+    if (tipo === 'Debito' || tipo === 'Credito') {
+        // Contas de Ativo/Passivo (Patrimoniais)
+        filterCondition = 'is_conta_patrimonial.eq.true';
+    } else if (tipo === 'Receita' || tipo === 'Despesa') {
+        // Contas de Resultado (DRE)
+        filterCondition = 'is_conta_resultado.eq.true';
+    } else {
+        // Fallback (não deve acontecer com enum)
+        setContasContabeis([]);
+        setLoadingContas(false);
+        return;
+    }
+    
     const { data, error } = await supabase
         .from('plano_contas')
-        .select('id, Conta, Descricao, Analitica, is_conta_caixa_banco, is_conta_patrimonial') // RENOMEADO
+        .select('id, Conta, Descricao, Analitica, is_conta_caixa_banco, is_conta_patrimonial')
         .eq('proprietario_id', empresaId)
         .eq('Analitica', 'Sim') // Apenas contas analíticas
-        .or('is_conta_caixa_banco.eq.true,is_conta_patrimonial.eq.true') // FILTRO PRINCIPAL
+        .or(filterCondition) // Aplica o filtro dinâmico
         .order('Conta');
         
     if (error) {
         showError('Erro ao carregar Plano de Contas: ' + error.message);
         setContasContabeis([]);
     } else {
-        setContasContabeis(data as PlanoContas[]);
+        // Filtro adicional para garantir que apenas contas de Caixa/Banco apareçam se o tipo for Debito/Credito
+        let filteredData = data as PlanoContas[];
+        
+        if (tipo === 'Debito' || tipo === 'Credito') {
+            // Se for Ativo/Passivo, filtramos para mostrar apenas as contas marcadas como Caixa/Banco
+            // (que são as contas que podem ter saldo inicial e movimentação direta)
+            filteredData = filteredData.filter(c => c.is_conta_caixa_banco);
+        }
+        
+        setContasContabeis(filteredData);
     }
     setLoadingContas(false);
   }, [empresaId]);
   
   useEffect(() => {
-      fetchContasContabeis();
-  }, [fetchContasContabeis]);
-
-  const form = useForm<FormValues>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
-      nome: contaInicial?.nome || '',
-      tipo_saldo: contaInicial?.tipo_saldo || 'Credito',
-      conta_contabil_id: contaInicial?.conta_contabil_id || null,
-      saldo_inicial: contaInicial?.saldo_inicial || 0,
-    },
-  });
+      // Recarrega as contas contábeis sempre que o tipo de saldo mudar
+      fetchContasContabeis(tipoSaldoWatch);
+      // Limpa a seleção anterior se o tipo mudar
+      form.setValue('conta_contabil_id', null);
+  }, [tipoSaldoWatch, fetchContasContabeis, form]);
 
   const onSubmit = async (values: FormValues) => {
     if (!empresaId) {
@@ -152,8 +181,8 @@ const FormSaldoConta: React.FC<FormSaldoContaProps> = ({ contaInicial, onSaveCom
                 <SelectContent>
                   <SelectItem value="Debito">Débito (Ativo)</SelectItem>
                   <SelectItem value="Credito">Crédito (Passivo)</SelectItem>
-                  <SelectItem value="Receita">Receita</SelectItem>
-                  <SelectItem value="Despesa">Despesa</SelectItem>
+                  <SelectItem value="Receita">Receita (DRE)</SelectItem>
+                  <SelectItem value="Despesa">Despesa (DRE)</SelectItem>
                 </SelectContent>
               </Select>
               <FormMessage />
@@ -167,7 +196,7 @@ const FormSaldoConta: React.FC<FormSaldoContaProps> = ({ contaInicial, onSaveCom
           render={({ field }) => (
             <FormItem>
               <FormLabel>Conta Contábil (Plano de Contas)</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value || undefined} disabled={loadingContas}>
+              <Select onValueChange={field.onChange} value={field.value || undefined} disabled={loadingContas}>
                 <FormControl>
                   <SelectTrigger>
                     <SelectValue placeholder={loadingContas ? "Carregando Contas Contábeis..." : "Selecione a conta analítica"} />
@@ -175,7 +204,7 @@ const FormSaldoConta: React.FC<FormSaldoContaProps> = ({ contaInicial, onSaveCom
                 </FormControl>
                 <SelectContent>
                     {contasContabeis.length === 0 ? (
-                        <SelectItem value="disabled" disabled>Nenhuma conta de saldo/patrimonial marcada no Plano de Contas.</SelectItem>
+                        <SelectItem value="disabled" disabled>Nenhuma conta analítica marcada para esta natureza.</SelectItem>
                     ) : (
                         contasContabeis.map(c => (
                             <SelectItem key={c.id} value={c.id}>
@@ -188,7 +217,7 @@ const FormSaldoConta: React.FC<FormSaldoContaProps> = ({ contaInicial, onSaveCom
               <FormMessage />
               {contasContabeis.length === 0 && (
                   <p className="text-sm text-red-500">
-                      Nenhuma conta contábil marcada como "Conta de Saldo" ou "Conta Patrimonial". Marque as contas em <a href="/plano-contas" className="underline">Plano de Contas</a>.
+                      Nenhuma conta contábil analítica marcada como "Caixa/Banco" ou "Patrimonial" para esta natureza. Marque as contas em <a href="/plano-contas" className="underline">Plano de Contas</a>.
                   </p>
               )}
             </FormItem>
