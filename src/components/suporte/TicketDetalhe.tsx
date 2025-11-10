@@ -55,24 +55,28 @@ const TicketDetalhe: React.FC<TicketDetalheProps> = ({ ticket, onClose, onUpdate
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const remetenteId = usuario?.id;
-  const isTicketOwner = remetenteId === ticket.proprietario_id;
-  const canManage = isAdminView || isTicketOwner;
+  const clienteId = ticket.proprietario_id;
+  const adminId = ticket.empresa_id; // O ID da empresa é o ID do Admin
   
-  // Determina o ID do Admin (destinatário)
-  const adminId = isAdminView ? remetenteId : ticket.empresa_id;
+  const canManage = isAdminView || remetenteId === clienteId;
   
   // Lógica de Responsabilidade
-  const ultimaMensagemId = ticket.ultima_mensagem_remetente_id || ticket.proprietario_id;
-  const isWaitingForAdmin = ultimaMensagemId === ticket.proprietario_id;
-  const isWaitingForClient = ultimaMensagemId === adminId;
+  const ultimaMensagemId = ticket.ultima_mensagem_remetente_id || clienteId;
   
-  // Bloqueia a resposta se o ticket não estiver fechado E a última mensagem for do outro lado
+  // Quem enviou a última mensagem?
+  const lastSenderIsAdmin = ultimaMensagemId === adminId;
+  const lastSenderIsClient = ultimaMensagemId === clienteId;
+  
+  // Quem é o responsável pela próxima ação?
+  const isWaitingForAdmin = lastSenderIsClient;
+  const isWaitingForClient = lastSenderIsAdmin;
+  
+  // Bloqueia a resposta se o ticket não estiver fechado E a resposta for esperada do outro lado
   const isReplyBlocked = currentStatus !== 'fechado' && (
-      (isAdminView && isWaitingForClient) || // Admin espera pelo Cliente
-      (!isAdminView && isWaitingForAdmin)    // Cliente espera pelo Admin
+      (isAdminView && isWaitingForAdmin) || // Admin logado, mas a resposta é esperada dele (Admin)
+      (!isAdminView && isWaitingForClient) // Cliente logado, mas a resposta é esperada dele (Cliente)
   );
   
-  // const responsavel = isWaitingForAdmin ? 'Admin' : 'Cliente'; // REMOVIDO: TS6133
   const responsavelNome = isWaitingForAdmin ? 'Administrador' : (ticket.proprietario_perfil?.nome || 'Cliente');
 
 
@@ -99,9 +103,9 @@ const TicketDetalhe: React.FC<TicketDetalheProps> = ({ ticket, onClose, onUpdate
       const mensagensComNome = await Promise.all((data as any[]).map(async (msg) => {
           let nome = 'N/A';
           // Se o remetente for o Admin (empresa_id)
-          if (msg.remetente_id === ticket.empresa_id) {
+          if (msg.remetente_id === adminId) {
               nome = 'Admin'; 
-          } else if (msg.remetente_id === ticket.proprietario_id) {
+          } else if (msg.remetente_id === clienteId) {
               nome = ticket.proprietario_perfil?.nome || 'Cliente';
           } else {
               // Tenta buscar o nome do usuário/cliente
@@ -118,7 +122,7 @@ const TicketDetalhe: React.FC<TicketDetalheProps> = ({ ticket, onClose, onUpdate
       setMensagens(mensagensComNome);
     }
     setLoadingMensagens(false);
-  }, [ticket.id, ticket.empresa_id, ticket.proprietario_id, ticket.proprietario_perfil?.nome]);
+  }, [ticket.id, adminId, clienteId, ticket.proprietario_perfil?.nome]);
 
   useEffect(() => {
     fetchMensagens();
@@ -392,10 +396,20 @@ const TicketDetalhe: React.FC<TicketDetalheProps> = ({ ticket, onClose, onUpdate
                 <>
                     {/* Indicador de Responsabilidade */}
                     <div className={cn("p-2 rounded-md mb-3 text-sm font-medium", isReplyBlocked ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-300" : "bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-300")}>
-                        {isReplyBlocked ? (
-                            <span>Aguardando resposta do(a) <span className="font-bold">{responsavelNome}</span>. Sua resposta está bloqueada.</span>
+                        {/* Lógica de exibição da mensagem de responsabilidade */}
+                        {isAdminView ? (
+                            isWaitingForAdmin ? (
+                                <span>Sua vez de responder.</span>
+                            ) : (
+                                <span>Aguardando resposta do(a) <span className="font-bold">{responsavelNome}</span>. Sua resposta está bloqueada.</span>
+                            )
                         ) : (
-                            <span>Sua vez de responder.</span>
+                            // Visão do Cliente
+                            isWaitingForClient ? (
+                                <span>Sua vez de responder.</span>
+                            ) : (
+                                <span>Aguardando resposta do(a) <span className="font-bold">Administrador</span>. Sua resposta está bloqueada.</span>
+                            )
                         )}
                     </div>
                     
