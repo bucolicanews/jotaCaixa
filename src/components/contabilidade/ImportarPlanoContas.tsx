@@ -74,11 +74,29 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
           setLoading(false);
           return;
       }
+      
+      // 2. Buscar Mapeamento Contábil
+      const { data: mapeamentoData, error: mapeamentoError } = await supabase
+          .from('configuracao_contabil')
+          .select('codigo_nivel_1, tipo_natureza')
+          .eq('proprietario_id', proprietarioId);
+          
+      if (mapeamentoError) throw mapeamentoError;
+      
+      const mapeamentoMap = (mapeamentoData || []).reduce((acc, item) => {
+          acc[item.codigo_nivel_1] = item.tipo_natureza;
+          return acc;
+      }, {} as Record<string, string>);
+      
+      if (Object.keys(mapeamentoMap).length < 5) {
+          showError('O mapeamento de níveis contábeis (1 a 5) não está completo. Configure em Configurações > Contabilidade.');
+          setLoading(false);
+          return;
+      }
 
-      // Mapear dados para o formato do banco de dados e INFERIR FLAGS
+      // 3. Mapear dados para o formato do banco de dados e INFERIR FLAGS
       const contasParaInserir: Partial<PlanoContas>[] = (parsedData as (ContaCSV | ContaJSON)[]).map(conta => {
         
-        // Lógica de preenchimento automático do Código Reduzido
         let codigoReduzido = conta['Código reduzido']?.trim() || '';
         if (!codigoReduzido && conta.Conta) {
             codigoReduzido = conta.Conta.replace(/\./g, '');
@@ -87,25 +105,26 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
         const contaCodigo = conta.Conta.trim();
         const isAnalitica = conta.Analítica === 'Sim';
         
-        // Inferência de Flags com base no código
+        // Inferência de Flags usando o mapeamento dinâmico
         let is_conta_patrimonial = false;
         let is_conta_resultado = false;
         let is_conta_caixa_banco = false;
         
         if (isAnalitica) {
-            // 1. Patrimonial: 1.x.x (Ativo), 2.x.x (Passivo), 3.x.x (PL)
-            if (contaCodigo.startsWith('1') || contaCodigo.startsWith('2') || contaCodigo.startsWith('3')) {
-                is_conta_patrimonial = true;
-            }
+            const nivel1 = contaCodigo.split('.')[0];
+            const natureza = mapeamentoMap[nivel1];
             
-            // 2. Resultado: 3.x.x (Receita), 4.x.x (Custo), 5.x.x (Despesa)
-            if (contaCodigo.startsWith('3') || contaCodigo.startsWith('4') || contaCodigo.startsWith('5')) {
-                is_conta_resultado = true;
-            }
-            
-            // 3. Caixa/Banco: Sugerido para contas de Ativo (1.x.x)
-            if (contaCodigo.startsWith('1')) {
-                is_conta_caixa_banco = true;
+            if (natureza) {
+                if (natureza === 'Ativo' || natureza === 'Passivo' || natureza === 'Patrimonio Liquido') {
+                    is_conta_patrimonial = true;
+                }
+                if (natureza === 'Receita' || natureza === 'Despesa') {
+                    is_conta_resultado = true;
+                }
+                // Sugestão para Caixa/Banco: Apenas contas de Ativo
+                if (natureza === 'Ativo') {
+                    is_conta_caixa_banco = true;
+                }
             }
         }
         
@@ -121,9 +140,9 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
         };
       });
       
-      // --- PRÉ-ANÁLISE DE DEPENDÊNCIAS ---
+      // --- PRÉ-ANÁLISE DE DEPENDÊNCIAS (Restante do código mantido) ---
       
-      // 2. Buscar contas antigas que estão em uso
+      // 4. Buscar contas antigas que estão em uso
       const { data: oldContas, error: oldContasError } = await supabase
           .from('plano_contas')
           .select('id, Conta, Descricao')
@@ -131,7 +150,7 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
           
       if (oldContasError) throw new Error('Erro ao buscar contas antigas: ' + oldContasError.message);
       
-      // 3. Identificar contas antigas que não estão no novo plano E que estão em uso
+      // 5. Identificar contas antigas que não estão no novo plano E que estão em uso
       const contasAntigasEmUso: ContaAntigaEmUsoSimples[] = [];
       const allOldContas = oldContas as PlanoContas[];
       
@@ -158,21 +177,21 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
           }
       }
       
-      // 4. Se houver contas antigas em uso que precisam de mapeamento, abre o modal
+      // 6. Se houver contas antigas em uso que precisam de mapeamento, abre o modal
       if (contasAntigasEmUso.length > 0) {
           setFile(null); // Limpa o arquivo para evitar re-importação acidental
           onOpenMapeamento(contasParaInserir, contasAntigasEmUso);
           return;
       }
       
-      // 5. Se não houver dependências NÃO MAPEADAS, procede com a importação direta (exclusão e inserção)
+      // 7. Se não houver dependências NÃO MAPEADAS, procede com a importação direta (exclusão e inserção)
       
       const oldIds = allOldContas.map(c => c.id);
       
       if (oldIds.length > 0) {
           // CRÍTICO: Limpar TODAS as referências de FK antes de deletar o plano_contas
           
-          // 5.1. Limpar referências em tabelas de configuração
+          // 7.1. Limpar referências em tabelas de configuração
           await supabase.from('configuracao_contas_pagar')
               .update({ conta_contabil_id: null })
               .eq('proprietario_id', proprietarioId)
@@ -199,7 +218,7 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
               .eq('admin_id', proprietarioId)
               .in('id_conta_contabil', oldIds);
               
-          // 5.2. Limpar referências em saldo_contas e lancamentos (SET TO NULL)
+          // 7.2. Limpar referências em saldo_contas e lancamentos (SET TO NULL)
           await supabase.from('saldo_contas')
               .update({ conta_contabil_id: null })
               .eq('proprietario_id', proprietarioId)
@@ -210,7 +229,7 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
               .eq('proprietario_id', proprietarioId)
               .in('conta_contabil_id', oldIds);
               
-          // 5.3. Limpar contas existentes para o proprietário
+          // 7.3. Limpar contas existentes para o proprietário
           const { error: deleteError } = await supabase
             .from('plano_contas')
             .delete()
@@ -221,7 +240,7 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
           }
       }
 
-      // 6. Inserir novos dados
+      // 8. Inserir novos dados
       const { error: insertError } = await supabase
         .from('plano_contas')
         .insert(contasParaInserir);

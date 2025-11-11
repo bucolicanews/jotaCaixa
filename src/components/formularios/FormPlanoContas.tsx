@@ -12,6 +12,7 @@ import { showError, showSuccess } from '@/utils/toast';
 import { PlanoContas } from '@/types/plano-contas';
 import { Checkbox } from '../ui/checkbox';
 import { cn } from '@/lib/utils';
+import { useMapeamentoContabil } from '@/hooks/use-mapeamento-contabil'; // NOVO IMPORT
 
 // Função de validação da máscara
 const validateMask = (code: string, mask: string): boolean => {
@@ -49,8 +50,8 @@ const formSchema = z.object({
   Analitica: z.enum(['Sim', 'Não'], {
     required_error: 'O tipo é obrigatório.',
   }),
-  is_conta_caixa_banco: z.boolean().optional(), // RENOMEADO
-  is_conta_patrimonial: z.boolean().optional(), // NOVO CAMPO
+  is_conta_caixa_banco: z.boolean().optional(),
+  is_conta_patrimonial: z.boolean().optional(),
   is_conta_resultado: z.boolean().optional(),
 });
 
@@ -67,35 +68,44 @@ const FormPlanoContas: React.FC<FormPlanoContasProps> = ({ proprietarioId, conta
   const isEditing = !!contaInicial && !!contaInicial.id;
   const [mascara, setMascara] = useState<string | null>(null);
   const [loadingMascara, setLoadingMascara] = useState(true);
+  const { mapeamento, loading: loadingMapeamento } = useMapeamentoContabil(); // USANDO HOOK
 
   const defaultConta = contaInicial?.Conta || '';
   const defaultAnalitica = contaInicial?.Analitica || 'Não';
   
   // Lógica de preenchimento automático de flags para novas contas
-  const inferFlags = (contaCode: string, isAnalitica: boolean) => {
-      if (!isAnalitica) return { is_conta_patrimonial: false, is_conta_resultado: false, is_conta_caixa_banco: false };
+  const inferFlags = useCallback((contaCode: string, isAnalitica: boolean) => {
+      if (!isAnalitica || !mapeamento || mapeamento.length === 0) {
+          // Fallback para o padrão se o mapeamento não estiver carregado
+          return { is_conta_patrimonial: false, is_conta_resultado: false, is_conta_caixa_banco: false };
+      }
       
       let is_conta_patrimonial = false;
       let is_conta_resultado = false;
       let is_conta_caixa_banco = false;
       
-      // 1. Patrimonial: 1.x.x (Ativo), 2.x.x (Passivo), 3.x.x (PL)
-      if (contaCode.startsWith('1') || contaCode.startsWith('2') || contaCode.startsWith('3')) {
-          is_conta_patrimonial = true;
-      }
+      const nivel1 = contaCode.split('.')[0];
+      const natureza = mapeamento.find(m => m.codigo_nivel_1 === nivel1)?.tipo_natureza;
       
-      // 2. Resultado: 3.x.x (Receita), 4.x.x (Custo), 5.x.x (Despesa)
-      if (contaCode.startsWith('3') || contaCode.startsWith('4') || contaCode.startsWith('5')) {
-          is_conta_resultado = true;
-      }
-      
-      // 3. Caixa/Banco: Sugerido para contas de Ativo (1.x.x)
-      if (contaCode.startsWith('1')) {
-          is_conta_caixa_banco = true;
+      if (natureza) {
+          // 1. Patrimonial: Ativo, Passivo, PL
+          if (natureza === 'Ativo' || natureza === 'Passivo' || natureza === 'Patrimonio Liquido') {
+              is_conta_patrimonial = true;
+          }
+          
+          // 2. Resultado: Receita, Despesa
+          if (natureza === 'Receita' || natureza === 'Despesa') {
+              is_conta_resultado = true;
+          }
+          
+          // 3. Caixa/Banco: Sugerido para contas de Ativo (1.x.x)
+          if (natureza === 'Ativo') {
+              is_conta_caixa_banco = true;
+          }
       }
       
       return { is_conta_patrimonial, is_conta_resultado, is_conta_caixa_banco };
-  };
+  }, [mapeamento]);
   
   const initialFlags = isEditing 
       ? {
@@ -121,20 +131,18 @@ const FormPlanoContas: React.FC<FormPlanoContasProps> = ({ proprietarioId, conta
   const isAnalitica = form.watch('Analitica') === 'Sim';
   const contaCodigo = form.watch('Conta');
   
-  // Efeito para preencher o Código Reduzido automaticamente
+  // Efeito para preencher o Código Reduzido e flags automaticamente
   useEffect(() => {
-    // Se não estiver editando e o código da conta mudar, preenche o código reduzido
-    if (!isEditing && contaCodigo) {
+    if (!isEditing && contaCodigo && !loadingMapeamento) {
         const codigoSemPontos = contaCodigo.replace(/\./g, '');
         form.setValue('codigo_reduzido', codigoSemPontos, { shouldDirty: false });
         
-        // Atualiza as flags ao mudar o código (apenas se não estiver editando)
         const newFlags = inferFlags(contaCodigo, isAnalitica);
         form.setValue('is_conta_patrimonial', newFlags.is_conta_patrimonial, { shouldDirty: false });
         form.setValue('is_conta_resultado', newFlags.is_conta_resultado, { shouldDirty: false });
         form.setValue('is_conta_caixa_banco', newFlags.is_conta_caixa_banco, { shouldDirty: false });
     }
-  }, [contaCodigo, isEditing, form, isAnalitica]);
+  }, [contaCodigo, isEditing, form, isAnalitica, inferFlags, loadingMapeamento]);
   
   const fetchMascara = useCallback(async () => {
     if (!proprietarioId) return;
@@ -175,8 +183,8 @@ const FormPlanoContas: React.FC<FormPlanoContasProps> = ({ proprietarioId, conta
       codigo_reduzido: values.codigo_reduzido || null,
       Descricao: values.Descricao,
       Analitica: values.Analitica,
-      is_conta_caixa_banco: values.Analitica === 'Sim' ? values.is_conta_caixa_banco : false, // RENOMEADO
-      is_conta_patrimonial: values.Analitica === 'Sim' ? values.is_conta_patrimonial : false, // NOVO CAMPO
+      is_conta_caixa_banco: values.Analitica === 'Sim' ? values.is_conta_caixa_banco : false,
+      is_conta_patrimonial: values.Analitica === 'Sim' ? values.is_conta_patrimonial : false,
       is_conta_resultado: values.Analitica === 'Sim' ? values.is_conta_resultado : false,
     };
 
