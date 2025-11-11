@@ -37,24 +37,25 @@ const MapearSaldosDialog: React.FC<MapearSaldosDialogProps> = ({
 }) => {
 
     const [loading, setLoading] = useState(false);
+    // O mapeamento agora armazena: { saldoContaId: 'Conta.Codigo.Novo' }
     const [mapping, setMapping] = useState<Record<string, string>>({});
 
-    // Filtra somente contas analíticas e normaliza o ID para string
+    // Filtra somente contas analíticas e usa o código da conta como identificador
     const newContasAnaliticas = useMemo(() => {
         return newPlanoContas
             .filter(c => c.Analitica === 'Sim')
             .map(c => ({
-                ...c,
-                // Garante que o ID é uma string válida e não vazia. Se for nulo, usamos um placeholder temporário.
-                id: c.id?.toString() ?? `temp-${Math.random()}` 
+                Conta: c.Conta,
+                Descricao: c.Descricao,
             }));
     }, [newPlanoContas]);
 
-    const isMappingComplete = oldSaldos.every(s => mapping[s.id]);
+    // Verifica se todas as contas de saldo foram mapeadas para um código de conta (string não vazia)
+    const isMappingComplete = oldSaldos.every(s => mapping[s.id] && mapping[s.id].length > 0);
 
-    // Corrigido: Recebe o ID como string (val) e armazena no mapping
-    const handleMapChange = useCallback((saldoContaId: string, newContaId: string) => {
-        setMapping(prev => ({ ...prev, [saldoContaId]: newContaId }));
+    // Mapeia para o CÓDIGO da Conta (string)
+    const handleMapChange = useCallback((saldoContaId: string, newContaCodigo: string) => {
+        setMapping(prev => ({ ...prev, [saldoContaId]: newContaCodigo }));
     }, []);
 
     const handleClearSelection = useCallback((saldoContaId: string) => {
@@ -109,12 +110,35 @@ const MapearSaldosDialog: React.FC<MapearSaldosDialogProps> = ({
                 .insert(newPlanoContas);
 
             if (insertErr) throw new Error("Erro ao inserir plano novo: " + insertErr.message);
+            
+            // 4. Buscar os IDs reais das contas recém-inseridas
+            const contasInseridasRes = await supabase
+                .from('plano_contas')
+                .select('id, Conta')
+                .eq('proprietario_id', proprietarioId);
+                
+            if (contasInseridasRes.error) throw contasInseridasRes.error;
+            
+            const contaIdMap = (contasInseridasRes.data as { id: string, Conta: string }[]).reduce((acc, c) => {
+                acc[c.Conta] = c.id;
+                return acc;
+            }, {} as Record<string, string>);
 
-            // 4. Atualizar as referências em saldo_contas
-            const updatesSaldoContas = oldSaldos.map(s => ({
-                id: s.id,
-                conta_contabil_id: mapping[s.id]
-            }));
+
+            // 5. Atualizar as referências em saldo_contas usando o ID real
+            const updatesSaldoContas = oldSaldos.map(s => {
+                const newContaCodigo = mapping[s.id];
+                const newContaId = contaIdMap[newContaCodigo];
+                
+                if (!newContaId) {
+                    throw new Error(`ID da nova conta contábil não encontrado para o código: ${newContaCodigo}`);
+                }
+                
+                return {
+                    id: s.id,
+                    conta_contabil_id: newContaId
+                };
+            });
 
             const { error: updateError } = await supabase
                 .from('saldo_contas')
@@ -196,8 +220,8 @@ const MapearSaldosDialog: React.FC<MapearSaldosDialogProps> = ({
                                                         <SelectContent position="popper" side="bottom">
                                                             {newContasAnaliticas.map(c => (
                                                                 <SelectItem
-                                                                    key={`item-${c.id}-${c.Conta}`}
-                                                                    value={c.id} // O valor já é string normalizada
+                                                                    key={`item-${c.Conta}`}
+                                                                    value={c.Conta} // Usando o CÓDIGO da Conta como valor
                                                                 >
                                                                     {c.Conta} - {c.Descricao}
                                                                 </SelectItem>
