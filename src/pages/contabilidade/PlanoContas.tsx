@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, Edit, Trash2, PlusCircle, Filter, Search, ArrowUp, ArrowDown } from 'lucide-react';
+import { Loader2, Edit, Trash2, PlusCircle, Filter, Search, ArrowUp, ArrowDown, ArrowRight } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
@@ -261,7 +261,7 @@ const PlanoContasPage = () => {
       setPopoverOpen(true);
   };
   
-  const handleOpenNewConta = (nivel: 'acima' | 'abaixo') => {
+  const handleOpenNewConta = (nivel: 'acima' | 'abaixo' | 'mesmo') => {
       if (!contaClicada) return;
       
       const parts = contaClicada.Conta.split('.').filter(p => p.length > 0);
@@ -272,66 +272,64 @@ const PlanoContasPage = () => {
       // 1. Determinar a máscara de padding
       const maskParts = mascaraAtiva?.split('.') || [];
       
-      if (nivel === 'abaixo') {
-          // Nível Abaixo: Adiciona um novo segmento
-          
-          // O novo segmento é o próximo nível (nivelAtual + 1)
-          const proximoNivel = nivelAtual; 
-          
-          // Se a máscara não tiver um segmento para o próximo nível, usamos '0001' como fallback
-          const paddingLength = maskParts[proximoNivel]?.length || 4; 
-          
-          // 1.1. Encontra o maior segmento do próximo nível que começa com o prefixo do pai
-          const prefixoPai = contaClicada.Conta + '.';
-          const contasFilhas = contas.filter(c => c.Conta.startsWith(prefixoPai));
+      // Função auxiliar para calcular o próximo segmento
+      const calculateNextSegment = (prefixo: string, nivelSegmento: number, paddingLength: number): string => {
+          const prefixoBusca = prefixo ? prefixo + '.' : '';
+          const contasFilhas = contas.filter(c => c.Conta.startsWith(prefixoBusca));
           
           let maxSegmento = 0;
           if (contasFilhas.length > 0) {
               maxSegmento = contasFilhas.reduce((max, c) => {
                   const cParts = c.Conta.split('.').filter(p => p.length > 0);
-                  // O índice do segmento filho é nivelAtual (se o pai tem 1 segmento, o filho é o índice 1)
-                  return Math.max(max, parseInt(cParts[nivelAtual], 10));
+                  // O índice do segmento é nivelSegmento (0 para nível 1, 1 para nível 2, etc.)
+                  if (cParts.length > nivelSegmento) {
+                      return Math.max(max, parseInt(cParts[nivelSegmento], 10));
+                  }
+                  return max;
               }, 0);
           }
           
           const novoSegmentoNumerico = maxSegmento + 1;
-          const novoSegmento = String(novoSegmentoNumerico).padStart(paddingLength, '0');
+          return String(novoSegmentoNumerico).padStart(paddingLength, '0');
+      };
+      
+      if (nivel === 'abaixo') {
+          // Nível Abaixo: Adiciona um novo segmento
+          
+          const nivelSegmento = nivelAtual; // O novo segmento é o índice nivelAtual
+          const paddingLength = maskParts[nivelSegmento]?.length || 4; 
+          
+          if (nivelSegmento >= maskParts.length) {
+              showError(`Não é possível criar um nível abaixo. A máscara só define até o nível ${maskParts.length}.`);
+              setPopoverOpen(false);
+              return;
+          }
+          
+          const novoSegmento = calculateNextSegment(contaClicada.Conta, nivelSegmento, paddingLength);
           
           novoCodigo = contaClicada.Conta + '.' + novoSegmento;
           novaAnalitica = 'Sim'; // Sugere analítica para o próximo nível
           
-      } else {
-          // Nível Acima: Incrementa o último segmento do código do pai
+      } else if (nivel === 'acima' || nivel === 'mesmo') {
+          // Nível Acima (Mesmo Nível): Incrementa o último segmento do código do pai
           
-          // 1. Encontra o código do pai (se houver)
-          const codigoPai = parts.slice(0, nivelAtual - 1).join('.');
+          const nivelSegmento = nivelAtual - 1; // O segmento a ser incrementado é o último
           
-          // 2. Encontra o segmento a ser incrementado
-          const segmentoAtual = parts[nivelAtual - 1];
-          const paddingLength = segmentoAtual.length;
+          if (nivelSegmento < 0) {
+              showError('Não é possível criar um nível acima do nível 1.');
+              setPopoverOpen(false);
+              return;
+          }
           
-          // 3. Encontra a conta de mesmo nível com o maior código
-          const contasNoMesmoNivel = contas.filter(c => {
-              const cParts = c.Conta.split('.').filter(p => p.length > 0);
-              // Verifica se tem o mesmo número de segmentos E o mesmo prefixo do pai
-              const prefixoConta = cParts.slice(0, nivelAtual - 1).join('.');
-              return cParts.length === nivelAtual && prefixoConta === codigoPai;
-          });
+          const codigoPai = parts.slice(0, nivelSegmento).join('.');
+          const paddingLength = maskParts[nivelSegmento]?.length || 4;
           
-          const maxSegmento = contasNoMesmoNivel.reduce((max, c) => {
-              const cParts = c.Conta.split('.').filter(p => p.length > 0);
-              return Math.max(max, parseInt(cParts[nivelAtual - 1], 10));
-          }, 0); // Começa a busca do máximo em 0
+          const novoSegmento = calculateNextSegment(codigoPai, nivelSegmento, paddingLength);
           
-          const novoSegmentoNumerico = maxSegmento + 1;
-          
-          // 4. Aplica o padding
-          const novoSegmentoFormatado = String(novoSegmentoNumerico).padStart(paddingLength, '0');
-          
-          if (nivelAtual === 1) {
-              novoCodigo = novoSegmentoFormatado;
+          if (nivelSegmento === 0) {
+              novoCodigo = novoSegmento;
           } else {
-              novoCodigo = `${codigoPai}.${novoSegmentoFormatado}`;
+              novoCodigo = `${codigoPai}.${novoSegmento}`;
           }
           
           novaAnalitica = 'Não'; // Sugere sintética para o mesmo nível
@@ -600,6 +598,9 @@ const PlanoContasPage = () => {
                                 <PopoverContent className="w-auto p-2 flex flex-col space-y-1" align="end">
                                     <Button variant="ghost" size="sm" onClick={() => handleOpenNewConta('abaixo')}>
                                         <ArrowDown className="w-4 h-4 mr-2" /> Criar Conta Nível Abaixo
+                                    </Button>
+                                    <Button variant="ghost" size="sm" onClick={() => handleOpenNewConta('mesmo')}>
+                                        <ArrowRight className="w-4 h-4 mr-2" /> Criar Conta Mesmo Nível
                                     </Button>
                                     <Button variant="ghost" size="sm" onClick={() => handleOpenNewConta('acima')}>
                                         <ArrowUp className="w-4 h-4 mr-2" /> Criar Conta Nível Acima
