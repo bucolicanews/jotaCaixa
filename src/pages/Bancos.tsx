@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Edit, Trash2, PlusCircle, Filter, Search, ArrowUpCircle, ArrowDownCircle, Eye, Link as LinkIcon, AlertTriangle, Banknote, Wallet, CreditCard } from 'lucide-react';
+import { Loader2, PlusCircle, Edit, Trash2, Banknote, Wallet, CreditCard, Filter, Search, ArrowUpCircle, ArrowDownCircle, Eye } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
@@ -19,7 +19,6 @@ import { Input } from '@/components/ui/input';
 import { useDebounce } from '@/hooks/use-debounce';
 import useSaldoContaCalculado from '@/hooks/use-saldo-conta-calculado';
 import DetalhesLancamentosDialog from '@/components/contabilidade/DetalhesLancamentosDialog';
-import MapeamentoRapidoSaldoContasDialog from '@/components/contabilidade/MapeamentoRapidoSaldoContasDialog'; // NOVO IMPORT
 
 type TipoSaldoFiltro = 'todos' | 'Credito' | 'Debito' | 'Receita' | 'Despesa';
 
@@ -32,9 +31,6 @@ const Bancos = () => {
   
   // State for details dialog
   const [detalhesDialog, setDetalhesDialog] = useState<{ open: boolean, conta: SaldoContaDetalhada | null }>({ open: false, conta: null });
-  
-  // State for quick mapping dialog
-  const [mapeamentoRapidoDialog, setMapeamentoRapidoDialog] = useState(false);
   
   // Filtros
   const [filtroTipoSaldo, setFiltroTipoSaldo] = useState<TipoSaldoFiltro>('todos');
@@ -64,7 +60,7 @@ const Bancos = () => {
     
     const { data, error } = await supabase
         .from('plano_contas')
-        .select('id, Conta, Descricao, Analitica, is_conta_caixa_banco') // Adicionado is_conta_caixa_banco
+        .select('id, Conta, Descricao, Analitica')
         .eq('proprietario_id', empresaId)
         .eq('Analitica', 'Sim')
         .eq('is_conta_caixa_banco', true) // FILTRO PRINCIPAL: Apenas contas marcadas como caixa/banco
@@ -118,9 +114,6 @@ const Bancos = () => {
   
   const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
   
-  // Verifica se há contas pendentes de mapeamento
-  const contasPendentesMapeamento = contas.filter(c => !c.conta_contabil_id).length;
-  
   if (carregandoSessao || carregandoSaldos) {
     return (
       <LayoutPrincipal>
@@ -152,40 +145,23 @@ const Bancos = () => {
         <h1 className="text-2xl md:text-3xl font-bold flex items-center">
             <Banknote className="w-6 h-6 mr-2" /> Contas e Saldos
         </h1>
-        <div className="flex space-x-2 w-full sm:w-auto">
-            {/* BOTÃO MAPEAMENTO RÁPIDO (Visível se houver contas cadastradas) */}
-            {contas.length > 0 && (
-                <Button 
-                    onClick={() => setMapeamentoRapidoDialog(true)} 
-                    variant="outline" 
-                    className="w-full sm:w-auto"
-                    disabled={loadingContasContabeis}
-                >
-                    <LinkIcon className="w-4 h-4 mr-2" /> Mapeamento Rápido
-                    {contasPendentesMapeamento > 0 && (
-                        <Badge variant="destructive" className="ml-2">{contasPendentesMapeamento}</Badge>
-                    )}
-                </Button>
-            )}
-            <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
-              <DialogTrigger asChild>
-                <Button onClick={() => setContaSelecionada(null)} className="w-full sm:w-auto">
-                  <PlusCircle className="w-4 h-4 mr-2" />
-                  Nova Conta
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[425px]">
-                <DialogHeader>
-                  <DialogTitle>{contaSelecionada ? 'Editar Conta' : 'Nova Conta'}</DialogTitle>
-                </DialogHeader>
-                <FormSaldoConta 
-                  contaInicial={contaSelecionada}
-                  onSaveComplete={handleSaveComplete}
-                  scope="bancos" // PASSANDO O ESCOPO CORRETO
-                />
-              </DialogContent>
-            </Dialog>
-        </div>
+        <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
+          <DialogTrigger asChild>
+            <Button onClick={() => setContaSelecionada(null)} className="w-full sm:w-auto">
+              <PlusCircle className="w-4 h-4 mr-2" />
+              Nova Conta
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>{contaSelecionada ? 'Editar Conta' : 'Nova Conta'}</DialogTitle>
+            </DialogHeader>
+            <FormSaldoConta 
+              contaInicial={contaSelecionada}
+              onSaveComplete={handleSaveComplete}
+            />
+          </DialogContent>
+        </Dialog>
       </div>
       
       <Card className="mb-6">
@@ -261,14 +237,8 @@ const Bancos = () => {
                             ) : (
                                 contas.map((conta) => {
                                     const natureza = getNaturezaDisplay(conta.tipo_saldo);
-                                    
-                                    // NOVO: Verifica se a conta contábil está faltando ou se a flag está incorreta
-                                    const isMissingContabilId = !conta.conta_contabil_id;
-                                    const isMissingFlag = conta.plano_contas && !conta.plano_contas.is_conta_caixa_banco;
-                                    const isMisconfigured = isMissingContabilId || isMissingFlag;
-
                                     return (
-                                        <TableRow key={conta.id} className={cn(isMisconfigured && 'bg-red-500/10')}>
+                                        <TableRow key={conta.id}>
                                             <TableCell className="font-medium flex items-center">
                                                 {natureza.icon}
                                                 {conta.nome}
@@ -279,14 +249,7 @@ const Bancos = () => {
                                                 </Badge>
                                             </TableCell>
                                             <TableCell className="text-sm text-muted-foreground">
-                                                {isMisconfigured ? (
-                                                    <span className="text-red-500 flex items-center">
-                                                        <AlertTriangle className="w-4 h-4 mr-1" />
-                                                        {isMissingContabilId ? 'FALTA VÍNCULO' : 'FLAG INCORRETA'}
-                                                    </span>
-                                                ) : (
-                                                    `${conta.plano_contas?.Conta} - ${conta.plano_contas?.Descricao || 'N/A'}`
-                                                )}
+                                                {conta.plano_contas?.Conta} - {conta.plano_contas?.Descricao || 'N/A'}
                                             </TableCell>
                                             <TableCell className={cn("text-right font-semibold", conta.saldo_atual >= 0 ? 'text-green-600' : 'text-red-600')}>
                                                 {formatCurrency(conta.saldo_atual)}
@@ -330,18 +293,6 @@ const Bancos = () => {
         open={detalhesDialog.open}
         onOpenChange={(open: boolean) => setDetalhesDialog({ open, conta: null })}
       />
-      
-      {/* NOVO MODAL DE MAPEAMENTO RÁPIDO */}
-      {empresaId && (
-          <MapeamentoRapidoSaldoContasDialog
-              open={mapeamentoRapidoDialog}
-              onOpenChange={setMapeamentoRapidoDialog}
-              contasSaldo={contas}
-              contasContabeis={contasContabeis}
-              proprietarioId={empresaId}
-              onSaveComplete={refetchSaldos}
-          />
-      )}
     </LayoutPrincipal>
   );
 };

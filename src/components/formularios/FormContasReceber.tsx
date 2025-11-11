@@ -22,7 +22,6 @@ import { useSessao } from '@/hooks/use-sessao';
 import { UsuarioProfile } from '@/types/usuario';
 import { Historico } from '@/types/historico'; // Importando Historico
 import { PlanoContas } from '@/types/plano-contas'; // Importando PlanoContas
-import { useMapeamentoContabil } from '@/hooks/use-mapeamento-contabil'; // NOVO IMPORT
 
 const formSchema = z.object({
   cliente_id: z.string({ required_error: 'Selecione um cliente.' }).uuid('Cliente inválido.'),
@@ -70,8 +69,6 @@ interface ClienteCRSimples extends Cliente {
 
 const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onSaveComplete }) => {
   const { perfil, role } = useSessao();
-  const { mapeamento } = useMapeamentoContabil(); // USANDO HOOK
-  
   const [clientes, setClientes] = useState<ClienteCRSimples[]>([]);
   const [loadingClientes, setLoadingClientes] = useState(true);
   const [mapeamentoContabil, setMapeamentoContabil] = useState<Record<string, string | null>>({});
@@ -127,26 +124,16 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
   }, [ownerId]);
   
   const fetchContasReceita = useCallback(async () => {
-    if (!ownerId || mapeamento.length === 0) return;
+    if (!ownerId) return;
     setLoadingContasReceita(true);
     
-    // 1. Encontra o código de nível 1 para Receita
-    const codigoReceita = mapeamento.find(m => m.tipo_natureza === 'Receita')?.codigo_nivel_1;
-    
-    if (!codigoReceita) {
-        setContasReceita([]);
-        setLoadingContasReceita(false);
-        return;
-    }
-    
-    // 2. Busca contas analíticas marcadas como resultado E que começam com o código de Receita
     const { data, error } = await supabase
         .from('plano_contas')
         .select('id, Conta, Descricao')
         .eq('proprietario_id', ownerId)
         .eq('Analitica', 'Sim')
-        .eq('is_conta_resultado', true) 
-        .like('Conta', `${codigoReceita}.%`) // Filtra pelo código de nível 1
+        .eq('is_conta_resultado', true) // Filtra apenas contas de resultado
+        .like('Conta', '3.%') // Filtra contas de Receita (código 3)
         .order('Conta');
         
     if (error) {
@@ -156,7 +143,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
         setContasReceita(data as PlanoContas[]);
     }
     setLoadingContasReceita(false);
-  }, [ownerId, mapeamento]);
+  }, [ownerId]);
 
   useEffect(() => {
     const fetchClientes = async () => {
@@ -189,15 +176,11 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
     
     fetchClientes();
     fetchHistoricos();
+    fetchContasReceita(); // NOVO: Busca contas de receita
     if (isAdmin) {
         fetchMapeamentoContabil();
     }
-  }, [perfil, role, ownerId, isAdmin, fetchMapeamentoContabil, fetchHistoricos]);
-  
-  // Efeito para buscar contas de receita (depende do mapeamento)
-  useEffect(() => {
-      fetchContasReceita();
-  }, [fetchContasReceita]);
+  }, [perfil, role, ownerId, isAdmin, fetchMapeamentoContabil, fetchHistoricos, fetchContasReceita]);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
