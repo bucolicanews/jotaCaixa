@@ -61,63 +61,56 @@ const MapeamentoPlanoContasDialog: React.FC<MapeamentoPlanoContasDialogProps> = 
     // 2. Lógica de Inserção (Passo 1)
     const handleInsertNewContas = useCallback(async () => {
         setIsSubmitting(true);
+        
+        // IDs das contas antigas que serão deletadas
+        const oldIdsToDelete = contasAntigasEmUso.map(c => c.id);
+
         try {
-            // 1. Buscar IDs das contas antigas
-            const { data: oldContasIds, error: fetchOldIdsError } = await supabase
-                .from('plano_contas')
-                .select('id')
-                .eq('proprietario_id', proprietarioId);
-
-            if (fetchOldIdsError) throw new Error('Erro ao buscar IDs antigos: ' + fetchOldIdsError.message);
-            const oldIds = (oldContasIds || []).map(c => c.id);
-
-            if (oldIds.length > 0) {
-                // 2. Limpar referências em tabelas de configuração (CRÍTICO para evitar FK violation)
-                console.log('LOG: Clearing FK references in configuration tables...');
-                
-                // a) configuracao_contas_pagar
-                await supabase.from('configuracao_contas_pagar')
-                    .update({ conta_contabil_id: null })
-                    .eq('proprietario_id', proprietarioId)
-                    .in('conta_contabil_id', oldIds);
-
-                // b) configuracao_contas_receber
-                await supabase.from('configuracao_contas_receber')
-                    .update({ conta_contabil_id: null })
-                    .eq('proprietario_id', proprietarioId)
-                    .in('conta_contabil_id', oldIds);
-                    
-                // c) configuracoes_stripe (conta_sintetica_id e conta_receber_id)
-                await supabase.from('configuracoes_stripe')
-                    .update({ conta_sintetica_id: null, conta_receber_id: null })
-                    .eq('proprietario_id', proprietarioId)
-                    .or(`conta_sintetica_id.in.(${oldIds.join(',')}),conta_receber_id.in.(${oldIds.join(',')})`);
-                    
-                // NOVO: Limpar referências em contas sintéticas (admin_contas_receber e admin_contas_pagar)
-                await supabase.from('admin_contas_receber')
-                    .update({ id_conta_contabil: null })
-                    .eq('admin_id', proprietarioId)
-                    .in('id_conta_contabil', oldIds);
-                    
-                await supabase.from('admin_contas_pagar')
-                    .update({ id_conta_contabil: null })
-                    .eq('admin_id', proprietarioId)
-                    .in('id_conta_contabil', oldIds);
-                    
-                // d) saldo_contas (CRÍTICO)
-                await supabase.from('saldo_contas')
-                    .update({ conta_contabil_id: null })
-                    .eq('proprietario_id', proprietarioId)
-                    .in('conta_contabil_id', oldIds);
-                    
-                // e) lancamentos (CRÍTICO)
-                await supabase.from('lancamentos')
-                    .update({ conta_contabil_id: null })
-                    .eq('proprietario_id', proprietarioId)
-                    .in('conta_contabil_id', oldIds);
-            }
+            // 1. Limpar referências em tabelas de configuração (CRÍTICO para evitar FK violation)
+            console.log('LOG: Clearing FK references in configuration tables...');
             
-            // 3. Limpar contas existentes para o proprietário (Agora deve funcionar)
+            // a) configuracao_contas_pagar
+            await supabase.from('configuracao_contas_pagar')
+                .update({ conta_contabil_id: null })
+                .eq('proprietario_id', proprietarioId)
+                .in('conta_contabil_id', oldIdsToDelete);
+
+            // b) configuracao_contas_receber
+            await supabase.from('configuracao_contas_receber')
+                .update({ conta_contabil_id: null })
+                .eq('proprietario_id', proprietarioId)
+                .in('conta_contabil_id', oldIdsToDelete);
+                
+            // c) configuracoes_stripe (conta_sintetica_id e conta_receber_id)
+            await supabase.from('configuracoes_stripe')
+                .update({ conta_sintetica_id: null, conta_receber_id: null })
+                .eq('proprietario_id', proprietarioId)
+                .or(`conta_sintetica_id.in.(${oldIdsToDelete.join(',')}),conta_receber_id.in.(${oldIdsToDelete.join(',')})`);
+                
+            // d) admin_contas_receber e admin_contas_pagar
+            await supabase.from('admin_contas_receber')
+                .update({ id_conta_contabil: null })
+                .eq('admin_id', proprietarioId)
+                .in('id_conta_contabil', oldIdsToDelete);
+                
+            await supabase.from('admin_contas_pagar')
+                .update({ id_conta_contabil: null })
+                .eq('admin_id', proprietarioId)
+                .in('id_conta_contabil', oldIdsToDelete);
+                
+            // e) saldo_contas (CRÍTICO)
+            await supabase.from('saldo_contas')
+                .update({ conta_contabil_id: null })
+                .eq('proprietario_id', proprietarioId)
+                .in('conta_contabil_id', oldIdsToDelete);
+                
+            // f) lancamentos (CRÍTICO)
+            await supabase.from('lancamentos')
+                .update({ conta_contabil_id: null })
+                .eq('proprietario_id', proprietarioId)
+                .in('conta_contabil_id', oldIdsToDelete);
+            
+            // 2. Limpar contas existentes para o proprietário
             const { error: deleteError } = await supabase
                 .from('plano_contas')
                 .delete()
@@ -127,7 +120,7 @@ const MapeamentoPlanoContasDialog: React.FC<MapeamentoPlanoContasDialogProps> = 
                 throw new Error('Erro ao limpar contas existentes: ' + deleteError.message);
             }
             
-            // 4. Inserir novos dados e obter os novos IDs
+            // 3. Inserir novos dados e obter os novos IDs
             const { data: newContas, error: insertError } = await supabase
                 .from('plano_contas')
                 .insert(contasParaInserir)
@@ -160,7 +153,7 @@ const MapeamentoPlanoContasDialog: React.FC<MapeamentoPlanoContasDialogProps> = 
         } finally {
             setIsSubmitting(false);
         }
-    }, [contasParaInserir, onOpenChange, proprietarioId]);
+    }, [contasParaInserir, onOpenChange, proprietarioId, contasAntigasEmUso]);
     
     // 3. Lógica de Atualização (Passo 2)
     const handleUpdateReferences = useCallback(async () => {
@@ -195,7 +188,7 @@ const MapeamentoPlanoContasDialog: React.FC<MapeamentoPlanoContasDialogProps> = 
                         updatesLancamentos.push({ id: l.id, conta_contabil_id: item.newId! });
                     });
                     
-                    // CORREÇÃO DO ERRO 3: Usando lancamentosInUse
+                    // CORREÇÃO DO ERRO 2: Corrigido 'lancamentosInuse' para 'lancamentosInUse'
                     totalUpdated += (saldoContasInUse?.length || 0) + (lancamentosInUse?.length || 0);
                 } else {
                     // Se não foi mapeado, setar para NULL (já foi feito no passo 1, mas repetimos para segurança)
@@ -266,6 +259,29 @@ const MapeamentoPlanoContasDialog: React.FC<MapeamentoPlanoContasDialogProps> = 
                         <p>Ao clicar em "Inserir Novo Plano", o plano antigo será deletado e as novas contas serão criadas. Em seguida, você fará a correlação.</p>
                     </div>
                     
+                    <div className="overflow-x-auto">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead className="w-[30%]">Conta Antiga (Em Uso)</TableHead>
+                                    <TableHead className="w-[10%] text-center">Referências</TableHead>
+                                    <TableHead className="w-[60%]">Descrição</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {contasAntigasEmUso.map((item) => (
+                                    <TableRow key={item.id}>
+                                        <TableCell>
+                                            <p className="font-semibold">{item.Conta}</p>
+                                        </TableCell>
+                                        <TableCell className="text-center font-bold text-sm">{item.dependencies}</TableCell>
+                                        <TableCell className="text-sm text-muted-foreground">{item.Descricao}</TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </div>
+                    
                     <div className="flex justify-between pt-4 border-t">
                         <Button onClick={() => onOpenChange(false)} variant="secondary" disabled={isSubmitting}>
                             Cancelar
@@ -288,6 +304,7 @@ const MapeamentoPlanoContasDialog: React.FC<MapeamentoPlanoContasDialogProps> = 
                 <DialogContent className="sm:max-w-lg">
                     <DialogHeader>
                         <DialogTitle>Processando Inserção...</DialogTitle>
+                        {/* CORREÇÃO DO ERRO 1 e 3: Corrigido Dialoguração para DialogDescription */}
                         <DialogDescription>
                             Inserindo novas contas no Plano de Contas.
                         </DialogDescription>

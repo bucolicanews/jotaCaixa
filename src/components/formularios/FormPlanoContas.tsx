@@ -12,7 +12,7 @@ import { showError, showSuccess } from '@/utils/toast';
 import { PlanoContas } from '@/types/plano-contas';
 import { Checkbox } from '../ui/checkbox';
 import { cn } from '@/lib/utils';
-import { useMapeamentoContabil } from '@/hooks/use-mapeamento-contabil'; // NOVO IMPORT
+import { useMapeamentoContabil } from '@/hooks/use-mapeamento-contabil';
 
 // Função de validação da máscara
 const validateMask = (code: string, mask: string): boolean => {
@@ -68,7 +68,7 @@ const FormPlanoContas: React.FC<FormPlanoContasProps> = ({ proprietarioId, conta
   const isEditing = !!contaInicial && !!contaInicial.id;
   const [mascara, setMascara] = useState<string | null>(null);
   const [loadingMascara, setLoadingMascara] = useState(true);
-  const { mapeamento, loading: loadingMapeamento } = useMapeamentoContabil(); // USANDO HOOK
+  const { mapeamento, loading: loadingMapeamento } = useMapeamentoContabil();
 
   const defaultConta = contaInicial?.Conta || '';
   const defaultAnalitica = contaInicial?.Analitica || 'Não';

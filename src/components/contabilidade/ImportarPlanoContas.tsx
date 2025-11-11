@@ -23,6 +23,32 @@ interface ImportarPlanoContasProps {
   onOpenMapeamento: (contasParaInserir: Partial<PlanoContas>[], contasAntigasEmUso: ContaAntigaEmUsoSimples[]) => void;
 }
 
+// Função de validação da máscara (copiada de FormPlanoContas.tsx)
+const validateMask = (code: string, mask: string): boolean => {
+    if (!mask) return true;
+    
+    const codeParts = code.split('.');
+    const maskParts = mask.split('.');
+    
+    if (codeParts.length !== maskParts.length) {
+        return false;
+    }
+    
+    for (let i = 0; i < codeParts.length; i++) {
+        const codeSegment = codeParts[i];
+        const maskSegment = maskParts[i];
+        
+        if (codeSegment.length !== maskSegment.length) {
+            return false;
+        }
+        if (!/^\d+$/.test(codeSegment)) {
+            return false;
+        }
+    }
+    return true;
+};
+
+
 const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportComplete, onOpenMapeamento }) => {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
@@ -63,7 +89,7 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
       const parsedData = await parseFile(file);
 
       if (parsedData.length === 0) {
-        showError('O arquivo está vazio ou o formato está incorreto. Verifique se os cabeçalhos estão corretos.');
+        showError('O arquivo está vazio ou o formato está incorreto. Verifique se as colunas estão corretas.');
         setLoading(false);
         return;
       }
@@ -75,15 +101,17 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
           return;
       }
       
-      // 2. Buscar Mapeamento Contábil
-      const { data: mapeamentoData, error: mapeamentoError } = await supabase
-          .from('configuracao_contabil')
-          .select('codigo_nivel_1, tipo_natureza')
-          .eq('proprietario_id', proprietarioId);
-          
-      if (mapeamentoError) throw mapeamentoError;
+      // 2. Buscar Mapeamento Contábil e Máscara
+      const [mapeamentoRes, mascaraRes] = await Promise.all([
+          supabase.from('configuracao_contabil').select('codigo_nivel_1, tipo_natureza').eq('proprietario_id', proprietarioId),
+          supabase.from('configuracao_plano_contas').select('mascara_codigo').eq('proprietario_id', proprietarioId).limit(1).single(),
+      ]);
       
-      const mapeamentoMap = (mapeamentoData || []).reduce((acc, item) => {
+      if (mapeamentoRes.error) throw mapeamentoRes.error;
+      
+      const mascara = mascaraRes.data?.mascara_codigo || null;
+      
+      const mapeamentoMap = (mapeamentoRes.data || []).reduce((acc, item) => {
           acc[item.codigo_nivel_1] = item.tipo_natureza;
           return acc;
       }, {} as Record<string, string>);
@@ -121,7 +149,6 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
                 if (natureza === 'Receita' || natureza === 'Despesa') {
                     is_conta_resultado = true;
                 }
-                // Sugestão para Caixa/Banco: Apenas contas de Ativo
                 if (natureza === 'Ativo') {
                     is_conta_caixa_banco = true;
                 }
@@ -140,9 +167,20 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
         };
       });
       
-      // --- PRÉ-ANÁLISE DE DEPENDÊNCIAS (Restante do código mantido) ---
+      // 4. Validação da Máscara (Se houver máscara)
+      if (mascara) {
+          const invalidMasks = contasParaInserir.filter(c => 
+              c.Analitica === 'Sim' && !validateMask(c.Conta!, mascara)
+          );
+          
+          if (invalidMasks.length > 0) {
+              showError(`A importação falhou: ${invalidMasks.length} contas analíticas não seguem a máscara '${mascara}'. Corrija o arquivo.`);
+              setLoading(false);
+              return;
+          }
+      }
       
-      // 4. Buscar contas antigas que estão em uso
+      // 5. Buscar contas antigas que estão em uso
       const { data: oldContas, error: oldContasError } = await supabase
           .from('plano_contas')
           .select('id, Conta, Descricao')
@@ -150,7 +188,7 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
           
       if (oldContasError) throw new Error('Erro ao buscar contas antigas: ' + oldContasError.message);
       
-      // 5. Identificar contas antigas que não estão no novo plano E que estão em uso
+      // 6. Identificar contas antigas que não estão no novo plano E que estão em uso
       const contasAntigasEmUso: ContaAntigaEmUsoSimples[] = [];
       const allOldContas = oldContas as PlanoContas[];
       
@@ -177,21 +215,21 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
           }
       }
       
-      // 6. Se houver contas antigas em uso que precisam de mapeamento, abre o modal
+      // 7. Se houver contas antigas em uso que precisam de mapeamento, abre o modal
       if (contasAntigasEmUso.length > 0) {
           setFile(null); // Limpa o arquivo para evitar re-importação acidental
           onOpenMapeamento(contasParaInserir, contasAntigasEmUso);
           return;
       }
       
-      // 7. Se não houver dependências NÃO MAPEADAS, procede com a importação direta (exclusão e inserção)
+      // 8. Se não houver dependências NÃO MAPEADAS, procede com a importação direta (exclusão e inserção)
       
       const oldIds = allOldContas.map(c => c.id);
       
       if (oldIds.length > 0) {
           // CRÍTICO: Limpar TODAS as referências de FK antes de deletar o plano_contas
           
-          // 7.1. Limpar referências em tabelas de configuração
+          // 8.1. Limpar referências em tabelas de configuração
           await supabase.from('configuracao_contas_pagar')
               .update({ conta_contabil_id: null })
               .eq('proprietario_id', proprietarioId)
@@ -207,7 +245,6 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
               .eq('proprietario_id', proprietarioId)
               .or(`conta_sintetica_id.in.(${oldIds.join(',')}),conta_receber_id.in.(${oldIds.join(',')})`);
               
-          // NOVO: Limpar referências em contas sintéticas (admin_contas_receber e admin_contas_pagar)
           await supabase.from('admin_contas_receber')
               .update({ id_conta_contabil: null })
               .eq('admin_id', proprietarioId)
@@ -218,7 +255,7 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
               .eq('admin_id', proprietarioId)
               .in('id_conta_contabil', oldIds);
               
-          // 7.2. Limpar referências em saldo_contas e lancamentos (SET TO NULL)
+          // 8.2. Limpar referências em saldo_contas e lancamentos (SET TO NULL)
           await supabase.from('saldo_contas')
               .update({ conta_contabil_id: null })
               .eq('proprietario_id', proprietarioId)
@@ -229,7 +266,7 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
               .eq('proprietario_id', proprietarioId)
               .in('conta_contabil_id', oldIds);
               
-          // 7.3. Limpar contas existentes para o proprietário
+          // 8.3. Limpar contas existentes para o proprietário
           const { error: deleteError } = await supabase
             .from('plano_contas')
             .delete()
@@ -240,7 +277,7 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
           }
       }
 
-      // 8. Inserir novos dados
+      // 9. Inserir novos dados
       const { error: insertError } = await supabase
         .from('plano_contas')
         .insert(contasParaInserir);
