@@ -334,6 +334,9 @@ const PlanoContasPage = () => {
   const handleOpenNewConta = (nivel: 'acima' | 'abaixo') => {
       if (!contaClicada) return;
       
+      // Fecha o popover
+      setPopoverOpen(false);
+      
       // CORREÇÃO: Usando split('.') e filter(Boolean) para obter os segmentos
       const parts = contaClicada.Conta.split('.').filter(Boolean);
       const nivelAtual = parts.length;
@@ -395,7 +398,6 @@ const PlanoContasPage = () => {
       setContaSelecionada(null); // Garante que é uma nova conta
       setNovaContaInicial({ Conta: novoCodigo, Analitica: novaAnalitica }); // Define os valores iniciais
       setDialogAberto(true);
-      setPopoverOpen(false);
   };
   
   // --- FIM Lógica de Criação Hierárquica ---
