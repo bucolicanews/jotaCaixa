@@ -477,10 +477,21 @@ const PlanoContasPage = () => {
                                                 isEditable={true}
                                             />
                                         </TableCell>
+                                        
+                                        {/* Analítica (Select) */}
                                         <TableCell className="text-center">
-                                            {conta.Analitica}
+                                            <EditableCell
+                                                id={conta.id}
+                                                initialValue={conta.Analitica}
+                                                fieldName="Analitica"
+                                                onSaveSuccess={handleInlineSaveSuccess}
+                                                isEditable={true}
+                                                type="select"
+                                                options={["Sim", "Não"]}
+                                            />
                                         </TableCell>
                                         
+                                        {/* Conta Caixa/Banco (Boolean) */}
                                         <TableCell className="text-center">
                                             {conta.Analitica === 'Sim' ? (
                                                 <EditableCell
@@ -489,13 +500,14 @@ const PlanoContasPage = () => {
                                                     fieldName="is_conta_caixa_banco"
                                                     onSaveSuccess={handleInlineSaveSuccess}
                                                     isEditable={true}
+                                                    type="boolean"
                                                 />
                                             ) : (
                                                 '-'
                                             )}
                                         </TableCell>
                                         
-                                        {/* NOVA COLUNA: CONTA PATRIMONIAL */}
+                                        {/* Conta Patrimonial (Boolean) */}
                                         <TableCell className="text-center">
                                             {conta.Analitica === 'Sim' ? (
                                                 <EditableCell
@@ -504,12 +516,14 @@ const PlanoContasPage = () => {
                                                     fieldName="is_conta_patrimonial"
                                                     onSaveSuccess={handleInlineSaveSuccess}
                                                     isEditable={true}
+                                                    type="boolean"
                                                 />
                                             ) : (
                                                 '-'
                                             )}
                                         </TableCell>
                                         
+                                        {/* Conta de Resultado (Boolean) */}
                                         <TableCell className="text-center">
                                             {conta.Analitica === 'Sim' ? (
                                                 <EditableCell
@@ -518,6 +532,7 @@ const PlanoContasPage = () => {
                                                     fieldName="is_conta_resultado"
                                                     onSaveSuccess={handleInlineSaveSuccess}
                                                     isEditable={true}
+                                                    type="boolean"
                                                 />
                                             ) : (
                                                 '-'

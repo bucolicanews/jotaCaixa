@@ -6,15 +6,20 @@ import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { PlanoContas } from '@/types/plano-contas';
-import { Checkbox } from '../ui/checkbox'; // Importando Checkbox
+import { Checkbox } from '../ui/checkbox';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 
 interface EditableCellProps {
   id: string; // ID da conta
   initialValue: string | number | boolean | null | undefined; // Suporta booleano
-  fieldName: keyof PlanoContas; // Nome do campo a ser atualizado (Conta, Descricao, codigo_reduzido, is_conta_caixa_banco, is_conta_patrimonial, is_conta_resultado)
+  fieldName: keyof PlanoContas; // Nome do campo a ser atualizado
   onSaveSuccess: () => void;
   className?: string;
   isEditable: boolean; // Se a célula pode ser editada
+  
+  // Novos props para tipos de input
+  type?: 'text' | 'boolean' | 'select';
+  options?: string[]; // Apenas para type='select'
 }
 
 const EditableCell: React.FC<EditableCellProps> = ({
@@ -24,23 +29,31 @@ const EditableCell: React.FC<EditableCellProps> = ({
   onSaveSuccess,
   className,
   isEditable,
+  type = 'text',
+  options = [],
 }) => {
-  const isBoolean = fieldName === 'is_conta_caixa_banco' || fieldName === 'is_conta_patrimonial' || fieldName === 'is_conta_resultado';
+  const isBoolean = type === 'boolean';
+  const isSelect = type === 'select';
+  
+  const initialValueString = String(initialValue || '');
   const initialBooleanValue = isBoolean ? !!initialValue : false;
   
   const [isEditing, setIsEditing] = useState(false);
-  const [value, setValue] = useState(isBoolean ? initialBooleanValue : String(initialValue || ''));
+  const [value, setValue] = useState<string | boolean>(isBoolean ? initialBooleanValue : initialValueString);
   const [loading, setLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Foca no input quando o modo de edição é ativado
+  // Sincroniza o estado interno com o valor inicial quando o modo de edição é ativado
   useEffect(() => {
-    if (isEditing && inputRef.current) {
-      inputRef.current.focus();
+    if (isEditing) {
+        setValue(isBoolean ? initialBooleanValue : initialValueString);
+        if (inputRef.current) {
+            inputRef.current.focus();
+        }
     }
-  }, [isEditing]);
+  }, [isEditing, initialValueString, initialBooleanValue, isBoolean]);
 
-  const handleSave = async (newValue?: boolean) => {
+  const handleSave = async (newValue?: string | boolean) => {
     if (!isEditable || loading) return;
     
     let finalValue: string | number | boolean | null;
@@ -48,10 +61,11 @@ const EditableCell: React.FC<EditableCellProps> = ({
     if (isBoolean) {
         finalValue = newValue !== undefined ? newValue : (value as boolean);
     } else {
-        const trimmedValue = (value as string).trim();
+        const currentValue = newValue !== undefined ? (newValue as string) : (value as string);
+        const trimmedValue = currentValue.trim();
         
         // Se o valor não mudou, apenas sai do modo de edição
-        if (trimmedValue === String(initialValue || '')) {
+        if (trimmedValue === initialValueString) {
             setIsEditing(false);
             return;
         }
@@ -90,7 +104,7 @@ const EditableCell: React.FC<EditableCellProps> = ({
     }
   };
   
-  // Lógica para Checkbox (não precisa de modo de edição explícito)
+  // Lógica para Checkbox
   if (isBoolean) {
       const checked = !!initialValue;
       
@@ -110,18 +124,41 @@ const EditableCell: React.FC<EditableCellProps> = ({
           </div>
       );
   }
+  
+  // Lógica para Select
+  if (isSelect) {
+      return (
+          <div className="flex items-center space-x-1">
+              <Select 
+                  value={initialValueString} 
+                  onValueChange={handleSave} 
+                  disabled={loading || !isEditable}
+              >
+                  <SelectTrigger className="h-8 text-sm flex-1 min-w-[80px]">
+                      <SelectValue placeholder="Selecione" />
+                  </SelectTrigger>
+                  <SelectContent>
+                      {options.map(opt => (
+                          <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                      ))}
+                  </SelectContent>
+              </Select>
+              {loading && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
+          </div>
+      );
+  }
 
   // Lógica para Input (Texto/Número)
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       handleSave();
     } else if (e.key === 'Escape') {
-      setValue(String(initialValue || ''));
+      setValue(initialValueString);
       setIsEditing(false);
     }
   };
   
-  const displayValue = String(initialValue || '-');
+  const displayValue = initialValueString || '-';
 
   if (isEditing) {
     return (
@@ -150,7 +187,7 @@ const EditableCell: React.FC<EditableCellProps> = ({
           variant="ghost"
           size="icon"
           onClick={() => {
-            setValue(String(initialValue || ''));
+            setValue(initialValueString);
             setIsEditing(false);
           }}
           disabled={loading}
