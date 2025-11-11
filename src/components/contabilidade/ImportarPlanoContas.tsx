@@ -9,19 +9,21 @@ import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { ContaCSV, ContaJSON, PlanoContas } from '@/types/plano-contas';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
-import MapearSaldosDialog from './MapearSaldosDialog';
+import MapearTodasFKsDialog from './MapearTodasFKsDialog'; // NOVO IMPORT
 
 interface ImportarPlanoContasProps {
   onImportComplete: () => void;
 }
 
-// Novo tipo para o estado de mapeamento
-interface OldSaldoData {
-    id: string; // saldo_contas.id
-    nome: string; // saldo_contas.nome
-    saldo_inicial: number;
+// Novo tipo para o estado de mapeamento (unificado)
+interface OldFKData {
+    id: string;
+    nome: string;
+    tabela: 'saldo_contas' | 'config_cr' | 'config_cp' | 'config_stripe_sintetica' | 'config_stripe_receber';
     old_conta_contabil_id: string;
-    old_conta_contabil_nome: string; // PlanoContas.Descricao
+    old_conta_contabil_nome: string;
+    saldo_inicial?: number; // Apenas para saldo_contas
+    tipo_registro?: string; // Apenas para configs CR/CP
 }
 
 const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportComplete }) => {
@@ -31,7 +33,7 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
   
   // Estados para o modal de mapeamento
   const [mappingDialogOpen, setMappingDialogOpen] = useState(false);
-  const [oldSaldosToMap, setOldSaldosToMap] = useState<OldSaldoData[]>([]);
+  const [oldFKsToMap, setOldFKsToMap] = useState<OldFKData[]>([]);
   const [newPlanoContas, setNewPlanoContas] = useState<PlanoContas[]>([]);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -78,6 +80,90 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
         throw new Error('Erro ao inserir contas: ' + insertError.message);
       }
   };
+  
+  const fetchAllFKs = async (proprietarioId: string): Promise<OldFKData[]> => {
+      const fks: OldFKData[] = [];
+      
+      // 1. Saldo Contas
+      const { data: saldosData } = await supabase
+        .from('saldo_contas')
+        .select(`id, nome, saldo_inicial, conta_contabil_id, plano_contas ( Descricao )`)
+        .eq('proprietario_id', proprietarioId)
+        .not('conta_contabil_id', 'is', null);
+        
+      (saldosData || []).forEach((s: any) => fks.push({
+          id: s.id,
+          nome: s.nome,
+          tabela: 'saldo_contas',
+          old_conta_contabil_id: s.conta_contabil_id,
+          old_conta_contabil_nome: s.plano_contas?.Descricao || 'Conta Antiga Desconhecida',
+          saldo_inicial: s.saldo_inicial,
+      }));
+      
+      // 2. Configurações CR
+      const { data: crData } = await supabase
+        .from('configuracao_contas_receber')
+        .select(`id, tipo_registro, conta_contabil_id, plano_contas ( Descricao )`)
+        .eq('proprietario_id', proprietarioId)
+        .not('conta_contabil_id', 'is', null);
+        
+      (crData || []).forEach((c: any) => fks.push({
+          id: c.id,
+          nome: `CR: ${c.tipo_registro}`,
+          tabela: 'config_cr',
+          old_conta_contabil_id: c.conta_contabil_id,
+          old_conta_contabil_nome: c.plano_contas?.Descricao || 'Conta Antiga Desconhecida',
+          tipo_registro: c.tipo_registro,
+      }));
+      
+      // 3. Configurações CP
+      const { data: cpData } = await supabase
+        .from('configuracao_contas_pagar')
+        .select(`id, tipo_registro, conta_contabil_id, plano_contas ( Descricao )`)
+        .eq('proprietario_id', proprietarioId)
+        .not('conta_contabil_id', 'is', null);
+        
+      (cpData || []).forEach((c: any) => fks.push({
+          id: c.id,
+          nome: `CP: ${c.tipo_registro}`,
+          tabela: 'config_cp',
+          old_conta_contabil_id: c.conta_contabil_id,
+          old_conta_contabil_nome: c.plano_contas?.Descricao || 'Conta Antiga Desconhecida',
+          tipo_registro: c.tipo_registro,
+      }));
+      
+      // 4. Configurações Stripe
+      const { data: stripeData } = await supabase
+        .from('configuracoes_stripe')
+        .select(`id, conta_sintetica_id, conta_receber_id, historico_padrao_id, plano_contas_sintetica:conta_sintetica_id ( Descricao ), plano_contas_receber:conta_receber_id ( Descricao )`)
+        .eq('proprietario_id', proprietarioId);
+        
+      (stripeData || []).forEach((s: any) => {
+          if (s.conta_sintetica_id) {
+              fks.push({
+                  id: s.id,
+                  nome: 'Stripe: Conta Sintética',
+                  tabela: 'config_stripe_sintetica',
+                  old_conta_contabil_id: s.conta_sintetica_id,
+                  old_conta_contabil_nome: s.plano_contas_sintetica?.Descricao || 'Conta Antiga Desconhecida',
+                  tipo_registro: 'conta_sintetica_id',
+              });
+          }
+          if (s.conta_receber_id) {
+              fks.push({
+                  id: s.id,
+                  nome: 'Stripe: Conta Receber',
+                  tabela: 'config_stripe_receber',
+                  old_conta_contabil_id: s.conta_receber_id,
+                  old_conta_contabil_nome: s.plano_contas_receber?.Descricao || 'Conta Antiga Desconhecida',
+                  tipo_registro: 'conta_receber_id',
+              });
+          }
+          // Ignoramos historico_padrao_id pois ele referencia 'historicos', não 'plano_contas'
+      });
+      
+      return fks;
+  };
 
   const handleImport = async () => {
     if (!file) {
@@ -109,7 +195,6 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
         codigo_reduzido: conta['Código reduzido'] || null,
         Descricao: conta.Descrição.trim(),
         Analitica: conta.Analítica,
-        // Campos booleanos são definidos como false por padrão no DB, mas para garantir
         is_conta_caixa_banco: false,
         is_conta_patrimonial: false,
         is_conta_resultado: false,
@@ -117,35 +202,15 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
       
       setNewPlanoContas(contasParaInserir);
 
-      // 2. Verificar se existem contas de saldo (saldo_contas) vinculadas ao plano antigo
-      const { data: oldSaldosData, error: oldSaldosError } = await supabase
-        .from('saldo_contas')
-        .select(`
-            id,
-            nome,
-            saldo_inicial,
-            conta_contabil_id,
-            plano_contas ( Descricao )
-        `)
-        .eq('proprietario_id', proprietarioId)
-        .not('conta_contabil_id', 'is', null);
+      // 2. Verificar todas as FKs existentes
+      const oldFKs = await fetchAllFKs(proprietarioId);
 
-      if (oldSaldosError) throw oldSaldosError;
-      
-      const oldSaldos = (oldSaldosData as any[]).map(s => ({
-          id: s.id,
-          nome: s.nome,
-          saldo_inicial: s.saldo_inicial,
-          old_conta_contabil_id: s.conta_contabil_id,
-          old_conta_contabil_nome: s.plano_contas?.Descricao || 'Conta Antiga Desconhecida',
-      })) as OldSaldoData[];
-
-      if (oldSaldos.length > 0) {
-        // Se houver saldos antigos, abre o modal de mapeamento
-        setOldSaldosToMap(oldSaldos);
+      if (oldFKs.length > 0) {
+        // Se houver FKs antigas, abre o modal de mapeamento
+        setOldFKsToMap(oldFKs);
         setMappingDialogOpen(true);
       } else {
-        // Se não houver saldos antigos, procede com a exclusão direta e inserção
+        // Se não houver FKs antigas, procede com a exclusão direta e inserção
         await performDirectImport(proprietarioId, contasParaInserir);
         onImportComplete();
         showSuccess(`Plano de Contas importado com sucesso! ${contasParaInserir.length} contas adicionadas.`);
@@ -164,7 +229,6 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
       onImportComplete();
   };
   
-  // Função para fechar o modal (necessária para onOpenChange)
   const handleClose = (open: boolean) => {
       if (!open) {
           setMappingDialogOpen(false);
@@ -209,12 +273,12 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
         </CardContent>
       </Card>
       
-      {/* Modal de Mapeamento de Saldos */}
+      {/* Modal de Mapeamento de FKs */}
       {proprietarioId && (
-          <MapearSaldosDialog
+          <MapearTodasFKsDialog
               open={mappingDialogOpen}
               onOpenChange={handleClose}
-              oldSaldos={oldSaldosToMap}
+              oldFKs={oldFKsToMap}
               newPlanoContas={newPlanoContas}
               proprietarioId={proprietarioId}
               onSaveComplete={handleMappingComplete}
