@@ -135,7 +135,7 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
       if (oldIds.length > 0) {
           // CRÍTICO: Limpar TODAS as referências de FK antes de deletar o plano_contas
           
-          // Clear config tables (CRITICAL for avoiding FK violation)
+          // 5.1. Limpar referências em tabelas de configuração
           await supabase.from('configuracao_contas_pagar')
               .update({ conta_contabil_id: null })
               .eq('proprietario_id', proprietarioId)
@@ -149,26 +149,36 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
           await supabase.from('configuracoes_stripe')
               .update({ conta_sintetica_id: null })
               .eq('proprietario_id', proprietarioId)
-              .in('conta_sintetica_id', oldIds);
+              .in('conta_contabil_id', oldIds);
               
           await supabase.from('configuracoes_stripe')
               .update({ conta_receber_id: null })
               .eq('proprietario_id', proprietarioId)
-              .in('conta_receber_id', oldIds);
+              .in('conta_contabil_id', oldIds);
               
-          // Clear saldo_contas references (SET TO NULL)
+          // NOVO: Limpar referências em contas sintéticas (admin_contas_receber e admin_contas_pagar)
+          await supabase.from('admin_contas_receber')
+              .update({ id_conta_contabil: null })
+              .eq('admin_id', proprietarioId)
+              .in('id_conta_contabil', oldIds);
+              
+          await supabase.from('admin_contas_pagar')
+              .update({ id_conta_contabil: null })
+              .eq('admin_id', proprietarioId)
+              .in('id_conta_contabil', oldIds);
+              
+          // 5.2. Limpar referências em saldo_contas e lancamentos (SET TO NULL)
           await supabase.from('saldo_contas')
               .update({ conta_contabil_id: null })
               .eq('proprietario_id', proprietarioId)
               .in('conta_contabil_id', oldIds);
               
-          // Clear lancamentos references (SET TO NULL)
           await supabase.from('lancamentos')
               .update({ conta_contabil_id: null })
               .eq('proprietario_id', proprietarioId)
               .in('conta_contabil_id', oldIds);
               
-          // Limpar contas existentes para o proprietário
+          // 5.3. Limpar contas existentes para o proprietário
           const { error: deleteError } = await supabase
             .from('plano_contas')
             .delete()
@@ -179,7 +189,7 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
           }
       }
 
-      // Inserir novos dados
+      // 6. Inserir novos dados
       const { error: insertError } = await supabase
         .from('plano_contas')
         .insert(contasParaInserir);

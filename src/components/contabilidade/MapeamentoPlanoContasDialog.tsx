@@ -89,14 +89,32 @@ const MapeamentoPlanoContasDialog: React.FC<MapeamentoPlanoContasDialogProps> = 
                     
                 // c) configuracoes_stripe (conta_sintetica_id e conta_receber_id)
                 await supabase.from('configuracoes_stripe')
-                    .update({ conta_sintetica_id: null })
+                    .update({ conta_sintetica_id: null, conta_receber_id: null })
                     .eq('proprietario_id', proprietarioId)
-                    .in('conta_sintetica_id', oldIds);
+                    .or(`conta_sintetica_id.in.(${oldIds.join(',')}),conta_receber_id.in.(${oldIds.join(',')})`);
                     
-                await supabase.from('configuracoes_stripe')
-                    .update({ conta_receber_id: null })
+                // NOVO: Limpar referências em contas sintéticas (admin_contas_receber e admin_contas_pagar)
+                await supabase.from('admin_contas_receber')
+                    .update({ id_conta_contabil: null })
+                    .eq('admin_id', proprietarioId)
+                    .in('id_conta_contabil', oldIds);
+                    
+                await supabase.from('admin_contas_pagar')
+                    .update({ id_conta_contabil: null })
+                    .eq('admin_id', proprietarioId)
+                    .in('id_conta_contabil', oldIds);
+                    
+                // d) saldo_contas (CRÍTICO)
+                await supabase.from('saldo_contas')
+                    .update({ conta_contabil_id: null })
                     .eq('proprietario_id', proprietarioId)
-                    .in('conta_receber_id', oldIds);
+                    .in('conta_contabil_id', oldIds);
+                    
+                // e) lancamentos (CRÍTICO)
+                await supabase.from('lancamentos')
+                    .update({ conta_contabil_id: null })
+                    .eq('proprietario_id', proprietarioId)
+                    .in('conta_contabil_id', oldIds);
             }
             
             // 3. Limpar contas existentes para o proprietário (Agora deve funcionar)
@@ -177,10 +195,10 @@ const MapeamentoPlanoContasDialog: React.FC<MapeamentoPlanoContasDialogProps> = 
                         updatesLancamentos.push({ id: l.id, conta_contabil_id: item.newId! });
                     });
                     
+                    // CORREÇÃO DO ERRO 3: Usando lancamentosInUse
                     totalUpdated += (saldoContasInUse?.length || 0) + (lancamentosInUse?.length || 0);
                 } else {
-                    // Se não foi mapeado, setar para NULL (ou manter o ID antigo, mas o objetivo é limpar)
-                    // Para simplificar, vamos setar para NULL se não for mapeado, garantindo que a FK seja limpa.
+                    // Se não foi mapeado, setar para NULL (já foi feito no passo 1, mas repetimos para segurança)
                     
                     // Atualiza saldo_contas para NULL
                     await supabase
