@@ -62,7 +62,44 @@ const MapeamentoPlanoContasDialog: React.FC<MapeamentoPlanoContasDialogProps> = 
     const handleInsertNewContas = useCallback(async () => {
         setIsSubmitting(true);
         try {
-            // 1. Limpar contas existentes para o proprietário
+            // 1. Buscar IDs das contas antigas
+            const { data: oldContasIds, error: fetchOldIdsError } = await supabase
+                .from('plano_contas')
+                .select('id')
+                .eq('proprietario_id', proprietarioId);
+
+            if (fetchOldIdsError) throw new Error('Erro ao buscar IDs antigos: ' + fetchOldIdsError.message);
+            const oldIds = (oldContasIds || []).map(c => c.id);
+
+            if (oldIds.length > 0) {
+                // 2. Limpar referências em tabelas de configuração (CRÍTICO para evitar FK violation)
+                console.log('LOG: Clearing FK references in configuration tables...');
+                
+                // a) configuracao_contas_pagar
+                await supabase.from('configuracao_contas_pagar')
+                    .update({ conta_contabil_id: null })
+                    .eq('proprietario_id', proprietarioId)
+                    .in('conta_contabil_id', oldIds);
+
+                // b) configuracao_contas_receber
+                await supabase.from('configuracao_contas_receber')
+                    .update({ conta_contabil_id: null })
+                    .eq('proprietario_id', proprietarioId)
+                    .in('conta_contabil_id', oldIds);
+                    
+                // c) configuracoes_stripe (conta_sintetica_id e conta_receber_id)
+                await supabase.from('configuracoes_stripe')
+                    .update({ conta_sintetica_id: null })
+                    .eq('proprietario_id', proprietarioId)
+                    .in('conta_sintetica_id', oldIds);
+                    
+                await supabase.from('configuracoes_stripe')
+                    .update({ conta_receber_id: null })
+                    .eq('proprietario_id', proprietarioId)
+                    .in('conta_receber_id', oldIds);
+            }
+            
+            // 3. Limpar contas existentes para o proprietário (Agora deve funcionar)
             const { error: deleteError } = await supabase
                 .from('plano_contas')
                 .delete()
@@ -72,7 +109,7 @@ const MapeamentoPlanoContasDialog: React.FC<MapeamentoPlanoContasDialogProps> = 
                 throw new Error('Erro ao limpar contas existentes: ' + deleteError.message);
             }
             
-            // 2. Inserir novos dados e obter os novos IDs
+            // 4. Inserir novos dados e obter os novos IDs
             const { data: newContas, error: insertError } = await supabase
                 .from('plano_contas')
                 .insert(contasParaInserir)
