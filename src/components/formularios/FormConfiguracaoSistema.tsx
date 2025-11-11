@@ -4,7 +4,6 @@ import { Loader2, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { PlanoContas } from '@/types/plano-contas';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Card, CardContent } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { cn } from '@/lib/utils';
@@ -59,10 +58,8 @@ const FormConfiguracaoSistema: React.FC<FormConfiguracaoSistemaProps> = ({ admin
   }, [fetchConfig]);
 
   const handleSave = async () => {
-    if (!planoContasPadraoId) {
-      showError('Selecione uma conta de nível 1 para definir o Plano Padrão.');
-      return;
-    }
+    // A validação de planoContasPadraoId foi removida, pois o Admin está definindo o próprio plano.
+    // O ID do Admin é usado como valor para indicar que o plano dele é o padrão.
     
     setIsSubmitting(true);
     
