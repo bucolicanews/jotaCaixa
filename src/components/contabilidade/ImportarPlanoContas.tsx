@@ -10,11 +10,20 @@ import { useSessao } from '@/hooks/use-sessao';
 import { ContaCSV, ContaJSON, PlanoContas } from '@/types/plano-contas';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 
-interface ImportarPlanoContasProps {
-  onImportComplete: () => void;
+// Tipo para a conta antiga em uso (para o modal)
+interface ContaAntigaEmUsoSimples {
+    id: string;
+    Conta: string;
+    Descricao: string;
+    dependencies: number;
 }
 
-const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportComplete }) => {
+interface ImportarPlanoContasProps {
+  onImportComplete: () => void;
+  onOpenMapeamento: (contasParaInserir: Partial<PlanoContas>[], contasAntigasEmUso: ContaAntigaEmUsoSimples[]) => void;
+}
+
+const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportComplete, onOpenMapeamento }) => {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const { usuario, role, perfil } = useSessao();
@@ -67,7 +76,7 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
       }
 
       // Mapear dados para o formato do banco de dados
-      const contasParaInserir = (parsedData as (ContaCSV | ContaJSON)[]).map(conta => ({
+      const contasParaInserir: Partial<PlanoContas>[] = (parsedData as (ContaCSV | ContaJSON)[]).map(conta => ({
         proprietario_id: proprietarioId,
         Conta: conta.Conta,
         codigo_reduzido: conta['Código reduzido'] || null,
@@ -75,17 +84,52 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
         Analitica: conta.Analítica,
       }));
       
-      // --- LÓGICA DE CORRELAÇÃO DE CONTAS EXISTENTES ---
+      // --- PRÉ-ANÁLISE DE DEPENDÊNCIAS ---
       
-      // 2. Buscar contas antigas que estão em uso (apenas ID e Conta)
+      // 2. Buscar contas antigas que estão em uso
       const { data: oldContas, error: oldContasError } = await supabase
           .from('plano_contas')
-          .select('id, Conta')
+          .select('id, Conta, Descricao')
           .eq('proprietario_id', proprietarioId);
           
       if (oldContasError) throw new Error('Erro ao buscar contas antigas: ' + oldContasError.message);
       
-      // 3. Limpar contas existentes para o proprietário
+      // 3. Identificar contas antigas que não estão no novo plano E que estão em uso
+      const contasAntigasEmUso: ContaAntigaEmUsoSimples[] = [];
+      
+      for (const oldConta of oldContas as PlanoContas[]) {
+          const isStillPresent = contasParaInserir.some(c => c.Conta === oldConta.Conta);
+          
+          if (!isStillPresent) {
+              // Verifica dependências (saldo_contas e lancamentos)
+              const checks = await Promise.all([
+                  supabase.from('saldo_contas').select('id', { count: 'exact', head: true }).eq('conta_contabil_id', oldConta.id),
+                  supabase.from('lancamentos').select('id', { count: 'exact', head: true }).eq('conta_contabil_id', oldConta.id),
+              ]);
+              
+              const totalDependencies = checks.reduce((sum, res) => sum + (res.count || 0), 0);
+              
+              if (totalDependencies > 0) {
+                  contasAntigasEmUso.push({
+                      id: oldConta.id,
+                      Conta: oldConta.Conta,
+                      Descricao: oldConta.Descricao,
+                      dependencies: totalDependencies,
+                  });
+              }
+          }
+      }
+      
+      // 4. Se houver contas antigas em uso que precisam de mapeamento, abre o modal
+      if (contasAntigasEmUso.length > 0) {
+          setFile(null); // Limpa o arquivo para evitar re-importação acidental
+          onOpenMapeamento(contasParaInserir, contasAntigasEmUso);
+          return;
+      }
+      
+      // 5. Se não houver dependências, procede com a importação direta (exclusão e inserção)
+      
+      // Limpar contas existentes para o proprietário
       const { error: deleteError } = await supabase
         .from('plano_contas')
         .delete()
@@ -95,67 +139,16 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
         throw new Error('Erro ao limpar contas existentes: ' + deleteError.message);
       }
 
-      // 4. Inserir novos dados e obter os novos IDs
-      const { data: newContas, error: insertError } = await supabase
+      // Inserir novos dados
+      const { error: insertError } = await supabase
         .from('plano_contas')
-        .insert(contasParaInserir)
-        .select('id, Conta');
+        .insert(contasParaInserir);
 
       if (insertError) {
         throw new Error('Erro ao inserir contas: ' + insertError.message);
       }
-      
-      // Mapeamento: Código da Conta -> ID Novo
-      const newIdMap: Record<string, string> = (newContas as PlanoContas[]).reduce((acc, c) => {
-          acc[c.Conta] = c.id;
-          return acc;
-      }, {} as Record<string, string>);
-      
-      // 5. Preparar updates para tabelas que referenciam plano_contas
-      const updatesSaldoContas: { id: string, conta_contabil_id: string }[] = [];
-      const updatesLancamentos: { id: string, conta_contabil_id: string }[] = [];
-      
-      // Itera sobre as contas antigas que estavam em uso
-      for (const oldConta of oldContas as PlanoContas[]) {
-          const newId = newIdMap[oldConta.Conta];
-          
-          // Se o código da conta existe no novo plano (correlação)
-          if (newId) {
-              // Verifica se a conta antiga estava em uso em saldo_contas
-              const { data: saldoContasInUse } = await supabase
-                  .from('saldo_contas')
-                  .select('id')
-                  .eq('proprietario_id', proprietarioId)
-                  .eq('conta_contabil_id', oldConta.id);
-                  
-              (saldoContasInUse || []).forEach(sc => {
-                  updatesSaldoContas.push({ id: sc.id, conta_contabil_id: newId });
-              });
-              
-              // Verifica se a conta antiga estava em uso em lancamentos
-              const { data: lancamentosInUse } = await supabase
-                  .from('lancamentos')
-                  .select('id')
-                  .eq('proprietario_id', proprietarioId)
-                  .eq('conta_contabil_id', oldConta.id);
-                  
-              (lancamentosInUse || []).forEach(l => {
-                  updatesLancamentos.push({ id: l.id, conta_contabil_id: newId });
-              });
-          }
-      }
-      
-      // 6. Executar updates em lote
-      if (updatesSaldoContas.length > 0) {
-          await supabase.from('saldo_contas').upsert(updatesSaldoContas, { onConflict: 'id' });
-      }
-      if (updatesLancamentos.length > 0) {
-          await supabase.from('lancamentos').upsert(updatesLancamentos, { onConflict: 'id' });
-      }
-      
-      // --- FIM LÓGICA DE CORRELAÇÃO ---
 
-      showSuccess(`Plano de Contas importado com sucesso! ${contasParaInserir.length} contas adicionadas. ${updatesSaldoContas.length + updatesLancamentos.length} referências atualizadas.`);
+      showSuccess(`Plano de Contas importado com sucesso! ${contasParaInserir.length} contas adicionadas.`);
       setFile(null);
       onImportComplete();
 
@@ -201,7 +194,7 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
           <p className="text-sm text-green-600">Arquivo selecionado: {file.name}</p>
         )}
         <p className="text-xs text-yellow-600 dark:text-yellow-400">
-            Atenção: A importação **substitui** o plano de contas existente. Contas em uso serão correlacionadas automaticamente se o código da conta for mantido.
+            Atenção: A importação **substitui** o plano de contas existente. Se houver contas antigas em uso que não estão no novo arquivo, você será solicitado a mapeá-las.
         </p>
       </CardContent>
     </Card>

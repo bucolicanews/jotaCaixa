@@ -18,6 +18,7 @@ import { useDebounce } from '@/hooks/use-debounce';
 import EditableCell from '@/components/contabilidade/EditableCell';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
+import MapeamentoPlanoContasDialog from '@/components/contabilidade/MapeamentoPlanoContasDialog'; // NOVO IMPORT
 
 // Tipo para inicializar o formulário de nova conta
 interface NovaContaInicial {
@@ -33,6 +34,14 @@ type FormInitialData = PlanoContas | (NovaContaInicial & {
     is_conta_patrimonial: boolean; // NOVO CAMPO
     is_conta_resultado: boolean;
 });
+
+// Tipo para a conta antiga em uso (para o modal)
+interface ContaAntigaEmUsoSimples {
+    id: string;
+    Conta: string;
+    Descricao: string;
+    dependencies: number;
+}
 
 // Mapeamento de cores para os níveis hierárquicos
 const NIVEL_COLORS: Record<number, string> = {
@@ -67,6 +76,11 @@ const PlanoContasPage = () => {
   const [novaContaInicial, setNovaContaInicial] = useState<NovaContaInicial | null>(null);
   
   const [dialogAberto, setDialogAberto] = useState(false);
+  
+  // NOVO ESTADO: Mapeamento de Importação
+  const [mapeamentoDialogOpen, setMapeamentoDialogOpen] = useState(false);
+  const [contasParaInserir, setContasParaInserir] = useState<Partial<PlanoContas>[]>([]);
+  const [contasAntigasEmUso, setContasAntigasEmUso] = useState<ContaAntigaEmUsoSimples[]>([]);
   
   // NOVO ESTADO: Conta clicada para navegação hierárquica
   const [contaClicada, setContaClicada] = useState<PlanoContas | null>(null);
@@ -302,6 +316,19 @@ const PlanoContasPage = () => {
   };
   
   // --- FIM Lógica de Criação Hierárquica ---
+  
+  // --- Handler para abrir o modal de mapeamento ---
+  const handleOpenMapeamento = (contasParaInserir: Partial<PlanoContas>[], contasAntigasEmUso: ContaAntigaEmUsoSimples[]) => {
+      setContasParaInserir(contasParaInserir);
+      setContasAntigasEmUso(contasAntigasEmUso);
+      setMapeamentoDialogOpen(true);
+  };
+  
+  // --- Handler para finalizar o mapeamento ---
+  const handleMapeamentoCompleto = () => {
+      setMapeamentoDialogOpen(false);
+      handleImportComplete(); // Recarrega a lista principal
+  };
 
   if (carregandoSessao) {
     return (
@@ -370,7 +397,10 @@ const PlanoContasPage = () => {
       </div>
 
       <div className="space-y-6">
-        <ImportarPlanoContas onImportComplete={handleImportComplete} />
+        <ImportarPlanoContas 
+            onImportComplete={handleImportComplete} 
+            onOpenMapeamento={handleOpenMapeamento} // PASSANDO O NOVO HANDLER
+        />
 
         <Card>
           <CardHeader>
@@ -586,6 +616,18 @@ const PlanoContasPage = () => {
           />
         </DialogContent>
       </Dialog>
+      
+      {/* NOVO MODAL DE MAPEAMENTO */}
+      {proprietarioId && (
+          <MapeamentoPlanoContasDialog
+              open={mapeamentoDialogOpen}
+              onOpenChange={setMapeamentoDialogOpen}
+              proprietarioId={proprietarioId}
+              contasParaInserir={contasParaInserir}
+              contasAntigasEmUso={contasAntigasEmUso}
+              onMapeamentoCompleto={handleMapeamentoCompleto}
+          />
+      )}
     </LayoutPrincipal>
   );
 };
