@@ -516,8 +516,8 @@ const PlanoContasPage = () => {
                 <Loader2 className="h-5 w-5 animate-spin text-primary" />
               )}
             </CardHeader>
-            <CardContent>
-              <div className="relative overflow-x-auto overflow-y-auto max-h-[80vh] rounded-md border border-border/50">
+            <CardContent className="p-0"> {/* REMOVENDO PADDING */}
+              <div className="relative overflow-x-auto overflow-y-auto max-h-[95vh] rounded-md border border-border/50"> {/* AUMENTANDO ALTURA */}
                 <table className="w-full caption-bottom text-sm">
                   <thead className="[&_tr]:border-b sticky top-0 bg-background/95 backdrop-blur-sm z-20 shadow-sm">
                     <TableRow>
