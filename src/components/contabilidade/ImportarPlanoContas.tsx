@@ -1,16 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Upload, Loader2, AlertTriangle } from 'lucide-react';
+import { Upload, Loader2 } from 'lucide-react';
 import { showSuccess, showError } from '@/utils/toast';
 import { parseFile } from '@/utils/file-parser';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { ContaCSV, ContaJSON, PlanoContas } from '@/types/plano-contas';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
-import { useMapeamentoContabil } from '@/hooks/use-mapeamento-contabil';
-import { Link } from 'react-router-dom';
 
 // Tipo para a conta antiga em uso (para o modal)
 interface ContaAntigaEmUsoSimples {
@@ -55,7 +53,6 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const { usuario, role, perfil } = useSessao();
-  const { mapeamento, loading: loadingMapeamento, refetch: refetchMapeamento } = useMapeamentoContabil();
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files[0]) {
@@ -72,25 +69,13 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
     return null;
   };
 
-  const proprietarioId = getProprietarioId();
-  
-  // Verifica se o mapeamento de Nível 1 está completo (6 entradas não nulas)
-  const isMapeamentoCompleto = mapeamento.filter(m => m.tipo_natureza !== 'Nenhum').length >= 6;
-  
-  // Adicionando useEffect para garantir que o mapeamento seja buscado
-  useEffect(() => {
-      if (proprietarioId) {
-          refetchMapeamento();
-      }
-  }, [proprietarioId, refetchMapeamento]);
-
-
   const handleImport = async () => {
     if (!file) {
       showError('Por favor, selecione um arquivo CSV ou JSON.');
       return;
     }
     
+    const proprietarioId = getProprietarioId();
     if (!proprietarioId) {
       showError('Usuário não autenticado ou sem empresa vinculada.');
       setLoading(false);
@@ -116,16 +101,22 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
           return;
       }
       
-      // 2. Buscar Máscara
-      const { data: mascaraRes, error: mascaraError } = await supabase
-          .from('configuracao_plano_contas')
-          .select('mascara_codigo')
-          .eq('proprietario_id', proprietarioId)
-          .limit(1)
-          .single();
-          
-      if (mascaraError && mascaraError.code !== 'PGRST116') throw mascaraError;
-      const mascara = mascaraRes?.mascara_codigo || null;
+      // 2. Buscar Mapeamento Contábil e Máscara
+      const [mapeamentoRes, mascaraRes] = await Promise.all([
+          supabase.from('configuracao_contabil').select('codigo_nivel_1, tipo_natureza').eq('proprietario_id', proprietarioId),
+          supabase.from('configuracao_plano_contas').select('mascara_codigo').eq('proprietario_id', proprietarioId).limit(1).single(),
+      ]);
+      
+      if (mapeamentoRes.error) throw mapeamentoRes.error;
+      
+      const mascara = mascaraRes.data?.mascara_codigo || null;
+      
+      const mapeamentoMap = (mapeamentoRes.data || []).reduce((acc, item) => {
+          acc[item.codigo_nivel_1] = item.tipo_natureza;
+          return acc;
+      }, {} as Record<string, string>);
+      
+      const mapeamentoCompleto = Object.keys(mapeamentoMap).length === 6;
       
       // 3. Mapear dados para o formato do banco de dados e INFERIR FLAGS
       const contasParaInserir: Partial<PlanoContas>[] = (parsedData as (ContaCSV | ContaJSON)[]).map(conta => {
@@ -145,13 +136,13 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
         
         if (isAnalitica) {
             const nivel1 = contaCodigo.split('.')[0];
-            const natureza = mapeamento.find(m => m.codigo_nivel_1 === nivel1)?.tipo_natureza;
+            const natureza = mapeamentoMap[nivel1];
             
             if (natureza) {
                 if (natureza === 'Ativo' || natureza === 'Passivo' || natureza === 'Patrimonio Liquido') {
                     is_conta_patrimonial = true;
                 }
-                if (natureza === 'Receita' || natureza === 'Despesa' || natureza === 'Resultado') {
+                if (natureza === 'Receita' || natureza === 'Despesa') {
                     is_conta_resultado = true;
                 }
                 if (natureza === 'Ativo') {
@@ -181,7 +172,7 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
       const hasNiveisAcimaDe2 = maxNivelImportado > 2;
       
       // REGRA DE BLOQUEIO: Se o arquivo importado tiver níveis além do Nível 2 E o mapeamento estiver incompleto, bloqueia.
-      if (hasNiveisAcimaDe2 && !isMapeamentoCompleto) {
+      if (hasNiveisAcimaDe2 && !mapeamentoCompleto) {
           showError('O Plano de Contas importado contém níveis além do Nível 2, mas o Mapeamento Contábil (1 a 6) está incompleto. Corrija o Plano de Contas ou complete o mapeamento em Configurações > Contabilidade.');
           setLoading(false);
           return;
@@ -201,25 +192,14 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
       }
       
       // 6. Adicionar Níveis Faltantes (3 a 6) se o arquivo for simplificado (Nível 1 e 2) E o mapeamento estiver completo
-      if (!hasNiveisAcimaDe2 && isMapeamentoCompleto) {
+      if (!hasNiveisAcimaDe2 && mapeamentoCompleto) {
           const existingNivel1 = new Set(contasParaInserir.map(c => c.Conta?.split('.')[0]).filter(Boolean));
           
           const niveisFaltantes: Partial<PlanoContas>[] = [];
           
-          // Lista de naturezas para inferir a descrição
-          const NATUREZAS = [
-              { value: 'Ativo', label: 'Ativo (Balanço)' },
-              { value: 'Passivo', label: 'Passivo (Balanço)' },
-              { value: 'Patrimonio Liquido', label: 'Patrimônio Líquido (Balanço)' },
-              { value: 'Receita', label: 'Receita (DRE)' },
-              { value: 'Despesa', label: 'Despesa (DRE)' },
-              { value: 'Resultado', label: 'Resultado (Lucro/Prejuízo)' },
-              { value: 'Nenhum', label: 'Nenhum (Ignorar Nível)' },
-          ];
-
           for (const code of ['3', '4', '5', '6']) {
               if (!existingNivel1.has(code)) {
-                  const natureza = mapeamento.find(m => m.codigo_nivel_1 === code)?.tipo_natureza;
+                  const natureza = mapeamentoMap[code];
                   if (natureza && natureza !== 'Nenhum') {
                       niveisFaltantes.push({
                           proprietario_id: proprietarioId,
@@ -367,19 +347,6 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
         <p className="text-sm text-muted-foreground">
           Selecione um arquivo CSV (<code>Conta;Código reduzido;Descrição;Analítica</code>) ou JSON (array de objetos).
         </p>
-        
-        {loadingMapeamento ? (
-            <div className="flex justify-center items-center h-10"><Loader2 className="h-4 w-4 animate-spin text-primary" /></div>
-        ) : !isMapeamentoCompleto && proprietarioId ? (
-            <div className="p-3 bg-red-100 dark:bg-red-900/20 border border-red-500 rounded-md text-sm text-red-700 dark:text-red-300 flex items-start">
-                <AlertTriangle className="w-5 h-5 mr-2 flex-shrink-0" />
-                <p className="flex-1">O Mapeamento Contábil (1 a 6) está incompleto. Complete-o em <Link to="/configuracoes" className="underline font-semibold">Configurações &gt; Contabilidade</Link> para garantir a correta inferência das flags de DRE/Balanço.</p>
-                <Button variant="link" size="sm" onClick={refetchMapeamento} disabled={loadingMapeamento} className="ml-auto p-0 h-auto text-red-700 dark:text-red-300">
-                    Tentar Recarregar Mapeamento
-                </Button>
-            </div>
-        ) : null}
-        
         <div className="flex items-center space-x-2">
           <Input 
             id="csv-file" 
@@ -391,7 +358,7 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
           />
           <Button 
             onClick={handleImport} 
-            disabled={!file || loading || !proprietarioId}
+            disabled={!file || loading || !getProprietarioId()}
           >
             {loading ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -411,5 +378,16 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
     </Card>
   );
 };
+
+// Adicionando a lista de naturezas para o passo 6 (criação de níveis faltantes)
+const NATUREZAS = [
+    { value: 'Ativo', label: 'Ativo (Balanço)' },
+    { value: 'Passivo', label: 'Passivo (Balanço)' },
+    { value: 'Patrimonio Liquido', label: 'Patrimônio Líquido (Balanço)' },
+    { value: 'Receita', label: 'Receita (DRE)' },
+    { value: 'Despesa', label: 'Despesa (DRE)' },
+    { value: 'Resultado', label: 'Resultado (Lucro/Prejuízo)' },
+    { value: 'Nenhum', label: 'Nenhum (Ignorar Nível)' },
+];
 
 export default ImportarPlanoContas;
