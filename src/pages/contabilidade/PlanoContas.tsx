@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-// IMPORTAÇÕES DE TABELA REMOVIDAS/AJUSTADAS
 import { Loader2, Edit, Trash2, PlusCircle, Filter, Search, ArrowUp, ArrowDown } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
@@ -19,7 +18,7 @@ import EditableCell from '@/components/contabilidade/EditableCell';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import MapeamentoPlanoContasDialog from '@/components/contabilidade/MapeamentoPlanoContasDialog';
-import MapeamentoManualPlanoContasDialog from '@/components/contabilidade/MapeamentoManualPlanoContasDialog'; // NOVO IMPORT
+import MapeamentoManualPlanoContasDialog from '@/components/contabilidade/MapeamentoManualPlanoContasDialog';
 
 // Tipo para inicializar o formulário de nova conta
 interface NovaContaInicial {
@@ -31,8 +30,8 @@ interface NovaContaInicial {
 type FormInitialData = PlanoContas | (NovaContaInicial & {
     codigo_reduzido: string;
     Descricao: string;
-    is_conta_caixa_banco: boolean; // RENOMEADO
-    is_conta_patrimonial: boolean; // NOVO CAMPO
+    is_conta_caixa_banco: boolean;
+    is_conta_patrimonial: boolean;
     is_conta_resultado: boolean;
 });
 
@@ -448,8 +447,8 @@ const PlanoContasPage = () => {
             Analitica: novaContaInicial.Analitica,
             codigo_reduzido: '', 
             Descricao: '', 
-            is_conta_caixa_banco: false, // RENOMEADO
-            is_conta_patrimonial: false, // NOVO CAMPO
+            is_conta_caixa_banco: false,
+            is_conta_patrimonial: false,
             is_conta_resultado: false 
         } as FormInitialData
         : null);
@@ -483,7 +482,7 @@ const PlanoContasPage = () => {
       <div className="space-y-6">
         <ImportarPlanoContas 
             onImportComplete={handleImportComplete} 
-            onOpenMapeamento={handleOpenMapeamento} // PASSANDO O NOVO HANDLER
+            onOpenMapeamento={handleOpenMapeamento}
         />
 
         <Card>
@@ -539,9 +538,9 @@ const PlanoContasPage = () => {
                     <TableHead className="w-[100px]">Cód. Reduzido</TableHead>
                     <TableHead>Descrição</TableHead>
                     <TableHead className="w-[100px] text-center">Analítica</TableHead>
-                    <TableHead className="w-[100px] text-center">Conta Caixa/Banco</TableHead>
-                    <TableHead className="w-[100px] text-center">Conta Patrimonial</TableHead>
-                    <TableHead className="w-[100px] text-center">Conta de Resultado</TableHead>
+                    <TableHead className="w-[100px] text-center">Caixa/Banco</TableHead>
+                    <TableHead className="w-[100px] text-center">Patrimonial</TableHead>
+                    <TableHead className="w-[100px] text-center">Resultado</TableHead>
                     <TableHead className="w-[100px] text-right">Ações</TableHead>
                   </TableRow>
                 </thead>
