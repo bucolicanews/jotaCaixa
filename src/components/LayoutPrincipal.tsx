@@ -49,9 +49,9 @@ const LayoutPrincipal: React.FC<LayoutPrincipalProps> = ({ children }) => {
 
   if (isPendingClient) {
     return (
-      <div className="flex flex-col min-h-screen bg-background">
+      <div className="flex flex-col min-h-screen w-full bg-background">
         <Header />
-        <main className="flex-1 p-4 md:p-8 overflow-y-auto flex items-center justify-center">
+        <main className="flex-1 p-4 md:p-8 overflow-y-auto flex items-center justify-center w-full">
           <Card className="w-full max-w-lg text-center">
             <CardHeader>
               <CardTitle className="text-2xl">Aguardando Aprovação</CardTitle>
@@ -74,9 +74,9 @@ const LayoutPrincipal: React.FC<LayoutPrincipalProps> = ({ children }) => {
   
   if (isAccessExpired || isAccessBlocked) {
       return (
-        <div className="flex flex-col min-h-screen bg-background">
+        <div className="flex flex-col min-h-screen w-full bg-background">
           <Header />
-          <main className="flex-1 p-4 md:p-8 overflow-y-auto flex items-center justify-center">
+          <main className="flex-1 p-4 md:p-8 overflow-y-auto flex items-center justify-center w-full">
             <Card className="w-full max-w-lg text-center border-red-500">
               <CardHeader>
                 <CardTitle className="text-2xl text-destructive">Acesso Bloqueado</CardTitle>
@@ -114,7 +114,7 @@ const LayoutPrincipal: React.FC<LayoutPrincipalProps> = ({ children }) => {
       <TrialBanner />
       
       {/* Conteúdo Principal (Rolável) */}
-      <main className={cn("flex-1 p-4 md:p-8 w-full")}>
+      <main className={cn("flex-1 p-4 md:p-8 w-full overflow-x-hidden")}>
         {children}
       </main>
       
