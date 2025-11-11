@@ -11,7 +11,6 @@ import {
   Search,
   ArrowUp,
   ArrowRight,
-  BookOpen,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
@@ -27,13 +26,21 @@ import { useDebounce } from '@/hooks/use-debounce';
 import EditableCell from '@/components/contabilidade/EditableCell';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
-import EditableSelectCell from '@/components/contabilidade/EditableSelectCell'; // NOVO IMPORT
 
 // Tipo para inicializar o formulário de nova conta
 interface NovaContaInicial {
     Conta: string;
     Analitica: 'Sim' | 'Não';
 }
+
+// Tipo para os dados que o FormPlanoContas realmente precisa para inicializar
+type FormInitialData = PlanoContas | (NovaContaInicial & {
+    codigo_reduzido: string;
+    Descricao: string;
+    is_conta_caixa_banco: boolean; // RENOMEADO
+    is_conta_patrimonial: boolean; // NOVO CAMPO
+    is_conta_resultado: boolean;
+});
 
 // Mapeamento de cores para os níveis hierárquicos
 const NIVEL_COLORS: Record<number, string> = {
@@ -118,7 +125,7 @@ const PlanoContasPage = () => {
         .select('mascara_codigo')
         .eq('proprietario_id', id)
         .limit(1)
-        .maybeSingle();
+        .maybeSingle(); // USANDO maybeSingle()
         
     if (error) {
         console.error('Erro ao buscar máscara:', error);
@@ -229,300 +236,481 @@ const PlanoContasPage = () => {
   const handleDelete = async (id: string) => {
     if (!window.confirm('Tem certeza que deseja excluir esta conta?')) return;
 
+    // CORREÇÃO CRÍTICA: Antes de deletar, setar as FKs para NULL
     try {
         // 1. Anular referências em tabelas dependentes
         await supabase.from('saldo_contas').update({ conta_contabil_id: null }).eq('conta_contabil_id', id);
         await supabase.from('lancamentos').update({ conta_contabil_id: null }).eq('conta_contabil_id', id);
         await supabase.from('configuracao_contas_receber').update({ conta_contabil_id: null }).eq('conta_contabil_id', id);
         await supabase.from('configuracao_contas_pagar').update({ conta_contabil_id: null }).eq('conta_contabil_id', id);
+        await supabase.from('configuracoes_stripe').update({ conta_sintetica_id: null }).eq('conta_sintetica_id', id);
+        await supabase.from('configuracoes_stripe').update({ conta_receber_id: null }).eq('conta_receber_id', id);
         
         // 2. Deletar a conta
-        const { error: deleteError } = await supabase
+        const { error } = await supabase
             .from('plano_contas')
             .delete()
             .eq('id', id);
 
-        if (deleteError) throw deleteError;
+        if (error) throw error;
 
         showSuccess('Conta excluída com sucesso.');
-        if (proprietarioId) {
-            buscarPlanoContas(proprietarioId);
-        }
+        handleImportComplete();
     } catch (error: any) {
-        console.error('Erro ao excluir conta:', error);
-        showError('Falha ao excluir conta: ' + error.message);
-    }
-  };
-
-  // Função para lidar com o clique na conta (para navegação hierárquica)
-  const handleContaClick = (conta: PlanoContas) => {
-    if (conta.Analitica === 'Não') {
-        setContaClicada(conta);
-        setPopoverOpen(true);
-    } else {
-        // Se for analítica, não faz nada ou abre edição
-        handleEdit(conta);
+        showError('Erro ao excluir conta: ' + error.message);
     }
   };
   
-  // Função para criar nova conta abaixo (filha)
-  const handleNovaContaAbaixo = (contaPai: PlanoContas) => {
-      setNovaContaInicial({
-          Conta: contaPai.Conta + '.', 
-          Analitica: 'Sim', 
-      });
-      setContaSelecionada(null);
-      setDialogAberto(true);
-      setPopoverOpen(false);
+  // --- Lógica de Criação Hierárquica ---
+  
+  const handleRowClick = (conta: PlanoContas) => {
+      setContaClicada(conta);
+      setPopoverOpen(true);
   };
   
-  // Função para criar nova conta no mesmo nível (irmã)
-  const handleNovaContaNivel = (contaIrma: PlanoContas) => {
-      const partes = contaIrma.Conta.split('.');
-      partes.pop(); 
-      const prefixo = partes.join('.');
+  const handleOpenNewConta = (nivel: 'acima' | 'abaixo' | 'mesmo') => {
+      if (!contaClicada) return;
       
-      setNovaContaInicial({
-          Conta: prefixo + '.', 
-          Analitica: contaIrma.Analitica, 
-      });
-      setContaSelecionada(null);
+      const parts = contaClicada.Conta.split('.').filter(p => p.length > 0);
+      const nivelAtual = parts.length;
+      let novoCodigo = '';
+      let novaAnalitica: 'Sim' | 'Não' = 'Não';
+      
+      // 1. Determinar a máscara de padding
+      const maskParts = mascaraAtiva?.split('.') || [];
+      
+      if (maskParts.length === 0) {
+          showError("A máscara de código não foi carregada. Verifique as configurações.");
+          setPopoverOpen(false);
+          return;
+      }
+      
+      // Função auxiliar para calcular o próximo segmento
+      const calculateNextSegment = (prefixo: string, nivelSegmento: number, paddingLength: number): string => {
+          const prefixoBusca = prefixo ? prefixo + '.' : '';
+          // Filtra contas que são filhas diretas do prefixo (ou contas de nível 1 se prefixo vazio)
+          const contasFilhas = contas.filter(c => {
+              const cParts = c.Conta.split('.').filter(p => p.length > 0);
+              
+              // Se estamos buscando o nível 1 (prefixo vazio), queremos todas as contas de nível 1
+              if (!prefixo && nivelSegmento === 0) {
+                  return cParts.length >= 1;
+              }
+              
+              // Se estamos buscando contas filhas, o código deve começar com o prefixo + '.'
+              return c.Conta.startsWith(prefixoBusca);
+          });
+          
+          let maxSegmento = 0;
+          if (contasFilhas.length > 0) {
+              maxSegmento = contasFilhas.reduce((max, c) => {
+                  const cParts = c.Conta.split('.').filter(p => p.length > 0);
+                  // O índice do segmento é nivelSegmento (0 para nível 1, 1 para nível 2, etc.)
+                  if (cParts.length > nivelSegmento) {
+                      return Math.max(max, parseInt(cParts[nivelSegmento], 10));
+                  }
+                  return max;
+              }, 0);
+          }
+          
+          const novoSegmentoNumerico = maxSegmento + 1;
+          return String(novoSegmentoNumerico).padStart(paddingLength, '0');
+      };
+      
+      if (nivel === 'abaixo') {
+          // Lógica mantida, mas o botão foi removido da UI
+          
+          const nivelSegmento = nivelAtual; // O novo segmento é o índice nivelAtual
+          
+          if (nivelSegmento >= maskParts.length) {
+              showError(`Não é possível criar um nível abaixo. A máscara só define até o nível ${maskParts.length}.`);
+              setPopoverOpen(false);
+              return;
+          }
+          
+          const paddingLength = maskParts[nivelSegmento].length; 
+          
+          const novoSegmento = calculateNextSegment(contaClicada.Conta, nivelSegmento, paddingLength);
+          
+          novoCodigo = contaClicada.Conta + '.' + novoSegmento;
+          novaAnalitica = 'Sim'; // Sugere analítica para o próximo nível
+          
+      } else if (nivel === 'acima' || nivel === 'mesmo') {
+          // Nível Acima (Mesmo Nível): Incrementa o último segmento do código do pai
+          
+          const nivelSegmento = nivelAtual - 1; // O segmento a ser incrementado é o último
+          
+          if (nivelSegmento < 0) {
+              showError('Não é possível criar um nível acima do nível 1.');
+              setPopoverOpen(false);
+              return;
+          }
+          
+          const codigoPai = parts.slice(0, nivelSegmento).join('.');
+          
+          // CORREÇÃO DE PADDING: Garante que o paddingLength seja extraído corretamente da máscara
+          const maskSegment = maskParts[nivelSegmento];
+          
+          if (!maskSegment) {
+             showError(`A máscara (${mascaraAtiva}) não define o formato para o nível ${nivelAtual}.`);
+             setPopoverOpen(false);
+             return;
+          }
+          
+          const paddingLength = maskSegment.length; // Usa o tamanho exato do segmento da máscara (e.g., 2 para '00')
+          
+          const novoSegmento = calculateNextSegment(codigoPai, nivelSegmento, paddingLength);
+          
+          if (nivelSegmento === 0) {
+              novoCodigo = novoSegmento;
+          } else {
+              novoCodigo = `${codigoPai}.${novoSegmento}`;
+          }
+          
+          novaAnalitica = 'Não'; // Sugere sintética para o mesmo nível
+      }
+      
+      setContaSelecionada(null); // Garante que é uma nova conta
+      setNovaContaInicial({ Conta: novoCodigo, Analitica: novaAnalitica }); // Define os valores iniciais
       setDialogAberto(true);
       setPopoverOpen(false);
   };
+  
+  // --- FIM Lógica de Criação Hierárquica ---
 
-  // Renderização da Tabela
-  const renderTabela = () => {
-    if (carregandoContas) {
-      return (
+  if (carregandoSessao) {
+    return (
+      <LayoutPrincipal>
         <div className="flex justify-center items-center h-64">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
-      );
-    }
-
-    if (contas.length === 0) {
-      return (
-        <p className="text-center text-gray-500 mt-8">
-          Nenhuma conta encontrada. Comece importando ou cadastrando uma nova.
-        </p>
-      );
-    }
-
-    return (
-      <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-          <thead>
-            <TableRow className="bg-gray-50 dark:bg-gray-800 sticky top-0 z-10">
-              <TableHead className="w-[150px]">Conta</TableHead>
-              <TableHead className="w-[100px] text-center">Reduzido</TableHead>
-              <TableHead>Descrição</TableHead>
-              <TableHead className="w-[100px] text-center">Analítica</TableHead>
-              <TableHead className="w-[100px] text-center">Ações</TableHead>
-            </TableRow>
-          </thead>
-          <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-            {contas.map((conta) => {
-              const nivel = conta.Conta.split('.').length;
-              const isContaPai = conta.Analitica === 'Não';
-              
-              return (
-                <TableRow 
-                  key={conta.id} 
-                  className={cn(
-                    NIVEL_COLORS[nivel] || 'hover:bg-gray-50/50',
-                    isContaPai && 'font-semibold'
-                  )}
-                >
-                  <TableCell 
-                    className={cn(
-                        "font-mono cursor-pointer",
-                        isContaPai && "text-primary hover:underline"
-                    )}
-                    onClick={() => handleContaClick(conta)}
-                  >
-                    {conta.Conta}
-                  </TableCell>
-                  
-                  <TableCell className="text-center">
-                    <EditableCell
-                      id={conta.id}
-                      initialValue={conta.codigo_reduzido}
-                      fieldName="codigo_reduzido"
-                      onSaveSuccess={handleInlineSaveSuccess}
-                      isEditable={true} 
-                    />
-                  </TableCell>
-                  
-                  <TableCell>
-                    <EditableCell
-                      id={conta.id}
-                      initialValue={conta.Descricao}
-                      fieldName="Descricao"
-                      onSaveSuccess={handleInlineSaveSuccess}
-                      isEditable={true} 
-                    />
-                  </TableCell>
-                  
-                  {/* AQUI: USANDO O NOVO COMPONENTE PARA EDIÇÃO INLINE DE SELEÇÃO */}
-                  <TableCell className="text-center">
-                    <EditableSelectCell
-                      id={conta.id}
-                      initialValue={conta.Analitica as 'Sim' | 'Não'}
-                      fieldName="Analitica"
-                      onSaveSuccess={handleInlineSaveSuccess}
-                      isEditable={true} 
-                    />
-                  </TableCell>
-                  
-                  <TableCell className="text-center">
-                    <div className="flex justify-center space-x-2">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleEdit(conta)}
-                        title="Editar Conta"
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleDelete(conta.id)}
-                        title="Excluir Conta"
-                        className="text-red-500 hover:text-red-700"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      </LayoutPrincipal>
     );
-  };
+  }
+
+  if (!proprietarioId) {
+    return (
+      <LayoutPrincipal>
+        <Card>
+          <CardHeader>
+            <CardTitle>Plano de Contas</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-red-500">Não foi possível carregar o ID da empresa/proprietário. Verifique se o usuário está vinculado.</p>
+          </CardContent>
+        </Card>
+      </LayoutPrincipal>
+    );
+  }
+  
+  // Determina os valores iniciais do formulário de diálogo
+  const initialFormValues: PlanoContas | FormInitialData | null = contaSelecionada 
+    ? contaSelecionada 
+    : (novaContaInicial 
+        ? { 
+            Conta: novaContaInicial.Conta, 
+            Analitica: novaContaInicial.Analitica,
+            codigo_reduzido: '', 
+            Descricao: '', 
+            is_conta_caixa_banco: false, // RENOMEADO
+            is_conta_patrimonial: false, // NOVO CAMPO
+            is_conta_resultado: false 
+        } as FormInitialData
+        : null);
 
   return (
     <LayoutPrincipal>
-      <h1 className="text-2xl md:text-3xl font-bold mb-6 flex items-center">
-        <BookOpen className="w-6 h-6 mr-2" /> Plano de Contas
-      </h1>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+        <h1 className="text-2xl md:text-3xl font-bold">Plano de Contas</h1>
+        <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
+          <DialogTrigger asChild>
+            <Button onClick={() => { setContaSelecionada(null); setNovaContaInicial(null); }} className="w-full sm:w-auto">
+              <PlusCircle className="w-4 h-4 mr-2" />
+              Nova Conta
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>{(initialFormValues as PlanoContas)?.id ? 'Editar Conta' : 'Nova Conta'}</DialogTitle>
+            </DialogHeader>
+            <FormPlanoContas 
+              proprietarioId={proprietarioId}
+              contaInicial={initialFormValues as PlanoContas | null}
+              onSaveComplete={handleSaveComplete}
+            />
+          </DialogContent>
+        </Dialog>
+      </div>
 
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-xl font-medium">
-            Contas Contábeis ({contas.length})
-          </CardTitle>
-          <div className="flex space-x-2">
-            <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
-              <DialogTrigger asChild>
-                <Button 
-                  size="sm" 
-                  className="h-8 gap-1"
-                  onClick={() => {
-                    setContaSelecionada(null);
-                    setNovaContaInicial(null);
-                  }}
-                >
-                  <PlusCircle className="h-4 w-4" />
-                  <span className="hidden sm:inline">Nova Conta</span>
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[600px]">
-                <DialogHeader>
-                  <DialogTitle>{contaSelecionada ? 'Editar Conta' : 'Cadastrar Nova Conta'}</DialogTitle>
-                </DialogHeader>
-                {proprietarioId && (
-                  <FormPlanoContas 
-                    proprietarioId={proprietarioId}
-                    initialData={contaSelecionada || novaContaInicial}
-                    onSaveSuccess={handleSaveComplete}
-                    mascaraAtiva={mascaraAtiva}
-                  />
-                )}
-              </DialogContent>
-            </Dialog>
-            
-            {proprietarioId && (
-              <ImportarPlanoContas 
-                proprietarioId={proprietarioId} 
-                onImportComplete={handleImportComplete} 
-              />
-            )}
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col md:flex-row gap-4 mb-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Buscar por Conta, Código ou Descrição..."
-                value={filtroTexto}
-                onChange={(e) => setFiltroTexto(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-            <div className="flex gap-4">
+      {/* GRID MODERNO DE DUAS COLUNAS */}
+      <div className="grid grid-cols-1 lg:grid-cols-[30%_70%] gap-6 items-start">
+        
+        {/* COLUNA ESQUERDA */}
+        <div className="space-y-6">
+          {/* IMPORTAR PLANO DE CONTAS */}
+          <Card className="shadow-md border border-border/50">
+            <CardHeader>
+              <CardTitle className="text-lg font-semibold flex items-center">
+                <ArrowRight className="w-4 h-4 mr-2 text-muted-foreground" />
+                Importar Plano de Contas
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ImportarPlanoContas onImportComplete={handleImportComplete} />
+            </CardContent>
+          </Card>
+
+          {/* FILTROS */}
+          <Card className="shadow-md border border-border/50">
+            <CardHeader>
+              <CardTitle className="text-lg font-semibold flex items-center">
+                <Filter className="w-4 h-4 mr-2 text-muted-foreground" />
+                Filtros
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar por conta, código ou descrição..."
+                  value={filtroTexto}
+                  onChange={(e) => setFiltroTexto(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
               <Select value={filtroTipoConta} onValueChange={setFiltroTipoConta}>
-                <SelectTrigger className="w-[180px]">
-                  <Filter className="h-4 w-4 mr-2" />
+                <SelectTrigger>
                   <SelectValue placeholder="Filtrar por Tipo" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="todos">Todos os Tipos</SelectItem>
-                  <SelectItem value="ativo">Ativo (1)</SelectItem>
-                  <SelectItem value="passivo">Passivo (2)</SelectItem>
-                  <SelectItem value="receita">Receita (3)</SelectItem>
-                  <SelectItem value="despesa">Despesa (4)</SelectItem>
+                  <SelectItem value="ativo">Ativo (Inicia com 1)</SelectItem>
+                  <SelectItem value="passivo">Passivo (Inicia com 2)</SelectItem>
+                  <SelectItem value="receita">Receita (Inicia com 3)</SelectItem>
+                  <SelectItem value="despesa">Despesa (Inicia com 4)</SelectItem>
                 </SelectContent>
               </Select>
+
               <Select value={filtroAnalitica} onValueChange={setFiltroAnalitica}>
-                <SelectTrigger className="w-[150px]">
-                  <SelectValue placeholder="Filtrar Analítica" />
+                <SelectTrigger>
+                  <SelectValue placeholder="Filtrar por Analítica" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="todos">Todas</SelectItem>
-                  <SelectItem value="Sim">Analítica (Sim)</SelectItem>
-                  <SelectItem value="Não">Sintética (Não)</SelectItem>
+                  <SelectItem value="todos">Todas (Analítica)</SelectItem>
+                  <SelectItem value="Sim">Sim</SelectItem>
+                  <SelectItem value="Não">Não</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
-          </div>
-          
-          {renderTabela()}
-          
-          {/* Popover para Ações Hierárquicas */}
-          <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
-            <PopoverTrigger asChild>
-                {/* Trigger invisível, ativado via estado */}
-                <Button variant="ghost" className="hidden" />
-            </PopoverTrigger>
-            <PopoverContent className="w-64 p-2" align="start" side="right">
-                <p className="text-sm font-semibold mb-2">Ações para {contaClicada?.Conta}</p>
-                <div className="flex flex-col space-y-1">
-                    <Button 
-                        variant="ghost" 
-                        className="justify-start"
-                        onClick={() => contaClicada && handleNovaContaAbaixo(contaClicada)}
-                    >
-                        <ArrowRight className="h-4 w-4 mr-2" /> Adicionar Conta Abaixo
-                    </Button>
-                    <Button 
-                        variant="ghost" 
-                        className="justify-start"
-                        onClick={() => contaClicada && handleNovaContaNivel(contaClicada)}
-                    >
-                        <ArrowUp className="h-4 w-4 mr-2" /> Adicionar Conta no Mesmo Nível
-                    </Button>
-                </div>
-            </PopoverContent>
-          </Popover>
-          
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* COLUNA DIREITA */}
+        <div>
+          <Card className="shadow-md border border-border/50">
+            <CardHeader className="flex justify-between items-center">
+              <CardTitle className="text-xl font-semibold">
+                Contas Cadastradas ({contas.length})
+              </CardTitle>
+              {carregandoContas && (
+                <Loader2 className="h-5 w-5 animate-spin text-primary" />
+              )}
+            </CardHeader>
+            <CardContent className="p-0"> {/* REMOVENDO PADDING */}
+              <div className="relative overflow-x-auto overflow-y-auto max-h-[95vh] rounded-md border border-border/50"> {/* AUMENTANDO ALTURA */}
+                <table className="w-full caption-bottom text-sm">
+                  <thead className="[&_tr]:border-b sticky top-0 bg-background/95 backdrop-blur-sm z-20 shadow-sm">
+                    <TableRow>
+                      <TableHead className="w-[150px]">Conta</TableHead>
+                      <TableHead className="w-[100px]">Cód. Reduzido</TableHead>
+                      <TableHead>Descrição</TableHead>
+                      <TableHead className="w-[100px] text-center">Analítica</TableHead>
+                      <TableHead className="w-[100px] text-center">Caixa/Banco</TableHead>
+                      <TableHead className="w-[100px] text-center">Patrimonial</TableHead>
+                      <TableHead className="w-[100px] text-center">Resultado</TableHead>
+                      <TableHead className="w-[100px] text-right">Ações</TableHead>
+                    </TableRow>
+                  </thead>
+                  <tbody className="[&_tr:last-child]:border-0">
+                    {carregandoContas ? (
+                      <TableRow>
+                        <TableCell colSpan={8} className="text-center py-8">
+                          <Loader2 className="h-6 w-6 animate-spin mx-auto text-primary" />
+                        </TableCell>
+                      </TableRow>
+                    ) : contas.length === 0 ? (
+                      <TableRow>
+                        <TableCell
+                          colSpan={8}
+                          className="text-center py-4 text-muted-foreground"
+                        >
+                          Nenhuma conta encontrada com os filtros aplicados.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      contas.map((conta) => {
+                        const nivel = conta.Conta.split('.').filter((p) => p.length > 0)
+                          .length;
+                        const nivelClass =
+                          NIVEL_COLORS[nivel] || 'hover:bg-secondary/50';
+                        const paddingLeft = (nivel - 1) * 10;
+                        const rowClassName = cn(
+                          nivelClass,
+                          contaClicada?.id === conta.id &&
+                            popoverOpen &&
+                            'bg-secondary/50'
+                        );
+
+                        return (
+                          <Popover
+                            open={contaClicada?.id === conta.id && popoverOpen}
+                            onOpenChange={setPopoverOpen}
+                            key={conta.id}
+                          >
+                            <PopoverTrigger asChild>
+                              <TableRow
+                                onClick={() => handleRowClick(conta)}
+                                className={cn('cursor-pointer', rowClassName)}
+                              >
+                                <TableCell
+                                  className="font-mono text-sm"
+                                  style={{ paddingLeft: `${paddingLeft + 16}px` }}
+                                >
+                                  <EditableCell
+                                    id={conta.id}
+                                    initialValue={conta.Conta}
+                                    fieldName="Conta"
+                                    onSaveSuccess={handleInlineSaveSuccess}
+                                    isEditable={true}
+                                    className="font-mono text-sm"
+                                  />
+                                </TableCell>
+                                <TableCell className="text-sm">
+                                  <EditableCell
+                                    id={conta.id}
+                                    initialValue={conta.codigo_reduzido}
+                                    fieldName="codigo_reduzido"
+                                    onSaveSuccess={handleInlineSaveSuccess}
+                                    isEditable={true}
+                                  />
+                                </TableCell>
+                                <TableCell>
+                                  <EditableCell
+                                    id={conta.id}
+                                    initialValue={conta.Descricao}
+                                    fieldName="Descricao"
+                                    onSaveSuccess={handleInlineSaveSuccess}
+                                    isEditable={true}
+                                  />
+                                </TableCell>
+                                <TableCell className="text-center">
+                                  {conta.Analitica}
+                                </TableCell>
+                                
+                                <TableCell className="text-center">
+                                  {conta.Analitica === 'Sim' ? (
+                                    <EditableCell
+                                      id={conta.id}
+                                      initialValue={conta.is_conta_caixa_banco}
+                                      fieldName="is_conta_caixa_banco"
+                                      onSaveSuccess={handleInlineSaveSuccess}
+                                      isEditable={true}
+                                    />
+                                  ) : (
+                                    '-'
+                                  )}
+                                </TableCell>
+                                
+                                {/* NOVA COLUNA: CONTA PATRIMONIAL */}
+                                <TableCell className="text-center">
+                                  {conta.Analitica === 'Sim' ? (
+                                    <EditableCell
+                                      id={conta.id}
+                                      initialValue={conta.is_conta_patrimonial}
+                                      fieldName="is_conta_patrimonial"
+                                      onSaveSuccess={handleInlineSaveSuccess}
+                                      isEditable={true}
+                                    />
+                                  ) : (
+                                    '-'
+                                  )}
+                                </TableCell>
+                                
+                                <TableCell className="text-center">
+                                  {conta.Analitica === 'Sim' ? (
+                                    <EditableCell
+                                      id={conta.id}
+                                      initialValue={conta.is_conta_resultado}
+                                      fieldName="is_conta_resultado"
+                                      onSaveSuccess={handleInlineSaveSuccess}
+                                      isEditable={true}
+                                    />
+                                  ) : (
+                                    '-'
+                                  )}
+                                </TableCell>
+                                
+                                <TableCell className="text-right">
+                                  <div className="flex justify-end space-x-2">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleEdit(conta);
+                                      }}
+                                      title="Editar Conta"
+                                    >
+                                      <Edit className="w-4 h-4" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDelete(conta.id);
+                                      }}
+                                      title="Excluir Conta"
+                                    >
+                                      <Trash2 className="w-4 h-4 text-red-500" />
+                                    </Button>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-2 flex flex-col space-y-1" align="end">
+                              <Button variant="ghost" size="sm" onClick={() => handleOpenNewConta('mesmo')}>
+                                <ArrowRight className="w-4 h-4 mr-2" /> Criar Conta Mesmo Nível
+                              </Button>
+                              <Button variant="ghost" size="sm" onClick={() => handleOpenNewConta('acima')}>
+                                <ArrowUp className="w-4 h-4 mr-2" /> Criar Conta Nível Acima
+                              </Button>
+                            </PopoverContent>
+                          </Popover>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+      
+      {/* Diálogo de Criação/Edição (usando o FormPlanoContas) */}
+      <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>{(initialFormValues as PlanoContas)?.id ? 'Editar Conta' : 'Nova Conta'}</DialogTitle>
+          </DialogHeader>
+          <FormPlanoContas 
+            proprietarioId={proprietarioId}
+            contaInicial={initialFormValues as PlanoContas | null}
+            onSaveComplete={handleSaveComplete}
+          />
+        </DialogContent>
+      </Dialog>
     </LayoutPrincipal>
   );
 };
