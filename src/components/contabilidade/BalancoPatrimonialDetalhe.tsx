@@ -240,26 +240,20 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
                 </DropdownMenuContent>
             </DropdownMenu>
         </CardHeader>
-        <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {/* NOVO CARD: TOTAL ATIVO */}
+        <CardContent className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          {/* CARD 1: TOTAL ATIVO */}
           <div className="p-3 bg-secondary rounded-md">
             <p className="text-sm font-medium">Total Ativo</p>
             <p className="text-2xl font-bold mt-1">{formatCurrency(totalAtivo)}</p>
           </div>
           
-          {/* NOVO CARD: TOTAL PASSIVO */}
+          {/* CARD 2: TOTAL PASSIVO + PL (Consolidado) */}
           <div className="p-3 bg-secondary rounded-md">
-            <p className="text-sm font-medium">Total Passivo</p>
-            <p className="text-2xl font-bold mt-1">{formatCurrency(totalPassivo)}</p>
+            <p className="text-sm font-medium">Total Passivo + PL</p>
+            <p className="text-2xl font-bold mt-1">{formatCurrency(totalPassivoPL)}</p>
           </div>
           
-          {/* NOVO CARD: TOTAL PL (Consolidado) */}
-          <div className="p-3 bg-secondary rounded-md">
-            <p className="text-sm font-medium">Total PL + Resultado</p>
-            <p className="text-2xl font-bold mt-1">{formatCurrency(totalPatrimonioLiquido)}</p>
-          </div>
-          
-          {/* CARD: STATUS / DESEQUILÍBRIO */}
+          {/* CARD 3: STATUS / DESEQUILÍBRIO */}
           <div className="p-3 rounded-md" style={{ backgroundColor: isBalanced ? 'var(--green-100)' : 'var(--red-100)' }}>
             <p className="text-sm font-medium text-foreground">Status</p>
             <p className={cn("text-2xl font-bold mt-1", isBalanced ? "text-green-600" : "text-red-600")}>
