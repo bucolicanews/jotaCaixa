@@ -4,11 +4,12 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Form, FormControl, FormField, FormItem, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2, Save, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'; // Importando componentes de tabela
 
 const NATUREZAS = [
     { value: 'Ativo', label: 'Ativo (Balanço)' },
@@ -16,18 +17,18 @@ const NATUREZAS = [
     { value: 'Patrimonio Liquido', label: 'Patrimônio Líquido (Balanço)' },
     { value: 'Receita', label: 'Receita (DRE)' },
     { value: 'Despesa', label: 'Despesa (DRE)' },
-    { value: 'Resultado', label: 'Resultado (Lucro/Prejuízo)' }, // NOVO
+    { value: 'Resultado', label: 'Resultado (Lucro/Prejuízo)' },
 ];
 
-const NaturezaEnum = z.enum(['Ativo', 'Passivo', 'Patrimonio Liquido', 'Receita', 'Despesa', 'Resultado']); // NOVO
+const NaturezaEnum = z.enum(['Ativo', 'Passivo', 'Patrimonio Liquido', 'Receita', 'Despesa', 'Resultado']);
 type NaturezaType = z.infer<typeof NaturezaEnum>;
 
 const formSchema = z.object({
     mapeamentos: z.array(z.object({
-        codigo_nivel_1: z.string().regex(/^[1-6]$/, 'Código deve ser 1, 2, 3, 4, 5 ou 6.'), // ATUALIZADO
+        codigo_nivel_1: z.string().regex(/^[1-6]$/, 'Código deve ser 1, 2, 3, 4, 5 ou 6.'),
         tipo_natureza: NaturezaEnum,
         id: z.string().optional(), // ID existente no DB
-    })).min(6, 'É necessário mapear pelo menos 6 níveis primários (1 a 6).'), // ATUALIZADO
+    })).min(6, 'É necessário mapear pelo menos 6 níveis primários (1 a 6).'),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -43,12 +44,12 @@ const FormMapeamentoContabil: React.FC<FormMapeamentoContabilProps> = ({ proprie
         resolver: zodResolver(formSchema),
         defaultValues: {
             mapeamentos: [
-                { codigo_nivel_1: '1', tipo_natureza: 'Ativo' },
-                { codigo_nivel_1: '2', tipo_natureza: 'Passivo' },
-                { codigo_nivel_1: '3', tipo_natureza: 'Patrimonio Liquido' },
-                { codigo_nivel_1: '4', tipo_natureza: 'Receita' },
-                { codigo_nivel_1: '5', tipo_natureza: 'Despesa' },
-                { codigo_nivel_1: '6', tipo_natureza: 'Resultado' }, // NOVO PADRÃO
+                { codigo_nivel_1: '1', tipo_natureza: 'Ativo' as NaturezaType },
+                { codigo_nivel_1: '2', tipo_natureza: 'Passivo' as NaturezaType },
+                { codigo_nivel_1: '3', tipo_natureza: 'Patrimonio Liquido' as NaturezaType },
+                { codigo_nivel_1: '4', tipo_natureza: 'Receita' as NaturezaType },
+                { codigo_nivel_1: '5', tipo_natureza: 'Despesa' as NaturezaType },
+                { codigo_nivel_1: '6', tipo_natureza: 'Resultado' as NaturezaType },
             ],
         },
     });
@@ -79,8 +80,7 @@ const FormMapeamentoContabil: React.FC<FormMapeamentoContabilProps> = ({ proprie
                 return acc;
             }, {} as Record<string, FormValues['mapeamentos'][number]>);
             
-            // Garante que os 6 níveis padrão (1-6) estejam presentes, usando o valor salvo ou o padrão
-            const defaultLevels = ['1', '2', '3', '4', '5', '6']; // ATUALIZADO
+            const defaultLevels = ['1', '2', '3', '4', '5', '6'];
             
             const finalMapeamentos = defaultLevels.map(code => {
                 if (existingMap[code]) return existingMap[code];
@@ -102,7 +102,7 @@ const FormMapeamentoContabil: React.FC<FormMapeamentoContabilProps> = ({ proprie
                 { codigo_nivel_1: '3', tipo_natureza: 'Patrimonio Liquido' as NaturezaType },
                 { codigo_nivel_1: '4', tipo_natureza: 'Receita' as NaturezaType },
                 { codigo_nivel_1: '5', tipo_natureza: 'Despesa' as NaturezaType },
-                { codigo_nivel_1: '6', tipo_natureza: 'Resultado' as NaturezaType }, // NOVO
+                { codigo_nivel_1: '6', tipo_natureza: 'Resultado' as NaturezaType },
             ];
             replace(defaultMapeamentos);
         }
@@ -115,7 +115,7 @@ const FormMapeamentoContabil: React.FC<FormMapeamentoContabilProps> = ({ proprie
 
     const onSubmit = async (values: FormValues) => {
         const dataToUpsert = values.mapeamentos.map(m => ({
-            id: m.id, // Se for edição
+            id: m.id,
             proprietario_id: proprietarioId,
             codigo_nivel_1: m.codigo_nivel_1,
             tipo_natureza: m.tipo_natureza,
@@ -153,43 +153,55 @@ const FormMapeamentoContabil: React.FC<FormMapeamentoContabilProps> = ({ proprie
                     <p>Esta configuração é crucial para a correta inferência das flags de uso (`is_conta_patrimonial`, `is_conta_resultado`) durante a importação e criação de contas.</p>
                 </div>
 
-                <div className="space-y-4">
-                    {fields.map((item, index) => (
-                        <div key={item.id} className="flex items-center space-x-4">
-                            <FormField
-                                control={form.control}
-                                name={`mapeamentos.${index}.codigo_nivel_1`}
-                                render={({ field }) => (
-                                    <FormItem className="w-[100px]">
-                                        <FormLabel>Nível 1</FormLabel>
-                                        <FormControl><Input {...field} disabled /></FormControl>
-                                    </FormItem>
-                                )}
-                            />
-                            <FormField
-                                control={form.control}
-                                name={`mapeamentos.${index}.tipo_natureza`}
-                                render={({ field }) => (
-                                    <FormItem className="flex-1">
-                                        <FormLabel>Natureza Contábil</FormLabel>
-                                        <Select onValueChange={field.onChange} value={field.value} disabled={isSubmitting}>
-                                            <FormControl>
-                                                <SelectTrigger>
-                                                    <SelectValue placeholder="Selecione a Natureza" />
-                                                </SelectTrigger>
-                                            </FormControl>
-                                            <SelectContent>
-                                                {NATUREZAS.map(n => (
-                                                    <SelectItem key={n.value} value={n.value}>{n.label}</SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
-                        </div>
-                    ))}
+                <div className="overflow-x-auto border rounded-md">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead className="w-[100px]">Nível 1</TableHead>
+                                <TableHead>Natureza Contábil</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {fields.map((item, index) => (
+                                <TableRow key={item.id}>
+                                    <TableCell className="w-[100px] font-bold">
+                                        <FormField
+                                            control={form.control}
+                                            name={`mapeamentos.${index}.codigo_nivel_1`}
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormControl><Input {...field} disabled className="text-center" /></FormControl>
+                                                </FormItem>
+                                            )}
+                                        />
+                                    </TableCell>
+                                    <TableCell>
+                                        <FormField
+                                            control={form.control}
+                                            name={`mapeamentos.${index}.tipo_natureza`}
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <Select onValueChange={field.onChange} value={field.value} disabled={isSubmitting}>
+                                                        <FormControl>
+                                                            <SelectTrigger>
+                                                                <SelectValue placeholder="Selecione a Natureza" />
+                                                            </SelectTrigger>
+                                                        </FormControl>
+                                                        <SelectContent>
+                                                            {NATUREZAS.map(n => (
+                                                                <SelectItem key={n.value} value={n.value}>{n.label}</SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
                 </div>
 
                 <Button type="submit" className="w-full" disabled={isSubmitting}>
