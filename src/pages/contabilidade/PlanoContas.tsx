@@ -73,9 +73,9 @@ const PlanoContasPage = () => {
         .select('mascara_codigo')
         .eq('proprietario_id', id)
         .limit(1)
-        .single();
+        .maybeSingle(); // USANDO maybeSingle()
         
-    if (error && error.code !== 'PGRST116') {
+    if (error) {
         console.error('Erro ao buscar máscara:', error);
     }
     setMascaraAtiva(data?.mascara_codigo || null);

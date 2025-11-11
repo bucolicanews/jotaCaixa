@@ -45,7 +45,8 @@ const MapearSaldosDialog: React.FC<MapearSaldosDialogProps> = ({
             .filter(c => c.Analitica === 'Sim')
             .map(c => ({
                 ...c,
-                id: c.id?.toString() ?? "" // Garante que o ID é uma string válida
+                // Garante que o ID é uma string válida e não vazia. Se for nulo, usamos um placeholder temporário.
+                id: c.id?.toString() ?? `temp-${Math.random()}` 
             }));
     }, [newPlanoContas]);
 
