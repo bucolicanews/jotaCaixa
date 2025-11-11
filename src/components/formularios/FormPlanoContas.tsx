@@ -71,6 +71,34 @@ const FormPlanoContas: React.FC<FormPlanoContasProps> = ({ proprietarioId, conta
   const defaultConta = contaInicial?.Conta || '';
   const defaultAnalitica = contaInicial?.Analitica || 'Não';
   
+  // Lógica de preenchimento automático de flags para novas contas
+  const inferFlags = (contaCode: string, isAnalitica: boolean) => {
+      if (!isAnalitica) return { is_conta_patrimonial: false, is_conta_resultado: false, is_conta_caixa_banco: false };
+      
+      let is_conta_patrimonial = false;
+      let is_conta_resultado = false;
+      let is_conta_caixa_banco = false;
+      
+      if (contaCode.startsWith('1') || contaCode.startsWith('2') || contaCode.startsWith('3')) {
+          is_conta_patrimonial = true;
+      }
+      if (contaCode.startsWith('3') || contaCode.startsWith('4') || contaCode.startsWith('5')) {
+          is_conta_resultado = true;
+      }
+      if (contaCode.startsWith('1.1')) {
+          is_conta_caixa_banco = true;
+      }
+      return { is_conta_patrimonial, is_conta_resultado, is_conta_caixa_banco };
+  };
+  
+  const initialFlags = isEditing 
+      ? {
+          is_conta_caixa_banco: contaInicial?.is_conta_caixa_banco || false,
+          is_conta_patrimonial: contaInicial?.is_conta_patrimonial || false,
+          is_conta_resultado: contaInicial?.is_conta_resultado || false,
+      }
+      : inferFlags(defaultConta, defaultAnalitica === 'Sim');
+  
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -78,9 +106,9 @@ const FormPlanoContas: React.FC<FormPlanoContasProps> = ({ proprietarioId, conta
       codigo_reduzido: contaInicial?.codigo_reduzido || '',
       Descricao: contaInicial?.Descricao || '',
       Analitica: defaultAnalitica,
-      is_conta_caixa_banco: (contaInicial as any)?.is_conta_caixa_banco || false, // Corrigido acesso
-      is_conta_patrimonial: contaInicial?.is_conta_patrimonial || false, // NOVO CAMPO
-      is_conta_resultado: contaInicial?.is_conta_resultado || false,
+      is_conta_caixa_banco: initialFlags.is_conta_caixa_banco,
+      is_conta_patrimonial: initialFlags.is_conta_patrimonial,
+      is_conta_resultado: initialFlags.is_conta_resultado,
     },
   });
   
@@ -93,8 +121,14 @@ const FormPlanoContas: React.FC<FormPlanoContasProps> = ({ proprietarioId, conta
     if (!isEditing && contaCodigo) {
         const codigoSemPontos = contaCodigo.replace(/\./g, '');
         form.setValue('codigo_reduzido', codigoSemPontos, { shouldDirty: false });
+        
+        // Atualiza as flags ao mudar o código (apenas se não estiver editando)
+        const newFlags = inferFlags(contaCodigo, isAnalitica);
+        form.setValue('is_conta_patrimonial', newFlags.is_conta_patrimonial, { shouldDirty: false });
+        form.setValue('is_conta_resultado', newFlags.is_conta_resultado, { shouldDirty: false });
+        form.setValue('is_conta_caixa_banco', newFlags.is_conta_caixa_banco, { shouldDirty: false });
     }
-  }, [contaCodigo, isEditing, form]);
+  }, [contaCodigo, isEditing, form, isAnalitica]);
   
   const fetchMascara = useCallback(async () => {
     if (!proprietarioId) return;

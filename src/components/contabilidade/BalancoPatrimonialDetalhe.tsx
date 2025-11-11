@@ -278,8 +278,12 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* ATIVO */}
                 <Card>
-                    <CardHeader><CardTitle className="text-xl text-green-600">Ativo ({formatCurrency(totalAtivo)})</CardTitle></CardHeader>
-                    <CardContent>
+<CardHeader>
+<CardTitle className="text-xl text-green-700 flex items-center justify-between">
+Ativo
+<span className="text-lg">{formatCurrency(totalAtivo)}</span>
+</CardTitle>
+</CardHeader>                    <CardContent>
                         <Table>
                             <TableHeader><TableRow><TableHead className="w-[150px]">Conta</TableHead><TableHead>Descrição</TableHead><TableHead className="text-right w-[150px]">Saldo</TableHead></TableRow></TableHeader>
                             <TableBody>{renderContas(getContasPorTipo('Ativo'))}</TableBody>
@@ -290,8 +294,14 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
                 {/* PASSIVO + PL + RESULTADO */}
                 <div className="space-y-6">
                     <Card>
-                        <CardHeader><CardTitle className="text-xl text-red-600">Passivo ({formatCurrency(totalPassivo)})</CardTitle></CardHeader>
-                        <CardContent>
+ <CardHeader>
+    <CardTitle className="text-xl text-red-600 flex items-center justify-between">
+      Passivo
+      <span className={cn("text-right text-lg", totalPassivoPL >= 0 ? "text-green-700" : "text-red-700")}>
+        {formatCurrency(totalPassivoPL)}
+      </span>
+    </CardTitle>
+  </CardHeader>                        <CardContent>
                             <Table>
                                 <TableHeader><TableRow><TableHead className="w-[150px]">Conta</TableHead><TableHead>Descrição</TableHead><TableHead className="text-right w-[150px]">Saldo</TableHead></TableRow></TableHeader>
                                 <TableBody>{renderContas(getContasPorTipo('Passivo'))}</TableBody>

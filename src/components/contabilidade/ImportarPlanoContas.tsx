@@ -75,7 +75,7 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
           return;
       }
 
-      // Mapear dados para o formato do banco de dados
+      // Mapear dados para o formato do banco de dados e INFERIR FLAGS
       const contasParaInserir: Partial<PlanoContas>[] = (parsedData as (ContaCSV | ContaJSON)[]).map(conta => {
         
         // Lógica de preenchimento automático do Código Reduzido
@@ -84,12 +84,37 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
             codigoReduzido = conta.Conta.replace(/\./g, '');
         }
         
+        const contaCodigo = conta.Conta.trim();
+        const isAnalitica = conta.Analítica === 'Sim';
+        
+        // Inferência de Flags com base no código (1=Ativo, 2=Passivo, 3=PL, 4/5=Resultado)
+        let is_conta_patrimonial = false;
+        let is_conta_resultado = false;
+        let is_conta_caixa_banco = false;
+        
+        if (isAnalitica) {
+            if (contaCodigo.startsWith('1') || contaCodigo.startsWith('2') || contaCodigo.startsWith('3')) {
+                is_conta_patrimonial = true;
+            }
+            if (contaCodigo.startsWith('3') || contaCodigo.startsWith('4') || contaCodigo.startsWith('5')) {
+                is_conta_resultado = true;
+            }
+            
+            // Sugestão para Caixa/Banco (Contas de Ativo Circulante - 1.1.x)
+            if (contaCodigo.startsWith('1.1')) {
+                is_conta_caixa_banco = true;
+            }
+        }
+        
         return {
             proprietario_id: proprietarioId,
-            Conta: conta.Conta,
+            Conta: contaCodigo,
             codigo_reduzido: codigoReduzido || null,
             Descricao: conta.Descrição.trim(),
-            Analitica: conta.Analítica,
+            Analitica: isAnalitica ? 'Sim' : 'Não',
+            is_conta_patrimonial: is_conta_patrimonial,
+            is_conta_resultado: is_conta_resultado,
+            is_conta_caixa_banco: is_conta_caixa_banco,
         };
       });
       
@@ -156,14 +181,9 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
               .in('conta_contabil_id', oldIds);
               
           await supabase.from('configuracoes_stripe')
-              .update({ conta_sintetica_id: null })
+              .update({ conta_sintetica_id: null, conta_receber_id: null })
               .eq('proprietario_id', proprietarioId)
-              .in('conta_contabil_id', oldIds);
-              
-          await supabase.from('configuracoes_stripe')
-              .update({ conta_receber_id: null })
-              .eq('proprietario_id', proprietarioId)
-              .in('conta_contabil_id', oldIds);
+              .or(`conta_sintetica_id.in.(${oldIds.join(',')}),conta_receber_id.in.(${oldIds.join(',')})`);
               
           // NOVO: Limpar referências em contas sintéticas (admin_contas_receber e admin_contas_pagar)
           await supabase.from('admin_contas_receber')
