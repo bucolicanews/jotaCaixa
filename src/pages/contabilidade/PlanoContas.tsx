@@ -255,6 +255,7 @@ const PlanoContasPage = () => {
           if (contasFilhas.length > 0) {
               maxSegmento = contasFilhas.reduce((max, c) => {
                   const cParts = c.Conta.split('.').filter(p => p.length > 0);
+                  // O índice do segmento filho é nivelAtual (se o pai tem 1 segmento, o filho é o índice 1)
                   return Math.max(max, parseInt(cParts[nivelAtual], 10));
               }, 0);
           }
@@ -279,13 +280,14 @@ const PlanoContasPage = () => {
           const contasNoMesmoNivel = contas.filter(c => {
               const cParts = c.Conta.split('.').filter(p => p.length > 0);
               // Verifica se tem o mesmo número de segmentos E o mesmo prefixo do pai
-              return cParts.length === nivelAtual && c.Conta.startsWith(codigoPai);
+              const prefixoConta = cParts.slice(0, nivelAtual - 1).join('.');
+              return cParts.length === nivelAtual && prefixoConta === codigoPai;
           });
           
           const maxSegmento = contasNoMesmoNivel.reduce((max, c) => {
               const cParts = c.Conta.split('.').filter(p => p.length > 0);
               return Math.max(max, parseInt(cParts[nivelAtual - 1], 10));
-          }, parseInt(segmentoAtual, 10));
+          }, 0); // Começa a busca do máximo em 0
           
           const novoSegmentoNumerico = maxSegmento + 1;
           
@@ -468,7 +470,6 @@ const PlanoContasPage = () => {
                         return (
                             <Popover open={contaClicada?.id === conta.id && popoverOpen} onOpenChange={setPopoverOpen} key={conta.id}>
                                 <PopoverTrigger asChild>
-                                    {/* CORREÇÃO: A TableRow agora é o PopoverTrigger. O onClick é usado para definir a conta clicada. */}
                                     <TableRow 
                                         onClick={() => handleRowClick(conta)}
                                         className={cn("cursor-pointer", rowClassName)}
@@ -551,7 +552,7 @@ const PlanoContasPage = () => {
                                         
                                         <TableCell className="text-right">
                                             <div className="flex justify-end space-x-2">
-                                                {/* Adicionado e.stopPropagation() para evitar que o clique feche o popover */}
+                                                {/* CORREÇÃO CRÍTICA: Adicionado e.stopPropagation() para evitar que o clique feche o popover */}
                                                 <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); handleEdit(conta); }} title="Editar Conta">
                                                     <Edit className="w-4 h-4" />
                                                 </Button>
