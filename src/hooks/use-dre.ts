@@ -28,12 +28,14 @@ interface DREData {
  * 3.x.x = Receita
  * 4.x.x = Custo
  * 5.x.x = Despesa
+ * 6.x.x = Resultado (Lucro/Prejuízo)
  */
 const getTipoDRE = (conta: string): ContaDRE['tipo_dre'] => {
   if (conta.startsWith('3')) return 'Receita';
   if (conta.startsWith('4')) return 'Custo';
   if (conta.startsWith('5')) return 'Despesa';
-  return 'Resultado'; // Contas de resultado (lucro/prejuízo)
+  if (conta.startsWith('6')) return 'Resultado'; // NOVO NÍVEL
+  return 'Resultado'; // Fallback
 };
 
 /**
@@ -146,12 +148,12 @@ export function useDRE(filtroPeriodo: DateRange | undefined): DREData {
     setCarregando(true);
     
     try {
-      // 1. Buscar Plano de Contas (apenas contas de resultado: 3, 4, 5)
+      // 1. Buscar Plano de Contas (apenas contas de resultado: 3, 4, 5, 6)
       const { data: planoContasData, error: pcError } = await supabase
         .from('plano_contas')
         .select('*')
         .eq('proprietario_id', empresaId)
-        .or('Conta.like.3.%,Conta.like.4.%,Conta.like.5.%')
+        .or('Conta.like.3.%,Conta.like.4.%,Conta.like.5.%,Conta.like.6.%') // ATUALIZADO PARA INCLUIR NÍVEL 6
         .order('Conta', { ascending: true });
         
       if (pcError) throw pcError;
@@ -170,19 +172,18 @@ export function useDRE(filtroPeriodo: DateRange | undefined): DREData {
       // 3. Calcular o saldo de cada conta contábil (apenas analíticas)
       const movimentosMap = lancamentosData.reduce((acc, l) => {
         if (l.conta_contabil_id) {
-          // Receita (3.x.x) é Entrada (+), Despesa/Custo (4.x.x, 5.x.x) é Saída (-)
           const conta = planoContas.find(pc => pc.id === l.conta_contabil_id);
           const tipoDRE = conta ? getTipoDRE(conta.Conta) : 'Resultado';
           
           let valor = 0;
           
+          // Contas de Resultado (3, 4, 5)
           if (tipoDRE === 'Receita') {
-              // Receita: Entrada é positiva, Saída é negativa (estorno)
               valor = l.tipo === 'Entrada' ? l.valor : -l.valor;
           } else if (tipoDRE === 'Custo' || tipoDRE === 'Despesa') {
-              // Custo/Despesa: Saída é positiva (aumenta o custo), Entrada é negativa (estorno)
               valor = l.tipo === 'Saida' ? l.valor : -l.valor;
           }
+          // Contas de Resultado (Nível 6) não devem ter lançamentos diretos, mas se tiverem, são tratados como Resultado.
           
           acc[l.conta_contabil_id] = (acc[l.conta_contabil_id] || 0) + valor;
         }
