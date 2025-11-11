@@ -36,18 +36,20 @@ const MapearSaldosDialog: React.FC<MapearSaldosDialogProps> = ({
     onSaveComplete,
 }) => {
     const [loading, setLoading] = useState(false);
-    const [mapping, setMapping] = useState<Record<string, string>>({}); // { old_conta_id: new_conta_id }
+    // Mapeamento: { saldo_contas.id: new_plano_contas.id }
+    const [mapping, setMapping] = useState<Record<string, string>>({}); 
     
     // Mapeia apenas as novas contas analíticas que podem ser de saldo/patrimonial
     const newContasAnaliticas = useMemo(() => {
         return newPlanoContas.filter(c => c.Analitica === 'Sim');
     }, [newPlanoContas]);
 
-    // Verifica se todas as contas antigas foram mapeadas
-    const isMappingComplete = oldSaldos.every(s => mapping[s.old_conta_contabil_id]);
+    // Verifica se todas as contas de saldo foram mapeadas
+    const isMappingComplete = oldSaldos.every(s => mapping[s.id]);
 
-    const handleMapChange = (oldContaId: string, newContaId: string) => {
-        setMapping(prev => ({ ...prev, [oldContaId]: newContaId }));
+    // CORREÇÃO: A chave agora é o ID da conta de saldo (s.id)
+    const handleMapChange = (saldoContaId: string, newContaId: string) => {
+        setMapping(prev => ({ ...prev, [saldoContaId]: newContaId }));
     };
     
     const handleClose = (forceClose: boolean = false) => {
@@ -71,7 +73,6 @@ const MapearSaldosDialog: React.FC<MapearSaldosDialogProps> = ({
         
         try {
             // 1. Setar todas as FKs para NULL (para evitar a violação)
-            // Nota: Fazemos isso antes de deletar o plano de contas antigo.
             await supabase.from('saldo_contas').update({ conta_contabil_id: null }).eq('proprietario_id', proprietarioId);
             await supabase.from('lancamentos').update({ conta_contabil_id: null }).eq('proprietario_id', proprietarioId);
             await supabase.from('configuracao_contas_receber').update({ conta_contabil_id: null }).eq('proprietario_id', proprietarioId);
@@ -85,46 +86,30 @@ const MapearSaldosDialog: React.FC<MapearSaldosDialogProps> = ({
                 .eq('proprietario_id', proprietarioId);
 
             if (deleteError) {
-                // Se a exclusão falhar aqui, é um erro crítico (provavelmente uma FK que esquecemos)
                 throw new Error('Erro crítico ao limpar plano de contas antigo: ' + deleteError.message);
             }
 
             // 3. Inserir novos dados
-            const { error: insertError, data: insertedContas } = await supabase
+            const { error: insertError } = await supabase
                 .from('plano_contas')
-                .insert(newPlanoContas)
-                .select('id, Conta');
+                .insert(newPlanoContas);
 
             if (insertError) {
                 throw new Error('Erro ao inserir novo plano de contas: ' + insertError.message);
             }
             
-            // 4. Mapear IDs antigos para novos IDs
-            const newContaMap = (insertedContas as PlanoContas[]).reduce((acc, c) => {
-                acc[c.Conta] = c.id;
-                return acc;
-            }, {} as Record<string, string>);
-            
-            // 5. Atualizar as referências em saldo_contas
+            // 4. Atualizar as referências em saldo_contas
             const updatesSaldoContas = oldSaldos.map(s => {
-                const newContaId = mapping[s.old_conta_contabil_id];
-                const newConta = newPlanoContas.find(c => c.id === newContaId);
-                
-                if (!newConta) {
-                    console.error(`Nova conta ID ${newContaId} não encontrada no novo plano.`);
-                    return null;
-                }
-                
-                const newContaContabilId = newContaMap[newConta.Conta];
+                const newContaContabilId = mapping[s.id]; // Usa o ID da conta de saldo como chave
                 
                 if (!newContaContabilId) {
-                    console.error(`Novo código de conta ${newConta.Conta} não encontrado após inserção.`);
+                    console.error(`Nova conta ID não encontrada para saldo ${s.nome}.`);
                     return null;
                 }
                 
                 return {
-                    id: s.id,
-                    conta_contabil_id: newContaContabilId,
+                    id: s.id, // ID da conta de saldo
+                    conta_contabil_id: newContaContabilId, // Novo ID da conta contábil
                 };
             }).filter(u => u !== null);
             
@@ -180,7 +165,8 @@ const MapearSaldosDialog: React.FC<MapearSaldosDialogProps> = ({
                             </TableHeader>
                             <TableBody>
                                 {oldSaldos.map((saldo) => {
-                                    const isMapped = !!mapping[saldo.old_conta_contabil_id];
+                                    // CORREÇÃO: Verifica se o ID da conta de saldo (s.id) está no mapeamento
+                                    const isMapped = !!mapping[saldo.id];
                                     
                                     return (
                                         <TableRow key={saldo.id} className={cn(!isMapped && 'bg-red-500/10')}>
@@ -193,8 +179,10 @@ const MapearSaldosDialog: React.FC<MapearSaldosDialogProps> = ({
                                             </TableCell>
                                             <TableCell>
                                                 <Select 
-                                                    onValueChange={(newContaId) => handleMapChange(saldo.old_conta_contabil_id, newContaId)}
-                                                    value={mapping[saldo.old_conta_contabil_id] || undefined}
+                                                    // CORREÇÃO: Passa o ID da conta de saldo (s.id) para o handler
+                                                    onValueChange={(newContaId) => handleMapChange(saldo.id, newContaId)}
+                                                    // CORREÇÃO: Usa o ID da conta de saldo (s.id) para buscar o valor no mapping
+                                                    value={mapping[saldo.id] || undefined}
                                                     disabled={loading}
                                                 >
                                                     <SelectTrigger className={cn("h-8 text-xs", !isMapped && 'border-red-500')}>
