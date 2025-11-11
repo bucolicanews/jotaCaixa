@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -47,11 +47,10 @@ const MapearSaldosDialog: React.FC<MapearSaldosDialogProps> = ({
     // Verifica se todas as contas de saldo foram mapeadas
     const isMappingComplete = oldSaldos.every(s => mapping[s.id]);
 
-    // CORREÇÃO: A chave agora é o ID da conta de saldo (s.id)
-    const handleMapChange = (saldoContaId: string, newContaId: string) => {
-        // 1. Garante que o newContaId seja uma string antes de salvar
+    // CORREÇÃO: Memoizando a função de atualização do mapeamento
+    const handleMapChange = useCallback((saldoContaId: string, newContaId: string) => {
         setMapping(prev => ({ ...prev, [saldoContaId]: String(newContaId) }));
-    };
+    }, []);
     
     const handleClose = (forceClose: boolean = false) => {
         if (loading) return;
