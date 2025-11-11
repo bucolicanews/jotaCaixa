@@ -184,16 +184,29 @@ const PlanoContasPage = () => {
   const handleDelete = async (id: string) => {
     if (!window.confirm('Tem certeza que deseja excluir esta conta?')) return;
 
-    const { error } = await supabase
-      .from('plano_contas')
-      .delete()
-      .eq('id', id);
+    // CORREÇÃO CRÍTICA: Antes de deletar, setar as FKs para NULL
+    try {
+        // 1. Anular referências em tabelas dependentes
+        await supabase.from('saldo_contas').update({ conta_contabil_id: null }).eq('conta_contabil_id', id);
+        await supabase.from('lancamentos').update({ conta_contabil_id: null }).eq('conta_contabil_id', id);
+        await supabase.from('configuracao_contas_receber').update({ conta_contabil_id: null }).eq('conta_contabil_id', id);
+        await supabase.from('configuracao_contas_pagar').update({ conta_contabil_id: null }).eq('conta_contabil_id', id);
+        // Para configuracoes_stripe, precisamos verificar ambos os campos
+        await supabase.from('configuracoes_stripe').update({ conta_sintetica_id: null }).eq('conta_sintetica_id', id);
+        await supabase.from('configuracoes_stripe').update({ conta_receber_id: null }).eq('conta_receber_id', id);
+        
+        // 2. Deletar a conta
+        const { error } = await supabase
+            .from('plano_contas')
+            .delete()
+            .eq('id', id);
 
-    if (error) {
-      showError('Erro ao excluir conta: ' + error.message);
-    } else {
-      showSuccess('Conta excluída com sucesso.');
-      handleImportComplete();
+        if (error) throw error;
+
+        showSuccess('Conta excluída com sucesso.');
+        handleImportComplete();
+    } catch (error: any) {
+        showError('Erro ao excluir conta: ' + error.message);
     }
   };
   
