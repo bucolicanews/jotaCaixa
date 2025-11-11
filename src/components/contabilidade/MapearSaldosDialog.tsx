@@ -2,7 +2,7 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Loader2, AlertTriangle, CheckCircle2, Trash2 } from 'lucide-react';
 import { PlanoContas } from '@/types/plano-contas';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
@@ -47,9 +47,18 @@ const MapearSaldosDialog: React.FC<MapearSaldosDialogProps> = ({
     // Verifica se todas as contas de saldo foram mapeadas
     const isMappingComplete = oldSaldos.every(s => mapping[s.id]);
 
-    // CORREÇÃO: Memoizando a função de atualização do mapeamento
+    // Memoizando a função de atualização do mapeamento
     const handleMapChange = useCallback((saldoContaId: string, newContaId: string) => {
         setMapping(prev => ({ ...prev, [saldoContaId]: String(newContaId) }));
+    }, []);
+    
+    // NOVO HANDLER: Limpar a seleção de uma conta
+    const handleClearSelection = useCallback((saldoContaId: string) => {
+        setMapping(prev => {
+            const newState = { ...prev };
+            delete newState[saldoContaId];
+            return newState;
+        });
     }, []);
     
     const handleClose = (forceClose: boolean = false) => {
@@ -178,28 +187,44 @@ const MapearSaldosDialog: React.FC<MapearSaldosDialogProps> = ({
                                                 {formatCurrency(saldo.saldo_inicial)}
                                             </TableCell>
                                             <TableCell>
-                                                <Select 
-                                                    // 1. Converte o newContaId para string ao salvar
-                                                    onValueChange={(newContaId) => handleMapChange(saldo.id, String(newContaId))}
-                                                    // 2. Garante que o valor seja string ou undefined
-                                                    value={mapping[saldo.id] ? String(mapping[saldo.id]) : undefined}
-                                                    disabled={loading}
-                                                >
-                                                    <SelectTrigger className={cn("h-8 text-xs", !isMapped && 'border-red-500')}>
-                                                        <SelectValue placeholder="Selecione a nova conta analítica" />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        {newContasAnaliticas.map(c => (
-                                                            <SelectItem 
-                                                                key={c.id} 
-                                                                // 3. Garante que o valor do SelectItem seja string
-                                                                value={String(c.id)}
-                                                            >
-                                                                {c.Conta} - {c.Descricao}
-                                                            </SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
+                                                <div className="flex items-center space-x-2">
+                                                    <Select 
+                                                        // 1. Converte o newContaId para string ao salvar
+                                                        onValueChange={(newContaId) => handleMapChange(saldo.id, String(newContaId))}
+                                                        // 2. Garante que o valor seja string ou undefined
+                                                        value={mapping[saldo.id] ? String(mapping[saldo.id]) : undefined}
+                                                        disabled={loading}
+                                                    >
+                                                        <SelectTrigger className={cn("h-8 text-xs flex-1", !isMapped && 'border-red-500')}>
+                                                            <SelectValue placeholder="Selecione a nova conta analítica" />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            {newContasAnaliticas.map(c => (
+                                                                <SelectItem 
+                                                                    key={c.id} 
+                                                                    // 3. Garante que o valor do SelectItem seja string
+                                                                    value={String(c.id)}
+                                                                >
+                                                                    {c.Conta} - {c.Descricao}
+                                                                </SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                    
+                                                    {/* NOVO BOTÃO: Limpar Seleção */}
+                                                    {isMapped && (
+                                                        <Button 
+                                                            variant="ghost" 
+                                                            size="icon" 
+                                                            onClick={() => handleClearSelection(saldo.id)}
+                                                            disabled={loading}
+                                                            title="Limpar Mapeamento"
+                                                            className="h-8 w-8 flex-shrink-0 text-red-500 hover:text-red-700"
+                                                        >
+                                                            <Trash2 className="w-4 h-4" />
+                                                        </Button>
+                                                    )}
+                                                </div>
                                             </TableCell>
                                         </TableRow>
                                     );
