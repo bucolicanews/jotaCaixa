@@ -33,7 +33,6 @@ const MapeamentoRapidoSaldoContasDialog: React.FC<MapeamentoRapidoSaldoContasDia
     onOpenChange,
     contasSaldo,
     contasContabeis,
-    proprietarioId,
     onSaveComplete,
 }) => {
     const [mapeamento, setMapeamento] = useState<MapeamentoItem[]>([]);

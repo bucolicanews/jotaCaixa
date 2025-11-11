@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, PlusCircle, Edit, Trash2, Banknote, Wallet, CreditCard, Filter, Search, ArrowUpCircle, ArrowDownCircle, Eye, Link as LinkIcon, AlertTriangle } from 'lucide-react';
+import { Loader2, Edit, Trash2, PlusCircle, Filter, Search, ArrowUpCircle, ArrowDownCircle, Eye, Link as LinkIcon, AlertTriangle, Banknote, Wallet, CreditCard } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
@@ -153,14 +153,18 @@ const Bancos = () => {
             <Banknote className="w-6 h-6 mr-2" /> Contas e Saldos
         </h1>
         <div className="flex space-x-2 w-full sm:w-auto">
-            {contasPendentesMapeamento > 0 && (
+            {/* BOTÃO MAPEAMENTO RÁPIDO (Visível se houver contas cadastradas) */}
+            {contas.length > 0 && (
                 <Button 
                     onClick={() => setMapeamentoRapidoDialog(true)} 
-                    variant="destructive" 
+                    variant="outline" 
                     className="w-full sm:w-auto"
-                    disabled={contas.length === 0}
+                    disabled={loadingContasContabeis}
                 >
-                    <LinkIcon className="w-4 h-4 mr-2" /> Mapear Pendentes ({contasPendentesMapeamento})
+                    <LinkIcon className="w-4 h-4 mr-2" /> Mapeamento Rápido
+                    {contasPendentesMapeamento > 0 && (
+                        <Badge variant="destructive" className="ml-2">{contasPendentesMapeamento}</Badge>
+                    )}
                 </Button>
             )}
             <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
