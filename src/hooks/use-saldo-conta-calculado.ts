@@ -118,11 +118,15 @@ const useSaldoContaCalculado = (filtroTipoSaldo: 'todos' | 'Credito' | 'Debito' 
       let filteredContas = contasCalculadas;
       
       if (scope === 'bancos') {
-          // Filtra apenas contas marcadas como Caixa/Banco
-          filteredContas = filteredContas.filter(c => c.plano_contas?.is_conta_caixa_banco);
+          // Filtra apenas contas marcadas como Caixa/Banco OU contas que NÃO TÊM VÍNCULO CONTÁBIL (conta_contabil_id is null)
+          filteredContas = filteredContas.filter(c => 
+              c.plano_contas?.is_conta_caixa_banco || !c.conta_contabil_id
+          );
       } else if (scope === 'patrimonial') {
-          // Filtra apenas contas marcadas como Patrimonial
-          filteredContas = filteredContas.filter(c => c.plano_contas?.is_conta_patrimonial);
+          // Filtra apenas contas marcadas como Patrimonial OU contas que NÃO TÊM VÍNCULO CONTÁBIL
+          filteredContas = filteredContas.filter(c => 
+              c.plano_contas?.is_conta_patrimonial || !c.conta_contabil_id
+          );
       }
       
       // 5. Aplicar filtro de nome no frontend (se a busca por ILIKE não for suficiente)
