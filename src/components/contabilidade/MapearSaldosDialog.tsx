@@ -11,11 +11,11 @@ import { formatCurrency } from '@/utils/formatters';
 import { cn } from '@/lib/utils';
 
 interface OldSaldoData {
-    id: string; // saldo_contas.id
-    nome: string; // saldo_contas.nome
+    id: string;
+    nome: string;
     saldo_inicial: number;
     old_conta_contabil_id: string;
-    old_conta_contabil_nome: string; // PlanoContas.Descricao
+    old_conta_contabil_nome: string;
 }
 
 interface MapearSaldosDialogProps {
@@ -35,51 +35,57 @@ const MapearSaldosDialog: React.FC<MapearSaldosDialogProps> = ({
     proprietarioId,
     onSaveComplete,
 }) => {
+
     const [loading, setLoading] = useState(false);
-    // Mapeamento: { saldo_contas.id: new_plano_contas.id }
-    const [mapping, setMapping] = useState<Record<string, string>>({}); 
-    
-    // Mapeia apenas as novas contas analíticas que podem ser de saldo/patrimonial
+    const [mapping, setMapping] = useState<Record<string, string>>({});
+
+    // Filtra somente contas analíticas e normaliza o ID para string
     const newContasAnaliticas = useMemo(() => {
-        return newPlanoContas.filter(c => c.Analitica === 'Sim');
+        return newPlanoContas
+            .filter(c => c.Analitica === 'Sim')
+            .map(c => ({
+                ...c,
+                id: c.id?.toString() ?? "" // Garante que o ID é uma string válida
+            }));
     }, [newPlanoContas]);
 
-    // Verifica se todas as contas de saldo foram mapeadas
     const isMappingComplete = oldSaldos.every(s => mapping[s.id]);
 
-    // Memoizando a função de atualização do mapeamento
+    // Corrigido: Recebe o ID como string (val) e armazena no mapping
     const handleMapChange = useCallback((saldoContaId: string, newContaId: string) => {
-        setMapping(prev => ({ ...prev, [saldoContaId]: String(newContaId) }));
+        setMapping(prev => ({ ...prev, [saldoContaId]: newContaId }));
     }, []);
-    
-    // NOVO HANDLER: Limpar a seleção de uma conta
+
     const handleClearSelection = useCallback((saldoContaId: string) => {
         setMapping(prev => {
-            const newState = { ...prev };
-            delete newState[saldoContaId];
-            return newState;
+            const newMapping = { ...prev };
+            delete newMapping[saldoContaId];
+            return newMapping;
         });
     }, []);
-    
+
     const handleClose = (forceClose: boolean = false) => {
         if (loading) return;
+
         if (!forceClose && !isMappingComplete) {
-            if (!window.confirm('O mapeamento não está completo. Se você fechar, a importação será cancelada. Deseja continuar?')) {
-                return;
-            }
+            const confirma = window.confirm(
+                "O mapeamento não está completo. Se você fechar, a importação será cancelada. Deseja continuar?"
+            );
+            if (!confirma) return;
         }
+
         setMapping({});
         onOpenChange(false);
     };
 
     const handleConfirmImport = async () => {
         if (!isMappingComplete) {
-            showError('Mapeie todas as contas de saldo antes de prosseguir.');
+            showError("Mapeie todas as contas antes de continuar.");
             return;
         }
-        
+
         setLoading(true);
-        
+
         try {
             // 1. Setar todas as FKs para NULL (para evitar a violação)
             await supabase.from('saldo_contas').update({ conta_contabil_id: null }).eq('proprietario_id', proprietarioId);
@@ -87,58 +93,41 @@ const MapearSaldosDialog: React.FC<MapearSaldosDialogProps> = ({
             await supabase.from('configuracao_contas_receber').update({ conta_contabil_id: null }).eq('proprietario_id', proprietarioId);
             await supabase.from('configuracao_contas_pagar').update({ conta_contabil_id: null }).eq('proprietario_id', proprietarioId);
             await supabase.from('configuracoes_stripe').update({ conta_sintetica_id: null, conta_receber_id: null }).eq('proprietario_id', proprietarioId);
-            
+
             // 2. Limpar contas existentes para o proprietário
-            const { error: deleteError } = await supabase
+            const { error: delErr } = await supabase
                 .from('plano_contas')
                 .delete()
                 .eq('proprietario_id', proprietarioId);
 
-            if (deleteError) {
-                throw new Error('Erro crítico ao limpar plano de contas antigo: ' + deleteError.message);
-            }
+            if (delErr) throw new Error("Erro ao limpar plano de contas: " + delErr.message);
 
             // 3. Inserir novos dados
-            const { error: insertError } = await supabase
+            const { error: insertErr } = await supabase
                 .from('plano_contas')
                 .insert(newPlanoContas);
 
-            if (insertError) {
-                throw new Error('Erro ao inserir novo plano de contas: ' + insertError.message);
-            }
-            
-            // 4. Atualizar as referências em saldo_contas
-            const updatesSaldoContas = oldSaldos.map(s => {
-                const newContaContabilId = mapping[s.id]; // Usa o ID da conta de saldo como chave
-                
-                if (!newContaContabilId) {
-                    console.error(`Nova conta ID não encontrada para saldo ${s.nome}.`);
-                    return null;
-                }
-                
-                return {
-                    id: s.id, // ID da conta de saldo
-                    conta_contabil_id: newContaContabilId, // Novo ID da conta contábil
-                };
-            }).filter(u => u !== null);
-            
-            if (updatesSaldoContas.length > 0) {
-                const { error: updateError } = await supabase
-                    .from('saldo_contas')
-                    .upsert(updatesSaldoContas, { onConflict: 'id' });
-                    
-                if (updateError) {
-                    throw new Error('Erro ao atualizar referências em saldo_contas: ' + updateError.message);
-                }
-            }
+            if (insertErr) throw new Error("Erro ao inserir plano novo: " + insertErr.message);
 
-            showSuccess(`Plano de Contas importado e ${updatesSaldoContas.length} saldos remapeados com sucesso!`);
+            // 4. Atualizar as referências em saldo_contas
+            const updatesSaldoContas = oldSaldos.map(s => ({
+                id: s.id,
+                conta_contabil_id: mapping[s.id]
+            }));
+
+            const { error: updateError } = await supabase
+                .from('saldo_contas')
+                .upsert(updatesSaldoContas, { onConflict: 'id' });
+
+            if (updateError) throw new Error("Erro ao atualizar saldo_contas: " + updateError.message);
+
+            showSuccess(`Plano importado e ${updatesSaldoContas.length} saldos remapeados!`);
             onSaveComplete();
             handleClose(true);
 
-        } catch (error: any) {
-            console.error('Erro na transação de importação:', error);
-            showError('Falha na importação e remapeamento: ' + error.message);
+        } catch (e: any) {
+            console.error(e);
+            showError("Erro ao importar: " + e.message);
         } finally {
             setLoading(false);
         }
@@ -152,84 +141,87 @@ const MapearSaldosDialog: React.FC<MapearSaldosDialogProps> = ({
                         <AlertTriangle className="w-6 h-6 mr-2" /> Mapeamento de Saldos Necessário
                     </DialogTitle>
                     <DialogDescription>
-                        Existem {oldSaldos.length} contas de Saldo/Caixa vinculadas ao Plano de Contas antigo. Você deve mapeá-las para as contas correspondentes no novo Plano de Contas.
+                        Existem {oldSaldos.length} contas de saldo vinculadas ao plano antigo. Faça o mapeamento para prosseguir.
                     </DialogDescription>
                 </DialogHeader>
-                
+
                 <div className="space-y-4">
                     <div className="p-3 bg-blue-100 dark:bg-blue-900/20 border border-blue-500 rounded-md text-sm">
                         <p className="font-semibold">Instruções:</p>
-                        <p>Selecione a conta analítica do NOVO Plano de Contas que corresponde à conta antiga.</p>
+                        <p>Selecione a conta analítica correspondente no novo Plano de Contas.</p>
                     </div>
-                    
+
                     <div className="overflow-x-auto border rounded-md">
                         <Table>
                             <TableHeader>
                                 <TableRow>
                                     <TableHead className="w-[25%]">Conta de Saldo/Caixa</TableHead>
-                                    <TableHead className="w-[25%]">Conta Contábil Antiga</TableHead>
+                                    <TableHead className="w-[25%]">Conta Antiga</TableHead>
                                     <TableHead className="w-[15%] text-right">Saldo Inicial</TableHead>
-                                    <TableHead className="w-[35%]">Mapear para Nova Conta Analítica</TableHead>
+                                    <TableHead className="w-[35%]">Mapear para Nova Conta</TableHead>
                                 </TableRow>
                             </TableHeader>
+
                             <TableBody>
-                                {oldSaldos.map((saldo) => {
-                                    // CORREÇÃO: Verifica se o ID da conta de saldo (s.id) está no mapeamento
+                                {oldSaldos.map(saldo => {
                                     const isMapped = !!mapping[saldo.id];
-                                    
+
                                     return (
-                                        <TableRow key={saldo.id} className={cn(!isMapped && 'bg-red-500/10')}>
-                                            <TableCell className="font-medium">{saldo.nome}</TableCell>
+                                        <TableRow key={saldo.id} className={cn(!isMapped && "bg-red-500/10")}>
+                                            <TableCell>{saldo.nome}</TableCell>
+
                                             <TableCell className="text-sm text-muted-foreground">
                                                 {saldo.old_conta_contabil_nome}
                                             </TableCell>
+
                                             <TableCell className="text-right font-semibold">
                                                 {formatCurrency(saldo.saldo_inicial)}
                                             </TableCell>
+
                                             <TableCell>
                                                 <div className="flex items-center space-x-2">
-                                                    <Select 
-                                                        // 1. Converte o newContaId para string ao salvar
-                                                        onValueChange={(newContaId) => handleMapChange(saldo.id, String(newContaId))}
-                                                        // 2. Garante que o valor seja string ou undefined
-                                                        value={mapping[saldo.id] ? String(mapping[saldo.id]) : undefined}
+
+                                                    <Select
+                                                        onValueChange={(id) => handleMapChange(saldo.id, id)}
+                                                        value={mapping[saldo.id] ?? ""} // Garante que o valor é string ou ""
                                                         disabled={loading}
                                                     >
-                                                        <SelectTrigger className={cn("h-8 text-xs flex-1", !isMapped && 'border-red-500')}>
+                                                        <SelectTrigger
+                                                            className={cn("h-8 text-xs flex-1", !isMapped && "border-red-500")}
+                                                        >
                                                             <SelectValue placeholder="Selecione a nova conta analítica" />
                                                         </SelectTrigger>
+
                                                         <SelectContent position="popper" side="bottom">
                                                             {newContasAnaliticas.map(c => (
-                                                                <SelectItem 
-                                                                    key={c.id} 
-                                                                    // 3. Garante que o valor do SelectItem seja string
-                                                                    value={String(c.id)}
+                                                                <SelectItem
+                                                                    key={`item-${c.id}-${c.Conta}`}
+                                                                    value={c.id} // O valor já é string normalizada
                                                                 >
                                                                     {c.Conta} - {c.Descricao}
                                                                 </SelectItem>
                                                             ))}
                                                         </SelectContent>
                                                     </Select>
-                                                    
-                                                    {/* NOVO BOTÃO: Limpar Seleção */}
+
                                                     {isMapped && (
-                                                        <Button 
-                                                            variant="ghost" 
-                                                            size="icon" 
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
                                                             onClick={() => handleClearSelection(saldo.id)}
-                                                            disabled={loading}
-                                                            title="Limpar Mapeamento"
-                                                            className="h-8 w-8 flex-shrink-0 text-red-500 hover:text-red-700"
+                                                            className="h-8 w-8 text-red-500 hover:text-red-700"
                                                         >
                                                             <Trash2 className="w-4 h-4" />
                                                         </Button>
                                                     )}
                                                 </div>
                                             </TableCell>
+
                                         </TableRow>
                                     );
                                 })}
                             </TableBody>
+
                         </Table>
                     </div>
                 </div>
@@ -238,15 +230,17 @@ const MapearSaldosDialog: React.FC<MapearSaldosDialogProps> = ({
                     <Button onClick={() => handleClose(true)} variant="secondary" disabled={loading}>
                         Cancelar Importação
                     </Button>
-                    <Button 
-                        onClick={handleConfirmImport} 
+
+                    <Button
+                        onClick={handleConfirmImport}
                         disabled={loading || !isMappingComplete}
-                        className={cn(!isMappingComplete && 'bg-gray-400')}
+                        className={cn(!isMappingComplete && "bg-gray-400")}
                     >
                         {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
                         Confirmar Mapeamento e Importar
                     </Button>
                 </div>
+
             </DialogContent>
         </Dialog>
     );
