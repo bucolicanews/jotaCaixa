@@ -26,8 +26,8 @@ const getTipoPrincipal = (conta: string): ContaBalanco['tipo_principal'] => {
   if (conta.startsWith('1')) return 'Ativo';
   if (conta.startsWith('2')) return 'Passivo';
   
-  // Contas de Resultado (Receita, Custo, Despesa)
-  if (conta.startsWith('4') || conta.startsWith('5')) return 'Resultado';
+  // Contas de Resultado (Receita, Custo, Despesa, Resultado)
+  if (conta.startsWith('4') || conta.startsWith('5') || conta.startsWith('6')) return 'Resultado'; // ATUALIZADO
   
   // Contas de Patrimônio Líquido (3.x.x)
   if (conta.startsWith('3')) return 'Patrimonio Liquido';
@@ -199,7 +199,7 @@ export function useBalancoPatrimonial(endDate: Date | undefined): BalancoData {
         if (pc.is_conta_caixa_banco || pc.is_conta_patrimonial) {
             saldo_final = saldoInicial + movimentos;
         } 
-        // Se for conta de Resultado (Receita/Despesa), o saldo é apenas Movimentos
+        // Se for conta de Resultado (Receita/Despesa/Resultado), o saldo é apenas Movimentos
         else if (pc.is_conta_resultado) {
             const tipoPrincipal = getTipoPrincipal(pc.Conta);
             
@@ -218,8 +218,11 @@ export function useBalancoPatrimonial(endDate: Date | undefined): BalancoData {
                     
                 if (pc.Conta.startsWith('3')) {
                     saldo_final = movimentosReceita;
-                } else {
+                } else if (pc.Conta.startsWith('4') || pc.Conta.startsWith('5')) {
                     saldo_final = movimentosDespesa;
+                } else if (pc.Conta.startsWith('6')) {
+                    // Contas de Resultado (Nível 6) não devem ter lançamentos diretos, mas se tiverem, usam a lógica de movimento
+                    saldo_final = movimentos;
                 }
                 
             } else {
