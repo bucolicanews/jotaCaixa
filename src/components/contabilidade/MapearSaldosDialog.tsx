@@ -123,6 +123,40 @@ const MapearSaldosDialog: React.FC<MapearSaldosDialogProps> = ({
                 acc[c.Conta] = c.id;
                 return acc;
             }, {} as Record<string, string>);
+            
+            // 4.1. Identificar quais novas contas precisam ser marcadas como Caixa/Banco ou Patrimonial
+            const newContaCodesToMark = new Set(Object.values(mapping));
+            
+            // 4.2. Preparar o payload para atualizar os campos booleanos no novo Plano de Contas
+            const updatesPlanoContas = Array.from(newContaCodesToMark).map(contaCodigo => {
+                const newContaId = contaIdMap[contaCodigo];
+                
+                // Determina se a conta antiga era de Ativo (1.x.x) ou Passivo (2.x.x)
+                // Nota: Não temos o tipo exato da conta antiga, mas podemos inferir a partir do código da nova conta
+                const isAtivo = contaCodigo.startsWith('1');
+                
+                // Se a conta for de Ativo (1.x.x), marcamos como is_conta_caixa_banco
+                // Se a conta for de Passivo/PL (2.x.x/3.x.x), marcamos como is_conta_patrimonial
+                
+                let payload: Partial<PlanoContas> = { id: newContaId };
+                
+                if (isAtivo) {
+                    payload.is_conta_caixa_banco = true;
+                } else {
+                    payload.is_conta_patrimonial = true;
+                }
+                
+                return payload;
+            });
+            
+            // 4.3. Executar o upsert para marcar as contas no novo Plano de Contas
+            if (updatesPlanoContas.length > 0) {
+                const { error: updatePCError } = await supabase
+                    .from('plano_contas')
+                    .upsert(updatesPlanoContas, { onConflict: 'id' });
+                    
+                if (updatePCError) console.error('Aviso: Falha ao marcar contas como Caixa/Patrimonial:', updatePCError);
+            }
 
 
             // 5. Atualizar as referências em saldo_contas usando o ID real
@@ -131,6 +165,7 @@ const MapearSaldosDialog: React.FC<MapearSaldosDialogProps> = ({
                 const newContaId = contaIdMap[newContaCodigo];
                 
                 if (!newContaId) {
+                    // Isso não deve acontecer se o mapeamento estiver completo
                     throw new Error(`ID da nova conta contábil não encontrado para o código: ${newContaCodigo}`);
                 }
                 
