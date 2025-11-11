@@ -198,7 +198,7 @@ const MapearSaldosDialog: React.FC<MapearSaldosDialogProps> = ({
                                                         <SelectTrigger className={cn("h-8 text-xs flex-1", !isMapped && 'border-red-500')}>
                                                             <SelectValue placeholder="Selecione a nova conta analítica" />
                                                         </SelectTrigger>
-                                                        <SelectContent>
+                                                        <SelectContent position="popper" side="bottom">
                                                             {newContasAnaliticas.map(c => (
                                                                 <SelectItem 
                                                                     key={c.id} 
