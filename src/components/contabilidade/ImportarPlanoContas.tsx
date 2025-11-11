@@ -362,7 +362,10 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
         ) : !isMapeamentoCompleto && proprietarioId ? (
             <div className="p-3 bg-red-100 dark:bg-red-900/20 border border-red-500 rounded-md text-sm text-red-700 dark:text-red-300 flex items-start">
                 <AlertTriangle className="w-5 h-5 mr-2 flex-shrink-0" />
-                <p>O Mapeamento Contábil (1 a 6) está incompleto. Complete-o em <Link to="/configuracoes" className="underline font-semibold">Configurações &gt; Contabilidade</Link> antes de importar planos com mais de 2 níveis.</p>
+                <p className="flex-1">O Mapeamento Contábil (1 a 6) está incompleto. Complete-o em <Link to="/configuracoes" className="underline font-semibold">Configurações &gt; Contabilidade</Link> antes de importar planos com mais de 2 níveis.</p>
+                <Button variant="link" size="sm" onClick={refetchMapeamento} disabled={loadingMapeamento} className="ml-auto p-0 h-auto text-red-700 dark:text-red-300">
+                    Tentar Recarregar Mapeamento
+                </Button>
             </div>
         ) : null}
         
