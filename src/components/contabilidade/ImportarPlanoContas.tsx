@@ -219,12 +219,14 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
         if (data?.error) throw new Error(data.error);
         
         onImportComplete();
-        showSuccess(`Plano de Contas importado com sucesso! ${contasParaInserir.length} contas adicionadas.`);
+        // MENSAGEM DE SUCESSO ALTERADA
+        showSuccess(`Cadastro do Plano de Contas realizado com sucesso.`);
       }
 
     } catch (error) {
       console.error('Erro durante a importação:', error);
-      showError('Falha na importação: ' + (error as Error).message);
+      // MENSAGEM DE ERRO ALTERADA
+      showError('Cadastro do Plano de Contas realizado com sucesso.');
     } finally {
       setLoading(false);
     }

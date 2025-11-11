@@ -39,6 +39,7 @@ serve(async (req: Request) => {
 
     if (delErr) {
         console.error('Edge Function Error: Failed to delete old plan:', delErr);
+        // Retorna 500 se a exclusão falhar
         return new Response(JSON.stringify({ error: 'Falha ao limpar plano de contas antigo.' }), {
             status: 500,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -52,6 +53,7 @@ serve(async (req: Request) => {
 
     if (insertErr) {
         console.error('Edge Function Error: Failed to insert new plan:', insertErr);
+        // Retorna 500 se a inserção falhar
         return new Response(JSON.stringify({ error: 'Falha ao inserir novo plano de contas.' }), {
             status: 500,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -66,12 +68,14 @@ serve(async (req: Request) => {
         
     if (fetchErr) {
         console.error('Edge Function Error: Failed to fetch new IDs:', fetchErr);
+        // Retorna 500 se a busca falhar
         return new Response(JSON.stringify({ error: 'Falha ao buscar IDs do novo plano.' }), {
             status: 500,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
     }
 
+    // Retorna 200 com os dados de mapeamento
     return new Response(JSON.stringify({ success: true, contaIdMap: contasInseridas }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
