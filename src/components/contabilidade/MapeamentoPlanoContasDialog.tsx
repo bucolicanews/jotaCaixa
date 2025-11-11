@@ -80,7 +80,22 @@ const MapeamentoPlanoContasDialog: React.FC<MapeamentoPlanoContasDialogProps> = 
 
             if (insertError) throw insertError;
             
-            setNewContasMap(newContas as PlanoContas[]);
+            let finalNewContas = newContas as PlanoContas[] || [];
+            
+            // Fallback: Se o select() retornar vazio (pode acontecer devido a RLS ou configuração)
+            if (finalNewContas.length === 0 && contasParaInserir.length > 0) {
+                console.warn("Insert returned empty data. Fetching all accounts as fallback.");
+                const { data: fetchedData, error: fetchError } = await supabase
+                    .from('plano_contas')
+                    .select('id, Conta, Descricao')
+                    .eq('proprietario_id', proprietarioId)
+                    .order('Conta', { ascending: true });
+                    
+                if (fetchError) throw fetchError;
+                finalNewContas = fetchedData as PlanoContas[];
+            }
+            
+            setNewContasMap(finalNewContas);
             setStep('update'); // Avança para o passo de atualização
             showSuccess('Novas contas inseridas. Iniciando correlação...');
 
