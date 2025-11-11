@@ -9,7 +9,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { ContaCSV, ContaJSON, PlanoContas } from '@/types/plano-contas';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
-import MapearSaldosDialog from './MapearSaldosDialog'; // Importando o novo componente
+import MapearSaldosDialog from './MapearSaldosDialog';
 
 interface ImportarPlanoContasProps {
   onImportComplete: () => void;
@@ -49,7 +49,7 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
     return null;
   };
   
-  const proprietarioId = getProprietarioId(); // Define a variável no escopo do componente
+  const proprietarioId = getProprietarioId();
 
   const performDirectImport = async (proprietarioId: string, contasParaInserir: PlanoContas[]) => {
       // 1. Setar todas as FKs para NULL (para evitar a violação)
