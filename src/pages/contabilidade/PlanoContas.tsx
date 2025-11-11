@@ -264,21 +264,18 @@ const PlanoContasPage = () => {
   const handleOpenNewConta = (nivel: 'acima' | 'abaixo' | 'mesmo') => {
       if (!contaClicada) return;
       
-      const maskParts = mascaraAtiva?.split('.') || [];
       const parts = contaClicada.Conta.split('.').filter(p => p.length > 0);
       const nivelAtual = parts.length;
       let novoCodigo = '';
       let novaAnalitica: 'Sim' | 'Não' = 'Não';
       
+      // 1. Determinar a máscara de padding
+      const maskParts = mascaraAtiva?.split('.') || [];
+      
       // Função auxiliar para calcular o próximo segmento
       const calculateNextSegment = (prefixo: string, nivelSegmento: number, paddingLength: number): string => {
           const prefixoBusca = prefixo ? prefixo + '.' : '';
-          
-          // Filtra contas que começam com o prefixo e têm o nível de segmento correto
-          const contasFilhas = contas.filter(c => 
-              c.Conta.startsWith(prefixoBusca) && 
-              c.Conta.split('.').filter(p => p.length > 0).length > nivelSegmento
-          );
+          const contasFilhas = contas.filter(c => c.Conta.startsWith(prefixoBusca));
           
           let maxSegmento = 0;
           if (contasFilhas.length > 0) {
@@ -300,6 +297,7 @@ const PlanoContasPage = () => {
           // Nível Abaixo: Adiciona um novo segmento
           
           const nivelSegmento = nivelAtual; // O novo segmento é o índice nivelAtual
+          const paddingLength = maskParts[nivelSegmento]?.length || 4; 
           
           if (nivelSegmento >= maskParts.length) {
               showError(`Não é possível criar um nível abaixo. A máscara só define até o nível ${maskParts.length}.`);
@@ -307,44 +305,18 @@ const PlanoContasPage = () => {
               return;
           }
           
-          const paddingLength = maskParts[nivelSegmento]?.length || 4; 
           const novoSegmento = calculateNextSegment(contaClicada.Conta, nivelSegmento, paddingLength);
           
           novoCodigo = contaClicada.Conta + '.' + novoSegmento;
           novaAnalitica = 'Sim'; // Sugere analítica para o próximo nível
           
-      } else if (nivel === 'acima') {
-          // Nível Acima: Cria no nível do PAI (nívelAtual - 1)
-          
-          const nivelSegmento = nivelAtual - 2; // O segmento a ser incrementado é o do PAI
-          
-          if (nivelSegmento < 0) {
-              showError('Não é possível criar um nível acima do nível 1.');
-              setPopoverOpen(false);
-              return;
-          }
-          
-          const codigoPai = parts.slice(0, nivelSegmento).join('.');
-          const nivelSegmentoPai = nivelSegmento;
-          const paddingLength = maskParts[nivelSegmentoPai]?.length || 4;
-          
-          const novoSegmento = calculateNextSegment(codigoPai, nivelSegmentoPai, paddingLength);
-          
-          if (nivelSegmentoPai === 0) {
-              novoCodigo = novoSegmento;
-          } else {
-              novoCodigo = `${codigoPai}.${novoSegmento}`;
-          }
-          
-          novaAnalitica = 'Não'; // Sugere sintética para o nível acima
-          
-      } else if (nivel === 'mesmo') {
-          // Mesmo Nível: Incrementa o último segmento
+      } else if (nivel === 'acima' || nivel === 'mesmo') {
+          // Nível Acima (Mesmo Nível): Incrementa o último segmento do código do pai
           
           const nivelSegmento = nivelAtual - 1; // O segmento a ser incrementado é o último
           
           if (nivelSegmento < 0) {
-              showError('Não é possível criar no mesmo nível do nível 0.');
+              showError('Não é possível criar um nível acima do nível 1.');
               setPopoverOpen(false);
               return;
           }
@@ -360,7 +332,7 @@ const PlanoContasPage = () => {
               novoCodigo = `${codigoPai}.${novoSegmento}`;
           }
           
-          novaAnalitica = contaClicada.Analitica; // Mantém o tipo Analítica/Sintética do item clicado
+          novaAnalitica = 'Não'; // Sugere sintética para o mesmo nível
       }
       
       setContaSelecionada(null); // Garante que é uma nova conta
