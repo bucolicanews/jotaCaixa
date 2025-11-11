@@ -3,13 +3,13 @@ import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2, Save, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { showError, showSuccess } from '@/utils/toast';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { showError, showSuccess } from '@/utils/toast';
+import { cn } from '@/lib/utils';
 
 const NATUREZAS = [
     { value: 'Ativo', label: 'Ativo (Balanço)' },
@@ -18,10 +18,10 @@ const NATUREZAS = [
     { value: 'Receita', label: 'Receita (DRE)' },
     { value: 'Despesa', label: 'Despesa (DRE)' },
     { value: 'Resultado', label: 'Resultado (Lucro/Prejuízo)' },
-    { value: 'Nenhum', label: 'Nenhum (Ignorar Nível)' }, // NOVO
+    { value: 'Nenhum', label: 'Nenhum (Ignorar Nível)' },
 ];
 
-const NaturezaEnum = z.enum(['Ativo', 'Passivo', 'Patrimonio Liquido', 'Receita', 'Despesa', 'Resultado', 'Nenhum']); // NOVO
+const NaturezaEnum = z.enum(['Ativo', 'Passivo', 'Patrimonio Liquido', 'Receita', 'Despesa', 'Resultado', 'Nenhum']);
 type NaturezaType = z.infer<typeof NaturezaEnum>;
 
 const formSchema = z.object({
@@ -139,17 +139,26 @@ const FormMapeamentoContabil: React.FC<FormMapeamentoContabilProps> = ({ proprie
     }
     
     const isSubmitting = form.formState.isSubmitting;
+    
+    const handleToggleNivel = (index: number, currentNatureza: NaturezaType) => {
+        const isIgnored = currentNatureza === 'Nenhum';
+        const defaultNatureza = NATUREZAS.find(n => n.value.startsWith(fields[index].codigo_nivel_1))?.value || 'Ativo';
+        
+        const newNatureza = isIgnored ? defaultNatureza : 'Nenhum';
+        
+        form.setValue(`mapeamentos.${index}.tipo_natureza`, newNatureza as NaturezaType, { shouldDirty: true });
+    };
 
     return (
         <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
                 <p className="text-sm text-muted-foreground">
-                    Defina a natureza contábil (Ativo, Passivo, Receita, Despesa, Resultado) para cada código de nível primário (1, 2, 3, 4, 5, 6) do seu Plano de Contas. Se um nível não for utilizado, selecione "Nenhum".
+                    Defina a natureza contábil (Ativo, Passivo, Receita, Despesa, Resultado) para cada código de nível primário (1, 2, 3, 4, 5, 6) do seu Plano de Contas.
                 </p>
                 
                 <div className="p-3 bg-yellow-100 dark:bg-yellow-900/20 border border-yellow-500 rounded-md text-sm text-yellow-700 dark:text-yellow-300 flex items-start">
                     <AlertTriangle className="w-5 h-5 mr-2 flex-shrink-0" />
-                    <p>Esta configuração é crucial para a correta inferência das flags de uso (`is_conta_patrimonial`, `is_conta_resultado`) durante a importação e criação de contas.</p>
+                    <p>Clique no código do nível (1, 2, 3...) para alternar rapidamente entre Ativo/Resultado e Ignorar (Nenhum).</p>
                 </div>
 
                 <div className="overflow-x-auto border rounded-md">
@@ -161,44 +170,53 @@ const FormMapeamentoContabil: React.FC<FormMapeamentoContabilProps> = ({ proprie
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {fields.map((item, index) => (
-                                <TableRow key={item.id}>
-                                    <TableCell className="w-[100px] font-bold">
-                                        <FormField
-                                            control={form.control}
-                                            name={`mapeamentos.${index}.codigo_nivel_1`}
-                                            render={({ field }) => (
-                                                <FormItem>
-                                                    <FormControl><Input {...field} disabled className="text-center" /></FormControl>
-                                                </FormItem>
-                                            )}
-                                        />
-                                    </TableCell>
-                                    <TableCell>
-                                        <FormField
-                                            control={form.control}
-                                            name={`mapeamentos.${index}.tipo_natureza`}
-                                            render={({ field }) => (
-                                                <FormItem>
-                                                    <Select onValueChange={field.onChange} value={field.value} disabled={isSubmitting}>
-                                                        <FormControl>
-                                                            <SelectTrigger>
-                                                                <SelectValue placeholder="Selecione a Natureza" />
-                                                            </SelectTrigger>
-                                                        </FormControl>
-                                                        <SelectContent>
-                                                            {NATUREZAS.map(n => (
-                                                                <SelectItem key={n.value} value={n.value}>{n.label}</SelectItem>
-                                                            ))}
-                                                        </SelectContent>
-                                                    </Select>
-                                                    <FormMessage />
-                                                </FormItem>
-                                            )}
-                                        />
-                                    </TableCell>
-                                </TableRow>
-                            ))}
+                            {fields.map((item, index) => {
+                                const currentNatureza = form.watch(`mapeamentos.${index}.tipo_natureza`);
+                                const isIgnored = currentNatureza === 'Nenhum';
+                                
+                                return (
+                                    <TableRow key={item.id}>
+                                        <TableCell className="w-[100px] font-bold">
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => handleToggleNivel(index, currentNatureza)}
+                                                className={cn(
+                                                    "w-full font-extrabold text-lg transition-all duration-300",
+                                                    isIgnored ? "bg-red-500/20 text-red-600 hover:bg-red-500/30" : "bg-primary/10 text-primary hover:bg-primary/20"
+                                                )}
+                                                disabled={isSubmitting}
+                                            >
+                                                {item.codigo_nivel_1}
+                                            </Button>
+                                        </TableCell>
+                                        <TableCell>
+                                            <FormField
+                                                control={form.control}
+                                                name={`mapeamentos.${index}.tipo_natureza`}
+                                                render={({ field }) => (
+                                                    <FormItem>
+                                                        <Select onValueChange={field.onChange} value={field.value} disabled={isSubmitting}>
+                                                            <FormControl>
+                                                                <SelectTrigger className={cn(isIgnored && 'border-red-500')}>
+                                                                    <SelectValue placeholder="Selecione a Natureza" />
+                                                                </SelectTrigger>
+                                                            </FormControl>
+                                                            <SelectContent>
+                                                                {NATUREZAS.map(n => (
+                                                                    <SelectItem key={n.value} value={n.value}>{n.label}</SelectItem>
+                                                                ))}
+                                                            </SelectContent>
+                                                        </Select>
+                                                        <FormMessage />
+                                                    </FormItem>
+                                                )}
+                                            />
+                                        </TableCell>
+                                    </TableRow>
+                                );
+                            })}
                         </TableBody>
                     </Table>
                 </div>
