@@ -21,6 +21,11 @@ interface OldFKData {
     old_conta_contabil_nome: string;
     saldo_inicial?: number; // Apenas para saldo_contas
     tipo_registro?: string; // Apenas para configs CR/CP
+    
+    // Campos booleanos da conta antiga (para herança) - CORREÇÃO TS2353
+    is_conta_caixa_banco?: boolean;
+    is_conta_patrimonial?: boolean;
+    is_conta_resultado?: boolean;
 }
 
 interface MapearTodasFKsDialogProps {
@@ -103,8 +108,6 @@ const MapearTodasFKsDialog: React.FC<MapearTodasFKsDialogProps> = ({
 
         try {
             // 1. Setar todas as FKs para NULL (para evitar a violação)
-            // Esta etapa é mantida para garantir que a exclusão do plano antigo (feita na Edge Function)
-            // não cause violação de FKs em outras tabelas.
             await supabase.from('saldo_contas').update({ conta_contabil_id: null }).eq('proprietario_id', proprietarioId);
             await supabase.from('lancamentos').update({ conta_contabil_id: null }).eq('proprietario_id', proprietarioId);
             await supabase.from('configuracao_contas_receber').update({ conta_contabil_id: null }).eq('proprietario_id', proprietarioId);
@@ -132,8 +135,9 @@ const MapearTodasFKsDialog: React.FC<MapearTodasFKsDialogProps> = ({
             const updatesConfigCR: any[] = [];
             const updatesConfigCP: any[] = [];
             const updatesConfigStripe: any[] = [];
-            const updatesPlanoContasBooleans: Partial<PlanoContas>[] = [];
-            const newContaCodesToMark = new Set<string>();
+            
+            // Mapa para rastrear os booleanos que devem ser marcados na nova tabela PlanoContas
+            const newContaBooleansMap: Record<string, Partial<PlanoContas>> = {};
 
             oldFKs.forEach(fk => {
                 const newContaCodigo = mapping[fk.id];
@@ -141,35 +145,47 @@ const MapearTodasFKsDialog: React.FC<MapearTodasFKsDialogProps> = ({
                 
                 if (!newContaId) return;
 
+                // Inicializa o payload de booleanos para a nova conta, se ainda não existir
+                newContaBooleansMap[newContaId] = newContaBooleansMap[newContaId] || { id: newContaId };
+
                 // 3.1. Coletar atualizações de FK
                 if (fk.tabela === 'saldo_contas') {
                     updatesSaldoContas.push({ id: fk.id, conta_contabil_id: newContaId });
-                    newContaCodesToMark.add(newContaCodigo);
+                    
+                    // Herança de booleanos (Caixa/Banco ou Patrimonial)
+                    if (fk.is_conta_caixa_banco) newContaBooleansMap[newContaId].is_conta_caixa_banco = true;
+                    if (fk.is_conta_patrimonial) newContaBooleansMap[newContaId].is_conta_patrimonial = true;
+                    
                 } else if (fk.tabela === 'config_cr') {
                     updatesConfigCR.push({ id: fk.id, conta_contabil_id: newContaId });
+                    
+                    // Herança de booleano (Resultado)
+                    if (fk.is_conta_resultado) newContaBooleansMap[newContaId].is_conta_resultado = true;
+                    
                 } else if (fk.tabela === 'config_cp') {
                     updatesConfigCP.push({ id: fk.id, conta_contabil_id: newContaId });
+                    
+                    // Herança de booleano (Resultado)
+                    if (fk.is_conta_resultado) newContaBooleansMap[newContaId].is_conta_resultado = true;
+                    
                 } else if (fk.tabela === 'config_stripe_sintetica') {
                     updatesConfigStripe.push({ id: fk.id, conta_sintetica_id: newContaId });
+                    
+                    // Herança de booleanos (Caixa/Banco ou Patrimonial)
+                    if (fk.is_conta_caixa_banco) newContaBooleansMap[newContaId].is_conta_caixa_banco = true;
+                    if (fk.is_conta_patrimonial) newContaBooleansMap[newContaId].is_conta_patrimonial = true;
+                    
                 } else if (fk.tabela === 'config_stripe_receber') {
                     updatesConfigStripe.push({ id: fk.id, conta_receber_id: newContaId });
+                    
+                    // Herança de booleanos (Caixa/Banco ou Patrimonial)
+                    if (fk.is_conta_caixa_banco) newContaBooleansMap[newContaId].is_conta_caixa_banco = true;
+                    if (fk.is_conta_patrimonial) newContaBooleansMap[newContaId].is_conta_patrimonial = true;
                 }
             });
             
-            // 3.2. Marcar campos booleanos no novo Plano de Contas
-            Array.from(newContaCodesToMark).forEach(contaCodigo => {
-                const newContaId = contaIdMap[contaCodigo];
-                const isAtivo = contaCodigo.startsWith('1');
-                
-                let payload: Partial<PlanoContas> = { id: newContaId };
-                
-                if (isAtivo) {
-                    payload.is_conta_caixa_banco = true;
-                } else {
-                    payload.is_conta_patrimonial = true;
-                }
-                updatesPlanoContasBooleans.push(payload);
-            });
+            // 3.2. Coletar todos os payloads de booleanos
+            const updatesPlanoContasBooleans = Object.values(newContaBooleansMap);
             
             // 3.3. Executar todas as atualizações
             const updatePromises = [
@@ -177,6 +193,7 @@ const MapearTodasFKsDialog: React.FC<MapearTodasFKsDialogProps> = ({
                 supabase.from('configuracao_contas_receber').upsert(updatesConfigCR, { onConflict: 'id' }),
                 supabase.from('configuracao_contas_pagar').upsert(updatesConfigCP, { onConflict: 'id' }),
                 supabase.from('configuracoes_stripe').upsert(updatesConfigStripe, { onConflict: 'id' }),
+                // Atualiza os booleanos no novo Plano de Contas
                 supabase.from('plano_contas').upsert(updatesPlanoContasBooleans, { onConflict: 'id' }),
             ];
             

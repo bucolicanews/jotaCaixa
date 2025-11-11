@@ -24,6 +24,11 @@ interface OldFKData {
     old_conta_contabil_nome: string;
     saldo_inicial?: number; // Apenas para saldo_contas
     tipo_registro?: string; // Apenas para configs CR/CP
+    
+    // Campos booleanos da conta antiga (para herança) - CORREÇÃO TS2353
+    is_conta_caixa_banco?: boolean;
+    is_conta_patrimonial?: boolean;
+    is_conta_resultado?: boolean;
 }
 
 const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportComplete }) => {
@@ -61,7 +66,7 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
       // 1. Saldo Contas
       const { data: saldosData } = await supabase
         .from('saldo_contas')
-        .select(`id, nome, saldo_inicial, conta_contabil_id, plano_contas ( Descricao )`)
+        .select(`id, nome, saldo_inicial, conta_contabil_id, plano_contas ( Descricao, is_conta_caixa_banco, is_conta_patrimonial )`)
         .eq('proprietario_id', proprietarioId)
         .not('conta_contabil_id', 'is', null);
         
@@ -72,12 +77,15 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
           old_conta_contabil_id: s.conta_contabil_id,
           old_conta_contabil_nome: s.plano_contas?.Descricao || 'Conta Antiga Desconhecida',
           saldo_inicial: s.saldo_inicial,
+          // Adicionando os booleanos da conta antiga para herança
+          is_conta_caixa_banco: s.plano_contas?.is_conta_caixa_banco,
+          is_conta_patrimonial: s.plano_contas?.is_conta_patrimonial,
       }));
       
       // 2. Configurações CR
       const { data: crData } = await supabase
         .from('configuracao_contas_receber')
-        .select(`id, tipo_registro, conta_contabil_id, plano_contas ( Descricao )`)
+        .select(`id, tipo_registro, conta_contabil_id, plano_contas ( Descricao, is_conta_resultado )`)
         .eq('proprietario_id', proprietarioId)
         .not('conta_contabil_id', 'is', null);
         
@@ -88,12 +96,13 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
           old_conta_contabil_id: c.conta_contabil_id,
           old_conta_contabil_nome: c.plano_contas?.Descricao || 'Conta Antiga Desconhecida',
           tipo_registro: c.tipo_registro,
+          is_conta_resultado: c.plano_contas?.is_conta_resultado,
       }));
       
       // 3. Configurações CP
       const { data: cpData } = await supabase
         .from('configuracao_contas_pagar')
-        .select(`id, tipo_registro, conta_contabil_id, plano_contas ( Descricao )`)
+        .select(`id, tipo_registro, conta_contabil_id, plano_contas ( Descricao, is_conta_resultado )`)
         .eq('proprietario_id', proprietarioId)
         .not('conta_contabil_id', 'is', null);
         
@@ -104,12 +113,13 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
           old_conta_contabil_id: c.conta_contabil_id,
           old_conta_contabil_nome: c.plano_contas?.Descricao || 'Conta Antiga Desconhecida',
           tipo_registro: c.tipo_registro,
+          is_conta_resultado: c.plano_contas?.is_conta_resultado,
       }));
       
       // 4. Configurações Stripe
       const { data: stripeData } = await supabase
         .from('configuracoes_stripe')
-        .select(`id, conta_sintetica_id, conta_receber_id, historico_padrao_id, plano_contas_sintetica:conta_sintetica_id ( Descricao ), plano_contas_receber:conta_receber_id ( Descricao )`)
+        .select(`id, conta_sintetica_id, conta_receber_id, historico_padrao_id, plano_contas_sintetica:conta_sintetica_id ( Descricao, is_conta_caixa_banco, is_conta_patrimonial ), plano_contas_receber:conta_receber_id ( Descricao, is_conta_caixa_banco, is_conta_patrimonial )`)
         .eq('proprietario_id', proprietarioId);
         
       (stripeData || []).forEach((s: any) => {
@@ -121,6 +131,8 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
                   old_conta_contabil_id: s.conta_sintetica_id,
                   old_conta_contabil_nome: s.plano_contas_sintetica?.Descricao || 'Conta Antiga Desconhecida',
                   tipo_registro: 'conta_sintetica_id',
+                  is_conta_caixa_banco: s.plano_contas_sintetica?.is_conta_caixa_banco,
+                  is_conta_patrimonial: s.plano_contas_sintetica?.is_conta_patrimonial,
               });
           }
           if (s.conta_receber_id) {
@@ -131,6 +143,8 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
                   old_conta_contabil_id: s.conta_receber_id,
                   old_conta_contabil_nome: s.plano_contas_receber?.Descricao || 'Conta Antiga Desconhecida',
                   tipo_registro: 'conta_receber_id',
+                  is_conta_caixa_banco: s.plano_contas_receber?.is_conta_caixa_banco,
+                  is_conta_patrimonial: s.plano_contas_receber?.is_conta_patrimonial,
               });
           }
       });
@@ -162,16 +176,20 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
         return;
       }
       
-      const contasParaInserir = (parsedData as (ContaCSV | ContaJSON)[]).map(conta => ({
-        proprietario_id: proprietarioId,
-        Conta: conta.Conta,
-        codigo_reduzido: conta['Código reduzido'] || null,
-        Descricao: conta.Descrição.trim(),
-        Analitica: conta.Analítica,
-        is_conta_caixa_banco: false,
-        is_conta_patrimonial: false,
-        is_conta_resultado: false,
-      })) as PlanoContas[];
+      const contasParaInserir = (parsedData as (ContaCSV | ContaJSON)[]).map(conta => {
+          const codigoReduzido = conta['Código reduzido'] || conta.Conta.replace(/\./g, '');
+          
+          return {
+            proprietario_id: proprietarioId,
+            Conta: conta.Conta,
+            codigo_reduzido: codigoReduzido, // CORREÇÃO AQUI
+            Descricao: conta.Descrição.trim(),
+            Analitica: conta.Analítica,
+            is_conta_caixa_banco: false,
+            is_conta_patrimonial: false,
+            is_conta_resultado: false,
+          } as PlanoContas;
+      });
       
       setNewPlanoContas(contasParaInserir);
 
