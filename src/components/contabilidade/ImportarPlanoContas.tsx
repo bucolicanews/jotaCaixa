@@ -76,13 +76,22 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
       }
 
       // Mapear dados para o formato do banco de dados
-      const contasParaInserir: Partial<PlanoContas>[] = (parsedData as (ContaCSV | ContaJSON)[]).map(conta => ({
-        proprietario_id: proprietarioId,
-        Conta: conta.Conta,
-        codigo_reduzido: conta['Código reduzido'] || null,
-        Descricao: conta.Descrição.trim(),
-        Analitica: conta.Analítica,
-      }));
+      const contasParaInserir: Partial<PlanoContas>[] = (parsedData as (ContaCSV | ContaJSON)[]).map(conta => {
+        
+        // Lógica de preenchimento automático do Código Reduzido
+        let codigoReduzido = conta['Código reduzido']?.trim() || '';
+        if (!codigoReduzido && conta.Conta) {
+            codigoReduzido = conta.Conta.replace(/\./g, '');
+        }
+        
+        return {
+            proprietario_id: proprietarioId,
+            Conta: conta.Conta,
+            codigo_reduzido: codigoReduzido || null,
+            Descricao: conta.Descrição.trim(),
+            Analitica: conta.Analítica,
+        };
+      });
       
       // --- PRÉ-ANÁLISE DE DEPENDÊNCIAS ---
       

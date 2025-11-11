@@ -33,12 +33,9 @@ const MapeamentoRapidoSaldoContasDialog: React.FC<MapeamentoRapidoSaldoContasDia
     onOpenChange,
     contasSaldo,
     contasContabeis,
-    proprietarioId, // Removendo o underscore aqui
+    proprietarioId,
     onSaveComplete,
 }) => {
-    // Renomeando a variável para ignorar o uso, se necessário
-    const _proprietarioId = proprietarioId;
-    
     const [mapeamento, setMapeamento] = useState<MapeamentoItem[]>([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
 

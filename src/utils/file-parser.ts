@@ -1,6 +1,7 @@
 import Papa, { ParseResult } from 'papaparse';
 import { ContaCSV, ContaJSON } from '@/types/plano-contas';
 import { HistoricoCSV } from '@/types/historico'; // Importando HistoricoCSV
+import { normalizeString } from '@/utils/formatters'; // IMPORTADO
 
 type ParsedData = ContaCSV[] | ContaJSON[] | HistoricoCSV[];
 
@@ -17,20 +18,28 @@ const parseCSV = (file: File): Promise<ParsedData> => {
       complete: (results: ParseResult<any>) => {
         const headers = results.meta.fields || [];
         
+        // Encontra as chaves corretas, ignorando acentos e capitalização
+        const findKey = (partial: string) => headers.find(h => normalizeString(h).includes(partial));
+        
+        const contaKey = findKey('conta') || 'Conta';
+        const descricaoKey = findKey('descri') || 'Descrição';
+        const analiticaKey = findKey('analitica') || 'Analítica';
+        const codigoReduzidoKey = findKey('codigo reduzido') || 'Código reduzido'; // Busca por 'codigo reduzido'
+        
         // Verifica se é Plano de Contas
-        if (headers.includes('Conta') && headers.includes('Analítica')) {
+        if (headers.includes(contaKey) && headers.includes(analiticaKey)) {
             const data = results.data.map((row: any) => ({
-              Conta: String(row.Conta || ''),
-              'Código reduzido': String(row['Código reduzido'] || ''),
-              Descrição: String(row.Descrição || ''),
-              Analítica: (row.Analítica === 'Sim' ? 'Sim' : 'Não') as 'Sim' | 'Não',
+              Conta: String(row[contaKey] || ''),
+              'Código reduzido': String(row[codigoReduzidoKey] || ''), // Usa a chave encontrada
+              Descrição: String(row[descricaoKey] || ''),
+              Analítica: (row[analiticaKey] === 'Sim' ? 'Sim' : 'Não') as 'Sim' | 'Não',
             })).filter((row: ContaCSV) => row.Conta && row.Descrição);
             return resolve(data as ContaCSV[]);
         }
         
-        // Verifica se é Histórico (procura por 'Descrição' ou 'Descricao')
-        const descKey = headers.find(h => h.toLowerCase().includes('descri')) || 'Descrição';
-        const codigoKey = headers.find(h => h.toLowerCase().includes('código')) || 'Código';
+        // Verifica se é Histórico (procura por 'Descricao' ou 'Descricao')
+        const descKey = findKey('descri') || 'Descrição';
+        const codigoKey = findKey('codigo') || 'Código';
         
         if (descKey) {
             const data = results.data.map((row: any) => ({
@@ -72,8 +81,8 @@ const parseJSON = (file: File): Promise<ParsedData> => {
             // Plano de Contas JSON
             const data = json.map((row: any) => ({
                 Conta: String(row.Conta || ''),
-                'Código reduzido': String(row['Código reduzido'] || ''),
-                Descrição: String(row.Descrição || ''),
+                'Código reduzido': String(row['Código reduzido'] || row.codigo_reduzido || ''), // Tenta ler variações
+                Descrição: String(row.Descrição || row.Descricao || ''),
                 Analítica: (row.Analítica === 'Sim' ? 'Sim' : 'Não') as 'Sim' | 'Não',
             })).filter((row: ContaJSON) => row.Conta && row.Descrição);
             return resolve(data as ContaJSON[]);
@@ -83,7 +92,7 @@ const parseJSON = (file: File): Promise<ParsedData> => {
             // Histórico JSON
             const data = json.map((row: any) => ({
                 Descricao: String(row.Descricao || row.Descrição || ''),
-                Código: String(row.Código || row.Código || ''), // Tenta ler Código
+                Código: String(row.Código || row.Codigo || ''), // Tenta ler Código
             })).filter((row: HistoricoCSV) => row.Descricao);
             return resolve(data as HistoricoCSV[]);
         }
