@@ -13,35 +13,8 @@ import { PlanoContas } from '@/types/plano-contas';
 import { Checkbox } from '../ui/checkbox';
 import { cn } from '@/lib/utils';
 import { useMapeamentoContabil } from '@/hooks/use-mapeamento-contabil';
-
-// Função de validação da máscara
-const validateMask = (code: string, mask: string): boolean => {
-    if (!mask) return true; // Se não houver máscara, a validação passa
-    
-    const codeParts = code.split('.');
-    const maskParts = mask.split('.');
-    
-    if (codeParts.length !== maskParts.length) {
-        return false;
-    }
-    
-    for (let i = 0; i < codeParts.length; i++) {
-        const codeSegment = codeParts[i];
-        const maskSegment = maskParts[i];
-        
-        // Verifica se o segmento do código tem o mesmo comprimento do segmento da máscara
-        if (codeSegment.length !== maskSegment.length) {
-            return false;
-        }
-        
-        // Verifica se o segmento contém apenas dígitos (já que a máscara só tem '0')
-        if (!/^\d+$/.test(codeSegment)) {
-            return false;
-        }
-    }
-    
-    return true;
-};
+import { validateMask } from '@/utils/contabilidade'; // IMPORTADO
+// import { validateMask } from '@/utils/contabilidade'; // REMOVIDO
 
 const formSchema = z.object({
   Conta: z.string().min(1, 'O código é obrigatório.'),
