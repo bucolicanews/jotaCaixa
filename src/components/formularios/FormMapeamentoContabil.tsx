@@ -85,6 +85,7 @@ const FormMapeamentoContabil: React.FC<FormMapeamentoContabilProps> = ({ proprie
             const finalMapeamentos = defaultLevels.map(code => {
                 if (existingMap[code]) return existingMap[code];
                 
+                // Define o valor padrão se não existir no DB
                 const defaultNatureza = NATUREZAS.find(n => n.value.startsWith(code))?.value || (code === '6' ? 'Resultado' : 'Ativo');
                 return { 
                     codigo_nivel_1: code, 
@@ -94,6 +95,7 @@ const FormMapeamentoContabil: React.FC<FormMapeamentoContabilProps> = ({ proprie
             
             replace(finalMapeamentos);
         } else {
+            // Se não houver dados, usa os defaults
             const defaultMapeamentos = [
                 { codigo_nivel_1: '1', tipo_natureza: 'Ativo' as NaturezaType },
                 { codigo_nivel_1: '2', tipo_natureza: 'Passivo' as NaturezaType },
