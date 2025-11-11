@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, PlusCircle, Edit, Trash2, Banknote, Wallet, CreditCard, Filter, Search, ArrowUpCircle, ArrowDownCircle, Eye, Link as LinkIcon } from 'lucide-react';
+import { Loader2, PlusCircle, Edit, Trash2, Banknote, Wallet, CreditCard, Filter, Search, ArrowUpCircle, ArrowDownCircle, Eye, Link as LinkIcon, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
@@ -252,8 +252,14 @@ const Bancos = () => {
                             ) : (
                                 contas.map((conta) => {
                                     const natureza = getNaturezaDisplay(conta.tipo_saldo);
+                                    
+                                    // NOVO: Verifica se a conta contábil está faltando ou se a flag está incorreta
+                                    const isMissingContabilId = !conta.conta_contabil_id;
+                                    const isMissingFlag = conta.plano_contas && !conta.plano_contas.is_conta_caixa_banco;
+                                    const isMisconfigured = isMissingContabilId || isMissingFlag;
+
                                     return (
-                                        <TableRow key={conta.id}>
+                                        <TableRow key={conta.id} className={cn(isMisconfigured && 'bg-red-500/10')}>
                                             <TableCell className="font-medium flex items-center">
                                                 {natureza.icon}
                                                 {conta.nome}
@@ -264,7 +270,14 @@ const Bancos = () => {
                                                 </Badge>
                                             </TableCell>
                                             <TableCell className="text-sm text-muted-foreground">
-                                                {conta.plano_contas?.Conta} - {conta.plano_contas?.Descricao || 'N/A'}
+                                                {isMisconfigured ? (
+                                                    <span className="text-red-500 flex items-center">
+                                                        <AlertTriangle className="w-4 h-4 mr-1" />
+                                                        {isMissingContabilId ? 'FALTA VÍNCULO' : 'FLAG INCORRETA'}
+                                                    </span>
+                                                ) : (
+                                                    `${conta.plano_contas?.Conta} - ${conta.plano_contas?.Descricao || 'N/A'}`
+                                                )}
                                             </TableCell>
                                             <TableCell className={cn("text-right font-semibold", conta.saldo_atual >= 0 ? 'text-green-600' : 'text-red-600')}>
                                                 {formatCurrency(conta.saldo_atual)}
