@@ -398,9 +398,9 @@ const PlanoContasPage = () => {
           </CardHeader>
           <CardContent>
             {/* CORREÇÃO: O div que define a rolagem vertical e horizontal */}
-            <div className="overflow-x-auto overflow-y-auto max-h-[60vh]"> 
+            <div className="relative overflow-x-auto overflow-y-auto max-h-[60vh]"> 
               <Table>
-                <TableHeader className="sticky top-0 bg-background z-10">
+                <TableHeader className="sticky top-0 bg-background/95 backdrop-blur-sm z-20 shadow-sm">
                   <TableRow>
                     <TableHead className="w-[150px]">Conta</TableHead>
                     <TableHead className="w-[100px]">Cód. Reduzido</TableHead>
