@@ -18,7 +18,8 @@ import { useDebounce } from '@/hooks/use-debounce';
 import EditableCell from '@/components/contabilidade/EditableCell';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
-import MapeamentoPlanoContasDialog from '@/components/contabilidade/MapeamentoPlanoContasDialog'; // NOVO IMPORT
+import MapeamentoPlanoContasDialog from '@/components/contabilidade/MapeamentoPlanoContasDialog';
+import MapeamentoManualPlanoContasDialog from '@/components/contabilidade/MapeamentoManualPlanoContasDialog'; // NOVO IMPORT
 
 // Tipo para inicializar o formulário de nova conta
 interface NovaContaInicial {
@@ -92,6 +93,13 @@ const PlanoContasPage = () => {
   const filtroTextoDebounced = useDebounce(filtroTexto, 500);
   const [filtroTipoConta, setFiltroTipoConta] = useState('todos');
   const [filtroAnalitica, setFiltroAnalitica] = useState('todos');
+  
+  // ESTADOS PARA MAPEAMENTO MANUAL DE DELEÇÃO
+  const [contaParaDeletar, setContaParaDeletar] = useState<PlanoContas | null>(null);
+  const [mapeamentoManualDialogOpen, setMapeamentoManualDialogOpen] = useState(false);
+  const [contasDisponiveisParaMapeamento, setContasDisponiveisParaMapeamento] = useState<PlanoContas[]>([]);
+  const [isSubmittingManualMapping, setIsSubmittingManualMapping] = useState(false);
+
 
   const fetchMascara = useCallback(async (id: string) => {
     const { data, error } = await supabase
@@ -223,11 +231,21 @@ const PlanoContasPage = () => {
     const totalDependencies = checks.reduce((sum, res) => sum + (res.count || 0), 0);
     
     if (totalDependencies > 0) {
-        showError(`Não é possível excluir esta conta. Ela está sendo usada em ${totalDependencies} registros (Saldos, Lançamentos ou Configurações).`);
+        // SE HOUVER DEPENDÊNCIAS, ABRE O MODAL DE MAPEAMENTO MANUAL
+        const conta = contas.find(c => c.id === id);
+        if (!conta) return;
+        
+        setContaParaDeletar(conta);
+        
+        // Filtra contas disponíveis para mapeamento (todas exceto a que será deletada)
+        const availableContas = contas.filter(c => c.id !== id);
+        setContasDisponiveisParaMapeamento(availableContas);
+        
+        setMapeamentoManualDialogOpen(true);
         return;
     }
 
-    // 2. EXCLUIR
+    // 2. EXCLUIR (Se não houver dependências)
     const { error } = await supabase
       .from('plano_contas')
       .delete()
@@ -239,6 +257,72 @@ const PlanoContasPage = () => {
       showSuccess('Conta excluída com sucesso.');
       handleImportComplete();
     }
+  };
+  
+  // NEW HANDLER for manual mapping submission
+  const handleManualMappingSubmit = async (newContaId: string | null) => {
+      if (!contaParaDeletar || !proprietarioId) return;
+      
+      setIsSubmittingManualMapping(true);
+      
+      try {
+          const oldId = contaParaDeletar.id;
+          
+          // 1. Atualizar todas as referências para a nova conta (ou NULL)
+          
+          // a) saldo_contas
+          await supabase.from('saldo_contas')
+              .update({ conta_contabil_id: newContaId })
+              .eq('proprietario_id', proprietarioId)
+              .eq('conta_contabil_id', oldId);
+              
+          // b) lancamentos
+          await supabase.from('lancamentos')
+              .update({ conta_contabil_id: newContaId })
+              .eq('proprietario_id', proprietarioId)
+              .eq('conta_contabil_id', oldId);
+              
+          // c) configuracao_contas_receber
+          await supabase.from('configuracao_contas_receber')
+              .update({ conta_contabil_id: newContaId })
+              .eq('proprietario_id', proprietarioId)
+              .eq('conta_contabil_id', oldId);
+              
+          // d) configuracao_contas_pagar
+          await supabase.from('configuracao_contas_pagar')
+              .update({ conta_contabil_id: newContaId })
+              .eq('proprietario_id', proprietarioId)
+              .eq('conta_contabil_id', oldId);
+              
+          // e) configuracoes_stripe (conta_sintetica_id e conta_receber_id)
+          await supabase.from('configuracoes_stripe')
+              .update({ conta_sintetica_id: newContaId })
+              .eq('proprietario_id', proprietarioId)
+              .eq('conta_sintetica_id', oldId);
+              
+          await supabase.from('configuracoes_stripe')
+              .update({ conta_receber_id: newContaId })
+              .eq('proprietario_id', proprietarioId)
+              .eq('conta_receber_id', oldId);
+              
+          // 2. Deletar a conta antiga
+          const { error: deleteError } = await supabase
+              .from('plano_contas')
+              .delete()
+              .eq('id', oldId);
+              
+          if (deleteError) throw deleteError;
+          
+          showSuccess(`Conta ${contaParaDeletar.Conta} deletada e referências atualizadas.`);
+          setMapeamentoManualDialogOpen(false);
+          setContaParaDeletar(null);
+          handleImportComplete(); // Recarrega a lista
+          
+      } catch (error: any) {
+          showError('Falha ao mapear e deletar conta: ' + error.message);
+      } finally {
+          setIsSubmittingManualMapping(false);
+      }
   };
   
   // --- Lógica de Criação Hierárquica ---
@@ -617,7 +701,7 @@ const PlanoContasPage = () => {
         </DialogContent>
       </Dialog>
       
-      {/* NOVO MODAL DE MAPEAMENTO */}
+      {/* MODAL DE MAPEAMENTO DE IMPORTAÇÃO */}
       {proprietarioId && (
           <MapeamentoPlanoContasDialog
               open={mapeamentoDialogOpen}
@@ -626,6 +710,18 @@ const PlanoContasPage = () => {
               contasParaInserir={contasParaInserir}
               contasAntigasEmUso={contasAntigasEmUso}
               onMapeamentoCompleto={handleMapeamentoCompleto}
+          />
+      )}
+      
+      {/* NOVO MODAL DE MAPEAMENTO MANUAL DE DELEÇÃO */}
+      {proprietarioId && contaParaDeletar && (
+          <MapeamentoManualPlanoContasDialog
+              open={mapeamentoManualDialogOpen}
+              onOpenChange={setMapeamentoManualDialogOpen}
+              contaParaDeletar={contaParaDeletar}
+              contasDisponiveis={contasDisponiveisParaMapeamento}
+              onSubmit={handleManualMappingSubmit}
+              isSubmitting={isSubmittingManualMapping}
           />
       )}
     </LayoutPrincipal>

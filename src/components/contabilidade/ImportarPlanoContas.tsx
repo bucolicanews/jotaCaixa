@@ -96,12 +96,13 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
       
       // 3. Identificar contas antigas que não estão no novo plano E que estão em uso
       const contasAntigasEmUso: ContaAntigaEmUsoSimples[] = [];
+      const allOldContas = oldContas as PlanoContas[];
       
-      for (const oldConta of oldContas as PlanoContas[]) {
+      for (const oldConta of allOldContas) {
           const isStillPresent = contasParaInserir.some(c => c.Conta === oldConta.Conta);
           
           if (!isStillPresent) {
-              // Verifica dependências (saldo_contas e lancamentos)
+              // Verifica dependências em saldo_contas e lancamentos
               const checks = await Promise.all([
                   supabase.from('saldo_contas').select('id', { count: 'exact', head: true }).eq('conta_contabil_id', oldConta.id),
                   supabase.from('lancamentos').select('id', { count: 'exact', head: true }).eq('conta_contabil_id', oldConta.id),
@@ -127,16 +128,55 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
           return;
       }
       
-      // 5. Se não houver dependências, procede com a importação direta (exclusão e inserção)
+      // 5. Se não houver dependências NÃO MAPEADAS, procede com a importação direta (exclusão e inserção)
       
-      // Limpar contas existentes para o proprietário
-      const { error: deleteError } = await supabase
-        .from('plano_contas')
-        .delete()
-        .eq('proprietario_id', proprietarioId);
+      const oldIds = allOldContas.map(c => c.id);
+      
+      if (oldIds.length > 0) {
+          // CRÍTICO: Limpar TODAS as referências de FK antes de deletar o plano_contas
+          
+          // Clear config tables (CRITICAL for avoiding FK violation)
+          await supabase.from('configuracao_contas_pagar')
+              .update({ conta_contabil_id: null })
+              .eq('proprietario_id', proprietarioId)
+              .in('conta_contabil_id', oldIds);
 
-      if (deleteError) {
-        throw new Error('Erro ao limpar contas existentes: ' + deleteError.message);
+          await supabase.from('configuracao_contas_receber')
+              .update({ conta_contabil_id: null })
+              .eq('proprietario_id', proprietarioId)
+              .in('conta_contabil_id', oldIds);
+              
+          await supabase.from('configuracoes_stripe')
+              .update({ conta_sintetica_id: null })
+              .eq('proprietario_id', proprietarioId)
+              .in('conta_sintetica_id', oldIds);
+              
+          await supabase.from('configuracoes_stripe')
+              .update({ conta_receber_id: null })
+              .eq('proprietario_id', proprietarioId)
+              .in('conta_receber_id', oldIds);
+              
+          // Clear saldo_contas references (SET TO NULL)
+          await supabase.from('saldo_contas')
+              .update({ conta_contabil_id: null })
+              .eq('proprietario_id', proprietarioId)
+              .in('conta_contabil_id', oldIds);
+              
+          // Clear lancamentos references (SET TO NULL)
+          await supabase.from('lancamentos')
+              .update({ conta_contabil_id: null })
+              .eq('proprietario_id', proprietarioId)
+              .in('conta_contabil_id', oldIds);
+              
+          // Limpar contas existentes para o proprietário
+          const { error: deleteError } = await supabase
+            .from('plano_contas')
+            .delete()
+            .eq('proprietario_id', proprietarioId);
+
+          if (deleteError) {
+            throw new Error('Erro ao limpar contas existentes: ' + deleteError.message);
+          }
       }
 
       // Inserir novos dados
