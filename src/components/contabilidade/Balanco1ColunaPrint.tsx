@@ -78,7 +78,7 @@ const Balanco1ColunaPrint: React.FC<Balanco1ColunaPrintProps> = ({
     </div>
   );
   
-  const renderTable = (title: string, contasList: ContaBalanco[], total: number, totalLabel: string) => (
+  const renderTable = (title: string, contasList: ContaBalanco[], total: number, totalLabel: string, showTotalPassivoPL: boolean = false) => (
     <div className="print-section" style={{ pageBreakBefore: 'always' }}>
         {renderHeader(title)}
         <table className="print-table" style={{ width: '100%' }}>
@@ -95,6 +95,12 @@ const Balanco1ColunaPrint: React.FC<Balanco1ColunaPrintProps> = ({
                     <td colSpan={2}>{totalLabel}</td>
                     <td style={{ textAlign: 'right' }}>{formatCurrency(total)}</td>
                 </tr>
+                {showTotalPassivoPL && (
+                    <tr style={{ fontWeight: 'bold', borderTop: '2px solid #000', backgroundColor: '#c0c0c0' }}>
+                        <td colSpan={2}>TOTAL PASSIVO + PL</td>
+                        <td style={{ textAlign: 'right' }}>{formatCurrency(totalPassivo + totalPatrimonioLiquido + resultadoLiquido)}</td>
+                    </tr>
+                )}
             </tbody>
         </table>
         {renderSignatures()}
@@ -120,7 +126,7 @@ const Balanco1ColunaPrint: React.FC<Balanco1ColunaPrintProps> = ({
       {renderTable('BALANÇO PATRIMONIAL - PASSIVO', passivoContas, totalPassivo, 'TOTAL DO PASSIVO')}
       
       {/* 3. PATRIMÔNIO LÍQUIDO */}
-      {renderTable('BALANÇO PATRIMONIAL - PATRIMÔNIO LÍQUIDO', plContas, totalPatrimonioLiquido, 'TOTAL DO PATRIMÔNIO LÍQUIDO')}
+      {renderTable('BALANÇO PATRIMONIAL - PATRIMÔNIO LÍQUIDO', plContas, totalPatrimonioLiquido, 'TOTAL DO PATRIMÔNIO LÍQUIDO', true)}
       
       {/* 4. RECEITA */}
       {renderTable('DEMONSTRAÇÃO DO RESULTADO - RECEITAS', receitaContas, totalReceita, 'TOTAL DAS RECEITAS')}
