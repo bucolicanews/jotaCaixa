@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Loader2, Edit, Trash2, PlusCircle, Filter, Search, ArrowUp, ArrowDown } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
@@ -41,17 +42,6 @@ const NIVEL_COLORS: Record<number, string> = {
     4: 'bg-red-500/10 hover:bg-red-500/20',
     5: 'bg-purple-500/10 hover:bg-purple-500/20',
 };
-
-// Componentes utilitários de Tabela (Baseados em shadcn/ui)
-const TableRow = ({ className, ...props }: React.HTMLAttributes<HTMLTableRowElement>) => (
-    <tr className={cn("border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted", className)} {...props} />
-);
-const TableHead = ({ className, ...props }: React.ThHTMLAttributes<HTMLTableCellElement>) => (
-    <th className={cn("h-12 px-4 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0", className)} {...props} />
-);
-const TableCell = ({ className, ...props }: React.TdHTMLAttributes<HTMLTableCellElement>) => (
-    <td className={cn("p-4 align-middle [&:has([role=checkbox])]:pr-0", className)} {...props} />
-);
 
 
 const PlanoContasPage = () => {
@@ -410,8 +400,8 @@ const PlanoContasPage = () => {
           <CardContent>
             {/* CORREÇÃO: O div que define a rolagem vertical e horizontal */}
             <div className="relative overflow-x-auto overflow-y-auto max-h-[60vh]"> 
-              <table className="w-full caption-bottom text-sm">
-                <thead className="[&amp;_tr]:border-b sticky top-0 bg-background/95 backdrop-blur-sm z-20 shadow-sm">
+              <Table>
+                <TableHeader className="sticky top-0 bg-background/95 backdrop-blur-sm z-20 shadow-sm">
                   <TableRow>
                     <TableHead className="w-[150px]">Conta</TableHead>
                     <TableHead className="w-[100px]">Cód. Reduzido</TableHead>
@@ -422,8 +412,8 @@ const PlanoContasPage = () => {
                     <TableHead className="w-[100px] text-center">Conta de Resultado</TableHead>
                     <TableHead className="w-[100px] text-right">Ações</TableHead>
                   </TableRow>
-                </thead>
-                <tbody className="[&amp;_tr:last-child]:border-0">
+                </TableHeader>
+                <TableBody>
                   {carregandoContas ? (
                     <TableRow>
                       <TableCell colSpan={8} className="text-center py-8">
@@ -558,8 +548,8 @@ const PlanoContasPage = () => {
                         );
                     })
                   )}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
           </CardContent>
         </Card>
