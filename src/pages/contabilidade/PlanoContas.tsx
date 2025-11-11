@@ -191,7 +191,6 @@ const PlanoContasPage = () => {
         await supabase.from('lancamentos').update({ conta_contabil_id: null }).eq('conta_contabil_id', id);
         await supabase.from('configuracao_contas_receber').update({ conta_contabil_id: null }).eq('conta_contabil_id', id);
         await supabase.from('configuracao_contas_pagar').update({ conta_contabil_id: null }).eq('conta_contabil_id', id);
-        // Para configuracoes_stripe, precisamos verificar ambos os campos
         await supabase.from('configuracoes_stripe').update({ conta_sintetica_id: null }).eq('conta_sintetica_id', id);
         await supabase.from('configuracoes_stripe').update({ conta_receber_id: null }).eq('conta_receber_id', id);
         
