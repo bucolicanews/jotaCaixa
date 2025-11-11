@@ -90,6 +90,7 @@ const PlanoContasPage = () => {
     if (error && error.code !== 'PGRST116') {
         console.error('Erro ao buscar máscara:', error);
     }
+    
     setMascaraAtiva(data?.mascara_codigo || null);
   }, []);
 
@@ -195,7 +196,24 @@ const PlanoContasPage = () => {
 
   const handleDelete = async (id: string) => {
     if (!window.confirm('Tem certeza que deseja excluir esta conta?')) return;
+    
+    // 1. VERIFICAR DEPENDÊNCIAS
+    const checks = await Promise.all([
+        supabase.from('saldo_contas').select('id', { count: 'exact', head: true }).eq('conta_contabil_id', id),
+        supabase.from('lancamentos').select('id', { count: 'exact', head: true }).eq('conta_contabil_id', id),
+        supabase.from('configuracao_contas_receber').select('id', { count: 'exact', head: true }).eq('conta_contabil_id', id),
+        supabase.from('configuracao_contas_pagar').select('id', { count: 'exact', head: true }).eq('conta_contabil_id', id),
+        supabase.from('configuracoes_stripe').select('id', { count: 'exact', head: true }).or(`conta_sintetica_id.eq.${id},conta_receber_id.eq.${id}`),
+    ]);
+    
+    const totalDependencies = checks.reduce((sum, res) => sum + (res.count || 0), 0);
+    
+    if (totalDependencies > 0) {
+        showError(`Não é possível excluir esta conta. Ela está sendo usada em ${totalDependencies} registros (Saldos, Lançamentos ou Configurações).`);
+        return;
+    }
 
+    // 2. EXCLUIR
     const { error } = await supabase
       .from('plano_contas')
       .delete()
@@ -219,7 +237,8 @@ const PlanoContasPage = () => {
   const handleOpenNewConta = (nivel: 'acima' | 'abaixo') => {
       if (!contaClicada) return;
       
-      const parts = contaClicada.Conta.split('.').filter(p => p.length > 0);
+      // CORREÇÃO: Usando split('.') e filter(Boolean) para obter os segmentos
+      const parts = contaClicada.Conta.split('.').filter(Boolean);
       const nivelAtual = parts.length;
       let novoCodigo = '';
       let novaAnalitica: 'Sim' | 'Não' = 'Não';
@@ -230,11 +249,11 @@ const PlanoContasPage = () => {
       if (nivel === 'abaixo') {
           // Nível Abaixo: Adiciona um novo segmento
           
-          // O novo segmento é o próximo nível (nivelAtual + 1)
-          const proximoNivel = nivelAtual; 
+          // O novo segmento é o próximo nível (nivelAtual)
+          const proximoNivelIndex = nivelAtual; 
           
           // Se a máscara não tiver um segmento para o próximo nível, usamos '0001' como fallback
-          const paddingLength = maskParts[proximoNivel]?.length || 4; 
+          const paddingLength = maskParts[proximoNivelIndex]?.length || 4; 
           const novoSegmento = String(1).padStart(paddingLength, '0');
           
           novoCodigo = contaClicada.Conta + '.' + novoSegmento;
@@ -252,13 +271,13 @@ const PlanoContasPage = () => {
           
           // 3. Encontra a conta de mesmo nível com o maior código
           const contasNoMesmoNivel = contas.filter(c => {
-              const cParts = c.Conta.split('.').filter(p => p.length > 0);
+              const cParts = c.Conta.split('.').filter(Boolean);
               // Verifica se tem o mesmo número de segmentos E o mesmo prefixo do pai
               return cParts.length === nivelAtual && c.Conta.startsWith(codigoPai);
           });
           
           const maxSegmento = contasNoMesmoNivel.reduce((max, c) => {
-              const cParts = c.Conta.split('.').filter(p => p.length > 0);
+              const cParts = c.Conta.split('.').filter(Boolean);
               return Math.max(max, parseInt(cParts[nivelAtual - 1], 10));
           }, parseInt(segmentoAtual, 10));
           
