@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -43,15 +43,49 @@ const NIVEL_COLORS: Record<number, string> = {
 };
 
 // Componentes utilitários de Tabela (Baseados em shadcn/ui)
-const TableRow = ({ className, ...props }: React.HTMLAttributes<HTMLTableRowElement>) => (
-    <tr className={cn("border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted", className)} {...props} />
+// --- INÍCIO DA CORREÇÃO COM FORWARD REF ---
+const TableRow = React.forwardRef<HTMLTableRowElement, React.HTMLAttributes<HTMLTableRowElement>>(
+  function TableRow({ className, children, ...props }, ref) {
+    return (
+      <tr
+        ref={ref}
+        className={cn("border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted", className)}
+        {...props}
+      >
+        {children}
+      </tr>
+    );
+  }
 );
-const TableHead = ({ className, ...props }: React.ThHTMLAttributes<HTMLTableCellElement>) => (
-    <th className={cn("h-12 px-4 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0", className)} {...props} />
+
+const TableHead = React.forwardRef<HTMLTableCellElement, React.ThHTMLAttributes<HTMLTableCellElement>>(
+  function TableHead({ className, children, ...props }, ref) {
+    return (
+      <th
+        ref={ref}
+        className={cn("h-12 px-4 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0", className)}
+        {...props}
+      >
+        {children}
+      </th>
+    );
+  }
 );
-const TableCell = ({ className, ...props }: React.TdHTMLAttributes<HTMLTableCellElement>) => (
-    <td className={cn("p-4 align-middle [&:has([role=checkbox])]:pr-0", className)} {...props} />
+
+const TableCell = React.forwardRef<HTMLTableCellElement, React.TdHTMLAttributes<HTMLTableCellElement>>(
+  function TableCell({ className, children, ...props }, ref) {
+    return (
+      <td
+        ref={ref}
+        className={cn("p-4 align-middle [&:has([role=checkbox])]:pr-0", className)}
+        {...props}
+      >
+        {children}
+      </td>
+    );
+  }
 );
+// --- FIM DA CORREÇÃO COM FORWARD REF ---
 
 
 const PlanoContasPage = () => {
