@@ -49,7 +49,8 @@ const MapearSaldosDialog: React.FC<MapearSaldosDialogProps> = ({
 
     // CORREÇÃO: A chave agora é o ID da conta de saldo (s.id)
     const handleMapChange = (saldoContaId: string, newContaId: string) => {
-        setMapping(prev => ({ ...prev, [saldoContaId]: newContaId }));
+        // 1. Garante que o newContaId seja uma string antes de salvar
+        setMapping(prev => ({ ...prev, [saldoContaId]: String(newContaId) }));
     };
     
     const handleClose = (forceClose: boolean = false) => {
@@ -179,19 +180,22 @@ const MapearSaldosDialog: React.FC<MapearSaldosDialogProps> = ({
                                             </TableCell>
                                             <TableCell>
                                                 <Select 
-                                                    // CORREÇÃO: Passa o ID da conta de saldo (s.id) para o handler
-                                                    onValueChange={(newContaId) => handleMapChange(saldo.id, newContaId)}
-                                                    // CORREÇÃO: Garante que o valor seja undefined se não houver mapeamento
-                                                    value={mapping[saldo.id] || undefined}
+                                                    // 1. Converte o newContaId para string ao salvar
+                                                    onValueChange={(newContaId) => handleMapChange(saldo.id, String(newContaId))}
+                                                    // 2. Garante que o valor seja string ou undefined
+                                                    value={mapping[saldo.id] ? String(mapping[saldo.id]) : undefined}
                                                     disabled={loading}
                                                 >
                                                     <SelectTrigger className={cn("h-8 text-xs", !isMapped && 'border-red-500')}>
-                                                        {/* CORREÇÃO: Remove o conteúdo extra do SelectValue */}
                                                         <SelectValue placeholder="Selecione a nova conta analítica" />
                                                     </SelectTrigger>
                                                     <SelectContent>
                                                         {newContasAnaliticas.map(c => (
-                                                            <SelectItem key={c.id} value={c.id}>
+                                                            <SelectItem 
+                                                                key={c.id} 
+                                                                // 3. Garante que o valor do SelectItem seja string
+                                                                value={String(c.id)}
+                                                            >
                                                                 {c.Conta} - {c.Descricao}
                                                             </SelectItem>
                                                         ))}
