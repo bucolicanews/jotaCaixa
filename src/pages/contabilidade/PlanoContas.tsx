@@ -11,7 +11,7 @@ import {
   Search,
   ArrowUp,
   ArrowRight,
-  BookOpen, // ERRO 6: Importando BookOpen
+  BookOpen,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
@@ -27,24 +27,13 @@ import { useDebounce } from '@/hooks/use-debounce';
 import EditableCell from '@/components/contabilidade/EditableCell';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
-import EditableSelectCell from '@/components/contabilidade/EditableSelectCell'; // ERRO 1: O caminho está correto, assumindo que o arquivo foi criado.
+import EditableSelectCell from '@/components/contabilidade/EditableSelectCell'; // NOVO IMPORT
 
 // Tipo para inicializar o formulário de nova conta
 interface NovaContaInicial {
     Conta: string;
     Analitica: 'Sim' | 'Não';
 }
-
-// ERRO 2: Removendo o tipo 'FormInitialData' não utilizado.
-/*
-type FormInitialData = PlanoContas | (NovaContaInicial & {
-    codigo_reduzido: string;
-    Descricao: string;
-    is_conta_caixa_banco: boolean; 
-    is_conta_patrimonial: boolean; 
-    is_conta_resultado: boolean;
-});
-*/
 
 // Mapeamento de cores para os níveis hierárquicos
 const NIVEL_COLORS: Record<number, string> = {
@@ -129,7 +118,7 @@ const PlanoContasPage = () => {
         .select('mascara_codigo')
         .eq('proprietario_id', id)
         .limit(1)
-        .maybeSingle(); // USANDO maybeSingle()
+        .maybeSingle();
         
     if (error) {
         console.error('Erro ao buscar máscara:', error);
@@ -265,13 +254,6 @@ const PlanoContasPage = () => {
     }
   };
 
-  // ERRO 3: Removendo a função 'isParentOf' não utilizada.
-  /*
-  const isParentOf = (parent: PlanoContas, child: PlanoContas): boolean => {
-    return child.Conta.startsWith(parent.Conta) && child.Conta !== parent.Conta;
-  };
-  */
-
   // Função para lidar com o clique na conta (para navegação hierárquica)
   const handleContaClick = (conta: PlanoContas) => {
     if (conta.Analitica === 'Não') {
@@ -283,7 +265,7 @@ const PlanoContasPage = () => {
     }
   };
   
-  // Função para criar nova conta abaixo (filha) - NÃO ALTERADA
+  // Função para criar nova conta abaixo (filha)
   const handleNovaContaAbaixo = (contaPai: PlanoContas) => {
       setNovaContaInicial({
           Conta: contaPai.Conta + '.', 
@@ -294,7 +276,7 @@ const PlanoContasPage = () => {
       setPopoverOpen(false);
   };
   
-  // Função para criar nova conta no mesmo nível (irmã) - NÃO ALTERADA
+  // Função para criar nova conta no mesmo nível (irmã)
   const handleNovaContaNivel = (contaIrma: PlanoContas) => {
       const partes = contaIrma.Conta.split('.');
       partes.pop(); 
@@ -369,7 +351,6 @@ const PlanoContasPage = () => {
                       fieldName="codigo_reduzido"
                       onSaveSuccess={handleInlineSaveSuccess}
                       isEditable={true} 
-                      // ERRO 4: Removendo prop 'type'
                     />
                   </TableCell>
                   
@@ -380,7 +361,6 @@ const PlanoContasPage = () => {
                       fieldName="Descricao"
                       onSaveSuccess={handleInlineSaveSuccess}
                       isEditable={true} 
-                      // ERRO 5: Removendo prop 'type'
                     />
                   </TableCell>
                   
@@ -458,9 +438,7 @@ const PlanoContasPage = () => {
                 {proprietarioId && (
                   <FormPlanoContas 
                     proprietarioId={proprietarioId}
-                    // ERRO 7: Assumindo que o componente FormPlanoContas aceita o tipo de união para initialData
-                    // Se o erro persistir, o tipo FormPlanoContasProps deve ser definido/importado corretamente.
-                    initialData={contaSelecionada || novaContaInicial} 
+                    initialData={contaSelecionada || novaContaInicial}
                     onSaveSuccess={handleSaveComplete}
                     mascaraAtiva={mascaraAtiva}
                   />
@@ -470,8 +448,6 @@ const PlanoContasPage = () => {
             
             {proprietarioId && (
               <ImportarPlanoContas 
-                // ERRO 8: Assumindo que o componente ImportarPlanoContas aceita a prop proprietarioId
-                // Se o erro persistir, o tipo ImportarPlanoContasProps deve ser definido/importado corretamente.
                 proprietarioId={proprietarioId} 
                 onImportComplete={handleImportComplete} 
               />
@@ -524,7 +500,7 @@ const PlanoContasPage = () => {
                 {/* Trigger invisível, ativado via estado */}
                 <Button variant="ghost" className="hidden" />
             </PopoverTrigger>
-            <PopoverContent className="w-64 p-2">
+            <PopoverContent className="w-64 p-2" align="start" side="right">
                 <p className="text-sm font-semibold mb-2">Ações para {contaClicada?.Conta}</p>
                 <div className="flex flex-col space-y-1">
                     <Button 
