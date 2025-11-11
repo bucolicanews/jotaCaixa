@@ -2,7 +2,18 @@ import React, { useState, useEffect, useCallback } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, Edit, Trash2, PlusCircle, Filter, Search, ArrowUp, ArrowRight } from 'lucide-react';
+import {
+  Loader2,
+  Edit,
+  Trash2,
+  PlusCircle,
+  Filter,
+  Search,
+  ArrowUp,
+  ArrowRight,
+  AlertTriangle,
+  CheckCircle2,
+} from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
@@ -413,231 +424,280 @@ const PlanoContasPage = () => {
     <LayoutPrincipal>
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
         <h1 className="text-2xl md:text-3xl font-bold">Plano de Contas</h1>
-        <div className="space-x-2 w-full sm:w-auto">
-          <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
-            <DialogTrigger asChild>
-              <Button onClick={() => { setContaSelecionada(null); setNovaContaInicial(null); }} className="w-full sm:w-auto">
-                <PlusCircle className="w-4 h-4 mr-2" />
-                Nova Conta
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px]">
-              <DialogHeader>
-                <DialogTitle>{(initialFormValues as PlanoContas)?.id ? 'Editar Conta' : 'Nova Conta'}</DialogTitle>
-              </DialogHeader>
-              <FormPlanoContas 
-                proprietarioId={proprietarioId}
-                contaInicial={initialFormValues as PlanoContas | null}
-                onSaveComplete={handleSaveComplete}
-              />
-            </DialogContent>
-          </Dialog>
-        </div>
+        <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
+          <DialogTrigger asChild>
+            <Button onClick={() => { setContaSelecionada(null); setNovaContaInicial(null); }} className="w-full sm:w-auto">
+              <PlusCircle className="w-4 h-4 mr-2" />
+              Nova Conta
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>{(initialFormValues as PlanoContas)?.id ? 'Editar Conta' : 'Nova Conta'}</DialogTitle>
+            </DialogHeader>
+            <FormPlanoContas 
+              proprietarioId={proprietarioId}
+              contaInicial={initialFormValues as PlanoContas | null}
+              onSaveComplete={handleSaveComplete}
+            />
+          </DialogContent>
+        </Dialog>
       </div>
 
-      <div className="space-y-6">
-        <ImportarPlanoContas onImportComplete={handleImportComplete} />
+      {/* GRID MODERNO DE DUAS COLUNAS */}
+      <div className="grid grid-cols-1 lg:grid-cols-[30%_70%] gap-6 items-start">
+        
+        {/* COLUNA ESQUERDA */}
+        <div className="space-y-6">
+          {/* IMPORTAR PLANO DE CONTAS */}
+          <Card className="shadow-md border border-border/50">
+            <CardHeader>
+              <CardTitle className="text-lg font-semibold flex items-center">
+                <ArrowRight className="w-4 h-4 mr-2 text-muted-foreground" />
+                Importar Plano de Contas
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ImportarPlanoContas onImportComplete={handleImportComplete} />
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center"><Filter className="w-4 h-4 mr-2" /> Filtros</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col sm:flex-row gap-4">
-            <div className="relative w-full sm:w-[300px]">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Buscar por conta, código ou descrição..."
-                value={filtroTexto}
-                onChange={(e) => setFiltroTexto(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-            <Select value={filtroTipoConta} onValueChange={setFiltroTipoConta}>
-              <SelectTrigger className="w-full sm:w-[200px]">
-                <SelectValue placeholder="Filtrar por Tipo" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos os Tipos</SelectItem>
-                <SelectItem value="ativo">Ativo (Inicia com 1)</SelectItem>
-                <SelectItem value="passivo">Passivo (Inicia com 2)</SelectItem>
-                <SelectItem value="receita">Receita (Inicia com 3)</SelectItem>
-                <SelectItem value="despesa">Despesa (Inicia com 4)</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={filtroAnalitica} onValueChange={setFiltroAnalitica}>
-              <SelectTrigger className="w-full sm:w-[200px]">
-                <SelectValue placeholder="Filtrar por Analítica" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todas (Analítica)</SelectItem>
-                <SelectItem value="Sim">Sim</SelectItem>
-                <SelectItem value="Não">Não</SelectItem>
-              </SelectContent>
-            </Select>
-          </CardContent>
-        </Card>
+          {/* FILTROS */}
+          <Card className="shadow-md border border-border/50">
+            <CardHeader>
+              <CardTitle className="text-lg font-semibold flex items-center">
+                <Filter className="w-4 h-4 mr-2 text-muted-foreground" />
+                Filtros
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar por conta, código ou descrição..."
+                  value={filtroTexto}
+                  onChange={(e) => setFiltroTexto(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              <Select value={filtroTipoConta} onValueChange={setFiltroTipoConta}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Filtrar por Tipo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos os Tipos</SelectItem>
+                  <SelectItem value="ativo">Ativo (Inicia com 1)</SelectItem>
+                  <SelectItem value="passivo">Passivo (Inicia com 2)</SelectItem>
+                  <SelectItem value="receita">Receita (Inicia com 3)</SelectItem>
+                  <SelectItem value="despesa">Despesa (Inicia com 4)</SelectItem>
+                </SelectContent>
+              </Select>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-xl">Contas Cadastradas ({contas.length})</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {/* CORREÇÃO: O div que define a rolagem vertical e horizontal */}
-            <div className="relative overflow-x-auto overflow-y-auto max-h-[60vh]"> 
-              <table className="w-full caption-bottom text-sm">
-                <thead className="[&amp;_tr]:border-b sticky top-0 bg-background/95 backdrop-blur-sm z-20 shadow-sm">
-                  <TableRow>
-                    <TableHead className="w-[150px]">Conta</TableHead>
-                    <TableHead className="w-[100px]">Cód. Reduzido</TableHead>
-                    <TableHead>Descrição</TableHead>
-                    <TableHead className="w-[100px] text-center">Analítica</TableHead>
-                    <TableHead className="w-[100px] text-center">Conta Caixa/Banco</TableHead>
-                    <TableHead className="w-[100px] text-center">Conta Patrimonial</TableHead>
-                    <TableHead className="w-[100px] text-center">Conta de Resultado</TableHead>
-                    <TableHead className="w-[100px] text-right">Ações</TableHead>
-                  </TableRow>
-                </thead>
-                <tbody className="[&amp;_tr:last-child]:border-0">
-                  {carregandoContas ? (
+              <Select value={filtroAnalitica} onValueChange={setFiltroAnalitica}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Filtrar por Analítica" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todas (Analítica)</SelectItem>
+                  <SelectItem value="Sim">Sim</SelectItem>
+                  <SelectItem value="Não">Não</SelectItem>
+                </SelectContent>
+              </Select>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* COLUNA DIREITA */}
+        <div>
+          <Card className="shadow-md border border-border/50">
+            <CardHeader className="flex justify-between items-center">
+              <CardTitle className="text-xl font-semibold">
+                Contas Cadastradas ({contas.length})
+              </CardTitle>
+              {carregandoContas && (
+                <Loader2 className="h-5 w-5 animate-spin text-primary" />
+              )}
+            </CardHeader>
+            <CardContent>
+              <div className="relative overflow-x-auto overflow-y-auto max-h-[65vh] rounded-md border border-border/50">
+                <table className="w-full caption-bottom text-sm">
+                  <thead className="[&_tr]:border-b sticky top-0 bg-background/95 backdrop-blur-sm z-20 shadow-sm">
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center py-8">
-                        <Loader2 className="h-6 w-6 animate-spin mx-auto text-primary" />
-                      </TableCell>
+                      <TableHead className="w-[150px]">Conta</TableHead>
+                      <TableHead className="w-[100px]">Cód. Reduzido</TableHead>
+                      <TableHead>Descrição</TableHead>
+                      <TableHead className="w-[100px] text-center">Analítica</TableHead>
+                      <TableHead className="w-[100px] text-center">Caixa/Banco</TableHead>
+                      <TableHead className="w-[100px] text-center">Patrimonial</TableHead>
+                      <TableHead className="w-[100px] text-center">Resultado</TableHead>
+                      <TableHead className="w-[100px] text-right">Ações</TableHead>
                     </TableRow>
-                  ) : contas.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={8} className="text-center py-4 text-muted-foreground">
-                        Nenhuma conta encontrada com os filtros aplicados.
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    contas.map((conta) => {
-                        // Calcula o nível da conta (número de segmentos)
-                        const nivel = conta.Conta.split('.').filter(p => p.length > 0).length;
-                        const nivelClass = NIVEL_COLORS[nivel] || 'hover:bg-secondary/50';
-                        
-                        // Aplica indentação
+                  </thead>
+                  <tbody className="[&_tr:last-child]:border-0">
+                    {carregandoContas ? (
+                      <TableRow>
+                        <TableCell colSpan={8} className="text-center py-8">
+                          <Loader2 className="h-6 w-6 animate-spin mx-auto text-primary" />
+                        </TableCell>
+                      </TableRow>
+                    ) : contas.length === 0 ? (
+                      <TableRow>
+                        <TableCell
+                          colSpan={8}
+                          className="text-center py-4 text-muted-foreground"
+                        >
+                          Nenhuma conta encontrada com os filtros aplicados.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      contas.map((conta) => {
+                        const nivel = conta.Conta.split('.').filter((p) => p.length > 0)
+                          .length;
+                        const nivelClass =
+                          NIVEL_COLORS[nivel] || 'hover:bg-secondary/50';
                         const paddingLeft = (nivel - 1) * 10;
-                        
-                        // Define a cor de fundo da linha
                         const rowClassName = cn(
-                            nivelClass,
-                            contaClicada?.id === conta.id && popoverOpen && "bg-secondary/50"
+                          nivelClass,
+                          contaClicada?.id === conta.id &&
+                            popoverOpen &&
+                            'bg-secondary/50'
                         );
 
                         return (
-                            <Popover open={contaClicada?.id === conta.id && popoverOpen} onOpenChange={setPopoverOpen} key={conta.id}>
-                                <PopoverTrigger asChild>
-                                    <TableRow 
-                                        onClick={() => handleRowClick(conta)}
-                                        className={cn("cursor-pointer", rowClassName)}
+                          <Popover
+                            open={contaClicada?.id === conta.id && popoverOpen}
+                            onOpenChange={setPopoverOpen}
+                            key={conta.id}
+                          >
+                            <PopoverTrigger asChild>
+                              <TableRow
+                                onClick={() => handleRowClick(conta)}
+                                className={cn('cursor-pointer', rowClassName)}
+                              >
+                                <TableCell
+                                  className="font-mono text-sm"
+                                  style={{ paddingLeft: `${paddingLeft + 16}px` }}
+                                >
+                                  <EditableCell
+                                    id={conta.id}
+                                    initialValue={conta.Conta}
+                                    fieldName="Conta"
+                                    onSaveSuccess={handleInlineSaveSuccess}
+                                    isEditable={true}
+                                    className="font-mono text-sm"
+                                  />
+                                </TableCell>
+                                <TableCell className="text-sm">
+                                  <EditableCell
+                                    id={conta.id}
+                                    initialValue={conta.codigo_reduzido}
+                                    fieldName="codigo_reduzido"
+                                    onSaveSuccess={handleInlineSaveSuccess}
+                                    isEditable={true}
+                                  />
+                                </TableCell>
+                                <TableCell>
+                                  <EditableCell
+                                    id={conta.id}
+                                    initialValue={conta.Descricao}
+                                    fieldName="Descricao"
+                                    onSaveSuccess={handleInlineSaveSuccess}
+                                    isEditable={true}
+                                  />
+                                </TableCell>
+                                <TableCell className="text-center">
+                                  {conta.Analitica}
+                                </TableCell>
+                                
+                                <TableCell className="text-center">
+                                  {conta.Analitica === 'Sim' ? (
+                                    <EditableCell
+                                      id={conta.id}
+                                      initialValue={conta.is_conta_caixa_banco}
+                                      fieldName="is_conta_caixa_banco"
+                                      onSaveSuccess={handleInlineSaveSuccess}
+                                      isEditable={true}
+                                    />
+                                  ) : (
+                                    '-'
+                                  )}
+                                </TableCell>
+                                
+                                {/* NOVA COLUNA: CONTA PATRIMONIAL */}
+                                <TableCell className="text-center">
+                                  {conta.Analitica === 'Sim' ? (
+                                    <EditableCell
+                                      id={conta.id}
+                                      initialValue={conta.is_conta_patrimonial}
+                                      fieldName="is_conta_patrimonial"
+                                      onSaveSuccess={handleInlineSaveSuccess}
+                                      isEditable={true}
+                                    />
+                                  ) : (
+                                    '-'
+                                  )}
+                                </TableCell>
+                                
+                                <TableCell className="text-center">
+                                  {conta.Analitica === 'Sim' ? (
+                                    <EditableCell
+                                      id={conta.id}
+                                      initialValue={conta.is_conta_resultado}
+                                      fieldName="is_conta_resultado"
+                                      onSaveSuccess={handleInlineSaveSuccess}
+                                      isEditable={true}
+                                    />
+                                  ) : (
+                                    '-'
+                                  )}
+                                </TableCell>
+                                
+                                <TableCell className="text-right">
+                                  <div className="flex justify-end space-x-2">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleEdit(conta);
+                                      }}
+                                      title="Editar Conta"
                                     >
-                                        <TableCell className="font-mono text-sm" style={{ paddingLeft: `${paddingLeft + 16}px` }}>
-                                            <EditableCell
-                                                id={conta.id}
-                                                initialValue={conta.Conta}
-                                                fieldName="Conta"
-                                                onSaveSuccess={handleInlineSaveSuccess}
-                                                isEditable={true}
-                                                className="font-mono text-sm"
-                                            />
-                                        </TableCell>
-                                        <TableCell className="text-sm">
-                                            <EditableCell
-                                                id={conta.id}
-                                                initialValue={conta.codigo_reduzido}
-                                                fieldName="codigo_reduzido"
-                                                onSaveSuccess={handleInlineSaveSuccess}
-                                                isEditable={true}
-                                                className="text-sm"
-                                            />
-                                        </TableCell>
-                                        <TableCell>
-                                            <EditableCell
-                                                id={conta.id}
-                                                initialValue={conta.Descricao}
-                                                fieldName="Descricao"
-                                                onSaveSuccess={handleInlineSaveSuccess}
-                                                isEditable={true}
-                                            />
-                                        </TableCell>
-                                        <TableCell className="text-center">
-                                            {conta.Analitica}
-                                        </TableCell>
-                                        
-                                        <TableCell className="text-center">
-                                            {conta.Analitica === 'Sim' ? (
-                                                <EditableCell
-                                                    id={conta.id}
-                                                    initialValue={conta.is_conta_caixa_banco}
-                                                    fieldName="is_conta_caixa_banco"
-                                                    onSaveSuccess={handleInlineSaveSuccess}
-                                                    isEditable={true}
-                                                />
-                                            ) : (
-                                                '-'
-                                            )}
-                                        </TableCell>
-                                        
-                                        {/* NOVA COLUNA: CONTA PATRIMONIAL */}
-                                        <TableCell className="text-center">
-                                            {conta.Analitica === 'Sim' ? (
-                                                <EditableCell
-                                                    id={conta.id}
-                                                    initialValue={conta.is_conta_patrimonial}
-                                                    fieldName="is_conta_patrimonial"
-                                                    onSaveSuccess={handleInlineSaveSuccess}
-                                                    isEditable={true}
-                                                />
-                                            ) : (
-                                                '-'
-                                            )}
-                                        </TableCell>
-                                        
-                                        <TableCell className="text-center">
-                                            {conta.Analitica === 'Sim' ? (
-                                                <EditableCell
-                                                    id={conta.id}
-                                                    initialValue={conta.is_conta_resultado}
-                                                    fieldName="is_conta_resultado"
-                                                    onSaveSuccess={handleInlineSaveSuccess}
-                                                    isEditable={true}
-                                                />
-                                            ) : (
-                                                '-'
-                                            )}
-                                        </TableCell>
-                                        
-                                        <TableCell className="text-right">
-                                            <div className="flex justify-end space-x-2">
-                                                {/* CORREÇÃO CRÍTICA: Adicionado e.stopPropagation() para evitar que o clique feche o popover */}
-                                                <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); handleEdit(conta); }} title="Editar Conta">
-                                                    <Edit className="w-4 h-4" />
-                                                </Button>
-                                                <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); handleDelete(conta.id); }} title="Excluir Conta">
-                                                    <Trash2 className="w-4 h-4 text-red-500" />
-                                                </Button>
-                                            </div>
-                                        </TableCell>
-                                    </TableRow>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-auto p-2 flex flex-col space-y-1" align="end">
-                                    <Button variant="ghost" size="sm" onClick={() => handleOpenNewConta('mesmo')}>
-                                        <ArrowRight className="w-4 h-4 mr-2" /> Criar Conta Mesmo Nível
+                                      <Edit className="w-4 h-4" />
                                     </Button>
-                                    <Button variant="ghost" size="sm" onClick={() => handleOpenNewConta('acima')}>
-                                        <ArrowUp className="w-4 h-4 mr-2" /> Criar Conta Nível Acima
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDelete(conta.id);
+                                      }}
+                                      title="Excluir Conta"
+                                    >
+                                      <Trash2 className="w-4 h-4 text-red-500" />
                                     </Button>
-                                </PopoverContent>
-                            </Popover>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-2 flex flex-col space-y-1" align="end">
+                              <Button variant="ghost" size="sm" onClick={() => handleOpenNewConta('mesmo')}>
+                                <ArrowRight className="w-4 h-4 mr-2" /> Criar Conta Mesmo Nível
+                              </Button>
+                              <Button variant="ghost" size="sm" onClick={() => handleOpenNewConta('acima')}>
+                                <ArrowUp className="w-4 h-4 mr-2" /> Criar Conta Nível Acima
+                              </Button>
+                            </PopoverContent>
+                          </Popover>
                         );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
       
       {/* Diálogo de Criação/Edição (usando o FormPlanoContas) */}
