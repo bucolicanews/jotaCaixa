@@ -246,7 +246,21 @@ const PlanoContasPage = () => {
           
           // Se a máscara não tiver um segmento para o próximo nível, usamos '0001' como fallback
           const paddingLength = maskParts[proximoNivel]?.length || 4; 
-          const novoSegmento = String(1).padStart(paddingLength, '0');
+          
+          // 1.1. Encontra o maior segmento do próximo nível que começa com o prefixo do pai
+          const prefixoPai = contaClicada.Conta + '.';
+          const contasFilhas = contas.filter(c => c.Conta.startsWith(prefixoPai));
+          
+          let maxSegmento = 0;
+          if (contasFilhas.length > 0) {
+              maxSegmento = contasFilhas.reduce((max, c) => {
+                  const cParts = c.Conta.split('.').filter(p => p.length > 0);
+                  return Math.max(max, parseInt(cParts[nivelAtual], 10));
+              }, 0);
+          }
+          
+          const novoSegmentoNumerico = maxSegmento + 1;
+          const novoSegmento = String(novoSegmentoNumerico).padStart(paddingLength, '0');
           
           novoCodigo = contaClicada.Conta + '.' + novoSegmento;
           novaAnalitica = 'Sim'; // Sugere analítica para o próximo nível
