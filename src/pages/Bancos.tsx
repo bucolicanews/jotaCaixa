@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, PlusCircle, Edit, Trash2, Banknote, Wallet, CreditCard, Filter, Search, ArrowUpCircle, ArrowDownCircle, Eye } from 'lucide-react';
+import { Loader2, PlusCircle, Edit, Trash2, Banknote, Wallet, CreditCard, Filter, Search, ArrowUpCircle, ArrowDownCircle, Eye, Link as LinkIcon } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
@@ -19,6 +19,7 @@ import { Input } from '@/components/ui/input';
 import { useDebounce } from '@/hooks/use-debounce';
 import useSaldoContaCalculado from '@/hooks/use-saldo-conta-calculado';
 import DetalhesLancamentosDialog from '@/components/contabilidade/DetalhesLancamentosDialog';
+import MapeamentoRapidoSaldoContasDialog from '@/components/contabilidade/MapeamentoRapidoSaldoContasDialog'; // NOVO IMPORT
 
 type TipoSaldoFiltro = 'todos' | 'Credito' | 'Debito' | 'Receita' | 'Despesa';
 
@@ -31,6 +32,9 @@ const Bancos = () => {
   
   // State for details dialog
   const [detalhesDialog, setDetalhesDialog] = useState<{ open: boolean, conta: SaldoContaDetalhada | null }>({ open: false, conta: null });
+  
+  // State for quick mapping dialog
+  const [mapeamentoRapidoDialog, setMapeamentoRapidoDialog] = useState(false);
   
   // Filtros
   const [filtroTipoSaldo, setFiltroTipoSaldo] = useState<TipoSaldoFiltro>('todos');
@@ -145,24 +149,34 @@ const Bancos = () => {
         <h1 className="text-2xl md:text-3xl font-bold flex items-center">
             <Banknote className="w-6 h-6 mr-2" /> Contas e Saldos
         </h1>
-        <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
-          <DialogTrigger asChild>
-            <Button onClick={() => setContaSelecionada(null)} className="w-full sm:w-auto">
-              <PlusCircle className="w-4 h-4 mr-2" />
-              Nova Conta
+        <div className="flex space-x-2 w-full sm:w-auto">
+            <Button 
+                onClick={() => setMapeamentoRapidoDialog(true)} 
+                variant="outline" 
+                className="w-full sm:w-auto"
+                disabled={contas.length === 0 || loadingContasContabeis}
+            >
+                <LinkIcon className="w-4 h-4 mr-2" /> Mapeamento Rápido
             </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px]">
-            <DialogHeader>
-              <DialogTitle>{contaSelecionada ? 'Editar Conta' : 'Nova Conta'}</DialogTitle>
-            </DialogHeader>
-            <FormSaldoConta 
-              contaInicial={contaSelecionada}
-              onSaveComplete={handleSaveComplete}
-              scope="bancos" // PASSANDO O ESCOPO CORRETO
-            />
-          </DialogContent>
-        </Dialog>
+            <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
+              <DialogTrigger asChild>
+                <Button onClick={() => setContaSelecionada(null)} className="w-full sm:w-auto">
+                  <PlusCircle className="w-4 h-4 mr-2" />
+                  Nova Conta
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[425px]">
+                <DialogHeader>
+                  <DialogTitle>{contaSelecionada ? 'Editar Conta' : 'Nova Conta'}</DialogTitle>
+                </DialogHeader>
+                <FormSaldoConta 
+                  contaInicial={contaSelecionada}
+                  onSaveComplete={handleSaveComplete}
+                  scope="bancos" // PASSANDO O ESCOPO CORRETO
+                />
+              </DialogContent>
+            </Dialog>
+        </div>
       </div>
       
       <Card className="mb-6">
@@ -294,6 +308,18 @@ const Bancos = () => {
         open={detalhesDialog.open}
         onOpenChange={(open: boolean) => setDetalhesDialog({ open, conta: null })}
       />
+      
+      {/* NOVO MODAL DE MAPEAMENTO RÁPIDO */}
+      {empresaId && (
+          <MapeamentoRapidoSaldoContasDialog
+              open={mapeamentoRapidoDialog}
+              onOpenChange={setMapeamentoRapidoDialog}
+              contasSaldo={contas}
+              contasContabeis={contasContabeis}
+              proprietarioId={empresaId}
+              onSaveComplete={refetchSaldos}
+          />
+      )}
     </LayoutPrincipal>
   );
 };
