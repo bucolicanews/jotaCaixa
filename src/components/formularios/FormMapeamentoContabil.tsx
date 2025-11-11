@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Loader2, Save, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'; // Importando componentes de tabela
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 const NATUREZAS = [
     { value: 'Ativo', label: 'Ativo (Balanço)' },
@@ -18,9 +18,10 @@ const NATUREZAS = [
     { value: 'Receita', label: 'Receita (DRE)' },
     { value: 'Despesa', label: 'Despesa (DRE)' },
     { value: 'Resultado', label: 'Resultado (Lucro/Prejuízo)' },
+    { value: 'Nenhum', label: 'Nenhum (Ignorar Nível)' }, // NOVO
 ];
 
-const NaturezaEnum = z.enum(['Ativo', 'Passivo', 'Patrimonio Liquido', 'Receita', 'Despesa', 'Resultado']);
+const NaturezaEnum = z.enum(['Ativo', 'Passivo', 'Patrimonio Liquido', 'Receita', 'Despesa', 'Resultado', 'Nenhum']); // NOVO
 type NaturezaType = z.infer<typeof NaturezaEnum>;
 
 const formSchema = z.object({
@@ -70,11 +71,10 @@ const FormMapeamentoContabil: React.FC<FormMapeamentoContabilProps> = ({ proprie
         if (error) {
             showError('Erro ao carregar mapeamento contábil: ' + error.message);
         } else if (data && data.length > 0) {
-            // Mapeia os dados existentes para o formato do formulário
             const existingMap = data.reduce((acc, item) => {
                 acc[item.codigo_nivel_1] = {
                     codigo_nivel_1: item.codigo_nivel_1,
-                    tipo_natureza: item.tipo_natureza as NaturezaType, // Força o tipo NaturezaType
+                    tipo_natureza: item.tipo_natureza as NaturezaType,
                     id: item.id,
                 };
                 return acc;
@@ -85,7 +85,6 @@ const FormMapeamentoContabil: React.FC<FormMapeamentoContabilProps> = ({ proprie
             const finalMapeamentos = defaultLevels.map(code => {
                 if (existingMap[code]) return existingMap[code];
                 
-                // Fallback para o padrão se não estiver salvo
                 const defaultNatureza = NATUREZAS.find(n => n.value.startsWith(code))?.value || (code === '6' ? 'Resultado' : 'Ativo');
                 return { 
                     codigo_nivel_1: code, 
@@ -95,7 +94,6 @@ const FormMapeamentoContabil: React.FC<FormMapeamentoContabilProps> = ({ proprie
             
             replace(finalMapeamentos);
         } else {
-            // Se não houver dados, garante que o default de 6 níveis seja aplicado
             const defaultMapeamentos = [
                 { codigo_nivel_1: '1', tipo_natureza: 'Ativo' as NaturezaType },
                 { codigo_nivel_1: '2', tipo_natureza: 'Passivo' as NaturezaType },
@@ -118,7 +116,8 @@ const FormMapeamentoContabil: React.FC<FormMapeamentoContabilProps> = ({ proprie
             id: m.id,
             proprietario_id: proprietarioId,
             codigo_nivel_1: m.codigo_nivel_1,
-            tipo_natureza: m.tipo_natureza,
+            // Se for 'Nenhum', salva como NULL no campo tipo_natureza
+            tipo_natureza: m.tipo_natureza === 'Nenhum' ? null : m.tipo_natureza,
         }));
 
         try {
@@ -145,7 +144,7 @@ const FormMapeamentoContabil: React.FC<FormMapeamentoContabilProps> = ({ proprie
         <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
                 <p className="text-sm text-muted-foreground">
-                    Defina a natureza contábil (Ativo, Passivo, Receita, Despesa, Resultado) para cada código de nível primário (1, 2, 3, 4, 5, 6) do seu Plano de Contas.
+                    Defina a natureza contábil (Ativo, Passivo, Receita, Despesa, Resultado) para cada código de nível primário (1, 2, 3, 4, 5, 6) do seu Plano de Contas. Se um nível não for utilizado, selecione "Nenhum".
                 </p>
                 
                 <div className="p-3 bg-yellow-100 dark:bg-yellow-900/20 border border-yellow-500 rounded-md text-sm text-yellow-700 dark:text-yellow-300 flex items-start">

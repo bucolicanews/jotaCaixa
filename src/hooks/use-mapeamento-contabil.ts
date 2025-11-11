@@ -5,7 +5,7 @@ import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 
 interface MapeamentoItem {
     codigo_nivel_1: string;
-    tipo_natureza: 'Ativo' | 'Passivo' | 'Patrimonio Liquido' | 'Receita' | 'Despesa';
+    tipo_natureza: 'Ativo' | 'Passivo' | 'Patrimonio Liquido' | 'Receita' | 'Despesa' | 'Resultado' | 'Nenhum';
 }
 
 interface MapeamentoContabilHook {
@@ -15,7 +15,7 @@ interface MapeamentoContabilHook {
 }
 
 /**
- * Hook que busca o mapeamento de códigos de nível 1 (1, 2, 3, 4, 5) para a natureza contábil.
+ * Hook que busca o mapeamento de códigos de nível 1 (1, 2, 3, 4, 5, 6) para a natureza contábil.
  */
 export function useMapeamentoContabil(): MapeamentoContabilHook {
     const { usuario, perfil, role, carregando: carregandoSessao } = useSessao();
@@ -41,7 +41,7 @@ export function useMapeamentoContabil(): MapeamentoContabilHook {
             setLoading(false);
             return;
         }
-        
+
         setLoading(true);
         
         const { data, error } = await supabase
@@ -53,7 +53,12 @@ export function useMapeamentoContabil(): MapeamentoContabilHook {
             console.error('Erro ao buscar mapeamento contábil:', error);
             setMapeamento([]);
         } else {
-            setMapeamento(data as MapeamentoItem[]);
+            const mappedData = (data as any[]).map(item => ({
+                ...item,
+                // Se tipo_natureza for null, mapeia para 'Nenhum' para consistência interna
+                tipo_natureza: item.tipo_natureza || 'Nenhum', 
+            })) as MapeamentoItem[];
+            setMapeamento(mappedData);
         }
         setLoading(false);
     }, [ownerId, carregandoSessao, refreshKey]);
