@@ -116,12 +116,8 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
           return acc;
       }, {} as Record<string, string>);
       
-      if (Object.keys(mapeamentoMap).length < 5) {
-          showError('O mapeamento de níveis contábeis (1 a 5) não está completo. Configure em Configurações > Contabilidade.');
-          setLoading(false);
-          return;
-      }
-
+      const mapeamentoCompleto = Object.keys(mapeamentoMap).length === 6;
+      
       // 3. Mapear dados para o formato do banco de dados e INFERIR FLAGS
       const contasParaInserir: Partial<PlanoContas>[] = (parsedData as (ContaCSV | ContaJSON)[]).map(conta => {
         
@@ -167,20 +163,64 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
         };
       });
       
-      // 4. Validação da Máscara (Se houver máscara)
+      // 4. Validação de Níveis e Mapeamento
+      const maxNivelImportado = contasParaInserir.reduce((max, c) => {
+          const nivel = c.Conta?.split('.').filter(Boolean).length || 0;
+          return Math.max(max, nivel);
+      }, 0);
+      
+      const hasNiveisAcimaDe2 = maxNivelImportado > 2;
+      
+      // REGRA DE BLOQUEIO: Se o arquivo importado tiver níveis além do Nível 2 E o mapeamento estiver incompleto, bloqueia.
+      if (hasNiveisAcimaDe2 && !mapeamentoCompleto) {
+          showError('O Plano de Contas importado contém níveis além do Nível 2, mas o Mapeamento Contábil (1 a 6) está incompleto. Corrija o Plano de Contas ou complete o mapeamento em Configurações > Contabilidade.');
+          setLoading(false);
+          return;
+      }
+      
+      // 5. Validação da Máscara (Se houver máscara)
       if (mascara) {
           const invalidMasks = contasParaInserir.filter(c => 
               c.Analitica === 'Sim' && !validateMask(c.Conta!, mascara)
           );
           
           if (invalidMasks.length > 0) {
-              showError(`A importação falhou: ${invalidMasks.length} contas analíticas não seguem a máscara '${mascara}'. Corrija o arquivo.`);
+              showError(`A importação falhou: ${invalidMasks.length} contas analíticas não seguem a máscara cadastrada: ${mascara}. Corrija o arquivo.`);
               setLoading(false);
               return;
           }
       }
       
-      // 5. Buscar contas antigas que estão em uso
+      // 6. Adicionar Níveis Faltantes (3 a 6) se o arquivo for simplificado (Nível 1 e 2) E o mapeamento estiver completo
+      if (!hasNiveisAcimaDe2 && mapeamentoCompleto) {
+          const existingNivel1 = new Set(contasParaInserir.map(c => c.Conta?.split('.')[0]).filter(Boolean));
+          
+          const niveisFaltantes: Partial<PlanoContas>[] = [];
+          
+          for (const code of ['3', '4', '5', '6']) {
+              if (!existingNivel1.has(code)) {
+                  const natureza = mapeamentoMap[code];
+                  if (natureza && natureza !== 'Nenhum') {
+                      niveisFaltantes.push({
+                          proprietario_id: proprietarioId,
+                          Conta: code,
+                          Descricao: NATUREZAS.find(n => n.value === natureza)?.label || natureza,
+                          Analitica: 'Não',
+                          is_conta_patrimonial: natureza === 'Ativo' || natureza === 'Passivo' || natureza === 'Patrimonio Liquido',
+                          is_conta_resultado: natureza === 'Receita' || natureza === 'Despesa' || natureza === 'Resultado',
+                          is_conta_caixa_banco: natureza === 'Ativo',
+                      });
+                  }
+              }
+          }
+          
+          if (niveisFaltantes.length > 0) {
+              contasParaInserir.push(...niveisFaltantes);
+              showSuccess(`Níveis primários ausentes (3, 4, 5, 6) adicionados com base na configuração.`);
+          }
+      }
+      
+      // 7. Buscar contas antigas que estão em uso
       const { data: oldContas, error: oldContasError } = await supabase
           .from('plano_contas')
           .select('id, Conta, Descricao')
@@ -188,7 +228,7 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
           
       if (oldContasError) throw new Error('Erro ao buscar contas antigas: ' + oldContasError.message);
       
-      // 6. Identificar contas antigas que não estão no novo plano E que estão em uso
+      // 8. Identificar contas antigas que não estão no novo plano E que estão em uso
       const contasAntigasEmUso: ContaAntigaEmUsoSimples[] = [];
       const allOldContas = oldContas as PlanoContas[];
       
@@ -215,21 +255,21 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
           }
       }
       
-      // 7. Se houver contas antigas em uso que precisam de mapeamento, abre o modal
+      // 9. Se houver contas antigas em uso que precisam de mapeamento, abre o modal
       if (contasAntigasEmUso.length > 0) {
           setFile(null); // Limpa o arquivo para evitar re-importação acidental
           onOpenMapeamento(contasParaInserir, contasAntigasEmUso);
           return;
       }
       
-      // 8. Se não houver dependências NÃO MAPEADAS, procede com a importação direta (exclusão e inserção)
+      // 10. Se não houver dependências NÃO MAPEADAS, procede com a importação direta (exclusão e inserção)
       
       const oldIds = allOldContas.map(c => c.id);
       
       if (oldIds.length > 0) {
           // CRÍTICO: Limpar TODAS as referências de FK antes de deletar o plano_contas
           
-          // 8.1. Limpar referências em tabelas de configuração
+          // 10.1. Limpar referências em tabelas de configuração
           await supabase.from('configuracao_contas_pagar')
               .update({ conta_contabil_id: null })
               .eq('proprietario_id', proprietarioId)
@@ -255,7 +295,7 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
               .eq('admin_id', proprietarioId)
               .in('id_conta_contabil', oldIds);
               
-          // 8.2. Limpar referências em saldo_contas e lancamentos (SET TO NULL)
+          // 10.2. Limpar referências em saldo_contas e lancamentos (SET TO NULL)
           await supabase.from('saldo_contas')
               .update({ conta_contabil_id: null })
               .eq('proprietario_id', proprietarioId)
@@ -266,7 +306,7 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
               .eq('proprietario_id', proprietarioId)
               .in('conta_contabil_id', oldIds);
               
-          // 8.3. Limpar contas existentes para o proprietário
+          // 10.3. Limpar contas existentes para o proprietário
           const { error: deleteError } = await supabase
             .from('plano_contas')
             .delete()
@@ -277,7 +317,7 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
           }
       }
 
-      // 9. Inserir novos dados
+      // 11. Inserir novos dados
       const { error: insertError } = await supabase
         .from('plano_contas')
         .insert(contasParaInserir);
@@ -338,5 +378,16 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
     </Card>
   );
 };
+
+// Adicionando a lista de naturezas para o passo 6 (criação de níveis faltantes)
+const NATUREZAS = [
+    { value: 'Ativo', label: 'Ativo (Balanço)' },
+    { value: 'Passivo', label: 'Passivo (Balanço)' },
+    { value: 'Patrimonio Liquido', label: 'Patrimônio Líquido (Balanço)' },
+    { value: 'Receita', label: 'Receita (DRE)' },
+    { value: 'Despesa', label: 'Despesa (DRE)' },
+    { value: 'Resultado', label: 'Resultado (Lucro/Prejuízo)' },
+    { value: 'Nenhum', label: 'Nenhum (Ignorar Nível)' },
+];
 
 export default ImportarPlanoContas;
