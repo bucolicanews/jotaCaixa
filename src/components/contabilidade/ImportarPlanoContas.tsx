@@ -7,7 +7,7 @@ export interface ImportarPlanoContasProps {
     onImportComplete: () => void;
 }
 
-const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ proprietarioId, onImportComplete }) => {
+const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ proprietarioId: _proprietarioId, onImportComplete }) => {
     // Lógica de importação usaria proprietarioId para scoping de dados.
     // console.log('Proprietário ID para importação:', proprietarioId); 
     
