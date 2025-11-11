@@ -278,7 +278,7 @@ export function useBalancoPatrimonial(endDate: Date | undefined): BalancoData {
     }
   }, [carregandoSessao, empresaId, fetchBalanco]);
   
-  // 9. Calcular totais (usando os saldos consolidados)
+  // 9. Calcular totais
   const getSaldoNivel1 = (contaCodigo: string) => {
       const contaNivel1 = contasBalanco.find(c => c.Conta === contaCodigo);
       return contaNivel1?.saldo_final || 0;
