@@ -86,14 +86,14 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
   // NOVO FILTRO: Para Receita (3.x.x)
   const getContasReceita = () => {
       // Contas de Receita são as contas 3.x.x que são marcadas como is_conta_resultado
-      const receitaContas = contas.filter(c => c.Conta.startsWith('3') && c.is_conta_resultado);
+      const receitaContas = contasFiltradas.filter(c => c.Conta.startsWith('3') && c.is_conta_resultado);
       return filterAndIncludeParents(receitaContas, '3');
   };
   
   // NOVO FILTRO: Para Despesa (4.x.x e 5.x.x)
   const getContasDespesa = () => {
       // Contas de Despesa são as contas 4.x.x e 5.x.x (que são Resultado)
-      const despesaContas = contas.filter(c => c.tipo_principal === 'Resultado');
+      const despesaContas = contasFiltradas.filter(c => c.tipo_principal === 'Resultado');
       return filterAndIncludeParents(despesaContas, '4').concat(filterAndIncludeParents(despesaContas, '5'));
   };
   
@@ -240,15 +240,26 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
                 </DropdownMenuContent>
             </DropdownMenu>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {/* NOVO CARD: TOTAL ATIVO */}
           <div className="p-3 bg-secondary rounded-md">
             <p className="text-sm font-medium">Total Ativo</p>
             <p className="text-2xl font-bold mt-1">{formatCurrency(totalAtivo)}</p>
           </div>
+          
+          {/* NOVO CARD: TOTAL PASSIVO */}
           <div className="p-3 bg-secondary rounded-md">
-            <p className="text-sm font-medium">Total Passivo + PL</p>
-            <p className="text-2xl font-bold mt-1">{formatCurrency(totalPassivoPL)}</p>
+            <p className="text-sm font-medium">Total Passivo</p>
+            <p className="text-2xl font-bold mt-1">{formatCurrency(totalPassivo)}</p>
           </div>
+          
+          {/* NOVO CARD: TOTAL PL (Consolidado) */}
+          <div className="p-3 bg-secondary rounded-md">
+            <p className="text-sm font-medium">Total PL + Resultado</p>
+            <p className="text-2xl font-bold mt-1">{formatCurrency(totalPatrimonioLiquido)}</p>
+          </div>
+          
+          {/* CARD: STATUS / DESEQUILÍBRIO */}
           <div className="p-3 rounded-md" style={{ backgroundColor: isBalanced ? 'var(--green-100)' : 'var(--red-100)' }}>
             <p className="text-sm font-medium text-foreground">Status</p>
             <p className={cn("text-2xl font-bold mt-1", isBalanced ? "text-green-600" : "text-red-600")}>
