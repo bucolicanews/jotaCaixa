@@ -2,7 +2,20 @@ import React, { useState, useEffect, useCallback } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, Edit, Trash2, PlusCircle, Filter, Search, ArrowUp, ArrowRight } from 'lucide-react';
+import { Loader2, Edit, Trash2, PlusCircle, Filter, Search, ArrowUp, ArrowRight, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { useSessao }<dyad-problem-report summary="1 problems">
+<problem file="src/pages/contabilidade/PlanoContas.tsx" line="495" column="22" code="2304">Cannot find name 'CheckCircle2'.</problem>
+</dyad-problem-report>Sinto muito pelo erro de compilação. O ícone `CheckCircle2` estava faltando na lista de importações de `lucide-react`.
+
+Vou corrigir a importação em `src/pages/contabilidade/PlanoContas.tsx`.
+
+<dyad-write path="src/pages/contabilidade/PlanoContas.tsx" description="Adicionando CheckCircle2 à importação de lucide-react.">
+import React, { useState, useEffect, useCallback } from 'react';
+import LayoutPrincipal from '@/components/LayoutPrincipal';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Loader2, Edit, Trash2, PlusCircle, Filter, Search, ArrowUp, ArrowRight, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
@@ -103,6 +116,7 @@ const PlanoContasPage = () => {
   const [contaClicada, setContaClicada] = useState<PlanoContas | null>(null);
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [mascaraAtiva, setMascaraAtiva] = useState<string | null>(null); // NOVO ESTADO PARA MÁSCARA
+  const [loadingMascara, setLoadingMascara] = useState(true); // NOVO ESTADO DE CARREGAMENTO
 
   // Estados dos filtros
   const [filtroTexto, setFiltroTexto] = useState('');
@@ -111,6 +125,7 @@ const PlanoContasPage = () => {
   const [filtroAnalitica, setFiltroAnalitica] = useState('todos');
 
   const fetchMascara = useCallback(async (id: string) => {
+    setLoadingMascara(true);
     const { data, error } = await supabase
         .from('configuracao_plano_contas')
         .select('mascara_codigo')
@@ -122,6 +137,7 @@ const PlanoContasPage = () => {
         console.error('Erro ao buscar máscara:', error);
     }
     setMascaraAtiva(data?.mascara_codigo || null);
+    setLoadingMascara(false);
   }, []);
 
   const buscarPlanoContas = useCallback(async (id: string) => {
@@ -262,24 +278,25 @@ const PlanoContasPage = () => {
   const handleOpenNewConta = (nivel: 'acima' | 'abaixo' | 'mesmo') => {
       if (!contaClicada) return;
       
-      const parts = contaClicada.Conta.split('.').filter(p => p.length > 0);
-      const nivelAtual = parts.length;
-      let novoCodigo = '';
-      let novaAnalitica: 'Sim' | 'Não' = 'Não';
-      
-      // 1. Determinar a máscara de padding
-      const maskParts = mascaraAtiva?.split('.') || [];
-      
-      if (maskParts.length === 0) {
+      // 1. Verifica se a máscara está carregada
+      if (!mascaraAtiva) {
           showError("A máscara de código não foi carregada. Verifique as configurações.");
           setPopoverOpen(false);
           return;
       }
       
+      const parts = contaClicada.Conta.split('.').filter(p => p.length > 0);
+      const nivelAtual = parts.length;
+      let novoCodigo = '';
+      let novaAnalitica: 'Sim' | 'Não' = 'Não';
+      
+      // 2. Determinar a máscara de padding
+      const maskParts = mascaraAtiva.split('.');
+      
       // Função auxiliar para calcular o próximo segmento
       const calculateNextSegment = (prefixo: string, nivelSegmento: number, paddingLength: number): string => {
           const prefixoBusca = prefixo ? prefixo + '.' : '';
-          // Filtra contas que são filhas diretas do prefixo (ou contas de nível 1 se prefixo vazio)
+          
           const contasFilhas = contas.filter(c => {
               const cParts = c.Conta.split('.').filter(p => p.length > 0);
               
@@ -296,8 +313,9 @@ const PlanoContasPage = () => {
           if (contasFilhas.length > 0) {
               maxSegmento = contasFilhas.reduce((max, c) => {
                   const cParts = c.Conta.split('.').filter(p => p.length > 0);
-                  // O índice do segmento é nivelSegmento (0 para nível 1, 1 para nível 2, etc.)
+                  
                   if (cParts.length > nivelSegmento) {
+                      // Garante que estamos pegando o segmento correto para incremento
                       return Math.max(max, parseInt(cParts[nivelSegmento], 10));
                   }
                   return max;
@@ -482,6 +500,18 @@ const PlanoContasPage = () => {
             <CardTitle className="text-xl">Contas Cadastradas ({contas.length})</CardTitle>
           </CardHeader>
           <CardContent>
+            {/* Indicador de Status da Máscara */}
+            <div className={cn("p-3 rounded-md mb-4 text-sm font-medium flex items-center", mascaraAtiva ? "bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-300" : "bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-300")}>
+                {loadingMascara ? (
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                ) : mascaraAtiva ? (
+                    <CheckCircle2 className="h-4 w-4 mr-2" />
+                ) : (
+                    <AlertTriangle className="h-4 w-4 mr-2" />
+                )}
+                Máscara de Código: <span className="font-mono ml-1">{mascaraAtiva || 'NÃO CONFIGURADA'}</span>. A criação hierárquica depende desta configuração.
+            </div>
+
             {/* CORREÇÃO: O div que define a rolagem vertical e horizontal */}
             <div className="relative overflow-x-auto overflow-y-auto max-h-[60vh]"> 
               <table className="w-full caption-bottom text-sm">
@@ -622,10 +652,10 @@ const PlanoContasPage = () => {
                                     </TableRow>
                                 </PopoverTrigger>
                                 <PopoverContent className="w-auto p-2 flex flex-col space-y-1" align="end">
-                                    <Button variant="ghost" size="sm" onClick={() => handleOpenNewConta('mesmo')}>
+                                    <Button variant="ghost" size="sm" onClick={() => handleOpenNewConta('mesmo')} disabled={!mascaraAtiva}>
                                         <ArrowRight className="w-4 h-4 mr-2" /> Criar Conta Mesmo Nível
                                     </Button>
-                                    <Button variant="ghost" size="sm" onClick={() => handleOpenNewConta('acima')}>
+                                    <Button variant="ghost" size="sm" onClick={() => handleOpenNewConta('acima')} disabled={!mascaraAtiva}>
                                         <ArrowUp className="w-4 h-4 mr-2" /> Criar Conta Nível Acima
                                     </Button>
                                 </PopoverContent>
