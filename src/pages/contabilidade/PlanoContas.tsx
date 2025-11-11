@@ -53,13 +53,13 @@ const NIVEL_COLORS: Record<number, string> = {
 };
 
 // Definindo classes utilitárias para TableHead/TableRow/TableCell (baseado em shadcn)
-const TableRow = ({ className, ...props }: React.HTMLAttributes<HTMLTableRowElement>) => (
+const TableRowComponent = ({ className, ...props }: React.HTMLAttributes<HTMLTableRowElement>) => (
     <tr className={cn("border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted", className)} {...props} />
 );
-const TableHead = ({ className, ...props }: React.ThHTMLAttributes<HTMLTableCellElement>) => (
+const TableHeadComponent = ({ className, ...props }: React.ThHTMLAttributes<HTMLTableCellElement>) => (
     <th className={cn("h-12 px-4 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0", className)} {...props} />
 );
-const TableCell = ({ className, ...props }: React.TdHTMLAttributes<HTMLTableCellElement>) => (
+const TableCellComponent = ({ className, ...props }: React.TdHTMLAttributes<HTMLTableCellElement>) => (
     <td className={cn("p-4 align-middle [&:has([role=checkbox])]:pr-0", className)} {...props} />
 );
 
@@ -535,30 +535,30 @@ const PlanoContasPage = () => {
             <div className="overflow-x-auto overflow-y-auto max-h-[60vh]">
               <table className="w-full caption-bottom text-sm">
                 <thead className="[&amp;_tr]:border-b sticky top-0 bg-background z-10">
-                  <TableRow>
-                    <TableHead className="w-[150px]">Conta</TableHead>
-                    <TableHead className="w-[100px]">Cód. Reduzido</TableHead>
-                    <TableHead>Descrição</TableHead>
-                    <TableHead className="w-[100px] text-center">Analítica</TableHead>
-                    <TableHead className="w-[100px] text-center">Caixa/Banco</TableHead>
-                    <TableHead className="w-[100px] text-center">Patrimonial</TableHead>
-                    <TableHead className="w-[100px] text-center">Resultado</TableHead>
-                    <TableHead className="w-[100px] text-right">Ações</TableHead>
-                  </TableRow>
+                  <TableRowComponent>
+                    <TableHeadComponent className="w-[150px]">Conta</TableHeadComponent>
+                    <TableHeadComponent className="w-[100px]">Cód. Reduzido</TableHeadComponent>
+                    <TableHeadComponent>Descrição</TableHeadComponent>
+                    <TableHeadComponent className="w-[100px] text-center">Analítica</TableHeadComponent>
+                    <TableHeadComponent className="w-[100px] text-center">Caixa/Banco</TableHeadComponent>
+                    <TableHeadComponent className="w-[100px] text-center">Patrimonial</TableHeadComponent>
+                    <TableHeadComponent className="w-[100px] text-center">Resultado</TableHeadComponent>
+                    <TableHeadComponent className="w-[100px] text-right">Ações</TableHeadComponent>
+                  </TableRowComponent>
                 </thead>
                 <tbody className="[&amp;_tr:last-child]:border-0">
                   {carregandoContas ? (
-                    <TableRow>
-                      <TableCell colSpan={8} className="text-center py-8">
+                    <TableRowComponent>
+                      <TableCellComponent colSpan={8} className="text-center py-8">
                         <Loader2 className="h-6 w-6 animate-spin mx-auto text-primary" />
-                      </TableCell>
-                    </TableRow>
+                      </TableCellComponent>
+                    </TableRowComponent>
                   ) : contas.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={8} className="text-center py-4 text-muted-foreground">
+                    <TableRowComponent>
+                      <TableCellComponent colSpan={8} className="text-center py-4 text-muted-foreground">
                         Nenhuma conta encontrada com os filtros aplicados.
-                      </TableCell>
-                    </TableRow>
+                      </TableCellComponent>
+                    </TableRowComponent>
                   ) : (
                     contas.map((conta) => {
                         // Calcula o nível da conta (número de segmentos)
@@ -577,11 +577,11 @@ const PlanoContasPage = () => {
                         return (
                             <Popover open={contaClicada?.id === conta.id && popoverOpen} onOpenChange={setPopoverOpen} key={conta.id}>
                                 <PopoverTrigger asChild>
-                                    <TableRow 
+                                    <TableRowComponent 
                                         onClick={() => handleRowClick(conta)}
                                         className={cn("cursor-pointer", rowClassName)}
                                     >
-                                        <TableCell className="font-mono text-sm" style={{ paddingLeft: `${paddingLeft + 16}px` }}>
+                                        <TableCellComponent className="font-mono text-sm" style={{ paddingLeft: `${paddingLeft + 16}px` }}>
                                             <EditableCell
                                                 id={conta.id}
                                                 initialValue={conta.Conta}
@@ -590,8 +590,8 @@ const PlanoContasPage = () => {
                                                 isEditable={true}
                                                 className="font-mono text-sm"
                                             />
-                                        </TableCell>
-                                        <TableCell className="text-sm">
+                                        </TableCellComponent>
+                                        <TableCellComponent className="text-sm">
                                             <EditableCell
                                                 id={conta.id}
                                                 initialValue={conta.codigo_reduzido}
@@ -600,8 +600,8 @@ const PlanoContasPage = () => {
                                                 isEditable={true}
                                                 className="text-sm"
                                             />
-                                        </TableCell>
-                                        <TableCell>
+                                        </TableCellComponent>
+                                        <TableCellComponent>
                                             <EditableCell
                                                 id={conta.id}
                                                 initialValue={conta.Descricao}
@@ -609,12 +609,12 @@ const PlanoContasPage = () => {
                                                 onSaveSuccess={handleInlineSaveSuccess}
                                                 isEditable={true}
                                             />
-                                        </TableCell>
-                                        <TableCell className="text-center">
+                                        </TableCellComponent>
+                                        <TableCellComponent className="text-center">
                                             {conta.Analitica}
-                                        </TableCell>
+                                        </TableCellComponent>
                                         
-                                        <TableCell className="text-center">
+                                        <TableCellComponent className="text-center">
                                             {conta.Analitica === 'Sim' ? (
                                                 <EditableCell
                                                     id={conta.id}
@@ -626,10 +626,10 @@ const PlanoContasPage = () => {
                                             ) : (
                                                 '-'
                                             )}
-                                        </TableCell>
+                                        </TableCellComponent>
                                         
                                         {/* NOVA COLUNA: CONTA PATRIMONIAL */}
-                                        <TableCell className="text-center">
+                                        <TableCellComponent className="text-center">
                                             {conta.Analitica === 'Sim' ? (
                                                 <EditableCell
                                                     id={conta.id}
@@ -641,9 +641,9 @@ const PlanoContasPage = () => {
                                             ) : (
                                                 '-'
                                             )}
-                                        </TableCell>
+                                        </TableCellComponent>
                                         
-                                        <TableCell className="text-center">
+                                        <TableCellComponent className="text-center">
                                             {conta.Analitica === 'Sim' ? (
                                                 <EditableCell
                                                     id={conta.id}
@@ -655,9 +655,9 @@ const PlanoContasPage = () => {
                                             ) : (
                                                 '-'
                                             )}
-                                        </TableCell>
+                                        </TableCellComponent>
                                         
-                                        <TableCell className="text-right">
+                                        <TableCellComponent className="text-right">
                                             <div className="flex justify-end space-x-2">
                                                 <Button variant="ghost" size="sm" onClick={() => handleEdit(conta)}>
                                                     <Edit className="w-4 h-4" />
@@ -666,8 +666,8 @@ const PlanoContasPage = () => {
                                                     <Trash2 className="w-4 h-4 text-red-500" />
                                                 </Button>
                                             </div>
-                                        </TableCell>
-                                    </TableRow>
+                                        </TableCellComponent>
+                                    </TableRowComponent>
                                 </PopoverTrigger>
                                 <PopoverContent className="w-auto p-2 flex flex-col space-y-1" align="end">
                                     <Button variant="ghost" size="sm" onClick={() => handleOpenNewConta('abaixo')}>
