@@ -10,7 +10,7 @@ import { showError, showSuccess } from '@/utils/toast';
 import { formatCurrency } from '@/utils/formatters';
 import { cn } from '@/lib/utils';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ScrollArea } from '@/components/ui/scroll-area'; // CORREÇÃO: Importando ScrollArea
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 // Tipos de dados que precisam de remapeamento
 interface OldFKData {
@@ -103,42 +103,30 @@ const MapearTodasFKsDialog: React.FC<MapearTodasFKsDialogProps> = ({
 
         try {
             // 1. Setar todas as FKs para NULL (para evitar a violação)
-            // ESTA ETAPA É CRÍTICA E DEVE SER MANTIDA ANTES DA EXCLUSÃO DO PLANO ANTIGO
+            // Esta etapa é mantida para garantir que a exclusão do plano antigo (feita na Edge Function)
+            // não cause violação de FKs em outras tabelas.
             await supabase.from('saldo_contas').update({ conta_contabil_id: null }).eq('proprietario_id', proprietarioId);
             await supabase.from('lancamentos').update({ conta_contabil_id: null }).eq('proprietario_id', proprietarioId);
             await supabase.from('configuracao_contas_receber').update({ conta_contabil_id: null }).eq('proprietario_id', proprietarioId);
             await supabase.from('configuracao_contas_pagar').update({ conta_contabil_id: null }).eq('proprietario_id', proprietarioId);
             await supabase.from('configuracoes_stripe').update({ conta_sintetica_id: null, conta_receber_id: null }).eq('proprietario_id', proprietarioId);
 
-            // 2. Limpar contas existentes para o proprietário
-            const { error: delErr } = await supabase
-                .from('plano_contas')
-                .delete()
-                .eq('proprietario_id', proprietarioId);
-
-            if (delErr) throw new Error("Erro ao limpar plano de contas: " + delErr.message);
-
-            // 3. Inserir novos dados
-            const { error: insertErr } = await supabase
-                .from('plano_contas')
-                .insert(newPlanoContas);
-
-            if (insertErr) throw new Error("Erro ao inserir plano novo: " + insertErr.message);
+            // 2. Chamar Edge Function para Excluir/Inserir o Plano de Contas
+            const { data, error: invokeError } = await supabase.functions.invoke('manage-plano-contas', {
+                body: { proprietarioId, newPlanoContas },
+            });
             
-            // 4. Buscar os IDs reais das contas recém-inseridas
-            const contasInseridasRes = await supabase
-                .from('plano_contas')
-                .select('id, Conta')
-                .eq('proprietario_id', proprietarioId);
-                
-            if (contasInseridasRes.error) throw contasInseridasRes.error;
+            if (invokeError) throw invokeError;
+            if (data?.error) throw new Error(data.error);
             
-            const contaIdMap = (contasInseridasRes.data as { id: string, Conta: string }[]).reduce((acc, c) => {
+            // O Edge Function retorna o mapa de IDs do novo plano
+            const contasInseridas = data.contaIdMap as { id: string, Conta: string }[];
+            const contaIdMap = contasInseridas.reduce((acc, c) => {
                 acc[c.Conta] = c.id;
                 return acc;
             }, {} as Record<string, string>);
 
-            // 5. Atualizar as referências em TODAS as tabelas e marcar os campos booleanos
+            // 3. Atualizar as referências em TODAS as tabelas e marcar os campos booleanos
             
             const updatesSaldoContas: any[] = [];
             const updatesConfigCR: any[] = [];
@@ -151,9 +139,9 @@ const MapearTodasFKsDialog: React.FC<MapearTodasFKsDialogProps> = ({
                 const newContaCodigo = mapping[fk.id];
                 const newContaId = contaIdMap[newContaCodigo];
                 
-                if (!newContaId) return; // Deve ser mapeado, mas por segurança
+                if (!newContaId) return;
 
-                // 5.1. Coletar atualizações de FK
+                // 3.1. Coletar atualizações de FK
                 if (fk.tabela === 'saldo_contas') {
                     updatesSaldoContas.push({ id: fk.id, conta_contabil_id: newContaId });
                     newContaCodesToMark.add(newContaCodigo);
@@ -168,7 +156,7 @@ const MapearTodasFKsDialog: React.FC<MapearTodasFKsDialogProps> = ({
                 }
             });
             
-            // 5.2. Marcar campos booleanos no novo Plano de Contas
+            // 3.2. Marcar campos booleanos no novo Plano de Contas
             Array.from(newContaCodesToMark).forEach(contaCodigo => {
                 const newContaId = contaIdMap[contaCodigo];
                 const isAtivo = contaCodigo.startsWith('1');
@@ -183,7 +171,7 @@ const MapearTodasFKsDialog: React.FC<MapearTodasFKsDialogProps> = ({
                 updatesPlanoContasBooleans.push(payload);
             });
             
-            // 5.3. Executar todas as atualizações
+            // 3.3. Executar todas as atualizações
             const updatePromises = [
                 supabase.from('saldo_contas').upsert(updatesSaldoContas, { onConflict: 'id' }),
                 supabase.from('configuracao_contas_receber').upsert(updatesConfigCR, { onConflict: 'id' }),

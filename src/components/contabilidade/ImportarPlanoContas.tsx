@@ -9,7 +9,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { ContaCSV, ContaJSON, PlanoContas } from '@/types/plano-contas';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
-import MapearTodasFKsDialog from './MapearTodasFKsDialog'; // NOVO IMPORT
+import MapearTodasFKsDialog from './MapearTodasFKsDialog';
 
 interface ImportarPlanoContasProps {
   onImportComplete: () => void;
@@ -53,34 +53,8 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
   
   const proprietarioId = getProprietarioId();
 
-  const performDirectImport = async (proprietarioId: string, contasParaInserir: PlanoContas[]) => {
-      // 1. Setar todas as FKs para NULL (para evitar a violação)
-      await supabase.from('saldo_contas').update({ conta_contabil_id: null }).eq('proprietario_id', proprietarioId);
-      await supabase.from('lancamentos').update({ conta_contabil_id: null }).eq('proprietario_id', proprietarioId);
-      await supabase.from('configuracao_contas_receber').update({ conta_contabil_id: null }).eq('proprietario_id', proprietarioId);
-      await supabase.from('configuracao_contas_pagar').update({ conta_contabil_id: null }).eq('proprietario_id', proprietarioId);
-      await supabase.from('configuracoes_stripe').update({ conta_sintetica_id: null, conta_receber_id: null }).eq('proprietario_id', proprietarioId);
-      
-      // 2. Limpar contas existentes para o proprietário
-      const { error: deleteError } = await supabase
-        .from('plano_contas')
-        .delete()
-        .eq('proprietario_id', proprietarioId);
+  // REMOVIDO: performDirectImport
 
-      if (deleteError) {
-        throw new Error('Erro ao limpar contas existentes: ' + deleteError.message);
-      }
-
-      // 3. Inserir novos dados
-      const { error: insertError } = await supabase
-        .from('plano_contas')
-        .insert(contasParaInserir);
-
-      if (insertError) {
-        throw new Error('Erro ao inserir contas: ' + insertError.message);
-      }
-  };
-  
   const fetchAllFKs = async (proprietarioId: string): Promise<OldFKData[]> => {
       const fks: OldFKData[] = [];
       
@@ -159,7 +133,6 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
                   tipo_registro: 'conta_receber_id',
               });
           }
-          // Ignoramos historico_padrao_id pois ele referencia 'historicos', não 'plano_contas'
       });
       
       return fks;
@@ -210,8 +183,23 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
         setOldFKsToMap(oldFKs);
         setMappingDialogOpen(true);
       } else {
-        // Se não houver FKs antigas, procede com a exclusão direta e inserção
-        await performDirectImport(proprietarioId, contasParaInserir);
+        // Se não houver FKs antigas, procede com a exclusão direta e inserção (usando a Edge Function)
+        
+        // 3. Setar todas as FKs para NULL (para evitar a violação)
+        await supabase.from('saldo_contas').update({ conta_contabil_id: null }).eq('proprietario_id', proprietarioId);
+        await supabase.from('lancamentos').update({ conta_contabil_id: null }).eq('proprietario_id', proprietarioId);
+        await supabase.from('configuracao_contas_receber').update({ conta_contabil_id: null }).eq('proprietario_id', proprietarioId);
+        await supabase.from('configuracao_contas_pagar').update({ conta_contabil_id: null }).eq('proprietario_id', proprietarioId);
+        await supabase.from('configuracoes_stripe').update({ conta_sintetica_id: null, conta_receber_id: null }).eq('proprietario_id', proprietarioId);
+        
+        // 4. Chamar Edge Function para Excluir/Inserir
+        const { data, error: invokeError } = await supabase.functions.invoke('manage-plano-contas', {
+            body: { proprietarioId, newPlanoContas: contasParaInserir },
+        });
+        
+        if (invokeError) throw invokeError;
+        if (data?.error) throw new Error(data.error);
+        
         onImportComplete();
         showSuccess(`Plano de Contas importado com sucesso! ${contasParaInserir.length} contas adicionadas.`);
       }
