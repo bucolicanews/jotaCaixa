@@ -160,6 +160,7 @@ const ContasPatrimoniais = () => {
             <FormSaldoConta 
               contaInicial={contaSelecionada}
               onSaveComplete={handleSaveComplete}
+              scope="patrimonial" // PASSANDO O ESCOPO CORRETO
             />
           </DialogContent>
         </Dialog>
@@ -203,7 +204,7 @@ const ContasPatrimoniais = () => {
                 </SelectTrigger>
                 <SelectContent>
                     <SelectItem value="todos">Todas as Contas Contábeis</SelectItem>
-                    {contasContabeis.map(c => (
+                    {contasContabeis.map((c: PlanoContas) => (
                         <SelectItem key={c.id} value={c.id}>
                             {c.Conta} - {c.Descricao}
                         </SelectItem>

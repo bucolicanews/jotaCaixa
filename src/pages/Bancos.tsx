@@ -159,6 +159,7 @@ const Bancos = () => {
             <FormSaldoConta 
               contaInicial={contaSelecionada}
               onSaveComplete={handleSaveComplete}
+              scope="bancos" // PASSANDO O ESCOPO CORRETO
             />
           </DialogContent>
         </Dialog>
