@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, Edit, Trash2, PlusCircle, Filter, Search, ArrowUp, ArrowDown, ArrowRight } from 'lucide-react';
+import { Loader2, Edit, Trash2, PlusCircle, Filter, Search, ArrowUp, ArrowRight } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
@@ -43,7 +43,6 @@ const NIVEL_COLORS: Record<number, string> = {
 };
 
 // Componentes utilitários de Tabela (Baseados em shadcn/ui)
-// --- INÍCIO DA CORREÇÃO COM FORWARD REF ---
 const TableRow = React.forwardRef<HTMLTableRowElement, React.HTMLAttributes<HTMLTableRowElement>>(
   function TableRow({ className, children, ...props }, ref) {
     return (
@@ -85,7 +84,6 @@ const TableCell = React.forwardRef<HTMLTableCellElement, React.TdHTMLAttributes<
     );
   }
 );
-// --- FIM DA CORREÇÃO COM FORWARD REF ---
 
 
 const PlanoContasPage = () => {
@@ -272,10 +270,27 @@ const PlanoContasPage = () => {
       // 1. Determinar a máscara de padding
       const maskParts = mascaraAtiva?.split('.') || [];
       
+      if (maskParts.length === 0) {
+          showError("A máscara de código não foi carregada. Verifique as configurações.");
+          setPopoverOpen(false);
+          return;
+      }
+      
       // Função auxiliar para calcular o próximo segmento
       const calculateNextSegment = (prefixo: string, nivelSegmento: number, paddingLength: number): string => {
           const prefixoBusca = prefixo ? prefixo + '.' : '';
-          const contasFilhas = contas.filter(c => c.Conta.startsWith(prefixoBusca));
+          // Filtra contas que são filhas diretas do prefixo (ou contas de nível 1 se prefixo vazio)
+          const contasFilhas = contas.filter(c => {
+              const cParts = c.Conta.split('.').filter(p => p.length > 0);
+              
+              // Se estamos buscando o nível 1 (prefixo vazio), queremos todas as contas de nível 1
+              if (!prefixo && nivelSegmento === 0) {
+                  return cParts.length >= 1;
+              }
+              
+              // Se estamos buscando contas filhas, o código deve começar com o prefixo + '.'
+              return c.Conta.startsWith(prefixoBusca);
+          });
           
           let maxSegmento = 0;
           if (contasFilhas.length > 0) {
@@ -294,16 +309,17 @@ const PlanoContasPage = () => {
       };
       
       if (nivel === 'abaixo') {
-          // Nível Abaixo: Adiciona um novo segmento
+          // Lógica mantida, mas o botão foi removido da UI
           
           const nivelSegmento = nivelAtual; // O novo segmento é o índice nivelAtual
-          const paddingLength = maskParts[nivelSegmento]?.length || 4; 
           
           if (nivelSegmento >= maskParts.length) {
               showError(`Não é possível criar um nível abaixo. A máscara só define até o nível ${maskParts.length}.`);
               setPopoverOpen(false);
               return;
           }
+          
+          const paddingLength = maskParts[nivelSegmento].length; 
           
           const novoSegmento = calculateNextSegment(contaClicada.Conta, nivelSegmento, paddingLength);
           
@@ -322,7 +338,17 @@ const PlanoContasPage = () => {
           }
           
           const codigoPai = parts.slice(0, nivelSegmento).join('.');
-          const paddingLength = maskParts[nivelSegmento]?.length || 4;
+          
+          // CORREÇÃO DE PADDING: Garante que o paddingLength seja extraído corretamente da máscara
+          const maskSegment = maskParts[nivelSegmento];
+          
+          if (!maskSegment) {
+             showError(`A máscara (${mascaraAtiva}) não define o formato para o nível ${nivelAtual}.`);
+             setPopoverOpen(false);
+             return;
+          }
+          
+          const paddingLength = maskSegment.length; // Usa o tamanho exato do segmento da máscara (e.g., 2 para '00')
           
           const novoSegmento = calculateNextSegment(codigoPai, nivelSegmento, paddingLength);
           
@@ -596,9 +622,6 @@ const PlanoContasPage = () => {
                                     </TableRow>
                                 </PopoverTrigger>
                                 <PopoverContent className="w-auto p-2 flex flex-col space-y-1" align="end">
-                                    <Button variant="ghost" size="sm" onClick={() => handleOpenNewConta('abaixo')}>
-                                        <ArrowDown className="w-4 h-4 mr-2" /> Criar Conta Nível Abaixo
-                                    </Button>
                                     <Button variant="ghost" size="sm" onClick={() => handleOpenNewConta('mesmo')}>
                                         <ArrowRight className="w-4 h-4 mr-2" /> Criar Conta Mesmo Nível
                                     </Button>
