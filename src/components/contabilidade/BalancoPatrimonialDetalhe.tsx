@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatCurrency } from '@/utils/formatters';
@@ -44,13 +44,11 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
   const isBalanced = Math.abs(totalAtivo - totalPassivoPL) < 0.01;
   
   // Filtra as contas com base no estado local
-  const contasFiltradas = useMemo(() => {
+  const contasFiltradas = React.useMemo(() => {
       if (!filtroSomenteComSaldo) return contas;
       
-      // Lógica de inclusão:
-      // 1. Inclui contas com saldo diferente de zero (analíticas ou sintéticas)
-      // 2. Inclui todas as contas sintéticas (Analitica === 'Não') para manter a estrutura hierárquica
-      return contas.filter(c => Math.abs(c.saldo_final) >= 0.01 || c.Analitica === 'Não');
+      // Filtra todas as contas onde o saldo é zero (ou muito próximo de zero)
+      return contas.filter(c => Math.abs(c.saldo_final) >= 0.01);
       
   }, [contas, filtroSomenteComSaldo]);
   
@@ -76,7 +74,6 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
           }
       });
       
-      // Retorna apenas as contas que foram incluídas (com saldo ou pais)
       return list.filter(c => contasIncluidas.has(c.Conta) || (c.Analitica === 'Não' && c.Conta.startsWith(prefix)));
   };
   
@@ -126,7 +123,7 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
                 level === 1 && 'border-b-2 border-border'
             )}
         >
-          <TableCell className="pl-4" style={{ paddingLeft: `${paddingLeft + 16}px` }}>{c.Conta}</TableCell>
+          <TableCell className="pl-4" style={{ paddingLeft: `${paddingLeft}px` }}>{c.Conta}</TableCell>
           <TableCell className={cn(isSintetica ? 'pl-4' : 'pl-8')}>{c.Descricao}</TableCell>
           <TableCell className={cn("text-right", c.saldo_final < 0 && 'text-red-600')}>
             {formatCurrency(c.saldo_final)}
@@ -167,10 +164,6 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
             .filter(c => c.tipo_principal === 'Resultado' || (c.tipo_principal === 'Patrimonio Liquido' && c.is_conta_resultado))
             .reduce((sum, c) => sum + c.saldo_final, 0);
             
-        const totalPatrimonioLiquidoCalc = contasParaImpressao
-            .filter(c => c.tipo_principal === 'Patrimonio Liquido' && !c.is_conta_resultado)
-            .reduce((sum, c) => sum + c.saldo_final, 0);
-            
         printComponent = (
             <Balanco1ColunaPrint
                 empresaNome={empresaNome}
@@ -178,7 +171,7 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
                 contas={contasParaImpressao}
                 totalAtivo={totalAtivo}
                 totalPassivo={totalPassivo}
-                totalPatrimonioLiquido={totalPatrimonioLiquidoCalc}
+                totalPatrimonioLiquido={totalPatrimonioLiquido}
                 resultadoLiquido={resultadoLiquidoCalc}
             />
         );

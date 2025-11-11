@@ -196,19 +196,32 @@ export function useBalancoPatrimonial(endDate: Date | undefined): BalancoData {
         else if (pc.is_conta_resultado) {
             // Contas de Resultado (4.x.x e 5.x.x) têm saldo positivo para despesas/custos
             // Contas de Receita (3.x.x) têm saldo positivo para receitas
+            const tipoPrincipal = getTipoPrincipal(pc.Conta);
             
-            // Lógica de sinal para DRE (Receita é Entrada, Despesa é Saída)
-            const movimentosDRE = lancamentosData
-                .filter(l => l.conta_contabil_id === pc.id)
-                .reduce((sum, l) => {
-                    if (pc.Conta.startsWith('3')) { // Receita
-                        return sum + (l.tipo === 'Entrada' ? l.valor : -l.valor);
-                    } else { // Custo/Despesa
-                        return sum + (l.tipo === 'Saida' ? l.valor : -l.valor);
-                    }
-                }, 0);
-            
-            saldo_final = movimentosDRE;
+            if (tipoPrincipal === 'Resultado') {
+                // Para DRE, o saldo é o movimento (Receita é Entrada, Despesa é Saída)
+                // A lógica de sinal é complexa aqui, mas vamos usar a mesma do DRE hook:
+                // Receita (3.x.x): Entrada é +, Saída é -
+                // Despesa/Custo (4.x.x/5.x.x): Saída é +, Entrada é -
+                
+                const movimentosReceita = lancamentosData
+                    .filter(l => l.conta_contabil_id === pc.id)
+                    .reduce((sum, l) => sum + (l.tipo === 'Entrada' ? l.valor : -l.valor), 0);
+                    
+                const movimentosDespesa = lancamentosData
+                    .filter(l => l.conta_contabil_id === pc.id)
+                    .reduce((sum, l) => sum + (l.tipo === 'Saida' ? l.valor : -l.valor), 0);
+                    
+                if (pc.Conta.startsWith('3')) {
+                    saldo_final = movimentosReceita;
+                } else {
+                    saldo_final = movimentosDespesa;
+                }
+                
+            } else {
+                // Para PL (3.x.x que não são resultado), usa a lógica de saldo inicial + movimentos
+                saldo_final = saldoInicial + movimentos;
+            }
         }
         // Se for Patrimônio Líquido (PL), o saldo é Inicial + Movimentos
         else if (getTipoPrincipal(pc.Conta) === 'Patrimonio Liquido') {
@@ -256,22 +269,18 @@ export function useBalancoPatrimonial(endDate: Date | undefined): BalancoData {
   // 8. Calcular totais
   // NOVO CÁLCULO: Busca o saldo consolidado da conta de nível 1 (ex: '1')
   const getSaldoNivel1 = (contaCodigo: string) => {
-      const contaNivel1 = contasBalanco.find((c: ContaBalanco) => c.Conta === contaCodigo);
+      const contaNivel1 = contasBalanco.find(c => c.Conta === contaCodigo);
       return contaNivel1?.saldo_final || 0;
   };
   
   const totalAtivo = getSaldoNivel1('1');
   const totalPassivo = getSaldoNivel1('2');
-  
-  // NOVO CÁLCULO PL: Soma apenas as contas de PL (3.x.x) que NÃO são contas de resultado
-  const totalPatrimonioLiquido = contasBalanco
-    .filter((c: ContaBalanco) => c.tipo_principal === 'Patrimonio Liquido' && !c.is_conta_resultado)
-    .reduce((sum: number, c: ContaBalanco) => sum + c.saldo_final, 0);
+  const totalPatrimonioLiquido = getSaldoNivel1('3');
     
   // O Resultado Líquido é a soma de todas as contas de Resultado (4.x.x e 5.x.x)
   const resultadoLiquido = contasBalanco
-    .filter((c: ContaBalanco) => c.tipo_principal === 'Resultado')
-    .reduce((sum: number, c: ContaBalanco) => sum + c.saldo_final, 0);
+    .filter(c => c.tipo_principal === 'Resultado')
+    .reduce((sum, c) => sum + c.saldo_final, 0);
 
   return {
     contas: contasBalanco,
