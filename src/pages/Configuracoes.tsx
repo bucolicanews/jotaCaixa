@@ -7,8 +7,7 @@ import FormConfiguracoesCR from '@/components/formularios/FormConfiguracoesCR';
 import FormConfiguracoesCP from '@/components/formularios/FormConfiguracoesCP';
 import FormConfiguracoesContrato from '@/components/formularios/FormConfiguracoesContrato';
 import FormConfiguracaoPlanoContas from '@/components/formularios/FormConfiguracaoPlanoContas';
-import FormConfiguracaoSistema from '@/components/formularios/FormConfiguracaoSistema'; // NOVO IMPORT
-import { Key, Settings, DollarSign, ArrowDownCircle, FileSignature, BookOpen, Zap } from 'lucide-react'; // NOVO ICONE
+import { Key, Settings, DollarSign, ArrowDownCircle, FileSignature, BookOpen } from 'lucide-react';
 
 const Configuracoes = () => {
   const { role, usuario } = useSessao();
@@ -23,11 +22,10 @@ const Configuracoes = () => {
         <Settings className="w-6 h-6 mr-2" /> Configurações
       </h1>
       
-      <Tabs defaultValue={isAdmin ? "sistema" : "geral"} className="w-full">
+      <Tabs defaultValue={isAdmin ? "plano_contas" : "geral"} className="w-full">
         {/* Ajuste: Usando flex-wrap e w-full para quebrar em várias linhas em telas pequenas */}
         <TabsList className="flex flex-wrap h-auto justify-start w-full">
           <TabsTrigger value="geral" className="flex-1 sm:flex-auto">Geral</TabsTrigger>
-          {isAdmin && <TabsTrigger value="sistema" className="flex-1 sm:flex-auto flex items-center"><Zap className="w-4 h-4 mr-1" /> Sistema</TabsTrigger>}
           {isAdmin && <TabsTrigger value="plano_contas" className="flex-1 sm:flex-auto flex items-center"><BookOpen className="w-4 h-4 mr-1" /> Plano de Contas</TabsTrigger>}
           {isAdmin && <TabsTrigger value="cr" className="flex-1 sm:flex-auto flex items-center"><DollarSign className="w-4 h-4 mr-1" /> Contas a Receber</TabsTrigger>}
           {isAdmin && <TabsTrigger value="cp" className="flex-1 sm:flex-auto flex items-center"><ArrowDownCircle className="w-4 h-4 mr-1" /> Contas a Pagar</TabsTrigger>}
@@ -48,17 +46,6 @@ const Configuracoes = () => {
             </CardContent>
           </Card>
         </TabsContent>
-        
-        {isAdmin && (
-          <TabsContent value="sistema" className="mt-4">
-            <Card>
-              <CardHeader><CardTitle>Configurações de Sistema (Admin)</CardTitle></CardHeader>
-              <CardContent>
-                <FormConfiguracaoSistema adminId={proprietarioId} />
-              </CardContent>
-            </Card>
-          </TabsContent>
-        )}
         
         {isAdmin && (
           <TabsContent value="plano_contas" className="mt-4">
