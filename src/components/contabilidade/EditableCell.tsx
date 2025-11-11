@@ -26,7 +26,6 @@ const EditableCell: React.FC<EditableCellProps> = ({
   isEditable,
 }) => {
   const isBoolean = fieldName === 'is_conta_caixa_banco' || fieldName === 'is_conta_patrimonial' || fieldName === 'is_conta_resultado';
-  
   const initialBooleanValue = isBoolean ? !!initialValue : false;
   
   const [isEditing, setIsEditing] = useState(false);

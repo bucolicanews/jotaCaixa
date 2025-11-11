@@ -6,9 +6,8 @@ import FormConfiguracoesStripe from '@/components/formularios/FormConfiguracoesS
 import FormConfiguracoesCR from '@/components/formularios/FormConfiguracoesCR';
 import FormConfiguracoesCP from '@/components/formularios/FormConfiguracoesCP';
 import FormConfiguracoesContrato from '@/components/formularios/FormConfiguracoesContrato';
-import FormConfiguracaoPlanoContas from '@/components/formularios/FormConfiguracaoPlanoContas';
-import FormMapeamentoContabil from '@/components/formularios/FormMapeamentoContabil'; // NOVO IMPORT
-import { Key, Settings, DollarSign, ArrowDownCircle, FileSignature, BookOpen, Scale } from 'lucide-react'; // NOVO ICONE
+import FormConfiguracaoPlanoContas from '@/components/formularios/FormConfiguracaoPlanoContas'; // NOVO IMPORT
+import { Key, Settings, DollarSign, ArrowDownCircle, FileSignature, BookOpen } from 'lucide-react'; // NOVO ICONE
 
 const Configuracoes = () => {
   const { role, usuario } = useSessao();
@@ -23,12 +22,11 @@ const Configuracoes = () => {
         <Settings className="w-6 h-6 mr-2" /> Configurações
       </h1>
       
-      <Tabs defaultValue={isAdmin ? "contabilidade" : "geral"} className="w-full">
+      <Tabs defaultValue={isAdmin ? "plano_contas" : "geral"} className="w-full">
         {/* Ajuste: Usando flex-wrap e w-full para quebrar em várias linhas em telas pequenas */}
         <TabsList className="flex flex-wrap h-auto justify-start w-full">
           <TabsTrigger value="geral" className="flex-1 sm:flex-auto">Geral</TabsTrigger>
-          {isAdmin && <TabsTrigger value="contabilidade" className="flex-1 sm:flex-auto flex items-center"><Scale className="w-4 h-4 mr-1" /> Contabilidade</TabsTrigger>}
-          {isAdmin && <TabsTrigger value="plano_contas" className="flex-1 sm:flex-auto flex items-center"><BookOpen className="w-4 h-4 mr-1" /> Máscara</TabsTrigger>}
+          {isAdmin && <TabsTrigger value="plano_contas" className="flex-1 sm:flex-auto flex items-center"><BookOpen className="w-4 h-4 mr-1" /> Plano de Contas</TabsTrigger>}
           {isAdmin && <TabsTrigger value="cr" className="flex-1 sm:flex-auto flex items-center"><DollarSign className="w-4 h-4 mr-1" /> Contas a Receber</TabsTrigger>}
           {isAdmin && <TabsTrigger value="cp" className="flex-1 sm:flex-auto flex items-center"><ArrowDownCircle className="w-4 h-4 mr-1" /> Contas a Pagar</TabsTrigger>}
           {isAdmin && <TabsTrigger value="contratos" className="flex-1 sm:flex-auto flex items-center"><FileSignature className="w-4 h-4 mr-1" /> Contratos</TabsTrigger>}
@@ -48,17 +46,6 @@ const Configuracoes = () => {
             </CardContent>
           </Card>
         </TabsContent>
-        
-        {isAdmin && (
-          <TabsContent value="contabilidade" className="mt-4">
-            <Card>
-              <CardHeader><CardTitle>Mapeamento de Níveis Contábeis</CardTitle></CardHeader>
-              <CardContent>
-                <FormMapeamentoContabil proprietarioId={proprietarioId} />
-              </CardContent>
-            </Card>
-          </TabsContent>
-        )}
         
         {isAdmin && (
           <TabsContent value="plano_contas" className="mt-4">
