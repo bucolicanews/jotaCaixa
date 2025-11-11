@@ -64,7 +64,7 @@ const Bancos = () => {
     
     const { data, error } = await supabase
         .from('plano_contas')
-        .select('id, Conta, Descricao, Analitica')
+        .select('id, Conta, Descricao, Analitica, is_conta_caixa_banco') // Adicionado is_conta_caixa_banco
         .eq('proprietario_id', empresaId)
         .eq('Analitica', 'Sim')
         .eq('is_conta_caixa_banco', true) // FILTRO PRINCIPAL: Apenas contas marcadas como caixa/banco
@@ -118,6 +118,9 @@ const Bancos = () => {
   
   const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
   
+  // Verifica se há contas pendentes de mapeamento
+  const contasPendentesMapeamento = contas.filter(c => !c.conta_contabil_id).length;
+  
   if (carregandoSessao || carregandoSaldos) {
     return (
       <LayoutPrincipal>
@@ -150,14 +153,16 @@ const Bancos = () => {
             <Banknote className="w-6 h-6 mr-2" /> Contas e Saldos
         </h1>
         <div className="flex space-x-2 w-full sm:w-auto">
-            <Button 
-                onClick={() => setMapeamentoRapidoDialog(true)} 
-                variant="outline" 
-                className="w-full sm:w-auto"
-                disabled={contas.length === 0 || loadingContasContabeis}
-            >
-                <LinkIcon className="w-4 h-4 mr-2" /> Mapeamento Rápido
-            </Button>
+            {contasPendentesMapeamento > 0 && (
+                <Button 
+                    onClick={() => setMapeamentoRapidoDialog(true)} 
+                    variant="destructive" 
+                    className="w-full sm:w-auto"
+                    disabled={contas.length === 0}
+                >
+                    <LinkIcon className="w-4 h-4 mr-2" /> Mapear Pendentes ({contasPendentesMapeamento})
+                </Button>
+            )}
             <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
               <DialogTrigger asChild>
                 <Button onClick={() => setContaSelecionada(null)} className="w-full sm:w-auto">

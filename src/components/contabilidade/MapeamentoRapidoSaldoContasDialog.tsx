@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Link as LinkIcon, CheckCircle2 } from 'lucide-react';
+import { Loader2, Link as LinkIcon, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { SaldoContaDetalhada } from '@/types/saldo-conta';
 import { PlanoContas } from '@/types/plano-contas';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -43,6 +43,11 @@ const MapeamentoRapidoSaldoContasDialog: React.FC<MapeamentoRapidoSaldoContasDia
     const contasPendentes = useMemo(() => {
         return contasSaldo.filter(c => !c.conta_contabil_id);
     }, [contasSaldo]);
+
+    // Filtra as contas contábeis disponíveis para o mapeamento (apenas as marcadas como Caixa/Banco)
+    const contasContabeisFiltradas = useMemo(() => {
+        return contasContabeis.filter(c => c.is_conta_caixa_banco);
+    }, [contasContabeis]);
 
     // Inicializa o estado de mapeamento
     useEffect(() => {
@@ -102,8 +107,7 @@ const MapeamentoRapidoSaldoContasDialog: React.FC<MapeamentoRapidoSaldoContasDia
     
     const isReadyToSave = mapeamento.some(item => item.isDirty && item.newContaContabilId);
     
-    // Filtra as contas contábeis disponíveis para o mapeamento (apenas as marcadas como Caixa/Banco)
-    const contasContabeisFiltradas = contasContabeis.filter(c => c.is_conta_caixa_banco);
+    const hasContasContabeisDisponiveis = contasContabeisFiltradas.length > 0;
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -124,6 +128,13 @@ const MapeamentoRapidoSaldoContasDialog: React.FC<MapeamentoRapidoSaldoContasDia
                     </div>
                 ) : (
                     <>
+                        {!hasContasContabeisDisponiveis && (
+                            <div className="p-3 bg-red-100 dark:bg-red-900/20 border border-red-500 rounded-md text-sm text-red-700 dark:text-red-300 flex items-start">
+                                <AlertTriangle className="w-5 h-5 mr-2 flex-shrink-0" />
+                                <p>Nenhuma conta contábil analítica está marcada como "Conta Caixa/Banco" no seu Plano de Contas. Marque as contas em <a href="/plano-contas" className="underline font-semibold">Plano de Contas</a> para poder mapear.</p>
+                            </div>
+                        )}
+                        
                         <div className="overflow-x-auto">
                             <Table>
                                 <TableHeader>
@@ -142,7 +153,7 @@ const MapeamentoRapidoSaldoContasDialog: React.FC<MapeamentoRapidoSaldoContasDia
                                                 <Select 
                                                     onValueChange={(newId) => handleSelectChange(item.id, newId)}
                                                     value={item.newContaContabilId || undefined}
-                                                    disabled={isSubmitting}
+                                                    disabled={isSubmitting || !hasContasContabeisDisponiveis}
                                                 >
                                                     <SelectTrigger className={cn(!item.newContaContabilId && 'border-red-500')}>
                                                         <SelectValue placeholder="Selecione a conta analítica (Caixa/Banco)" />
@@ -168,7 +179,7 @@ const MapeamentoRapidoSaldoContasDialog: React.FC<MapeamentoRapidoSaldoContasDia
                             </Button>
                             <Button 
                                 onClick={handleSaveAll} 
-                                disabled={isSubmitting || !isReadyToSave}
+                                disabled={isSubmitting || !isReadyToSave || !hasContasContabeisDisponiveis}
                             >
                                 {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
                                 Salvar Mapeamentos
