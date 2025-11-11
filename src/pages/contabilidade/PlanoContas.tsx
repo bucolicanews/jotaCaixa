@@ -468,6 +468,7 @@ const PlanoContasPage = () => {
                         return (
                             <Popover open={contaClicada?.id === conta.id && popoverOpen} onOpenChange={setPopoverOpen} key={conta.id}>
                                 <PopoverTrigger asChild>
+                                    {/* CORREÇÃO: A TableRow agora é o PopoverTrigger. O onClick é usado para definir a conta clicada. */}
                                     <TableRow 
                                         onClick={() => handleRowClick(conta)}
                                         className={cn("cursor-pointer", rowClassName)}
@@ -550,10 +551,11 @@ const PlanoContasPage = () => {
                                         
                                         <TableCell className="text-right">
                                             <div className="flex justify-end space-x-2">
-                                                <Button variant="ghost" size="sm" onClick={() => handleEdit(conta)}>
+                                                {/* Adicionado e.stopPropagation() para evitar que o clique feche o popover */}
+                                                <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); handleEdit(conta); }} title="Editar Conta">
                                                     <Edit className="w-4 h-4" />
                                                 </Button>
-                                                <Button variant="ghost" size="sm" onClick={() => handleDelete(conta.id)}>
+                                                <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); handleDelete(conta.id); }} title="Excluir Conta">
                                                     <Trash2 className="w-4 h-4 text-red-500" />
                                                 </Button>
                                             </div>
