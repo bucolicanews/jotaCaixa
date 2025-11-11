@@ -206,6 +206,17 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
           
           const niveisFaltantes: Partial<PlanoContas>[] = [];
           
+          // Lista de naturezas para inferir a descrição
+          const NATUREZAS = [
+              { value: 'Ativo', label: 'Ativo (Balanço)' },
+              { value: 'Passivo', label: 'Passivo (Balanço)' },
+              { value: 'Patrimonio Liquido', label: 'Patrimônio Líquido (Balanço)' },
+              { value: 'Receita', label: 'Receita (DRE)' },
+              { value: 'Despesa', label: 'Despesa (DRE)' },
+              { value: 'Resultado', label: 'Resultado (Lucro/Prejuízo)' },
+              { value: 'Nenhum', label: 'Nenhum (Ignorar Nível)' },
+          ];
+
           for (const code of ['3', '4', '5', '6']) {
               if (!existingNivel1.has(code)) {
                   const natureza = mapeamento.find(m => m.codigo_nivel_1 === code)?.tipo_natureza;
@@ -362,7 +373,7 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
         ) : !isMapeamentoCompleto && proprietarioId ? (
             <div className="p-3 bg-red-100 dark:bg-red-900/20 border border-red-500 rounded-md text-sm text-red-700 dark:text-red-300 flex items-start">
                 <AlertTriangle className="w-5 h-5 mr-2 flex-shrink-0" />
-                <p className="flex-1">O Mapeamento Contábil (1 a 6) está incompleto. Complete-o em <Link to="/configuracoes" className="underline font-semibold">Configurações &gt; Contabilidade</Link> antes de importar planos com mais de 2 níveis.</p>
+                <p className="flex-1">O Mapeamento Contábil (1 a 6) está incompleto. Complete-o em <Link to="/configuracoes" className="underline font-semibold">Configurações &gt; Contabilidade</Link> para garantir a correta inferência das flags de DRE/Balanço.</p>
                 <Button variant="link" size="sm" onClick={refetchMapeamento} disabled={loadingMapeamento} className="ml-auto p-0 h-auto text-red-700 dark:text-red-300">
                     Tentar Recarregar Mapeamento
                 </Button>
@@ -400,16 +411,5 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
     </Card>
   );
 };
-
-// Adicionando a lista de naturezas para o passo 6 (criação de níveis faltantes)
-const NATUREZAS = [
-    { value: 'Ativo', label: 'Ativo (Balanço)' },
-    { value: 'Passivo', label: 'Passivo (Balanço)' },
-    { value: 'Patrimonio Liquido', label: 'Patrimônio Líquido (Balanço)' },
-    { value: 'Receita', label: 'Receita (DRE)' },
-    { value: 'Despesa', label: 'Despesa (DRE)' },
-    { value: 'Resultado', label: 'Resultado (Lucro/Prejuízo)' },
-    { value: 'Nenhum', label: 'Nenhum (Ignorar Nível)' },
-];
 
 export default ImportarPlanoContas;
