@@ -35,12 +35,13 @@ interface ContaBalanco {
 
 const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ endDate, filtroSomenteComSaldo }) => {
   const { perfil, role } = useSessao();
-  const { contas, totalAtivo, totalPassivo, totalPatrimonioLiquido, resultadoLiquido, carregando } = useBalancoPatrimonial(endDate);
+  const { contas, totalAtivo, totalPassivo, totalPatrimonioLiquido, carregando } = useBalancoPatrimonial(endDate);
   const { printContent } = usePrint();
   
   const empresaNome = role === 'Admin' ? 'Admin' : (perfil as ClienteProfile)?.nome || 'Empresa';
 
-  const totalPassivoPL = totalPassivo + totalPatrimonioLiquido + resultadoLiquido;
+  // O total Passivo + PL agora usa o totalPatrimonioLiquido que já inclui o resultado líquido
+  const totalPassivoPL = totalPassivo + totalPatrimonioLiquido; 
   const isBalanced = Math.abs(totalAtivo - totalPassivoPL) < 0.01;
   
   // Filtra as contas com base no estado local
@@ -98,8 +99,18 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
   
   // NOVO FILTRO: Apenas contas de PL (3.x.x) que não são Resultado
   const getContasPL = () => {
-      const plContas = contas.filter(c => c.tipo_principal === 'Patrimonio Liquido' && !c.is_conta_resultado);
-      return filterAndIncludeParents(plContas, '3');
+      // Filtra contas de PL (3.x.x) que não são Resultado E que não são a conta sintética principal '3'
+      const plContas = contasFiltradas.filter(c => 
+          c.tipo_principal === 'Patrimonio Liquido' && 
+          !c.is_conta_resultado &&
+          c.Conta !== '3'
+      );
+      return plContas;
+  };
+  
+  // NOVO FILTRO: Conta Sintética 3 (Patrimônio Líquido)
+  const getContaPLPrincipal = () => {
+      return contasFiltradas.find(c => c.Conta === '3' && c.Analitica === 'Não');
   };
   
   const renderContas = (contasList: ContaBalanco[]) => {
@@ -288,12 +299,18 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
                         <CardContent>
                             <Table>
                                 <TableHeader><TableRow><TableHead className="w-[150px]">Conta</TableHead><TableHead>Descrição</TableHead><TableHead className="text-right w-[150px]">Saldo</TableHead></TableRow></TableHeader>
+                                {/* Conta Sintética 3 (PL) */}
+                                {getContaPLPrincipal() && renderContas([getContaPLPrincipal()!])}
+                                {/* Contas Filhas do PL (3.x.x) */}
                                 <TableBody>{renderContas(getContasPL())}</TableBody>
-                                {/* Linha do Resultado Líquido */}
-                                <TableRow className={cn("font-bold border-t-2", resultadoLiquido >= 0 ? "bg-green-500/30" : "bg-red-500/30")}>
-                                    <TableCell colSpan={2}>Resultado Líquido do Período</TableCell>
-                                    <TableCell className={cn("text-right", resultadoLiquido >= 0 ? "text-green-700" : "text-red-700")}>
-                                        {formatCurrency(resultadoLiquido)}
+                                {/* Contas de Resultado (4.x.x e 5.x.x) */}
+                                <TableBody>{renderContas(getContasPorTipo('Resultado'))}</TableBody>
+                                
+                                {/* Linha do Total Passivo + PL */}
+                                <TableRow className={cn("font-bold border-t-2 bg-secondary/50")}>
+                                    <TableCell colSpan={2}>TOTAL PASSIVO + PL</TableCell>
+                                    <TableCell className={cn("text-right", totalPassivoPL >= 0 ? "text-green-700" : "text-red-700")}>
+                                        {formatCurrency(totalPassivoPL)}
                                     </TableCell>
                                 </TableRow>
                             </Table>
@@ -336,12 +353,18 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
                 <CardContent>
                     <Table>
                         <TableHeader><TableRow><TableHead className="w-[150px]">Conta</TableHead><TableHead>Descrição</TableHead><TableHead className="text-right w-[150px]">Saldo</TableHead></TableRow></TableHeader>
+                        {/* Conta Sintética 3 (PL) */}
+                        {getContaPLPrincipal() && renderContas([getContaPLPrincipal()!])}
+                        {/* Contas Filhas do PL (3.x.x) */}
                         <TableBody>{renderContas(getContasPL())}</TableBody>
-                        {/* Linha do Resultado Líquido */}
-                        <TableRow className={cn("font-bold border-t-2", resultadoLiquido >= 0 ? "bg-green-500/30" : "bg-red-500/30")}>
-                            <TableCell colSpan={2}>Resultado Líquido do Período</TableCell>
-                            <TableCell className={cn("text-right", resultadoLiquido >= 0 ? "text-green-700" : "text-red-700")}>
-                                {formatCurrency(resultadoLiquido)}
+                        {/* Contas de Resultado (4.x.x e 5.x.x) */}
+                        <TableBody>{renderContas(getContasPorTipo('Resultado'))}</TableBody>
+                        
+                        {/* Linha do Total Passivo + PL */}
+                        <TableRow className={cn("font-bold border-t-2 bg-secondary/50")}>
+                            <TableCell colSpan={2}>TOTAL PASSIVO + PL</TableCell>
+                            <TableCell className={cn("text-right", totalPassivoPL >= 0 ? "text-green-700" : "text-red-700")}>
+                                {formatCurrency(totalPassivoPL)}
                             </TableCell>
                         </TableRow>
                     </Table>
