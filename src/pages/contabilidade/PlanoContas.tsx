@@ -3,8 +3,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { PlusCircle, BookOpen } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import FormPlanoContas, { FormPlanoContasProps } from '@/components/formularios/FormPlanoContas'; // Importando a interface
-import ImportarPlanoContas, { ImportarPlanoContasProps } from '@/components/contabilidade/ImportarPlanoContas'; // Importando a interface
+import FormPlanoContas from '@/components/formularios/FormPlanoContas';
+import ImportarPlanoContas from '@/components/contabilidade/ImportarPlanoContas';
 import PlanoContasFilters from '@/components/contabilidade/PlanoContasFilters';
 import PlanoContasTable from '@/components/contabilidade/PlanoContasTable';
 import { usePlanoContasData } from '@/hooks/use-plano-contas-data';
