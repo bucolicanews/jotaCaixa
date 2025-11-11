@@ -187,18 +187,18 @@ const MapearTodasFKsDialog: React.FC<MapearTodasFKsDialogProps> = ({
             // 3.2. Coletar todos os payloads de booleanos
             const updatesPlanoContasBooleans = Object.values(newContaBooleansMap);
             
-            // 3.3. Executar todas as atualizações
-            const updatePromises = [
-                supabase.from('saldo_contas').upsert(updatesSaldoContas, { onConflict: 'id' }),
-                supabase.from('configuracao_contas_receber').upsert(updatesConfigCR, { onConflict: 'id' }),
-                supabase.from('configuracao_contas_pagar').upsert(updatesConfigCP, { onConflict: 'id' }),
-                supabase.from('configuracoes_stripe').upsert(updatesConfigStripe, { onConflict: 'id' }),
-                // Atualiza os booleanos no novo Plano de Contas
-                supabase.from('plano_contas').upsert(updatesPlanoContasBooleans, { onConflict: 'id' }),
-            ];
+            // 3.3. Executar todas as atualizações (AGORA ENVIAMOS TUDO PARA A EDGE FUNCTION)
+            const { error: finalUpdateError } = await supabase.functions.invoke('update-plano-contas-fks', {
+                body: {
+                    updatesSaldoContas,
+                    updatesConfigCR,
+                    updatesConfigCP,
+                    updatesConfigStripe,
+                    updatesPlanoContasBooleans,
+                },
+            });
             
-            const results = await Promise.all(updatePromises);
-            results.forEach(res => { if (res.error) throw res.error; });
+            if (finalUpdateError) throw finalUpdateError;
 
             showSuccess(`Plano importado e ${oldFKs.length} referências remapeadas!`);
             onSaveComplete();
