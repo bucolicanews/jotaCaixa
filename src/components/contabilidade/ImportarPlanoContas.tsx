@@ -87,21 +87,24 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
         const contaCodigo = conta.Conta.trim();
         const isAnalitica = conta.Analítica === 'Sim';
         
-        // Inferência de Flags com base no código (1=Ativo, 2=Passivo, 3=PL, 4/5=Resultado)
+        // Inferência de Flags com base no código
         let is_conta_patrimonial = false;
         let is_conta_resultado = false;
         let is_conta_caixa_banco = false;
         
         if (isAnalitica) {
+            // 1. Patrimonial: 1.x.x (Ativo), 2.x.x (Passivo), 3.x.x (PL)
             if (contaCodigo.startsWith('1') || contaCodigo.startsWith('2') || contaCodigo.startsWith('3')) {
                 is_conta_patrimonial = true;
             }
+            
+            // 2. Resultado: 3.x.x (Receita), 4.x.x (Custo), 5.x.x (Despesa)
             if (contaCodigo.startsWith('3') || contaCodigo.startsWith('4') || contaCodigo.startsWith('5')) {
                 is_conta_resultado = true;
             }
             
-            // Sugestão para Caixa/Banco (Contas de Ativo Circulante - 1.1.x)
-            if (contaCodigo.startsWith('1.1')) {
+            // 3. Caixa/Banco: Sugerido para contas de Ativo (1.x.x)
+            if (contaCodigo.startsWith('1')) {
                 is_conta_caixa_banco = true;
             }
         }

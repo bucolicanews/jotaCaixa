@@ -79,15 +79,21 @@ const FormPlanoContas: React.FC<FormPlanoContasProps> = ({ proprietarioId, conta
       let is_conta_resultado = false;
       let is_conta_caixa_banco = false;
       
+      // 1. Patrimonial: 1.x.x (Ativo), 2.x.x (Passivo), 3.x.x (PL)
       if (contaCode.startsWith('1') || contaCode.startsWith('2') || contaCode.startsWith('3')) {
           is_conta_patrimonial = true;
       }
+      
+      // 2. Resultado: 3.x.x (Receita), 4.x.x (Custo), 5.x.x (Despesa)
       if (contaCode.startsWith('3') || contaCode.startsWith('4') || contaCode.startsWith('5')) {
           is_conta_resultado = true;
       }
-      if (contaCode.startsWith('1.1')) {
+      
+      // 3. Caixa/Banco: Sugerido para contas de Ativo (1.x.x)
+      if (contaCode.startsWith('1')) {
           is_conta_caixa_banco = true;
       }
+      
       return { is_conta_patrimonial, is_conta_resultado, is_conta_caixa_banco };
   };
   
@@ -280,7 +286,7 @@ const FormPlanoContas: React.FC<FormPlanoContasProps> = ({ proprietarioId, conta
           )}
         />
         
-        {/* CAMPO: IS CONTA CAIXA/BANCO (Antigo IS CONTA SALDO) */}
+        {/* CAMPO: IS CONTA CAIXA/BANCO (Ativo) */}
         <FormField
             control={form.control}
             name="is_conta_caixa_banco"
@@ -305,7 +311,7 @@ const FormPlanoContas: React.FC<FormPlanoContasProps> = ({ proprietarioId, conta
             )}
         />
         
-        {/* NOVO CAMPO: IS CONTA PATRIMONIAL */}
+        {/* NOVO CAMPO: IS CONTA PATRIMONIAL (Ativo/Passivo/PL) */}
         <FormField
             control={form.control}
             name="is_conta_patrimonial"
@@ -330,7 +336,7 @@ const FormPlanoContas: React.FC<FormPlanoContasProps> = ({ proprietarioId, conta
             )}
         />
         
-        {/* CAMPO: IS CONTA RESULTADO */}
+        {/* CAMPO: IS CONTA RESULTADO (Receita/Despesa) */}
         <FormField
             control={form.control}
             name="is_conta_resultado"
