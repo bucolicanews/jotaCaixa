@@ -181,11 +181,12 @@ const MapearSaldosDialog: React.FC<MapearSaldosDialogProps> = ({
                                                 <Select 
                                                     // CORREÇÃO: Passa o ID da conta de saldo (s.id) para o handler
                                                     onValueChange={(newContaId) => handleMapChange(saldo.id, newContaId)}
-                                                    // CORREÇÃO: Usa o ID da conta de saldo (s.id) para buscar o valor no mapping
+                                                    // CORREÇÃO: Garante que o valor seja undefined se não houver mapeamento
                                                     value={mapping[saldo.id] || undefined}
                                                     disabled={loading}
                                                 >
                                                     <SelectTrigger className={cn("h-8 text-xs", !isMapped && 'border-red-500')}>
+                                                        {/* CORREÇÃO: Remove o conteúdo extra do SelectValue */}
                                                         <SelectValue placeholder="Selecione a nova conta analítica" />
                                                     </SelectTrigger>
                                                     <SelectContent>
