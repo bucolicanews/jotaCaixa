@@ -160,9 +160,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
       let fetchedClients: ClienteCRSimples[] = [];
 
       if (isAdmin) {
-          // ADMIN: Busca clientes do sistema (tbl_clientes) e clientes CR avulsos
-          
-          // 1. Clientes do Sistema (tbl_clientes)
+          // ADMIN: Busca APENAS clientes do sistema (tbl_clientes)
           const { data: systemClients, error: systemError } = await supabase
               .from('tbl_clientes')
               .select('id, nome, documento, email')
@@ -175,29 +173,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
               fetchedClients.push(...(systemClients as ClienteCRSimples[]));
           }
           
-          // 2. Clientes CR avulsos (que não são clientes do sistema)
-          const { data: crClients, error: crError } = await supabase
-              .from('clientes')
-              .select('id, nome, documento, email')
-              .eq('proprietario_id', ownerId)
-              .eq('is_system_client', false) // Filtra apenas os que não são clientes do sistema
-              .order('nome');
-              
-          if (crError) {
-              console.error('Erro ao carregar clientes CR avulsos:', crError);
-          } else {
-              fetchedClients.push(...(crClients as ClienteCRSimples[]));
-          }
-          
-          // Remove duplicatas (priorizando o registro da tbl_clientes se houver conflito de ID)
-          const uniqueClients = fetchedClients.reduce((acc, client) => {
-              if (!acc.some(c => c.id === client.id)) {
-                  acc.push(client);
-              }
-              return acc;
-          }, [] as ClienteCRSimples[]);
-          
-          setClientes(uniqueClients);
+          // Não busca clientes avulsos da tabela 'clientes' para o Admin.
 
       } else {
           // CLIENTE/USUÁRIO: Busca apenas clientes CR vinculados ao seu ID
