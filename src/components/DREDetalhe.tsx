@@ -185,18 +185,27 @@ const DREDetalhe: React.FC<DREDetalheProps> = ({ filtroPeriodo, filtroSomenteCom
                     </TableHeader>
                     <TableBody>
                         {/* 1. RECEITA BRUTA */}
-                        <TableRow className="bg-green-500/20 font-bold"><TableCell colSpan={2}>1. RECEITA BRUTA</TableCell><TableCell className="text-right text-green-600">{formatCurrency(totalReceita)}</TableCell></TableRow>
+                        <TableRow className="bg-green-500/20 font-bold">
+                            <TableCell colSpan={2}>1. RECEITA BRUTA (Contas {configMap.Receita}.x.x)</TableCell>
+                            <TableCell className="text-right text-green-600">{formatCurrency(totalReceita)}</TableCell>
+                        </TableRow>
                         {renderContas(getContasPorTipo('Receita'))}
                         
                         {/* 2. CUSTOS */}
-                        <TableRow className="bg-red-500/20 font-bold"><TableCell colSpan={2}>2. CUSTO DAS VENDAS (CMV/CPV)</TableCell><TableCell className="text-right text-red-600">{formatCurrency(totalCusto)}</TableCell></TableRow>
+                        <TableRow className="bg-red-500/20 font-bold">
+                            <TableCell colSpan={2}>2. CUSTO DAS VENDAS (Contas {configMap.Custo}.x.x)</TableCell>
+                            <TableCell className="text-right text-red-600">{formatCurrency(totalCusto)}</TableCell>
+                        </TableRow>
                         {renderContas(getContasPorTipo('Custo'))}
                         
                         {/* RESULTADO BRUTO */}
                         <TableRow className="bg-blue-500/20 font-bold"><TableCell colSpan={2}>RESULTADO BRUTO</TableCell><TableCell className="text-right text-blue-600">{formatCurrency(totalReceita - totalCusto)}</TableCell></TableRow>
                         
                         {/* 3. DESPESAS OPERACIONAIS */}
-                        <TableRow className="bg-red-500/20 font-bold"><TableCell colSpan={2}>3. DESPESAS OPERACIONAIS</TableCell><TableCell className="text-right text-red-600">{formatCurrency(totalDespesa)}</TableCell></TableRow>
+                        <TableRow className="bg-red-500/20 font-bold">
+                            <TableCell colSpan={2}>3. DESPESAS OPERACIONAIS (Contas {configMap.Despesa}.x.x)</TableCell>
+                            <TableCell className="text-right text-red-600">{formatCurrency(totalDespesa)}</TableCell>
+                        </TableRow>
                         {renderContas(getContasPorTipo('Despesa'))}
                         
                         {/* RESULTADO LÍQUIDO */}
