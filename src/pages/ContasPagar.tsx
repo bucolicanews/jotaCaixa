@@ -280,6 +280,30 @@ const ContasPagar: React.FC = () => {
     const tabela = isSupervisao ? 'admin_contas_pagar' : 'contas_pagar';
     
     try {
+      // 1. Buscar a descrição da conta sintética antes de deletar
+      const { data: contaToDelete, error: fetchError } = await supabase
+          .from(tabela)
+          .select('descricao')
+          .eq('id', id)
+          .single();
+          
+      if (fetchError) throw fetchError;
+      const descricaoBusca = contaToDelete?.descricao || '';
+      
+      // 2. Deletar todos os Lançamentos (Entrada/Saída) relacionados a esta conta sintética
+      if (descricaoBusca) {
+          // Deletar Lançamentos de Pagamento (que foram criados via Pagamentos)
+          // Busca por: 'Lançamento Inicial CP: [descricao]', 'Despesa/Custo: [descricao]', 'Estorno Patrimonial CP: [descricao]'
+          const { error: deleteLancamentosError } = await supabase
+              .from('lancamentos')
+              .delete()
+              .ilike('descricao', `%${descricaoBusca}%`)
+              .eq('proprietario_id', proprietarioId);
+              
+          if (deleteLancamentosError) console.warn('Aviso: Falha ao deletar lançamentos associados:', deleteLancamentosError);
+      }
+      
+      // 3. Deletar a conta sintética (cascades to parcels and payments)
       const { error } = await supabase.from(tabela).delete().eq('id', id);
       
       if (error) throw error;

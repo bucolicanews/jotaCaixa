@@ -12,6 +12,7 @@ export interface SaldoConta {
 // Tipo para a conta com o nome do plano de contas
 export interface SaldoContaDetalhada extends SaldoConta {
     plano_contas: {
+        id: string; // ADICIONADO
         Conta: string;
         Descricao: string;
         is_conta_caixa_banco?: boolean; // ADICIONADO
