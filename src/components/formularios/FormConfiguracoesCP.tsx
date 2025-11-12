@@ -11,7 +11,7 @@ import { useSessao } from '@/hooks/use-sessao';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { PlanoContas } from '@/types/plano-contas';
 import { Separator } from '../ui/separator';
-// import { Input } from '../ui/input'; // Removido: TS6133
+import { Historico } from '@/types/historico';
 
 // Tipos de registro que precisam de mapeamento contábil para CP
 const TIPOS_REGISTRO = [
@@ -37,6 +37,7 @@ const FormConfiguracoesCP: React.FC = () => {
   const { role, usuario, carregando: carregandoSessao } = useSessao();
   const [loadingData, setLoadingData] = useState(true);
   const [contasContabeis, setContasContabeis] = useState<PlanoContas[]>([]);
+  const [historicos, setHistoricos] = useState<Historico[]>([]); // NOVO ESTADO
   const [loadingContas, setLoadingContas] = useState(true);
   
   const isAdmin = role === 'Admin';
@@ -57,12 +58,11 @@ const FormConfiguracoesCP: React.FC = () => {
     if (!adminId) return;
     setLoadingContas(true);
     
-    // Busca apenas contas analíticas do Admin
+    // Busca TODAS as contas (Analíticas e Sintéticas) do Admin
     const { data, error } = await supabase
         .from('plano_contas')
         .select('id, Conta, Descricao, Analitica')
         .eq('proprietario_id', adminId)
-        .eq('Analitica', 'Sim')
         .order('Conta');
         
     if (error) {
@@ -72,6 +72,23 @@ const FormConfiguracoesCP: React.FC = () => {
         setContasContabeis(data as PlanoContas[]);
     }
     setLoadingContas(false);
+  }, [adminId]);
+  
+  // NOVO: Busca de Históricos
+  const fetchHistoricos = useCallback(async () => {
+    if (!adminId) return;
+    const { data, error } = await supabase
+        .from('historicos')
+        .select('id, descricao, codigo')
+        .eq('proprietario_id', adminId)
+        .order('descricao');
+        
+    if (error) {
+        console.error('Erro ao carregar históricos:', error);
+        setHistoricos([]);
+    } else {
+        setHistoricos(data as Historico[]);
+    }
   }, [adminId]);
 
   const fetchConfig = useCallback(async () => {
@@ -103,9 +120,10 @@ const FormConfiguracoesCP: React.FC = () => {
   useEffect(() => {
     if (!carregandoSessao && isAdmin) {
       fetchContasContabeis();
+      fetchHistoricos(); // Chamando a nova função
       fetchConfig();
     }
-  }, [carregandoSessao, isAdmin, fetchConfig, fetchContasContabeis]);
+  }, [carregandoSessao, isAdmin, fetchConfig, fetchContasContabeis, fetchHistoricos]);
 
   const onSubmit = async (values: FormValues) => {
     if (!isAdmin || !adminId) {
@@ -143,7 +161,7 @@ const FormConfiguracoesCP: React.FC = () => {
   
   const contasDisponiveis = contasContabeis.map(c => ({
       id: c.id,
-      display: `${c.Conta} - ${c.Descricao}`,
+      display: `${c.Conta} - ${c.Descricao} (${c.Analitica === 'Sim' ? 'Analítica' : 'Sintética'})`,
   }));
   
   // Filtra as contas contábeis para o campo de Histórico Padrão (que na verdade armazena um ID de Histórico)
@@ -154,7 +172,7 @@ const FormConfiguracoesCP: React.FC = () => {
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
         <p className="text-sm text-muted-foreground">
-            Mapeie cada tipo de transação de Contas a Pagar para a conta contábil analítica correspondente.
+            Mapeie cada tipo de transação de Contas a Pagar para a conta contábil correspondente.
         </p>
         
         <Separator />
@@ -174,7 +192,7 @@ const FormConfiguracoesCP: React.FC = () => {
                             >
                                 <FormControl>
                                     <SelectTrigger>
-                                        <SelectValue placeholder="Selecione a conta contábil analítica" />
+                                        <SelectValue placeholder="Selecione a conta contábil" />
                                     </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
@@ -215,17 +233,17 @@ const FormConfiguracoesCP: React.FC = () => {
                             </FormControl>
                             <SelectContent>
                                 <SelectItem value={null as any}>Nenhum (Não Mapear)</SelectItem>
-                                {/* Aqui, listamos os IDs dos Históricos, mas o campo armazena em conta_contabil_id */}
-                                {contasContabeis.map(c => (
-                                    <SelectItem key={c.id} value={c.id}>
-                                        {c.Descricao}
+                                {/* CORREÇÃO: Listando Históricos */}
+                                {historicos.map(h => (
+                                    <SelectItem key={h.id} value={h.id}>
+                                        {h.codigo && `[${h.codigo}] `}{h.descricao}
                                     </SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>
                         <FormMessage />
                         <p className="text-xs text-muted-foreground">
-                            Nota: O histórico padrão para pagamentos é configurado diretamente no diálogo de pagamento.
+                            Este histórico será sugerido automaticamente ao registrar um pagamento manual.
                         </p>
                     </FormItem>
                 )}
