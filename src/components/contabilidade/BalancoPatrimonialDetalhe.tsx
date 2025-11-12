@@ -242,6 +242,7 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
 
   return (
     <div className="space-y-6">
+      {/* REMOVIDO: Card de Resumo (Total Ativo, Total Passivo + PL, Status) */}
       <Card className={cn("border-l-4", isBalanced ? "border-green-500" : "border-red-500")}>
         <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-xl flex items-center"><Scale className="w-5 h-5 mr-2" /> Resumo do Balanço em {format(endDate, 'dd/MM/yyyy', { locale: ptBR })}</CardTitle>
