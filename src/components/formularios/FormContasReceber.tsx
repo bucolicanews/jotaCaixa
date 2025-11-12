@@ -15,7 +15,6 @@ import { ptBR } from 'date-fns/locale';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { ContaReceber } from '@/types/contas-receber';
-import { Cliente } from '@/types/cliente';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Separator } from '../ui/separator';
 import { useSessao } from '@/hooks/use-sessao';
@@ -61,7 +60,7 @@ interface FormContasReceberProps {
 }
 
 // Tipo simplificado para a lista de clientes (apenas o necessário da tabela 'clientes')
-interface ClienteCRSimples extends Cliente {
+interface ClienteCRSimples {
   id: string;
   nome: string;
   documento?: string | null;
@@ -69,7 +68,7 @@ interface ClienteCRSimples extends Cliente {
 }
 
 const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onSaveComplete }) => {
-  const { perfil, role } = useSessao();
+  const { perfil, role, usuario } = useSessao();
   const { configMap } = useContabilConfig(); // USANDO HOOK DE CONFIGURAÇÃO
   const [clientes, setClientes] = useState<ClienteCRSimples[]>([]);
   const [loadingClientes, setLoadingClientes] = useState(true);
@@ -81,7 +80,8 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
   const isEditing = !!contaInicial;
 
   const getOwnerId = () => {
-    if (role === 'Admin' || role === 'Cliente') return (perfil as any)?.id;
+    if (role === 'Admin') return usuario?.id || null;
+    if (role === 'Cliente') return (perfil as any)?.id;
     if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id;
     return null;
   };
@@ -160,7 +160,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
       let fetchedClients: ClienteCRSimples[] = [];
 
       if (isAdmin) {
-          // ADMIN: Busca APENAS clientes do sistema (tbl_clientes)
+          // ADMIN: Lista clientes do sistema (tbl_clientes)
           const { data: systemClients, error: systemError } = await supabase
               .from('tbl_clientes')
               .select('id, nome, documento, email')
@@ -172,11 +172,8 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
           } else {
               fetchedClients.push(...(systemClients as ClienteCRSimples[]));
           }
-          
-          // Não busca clientes avulsos da tabela 'clientes' para o Admin.
-
       } else {
-          // CLIENTE/USUÁRIO: Busca apenas clientes CR vinculados ao seu ID
+          // CLIENTE/USUÁRIO: Lista clientes CR vinculados ao seu ID
           let queryCR = supabase
             .from('clientes')
             .select('id, nome, documento, email')
@@ -191,10 +188,11 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
           } else {
               // Filtra o próprio ID do Cliente logado (se ele estiver na lista)
               const filteredClients = (dataCR as ClienteCRSimples[]).filter(c => c.id !== ownerId);
-              setClientes(filteredClients);
+              fetchedClients.push(...filteredClients);
           }
       }
       
+      setClientes(fetchedClients);
       setLoadingClientes(false);
     };
     
