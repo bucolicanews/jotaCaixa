@@ -157,22 +157,66 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
       }
       setLoadingClientes(true);
       
-      // BUSCA APENAS CLIENTES DA TABELA 'clientes' (Clientes CR)
-      let queryCR = supabase
-        .from('clientes')
-        .select('id, nome, documento, email')
-        .eq('proprietario_id', ownerId)
-        .order('nome');
-      
-      const { data: dataCR, error: errorCR } = await queryCR;
-      
-      if (errorCR) {
-          showError('Erro ao carregar clientes CR: ' + errorCR.message);
-          setClientes([]);
+      let fetchedClients: ClienteCRSimples[] = [];
+
+      if (isAdmin) {
+          // ADMIN: Busca clientes do sistema (tbl_clientes) e clientes CR avulsos
+          
+          // 1. Clientes do Sistema (tbl_clientes)
+          const { data: systemClients, error: systemError } = await supabase
+              .from('tbl_clientes')
+              .select('id, nome, documento, email')
+              .eq('aprovado', true)
+              .order('nome');
+              
+          if (systemError) {
+              console.error('Erro ao carregar clientes do sistema:', systemError);
+          } else {
+              fetchedClients.push(...(systemClients as ClienteCRSimples[]));
+          }
+          
+          // 2. Clientes CR avulsos (que não são clientes do sistema)
+          const { data: crClients, error: crError } = await supabase
+              .from('clientes')
+              .select('id, nome, documento, email')
+              .eq('proprietario_id', ownerId)
+              .eq('is_system_client', false) // Filtra apenas os que não são clientes do sistema
+              .order('nome');
+              
+          if (crError) {
+              console.error('Erro ao carregar clientes CR avulsos:', crError);
+          } else {
+              fetchedClients.push(...(crClients as ClienteCRSimples[]));
+          }
+          
+          // Remove duplicatas (priorizando o registro da tbl_clientes se houver conflito de ID)
+          const uniqueClients = fetchedClients.reduce((acc, client) => {
+              if (!acc.some(c => c.id === client.id)) {
+                  acc.push(client);
+              }
+              return acc;
+          }, [] as ClienteCRSimples[]);
+          
+          setClientes(uniqueClients);
+
       } else {
-          // Filtra o próprio ID do Cliente logado (se ele estiver na lista)
-          const filteredClients = (dataCR as ClienteCRSimples[]).filter(c => c.id !== ownerId);
-          setClientes(filteredClients);
+          // CLIENTE/USUÁRIO: Busca apenas clientes CR vinculados ao seu ID
+          let queryCR = supabase
+            .from('clientes')
+            .select('id, nome, documento, email')
+            .eq('proprietario_id', ownerId)
+            .order('nome');
+          
+          const { data: dataCR, error: errorCR } = await queryCR;
+          
+          if (errorCR) {
+              showError('Erro ao carregar clientes CR: ' + errorCR.message);
+              setClientes([]);
+          } else {
+              // Filtra o próprio ID do Cliente logado (se ele estiver na lista)
+              const filteredClients = (dataCR as ClienteCRSimples[]).filter(c => c.id !== ownerId);
+              setClientes(filteredClients);
+          }
       }
       
       setLoadingClientes(false);
@@ -239,11 +283,9 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
     
     try {
       // 0. GARANTIR QUE O CLIENTE EXISTA NA TABELA 'clientes' (para FK)
-      // Se o cliente não for encontrado na lista local, buscamos no banco para confirmar
       const clienteSelecionado = clientes.find(c => c.id === values.cliente_id);
       
       if (!clienteSelecionado) {
-          // Se não está na lista local, verifica se existe no banco (pode ter sido carregado incorretamente)
           const { data: dbClient, error: dbError } = await supabase
               .from('clientes')
               .select('id')
@@ -251,7 +293,6 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
               .single();
               
           if (dbError || !dbClient) {
-              // Se não existe no banco, lança o erro de FK
               throw new Error('Cliente selecionado não encontrado na base de dados de Clientes (CR).');
           }
       }
