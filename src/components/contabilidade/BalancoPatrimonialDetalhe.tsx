@@ -42,6 +42,7 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
   
   const empresaNome = role === 'Admin' ? 'Admin' : (perfil as ClienteProfile)?.nome || 'Empresa';
 
+  // CÁLCULO CORRIGIDO: Total do lado direito do balanço
   const totalPassivoPL = totalPassivo + totalPatrimonioLiquido + resultadoLiquido;
   const isBalanced = Math.abs(totalAtivo - totalPassivoPL) < 0.01;
   
@@ -194,7 +195,7 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
         fileName = `Balanço 2 Colunas - ${format(endDate, 'dd/MM/yyyy')}`;
     } else {
         // Para o Balanço de 1 Coluna, precisamos do resultado líquido
-        const totalPassivo = contasParaImpressao
+        const totalPassivoBase = contasParaImpressao
             .filter(c => c.tipo_principal === 'Passivo' && c.Analitica === 'Não' && c.Conta.split('.').length === 1)
             .reduce((sum, c) => sum + c.saldo_final, 0);
             
@@ -208,8 +209,8 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
                 endDate={endDate}
                 contas={contasParaImpressao}
                 totalAtivo={totalAtivo}
-                totalPassivo={totalPassivo}
-                totalPatrimonioLiquido={totalPatrimonioLiquido}
+                totalPassivo={totalPassivoBase} // Passando o Passivo real
+                totalPatrimonioLiquido={totalPatrimonioLiquido} // Passando o PL real
                 resultadoLiquido={resultadoLiquidoCalc}
             />
         );

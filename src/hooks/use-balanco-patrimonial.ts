@@ -16,9 +16,9 @@ interface ContaBalanco extends PlanoContas {
 interface BalancoData {
   contas: ContaBalanco[];
   totalAtivo: number;
-  totalPassivo: number;
-  totalPatrimonioLiquido: number;
-  resultadoLiquido: number; // Adicionando resultado líquido para facilitar
+  totalPassivo: number; // Passivo (código 2)
+  totalPatrimonioLiquido: number; // Patrimônio Líquido (código 3)
+  resultadoLiquido: number; // Resultado do Exercício (Receita - Custo - Despesa)
   carregando: boolean;
   refetch: () => void;
 }
@@ -84,10 +84,10 @@ const consolidateBalances = (contas: ContaBalanco[]): ContaBalanco[] => {
         
         // Itera sobre todas as contas para encontrar as filhas DIRETAS
         for (const conta of contas) {
-            // 3.1. Verifica se é filha (começa com o prefixo do pai + '.')
+            // 4.1. Verifica se é filha (começa com o prefixo do pai + '.')
             if (conta.Conta.startsWith(contaSintetica.Conta + '.') && conta.Conta !== contaSintetica.Conta) {
                 
-                // 3.2. Verifica se é filha DIRETA (o nível é exatamente o próximo)
+                // 4.2. Verifica se é filha DIRETA (o nível é exatamente o próximo)
                 const nivelConta = conta.Conta.split('.').filter(p => p.length > 0).length;
                 
                 if (nivelConta === nivelFilhoDireto) {
@@ -104,7 +104,7 @@ const consolidateBalances = (contas: ContaBalanco[]): ContaBalanco[] => {
         saldoConsolidadoMap[contaSintetica.Conta] = totalConsolidado;
     }
     
-    // 4. Atualiza a lista de contas com os saldos consolidados
+    // 5. Atualiza a lista de contas com os saldos consolidados
     return contas.map(c => {
         const saldo = saldoConsolidadoMap[c.Conta];
         return {
@@ -306,8 +306,8 @@ export function useBalancoPatrimonial(endDate: Date | undefined): BalancoData {
   };
   
   const totalAtivo = getSaldoNivel1('Ativo');
-  const totalPassivo = getSaldoNivel1('Passivo');
-  const totalPatrimonioLiquido = getSaldoNivel1('Patrimonio Liquido');
+  const totalPassivoBase = getSaldoNivel1('Passivo'); // Passivo (código 2)
+  const totalPLBase = getSaldoNivel1('Patrimonio Liquido'); // Patrimônio Líquido (código 3)
     
   // O Resultado Líquido é a soma de todas as contas de Resultado (Receita - Custo - Despesa)
   const totalReceita = contasBalanco
@@ -327,8 +327,8 @@ export function useBalancoPatrimonial(endDate: Date | undefined): BalancoData {
   return {
     contas: contasBalanco,
     totalAtivo,
-    totalPassivo,
-    totalPatrimonioLiquido,
+    totalPassivo: totalPassivoBase, // Retorna o Passivo real (código 2)
+    totalPatrimonioLiquido: totalPLBase, // Retorna o PL real (código 3)
     resultadoLiquido,
     carregando,
     refetch,
