@@ -251,6 +251,32 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
       
       const { error: parcelError } = await supabase.from(tabelaParcelasPagar).insert(parcelasComId);
       if (parcelError) throw parcelError;
+      
+      // 2. Lançamento Inicial na Conta Patrimonial (Crédito/Entrada)
+      if (values.conta_patrimonial_id) {
+          const lancamentoPatrimonialPayload = {
+              proprietario_id: adminId,
+              data_movimentacao: format(new Date(), 'yyyy-MM-dd') + 'T12:00:00Z', // Meio-dia UTC
+              descricao: `Lançamento Inicial CP: ${values.descricao}`,
+              valor: valorTotal,
+              tipo: 'Entrada' as const, // Entrada no Passivo/PL
+              conta_bancaria_id: null,
+              conta_contabil_id: values.conta_patrimonial_id,
+              origem: 'lancamento_cp',
+              historico_id: values.historico_id,
+          };
+          
+          // Se for edição, primeiro remove o lançamento antigo (se existir)
+          if (isEditing) {
+              await supabase.from('lancamentos')
+                  .delete()
+                  .eq('origem', 'lancamento_cp')
+                  .eq('proprietario_id', adminId)
+                  .ilike('descricao', `Lançamento Inicial CP: ${contaInicial?.descricao}`);
+          }
+          
+          await supabase.from('lancamentos').insert(lancamentoPatrimonialPayload);
+      }
 
       showSuccess(`Conta ${isEditing ? 'atualizada' : 'salva'} com sucesso!`);
       onSaveComplete();
@@ -323,8 +349,7 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
                                     <SelectItem value={null as any}>Nenhum</SelectItem>
                                     {historicos.map(h => (
                                         <SelectItem key={h.id} value={h.id}>
-                                            {h.codigo && <span className="font-mono text-xs mr-2">[{h.codigo}]</span>}
-                                            {h.descricao}
+                                            {h.codigo && `[${h.codigo}] `}{h.descricao}
                                         </SelectItem>
                                     ))}
                                 </SelectContent>

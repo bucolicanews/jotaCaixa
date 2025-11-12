@@ -326,6 +326,32 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
       
       const { error: parcelError } = await supabase.from(tabelaParcelasReceber).insert(parcelasComId);
       if (parcelError) throw parcelError;
+      
+      // 2. Lançamento Inicial na Conta Patrimonial (Débito/Entrada)
+      if (values.conta_patrimonial_id) {
+          const lancamentoPatrimonialPayload = {
+              proprietario_id: ownerId,
+              data_movimentacao: format(new Date(), 'yyyy-MM-dd') + 'T12:00:00Z', // Meio-dia UTC
+              descricao: `Lançamento Inicial CR: ${values.descricao}`,
+              valor: valorTotal,
+              tipo: 'Entrada' as const, // Entrada no Ativo/Passivo/PL
+              conta_bancaria_id: null,
+              conta_contabil_id: values.conta_patrimonial_id,
+              origem: 'lancamento_cr',
+              historico_id: values.historico_id,
+          };
+          
+          // Se for edição, primeiro remove o lançamento antigo (se existir)
+          if (isEditing) {
+              await supabase.from('lancamentos')
+                  .delete()
+                  .eq('origem', 'lancamento_cr')
+                  .eq('proprietario_id', ownerId)
+                  .ilike('descricao', `Lançamento Inicial CR: ${contaInicial?.descricao}`);
+          }
+          
+          await supabase.from('lancamentos').insert(lancamentoPatrimonialPayload);
+      }
 
       showSuccess(`Conta ${isEditing ? 'atualizada' : 'salva'} com sucesso!`);
       onSaveComplete();
