@@ -40,6 +40,7 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
   
   const empresaNome = role === 'Admin' ? 'Admin' : (perfil as ClienteProfile)?.nome || 'Empresa';
 
+  // CORREÇÃO: O totalPassivoPL deve somar o Passivo, o PL e o Resultado Líquido (que é o resultado do período)
   const totalPassivoPL = totalPassivo + totalPatrimonioLiquido + resultadoLiquido;
   const isBalanced = Math.abs(totalAtivo - totalPassivoPL) < 0.01;
   

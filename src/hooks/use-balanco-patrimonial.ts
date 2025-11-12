@@ -286,7 +286,8 @@ export function useBalancoPatrimonial(endDate: Date | undefined): BalancoData {
   // NOVO CÁLCULO: Busca o saldo consolidado da conta de nível 1 (ex: '1')
   const getSaldoNivel1 = (tipo: keyof ContabilConfigMap) => {
       const contaCodigo = configMap[tipo] || '0';
-      const contaNivel1 = contasBalanco.find(c => c.Conta === contaCodigo);
+      // Busca a conta sintética de nível 1 (Conta === '1', '2', '3', etc.)
+      const contaNivel1 = contasBalanco.find(c => c.Conta === contaCodigo && c.Analitica === 'Não');
       return contaNivel1?.saldo_final || 0;
   };
   
