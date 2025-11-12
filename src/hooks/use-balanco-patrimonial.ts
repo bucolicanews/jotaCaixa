@@ -48,7 +48,7 @@ const getTipoDRE = (conta: string, configMap: ContabilConfigMap): ContaBalanco['
  */
 const compareContas = (a: ContaBalanco, b: ContaBalanco): number => {
     const partsA = a.Conta.split('.').map(Number);
-    const partsB = b.Conta.split('.').map(Number);
+    const partsB = b.Conta.split('.map').length > 1 ? b.Conta.split('.').map(Number) : b.Conta.split('.').map(Number);
 
     for (let i = 0; i < Math.max(partsA.length, partsB.length); i++) {
         const numA = partsA[i] || 0;
