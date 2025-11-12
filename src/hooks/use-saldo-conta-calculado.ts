@@ -42,7 +42,7 @@ const useSaldoContaCalculado = (filtroTipoSaldo: 'todos' | 'Credito' | 'Debito' 
       // 1. Buscar contas de saldo (filtradas ou todas)
       let contasQuery = supabase
         .from('saldo_contas')
-        .select(`*, plano_contas ( Conta, Descricao, is_conta_caixa_banco, is_conta_patrimonial )`) // Incluindo novos campos
+        .select(`*, plano_contas ( id, Conta, Descricao, is_conta_caixa_banco, is_conta_patrimonial )`) // Incluindo novos campos
         .eq('proprietario_id', targetEmpresaId);
         
       // Aplica Filtros de UI
@@ -61,17 +61,27 @@ const useSaldoContaCalculado = (filtroTipoSaldo: 'todos' | 'Credito' | 'Debito' 
       
       let fetchedContas = contasData as SaldoContaDetalhada[];
       const contaIds = fetchedContas.map(c => c.id);
+      const contaContabilIds = fetchedContas.map(c => c.plano_contas?.id).filter((id): id is string => !!id);
       
       if (contaIds.length === 0) {
           return { fetchedContas: [], lancamentosData: [] };
       }
 
-      // 2. Buscar todos os lançamentos (para calcular o saldo atual total)
+      // 2. Buscar todos os lançamentos
+      
+      // Cláusula OR para buscar lançamentos:
+      // A) Movimentações de Caixa/Banco (conta_bancaria_id IN contaIds)
+      // B) Movimentações Patrimoniais (conta_contabil_id IN contaContabilIds AND conta_bancaria_id IS NULL)
+      const orClauses = [
+          `conta_bancaria_id.in.(${contaIds.join(',')})`,
+          `conta_contabil_id.in.(${contaContabilIds.join(',')})`,
+      ];
+      
       let lancamentosQuery = supabase
         .from('lancamentos')
-        .select('valor, tipo, conta_bancaria_id')
+        .select('valor, tipo, conta_bancaria_id, conta_contabil_id')
         .eq('proprietario_id', targetEmpresaId)
-        .in('conta_bancaria_id', contaIds);
+        .or(orClauses.join(','));
 
       const { data: lancamentosData, error: lancamentosError } = await lancamentosQuery;
       if (lancamentosError) throw lancamentosError;
@@ -92,15 +102,37 @@ const useSaldoContaCalculado = (filtroTipoSaldo: 'todos' | 'Credito' | 'Debito' 
       const { fetchedContas, lancamentosData } = await fetchContasAndLancamentos(empresaId);
 
       // 3. Calcular o saldo para cada conta
-      const lancamentosPorConta = lancamentosData.reduce((acc, l) => {
-        acc[l.conta_bancaria_id] = acc[l.conta_bancaria_id] || { entradas: 0, saidas: 0 };
-        if (l.tipo === 'Entrada') {
-          acc[l.conta_bancaria_id].entradas += l.valor;
-        } else if (l.tipo === 'Saida') {
-          acc[l.conta_bancaria_id].saidas += l.valor;
-        }
+      const lancamentosPorConta = fetchedContas.reduce((acc, conta) => {
+        acc[conta.id] = { entradas: 0, saidas: 0 };
         return acc;
       }, {} as Record<string, { entradas: number, saidas: number }>);
+      
+      // Mapeamento de Conta Contábil ID para Saldo Conta ID
+      const contaContabilToSaldoIdMap = fetchedContas.reduce((acc, c) => {
+          if (c.conta_contabil_id) acc[c.conta_contabil_id] = c.id;
+          return acc;
+      }, {} as Record<string, string>);
+
+      lancamentosData.forEach(l => {
+        let targetSaldoId: string | null = null;
+        
+        // A) Movimentação de Caixa/Banco (usa conta_bancaria_id)
+        if (l.conta_bancaria_id && lancamentosPorConta[l.conta_bancaria_id]) {
+            targetSaldoId = l.conta_bancaria_id;
+        } 
+        // B) Movimentação Patrimonial (usa conta_contabil_id)
+        else if (l.conta_contabil_id && contaContabilToSaldoIdMap[l.conta_contabil_id]) {
+            targetSaldoId = contaContabilToSaldoIdMap[l.conta_contabil_id];
+        }
+        
+        if (targetSaldoId && lancamentosPorConta[targetSaldoId]) {
+            if (l.tipo === 'Entrada') {
+                lancamentosPorConta[targetSaldoId].entradas += l.valor;
+            } else if (l.tipo === 'Saida') {
+                lancamentosPorConta[targetSaldoId].saidas += l.valor;
+            }
+        }
+      });
 
       const contasCalculadas: SaldoCalculado[] = fetchedContas.map(conta => {
         const { entradas = 0, saidas = 0 } = lancamentosPorConta[conta.id] || {};
