@@ -44,11 +44,11 @@ const getTipoDRE = (conta: string, configMap: ContabilConfigMap): ContaBalanco['
 
 /**
  * Função de comparação para ordenar códigos contábeis hierarquicamente.
- * Ex: 4.2.2.01.0004 deve vir depois de 4.2.2.01.
  */
 const compareContas = (a: ContaBalanco, b: ContaBalanco): number => {
     const partsA = a.Conta.split('.').map(Number);
-    const partsB = b.Conta.split('.map').length > 1 ? b.Conta.split('.').map(Number) : b.Conta.split('.').map(Number);
+    // CORREÇÃO: Removendo o erro de digitação '.map'
+    const partsB = b.Conta.split('.').map(Number);
 
     for (let i = 0; i < Math.max(partsA.length, partsB.length); i++) {
         const numA = partsA[i] || 0;
@@ -80,24 +80,20 @@ const consolidateBalances = (contas: ContaBalanco[]): ContaBalanco[] => {
     for (const contaSintetica of sinteticas) {
         let totalConsolidado = 0;
         
-        // Calcula o nível da conta sintética (número de pontos + 1)
-        const nivelPai = contaSintetica.Conta.split('.').filter(p => p.length > 0).length;
-        const nivelFilhoDireto = nivelPai + 1;
+        // O prefixo de busca é o código da conta sintética seguido por um ponto
+        const prefixoBusca = contaSintetica.Conta + '.';
         
-        // Itera sobre todas as contas para encontrar as filhas DIRETAS
+        // Itera sobre todas as contas para encontrar as filhas (diretas e indiretas)
         for (const conta of contas) {
-            // 4.1. Verifica se é filha (começa com o prefixo do pai + '.')
-            if (conta.Conta.startsWith(contaSintetica.Conta + '.') && conta.Conta !== contaSintetica.Conta) {
+            // 4.1. Verifica se é descendente (começa com o prefixo do pai + '.')
+            if (conta.Conta.startsWith(prefixoBusca)) {
                 
-                // 4.2. Verifica se é filha DIRETA (o nível é exatamente o próximo)
-                const nivelConta = conta.Conta.split('.').filter(p => p.length > 0).length;
+                // 4.2. Se for uma conta analítica, soma o saldo final dela.
+                // Se for uma conta sintética, soma o saldo consolidado dela (que já deve estar no mapa).
+                const saldoDescendente = saldoConsolidadoMap[conta.Conta];
                 
-                if (nivelConta === nivelFilhoDireto) {
-                    // Se for filha direta, soma o saldo consolidado dela (que já deve estar no mapa)
-                    const saldoFilho = saldoConsolidadoMap[conta.Conta];
-                    if (saldoFilho !== undefined) {
-                        totalConsolidado += saldoFilho;
-                    }
+                if (saldoDescendente !== undefined) {
+                    totalConsolidado += saldoDescendente;
                 }
             }
         }
