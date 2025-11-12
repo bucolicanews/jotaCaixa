@@ -79,9 +79,30 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
       return list.filter(c => contasIncluidas.has(c.Conta) || (c.Analitica === 'Não' && c.Conta.startsWith(prefix)));
   };
   
+  // NOVO: Função de normalização para filtragem robusta
+  const normalize = (v: string) =>
+    v.normalize("NFD")
+     .replace(/[\u0300-\u036f]/g, "")
+     .toLowerCase()
+     .trim();
+
   const getContasPorTipo = (tipo: ContaBalanco['tipo_principal']) => {
+    const tipoNorm = normalize(tipo);
+    
+    // Aplica a normalização e a lógica de startsWith/includes
+    const filtered = contasFiltradas.filter(c => {
+        const t = normalize(c.tipo_principal);
+
+        if (tipoNorm === "ativo") return t.startsWith("ativo");
+        if (tipoNorm === "passivo") return t.startsWith("passivo");
+        if (tipoNorm === "patrimonio liquido") return t.includes("patrimonio");
+        if (tipoNorm === "resultado") return t.includes("resultado");
+
+        return t === tipoNorm;
+    });
+    
     // Retorna as contas já ordenadas pelo hook
-    return contasFiltradas.filter(c => c.tipo_principal === tipo);
+    return filtered;
   };
   
   // NOVO FILTRO: Para Receita (usa o código configurado)
@@ -306,6 +327,13 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
                             <Table>
                                 <TableHeader><TableRow><TableHead className="w-[150px]">Conta</TableHead><TableHead>Descrição</TableHead><TableHead className="text-right w-[150px]">Saldo</TableHead></TableRow></TableHeader>
                                 <TableBody>{renderContas(getContasPL())}</TableBody>
+                                {/* Linha do Resultado Líquido */}
+                                <TableRow className={cn("font-bold border-t-2", resultadoLiquido >= 0 ? "bg-green-500/30" : "bg-red-500/30")}>
+                                    <TableCell colSpan={2}>Resultado Líquido do Período</TableCell>
+                                    <TableCell className={cn("text-right", resultadoLiquido >= 0 ? "text-green-700" : "text-red-700")}>
+                                        {formatCurrency(resultadoLiquido)}
+                                    </TableCell>
+                                </TableRow>
                             </Table>
                         </CardContent>
                     </Card>

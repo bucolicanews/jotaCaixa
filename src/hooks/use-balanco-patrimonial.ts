@@ -198,20 +198,20 @@ export function useBalancoPatrimonial(endDate: Date | undefined): BalancoData {
           
           let valor = 0;
           
-          // Contas que aumentam com DÉBITO (Entrada): Ativo, Custo, Despesa
-          const increasesWithDebit = tipoPrincipal === 'Ativo' || 
-                                     (tipoPrincipal === 'Resultado' && (conta?.Conta.startsWith(custoCode) || conta?.Conta.startsWith(despesaCode)));
+          // Contas de Natureza Devedora (Ativo, Custo, Despesa)
+          const isDevedora = tipoPrincipal === 'Ativo' || 
+                             (tipoPrincipal === 'Resultado' && (conta?.Conta.startsWith(custoCode) || conta?.Conta.startsWith(despesaCode)));
 
-          // Contas que aumentam com CRÉDITO (Saída): Passivo, PL, Receita
-          const increasesWithCredit = tipoPrincipal === 'Passivo' || 
-                                      tipoPrincipal === 'Patrimonio Liquido' || 
-                                      (tipoPrincipal === 'Resultado' && conta?.Conta.startsWith(receitaCode));
+          // Contas de Natureza Credora (Passivo, PL, Receita)
+          const isCredora = tipoPrincipal === 'Passivo' || 
+                            tipoPrincipal === 'Patrimonio Liquido' || 
+                            (tipoPrincipal === 'Resultado' && conta?.Conta.startsWith(receitaCode));
 
-          if (increasesWithDebit) {
-              // Se é Débito (Entrada), soma. Se é Crédito (Saída), subtrai.
+          if (isDevedora) {
+              // Débito (Entrada) aumenta, Crédito (Saída) diminui
               valor = l.tipo === 'Entrada' ? l.valor : -l.valor;
-          } else if (increasesWithCredit) {
-              // Se é Crédito (Saída), soma. Se é Débito (Entrada), subtrai.
+          } else if (isCredora) {
+              // Crédito (Saída) aumenta, Débito (Entrada) diminui
               valor = l.tipo === 'Saida' ? l.valor : -l.valor;
           }
           
