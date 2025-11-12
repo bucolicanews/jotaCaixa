@@ -185,11 +185,11 @@ export function useDRE(filtroPeriodo: DateRange | undefined): DREData {
           let valor = 0;
           
           if (tipoDRE === 'Receita') {
-              // Receita: Entrada é positiva, Saída é negativa (estorno)
-              valor = l.tipo === 'Entrada' ? l.valor : -l.valor;
-          } else if (tipoDRE === 'Custo' || tipoDRE === 'Despesa') {
-              // Custo/Despesa: Saída é positiva (aumenta o custo), Entrada é negativa (estorno)
+              // Receita (Aumenta com Crédito/Saída): Queremos o valor positivo
               valor = l.tipo === 'Saida' ? l.valor : -l.valor;
+          } else if (tipoDRE === 'Custo' || tipoDRE === 'Despesa') {
+              // Custo/Despesa (Aumenta com Débito/Entrada): Queremos o valor positivo
+              valor = l.tipo === 'Entrada' ? l.valor : -l.valor;
           }
           
           acc[l.conta_contabil_id] = (acc[l.conta_contabil_id] || 0) + valor;

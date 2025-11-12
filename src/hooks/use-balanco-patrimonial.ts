@@ -198,24 +198,21 @@ export function useBalancoPatrimonial(endDate: Date | undefined): BalancoData {
           
           let valor = 0;
           
-          // Lógica de débito/crédito para o Balanço (Ativo/Passivo/PL)
-          if (tipoPrincipal === 'Ativo' || tipoPrincipal === 'Patrimonio Liquido') {
-              // Ativo/PL: Entrada é débito (aumenta), Saída é crédito (diminui)
+          // Contas que aumentam com DÉBITO (Entrada): Ativo, Custo, Despesa
+          const increasesWithDebit = tipoPrincipal === 'Ativo' || 
+                                     (tipoPrincipal === 'Resultado' && (conta?.Conta.startsWith(custoCode) || conta?.Conta.startsWith(despesaCode)));
+
+          // Contas que aumentam com CRÉDITO (Saída): Passivo, PL, Receita
+          const increasesWithCredit = tipoPrincipal === 'Passivo' || 
+                                      tipoPrincipal === 'Patrimonio Liquido' || 
+                                      (tipoPrincipal === 'Resultado' && conta?.Conta.startsWith(receitaCode));
+
+          if (increasesWithDebit) {
+              // Se é Débito (Entrada), soma. Se é Crédito (Saída), subtrai.
               valor = l.tipo === 'Entrada' ? l.valor : -l.valor;
-          } else if (tipoPrincipal === 'Passivo') {
-              // Passivo: Entrada é crédito (diminui), Saída é débito (aumenta)
+          } else if (increasesWithCredit) {
+              // Se é Crédito (Saída), soma. Se é Débito (Entrada), subtrai.
               valor = l.tipo === 'Saida' ? l.valor : -l.valor;
-          }
-          
-          // Lógica de débito/crédito para o Resultado (DRE)
-          else if (tipoPrincipal === 'Resultado') {
-              if (conta?.Conta.startsWith(receitaCode)) {
-                  // Receita: Entrada é positiva, Saída é negativa (estorno)
-                  valor = l.tipo === 'Entrada' ? l.valor : -l.valor;
-              } else if (conta?.Conta.startsWith(custoCode) || conta?.Conta.startsWith(despesaCode)) {
-                  // Custo/Despesa: Saída é positiva (aumenta o custo), Entrada é negativa (estorno)
-                  valor = l.tipo === 'Saida' ? l.valor : -l.valor;
-              }
           }
           
           acc[l.conta_contabil_id] = (acc[l.conta_contabil_id] || 0) + valor;
@@ -297,15 +294,15 @@ export function useBalancoPatrimonial(endDate: Date | undefined): BalancoData {
     
   // O Resultado Líquido é a soma de todas as contas de Resultado (Receita - Custo - Despesa)
   const totalReceita = contasBalanco
-      .filter(c => c.tipo_principal === 'Resultado' && c.Conta.startsWith(configMap.Receita || '3'))
+      .filter(c => c.tipo_principal === 'Resultado' && c.Conta.startsWith(configMap.Receita || '4'))
       .reduce((sum, c) => sum + c.saldo_final, 0);
       
   const totalCusto = contasBalanco
-      .filter(c => c.tipo_principal === 'Resultado' && c.Conta.startsWith(configMap.Custo || '4'))
+      .filter(c => c.tipo_principal === 'Resultado' && c.Conta.startsWith(configMap.Custo || '5'))
       .reduce((sum, c) => sum + c.saldo_final, 0);
       
   const totalDespesa = contasBalanco
-      .filter(c => c.tipo_principal === 'Resultado' && c.Conta.startsWith(configMap.Despesa || '5'))
+      .filter(c => c.tipo_principal === 'Resultado' && c.Conta.startsWith(configMap.Despesa || '6'))
       .reduce((sum, c) => sum + c.saldo_final, 0);
       
   const resultadoLiquido = totalReceita - totalCusto - totalDespesa;
