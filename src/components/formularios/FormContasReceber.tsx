@@ -333,7 +333,13 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
                 {c.nome} {c.documento && <span className="text-xs text-muted-foreground">({c.documento})</span>}
               </SelectItem>
             ))}
-          </SelectContent></Select><FormMessage /></FormItem>
+          </SelectContent></Select><FormMessage />
+          {clientes.length === 0 && !loadingClientes && (
+              <p className="text-sm text-red-500">
+                  Nenhum cliente cadastrado. Cadastre um em <a href="/clientes" className="underline">Clientes</a>.
+              </p>
+          )}
+          </FormItem>
         )} />
         <Separator />
         <FormField control={form.control} name="descricao" render={({ field }) => (
@@ -364,7 +370,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
                         </SelectContent>
                     </Select>
                     <FormMessage />
-                    {contasReceita.length === 0 && (
+                    {contasReceita.length === 0 && !loadingContasReceita && (
                         <p className="text-sm text-red-500">
                             Nenhuma conta de Receita ({configMap.Receita}.x.x) marcada como "Conta de Resultado" no Plano de Contas.
                         </p>
@@ -432,7 +438,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
             <FormItem><FormLabel>{tipoLancamento === 'parcelar' ? 'Valor Total a Parcelar' : 'Valor da Parcela'}</FormLabel><FormControl><Input type="number" step="0.01" placeholder="0,00" {...field} /></FormControl><FormMessage /></FormItem>
           )} />
           {tipoLancamento === 'unico' && <FormField control={form.control} name="data_vencimento" render={({ field }) => (
-            <FormItem className="flex flex-col"><FormLabel>Data de Vencimento</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "PPP", { locale: ptBR }) : <span>Escolha uma data</span>}<CalendarIcon className="ml-auto h-4 w-4 opacity-50" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus locale={ptBR} /></PopoverContent></Popover><FormMessage /></FormItem>
+            <FormItem className="flex flex-col"><FormLabel>Data de Vencimento</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "PPP", { locale: ptBR }) : <span>Escolha uma data</span>}<CalendarIcon className="ml-auto h-4 w-4 opacity-50" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus locale={ptBR} /></PopoverContent></Popover><FormMessage /></FormItem>
           )} />}
           {tipoLancamento !== 'unico' && (
             <div className="grid grid-cols-3 gap-4">
@@ -443,7 +449,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
                 <FormItem><FormLabel>Intervalo (dias)</FormLabel><FormControl><Input type="number" placeholder="30" {...field} /></FormControl><FormMessage /></FormItem>
               )} />
               <FormField control={form.control} name="data_primeiro_vencimento" render={({ field }) => (
-                <FormItem className=""><FormLabel>1º Vencimento</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "PPP", { locale: ptBR }) : <span>Escolha uma data</span>}<CalendarIcon className="ml-auto h-4 w-4 opacity-50" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus locale={ptBR} /></PopoverContent></Popover><FormMessage /></FormItem>
+                <FormItem className=""><FormLabel>1º Vencimento</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "PPP", { locale: ptBR }) : <span>Escolha uma data</span>}<CalendarIcon className="ml-auto h-4 w-4 opacity-50" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus locale={ptBR} /></PopoverContent></Popover><FormMessage /></FormItem>
               )} />
             </div>
           )}
