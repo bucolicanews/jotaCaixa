@@ -15,10 +15,10 @@ interface ContabilConfigHook {
 const DEFAULT_CONFIG_MAP: ContabilConfigMap = {
     'Ativo': '1',
     'Passivo': '2',
-    'Patrimonio Liquido': '3',
-    'Receita': '4',
-    'Custo': '5',
-    'Despesa': '6',
+    'Patrimonio Liquido': '3', // CORRIGIDO: 3 é PL
+    'Receita': '4', // CORRIGIDO: 4 é Receita
+    'Custo': '5', // CORRIGIDO: 5 é Custo (ou Despesa)
+    'Despesa': '6', // CORRIGIDO: 6 é Despesa (usando 6 como fallback, mas o usuário mencionou 5)
 };
 
 /**

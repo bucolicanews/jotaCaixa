@@ -147,9 +147,9 @@ export function useDRE(filtroPeriodo: DateRange | undefined): DREData {
     
     setCarregando(true);
     
-    const receitaCode = configMap.Receita || '3';
-    const custoCode = configMap.Custo || '4';
-    const despesaCode = configMap.Despesa || '5';
+    const receitaCode = configMap.Receita || '4'; // USANDO CÓDIGO CORRETO
+    const custoCode = configMap.Custo || '5';
+    const despesaCode = configMap.Despesa || '6';
     
     // Cria a cláusula OR dinâmica
     const orClause = `Conta.like.${receitaCode}.%,Conta.like.${custoCode}.%,Conta.like.${despesaCode}.%`;

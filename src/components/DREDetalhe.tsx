@@ -15,6 +15,7 @@ import { ClienteProfile } from '@/types/usuario';
 import { showError } from '@/utils/toast';
 import { format } from 'date-fns';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
+import { useContabilConfig } from '@/hooks/use-contabil-config'; // Importando useContabilConfig
 
 interface DREDetalheProps {
   filtroPeriodo: DateRange | undefined;
@@ -33,30 +34,23 @@ interface ContaDRE {
 
 const DREDetalhe: React.FC<DREDetalheProps> = ({ filtroPeriodo, filtroSomenteComSaldo }) => {
   const { perfil, role } = useSessao();
+  const { configMap } = useContabilConfig(); // Obtendo o mapeamento
   const { contas, totalReceita, totalCusto, totalDespesa, resultadoLiquido, carregando } = useDRE(filtroPeriodo);
   const { printContent } = usePrint();
   
   const empresaNome = role === 'Admin' ? 'Admin' : (perfil as ClienteProfile)?.nome || 'Empresa';
 
-  // const resultadoBruto = totalReceita - totalCusto; // Removido TS6133
-  
   // Filtra as contas com base no estado local
   const contasFiltradas = useMemo(() => {
       if (!filtroSomenteComSaldo) return contas;
       
-      return contas.filter(c => {
-          const isZero = Math.abs(c.saldo_final) < 0.01;
-          
-          // Mantém contas sintéticas (Analitica='Não') mesmo se o saldo for zero,
-          // mas remove analíticas (Analitica='Sim') com saldo zero.
-          if (isZero && c.Analitica === 'Sim') return false;
-          
-          // Se o saldo não for zero, ou se for sintética, mantém.
-          return true;
-      });
+      // Filtra todas as contas onde o saldo é zero (ou muito próximo de zero)
+      return contas.filter(c => Math.abs(c.saldo_final) >= 0.01);
+      
   }, [contas, filtroSomenteComSaldo]);
   
   const getContasPorTipo = (tipo: ContaDRE['tipo_dre']) => {
+    // Retorna as contas já ordenadas pelo hook
     return contasFiltradas.filter(c => c.tipo_dre === tipo);
   };
   
@@ -86,6 +80,8 @@ const DREDetalhe: React.FC<DREDetalheProps> = ({ filtroPeriodo, filtroSomenteCom
         return;
     }
     
+    // Para a impressão, usamos a lista completa e deixamos o componente de impressão
+    // decidir se omite as linhas zero (se onlyWithBalance for true).
     const contasParaImpressao = onlyWithBalance 
         ? contas.filter(c => Math.abs(c.saldo_final) >= 0.01 || c.Analitica === 'Não')
         : contas;

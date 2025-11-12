@@ -16,6 +16,7 @@ import { useSessao } from '@/hooks/use-sessao';
 import { ClienteProfile } from '@/types/usuario';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../ui/dropdown-menu';
 import Balanco1ColunaPrint from './Balanco1ColunaPrint';
+import { useContabilConfig } from '@/hooks/use-contabil-config'; // Importando useContabilConfig
 
 interface BalancoPatrimonialDetalheProps {
   endDate: Date;
@@ -35,6 +36,7 @@ interface ContaBalanco {
 
 const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ endDate, filtroSomenteComSaldo }) => {
   const { perfil, role } = useSessao();
+  const { configMap } = useContabilConfig(); // Obtendo o mapeamento
   const { contas, totalAtivo, totalPassivo, totalPatrimonioLiquido, resultadoLiquido, carregando } = useBalancoPatrimonial(endDate);
   const { printContent } = usePrint();
   
@@ -83,24 +85,33 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
     return contasFiltradas.filter(c => c.tipo_principal === tipo);
   };
   
-  // NOVO FILTRO: Para Receita (3.x.x)
+  // NOVO FILTRO: Para Receita (usa o código configurado)
   const getContasReceita = () => {
-      // Contas de Receita são as contas 3.x.x que são marcadas como is_conta_resultado
-      const receitaContas = contas.filter(c => c.Conta.startsWith('3') && c.is_conta_resultado);
-      return filterAndIncludeParents(receitaContas, '3');
+      const receitaCode = configMap.Receita || '4'; // Usa o código configurado
+      // Contas de Receita são as contas que começam com o código de Receita E são marcadas como is_conta_resultado
+      const receitaContas = contas.filter(c => c.Conta.startsWith(receitaCode) && c.is_conta_resultado);
+      return filterAndIncludeParents(receitaContas, receitaCode);
   };
   
-  // NOVO FILTRO: Para Despesa (4.x.x e 5.x.x)
+  // NOVO FILTRO: Para Despesa (usa os códigos configurados)
   const getContasDespesa = () => {
-      // Contas de Despesa são as contas 4.x.x e 5.x.x (que são Resultado)
+      const custoCode = configMap.Custo || '5';
+      const despesaCode = configMap.Despesa || '6';
+      
+      // Contas de Despesa/Custo são as contas que começam com o código de Custo OU Despesa E são Resultado
       const despesaContas = contas.filter(c => c.tipo_principal === 'Resultado');
-      return filterAndIncludeParents(despesaContas, '4').concat(filterAndIncludeParents(despesaContas, '5'));
+      
+      const filteredCusto = filterAndIncludeParents(despesaContas, custoCode);
+      const filteredDespesa = filterAndIncludeParents(despesaContas, despesaCode);
+      
+      return [...filteredCusto, ...filteredDespesa];
   };
   
-  // NOVO FILTRO: Apenas contas de PL (3.x.x) que não são Resultado
+  // NOVO FILTRO: Apenas contas de PL (usa o código configurado)
   const getContasPL = () => {
+      const plCode = configMap['Patrimonio Liquido'] || '3';
       const plContas = contas.filter(c => c.tipo_principal === 'Patrimonio Liquido' && !c.is_conta_resultado);
-      return filterAndIncludeParents(plContas, '3');
+      return filterAndIncludeParents(plContas, plCode);
   };
   
   const renderContas = (contasList: ContaBalanco[]) => {
@@ -353,7 +364,7 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
         {/* ABA 5: RECEITA */}
         <TabsContent value="receita" className="mt-4">
             <Card>
-                <CardHeader><CardTitle className="text-xl text-green-600">Receitas (Contas 3.x.x de Resultado)</CardTitle></CardHeader>
+                <CardHeader><CardTitle className="text-xl text-green-600">Receitas (Contas {configMap.Receita}.x.x de Resultado)</CardTitle></CardHeader>
                 <CardContent>
                     <Table>
                         <TableHeader><TableRow><TableHead className="w-[150px]">Conta</TableHead><TableHead>Descrição</TableHead><TableHead className="text-right w-[150px]">Saldo</TableHead></TableRow></TableHeader>
@@ -366,7 +377,7 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
         {/* ABA 6: DESPESA */}
         <TabsContent value="despesa" className="mt-4">
             <Card>
-                <CardHeader><CardTitle className="text-xl text-red-600">Despesas (Contas 4.x.x e 5.x.x)</CardTitle></CardHeader>
+                <CardHeader><CardTitle className="text-xl text-red-600">Despesas (Contas {configMap.Custo}.x.x e {configMap.Despesa}.x.x)</CardTitle></CardHeader>
                 <CardContent>
                     <Table>
                         <TableHeader><TableRow><TableHead className="w-[150px]">Conta</TableHead><TableHead>Descrição</TableHead><TableHead className="text-right w-[150px]">Saldo</TableHead></TableRow></TableHeader>
