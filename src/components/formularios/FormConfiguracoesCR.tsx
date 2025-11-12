@@ -14,12 +14,11 @@ import { Separator } from '../ui/separator';
 import { Historico } from '@/types/historico';
 
 // Tipos de registro que precisam de mapeamento contábil
-const TIPOS_REGISTRO = [
+const TIPOS_REGISTRO_CONTABIL = [
   { key: 'a_receber', label: 'Contas a Receber (Sintético)' },
   { key: 'parcela', label: 'Parcelas a Receber (Analítico)' },
   { key: 'recebimento', label: 'Recebimentos (Crédito)' },
   { key: 'desconto', label: 'Descontos Concedidos (Despesa)' },
-  { key: 'recebimento_historico_padrao', label: 'Histórico Padrão (Recebimento)' }, // NOVO
 ];
 
 // Esquema dinâmico para garantir que todos os campos estejam presentes
@@ -28,7 +27,8 @@ const formSchema = z.object({
   parcela: z.string().uuid('Conta inválida para Parcelas a Receber.').nullable(),
   recebimento: z.string().uuid('Conta inválida para Recebimentos.').nullable(),
   desconto: z.string().uuid('Conta inválida para Descontos.').nullable(),
-  recebimento_historico_padrao: z.string().uuid('Histórico inválido para Recebimento Padrão.').nullable(), // NOVO
+  // Removido recebimento_historico_padrao do schema principal
+  historico_padrao_id: z.string().uuid('Histórico inválido.').nullable(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -37,7 +37,7 @@ const FormConfiguracoesCR: React.FC = () => {
   const { role, usuario, carregando: carregandoSessao } = useSessao();
   const [loadingData, setLoadingData] = useState(true);
   const [contasContabeis, setContasContabeis] = useState<PlanoContas[]>([]);
-  const [historicos, setHistoricos] = useState<Historico[]>([]); // NOVO ESTADO
+  const [historicos, setHistoricos] = useState<Historico[]>([]);
   const [loadingContas, setLoadingContas] = useState(true);
   
   const isAdmin = role === 'Admin';
@@ -50,7 +50,7 @@ const FormConfiguracoesCR: React.FC = () => {
       parcela: null,
       recebimento: null,
       desconto: null,
-      recebimento_historico_padrao: null, // NOVO
+      historico_padrao_id: null,
     },
   });
   
@@ -74,7 +74,6 @@ const FormConfiguracoesCR: React.FC = () => {
     setLoadingContas(false);
   }, [adminId]);
   
-  // NOVO: Busca de Históricos
   const fetchHistoricos = useCallback(async () => {
     if (!adminId) return;
     const { data, error } = await supabase
@@ -99,18 +98,31 @@ const FormConfiguracoesCR: React.FC = () => {
     
     setLoadingData(true);
     
-    const { data, error } = await supabase
+    // 1. Buscar Mapeamento Contábil
+    const { data: contasData, error: contasError } = await supabase
       .from('configuracao_contas_receber')
       .select('tipo_registro, conta_contabil_id')
       .eq('proprietario_id', adminId);
+      
+    // 2. Buscar Histórico Padrão (da nova tabela)
+    const { data: historicoData } = await supabase
+        .from('configuracao_historico_padrao')
+        .select('historico_id')
+        .eq('proprietario_id', adminId)
+        .eq('tipo_registro', 'recebimento_padrao')
+        .limit(1)
+        .single();
 
-    if (error) {
-      showError('Erro ao carregar configurações de CR: ' + error.message);
-    } else if (data) {
-      const mappedData = data.reduce((acc, item) => {
+    if (contasError) {
+      showError('Erro ao carregar configurações de CR: ' + contasError.message);
+    } else if (contasData) {
+      const mappedData = contasData.reduce((acc, item) => {
         acc[item.tipo_registro as keyof FormValues] = item.conta_contabil_id;
         return acc;
       }, {} as Partial<FormValues>);
+      
+      // Adiciona o ID do histórico padrão
+      mappedData.historico_padrao_id = historicoData?.historico_id || null;
       
       form.reset(mappedData);
     }
@@ -120,7 +132,7 @@ const FormConfiguracoesCR: React.FC = () => {
   useEffect(() => {
     if (!carregandoSessao && isAdmin) {
       fetchContasContabeis();
-      fetchHistoricos(); // Chamando a nova função
+      fetchHistoricos();
       fetchConfig();
     }
   }, [carregandoSessao, isAdmin, fetchConfig, fetchContasContabeis, fetchHistoricos]);
@@ -131,19 +143,32 @@ const FormConfiguracoesCR: React.FC = () => {
       return;
     }
     
-    const dataToUpsert = TIPOS_REGISTRO.map(tipo => ({
+    const dataToUpsertContabil = TIPOS_REGISTRO_CONTABIL.map(tipo => ({
         proprietario_id: adminId,
         tipo_registro: tipo.key,
-        // Se for o novo campo de histórico, o valor é o ID do histórico, mas a coluna é conta_contabil_id
         conta_contabil_id: values[tipo.key as keyof FormValues] || null, 
     }));
+    
+    const historicoPadraoPayload = {
+        proprietario_id: adminId,
+        tipo_registro: 'recebimento_padrao',
+        historico_id: values.historico_padrao_id || null,
+    };
 
     try {
-      const { error } = await supabase
+      // 1. Salvar Mapeamento Contábil
+      const { error: contabilError } = await supabase
         .from('configuracao_contas_receber')
-        .upsert(dataToUpsert, { onConflict: 'proprietario_id, tipo_registro' });
-
-      if (error) throw error;
+        .upsert(dataToUpsertContabil, { onConflict: 'proprietario_id, tipo_registro' });
+        
+      if (contabilError) throw contabilError;
+      
+      // 2. Salvar Histórico Padrão na nova tabela
+      const { error: historicoError } = await supabase
+        .from('configuracao_historico_padrao')
+        .upsert(historicoPadraoPayload, { onConflict: 'proprietario_id, tipo_registro' });
+        
+      if (historicoError) throw historicoError;
 
       showSuccess('Configurações de Contas a Receber salvas com sucesso!');
       fetchConfig();
@@ -165,9 +190,7 @@ const FormConfiguracoesCR: React.FC = () => {
       display: `${c.Conta} - ${c.Descricao} (${c.Analitica === 'Sim' ? 'Analítica' : 'Sintética'})`,
   }));
   
-  // Filtra as contas contábeis para o campo de Histórico Padrão (que na verdade armazena um ID de Histórico)
-  const historicoPadraoItem = TIPOS_REGISTRO.find(t => t.key === 'recebimento_historico_padrao');
-  const outrosRegistros = TIPOS_REGISTRO.filter(t => t.key !== 'recebimento_historico_padrao');
+  const historicoPadraoItem = TIPOS_REGISTRO_CONTABIL.find(t => t.key === 'recebimento_historico_padrao');
 
   return (
     <Form {...form}>
@@ -179,7 +202,7 @@ const FormConfiguracoesCR: React.FC = () => {
         <Separator />
         
         <div className="space-y-4">
-            {outrosRegistros.map(tipo => (
+            {TIPOS_REGISTRO_CONTABIL.map(tipo => (
                 <FormField
                     key={tipo.key}
                     control={form.control}
@@ -214,42 +237,38 @@ const FormConfiguracoesCR: React.FC = () => {
         
         <Separator />
         
-        {/* NOVO CAMPO: Histórico Padrão (usa o ID da conta contábil para armazenar o ID do Histórico) */}
-        {historicoPadraoItem && (
-            <FormField
-                key={historicoPadraoItem.key}
-                control={form.control}
-                name={historicoPadraoItem.key as keyof FormValues}
-                render={({ field }) => (
-                    <FormItem>
-                        <FormLabel>{historicoPadraoItem.label}</FormLabel>
-                        <Select 
-                            onValueChange={field.onChange} 
-                            value={field.value || undefined}
-                        >
-                            <FormControl>
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Selecione o Histórico Padrão" />
-                                </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                                <SelectItem value={null as any}>Nenhum (Não Mapear)</SelectItem>
-                                {/* CORREÇÃO: Listando Históricos */}
-                                {historicos.map(h => (
-                                    <SelectItem key={h.id} value={h.id}>
-                                        {h.codigo && `[${h.codigo}] `}{h.descricao}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                        <FormMessage />
-                        <p className="text-xs text-muted-foreground">
-                            Este histórico será sugerido automaticamente ao registrar um recebimento manual.
-                        </p>
-                    </FormItem>
-                )}
-            />
-        )}
+        {/* NOVO CAMPO: Histórico Padrão (usa o ID da nova tabela) */}
+        <FormField
+            control={form.control}
+            name="historico_padrao_id"
+            render={({ field }) => (
+                <FormItem>
+                    <FormLabel>{historicoPadraoItem?.label || 'Histórico Padrão (Recebimento)'}</FormLabel>
+                    <Select 
+                        onValueChange={field.onChange} 
+                        value={field.value || undefined}
+                    >
+                        <FormControl>
+                            <SelectTrigger>
+                                <SelectValue placeholder="Selecione o Histórico Padrão" />
+                            </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                            <SelectItem value={null as any}>Nenhum (Não Mapear)</SelectItem>
+                            {historicos.map(h => (
+                                <SelectItem key={h.id} value={h.id}>
+                                    {h.codigo && `[${h.codigo}] `}{h.descricao}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <FormMessage />
+                    <p className="text-xs text-muted-foreground">
+                        Este histórico será sugerido automaticamente ao registrar um recebimento manual.
+                    </p>
+                </FormItem>
+            )}
+        />
         
         <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
           {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

@@ -43,7 +43,6 @@ const getTipoDRE = (conta: string, configMap: ContabilConfigMap): ContaBalanco['
 
 /**
  * Função de comparação para ordenar códigos contábeis hierarquicamente.
- * Ex: 4.2.2.01.0004 deve vir depois de 4.2.2.01.
  */
 const compareContas = (a: ContaBalanco, b: ContaBalanco): number => {
     const partsA = a.Conta.split('.').map(Number);
@@ -62,34 +61,36 @@ const compareContas = (a: ContaBalanco, b: ContaBalanco): number => {
 
 /**
  * Consolida os saldos das contas analíticas para as contas sintéticas.
- * A lógica foi simplificada para somar o saldo de TODAS as contas descendentes ANALÍTICAS.
  */
 const consolidateBalances = (contas: ContaBalanco[]): ContaBalanco[] => {
     // 1. Cria um mapa de saldos base (apenas analíticas)
     const saldoAnaliticoMap: Record<string, number> = contas
-        .filter(c => c.Analitica === 'Sim') // Apenas contas analíticas têm o saldo base calculado
+        .filter(c => c.Analitica === 'Sim')
         .reduce((acc, c) => {
             acc[c.Conta] = c.saldo_final;
             return acc;
         }, {} as Record<string, number>);
 
     // 2. Cria um mapa para armazenar os saldos consolidados (inicialmente com saldos base)
-    const saldoConsolidadoMap: Record<string, number> = { ...saldoAnaliticoMap };
+    const saldoConsolidadoMap: Record<string, number> = contas
+        .reduce((acc, c) => {
+            // Se for analítica, usa o saldo calculado. Se for sintética, começa com 0.
+            acc[c.Conta] = c.Analitica === 'Sim' ? c.saldo_final : 0;
+            return acc;
+        }, {} as Record<string, number>);
 
     // 3. Ordena as contas sintéticas do mais específico para o mais geral (ordem decrescente)
     const sinteticas = contas.filter(c => c.Analitica === 'Não').sort((a, b) => compareContas(b, a));
 
-    // 4. Consolida: Cada sintética soma o saldo de seus descendentes analíticos
+    // 4. Consolida: Cada sintética soma o saldo de seus descendentes diretos e indiretos
     for (const contaSintetica of sinteticas) {
         let totalConsolidado = 0;
         
         // Itera sobre TODAS as contas para encontrar as filhas ANALÍTICAS
         for (const conta of contas) {
             // Verifica se é descendente E se é ANALÍTICA
-            // A conta sintética deve ser um prefixo da conta analítica, seguida por um ponto.
             if (conta.Analitica === 'Sim' && conta.Conta.startsWith(contaSintetica.Conta + '.')) {
                 
-                // Soma o saldo da conta analítica (que está no saldoAnaliticoMap)
                 const saldoAnalitico = saldoAnaliticoMap[conta.Conta];
                 
                 if (saldoAnalitico !== undefined) {
@@ -189,47 +190,54 @@ export function useBalancoPatrimonial(endDate: Date | undefined): BalancoData {
         
       if (lError) throw lError;
       
-      // 4. Calcular o saldo de cada conta contábil (apenas analíticas e sintéticas que podem ter saldo inicial)
+      // 4. Calcular o saldo de cada conta contábil (apenas analíticas)
       const movimentosMap = lancamentosData.reduce((acc, l) => {
         if (l.conta_contabil_id) {
-          const valor = l.tipo === 'Entrada' ? l.valor : -l.valor;
+          const conta = planoContas.find(pc => pc.id === l.conta_contabil_id);
+          const tipoPrincipal = conta ? getTipoDRE(conta.Conta, configMap) : 'Outros';
+          
+          let valor = 0;
+          
+          // Lógica de débito/crédito para o Balanço (Ativo/Passivo/PL)
+          if (tipoPrincipal === 'Ativo' || tipoPrincipal === 'Patrimonio Liquido') {
+              // Ativo/PL: Entrada é débito (aumenta), Saída é crédito (diminui)
+              valor = l.tipo === 'Entrada' ? l.valor : -l.valor;
+          } else if (tipoPrincipal === 'Passivo') {
+              // Passivo: Entrada é crédito (diminui), Saída é débito (aumenta)
+              valor = l.tipo === 'Saida' ? l.valor : -l.valor;
+          }
+          
+          // Lógica de débito/crédito para o Resultado (DRE)
+          else if (tipoPrincipal === 'Resultado') {
+              if (conta?.Conta.startsWith(receitaCode)) {
+                  // Receita: Entrada é positiva, Saída é negativa (estorno)
+                  valor = l.tipo === 'Entrada' ? l.valor : -l.valor;
+              } else if (conta?.Conta.startsWith(custoCode) || conta?.Conta.startsWith(despesaCode)) {
+                  // Custo/Despesa: Saída é positiva (aumenta o custo), Entrada é negativa (estorno)
+                  valor = l.tipo === 'Saida' ? l.valor : -l.valor;
+              }
+          }
+          
           acc[l.conta_contabil_id] = (acc[l.conta_contabil_id] || 0) + valor;
         }
         return acc;
       }, {} as Record<string, number>);
       
-      // 5. Calcular o saldo base (apenas analíticas e PL/Resultado)
+      // 5. Calcular o saldo base (apenas analíticas e sintéticas que podem ter saldo inicial)
       let contasCalculadas: ContaBalanco[] = planoContas.map(pc => {
         const saldoInicial = saldoInicialMap[pc.id] || 0;
         const movimentos = movimentosMap[pc.id] || 0;
         
         let saldo_final = 0;
-        const tipoPrincipal = getTipoDRE(pc.Conta, configMap); // USANDO CONFIG MAP
+        const tipoPrincipal = getTipoDRE(pc.Conta, configMap);
         
         // Se for conta de saldo (Caixa/Banco) ou Patrimonial, o saldo é Inicial + Movimentos
         if (pc.is_conta_caixa_banco || pc.is_conta_patrimonial) {
             saldo_final = saldoInicial + movimentos;
         } 
-        // Se for conta de Resultado (Receita/Custo/Despesa), o saldo é calculado de forma diferente
-        else if (tipoPrincipal === 'Resultado') {
-            // Para DRE, o saldo é o movimento (Receita é Entrada, Despesa/Custo é Saída)
-            
-            const movimentosReceita = lancamentosData
-                .filter(l => l.conta_contabil_id === pc.id)
-                .reduce((sum, l) => sum + (l.tipo === 'Entrada' ? l.valor : -l.valor), 0);
-                
-            const movimentosDespesa = lancamentosData
-                .filter(l => l.conta_contabil_id === pc.id)
-                .reduce((sum, l) => sum + (l.tipo === 'Saida' ? l.valor : -l.valor), 0);
-                
-            if (pc.Conta.startsWith(receitaCode)) {
-                saldo_final = movimentosReceita;
-            } else if (pc.Conta.startsWith(custoCode) || pc.Conta.startsWith(despesaCode)) {
-                saldo_final = movimentosDespesa;
-            } else {
-                saldo_final = 0;
-            }
-            
+        // Se for conta de Resultado (DRE), o saldo é apenas o movimento do período
+        else if (pc.is_conta_resultado) {
+            saldo_final = movimentos;
         }
         // Se for Patrimônio Líquido (PL), o saldo é Inicial + Movimentos
         else if (tipoPrincipal === 'Patrimonio Liquido') {
@@ -287,9 +295,18 @@ export function useBalancoPatrimonial(endDate: Date | undefined): BalancoData {
   const totalPatrimonioLiquido = getSaldoNivel1('Patrimonio Liquido');
     
   // O Resultado Líquido é a soma de todas as contas de Resultado (Receita - Custo - Despesa)
-  const totalReceita = getSaldoNivel1('Receita');
-  const totalCusto = getSaldoNivel1('Custo');
-  const totalDespesa = getSaldoNivel1('Despesa');
+  const totalReceita = contasBalanco
+      .filter(c => c.tipo_principal === 'Resultado' && c.Conta.startsWith(configMap.Receita || '3'))
+      .reduce((sum, c) => sum + c.saldo_final, 0);
+      
+  const totalCusto = contasBalanco
+      .filter(c => c.tipo_principal === 'Resultado' && c.Conta.startsWith(configMap.Custo || '4'))
+      .reduce((sum, c) => sum + c.saldo_final, 0);
+      
+  const totalDespesa = contasBalanco
+      .filter(c => c.tipo_principal === 'Resultado' && c.Conta.startsWith(configMap.Despesa || '5'))
+      .reduce((sum, c) => sum + c.saldo_final, 0);
+      
   const resultadoLiquido = totalReceita - totalCusto - totalDespesa;
 
   return {

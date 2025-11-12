@@ -14,12 +14,11 @@ import { Separator } from '../ui/separator';
 import { Historico } from '@/types/historico';
 
 // Tipos de registro que precisam de mapeamento contábil para CP
-const TIPOS_REGISTRO = [
+const TIPOS_REGISTRO_CONTABIL = [
   { key: 'a_pagar', label: 'Contas a Pagar (Sintético)' },
   { key: 'parcela_pagar', label: 'Parcelas a Pagar (Analítico)' },
   { key: 'pagamento', label: 'Pagamentos (Saída)' },
   { key: 'desconto_obtido', label: 'Descontos Obtidos (Receita)' },
-  { key: 'pagamento_historico_padrao', label: 'Histórico Padrão (Pagamento)' }, // NOVO
 ];
 
 // Esquema dinâmico para garantir que todos os campos estejam presentes
@@ -28,7 +27,8 @@ const formSchema = z.object({
   parcela_pagar: z.string().uuid('Conta inválida para Parcelas a Pagar.').nullable(),
   pagamento: z.string().uuid('Conta inválida para Pagamentos.').nullable(),
   desconto_obtido: z.string().uuid('Conta inválida para Descontos Obtidos.').nullable(),
-  pagamento_historico_padrao: z.string().uuid('Histórico inválido para Pagamento Padrão.').nullable(), // NOVO
+  // Removido pagamento_historico_padrao do schema principal
+  historico_padrao_id: z.string().uuid('Histórico inválido.').nullable(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -50,7 +50,7 @@ const FormConfiguracoesCP: React.FC = () => {
       parcela_pagar: null,
       pagamento: null,
       desconto_obtido: null,
-      pagamento_historico_padrao: null, // NOVO
+      historico_padrao_id: null,
     },
   });
   
@@ -99,18 +99,31 @@ const FormConfiguracoesCP: React.FC = () => {
     
     setLoadingData(true);
     
-    const { data, error } = await supabase
+    // 1. Buscar Mapeamento Contábil
+    const { data: contasData, error: contasError } = await supabase
       .from('configuracao_contas_pagar')
       .select('tipo_registro, conta_contabil_id')
       .eq('proprietario_id', adminId);
+      
+    // 2. Buscar Histórico Padrão (da nova tabela)
+    const { data: historicoData } = await supabase
+        .from('configuracao_historico_padrao')
+        .select('historico_id')
+        .eq('proprietario_id', adminId)
+        .eq('tipo_registro', 'pagamento_padrao')
+        .limit(1)
+        .single();
 
-    if (error) {
-      showError('Erro ao carregar configurações de CP: ' + error.message);
-    } else if (data) {
-      const mappedData = data.reduce((acc: Partial<FormValues>, item: { tipo_registro: string, conta_contabil_id: string | null }) => {
+    if (contasError) {
+      showError('Erro ao carregar configurações de CP: ' + contasError.message);
+    } else if (contasData) {
+      const mappedData = contasData.reduce((acc: Partial<FormValues>, item: { tipo_registro: string, conta_contabil_id: string | null }) => {
         acc[item.tipo_registro as keyof FormValues] = item.conta_contabil_id;
         return acc;
       }, {} as Partial<FormValues>);
+      
+      // Adiciona o ID do histórico padrão
+      mappedData.historico_padrao_id = historicoData?.historico_id || null;
       
       form.reset(mappedData);
     }
@@ -131,18 +144,32 @@ const FormConfiguracoesCP: React.FC = () => {
       return;
     }
     
-    const dataToUpsert = TIPOS_REGISTRO.map(tipo => ({
+    const dataToUpsertContabil = TIPOS_REGISTRO_CONTABIL.map(tipo => ({
         proprietario_id: adminId,
         tipo_registro: tipo.key,
         conta_contabil_id: values[tipo.key as keyof FormValues] || null,
     }));
+    
+    const historicoPadraoPayload = {
+        proprietario_id: adminId,
+        tipo_registro: 'pagamento_padrao',
+        historico_id: values.historico_padrao_id || null,
+    };
 
     try {
-      const { error } = await supabase
+      // 1. Salvar Mapeamento Contábil
+      const { error: contabilError } = await supabase
         .from('configuracao_contas_pagar')
-        .upsert(dataToUpsert, { onConflict: 'proprietario_id, tipo_registro' });
-
-      if (error) throw error;
+        .upsert(dataToUpsertContabil, { onConflict: 'proprietario_id, tipo_registro' });
+        
+      if (contabilError) throw contabilError;
+      
+      // 2. Salvar Histórico Padrão na nova tabela
+      const { error: historicoError } = await supabase
+        .from('configuracao_historico_padrao')
+        .upsert(historicoPadraoPayload, { onConflict: 'proprietario_id, tipo_registro' });
+        
+      if (historicoError) throw historicoError;
 
       showSuccess('Configurações de Contas a Pagar salvas com sucesso!');
       fetchConfig();
@@ -164,9 +191,7 @@ const FormConfiguracoesCP: React.FC = () => {
       display: `${c.Conta} - ${c.Descricao} (${c.Analitica === 'Sim' ? 'Analítica' : 'Sintética'})`,
   }));
   
-  // Filtra as contas contábeis para o campo de Histórico Padrão (que na verdade armazena um ID de Histórico)
-  const historicoPadraoItem = TIPOS_REGISTRO.find(t => t.key === 'pagamento_historico_padrao');
-  const outrosRegistros = TIPOS_REGISTRO.filter(t => t.key !== 'pagamento_historico_padrao');
+  const historicoPadraoItem = TIPOS_REGISTRO_CONTABIL.find(t => t.key === 'pagamento_historico_padrao');
 
   return (
     <Form {...form}>
@@ -178,7 +203,7 @@ const FormConfiguracoesCP: React.FC = () => {
         <Separator />
         
         <div className="space-y-4">
-            {outrosRegistros.map(tipo => (
+            {TIPOS_REGISTRO_CONTABIL.map(tipo => (
                 <FormField
                     key={tipo.key}
                     control={form.control}
@@ -213,42 +238,38 @@ const FormConfiguracoesCP: React.FC = () => {
         
         <Separator />
         
-        {/* NOVO CAMPO: Histórico Padrão (usa o ID da conta contábil para armazenar o ID do Histórico) */}
-        {historicoPadraoItem && (
-            <FormField
-                key={historicoPadraoItem.key}
-                control={form.control}
-                name={historicoPadraoItem.key as keyof FormValues}
-                render={({ field }) => (
-                    <FormItem>
-                        <FormLabel>{historicoPadraoItem.label}</FormLabel>
-                        <Select 
-                            onValueChange={field.onChange} 
-                            value={field.value || undefined}
-                        >
-                            <FormControl>
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Selecione o Histórico Padrão" />
-                                </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                                <SelectItem value={null as any}>Nenhum (Não Mapear)</SelectItem>
-                                {/* CORREÇÃO: Listando Históricos */}
-                                {historicos.map(h => (
-                                    <SelectItem key={h.id} value={h.id}>
-                                        {h.codigo && `[${h.codigo}] `}{h.descricao}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                        <FormMessage />
-                        <p className="text-xs text-muted-foreground">
-                            Este histórico será sugerido automaticamente ao registrar um pagamento manual.
-                        </p>
-                    </FormItem>
-                )}
-            />
-        )}
+        {/* NOVO CAMPO: Histórico Padrão (usa o ID da nova tabela) */}
+        <FormField
+            control={form.control}
+            name="historico_padrao_id"
+            render={({ field }) => (
+                <FormItem>
+                    <FormLabel>{historicoPadraoItem?.label || 'Histórico Padrão (Pagamento)'}</FormLabel>
+                    <Select 
+                        onValueChange={field.onChange} 
+                        value={field.value || undefined}
+                    >
+                        <FormControl>
+                            <SelectTrigger>
+                                <SelectValue placeholder="Selecione o Histórico Padrão" />
+                            </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                            <SelectItem value={null as any}>Nenhum (Não Mapear)</SelectItem>
+                            {historicos.map(h => (
+                                <SelectItem key={h.id} value={h.id}>
+                                    {h.codigo && `[${h.codigo}] `}{h.descricao}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <FormMessage />
+                    <p className="text-xs text-muted-foreground">
+                        Este histórico será sugerido automaticamente ao registrar um pagamento manual.
+                    </p>
+                </FormItem>
+            )}
+        />
         
         <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
           {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
