@@ -69,7 +69,7 @@ interface ClienteCRSimples {
 
 const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onSaveComplete }) => {
   const { perfil, role, usuario } = useSessao();
-  const { configMap } = useContabilConfig();
+  const { configMap: _configMap } = useContabilConfig(); // Corrigido TS6133
   const [clientes, setClientes] = useState<ClienteCRSimples[]>([]);
   const [loadingClientes, setLoadingClientes] = useState(true);
   const [mapeamentoContabil, setMapeamentoContabil] = useState<Record<string, string | null>>({});
@@ -129,9 +129,9 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
     if (!ownerId) return;
     setLoadingContasPatrimoniais(true);
     
-    const ativoCode = configMap.Ativo || '1';
-    const passivoCode = configMap.Passivo || '2';
-    const plCode = configMap['Patrimonio Liquido'] || '3';
+    const ativoCode = _configMap.Ativo || '1';
+    const passivoCode = _configMap.Passivo || '2';
+    const plCode = _configMap['Patrimonio Liquido'] || '3';
     
     // Busca contas Patrimoniais (Ativo, Passivo, PL)
     const { data, error } = await supabase
@@ -150,7 +150,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
         setContasPatrimoniais(data as PlanoContas[]);
     }
     setLoadingContasPatrimoniais(false);
-  }, [ownerId, configMap.Ativo, configMap.Passivo, configMap['Patrimonio Liquido']]);
+  }, [ownerId, _configMap.Ativo, _configMap.Passivo, _configMap['Patrimonio Liquido']]);
 
   useEffect(() => {
     const fetchClientes = async () => {
@@ -216,6 +216,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
     },
   });
 
+  const { isSubmitting } = form.formState;
   const tipoLancamento = form.watch('tipo_lancamento');
   const novoHistoricoValue = form.watch('novo_historico');
   
@@ -454,12 +455,12 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
                 <div className="flex space-x-2 pt-2">
                     <FormField control={form.control} name="novo_historico" render={({ field }) => (
                         <FormItem className="flex-1">
-                            <FormControl><Input placeholder="Novo Histórico" {...field} disabled={form.formState.isSubmitting} /></FormControl>
+                            <FormControl><Input placeholder="Novo Histórico" {...field} disabled={isSubmitting} /></FormControl>
                             <FormMessage />
                         </FormItem>
                     )} />
-                    <Button type="button" onClick={handleCreateHistorico} disabled={form.formState.isSubmitting || !form.watch('novo_historico')}>
-                        {form.formState.isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Criar'}
+                    <Button type="button" onClick={handleCreateHistorico} disabled={isSubmitting || !form.watch('novo_historico')}>
+                        {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Criar'}
                     </Button>
                 </div>
             )}
@@ -486,13 +487,13 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
                 <FormItem><FormLabel>Intervalo (dias)</FormLabel><FormControl><Input type="number" placeholder="30" {...field} /></FormControl><FormMessage /></FormItem>
               )} />
               <FormField control={form.control} name="data_primeiro_vencimento" render={({ field }) => (
-                <FormItem className=""><FormLabel>1º Vencimento</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "PPP", { locale: ptBR }) : <span>Escolha uma data</span>}<CalendarIcon className="ml-auto h-4 w-4 opacity-50" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus locale={ptBR} /></PopoverContent></Popover><FormMessage /></FormItem>
+                <FormItem><FormLabel>1º Vencimento</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("w-full text-left font-normal", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "dd/MM/yy") : <span>Data</span>}<CalendarIcon className="ml-auto h-4 w-4 opacity-50" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus locale={ptBR} /></PopoverContent></Popover><FormMessage /></FormItem>
               )} />
             </div>
           )}
         </div>
-        <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
-          {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+        <Button type="submit" className="w-full" disabled={isSubmitting}>
+          {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           {isEditing ? 'Salvar Alterações' : 'Salvar Lançamento'}
         </Button>
       </form>
