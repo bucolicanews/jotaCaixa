@@ -42,7 +42,6 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
   
   const empresaNome = role === 'Admin' ? 'Admin' : (perfil as ClienteProfile)?.nome || 'Empresa';
 
-  // CORREÇÃO: O totalPassivoPL deve somar o Passivo, o PL e o Resultado Líquido (que é o resultado do período)
   const totalPassivoPL = totalPassivo + totalPatrimonioLiquido + resultadoLiquido;
   const isBalanced = Math.abs(totalAtivo - totalPassivoPL) < 0.01;
   
@@ -104,13 +103,19 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
       const filteredCusto = filterAndIncludeParents(despesaContas, custoCode);
       const filteredDespesa = filterAndIncludeParents(despesaContas, despesaCode);
       
-      return [...filteredCusto, ...filteredDespesa];
+      // Combina e remove duplicatas (se houver sobreposição de códigos)
+      const combined = [...filteredCusto, ...filteredDespesa];
+      const uniqueMap = new Map<string, ContaBalanco>();
+      combined.forEach(c => uniqueMap.set(c.id, c));
+      
+      return Array.from(uniqueMap.values()).sort((a, b) => a.Conta.localeCompare(b.Conta));
   };
   
   // NOVO FILTRO: Apenas contas de PL (usa o código configurado)
   const getContasPL = () => {
       const plCode = configMap['Patrimonio Liquido'] || '3';
-      const plContas = contas.filter(c => c.tipo_principal === 'Patrimonio Liquido' && !c.is_conta_resultado);
+      // Contas de PL são as contas que começam com o código de PL E NÃO são Resultado
+      const plContas = contas.filter(c => c.Conta.startsWith(plCode) && !c.is_conta_resultado);
       return filterAndIncludeParents(plContas, plCode);
   };
   
@@ -135,7 +140,7 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
                 level === 1 && 'border-b-2 border-border'
             )}
         >
-          <TableCell className="pl-4" style={{ paddingLeft: `${paddingLeft}px` }}>{c.Conta}</TableCell>
+          <TableCell className="pl-4" style={{ paddingLeft: `${paddingLeft + 16}px` }}>{c.Conta}</TableCell>
           <TableCell className={cn(isSintetica ? 'pl-4' : 'pl-8')}>{c.Descricao}</TableCell>
           <TableCell className={cn("text-right", c.saldo_final < 0 && 'text-red-600')}>
             {formatCurrency(c.saldo_final)}
@@ -301,13 +306,6 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
                             <Table>
                                 <TableHeader><TableRow><TableHead className="w-[150px]">Conta</TableHead><TableHead>Descrição</TableHead><TableHead className="text-right w-[150px]">Saldo</TableHead></TableRow></TableHeader>
                                 <TableBody>{renderContas(getContasPL())}</TableBody>
-                                {/* Linha do Resultado Líquido */}
-                                <TableRow className={cn("font-bold border-t-2", resultadoLiquido >= 0 ? "bg-green-500/30" : "bg-red-500/30")}>
-                                    <TableCell colSpan={2}>Resultado Líquido do Período</TableCell>
-                                    <TableCell className={cn("text-right", resultadoLiquido >= 0 ? "text-green-700" : "text-red-700")}>
-                                        {formatCurrency(resultadoLiquido)}
-                                    </TableCell>
-                                </TableRow>
                             </Table>
                         </CardContent>
                     </Card>
