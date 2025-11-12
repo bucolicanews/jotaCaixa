@@ -47,7 +47,6 @@ const getTipoDRE = (conta: string, configMap: ContabilConfigMap): ContaBalanco['
  */
 const compareContas = (a: ContaBalanco, b: ContaBalanco): number => {
     const partsA = a.Conta.split('.').map(Number);
-    // CORREÇÃO: Removendo o erro de digitação '.map'
     const partsB = b.Conta.split('.').map(Number);
 
     for (let i = 0; i < Math.max(partsA.length, partsB.length); i++) {
@@ -296,16 +295,16 @@ export function useBalancoPatrimonial(endDate: Date | undefined): BalancoData {
   
   // 8. Calcular totais
   // NOVO CÁLCULO: Busca o saldo consolidado da conta de nível 1 (ex: '1')
-  const getSaldoNivel1 = (tipo: keyof ContabilConfigMap) => {
-      const contaCodigo = configMap[tipo] || '0';
-      // CORREÇÃO 3: Apenas procura a conta pelo código, sem Analitica
-      const contaNivel1 = contasBalanco.find(c => c.Conta === contaCodigo);
-      return contaNivel1?.saldo_final || 0;
+  const getTotalPorGrupo = (codigoBase: string) => {
+      // Soma todas as contas (analíticas e sintéticas) que pertencem a um grupo
+      return contasBalanco
+          .filter(c => c.Conta === codigoBase || c.Conta.startsWith(`${codigoBase}.`))
+          .reduce((sum, c) => sum + (c.saldo_final || 0), 0);
   };
   
-  const totalAtivo = getSaldoNivel1('Ativo');
-  const totalPassivoBase = getSaldoNivel1('Passivo'); // Passivo (código 2)
-  const totalPLBase = getSaldoNivel1('Patrimonio Liquido'); // Patrimônio Líquido (código 3)
+  const totalAtivo = getTotalPorGrupo(configMap.Ativo || '1');
+  const totalPassivoBase = getTotalPorGrupo(configMap.Passivo || '2'); // Passivo (código 2)
+  const totalPLBase = getTotalPorGrupo(configMap['Patrimonio Liquido'] || '3'); // Patrimônio Líquido (código 3)
     
   // O Resultado Líquido é a soma de todas as contas de Resultado (Receita - Custo - Despesa)
   const totalReceita = contasBalanco
