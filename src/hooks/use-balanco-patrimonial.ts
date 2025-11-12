@@ -63,15 +63,7 @@ const compareContas = (a: ContaBalanco, b: ContaBalanco): number => {
  * Consolida os saldos das contas analíticas para as contas sintéticas.
  */
 const consolidateBalances = (contas: ContaBalanco[]): ContaBalanco[] => {
-    // 1. Cria um mapa de saldos base (apenas analíticas)
-    const saldoAnaliticoMap: Record<string, number> = contas
-        .filter(c => c.Analitica === 'Sim')
-        .reduce((acc, c) => {
-            acc[c.Conta] = c.saldo_final;
-            return acc;
-        }, {} as Record<string, number>);
-
-    // 2. Cria um mapa para armazenar os saldos consolidados (inicialmente com saldos base)
+    // 1. Cria um mapa para armazenar os saldos consolidados (inicialmente com saldos base)
     const saldoConsolidadoMap: Record<string, number> = contas
         .reduce((acc, c) => {
             // Se for analítica, usa o saldo calculado. Se for sintética, começa com 0.
@@ -79,22 +71,31 @@ const consolidateBalances = (contas: ContaBalanco[]): ContaBalanco[] => {
             return acc;
         }, {} as Record<string, number>);
 
-    // 3. Ordena as contas sintéticas do mais específico para o mais geral (ordem decrescente)
+    // 2. Ordena as contas sintéticas do mais específico para o mais geral (ordem decrescente)
     const sinteticas = contas.filter(c => c.Analitica === 'Não').sort((a, b) => compareContas(b, a));
 
-    // 4. Consolida: Cada sintética soma o saldo de seus descendentes diretos e indiretos
+    // 3. Consolida: Cada sintética soma o saldo de seus descendentes diretos e indiretos
     for (const contaSintetica of sinteticas) {
         let totalConsolidado = 0;
         
-        // Itera sobre TODAS as contas para encontrar as filhas ANALÍTICAS
+        // Calcula o nível da conta sintética (número de pontos + 1)
+        const nivelPai = contaSintetica.Conta.split('.').filter(p => p.length > 0).length;
+        const nivelFilhoDireto = nivelPai + 1;
+        
+        // Itera sobre todas as contas para encontrar as filhas DIRETAS
         for (const conta of contas) {
-            // Verifica se é descendente E se é ANALÍTICA
-            if (conta.Analitica === 'Sim' && conta.Conta.startsWith(contaSintetica.Conta + '.')) {
+            // 3.1. Verifica se é filha (começa com o prefixo do pai + '.')
+            if (conta.Conta.startsWith(contaSintetica.Conta + '.') && conta.Conta !== contaSintetica.Conta) {
                 
-                const saldoAnalitico = saldoAnaliticoMap[conta.Conta];
+                // 3.2. Verifica se é filha DIRETA (o nível é exatamente o próximo)
+                const nivelConta = conta.Conta.split('.').filter(p => p.length > 0).length;
                 
-                if (saldoAnalitico !== undefined) {
-                    totalConsolidado += saldoAnalitico;
+                if (nivelConta === nivelFilhoDireto) {
+                    // Se for filha direta, soma o saldo consolidado dela (que já deve estar no mapa)
+                    const saldoFilho = saldoConsolidadoMap[conta.Conta];
+                    if (saldoFilho !== undefined) {
+                        totalConsolidado += saldoFilho;
+                    }
                 }
             }
         }
@@ -103,7 +104,7 @@ const consolidateBalances = (contas: ContaBalanco[]): ContaBalanco[] => {
         saldoConsolidadoMap[contaSintetica.Conta] = totalConsolidado;
     }
     
-    // 5. Atualiza a lista de contas com os saldos consolidados
+    // 4. Atualiza a lista de contas com os saldos consolidados
     return contas.map(c => {
         const saldo = saldoConsolidadoMap[c.Conta];
         return {
@@ -150,8 +151,21 @@ export function useBalancoPatrimonial(endDate: Date | undefined): BalancoData {
     const custoCode = configMap.Custo || '5';
     const despesaCode = configMap.Despesa || '6';
     
-    // Busca todas as contas que são Ativo, Passivo, PL, Receita, Custo ou Despesa
-    const orClause = `Conta.like.${ativoCode}.%,Conta.like.${passivoCode}.%,Conta.like.${plCode}.%,Conta.like.${receitaCode}.%,Conta.like.${custoCode}.%,Conta.like.${despesaCode}.%`;
+    // CORREÇÃO 1: Incluir contas de nível 1 explicitamente na cláusula OR
+    const orClause = [
+        `Conta.eq.${ativoCode}`,
+        `Conta.like.${ativoCode}.%`,
+        `Conta.eq.${passivoCode}`,
+        `Conta.like.${passivoCode}.%`,
+        `Conta.eq.${plCode}`,
+        `Conta.like.${plCode}.%`,
+        `Conta.eq.${receitaCode}`,
+        `Conta.like.${receitaCode}.%`,
+        `Conta.eq.${custoCode}`,
+        `Conta.like.${custoCode}.%`,
+        `Conta.eq.${despesaCode}`,
+        `Conta.like.${despesaCode}.%`,
+    ].join(',');
     
     try {
       // 1. Buscar Plano de Contas
@@ -207,12 +221,15 @@ export function useBalancoPatrimonial(endDate: Date | undefined): BalancoData {
                             tipoPrincipal === 'Patrimonio Liquido' || 
                             (tipoPrincipal === 'Resultado' && conta?.Conta.startsWith(receitaCode));
 
+          // CORREÇÃO 2: Lógica de Débito/Crédito
           if (isDevedora) {
               // Débito (Entrada) aumenta, Crédito (Saída) diminui
               valor = l.tipo === 'Entrada' ? l.valor : -l.valor;
           } else if (isCredora) {
-              // Crédito (Saída) aumenta, Débito (Entrada) diminui
-              valor = l.tipo === 'Saida' ? l.valor : -l.valor;
+              // Crédito (Entrada) aumenta, Débito (Saída) diminui
+              // Nota: No nosso sistema, Recebimento/Receita é 'Entrada', Pagamento/Despesa é 'Saida'.
+              // Para contas Credoras (Passivo, PL, Receita), o saldo aumenta com 'Entrada' (Crédito) e diminui com 'Saída' (Débito).
+              valor = l.tipo === 'Entrada' ? l.valor : -l.valor;
           }
           
           acc[l.conta_contabil_id] = (acc[l.conta_contabil_id] || 0) + valor;
@@ -283,8 +300,8 @@ export function useBalancoPatrimonial(endDate: Date | undefined): BalancoData {
   // NOVO CÁLCULO: Busca o saldo consolidado da conta de nível 1 (ex: '1')
   const getSaldoNivel1 = (tipo: keyof ContabilConfigMap) => {
       const contaCodigo = configMap[tipo] || '0';
-      // Busca a conta sintética de nível 1 (Conta === '1', '2', '3', etc.)
-      const contaNivel1 = contasBalanco.find(c => c.Conta === contaCodigo && c.Analitica === 'Não');
+      // CORREÇÃO 3: Apenas procura a conta pelo código, sem Analitica
+      const contaNivel1 = contasBalanco.find(c => c.Conta === contaCodigo);
       return contaNivel1?.saldo_final || 0;
   };
   
