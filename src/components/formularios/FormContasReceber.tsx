@@ -22,6 +22,7 @@ import { useSessao } from '@/hooks/use-sessao';
 import { UsuarioProfile } from '@/types/usuario';
 import { Historico } from '@/types/historico'; // Importando Historico
 import { PlanoContas } from '@/types/plano-contas'; // Importando PlanoContas
+import { useContabilConfig } from '@/hooks/use-contabil-config'; // NOVO IMPORT
 
 const formSchema = z.object({
   cliente_id: z.string({ required_error: 'Selecione um cliente.' }).uuid('Cliente inválido.'),
@@ -69,12 +70,13 @@ interface ClienteCRSimples extends Cliente {
 
 const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onSaveComplete }) => {
   const { perfil, role } = useSessao();
+  const { configMap } = useContabilConfig(); // USANDO HOOK DE CONFIGURAÇÃO
   const [clientes, setClientes] = useState<ClienteCRSimples[]>([]);
   const [loadingClientes, setLoadingClientes] = useState(true);
   const [mapeamentoContabil, setMapeamentoContabil] = useState<Record<string, string | null>>({});
   const [historicos, setHistoricos] = useState<Historico[]>([]);
-  const [contasReceita, setContasReceita] = useState<PlanoContas[]>([]); // NOVO ESTADO
-  const [loadingContasReceita, setLoadingContasReceita] = useState(true); // NOVO ESTADO
+  const [contasReceita, setContasReceita] = useState<PlanoContas[]>([]);
+  const [loadingContasReceita, setLoadingContasReceita] = useState(true);
   const [isCreatingHistorico, setIsCreatingHistorico] = useState(false);
   const isEditing = !!contaInicial;
 
@@ -127,13 +129,15 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
     if (!ownerId) return;
     setLoadingContasReceita(true);
     
+    const receitaCode = configMap.Receita || '3'; // USA O CÓDIGO CONFIGURADO
+    
     const { data, error } = await supabase
         .from('plano_contas')
         .select('id, Conta, Descricao')
         .eq('proprietario_id', ownerId)
         .eq('Analitica', 'Sim')
-        .eq('is_conta_resultado', true) // Filtra apenas contas de resultado
-        .like('Conta', '3.%') // Filtra contas de Receita (código 3)
+        .eq('is_conta_resultado', true)
+        .like('Conta', `${receitaCode}.%`) // FILTRO DINÂMICO
         .order('Conta');
         
     if (error) {
@@ -143,7 +147,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
         setContasReceita(data as PlanoContas[]);
     }
     setLoadingContasReceita(false);
-  }, [ownerId]);
+  }, [ownerId, configMap.Receita]);
 
   useEffect(() => {
     const fetchClientes = async () => {
@@ -176,7 +180,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
     
     fetchClientes();
     fetchHistoricos();
-    fetchContasReceita(); // NOVO: Busca contas de receita
+    fetchContasReceita();
     if (isAdmin) {
         fetchMapeamentoContabil();
     }
@@ -194,7 +198,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
       intervalo_dias: 30,
       historico_id: contaInicial?.historico_id || null,
       novo_historico: '',
-      conta_contabil_id: contaInicial?.id_conta_contabil || null, // NOVO VALOR INICIAL
+      conta_contabil_id: contaInicial?.id_conta_contabil || null,
     },
   });
 
@@ -333,7 +337,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
                     <Select onValueChange={field.onChange} value={field.value || undefined} disabled={loadingContasReceita}>
                         <FormControl>
                             <SelectTrigger>
-                                <SelectValue placeholder={loadingContasReceita ? "Carregando Contas..." : "Selecione a conta de Receita (3.x.x)"} />
+                                <SelectValue placeholder={loadingContasReceita ? "Carregando Contas..." : `Selecione a conta de Receita (${configMap.Receita}.x.x)`} />
                             </SelectTrigger>
                         </FormControl>
                         <SelectContent>
@@ -348,7 +352,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
                     <FormMessage />
                     {contasReceita.length === 0 && (
                         <p className="text-sm text-red-500">
-                            Nenhuma conta de Receita (3.x.x) marcada como "Conta de Resultado" no Plano de Contas.
+                            Nenhuma conta de Receita ({configMap.Receita}.x.x) marcada como "Conta de Resultado" no Plano de Contas.
                         </p>
                     )}
                 </FormItem>

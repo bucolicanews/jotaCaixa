@@ -6,6 +6,7 @@ import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 import { PlanoContas } from '@/types/plano-contas';
 import { format } from 'date-fns';
 import { DateRange } from 'react-day-picker';
+import { useContabilConfig, ContabilConfigMap } from './use-contabil-config'; // Importando ContabilConfigMap
 
 interface ContaDRE extends PlanoContas {
   saldo_final: number;
@@ -23,16 +24,16 @@ interface DREData {
 }
 
 /**
- * Determina o tipo de DRE (Receita, Custo, Despesa) com base no código da conta.
- * Regra Contábil Simplificada:
- * 3.x.x = Receita
- * 4.x.x = Custo
- * 5.x.x = Despesa
+ * Determina o tipo de DRE (Receita, Custo, Despesa) com base no código da conta
+ * e no mapeamento de configuração.
  */
-const getTipoDRE = (conta: string): ContaDRE['tipo_dre'] => {
-  if (conta.startsWith('3')) return 'Receita';
-  if (conta.startsWith('4')) return 'Custo';
-  if (conta.startsWith('5')) return 'Despesa';
+const getTipoDRE = (conta: string, configMap: ContabilConfigMap): ContaDRE['tipo_dre'] => {
+  const nivel1 = conta.split('.')[0];
+  
+  if (nivel1 === configMap.Receita) return 'Receita';
+  if (nivel1 === configMap.Custo) return 'Custo';
+  if (nivel1 === configMap.Despesa) return 'Despesa';
+  
   return 'Resultado'; // Contas de resultado (lucro/prejuízo)
 };
 
@@ -117,6 +118,7 @@ const consolidateBalances = (contas: ContaDRE[]): ContaDRE[] => {
 
 export function useDRE(filtroPeriodo: DateRange | undefined): DREData {
   const { usuario, perfil, role, carregando: carregandoSessao } = useSessao();
+  const { configMap, loading: loadingConfig } = useContabilConfig(); // USANDO HOOK DE CONFIGURAÇÃO
   const [contasDRE, setContasDRE] = useState<ContaDRE[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -138,20 +140,27 @@ export function useDRE(filtroPeriodo: DateRange | undefined): DREData {
   }, []);
 
   const fetchDRE = useCallback(async () => {
-    if (!empresaId || !startDateISO || !endDateISO) {
+    if (!empresaId || !startDateISO || !endDateISO || loadingConfig) {
       setCarregando(false);
       return;
     }
     
     setCarregando(true);
     
+    const receitaCode = configMap.Receita || '3';
+    const custoCode = configMap.Custo || '4';
+    const despesaCode = configMap.Despesa || '5';
+    
+    // Cria a cláusula OR dinâmica
+    const orClause = `Conta.like.${receitaCode}.%,Conta.like.${custoCode}.%,Conta.like.${despesaCode}.%`;
+    
     try {
-      // 1. Buscar Plano de Contas (apenas contas de resultado: 3, 4, 5)
+      // 1. Buscar Plano de Contas (apenas contas de resultado: Receita, Custo, Despesa)
       const { data: planoContasData, error: pcError } = await supabase
         .from('plano_contas')
         .select('*')
         .eq('proprietario_id', empresaId)
-        .or('Conta.like.3.%,Conta.like.4.%,Conta.like.5.%')
+        .or(orClause) // USANDO CLÁUSULA DINÂMICA
         .order('Conta', { ascending: true });
         
       if (pcError) throw pcError;
@@ -170,9 +179,8 @@ export function useDRE(filtroPeriodo: DateRange | undefined): DREData {
       // 3. Calcular o saldo de cada conta contábil (apenas analíticas)
       const movimentosMap = lancamentosData.reduce((acc, l) => {
         if (l.conta_contabil_id) {
-          // Receita (3.x.x) é Entrada (+), Despesa/Custo (4.x.x, 5.x.x) é Saída (-)
           const conta = planoContas.find(pc => pc.id === l.conta_contabil_id);
-          const tipoDRE = conta ? getTipoDRE(conta.Conta) : 'Resultado';
+          const tipoDRE = conta ? getTipoDRE(conta.Conta, configMap) : 'Resultado'; // USANDO CONFIG MAP
           
           let valor = 0;
           
@@ -198,7 +206,7 @@ export function useDRE(filtroPeriodo: DateRange | undefined): DREData {
             return {
                 ...pc,
                 saldo_final,
-                tipo_dre: getTipoDRE(pc.Conta),
+                tipo_dre: getTipoDRE(pc.Conta, configMap), // USANDO CONFIG MAP
             };
         });
         
@@ -208,7 +216,7 @@ export function useDRE(filtroPeriodo: DateRange | undefined): DREData {
         .map(pc => ({
             ...pc,
             saldo_final: 0,
-            tipo_dre: getTipoDRE(pc.Conta),
+            tipo_dre: getTipoDRE(pc.Conta, configMap), // USANDO CONFIG MAP
         }));
         
       contasCalculadas = [...contasCalculadas, ...sinteticas];
@@ -228,19 +236,21 @@ export function useDRE(filtroPeriodo: DateRange | undefined): DREData {
     } finally {
       setCarregando(false);
     }
-  }, [empresaId, startDateISO, endDateISO, refreshKey]);
+  }, [empresaId, startDateISO, endDateISO, refreshKey, loadingConfig, configMap]);
 
   useEffect(() => {
-    if (!carregandoSessao && empresaId && startDateISO && endDateISO) {
+    if (!carregandoSessao && empresaId && startDateISO && endDateISO && !loadingConfig) {
       fetchDRE();
     }
-  }, [carregandoSessao, empresaId, startDateISO, endDateISO, fetchDRE]);
+  }, [carregandoSessao, empresaId, startDateISO, endDateISO, fetchDRE, loadingConfig]);
   
   // 8. Calcular totais
-  const getSomaPorTipo = (tipo: ContaDRE['tipo_dre']) => {
+  const getSomaPorTipo = (tipo: keyof ContabilConfigMap) => {
+      const nivel1Code = configMap[tipo] || '0'; // Usa o código configurado
+      
       // Soma apenas as contas de nível 1 (ex: '3', '4', '5')
       return contasDRE
-          .filter(c => c.Analitica === 'Não' && c.Conta.split('.').length === 1 && c.tipo_dre === tipo)
+          .filter(c => c.Analitica === 'Não' && c.Conta === nivel1Code)
           .reduce((sum, c) => sum + c.saldo_final, 0);
   };
   

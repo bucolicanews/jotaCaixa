@@ -20,6 +20,7 @@ import { useSessao } from '@/hooks/use-sessao';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Historico } from '@/types/historico';
 import { PlanoContas } from '@/types/plano-contas'; // Importando PlanoContas
+import { useContabilConfig } from '@/hooks/use-contabil-config'; // NOVO IMPORT
 
 const formSchema = z.object({
   fornecedor: z.string().min(1, 'O nome do fornecedor é obrigatório.'),
@@ -59,10 +60,11 @@ interface FormContasPagarProps {
 
 const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveComplete }) => {
   const { usuario, role } = useSessao();
+  const { configMap } = useContabilConfig(); // USANDO HOOK DE CONFIGURAÇÃO
   const [mapeamentoContabil, setMapeamentoContabil] = useState<Record<string, string | null>>({});
   const [historicos, setHistoricos] = useState<Historico[]>([]);
-  const [contasDespesa, setContasDespesa] = useState<PlanoContas[]>([]); // NOVO ESTADO
-  const [loadingContasDespesa, setLoadingContasDespesa] = useState(true); // NOVO ESTADO
+  const [contasDespesa, setContasDespesa] = useState<PlanoContas[]>([]);
+  const [loadingContasDespesa, setLoadingContasDespesa] = useState(true);
   const [isCreatingHistorico, setIsCreatingHistorico] = useState(false);
   const isEditing = !!contaInicial;
 
@@ -109,13 +111,17 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
     if (!adminId) return;
     setLoadingContasDespesa(true);
     
+    const custoCode = configMap.Custo || '4';
+    const despesaCode = configMap.Despesa || '5';
+    
+    // Busca contas de Custo/Despesa (código configurado)
     const { data, error } = await supabase
         .from('plano_contas')
         .select('id, Conta, Descricao')
         .eq('proprietario_id', adminId)
         .eq('Analitica', 'Sim')
-        .eq('is_conta_resultado', true) // Filtra apenas contas de resultado
-        .or('Conta.like.4.%,Conta.like.5.%') // Filtra contas de Custo/Despesa (código 4 ou 5)
+        .eq('is_conta_resultado', true)
+        .or(`Conta.like.${custoCode}.%,Conta.like.${despesaCode}.%`) // FILTRO DINÂMICO
         .order('Conta');
         
     if (error) {
@@ -125,7 +131,7 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
         setContasDespesa(data as PlanoContas[]);
     }
     setLoadingContasDespesa(false);
-  }, [adminId]);
+  }, [adminId, configMap.Custo, configMap.Despesa]);
 
   useEffect(() => {
     if (isAdmin) {
@@ -133,7 +139,7 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
     }
     if (adminId) {
         fetchHistoricos();
-        fetchContasDespesa(); // NOVO: Busca contas de despesa
+        fetchContasDespesa();
     }
   }, [isAdmin, adminId, fetchMapeamentoContabil, fetchHistoricos, fetchContasDespesa]);
 
@@ -149,7 +155,7 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
       intervalo_dias: 30,
       historico_id: contaInicial?.historico_id || null,
       novo_historico: '',
-      conta_contabil_id: contaInicial?.id_conta_contabil || null, // NOVO VALOR INICIAL
+      conta_contabil_id: contaInicial?.id_conta_contabil || null,
     },
   });
   
@@ -217,7 +223,7 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
           data_vencimento: parcelasParaInserir[0].data_vencimento,
           status: 'pendente',
           origem: 'manual',
-          id_conta_contabil: values.conta_contabil_id, // NOVO CAMPO: Conta Contábil de Despesa/Custo
+          id_conta_contabil: values.conta_contabil_id,
           historico_id: values.historico_id,
       };
 
@@ -273,7 +279,7 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
                     <Select onValueChange={field.onChange} value={field.value || undefined} disabled={loadingContasDespesa}>
                         <FormControl>
                             <SelectTrigger>
-                                <SelectValue placeholder={loadingContasDespesa ? "Carregando Contas..." : "Selecione a conta de Despesa/Custo (4.x.x ou 5.x.x)"} />
+                                <SelectValue placeholder={loadingContasDespesa ? "Carregando Contas..." : `Selecione a conta de Despesa/Custo (${configMap.Custo}.x.x ou ${configMap.Despesa}.x.x)`} />
                             </SelectTrigger>
                         </FormControl>
                         <SelectContent>
@@ -288,7 +294,7 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
                     <FormMessage />
                     {contasDespesa.length === 0 && (
                         <p className="text-sm text-red-500">
-                            Nenhuma conta de Despesa/Custo (4.x.x ou 5.x.x) marcada como "Conta de Resultado" no Plano de Contas.
+                            Nenhuma conta de Despesa/Custo ({configMap.Custo}.x.x ou {configMap.Despesa}.x.x) marcada como "Conta de Resultado" no Plano de Contas.
                         </p>
                     )}
                 </FormItem>
