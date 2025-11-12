@@ -19,8 +19,8 @@ import { Separator } from '../ui/separator';
 import { useSessao } from '@/hooks/use-sessao';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Historico } from '@/types/historico';
-import { PlanoContas } from '@/types/plano-contas'; // Importando PlanoContas
-import { useContabilConfig } from '@/hooks/use-contabil-config'; // NOVO IMPORT
+import { PlanoContas } from '@/types/plano-contas';
+import { useContabilConfig } from '@/hooks/use-contabil-config';
 
 const formSchema = z.object({
   fornecedor: z.string().min(1, 'O nome do fornecedor é obrigatório.'),
@@ -37,8 +37,8 @@ const formSchema = z.object({
   historico_id: z.string().uuid('Selecione um histórico válido.').nullable(),
   novo_historico: z.string().optional(),
   
-  // NOVO CAMPO: Conta Contábil de Despesa/Custo
-  conta_contabil_id: z.string().uuid('Selecione uma conta contábil de despesa/custo válida.').nullable(),
+  // CAMPO ALTERADO: Agora é a Conta Patrimonial (Ativo/Passivo/PL)
+  conta_patrimonial_id: z.string().uuid('Selecione uma conta patrimonial válida.').nullable(),
 
 }).superRefine((data, ctx) => {
   if (data.tipo_lancamento === 'unico' && !data.data_vencimento) {
@@ -60,11 +60,11 @@ interface FormContasPagarProps {
 
 const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveComplete }) => {
   const { usuario, role } = useSessao();
-  const { configMap } = useContabilConfig(); // USANDO HOOK DE CONFIGURAÇÃO
+  const { configMap } = useContabilConfig();
   const [mapeamentoContabil, setMapeamentoContabil] = useState<Record<string, string | null>>({});
   const [historicos, setHistoricos] = useState<Historico[]>([]);
-  const [contasDespesa, setContasDespesa] = useState<PlanoContas[]>([]);
-  const [loadingContasDespesa, setLoadingContasDespesa] = useState(true);
+  const [contasPatrimoniais, setContasPatrimoniais] = useState<PlanoContas[]>([]); // RENOMEADO
+  const [loadingContasPatrimoniais, setLoadingContasPatrimoniais] = useState(true); // RENOMEADO
   const [isCreatingHistorico, setIsCreatingHistorico] = useState(false);
   const isEditing = !!contaInicial;
 
@@ -107,31 +107,32 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
     }
   }, [adminId]);
   
-  const fetchContasDespesa = useCallback(async () => {
+  const fetchContasPatrimoniais = useCallback(async () => {
     if (!adminId) return;
-    setLoadingContasDespesa(true);
+    setLoadingContasPatrimoniais(true);
     
-    const custoCode = configMap.Custo || '4';
-    const despesaCode = configMap.Despesa || '5';
+    const ativoCode = configMap.Ativo || '1';
+    const passivoCode = configMap.Passivo || '2';
+    const plCode = configMap['Patrimonio Liquido'] || '3';
     
-    // Busca contas de Custo/Despesa (código configurado)
+    // Busca contas Patrimoniais (Ativo, Passivo, PL)
     const { data, error } = await supabase
         .from('plano_contas')
         .select('id, Conta, Descricao')
         .eq('proprietario_id', adminId)
         .eq('Analitica', 'Sim')
-        .eq('is_conta_resultado', true)
-        .or(`Conta.like.${custoCode}.%,Conta.like.${despesaCode}.%`) // FILTRO DINÂMICO
+        .eq('is_conta_patrimonial', true) // FILTRO PRINCIPAL
+        .or(`Conta.like.${ativoCode}.%,Conta.like.${passivoCode}.%,Conta.like.${plCode}.%`)
         .order('Conta');
         
     if (error) {
-        showError('Erro ao carregar contas de despesa/custo: ' + error.message);
-        setContasDespesa([]);
+        showError('Erro ao carregar contas patrimoniais: ' + error.message);
+        setContasPatrimoniais([]);
     } else {
-        setContasDespesa(data as PlanoContas[]);
+        setContasPatrimoniais(data as PlanoContas[]);
     }
-    setLoadingContasDespesa(false);
-  }, [adminId, configMap.Custo, configMap.Despesa]);
+    setLoadingContasPatrimoniais(false);
+  }, [adminId, configMap.Ativo, configMap.Passivo, configMap['Patrimonio Liquido']]);
 
   useEffect(() => {
     if (isAdmin) {
@@ -139,9 +140,9 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
     }
     if (adminId) {
         fetchHistoricos();
-        fetchContasDespesa();
+        fetchContasPatrimoniais(); // Chamando a nova função
     }
-  }, [isAdmin, adminId, fetchMapeamentoContabil, fetchHistoricos, fetchContasDespesa]);
+  }, [isAdmin, adminId, fetchMapeamentoContabil, fetchHistoricos, fetchContasPatrimoniais]);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -155,7 +156,7 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
       intervalo_dias: 30,
       historico_id: contaInicial?.historico_id || null,
       novo_historico: '',
-      conta_contabil_id: contaInicial?.id_conta_contabil || null,
+      conta_patrimonial_id: contaInicial?.id_conta_patrimonial || null, // RENOMEADO
     },
   });
   
@@ -223,7 +224,8 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
           data_vencimento: parcelasParaInserir[0].data_vencimento,
           status: 'pendente',
           origem: 'manual',
-          id_conta_contabil: values.conta_contabil_id,
+          // CAMPO ALTERADO: Agora é a Conta Patrimonial
+          id_conta_patrimonial: values.conta_patrimonial_id,
           historico_id: values.historico_id,
       };
 
@@ -269,22 +271,22 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
         )} />
         <Separator />
         
-        {/* NOVO CAMPO: Conta Contábil de Despesa/Custo */}
+        {/* CAMPO ALTERADO: Conta Patrimonial */}
         <FormField
             control={form.control}
-            name="conta_contabil_id"
+            name="conta_patrimonial_id"
             render={({ field }) => (
                 <FormItem>
-                    <FormLabel>3. Conta Contábil de Despesa/Custo (DRE)</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value || undefined} disabled={loadingContasDespesa}>
+                    <FormLabel>3. Conta Patrimonial (Ativo/Passivo/PL)</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value || undefined} disabled={loadingContasPatrimoniais}>
                         <FormControl>
                             <SelectTrigger>
-                                <SelectValue placeholder={loadingContasDespesa ? "Carregando Contas..." : `Selecione a conta de Despesa/Custo (${configMap.Custo}.x.x ou ${configMap.Despesa}.x.x)`} />
+                                <SelectValue placeholder={loadingContasPatrimoniais ? "Carregando Contas..." : "Selecione a conta patrimonial"} />
                             </SelectTrigger>
                         </FormControl>
                         <SelectContent>
                             <SelectItem value={null as any}>Nenhum (Não Mapear)</SelectItem>
-                            {contasDespesa.map(c => (
+                            {contasPatrimoniais.map(c => (
                                 <SelectItem key={c.id} value={c.id}>
                                     {c.Conta} - {c.Descricao}
                                 </SelectItem>
@@ -292,9 +294,9 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
                         </SelectContent>
                     </Select>
                     <FormMessage />
-                    {contasDespesa.length === 0 && (
+                    {contasPatrimoniais.length === 0 && !loadingContasPatrimoniais && (
                         <p className="text-sm text-red-500">
-                            Nenhuma conta de Despesa/Custo ({configMap.Custo}.x.x ou {configMap.Despesa}.x.x) marcada como "Conta de Resultado" no Plano de Contas.
+                            Nenhuma conta Patrimonial marcada no Plano de Contas.
                         </p>
                     )}
                 </FormItem>
@@ -302,7 +304,7 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
         />
         <Separator />
         
-        {/* NOVO CAMPO: Histórico */}
+        {/* Histórico */}
         <div className="space-y-2">
             <FormLabel>4. Histórico (Opcional)</FormLabel>
             <div className="flex space-x-2">
@@ -360,7 +362,7 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
             <FormItem><FormLabel>{tipoLancamento === 'parcelar' ? 'Valor Total a Parcelar' : 'Valor da Parcela'}</FormLabel><FormControl><Input type="number" step="0.01" placeholder="0,00" {...field} /></FormControl><FormMessage /></FormItem>
           )} />
           {tipoLancamento === 'unico' && <FormField control={form.control} name="data_vencimento" render={({ field }) => (
-            <FormItem className="flex flex-col"><FormLabel>Data de Vencimento</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "PPP", { locale: ptBR }) : <span>Escolha uma data</span>}<CalendarIcon className="ml-auto h-4 w-4 opacity-50" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus locale={ptBR} /></PopoverContent></Popover><FormMessage /></FormItem>
+            <FormItem className="flex flex-col"><FormLabel>Data de Vencimento</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "PPP", { locale: ptBR }) : <span>Escolha uma data</span>}<CalendarIcon className="ml-auto h-4 w-4 opacity-50" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus locale={ptBR} /></PopoverContent></Popover><FormMessage /></FormItem>
           )} />}
           {tipoLancamento !== 'unico' && (
             <div className="grid grid-cols-3 gap-4">

@@ -15,10 +15,10 @@ import { Historico } from '@/types/historico';
 
 // Tipos de registro que precisam de mapeamento contábil
 const TIPOS_REGISTRO_CONTABIL = [
-  { key: 'a_receber', label: 'Contas a Receber (Sintético)' },
-  { key: 'parcela', label: 'Parcelas a Receber (Analítico)' },
-  { key: 'recebimento', label: 'Recebimentos (Crédito)' },
-  { key: 'desconto', label: 'Descontos Concedidos (Despesa)' },
+  { key: 'a_receber', label: 'Contas a Receber (Sintético)', tipo: 'Patrimonial' }, // NOVO TIPO
+  { key: 'parcela', label: 'Parcelas a Receber (Analítico)', tipo: 'Patrimonial' }, // NOVO TIPO
+  { key: 'recebimento', label: 'Recebimentos (Crédito)', tipo: 'Resultado' }, // NOVO TIPO
+  { key: 'desconto', label: 'Descontos Concedidos (Despesa)', tipo: 'Resultado' }, // NOVO TIPO
 ];
 
 // Esquema dinâmico para garantir que todos os campos estejam presentes
@@ -27,7 +27,6 @@ const formSchema = z.object({
   parcela: z.string().uuid('Conta inválida para Parcelas a Receber.').nullable(),
   recebimento: z.string().uuid('Conta inválida para Recebimentos.').nullable(),
   desconto: z.string().uuid('Conta inválida para Descontos.').nullable(),
-  // Removido recebimento_historico_padrao do schema principal
   historico_padrao_id: z.string().uuid('Histórico inválido.').nullable(),
 });
 
@@ -61,7 +60,7 @@ const FormConfiguracoesCR: React.FC = () => {
     // Busca TODAS as contas (Analíticas e Sintéticas) do Admin
     const { data, error } = await supabase
         .from('plano_contas')
-        .select('id, Conta, Descricao, Analitica')
+        .select('id, Conta, Descricao, Analitica, is_conta_patrimonial, is_conta_resultado') // Incluindo booleanos
         .eq('proprietario_id', adminId)
         .order('Conta');
         
@@ -185,12 +184,14 @@ const FormConfiguracoesCR: React.FC = () => {
     return <div className="flex justify-center items-center h-20"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>;
   }
   
-  const contasDisponiveis = contasContabeis.map(c => ({
-      id: c.id,
-      display: `${c.Conta} - ${c.Descricao} (${c.Analitica === 'Sim' ? 'Analítica' : 'Sintética'})`,
-  }));
-  
-  const historicoPadraoItem = TIPOS_REGISTRO_CONTABIL.find(t => t.key === 'recebimento_historico_padrao');
+  const getContasDisponiveis = (tipo: 'Patrimonial' | 'Resultado') => {
+      return contasContabeis
+          .filter(c => c.Analitica === 'Sim' && (tipo === 'Patrimonial' ? c.is_conta_patrimonial : c.is_conta_resultado))
+          .map(c => ({
+              id: c.id,
+              display: `${c.Conta} - ${c.Descricao}`,
+          }));
+  };
 
   return (
     <Form {...form}>
@@ -209,19 +210,19 @@ const FormConfiguracoesCR: React.FC = () => {
                     name={tipo.key as keyof FormValues}
                     render={({ field }) => (
                         <FormItem>
-                            <FormLabel>{tipo.label}</FormLabel>
+                            <FormLabel>{tipo.label} ({tipo.tipo})</FormLabel>
                             <Select 
                                 onValueChange={field.onChange} 
                                 value={field.value || undefined}
                             >
                                 <FormControl>
                                     <SelectTrigger>
-                                        <SelectValue placeholder="Selecione a conta contábil" />
+                                        <SelectValue placeholder={`Selecione a conta ${tipo.tipo}`} />
                                     </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
                                     <SelectItem value={null as any}>Nenhum (Não Mapear)</SelectItem>
-                                    {contasDisponiveis.map(c => (
+                                    {getContasDisponiveis(tipo.tipo as 'Patrimonial' | 'Resultado').map(c => (
                                         <SelectItem key={c.id} value={c.id}>
                                             {c.display}
                                         </SelectItem>
@@ -237,13 +238,13 @@ const FormConfiguracoesCR: React.FC = () => {
         
         <Separator />
         
-        {/* NOVO CAMPO: Histórico Padrão (usa o ID da nova tabela) */}
+        {/* Histórico Padrão */}
         <FormField
             control={form.control}
             name="historico_padrao_id"
             render={({ field }) => (
                 <FormItem>
-                    <FormLabel>{historicoPadraoItem?.label || 'Histórico Padrão (Recebimento)'}</FormLabel>
+                    <FormLabel>Histórico Padrão (Recebimento)</FormLabel>
                     <Select 
                         onValueChange={field.onChange} 
                         value={field.value || undefined}

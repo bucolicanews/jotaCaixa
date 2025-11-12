@@ -15,10 +15,10 @@ import { Historico } from '@/types/historico';
 
 // Tipos de registro que precisam de mapeamento contábil para CP
 const TIPOS_REGISTRO_CONTABIL = [
-  { key: 'a_pagar', label: 'Contas a Pagar (Sintético)' },
-  { key: 'parcela_pagar', label: 'Parcelas a Pagar (Analítico)' },
-  { key: 'pagamento', label: 'Pagamentos (Saída)' },
-  { key: 'desconto_obtido', label: 'Descontos Obtidos (Receita)' },
+  { key: 'a_pagar', label: 'Contas a Pagar (Sintético)', tipo: 'Patrimonial' }, // NOVO TIPO
+  { key: 'parcela_pagar', label: 'Parcelas a Pagar (Analítico)', tipo: 'Patrimonial' }, // NOVO TIPO
+  { key: 'pagamento', label: 'Pagamentos (Saída)', tipo: 'Resultado' }, // NOVO TIPO
+  { key: 'desconto_obtido', label: 'Descontos Obtidos (Receita)', tipo: 'Resultado' }, // NOVO TIPO
 ];
 
 // Esquema dinâmico para garantir que todos os campos estejam presentes
@@ -27,7 +27,6 @@ const formSchema = z.object({
   parcela_pagar: z.string().uuid('Conta inválida para Parcelas a Pagar.').nullable(),
   pagamento: z.string().uuid('Conta inválida para Pagamentos.').nullable(),
   desconto_obtido: z.string().uuid('Conta inválida para Descontos Obtidos.').nullable(),
-  // Removido pagamento_historico_padrao do schema principal
   historico_padrao_id: z.string().uuid('Histórico inválido.').nullable(),
 });
 
@@ -37,7 +36,7 @@ const FormConfiguracoesCP: React.FC = () => {
   const { role, usuario, carregando: carregandoSessao } = useSessao();
   const [loadingData, setLoadingData] = useState(true);
   const [contasContabeis, setContasContabeis] = useState<PlanoContas[]>([]);
-  const [historicos, setHistoricos] = useState<Historico[]>([]); // NOVO ESTADO
+  const [historicos, setHistoricos] = useState<Historico[]>([]);
   const [loadingContas, setLoadingContas] = useState(true);
   
   const isAdmin = role === 'Admin';
@@ -61,7 +60,7 @@ const FormConfiguracoesCP: React.FC = () => {
     // Busca TODAS as contas (Analíticas e Sintéticas) do Admin
     const { data, error } = await supabase
         .from('plano_contas')
-        .select('id, Conta, Descricao, Analitica')
+        .select('id, Conta, Descricao, Analitica, is_conta_patrimonial, is_conta_resultado') // Incluindo booleanos
         .eq('proprietario_id', adminId)
         .order('Conta');
         
@@ -74,7 +73,6 @@ const FormConfiguracoesCP: React.FC = () => {
     setLoadingContas(false);
   }, [adminId]);
   
-  // NOVO: Busca de Históricos
   const fetchHistoricos = useCallback(async () => {
     if (!adminId) return;
     const { data, error } = await supabase
@@ -133,7 +131,7 @@ const FormConfiguracoesCP: React.FC = () => {
   useEffect(() => {
     if (!carregandoSessao && isAdmin) {
       fetchContasContabeis();
-      fetchHistoricos(); // Chamando a nova função
+      fetchHistoricos();
       fetchConfig();
     }
   }, [carregandoSessao, isAdmin, fetchConfig, fetchContasContabeis, fetchHistoricos]);
@@ -186,12 +184,14 @@ const FormConfiguracoesCP: React.FC = () => {
     return <div className="flex justify-center items-center h-20"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>;
   }
   
-  const contasDisponiveis = contasContabeis.map(c => ({
-      id: c.id,
-      display: `${c.Conta} - ${c.Descricao} (${c.Analitica === 'Sim' ? 'Analítica' : 'Sintética'})`,
-  }));
-  
-  const historicoPadraoItem = TIPOS_REGISTRO_CONTABIL.find(t => t.key === 'pagamento_historico_padrao');
+  const getContasDisponiveis = (tipo: 'Patrimonial' | 'Resultado') => {
+      return contasContabeis
+          .filter(c => c.Analitica === 'Sim' && (tipo === 'Patrimonial' ? c.is_conta_patrimonial : c.is_conta_resultado))
+          .map(c => ({
+              id: c.id,
+              display: `${c.Conta} - ${c.Descricao}`,
+          }));
+  };
 
   return (
     <Form {...form}>
@@ -210,19 +210,19 @@ const FormConfiguracoesCP: React.FC = () => {
                     name={tipo.key as keyof FormValues}
                     render={({ field }) => (
                         <FormItem>
-                            <FormLabel>{tipo.label}</FormLabel>
+                            <FormLabel>{tipo.label} ({tipo.tipo})</FormLabel>
                             <Select 
                                 onValueChange={field.onChange} 
                                 value={field.value || undefined}
                             >
                                 <FormControl>
                                     <SelectTrigger>
-                                        <SelectValue placeholder="Selecione a conta contábil" />
+                                        <SelectValue placeholder={`Selecione a conta ${tipo.tipo}`} />
                                     </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
                                     <SelectItem value={null as any}>Nenhum (Não Mapear)</SelectItem>
-                                    {contasDisponiveis.map(c => (
+                                    {getContasDisponiveis(tipo.tipo as 'Patrimonial' | 'Resultado').map(c => (
                                         <SelectItem key={c.id} value={c.id}>
                                             {c.display}
                                         </SelectItem>
@@ -238,13 +238,13 @@ const FormConfiguracoesCP: React.FC = () => {
         
         <Separator />
         
-        {/* NOVO CAMPO: Histórico Padrão (usa o ID da nova tabela) */}
+        {/* Histórico Padrão */}
         <FormField
             control={form.control}
             name="historico_padrao_id"
             render={({ field }) => (
                 <FormItem>
-                    <FormLabel>{historicoPadraoItem?.label || 'Histórico Padrão (Pagamento)'}</FormLabel>
+                    <FormLabel>Histórico Padrão (Pagamento)</FormLabel>
                     <Select 
                         onValueChange={field.onChange} 
                         value={field.value || undefined}

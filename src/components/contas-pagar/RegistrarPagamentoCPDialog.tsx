@@ -20,6 +20,8 @@ import useSaldoContaCalculado from '@/hooks/use-saldo-conta-calculado';
 import { Separator } from '../ui/separator';
 import { Historico } from '@/types/historico';
 import { Checkbox } from '../ui/checkbox';
+import { PlanoContas } from '@/types/plano-contas'; // Importando PlanoContas
+import { useContabilConfig } from '@/hooks/use-contabil-config'; // Importando useContabilConfig
 
 interface ParcelaParaPagamento extends AdminParcelaPagar {
   fornecedor: string;
@@ -36,6 +38,9 @@ const formSchema = z.object({
   // Campos de Histórico
   historico_id: z.string().uuid('Selecione um histórico válido.').nullable(),
   salvar_como_padrao: z.boolean().optional(),
+  
+  // NOVO CAMPO: Conta de Resultado (Despesa/Custo)
+  conta_resultado_id: z.string().uuid('Selecione a conta de resultado.').nullable(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -49,22 +54,24 @@ interface RegistrarPagamentoCPDialogProps {
 
 const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({ parcela, open, onOpenChange, onSaveComplete }) => {
   const { role, usuario } = useSessao();
+  const { configMap } = useContabilConfig();
   const isAdmin = role === 'Admin';
   
   const [historicos, setHistoricos] = useState<Historico[]>([]);
   const [loadingHistoricos, setLoadingHistoricos] = useState(true);
-  const [historicoPadraoId, setHistoricoPadraoId] = useState<string | null>(null);
+  const [contasDespesa, setContasDespesa] = useState<PlanoContas[]>([]); // NOVO ESTADO
+  const [loadingContasDespesa, setLoadingContasDespesa] = useState(true); // NOVO ESTADO
   
   const [mapeamentoContabil, setMapeamentoContabil] = useState<Record<string, string | null>>({});
   const [isInitialized, setIsInitialized] = useState(false);
   
   const tabelaPagamentos = 'admin_pagamentos';
   const tabelaParcelas = 'admin_parcelas_pagar';
-  const tabelaContasPagar = 'admin_contas_pagar'; // Adicionado
+  const tabelaContasPagar = 'admin_contas_pagar';
   
   const adminId = usuario?.id;
 
-  const { contas: contasOrigem, carregando: loadingContas, refetch: refetchSaldos } = useSaldoContaCalculado('todos', 'todos', '');
+  const { contas: contasOrigem, carregando: loadingContas, refetch: refetchSaldos } = useSaldoContaCalculado('todos', 'todos', '', 'bancos');
 
   const saldoDevedor = parcela ? parcela.valor_parcela - (parcela.valor_pago || 0) : 0;
 
@@ -76,6 +83,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
       pagamentos: [],
       historico_id: null,
       salvar_como_padrao: false,
+      conta_resultado_id: null, // NOVO DEFAULT
     },
   });
   
@@ -127,37 +135,71 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
     setLoadingHistoricos(false);
   }, [adminId]);
   
-  const fetchHistoricoPadrao = useCallback(async () => {
-    if (!isAdmin || !adminId) return;
+  const fetchContasDespesa = useCallback(async () => {
+    if (!adminId) return;
+    setLoadingContasDespesa(true);
+    
+    const custoCode = configMap.Custo || '5';
+    const despesaCode = configMap.Despesa || '6';
     
     const { data, error } = await supabase
-        .from('configuracao_contas_pagar')
-        .select('conta_contabil_id')
+        .from('plano_contas')
+        .select('id, Conta, Descricao')
         .eq('proprietario_id', adminId)
-        .eq('tipo_registro', 'pagamento_historico_padrao') // NOVO TIPO DE REGISTRO
+        .eq('Analitica', 'Sim')
+        .eq('is_conta_resultado', true)
+        .or(`Conta.like.${custoCode}.%,Conta.like.${despesaCode}.%`)
+        .order('Conta');
+        
+    if (error) {
+        showError('Erro ao carregar contas de despesa/custo: ' + error.message);
+        setContasDespesa([]);
+    } else {
+        setContasDespesa(data as PlanoContas[]);
+    }
+    setLoadingContasDespesa(false);
+  }, [adminId, configMap.Custo, configMap.Despesa]);
+  
+  const fetchConfigAndDefaults = useCallback(async () => {
+    if (!isAdmin || !adminId) return;
+    
+    // 1. Buscar Histórico Padrão
+    const { data: historicoData } = await supabase
+        .from('configuracao_historico_padrao')
+        .select('historico_id')
+        .eq('proprietario_id', adminId)
+        .eq('tipo_registro', 'pagamento_padrao')
         .limit(1)
         .single();
         
-    if (error && error.code !== 'PGRST116') {
-        console.error('Erro ao buscar histórico padrão CP:', error);
-    }
+    // 2. Buscar Conta de Resultado Padrão
+    const { data: resultadoData } = await supabase
+        .from('configuracao_contas_pagar')
+        .select('conta_contabil_id')
+        .eq('proprietario_id', adminId)
+        .eq('tipo_registro', 'pagamento')
+        .limit(1)
+        .single();
+        
+    const defaultHistoricoId = historicoData?.historico_id || null;
+    const defaultResultadoId = resultadoData?.conta_contabil_id || null;
     
-    const id = data?.conta_contabil_id || null;
-    setHistoricoPadraoId(id);
-    form.setValue('historico_id', id);
+    form.setValue('historico_id', defaultHistoricoId);
+    form.setValue('conta_resultado_id', defaultResultadoId);
   }, [isAdmin, adminId, form]);
 
   useEffect(() => {
       if (open) {
           setIsInitialized(false);
           refetchSaldos();
+          fetchHistoricos();
+          fetchContasDespesa();
           if (isAdmin) {
               fetchMapeamentoContabil();
-              fetchHistoricos();
-              fetchHistoricoPadrao();
+              fetchConfigAndDefaults();
           }
       }
-  }, [open, isAdmin, refetchSaldos, fetchMapeamentoContabil, fetchHistoricos, fetchHistoricoPadrao]);
+  }, [open, isAdmin, refetchSaldos, fetchMapeamentoContabil, fetchHistoricos, fetchContasDespesa, fetchConfigAndDefaults]);
 
   useEffect(() => {
     if (open && !loadingContas && !isInitialized) {
@@ -167,16 +209,17 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
             pagamentos: contasOrigem.length > 0 
                 ? [{ conta_id: contasOrigem[0].id, valor_pago: saldoDevedor }]
                 : [],
-            historico_id: historicoPadraoId,
+            historico_id: form.getValues('historico_id'), // Mantém o valor padrão carregado
             salvar_como_padrao: false,
+            conta_resultado_id: form.getValues('conta_resultado_id'), // Mantém o valor padrão carregado
         });
         setIsInitialized(true);
     }
-  }, [open, loadingContas, contasOrigem, saldoDevedor, isInitialized, form, historicoPadraoId]);
+  }, [open, loadingContas, contasOrigem, saldoDevedor, isInitialized, form]);
 
   const onSubmit = async (values: FormValues) => {
-    if (!parcela || !adminId) {
-        showError('Dados da parcela ou do administrador estão incompletos.');
+    if (!parcela || !adminId || !values.conta_resultado_id) {
+        showError('Dados da parcela, administrador ou conta de resultado estão incompletos.');
         return;
     }
     
@@ -200,21 +243,21 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
     const contaPagamento = mapeamentoContabil['pagamento'];
     const contaParcelaPagar = mapeamentoContabil['parcela_pagar'];
     
-    // 0. Buscar a Conta Contábil de Despesa/Custo (DRE) da Conta Sintética
+    // 0. Buscar a Conta Patrimonial da Conta Sintética (para o lançamento de estorno)
     const { data: contaSintetica, error: csError } = await supabase
         .from(tabelaContasPagar)
-        .select('id_conta_contabil, descricao')
+        .select('id_conta_patrimonial, descricao') // RENOMEADO
         .eq('id', parcela.conta_pagar_id)
         .single();
         
     if (csError) {
-        showError('Erro ao buscar conta sintética para DRE: ' + csError.message);
+        showError('Erro ao buscar conta sintética para Balanço: ' + csError.message);
         return;
     }
-    const contaDespesaDRE = contaSintetica?.id_conta_contabil;
+    const contaPatrimonial = contaSintetica?.id_conta_patrimonial;
     const descricaoContaSintetica = contaSintetica?.descricao || 'Pagamento';
     
-    // CORREÇÃO DE FUSO HORÁRIO: Salva a data no meio do dia UTC para evitar que o fuso horário local mude o dia.
+    // CORREÇÃO DE FUSO HORÁRIO
     const dataPagamento = values.data_pagamento;
     const dataNoonUTC = new Date(Date.UTC(dataPagamento.getFullYear(), dataPagamento.getMonth(), dataPagamento.getDate(), 12, 0, 0));
     const dataPagamentoISO = dataNoonUTC.toISOString();
@@ -227,11 +270,12 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
             admin_id: adminId, 
             valor_pago: pagamento.valor_pago, 
             conta_id: pagamento.conta_id,
-            id_conta_contabil: contaPagamento,
+            id_conta_contabil: contaPagamento, // Conta de Ativo/Passivo (Pagamento)
             data_pagamento: dataPagamentoISO,
             forma_pagamento: values.forma_pagamento,
             tipo_pagamento: 'total',
-            historico_id: values.historico_id, // NOVO CAMPO
+            historico_id: values.historico_id,
+            id_conta_resultado: values.conta_resultado_id, // NOVO CAMPO
         };
         
         const { error: pagamentoError } = await supabase.from(tabelaPagamentos).insert(pagamentoPayload);
@@ -247,33 +291,46 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
             conta_bancaria_id: pagamento.conta_id,
             conta_contabil_id: contaPagamento, // Conta de Ativo/Passivo (Pagamento)
             origem: 'pagamento_manual',
-            historico_id: values.historico_id, // NOVO CAMPO
+            historico_id: values.historico_id,
         };
         
         const { error: lancamentoAtivoError } = await supabase.from('lancamentos').insert(lancamentoAtivoPayload);
         if (lancamentoAtivoError) throw lancamentoAtivoError;
         
-        // 3. Registrar o Lançamento na conta de Despesa/Custo (DRE) - DÉBITO (Despesa)
-        if (contaDespesaDRE) {
-            const lancamentoDespesaPayload = {
+        // 3. Registrar o Lançamento na conta de Resultado (DRE) - DÉBITO (Despesa)
+        const lancamentoDespesaPayload = {
+            proprietario_id: adminId,
+            data_movimentacao: dataPagamentoISO,
+            descricao: `Despesa/Custo: ${descricaoContaSintetica}`,
+            valor: pagamento.valor_pago,
+            tipo: 'Saida' as const, // Saída na Despesa (aumenta o saldo da conta 4.x.x/5.x.x)
+            conta_bancaria_id: null,
+            conta_contabil_id: values.conta_resultado_id, // Conta de Despesa/Custo (4.x.x/5.x.x)
+            historico_id: values.historico_id,
+        };
+        
+        const { error: lancamentoDespesaError } = await supabase.from('lancamentos').insert(lancamentoDespesaPayload);
+        if (lancamentoDespesaError) throw lancamentoDespesaError;
+        
+        // 4. Lançamento de Estorno da Conta Patrimonial (CP) - DÉBITO (Ativo)
+        if (contaPatrimonial) {
+            const lancamentoPatrimonialPayload = {
                 proprietario_id: adminId,
                 data_movimentacao: dataPagamentoISO,
-                descricao: `Despesa/Custo: ${descricaoContaSintetica}`,
+                descricao: `Estorno Patrimonial CP: ${descricaoContaSintetica}`,
                 valor: pagamento.valor_pago,
-                tipo: 'Saida' as const, // Saída na Despesa (aumenta o saldo da conta 4.x.x/5.x.x)
-                conta_bancaria_id: null, // Não é uma conta de saldo
-                conta_contabil_id: contaDespesaDRE, // Conta de Despesa/Custo (4.x.x/5.x.x)
+                tipo: 'Entrada' as const, // Entrada no Passivo (diminui o saldo da conta 2.x.x)
+                conta_bancaria_id: null,
+                conta_contabil_id: contaPatrimonial, // Conta Patrimonial (2.x.x)
                 historico_id: values.historico_id,
             };
-            
-            const { error: lancamentoDespesaError } = await supabase.from('lancamentos').insert(lancamentoDespesaPayload);
-            if (lancamentoDespesaError) throw lancamentoDespesaError;
+            await supabase.from('lancamentos').insert(lancamentoPatrimonialPayload);
         } else {
-            console.warn('Aviso: Conta Contábil de Despesa/Custo não mapeada na conta sintética. DRE pode estar incompleta.');
+            console.warn('Aviso: Conta Patrimonial não mapeada na conta sintética. Balanço pode estar incompleto.');
         }
       }
 
-      // 4. Atualizar a parcela para 'paga'
+      // 5. Atualizar a parcela para 'paga'
       await supabase.from(tabelaParcelas).update({
         status: 'paga',
         valor_pago: (parcela.valor_pago || 0) + totalPago,
@@ -281,7 +338,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
         id_conta_contabil: contaParcelaPagar,
       }).eq('id', parcela.id);
       
-      // 5. Verificar se a conta sintética está quitada
+      // 6. Verificar se a conta sintética está quitada
       const { count: parcelasPendentesCount, error: countError } = await supabase
           .from(tabelaParcelas)
           .select('id', { count: 'exact', head: true })
@@ -301,12 +358,12 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
               }
           }
       
-      // 6. Salvar Histórico Padrão (se marcado)
+      // 7. Salvar Histórico Padrão (se marcado)
       if (isAdmin && values.salvar_como_padrao && values.historico_id) {
-          await supabase.from('configuracao_contas_pagar').upsert({
+          await supabase.from('configuracao_historico_padrao').upsert({
               proprietario_id: adminId,
-              tipo_registro: 'pagamento_historico_padrao',
-              conta_contabil_id: values.historico_id,
+              tipo_registro: 'pagamento_padrao',
+              historico_id: values.historico_id,
           }, { onConflict: 'proprietario_id, tipo_registro' });
       }
 
@@ -336,7 +393,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
             <Separator />
             
             <div className="space-y-4">
-                <FormLabel>Fontes de Pagamento</FormLabel>
+                <FormLabel>Fontes de Pagamento (Ativo)</FormLabel>
                 {fields.map((item, index) => (
                     <div key={item.id} className="flex items-end space-x-2 p-2 border rounded-md">
                         <FormField
@@ -378,7 +435,41 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
                 </Button>
             </div>
             
-            {/* NOVO CAMPO: Histórico */}
+            <Separator />
+            
+            {/* NOVO CAMPO: Conta de Resultado (Despesa/Custo) */}
+            <FormField
+                control={form.control}
+                name="conta_resultado_id"
+                render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>Conta de Resultado (Despesa/Custo)</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value || undefined} disabled={loadingContasDespesa}>
+                            <FormControl>
+                                <SelectTrigger>
+                                    <SelectValue placeholder={loadingContasDespesa ? "Carregando Contas..." : `Selecione a conta de Despesa/Custo (${configMap.Custo}.x.x ou ${configMap.Despesa}.x.x)`} />
+                                </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                                <SelectItem value={null as any}>Nenhum (Não Mapear)</SelectItem>
+                                {contasDespesa.map(c => (
+                                    <SelectItem key={c.id} value={c.id}>
+                                        {c.Conta} - {c.Descricao}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <FormMessage />
+                        {contasDespesa.length === 0 && !loadingContasDespesa && (
+                            <p className="text-sm text-red-500">
+                                Nenhuma conta de Despesa/Custo ({configMap.Custo}.x.x ou {configMap.Despesa}.x.x) marcada como "Conta de Resultado".
+                            </p>
+                        )}
+                    </FormItem>
+                )}
+            />
+            
+            {/* Histórico */}
             {isAdmin && (
                 <div className="space-y-2 pt-2 border-t">
                     <FormField

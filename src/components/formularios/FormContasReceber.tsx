@@ -19,9 +19,9 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Separator } from '../ui/separator';
 import { useSessao } from '@/hooks/use-sessao';
 import { UsuarioProfile } from '@/types/usuario';
-import { Historico } from '@/types/historico'; // Importando Historico
-import { PlanoContas } from '@/types/plano-contas'; // Importando PlanoContas
-import { useContabilConfig } from '@/hooks/use-contabil-config'; // NOVO IMPORT
+import { Historico } from '@/types/historico';
+import { PlanoContas } from '@/types/plano-contas';
+import { useContabilConfig } from '@/hooks/use-contabil-config';
 
 const formSchema = z.object({
   cliente_id: z.string({ required_error: 'Selecione um cliente.' }).uuid('Cliente inválido.'),
@@ -38,8 +38,8 @@ const formSchema = z.object({
   historico_id: z.string().uuid('Selecione um histórico válido.').nullable(),
   novo_historico: z.string().optional(),
   
-  // NOVO CAMPO: Conta Contábil de Receita
-  conta_contabil_id: z.string().uuid('Selecione uma conta contábil de receita válida.').nullable(),
+  // CAMPO ALTERADO: Agora é a Conta Patrimonial (Ativo/Passivo/PL)
+  conta_patrimonial_id: z.string().uuid('Selecione uma conta patrimonial válida.').nullable(),
 
 }).superRefine((data, ctx) => {
   if (data.tipo_lancamento === 'unico' && !data.data_vencimento) {
@@ -69,13 +69,13 @@ interface ClienteCRSimples {
 
 const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onSaveComplete }) => {
   const { perfil, role, usuario } = useSessao();
-  const { configMap } = useContabilConfig(); // USANDO HOOK DE CONFIGURAÇÃO
+  const { configMap } = useContabilConfig();
   const [clientes, setClientes] = useState<ClienteCRSimples[]>([]);
   const [loadingClientes, setLoadingClientes] = useState(true);
   const [mapeamentoContabil, setMapeamentoContabil] = useState<Record<string, string | null>>({});
   const [historicos, setHistoricos] = useState<Historico[]>([]);
-  const [contasReceita, setContasReceita] = useState<PlanoContas[]>([]);
-  const [loadingContasReceita, setLoadingContasReceita] = useState(true);
+  const [contasPatrimoniais, setContasPatrimoniais] = useState<PlanoContas[]>([]); // RENOMEADO
+  const [loadingContasPatrimoniais, setLoadingContasPatrimoniais] = useState(true); // RENOMEADO
   const [isCreatingHistorico, setIsCreatingHistorico] = useState(false);
   const isEditing = !!contaInicial;
 
@@ -125,29 +125,32 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
     }
   }, [ownerId]);
   
-  const fetchContasReceita = useCallback(async () => {
+  const fetchContasPatrimoniais = useCallback(async () => {
     if (!ownerId) return;
-    setLoadingContasReceita(true);
+    setLoadingContasPatrimoniais(true);
     
-    const receitaCode = configMap.Receita || '3'; // USA O CÓDIGO CONFIGURADO
+    const ativoCode = configMap.Ativo || '1';
+    const passivoCode = configMap.Passivo || '2';
+    const plCode = configMap['Patrimonio Liquido'] || '3';
     
+    // Busca contas Patrimoniais (Ativo, Passivo, PL)
     const { data, error } = await supabase
         .from('plano_contas')
         .select('id, Conta, Descricao')
         .eq('proprietario_id', ownerId)
         .eq('Analitica', 'Sim')
-        .eq('is_conta_resultado', true)
-        .like('Conta', `${receitaCode}.%`) // FILTRO DINÂMICO
+        .eq('is_conta_patrimonial', true) // FILTRO PRINCIPAL
+        .or(`Conta.like.${ativoCode}.%,Conta.like.${passivoCode}.%,Conta.like.${plCode}.%`)
         .order('Conta');
         
     if (error) {
-        showError('Erro ao carregar contas de receita: ' + error.message);
-        setContasReceita([]);
+        showError('Erro ao carregar contas patrimoniais: ' + error.message);
+        setContasPatrimoniais([]);
     } else {
-        setContasReceita(data as PlanoContas[]);
+        setContasPatrimoniais(data as PlanoContas[]);
     }
-    setLoadingContasReceita(false);
-  }, [ownerId, configMap.Receita]);
+    setLoadingContasPatrimoniais(false);
+  }, [ownerId, configMap.Ativo, configMap.Passivo, configMap['Patrimonio Liquido']]);
 
   useEffect(() => {
     const fetchClientes = async () => {
@@ -160,20 +163,14 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
       let fetchedClients: ClienteCRSimples[] = [];
 
       if (isAdmin) {
-          // ADMIN: Lista clientes do sistema (tbl_clientes)
-          const { data: systemClients, error: systemError } = await supabase
+          const { data: systemClients } = await supabase
               .from('tbl_clientes')
               .select('id, nome, documento, email')
               .eq('aprovado', true)
               .order('nome');
               
-          if (systemError) {
-              console.error('Erro ao carregar clientes do sistema:', systemError);
-          } else {
-              fetchedClients.push(...(systemClients as ClienteCRSimples[]));
-          }
+          fetchedClients.push(...(systemClients as ClienteCRSimples[] || []));
       } else {
-          // CLIENTE/USUÁRIO: Lista clientes CR vinculados ao seu ID
           let queryCR = supabase
             .from('clientes')
             .select('id, nome, documento, email')
@@ -186,7 +183,6 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
               showError('Erro ao carregar clientes CR: ' + errorCR.message);
               setClientes([]);
           } else {
-              // Filtra o próprio ID do Cliente logado (se ele estiver na lista)
               const filteredClients = (dataCR as ClienteCRSimples[]).filter(c => c.id !== ownerId);
               fetchedClients.push(...filteredClients);
           }
@@ -198,11 +194,11 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
     
     fetchClientes();
     fetchHistoricos();
-    fetchContasReceita();
+    fetchContasPatrimoniais(); // Chamando a nova função
     if (isAdmin) {
         fetchMapeamentoContabil();
     }
-  }, [perfil, role, ownerId, isAdmin, fetchMapeamentoContabil, fetchHistoricos, fetchContasReceita]);
+  }, [perfil, role, ownerId, isAdmin, fetchMapeamentoContabil, fetchHistoricos, fetchContasPatrimoniais]);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -216,7 +212,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
       intervalo_dias: 30,
       historico_id: contaInicial?.historico_id || null,
       novo_historico: '',
-      conta_contabil_id: contaInicial?.id_conta_contabil || null,
+      conta_patrimonial_id: contaInicial?.id_conta_patrimonial || null, // RENOMEADO
     },
   });
 
@@ -304,8 +300,8 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
           tipo_receita: tipoLancamento === 'unico' ? 'única' : 'recorrente',
           status: 'aberta',
           origem: 'manual',
-          // NOVO CAMPO: Conta Contábil de Receita (para DRE)
-          id_conta_contabil: values.conta_contabil_id, 
+          // CAMPO ALTERADO: Agora é a Conta Patrimonial
+          id_conta_patrimonial: values.conta_patrimonial_id, 
           historico_id: values.historico_id,
       };
 
@@ -362,22 +358,22 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
         )} />
         <Separator />
         
-        {/* NOVO CAMPO: Conta Contábil de Receita */}
+        {/* CAMPO ALTERADO: Conta Patrimonial */}
         <FormField
             control={form.control}
-            name="conta_contabil_id"
+            name="conta_patrimonial_id"
             render={({ field }) => (
                 <FormItem>
-                    <FormLabel>3. Conta Contábil de Receita (DRE)</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value || undefined} disabled={loadingContasReceita}>
+                    <FormLabel>3. Conta Patrimonial (Ativo/Passivo/PL)</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value || undefined} disabled={loadingContasPatrimoniais}>
                         <FormControl>
                             <SelectTrigger>
-                                <SelectValue placeholder={loadingContasReceita ? "Carregando Contas..." : `Selecione a conta de Receita (${configMap.Receita}.x.x)`} />
+                                <SelectValue placeholder={loadingContasPatrimoniais ? "Carregando Contas..." : "Selecione a conta patrimonial"} />
                             </SelectTrigger>
                         </FormControl>
                         <SelectContent>
                             <SelectItem value={null as any}>Nenhum (Não Mapear)</SelectItem>
-                            {contasReceita.map(c => (
+                            {contasPatrimoniais.map(c => (
                                 <SelectItem key={c.id} value={c.id}>
                                     {c.Conta} - {c.Descricao}
                                 </SelectItem>
@@ -385,9 +381,9 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
                         </SelectContent>
                     </Select>
                     <FormMessage />
-                    {contasReceita.length === 0 && !loadingContasReceita && (
+                    {contasPatrimoniais.length === 0 && !loadingContasPatrimoniais && (
                         <p className="text-sm text-red-500">
-                            Nenhuma conta de Receita ({configMap.Receita}.x.x) marcada como "Conta de Resultado" no Plano de Contas.
+                            Nenhuma conta Patrimonial marcada no Plano de Contas.
                         </p>
                     )}
                 </FormItem>
@@ -395,7 +391,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
         />
         <Separator />
         
-        {/* NOVO CAMPO: Histórico */}
+        {/* Histórico */}
         <div className="space-y-2">
             <FormLabel>4. Histórico (Opcional)</FormLabel>
             <div className="flex space-x-2">
@@ -436,7 +432,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
                             <FormMessage />
                         </FormItem>
                     )} />
-                    <Button type="button" onClick={handleCreateHistorico} disabled={form.formState.isSubmitting || !novoHistoricoValue}>
+                    <Button type="button" onClick={handleCreateHistorico} disabled={form.formState.isSubmitting || !form.watch('novo_historico')}>
                         {form.formState.isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Criar'}
                     </Button>
                 </div>

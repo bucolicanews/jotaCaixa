@@ -21,7 +21,7 @@ export interface AdminContaPagar {
   status: 'pendente' | 'pago' | 'atrasado' | 'cancelado';
   descricao: string;
   origem: 'manual' | 'contrato' | 'assinatura_recorrente';
-  id_conta_contabil: string | null;
+  id_conta_patrimonial: string | null; // RENOMEADO: id_conta_contabil -> id_conta_patrimonial
   historico_id?: string | null; // ADICIONADO
 }
 
@@ -47,6 +47,7 @@ export interface AdminPagamento {
   conta_id: string;
   id_conta_contabil: string | null;
   historico_id?: string | null; // ADICIONADO
+  id_conta_resultado?: string | null; // NOVO CAMPO: Conta de Resultado (DRE)
   
   // Relações para exibição
   saldo_contas: { nome: string } | null;
@@ -71,5 +72,6 @@ export interface ExtendedParcelaPagar extends AdminParcelaPagar {
         fornecedor: string; // Adicionado para corrigir TS2339
         descricao: string;
         origem: AdminContaPagar['origem'];
+        id_conta_patrimonial: string | null; // ADICIONADO
     } | null;
 }

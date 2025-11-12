@@ -20,6 +20,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import useSaldoContaCalculado from '@/hooks/use-saldo-conta-calculado';
 import { Historico } from '@/types/historico';
 import { Checkbox } from '../ui/checkbox';
+import { PlanoContas } from '@/types/plano-contas'; // Importando PlanoContas
+import { useContabilConfig } from '@/hooks/use-contabil-config'; // Importando useContabilConfig
 
 interface ParcelaParaPagamento {
   id: string;
@@ -43,6 +45,9 @@ const formSchema = z.object({
   // Campos de Histórico
   historico_id: z.string().uuid('Selecione um histórico válido.').nullable(),
   salvar_como_padrao: z.boolean().optional(),
+  
+  // NOVO CAMPO: Conta de Resultado (Receita)
+  conta_resultado_id: z.string().uuid('Selecione a conta de resultado.').nullable(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -56,22 +61,24 @@ interface RegistrarPagamentoDialogProps {
 
 const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ parcela, open, onOpenChange, onSaveComplete }) => {
   const { role, usuario } = useSessao();
+  const { configMap } = useContabilConfig();
   const isAdmin = role === 'Admin';
   
   const [historicos, setHistoricos] = useState<Historico[]>([]);
   const [loadingHistoricos, setLoadingHistoricos] = useState(true);
-  const [_historicoPadraoId, setHistoricoPadraoId] = useState<string | null>(null);
+  const [contasReceita, setContasReceita] = useState<PlanoContas[]>([]); // NOVO ESTADO
+  const [loadingContasReceita, setLoadingContasReceita] = useState(true); // NOVO ESTADO
   
   // Determina as tabelas de destino
   const tabelaRecebimentos = isAdmin ? 'admin_recebimentos' : 'recebimentos';
-  const tabelaContasReceber = isAdmin ? 'admin_contas_receber' : 'contas_receber'; // Adicionado
+  const tabelaContasReceber = isAdmin ? 'admin_contas_receber' : 'contas_receber';
   const tabelaParcelas = isAdmin ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
   
   // O ID do proprietário da conta (Admin ID ou Empresa ID)
   const ownerId = isAdmin ? usuario?.id : parcela?.empresa_id;
 
   // Usamos o hook de saldo calculado para obter as contas de destino
-  const { contas: contasDestino, carregando: loadingContas, refetch: refetchSaldos } = useSaldoContaCalculado('todos', 'todos', '');
+  const { contas: contasDestino, carregando: loadingContas, refetch: refetchSaldos } = useSaldoContaCalculado('todos', 'todos', '', 'bancos');
 
   const saldoDevedor = parcela ? parcela.valor_parcela - (parcela.valor_pago || 0) : 0;
 
@@ -88,6 +95,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
       intervalo_dias_novas_parcelas: 30,
       historico_id: null,
       salvar_como_padrao: false,
+      conta_resultado_id: null, // NOVO DEFAULT
     },
   });
   
@@ -112,33 +120,68 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
     setLoadingHistoricos(false);
   }, [ownerId]);
   
-  const fetchHistoricoPadrao = useCallback(async () => {
-    if (!isAdmin || !ownerId) return;
+  const fetchContasReceita = useCallback(async () => {
+    if (!ownerId) return;
+    setLoadingContasReceita(true);
+    
+    const receitaCode = configMap.Receita || '4';
     
     const { data, error } = await supabase
-        .from('configuracao_contas_receber')
-        .select('conta_contabil_id')
+        .from('plano_contas')
+        .select('id, Conta, Descricao')
         .eq('proprietario_id', ownerId)
-        .eq('tipo_registro', 'recebimento_historico_padrao') // NOVO TIPO DE REGISTRO
+        .eq('Analitica', 'Sim')
+        .eq('is_conta_resultado', true)
+        .like('Conta', `${receitaCode}.%`)
+        .order('Conta');
+        
+    if (error) {
+        showError('Erro ao carregar contas de receita: ' + error.message);
+        setContasReceita([]);
+    } else {
+        setContasReceita(data as PlanoContas[]);
+    }
+    setLoadingContasReceita(false);
+  }, [ownerId, configMap.Receita]);
+  
+  const fetchConfigAndDefaults = useCallback(async () => {
+    if (!isAdmin || !ownerId) return;
+    
+    // 1. Buscar Histórico Padrão
+    const { data: historicoData } = await supabase
+        .from('configuracao_historico_padrao')
+        .select('historico_id')
+        .eq('proprietario_id', ownerId)
+        .eq('tipo_registro', 'recebimento_padrao')
         .limit(1)
         .single();
         
-    if (error && error.code !== 'PGRST116') {
-        console.error('Erro ao buscar histórico padrão:', error);
-    }
+    // 2. Buscar Conta de Resultado Padrão
+    const { data: resultadoData } = await supabase
+        .from('configuracao_contas_receber')
+        .select('conta_contabil_id')
+        .eq('proprietario_id', ownerId)
+        .eq('tipo_registro', 'recebimento')
+        .limit(1)
+        .single();
+        
+    const defaultHistoricoId = historicoData?.historico_id || null;
+    const defaultResultadoId = resultadoData?.conta_contabil_id || null;
     
-    const id = data?.conta_contabil_id || null;
-    setHistoricoPadraoId(id);
-    form.setValue('historico_id', id);
+    form.setValue('historico_id', defaultHistoricoId);
+    form.setValue('conta_resultado_id', defaultResultadoId);
   }, [isAdmin, ownerId, form]);
 
   useEffect(() => {
       if (open) {
           refetchSaldos();
           fetchHistoricos();
-          fetchHistoricoPadrao();
+          fetchContasReceita();
+          if (isAdmin) {
+              fetchConfigAndDefaults();
+          }
       }
-  }, [open, refetchSaldos, fetchHistoricos, fetchHistoricoPadrao]);
+  }, [open, refetchSaldos, fetchHistoricos, fetchContasReceita, fetchConfigAndDefaults, isAdmin]);
 
   useEffect(() => {
     if (open && !loadingContas && contasDestino.length > 0) {
@@ -155,8 +198,8 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
   const saldoRestante = saldoDevedor - valorRecebido;
 
   const onSubmit = async (values: FormValues) => {
-    if (!parcela || !ownerId || !values.conta_id) {
-        showError('Dados incompletos ou conta de destino não selecionada.');
+    if (!parcela || !ownerId || !values.conta_id || !values.conta_resultado_id) {
+        showError('Dados incompletos. Selecione a conta de destino e a conta de resultado.');
         return;
     }
 
@@ -166,31 +209,32 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
     const saldoRestanteCalculado = parcela.valor_parcela - novoValorPagoTotal;
     const quitouComPagamentoAtual = novoValorPagoTotal >= parcela.valor_parcela;
     
-    // Contas Contábeis Mapeadas
+    // Contas Contábeis Mapeadas (Admin)
     const contaRecebimento = isAdmin ? (await supabase.from('configuracao_contas_receber').select('conta_contabil_id').eq('proprietario_id', ownerId).eq('tipo_registro', 'recebimento').single()).data?.conta_contabil_id : null;
     const contaParcela = isAdmin ? (await supabase.from('configuracao_contas_receber').select('conta_contabil_id').eq('proprietario_id', ownerId).eq('tipo_registro', 'parcela').single()).data?.conta_contabil_id : null;
+    const contaDesconto = isAdmin ? (await supabase.from('configuracao_contas_receber').select('conta_contabil_id').eq('proprietario_id', ownerId).eq('tipo_registro', 'desconto').single()).data?.conta_contabil_id : null;
     
-    // 0. Buscar a Conta Contábil de Receita (DRE) da Conta Sintética
+    // 0. Buscar a Conta Patrimonial da Conta Sintética (para o lançamento de estorno)
     const { data: contaSintetica, error: csError } = await supabase
         .from(tabelaContasReceber)
-        .select('id_conta_contabil, descricao')
+        .select('id_conta_patrimonial, descricao') // RENOMEADO
         .eq('id', parcela.conta_receber_id)
         .single();
         
     if (csError) {
-        showError('Erro ao buscar conta sintética para DRE: ' + csError.message);
+        showError('Erro ao buscar conta sintética para Balanço: ' + csError.message);
         return;
     }
-    const contaReceitaDRE = contaSintetica?.id_conta_contabil;
+    const contaPatrimonial = contaSintetica?.id_conta_patrimonial;
     const descricaoContaSintetica = contaSintetica?.descricao || 'Recebimento';
     
-    // Payload base para recebimentos
-    let recebimentoBasePayload;
-    
-    // CORREÇÃO DE FUSO HORÁRIO: Salva a data no meio do dia UTC para evitar que o fuso horário local mude o dia.
+    // CORREÇÃO DE FUSO HORÁRIO
     const dataPagamento = values.data_pagamento;
     const dataNoonUTC = new Date(Date.UTC(dataPagamento.getFullYear(), dataPagamento.getMonth(), dataPagamento.getDate(), 12, 0, 0));
     const dataPagamentoISO = dataNoonUTC.toISOString();
+    
+    // Payload base para recebimentos
+    let recebimentoBasePayload;
     
     if (isAdmin) {
         const clienteIdPagador = parcela.cliente_id || parcela.empresa_id;
@@ -206,8 +250,9 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
             valor_recebido: valorRecebido, 
             cliente_id: clienteIdPagador,
             conta_id: values.conta_id,
-            id_conta_contabil: contaRecebimento,
-            historico_id: values.historico_id, // NOVO CAMPO
+            id_conta_contabil: contaRecebimento, // Conta de Ativo/Passivo (Recebimento)
+            historico_id: values.historico_id,
+            id_conta_resultado: values.conta_resultado_id, // NOVO CAMPO
         };
     } else {
         recebimentoBasePayload = { 
@@ -215,7 +260,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
             empresa_id: ownerId, 
             valor_recebido: valorRecebido,
             conta_id: values.conta_id,
-            // historico_id não é necessário para Cliente/Usuário
+            id_conta_resultado: values.conta_resultado_id, // NOVO CAMPO
         };
     }
 
@@ -230,7 +275,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
       
       if (recebimentoError) throw recebimentoError;
       
-      // 2. Lidar com a parcela original (lógica de reprogramação/desconto mantida)
+      // 2. Lidar com a parcela original
       if (quitouComPagamentoAtual) {
         await supabase.from(tabelaParcelas).update({
           status: 'paga',
@@ -247,6 +292,21 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
             observacao: `Recebido R$ ${valorRecebido.toFixed(2)} com R$ ${saldoRestanteCalculado.toFixed(2)} de desconto.`,
             ...(isAdmin && { id_conta_contabil: contaParcela })
           }).eq('id', parcela.id);
+          
+          // LANÇAMENTO DE DESCONTO (DÉBITO na Despesa/Custo)
+          if (contaDesconto) {
+              const lancamentoDescontoPayload = {
+                  proprietario_id: ownerId,
+                  data_movimentacao: dataPagamentoISO,
+                  descricao: `Desconto Concedido: ${descricaoContaSintetica}`,
+                  valor: saldoRestanteCalculado,
+                  tipo: 'Saida' as const, // Saída na Despesa
+                  conta_bancaria_id: null,
+                  conta_contabil_id: contaDesconto, // Conta de Desconto (Despesa)
+                  historico_id: values.historico_id,
+              };
+              await supabase.from('lancamentos').insert(lancamentoDescontoPayload);
+          }
           
         } else if (values.acao_saldo_restante === 'reprogramar' || values.acao_saldo_restante === 'parcelar') {
           await supabase.from(tabelaParcelas).update({
@@ -303,30 +363,43 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
       
       await supabase.from('lancamentos').insert(lancamentoAtivoPayload);
       
-      // 4. Registrar o Lançamento na conta de Receita (DRE) - CRÉDITO (Receita)
-      if (contaReceitaDRE) {
-          const lancamentoReceitaPayload = {
+      // 4. Registrar o Lançamento na conta de Resultado (DRE) - CRÉDITO (Receita)
+      const lancamentoReceitaPayload = {
+          proprietario_id: ownerId,
+          data_movimentacao: dataPagamentoISO,
+          descricao: `Receita: ${descricaoContaSintetica}`,
+          valor: valorRecebido,
+          tipo: 'Entrada' as const, // Entrada na Receita (aumenta o saldo da conta 3.x.x)
+          conta_bancaria_id: null, // Não é uma conta de saldo
+          conta_contabil_id: values.conta_resultado_id, // Conta de Receita (3.x.x)
+          historico_id: values.historico_id,
+      };
+      
+      await supabase.from('lancamentos').insert(lancamentoReceitaPayload);
+      
+      // 5. Lançamento de Estorno da Conta Patrimonial (CR) - CRÉDITO (Passivo)
+      if (contaPatrimonial) {
+          const lancamentoPatrimonialPayload = {
               proprietario_id: ownerId,
               data_movimentacao: dataPagamentoISO,
-              descricao: `Receita: ${descricaoContaSintetica}`,
+              descricao: `Estorno Patrimonial CR: ${descricaoContaSintetica}`,
               valor: valorRecebido,
-              tipo: 'Entrada' as const, // Entrada na Receita (aumenta o saldo da conta 3.x.x)
-              conta_bancaria_id: null, // Não é uma conta de saldo
-              conta_contabil_id: contaReceitaDRE, // Conta de Receita (3.x.x)
+              tipo: 'Saida' as const, // Saída do Ativo (diminui o saldo da conta 1.x.x)
+              conta_bancaria_id: null,
+              conta_contabil_id: contaPatrimonial, // Conta Patrimonial (1.x.x)
               historico_id: values.historico_id,
           };
-          
-          await supabase.from('lancamentos').insert(lancamentoReceitaPayload);
+          await supabase.from('lancamentos').insert(lancamentoPatrimonialPayload);
       } else {
-          console.warn('Aviso: Conta Contábil de Receita não mapeada na conta sintética. DRE pode estar incompleta.');
+          console.warn('Aviso: Conta Patrimonial não mapeada na conta sintética. Balanço pode estar incompleto.');
       }
       
-      // 5. Salvar Histórico Padrão (se marcado)
+      // 6. Salvar Histórico Padrão (se marcado)
       if (isAdmin && values.salvar_como_padrao && values.historico_id) {
-          await supabase.from('configuracao_contas_receber').upsert({
+          await supabase.from('configuracao_historico_padrao').upsert({
               proprietario_id: ownerId,
-              tipo_registro: 'recebimento_historico_padrao',
-              conta_contabil_id: values.historico_id,
+              tipo_registro: 'recebimento_padrao',
+              historico_id: values.historico_id,
           }, { onConflict: 'proprietario_id, tipo_registro' });
       }
 
@@ -356,7 +429,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
                 <FormField control={form.control} name="forma_pagamento" render={({ field }) => (<FormItem><FormLabel>Forma de Pagamento</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
                 <FormField control={form.control} name="conta_id" render={({ field }) => (
                     <FormItem>
-                        <FormLabel>Conta/Caixa de Destino</FormLabel>
+                        <FormLabel>Conta/Caixa de Destino (Ativo)</FormLabel>
                         <Select onValueChange={field.onChange} defaultValue={field.value || undefined} disabled={loadingContas}>
                             <FormControl>
                                 <SelectTrigger>
@@ -385,7 +458,39 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
                 )} />
             </div>
             
-            {/* NOVO CAMPO: Histórico */}
+            {/* NOVO CAMPO: Conta de Resultado (Receita) */}
+            <FormField
+                control={form.control}
+                name="conta_resultado_id"
+                render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>Conta de Resultado (Receita)</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value || undefined} disabled={loadingContasReceita}>
+                            <FormControl>
+                                <SelectTrigger>
+                                    <SelectValue placeholder={loadingContasReceita ? "Carregando Contas..." : `Selecione a conta de Receita (${configMap.Receita}.x.x)`} />
+                                </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                                <SelectItem value={null as any}>Nenhum (Não Mapear)</SelectItem>
+                                {contasReceita.map(c => (
+                                    <SelectItem key={c.id} value={c.id}>
+                                        {c.Conta} - {c.Descricao}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <FormMessage />
+                        {contasReceita.length === 0 && !loadingContasReceita && (
+                            <p className="text-sm text-red-500">
+                                Nenhuma conta de Receita ({configMap.Receita}.x.x) marcada como "Conta de Resultado".
+                            </p>
+                        )}
+                    </FormItem>
+                )}
+            />
+            
+            {/* Histórico */}
             {isAdmin && (
                 <div className="space-y-2 pt-2 border-t">
                     <FormField

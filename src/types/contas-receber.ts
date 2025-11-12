@@ -18,7 +18,7 @@ export interface ContaReceber {
   updated_at: string;
   clientes: Cliente;
   historico_id?: string | null; // NOVO CAMPO
-  id_conta_contabil?: string | null; // NOVO CAMPO ADICIONADO
+  id_conta_patrimonial?: string | null; // RENOMEADO: id_conta_contabil -> id_conta_patrimonial
 }
 
 export interface Parcela {
@@ -54,6 +54,7 @@ export interface ExtendedParcelaDetalhada extends ParcelaDetalhada {
         cliente_id: string | null;
         origem: ContaReceber['origem'];
         clientes: { nome: string } | null;
+        id_conta_patrimonial?: string | null; // ADICIONADO
     } | null;
 }
 
@@ -66,6 +67,7 @@ export interface AdminRecebimento {
     conta_id: string; // NOVO CAMPO
     saldo_contas: { nome: string } | null; // CORRIGIDO: Adicionado saldo_contas
     historico_id?: string | null; // ADICIONADO
+    id_conta_resultado?: string | null; // NOVO CAMPO: Conta de Resultado (DRE)
     admin_parcelas_receber: {
         numero_parcela: number;
         admin_contas_receber: {

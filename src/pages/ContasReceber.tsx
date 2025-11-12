@@ -235,7 +235,7 @@ const ContasReceber = () => {
         created_at: conta.created_at,
         updated_at: conta.updated_at,
         historico_id: conta.historico_id,
-        id_conta_contabil: conta.id_conta_contabil,
+        id_conta_patrimonial: conta.id_conta_patrimonial, // <-- FIX: Usando id_conta_patrimonial
     };
     setContaSelecionada(baseConta);
     setDialogAberto(true);
@@ -274,6 +274,7 @@ const ContasReceber = () => {
         clientes: conta.clientes,
         created_at: conta.created_at,
         updated_at: conta.updated_at,
+        id_conta_patrimonial: conta.id_conta_patrimonial, // <-- FIX: Usando id_conta_patrimonial
     };
     setContaSelecionada(baseConta);
     setParcelasDialogOpen(true);
