@@ -37,13 +37,13 @@ interface ContaBalanco {
 const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ endDate, filtroSomenteComSaldo }) => {
   const { perfil, role } = useSessao();
   const { configMap } = useContabilConfig(); // Obtendo o mapeamento
-  const { contas, totalAtivo, totalPassivo, totalPatrimonioLiquido, resultadoLiquido, carregando } = useBalancoPatrimonial(endDate);
+  const { contas, totalAtivo, totalPassivo, totalPatrimonioLiquido, resultadoLiquido, totalPassivoPL, carregando } = useBalancoPatrimonial(endDate);
   const { printContent } = usePrint();
   
   const empresaNome = role === 'Admin' ? 'Admin' : (perfil as ClienteProfile)?.nome || 'Empresa';
 
   // CÁLCULO CORRIGIDO: Total do lado direito do balanço
-  const totalPassivoPL = totalPassivo + totalPatrimonioLiquido + resultadoLiquido;
+  // const totalPassivoPL = totalPassivo + totalPatrimonioLiquido + resultadoLiquido; // REMOVIDO, AGORA VEM DO HOOK
   const isBalanced = Math.abs(totalAtivo - totalPassivoPL) < 0.01;
   
   // Filtra as contas com base no estado local
@@ -150,7 +150,7 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
       if (filtroSomenteComSaldo && isZero && c.Analitica === 'Sim') return null;
 
       // Calcula o nível de indentação baseado no código da conta (ex: 1.1.1.1)
-      const level = c.Conta.split('.').filter(p => p.length > 0).length;
+      const level = c.Conta.split('.filter').length > 1 ? c.Conta.split('.').filter(p => p.length > 0).length : 1;
       const paddingLeft = (level - 1) * 10;
 
       return (
@@ -181,6 +181,25 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
     let printComponent;
     let fileName;
     
+    // Lógica para calcular os totais necessários para o Balanco1ColunaPrint
+    const totalPassivoBase = contasParaImpressao
+        .filter(c => c.tipo_principal === 'Passivo' && c.Analitica === 'Não' && c.Conta.split('.').filter(p => p.length > 0).length === 1)
+        .reduce((sum, c) => sum + c.saldo_final, 0);
+        
+    const totalReceitaCalc = contasParaImpressao
+        .filter(c => c.tipo_principal === 'Resultado' && c.Conta.startsWith(configMap.Receita || '4'))
+        .reduce((sum, c) => sum + c.saldo_final, 0);
+        
+    const totalCustoCalc = contasParaImpressao
+        .filter(c => c.tipo_principal === 'Resultado' && c.Conta.startsWith(configMap.Custo || '5'))
+        .reduce((sum, c) => sum + c.saldo_final, 0);
+        
+    const totalDespesaCalc = contasParaImpressao
+        .filter(c => c.tipo_principal === 'Resultado' && c.Conta.startsWith(configMap.Despesa || '6'))
+        .reduce((sum, c) => sum + c.saldo_final, 0);
+        
+    const resultadoLiquidoCalc = totalReceitaCalc - totalCustoCalc - totalDespesaCalc;
+    
     if (formatType === '2colunas') {
         printComponent = (
             <BalancoPatrimonialPrint
@@ -194,15 +213,6 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
         );
         fileName = `Balanço 2 Colunas - ${format(endDate, 'dd/MM/yyyy')}`;
     } else {
-        // Para o Balanço de 1 Coluna, precisamos do resultado líquido
-        const totalPassivoBase = contasParaImpressao
-            .filter(c => c.tipo_principal === 'Passivo' && c.Analitica === 'Não' && c.Conta.split('.').length === 1)
-            .reduce((sum, c) => sum + c.saldo_final, 0);
-            
-        const resultadoLiquidoCalc = contasParaImpressao
-            .filter(c => c.tipo_principal === 'Resultado' || (c.tipo_principal === 'Patrimonio Liquido' && c.is_conta_resultado))
-            .reduce((sum, c) => sum + c.saldo_final, 0);
-            
         printComponent = (
             <Balanco1ColunaPrint
                 empresaNome={empresaNome}

@@ -19,6 +19,7 @@ interface BalancoData {
   totalPassivo: number; // Passivo (código 2)
   totalPatrimonioLiquido: number; // Patrimônio Líquido (código 3)
   resultadoLiquido: number; // Resultado do Exercício (Receita - Custo - Despesa)
+  totalPassivoPL: number; // NOVO: Total do lado direito (2 + 3 + Resultado)
   carregando: boolean;
   refetch: () => void;
 }
@@ -43,6 +44,7 @@ const getTipoDRE = (conta: string, configMap: ContabilConfigMap): ContaBalanco['
 
 /**
  * Função de comparação para ordenar códigos contábeis hierarquicamente.
+ * Ex: 4.2.2.01.0004 deve vir depois de 4.2.2.01.
  */
 const compareContas = (a: ContaBalanco, b: ContaBalanco): number => {
     const partsA = a.Conta.split('.').map(Number);
@@ -323,6 +325,9 @@ export function useBalancoPatrimonial(endDate: Date | undefined): BalancoData {
       .reduce((sum, c) => sum + c.saldo_final, 0);
       
   const resultadoLiquido = totalReceita - totalCusto - totalDespesa;
+  
+  // NOVO CÁLCULO: Total do lado direito (Passivo + PL + Resultado Líquido)
+  const totalPassivoPL = totalPassivoBase + totalPLBase + resultadoLiquido;
 
   return {
     contas: contasBalanco,
@@ -330,6 +335,7 @@ export function useBalancoPatrimonial(endDate: Date | undefined): BalancoData {
     totalPassivo: totalPassivoBase, // Retorna o Passivo real (código 2)
     totalPatrimonioLiquido: totalPLBase, // Retorna o PL real (código 3)
     resultadoLiquido,
+    totalPassivoPL, // NOVO RETORNO
     carregando,
     refetch,
   };
