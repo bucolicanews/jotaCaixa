@@ -239,8 +239,22 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
     
     try {
       // 0. GARANTIR QUE O CLIENTE EXISTA NA TABELA 'clientes' (para FK)
+      // Se o cliente não for encontrado na lista local, buscamos no banco para confirmar
       const clienteSelecionado = clientes.find(c => c.id === values.cliente_id);
-      if (!clienteSelecionado) throw new Error('Cliente selecionado não encontrado.');
+      
+      if (!clienteSelecionado) {
+          // Se não está na lista local, verifica se existe no banco (pode ter sido carregado incorretamente)
+          const { data: dbClient, error: dbError } = await supabase
+              .from('clientes')
+              .select('id')
+              .eq('id', values.cliente_id)
+              .single();
+              
+          if (dbError || !dbClient) {
+              // Se não existe no banco, lança o erro de FK
+              throw new Error('Cliente selecionado não encontrado na base de dados de Clientes (CR).');
+          }
+      }
       
       // 1. Calcular valores e parcelas
       let valorTotal: number;
