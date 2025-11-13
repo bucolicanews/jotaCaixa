@@ -162,11 +162,6 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
             // Minutos creditados para o total mensal = Minutos Abonados
             minutosDia = minutosAbonados; 
             
-            // Se for Falta Injustificada, minutosDia é 0
-            if (isFalta && !isFaltaJustificada) {
-                minutosDia = 0;
-            }
-            
             // Se for Falta/Abono, ignora as batidas de ponto para o cálculo do dia
             continue;
         }
@@ -242,7 +237,9 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
     // Se for Falta Justificada ou Abono, o total do dia é o tempo creditado
     if (isFaltaJustificada || (isAbono && !isCompensacaoAbono)) {
         minutosDia = minutosAbonados;
-    } else if (isFalta && !isFaltaJustificada) {
+    } 
+    // CORREÇÃO: Zera minutosDia APENAS se for Falta Injustificada E NENHUMA HORA FOI ABONADA.
+    else if (isFalta && !isFaltaJustificada && minutosAbonados === 0) {
         minutosDia = 0;
     }
 
@@ -408,28 +405,30 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
                         } else if (isFalta) {
                             const faltaRegistro = registros.find((r: RegistroPonto) => r.tipo === 'Falta');
                             const atestadoUrl = faltaRegistro?.atestado_url;
-                            const observacaoFalta = faltaRegistro?.observacao || '';
                             
                             let displayText: string;
 
                             // Lógica de exibição para Falta Injustificada (parcial ou total)
-                            let displayObs = observacaoFalta;
-                            if (!atestadoUrl && observacaoFalta.includes('Falta Injustificada')) {
-                                const horasInformadas = minutosAbonados / 60;
+                            if (!atestadoUrl && isFalta && !isFaltaJustificada) {
+                                const horasCreditadas = minutosAbonados / 60;
+                                const horasPerdidas = Math.max(0, JORNADA_DIARIA_PADRAO - horasCreditadas);
                                 
-                                if (horasInformadas === JORNADA_DIARIA_PADRAO) {
-                                    displayText = 'Falta Injustificada';
-                                } else {
-                                    const horasStr = Number.isInteger(horasInformadas) ? `${horasInformadas}h` : `${horasInformadas.toFixed(1)}h`;
-                                    const faltasAbonadas = Math.max(0, JORNADA_DIARIA_PADRAO - horasInformadas);
-                                    const faltasAbonadasStr = Number.isInteger(faltasAbonadas) ? `${faltasAbonadas}h` : `${faltasAbonadas.toFixed(1)}h`;
+                                if (horasCreditadas >= JORNADA_DIARIA_PADRAO) {
+                                    // Crédito total (mesmo que marcado como Falta, respeitamos as horas)
+                                    displayText = `Falta Injustificada (Crédito de ${formatarHoras(minutosAbonados)})`;
+                                } else if (horasCreditadas > 0) {
+                                    // Ausência/crédito parcial
+                                    const horasPerdidasStr = Number.isInteger(horasPerdidas) ? `${horasPerdidas}h` : `${horasPerdidas.toFixed(1)}h`;
+                                    const horasCreditadasStr = formatarHoras(minutosAbonados);
                                     
-                                    // Exibe a falta parcial e o saldo abonado (que é o tempo que falta para 8h)
-                                    displayObs = `Falta Injustificada (${horasStr})` + (faltasAbonadas > 0 ? ` e faltas abonadas (${faltasAbonadasStr})` : '');
-                                    displayText = displayObs;
+                                    // Exibe o tempo perdido e o tempo creditado
+                                    displayText = `Falta Injustificada (${horasPerdidasStr} perdidas) - ${horasCreditadasStr} creditadas`;
+                                } else {
+                                    // Ausência injustificada total (0 horas creditadas)
+                                    displayText = 'Falta Injustificada';
                                 }
                             } else {
-                                // Falta justificada (com atestado) — exibe observação/atestado
+                                // Falta justificada (com atestado) ou outro tipo de Falta
                                 displayText = faltaRegistro?.observacao || 'Falta Justificada';
                             }
                             
