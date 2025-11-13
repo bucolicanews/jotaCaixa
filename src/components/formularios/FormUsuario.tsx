@@ -101,7 +101,6 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
   onSaveComplete,
 }) => {
   const isEditing = !!usuarioInicial;
-  // REMOVIDO: isClientBeingManagedByAdmin não é mais usado (Erro 1)
   
   const profileToEdit = usuarioInicial as UsuarioProfile;
   
@@ -117,18 +116,24 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
     return isNaN(date.getTime()) ? undefined : date;
   };
 
+  // Determina as permissões visíveis
+  const permissoesVisiveis = PERMISSOES_DISPONIVEIS.filter((p: Permissao) => {
+      // Se for Admin, mostra todas as permissões
+      if (criadorRole === 'Admin') return true;
+      
+      // Se for Cliente, mostra apenas as permissões de Usuário (Funcionário)
+      return p.key === 'ponto_eletronico' || p.key === 'visualizar_proprio_ponto' || p.key === 'folha_ponto' || p.key === 'cadastrar_usuarios';
+  });
+
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: (function() { // IIFE para resolver TS2322 (Erro 2)
-        const defaultPermissoes = PERMISSOES_DISPONIVEIS.reduce((acc: Record<string, boolean>, p: Permissao) => {
-            // Filtra apenas as permissões relevantes para o Usuário (Funcionário)
-            if (p.key === 'ponto_eletronico' || p.key === 'visualizar_proprio_ponto' || p.key === 'folha_ponto' || p.key === 'cadastrar_usuarios') {
-                if (profileToEdit && 'permissoes' in profileToEdit && (profileToEdit as any).permissoes) {
-                    acc[p.key] = (profileToEdit as any).permissoes[p.key] !== false;
-                } else {
-                    // Padrão para novo usuário: Ponto Eletrônico e Visualizar Próprio Ponto
-                    acc[p.key] = p.key === 'ponto_eletronico' || p.key === 'visualizar_proprio_ponto';
-                }
+        const defaultPermissoes = permissoesVisiveis.reduce((acc: Record<string, boolean>, p: Permissao) => {
+            if (profileToEdit && 'permissoes' in profileToEdit && (profileToEdit as any).permissoes) {
+                acc[p.key] = (profileToEdit as any).permissoes[p.key] !== false;
+            } else {
+                // Padrão para novo usuário: Ponto Eletrônico e Visualizar Próprio Ponto
+                acc[p.key] = p.key === 'ponto_eletronico' || p.key === 'visualizar_proprio_ponto';
             }
             return acc;
         }, {} as Record<string, boolean>);
@@ -188,10 +193,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
   });
 
   const handleSelectAll = (select: boolean) => {
-    const permissoes = PERMISSOES_DISPONIVEIS.filter((p: Permissao) => 
-        p.key === 'ponto_eletronico' || p.key === 'visualizar_proprio_ponto' || p.key === 'folha_ponto' || p.key === 'cadastrar_usuarios'
-    );
-    permissoes.forEach((p: Permissao) => {
+    permissoesVisiveis.forEach((p: Permissao) => {
       form.setValue(`permissoes.${p.key}`, select, { shouldDirty: true });
     });
   };
@@ -346,9 +348,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
               <FormGeral
                   control={form.control}
                   isSubmitting={isSubmitting}
-                  permissoesVisiveis={PERMISSOES_DISPONIVEIS.filter((p: Permissao) => 
-                      p.key === 'ponto_eletronico' || p.key === 'visualizar_proprio_ponto' || p.key === 'folha_ponto' || p.key === 'cadastrar_usuarios'
-                  )}
+                  permissoesVisiveis={permissoesVisiveis}
                   handleSelectAll={handleSelectAll}
               />
               
