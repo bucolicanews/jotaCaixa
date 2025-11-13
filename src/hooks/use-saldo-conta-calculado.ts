@@ -27,7 +27,7 @@ const useSaldoContaCalculado = (filtroTipoSaldo: 'todos' | 'Credito' | 'Debito' 
   const getEmpresaId = () => {
     if (role === 'Admin') return usuario?.id || null;
     if (role === 'Cliente') return (perfil as ClienteProfile)?.id || null;
-    if (role === 'Usuario') return (perfil as UsuarioProfile)?.proprietario_id || null;
+    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id || null; // CORREÇÃO: Usando cliente_id
     return null;
   };
   
@@ -79,7 +79,7 @@ const useSaldoContaCalculado = (filtroTipoSaldo: 'todos' | 'Credito' | 'Debito' 
       
       let lancamentosQuery = supabase
         .from('lancamentos')
-        .select('valor, tipo, conta_bancaria_id, conta_contabil_id')
+        .select('valor, tipo, conta_contabil_id')
         .eq('proprietario_id', targetEmpresaId)
         .or(orClauses.join(','));
 

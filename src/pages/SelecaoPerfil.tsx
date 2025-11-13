@@ -22,7 +22,7 @@ const SelecaoPerfil: React.FC = () => {
   const [clienteSelecionado, setClienteSelecionado] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const isUnassignedUser = role === 'Usuario' && !(perfil as UsuarioProfile)?.proprietario_id;
+  const isUnassignedUser = role === 'Usuario' && !(perfil as UsuarioProfile)?.cliente_id; // CORREÇÃO AQUI
   const isClientApproved = role === 'Cliente' && (perfil as ClienteProfile)?.aprovado;
 
   // Se o usuário não for um Usuário não vinculado, redireciona imediatamente
@@ -71,7 +71,7 @@ const SelecaoPerfil: React.FC = () => {
         // 1. Atualiza o perfil do usuário na tbl_usuarios
         const { error } = await supabase
             .from('tbl_usuarios')
-            .update({ proprietario_id: clienteSelecionado })
+            .update({ cliente_id: clienteSelecionado }) // CORREÇÃO AQUI
             .eq('id', usuario.id);
             
         if (error) throw error;

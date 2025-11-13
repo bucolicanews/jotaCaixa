@@ -126,7 +126,7 @@ export function useDRE(filtroPeriodo: DateRange | undefined): DREData {
   const getEmpresaId = () => {
     if (role === 'Admin') return usuario?.id || null;
     if (role === 'Cliente') return (perfil as ClienteProfile)?.id || null;
-    if (role === 'Usuario') return (perfil as UsuarioProfile)?.proprietario_id || null;
+    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id || null; // CORREÇÃO: Usando cliente_id
     return null;
   };
   
@@ -186,7 +186,7 @@ export function useDRE(filtroPeriodo: DateRange | undefined): DREData {
           
           if (tipoDRE === 'Receita') {
               // Receita (Aumenta com Crédito/Saída): Queremos o valor positivo
-              valor = l.tipo === 'Saida' ? l.valor : -l.valor;
+              valor = l.tipo === 'Entrada' ? l.valor : -l.valor;
           } else if (tipoDRE === 'Custo' || tipoDRE === 'Despesa') {
               // Custo/Despesa (Aumenta com Débito/Entrada): Queremos o valor positivo
               valor = l.tipo === 'Entrada' ? l.valor : -l.valor;

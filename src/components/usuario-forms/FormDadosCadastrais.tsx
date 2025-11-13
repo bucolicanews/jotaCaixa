@@ -3,14 +3,13 @@ import { Control, useFormContext } from 'react-hook-form';
 import { FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
-import { useTagManager } from '@/hooks/use-tag-manager';
-import { CAMPOS_USUARIO_MAPA } from '@/config/contrato-campos-mapeaveis';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Loader2, Tag } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { showError } from '@/utils/toast';
 import { useBulkTagManager } from '@/hooks/use-bulk-tag-manager';
+import { TaggedFormField } from './TaggedFormField'; // Importando o componente TaggedFormField
 
 interface TaggedFormFieldProps {
     fieldName: string;
@@ -23,41 +22,20 @@ interface TaggedFormFieldProps {
     onTagToggle: () => void; // NOVO PROP
 }
 
-const TaggedFormField: React.FC<TaggedFormFieldProps> = ({ fieldName, label, placeholder, resourceId, disabled, isOptional = true, tagRefreshKey, onTagToggle }) => {
-    const { control, watch, setValue } = useFormContext();
-    const fieldMap = CAMPOS_USUARIO_MAPA.find(m => m.field === fieldName);
-    const fieldValue = watch(fieldName);
-    
-    // Se o campo não estiver mapeado para uma tag, renderiza o input normal
-    if (!fieldMap || !resourceId) {
-        return (
-            <FormField control={control} name={fieldName} render={({ field }) => (
-                <FormItem>
-                    <FormLabel>{label} {isOptional && <span className="text-muted-foreground">(Opcional)</span>}</FormLabel>
-                    <FormControl><Input placeholder={placeholder} {...field} value={(field.value as string) || ''} disabled={disabled} /></FormControl>
-                    <FormMessage />
-                </FormItem>
-            )} />
-        );
-    }
-    
-    // O useTagManager agora usa o tagRefreshKey (que é o refreshKey do bulk manager)
-    const { isTagActive, loading, toggleTag } = useTagManager(resourceId, fieldMap, tagRefreshKey);
-    
-    const handleToggle = async (checked: boolean) => {
-        await toggleTag(checked);
-        onTagToggle(); // Chama o refetch do bulk manager no pai
-    };
+// Componente wrapper para campos de Usuário (Funcionário)
+const UserTaggedFormField: React.FC<TaggedFormFieldProps> = (props) => {
+    const { watch, setValue } = useFormContext();
+    const fieldValue = watch(props.fieldName);
     
     const handleCepLookup = useCallback(async (cep: string) => {
         const cleanCep = cep.replace(/\D/g, '');
 
         if (cleanCep.length !== 8) return;
         
-        setValue('endereco', 'Buscando...');
-        setValue('bairro', 'Buscando...');
-        setValue('cidade', 'Buscando...');
-        setValue('estado', 'Buscando...');
+        props.fieldName !== 'cep' && setValue('endereco', 'Buscando...');
+        props.fieldName !== 'cep' && setValue('bairro', 'Buscando...');
+        props.fieldName !== 'cep' && setValue('cidade', 'Buscando...');
+        props.fieldName !== 'cep' && setValue('estado', 'Buscando...');
         
         try {
             const response = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
@@ -85,40 +63,24 @@ const TaggedFormField: React.FC<TaggedFormFieldProps> = ({ fieldName, label, pla
             setValue('cidade', '');
             setValue('estado', '');
         }
-    }, [setValue]);
+    }, [setValue, props.fieldName]);
     
     useEffect(() => {
-        if (fieldName === 'cep') {
+        if (props.fieldName === 'cep') {
             const cleanCep = fieldValue?.replace(/\D/g, '');
             if (cleanCep && cleanCep.length === 8) {
                 handleCepLookup(cleanCep);
             }
         }
-    }, [fieldName, fieldValue, handleCepLookup]);
+    }, [props.fieldName, fieldValue, handleCepLookup]);
 
 
     return (
-        <FormField control={control} name={fieldName} render={({ field }) => (
-            <FormItem>
-                <div className="flex justify-between items-center">
-                    <FormLabel>{label} {isOptional && <span className="text-muted-foreground">(Opcional)</span>}</FormLabel>
-                    <div className="flex items-center space-x-1">
-                        <Checkbox 
-                            id={`tag-${fieldName}`}
-                            checked={isTagActive}
-                            onCheckedChange={handleToggle}
-                            disabled={loading || disabled}
-                        />
-                        <Label htmlFor={`tag-${fieldName}`} className={cn("text-xs font-normal flex items-center", isTagActive ? "text-primary" : "text-muted-foreground")}>
-                            {loading ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Tag className="w-3 h-3 mr-1" />}
-                            Usar como Tag
-                        </Label>
-                    </div>
-                </div>
-                <FormControl><Input placeholder={placeholder} {...field} value={(field.value as string) || ''} disabled={disabled} /></FormControl>
-                <FormMessage />
-            </FormItem>
-        )} />
+        <TaggedFormField 
+            {...props} 
+            control={useFormContext().control} 
+            isClientScope={false} // Escopo de Usuário
+        />
     );
 };
 
@@ -133,19 +95,16 @@ interface FormDadosCadastraisProps {
 
 const FormDadosCadastrais: React.FC<FormDadosCadastraisProps> = ({ isSubmitting, resourceId, tagRefreshKey, onTagToggle }) => {
     const { watch } = useFormContext();
-    const { refetchStatus } = useBulkTagManager(resourceId); // Mantendo a chamada para refetchStatus
-    
-    // Usando onTagToggle para satisfazer o TS6133
-    console.log('Tag toggle handler is available:', onTagToggle);
-    
-    const isAddressLoading = watch('endereco') === 'Buscando...';
+    const { refetchStatus } = useBulkTagManager(resourceId);
     
     // Função de callback para forçar a atualização do status das tags em massa
     const handleTagToggle = useCallback(() => {
         refetchStatus();
-    }, [refetchStatus]);
+        onTagToggle();
+    }, [refetchStatus, onTagToggle]);
     
-    // Removendo a lógica de bulk toggle e os botões
+    const isAddressLoading = watch('endereco') === 'Buscando...';
+    
 
     return (
         <div className="space-y-6">
@@ -156,7 +115,7 @@ const FormDadosCadastrais: React.FC<FormDadosCadastraisProps> = ({ isSubmitting,
             <p className="text-sm text-muted-foreground mb-4">Dados pessoais e de contato do funcionário.</p>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <TaggedFormField 
+                <UserTaggedFormField 
                     fieldName="cpf" 
                     label="CPF" 
                     placeholder="000.000.000-00" 
@@ -165,7 +124,7 @@ const FormDadosCadastrais: React.FC<FormDadosCadastraisProps> = ({ isSubmitting,
                     tagRefreshKey={tagRefreshKey}
                     onTagToggle={handleTagToggle}
                 />
-                <TaggedFormField 
+                <UserTaggedFormField 
                     fieldName="rg" 
                     label="RG" 
                     placeholder="00.000.000-0" 
@@ -176,7 +135,7 @@ const FormDadosCadastrais: React.FC<FormDadosCadastraisProps> = ({ isSubmitting,
                 />
             </div>
 
-            <TaggedFormField 
+            <UserTaggedFormField 
                 fieldName="nome_mae" 
                 label="Nome da Mãe" 
                 placeholder="Nome completo da mãe" 
@@ -186,7 +145,7 @@ const FormDadosCadastrais: React.FC<FormDadosCadastraisProps> = ({ isSubmitting,
                 tagRefreshKey={tagRefreshKey}
                 onTagToggle={handleTagToggle}
             />
-            <TaggedFormField 
+            <UserTaggedFormField 
                 fieldName="nome_pai" 
                 label="Nome do Pai" 
                 placeholder="Nome completo do pai" 
@@ -195,7 +154,7 @@ const FormDadosCadastrais: React.FC<FormDadosCadastraisProps> = ({ isSubmitting,
                 tagRefreshKey={tagRefreshKey}
                 onTagToggle={handleTagToggle}
             />
-            <TaggedFormField 
+            <UserTaggedFormField 
                 fieldName="telefone" 
                 label="Telefone de Contato" 
                 placeholder="(00) 90000-0000" 
@@ -208,7 +167,7 @@ const FormDadosCadastrais: React.FC<FormDadosCadastraisProps> = ({ isSubmitting,
             <Separator />
             <h4 className="font-semibold">Endereço</h4>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <TaggedFormField 
+                <UserTaggedFormField 
                     fieldName="cep" 
                     label="CEP" 
                     placeholder="00000-000" 
@@ -217,7 +176,7 @@ const FormDadosCadastrais: React.FC<FormDadosCadastraisProps> = ({ isSubmitting,
                     tagRefreshKey={tagRefreshKey}
                     onTagToggle={handleTagToggle}
                 />
-                <TaggedFormField 
+                <UserTaggedFormField 
                     fieldName="cidade" 
                     label="Cidade" 
                     placeholder="São Paulo" 
@@ -226,7 +185,7 @@ const FormDadosCadastrais: React.FC<FormDadosCadastraisProps> = ({ isSubmitting,
                     tagRefreshKey={tagRefreshKey}
                     onTagToggle={handleTagToggle}
                 />
-                <TaggedFormField 
+                <UserTaggedFormField 
                     fieldName="estado" 
                     label="Estado (UF)" 
                     placeholder="SP" 
@@ -237,7 +196,7 @@ const FormDadosCadastrais: React.FC<FormDadosCadastraisProps> = ({ isSubmitting,
                 />
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <TaggedFormField 
+                <UserTaggedFormField 
                     fieldName="endereco" 
                     label="Logradouro/Rua" 
                     placeholder="Rua Exemplo" 
@@ -246,7 +205,7 @@ const FormDadosCadastrais: React.FC<FormDadosCadastraisProps> = ({ isSubmitting,
                     tagRefreshKey={tagRefreshKey}
                     onTagToggle={handleTagToggle}
                 />
-                <TaggedFormField 
+                <UserTaggedFormField 
                     fieldName="numero" 
                     label="Número" 
                     placeholder="123" 
@@ -255,7 +214,7 @@ const FormDadosCadastrais: React.FC<FormDadosCadastraisProps> = ({ isSubmitting,
                     tagRefreshKey={tagRefreshKey}
                     onTagToggle={handleTagToggle}
                 />
-                <TaggedFormField 
+                <UserTaggedFormField 
                     fieldName="complemento" 
                     label="Complemento" 
                     placeholder="Apto 101" 
@@ -265,7 +224,7 @@ const FormDadosCadastrais: React.FC<FormDadosCadastraisProps> = ({ isSubmitting,
                     onTagToggle={handleTagToggle}
                 />
             </div>
-            <TaggedFormField 
+            <UserTaggedFormField 
                 fieldName="bairro" 
                 label="Bairro" 
                 placeholder="Centro" 

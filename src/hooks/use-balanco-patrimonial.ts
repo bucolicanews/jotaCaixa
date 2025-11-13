@@ -113,7 +113,7 @@ export function useBalancoPatrimonial(endDate: Date | undefined): BalancoData {
   const getEmpresaId = () => {
     if (role === 'Admin') return usuario?.id || null;
     if (role === 'Cliente') return (perfil as ClienteProfile)?.id || null;
-    if (role === 'Usuario') return (perfil as UsuarioProfile)?.proprietario_id || null;
+    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id || null; // CORREÇÃO: Usando cliente_id
     return null;
   };
 

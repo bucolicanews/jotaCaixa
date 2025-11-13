@@ -31,8 +31,8 @@ const AcompanharPonto: React.FC = () => {
   // ID do proprietário (Admin ou Cliente)
   const getOwnerId = () => {
     if (isAdmin) return usuario?.id || null;
-    if (role === 'Cliente') return (perfil as ClienteProfile)?.id;
-    if (role === 'Usuario') return (perfil as UsuarioProfile)?.proprietario_id; // CORREÇÃO: Usando proprietario_id
+    if (role === 'Cliente') return (perfil as ClienteProfile)?.id || null;
+    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id || null; // CORREÇÃO: Usando cliente_id
     return null;
   };
   
@@ -46,7 +46,7 @@ const AcompanharPonto: React.FC = () => {
     
     setCarregandoDados(true);
     
-    let allowedProprietarioIds: string[] = [];
+    let allowedClienteIds: string[] = [];
     let fetchedClientes: Cliente[] = [];
     
     if (isAdmin) {
@@ -63,22 +63,22 @@ const AcompanharPonto: React.FC = () => {
         
         fetchedClientes = clientsData as Cliente[];
         
-        // Adiciona o próprio Admin como um "proprietário" para seus próprios usuários
+        // Adiciona o próprio Admin como um "cliente" para seus próprios usuários
         if (usuario?.id) {
             fetchedClientes.unshift({ id: usuario.id, nome: 'Meus Usuários (Admin)' } as Cliente);
         }
         
         // IDs permitidos: Admin's ID + todos os IDs de clientes
-        allowedProprietarioIds = fetchedClientes.map(c => c.id);
+        allowedClienteIds = fetchedClientes.map(c => c.id);
         
     } else if (ownerId) {
         // Cliente/Usuário: Apenas o próprio ID
-        allowedProprietarioIds = [ownerId];
+        allowedClienteIds = [ownerId];
     }
     
     setClientesDisponiveis(fetchedClientes);
 
-    if (allowedProprietarioIds.length === 0) {
+    if (allowedClienteIds.length === 0) {
         setUsuarios([]);
         setCarregandoDados(false);
         return;
@@ -87,8 +87,8 @@ const AcompanharPonto: React.FC = () => {
     // 2. Busca Usuários
     const { data: usersData, error: usersError } = await supabase
         .from('tbl_usuarios')
-        .select('*')
-        .in('proprietario_id', allowedProprietarioIds) // CORREÇÃO: Usando proprietario_id
+        .select('*, cliente_id') // CORREÇÃO AQUI: Selecionando cliente_id
+        .in('cliente_id', allowedClienteIds) // CORREÇÃO AQUI: Filtrando por cliente_id
         .order('nome');
 
     if (usersError) {
@@ -97,7 +97,7 @@ const AcompanharPonto: React.FC = () => {
     } else {
         // Mapeia os usuários para incluir o nome do cliente/empresa
         const usuariosComNomeCliente = (usersData as UsuarioProfile[]).map(user => {
-            const cliente = fetchedClientes.find(c => c.id === user.proprietario_id); // CORREÇÃO: Usando proprietario_id
+            const cliente = fetchedClientes.find(c => c.id === user.cliente_id); // CORREÇÃO: Usando cliente_id
             return {
                 ...user,
                 cliente_nome: cliente?.nome || 'N/A',
@@ -126,7 +126,7 @@ const AcompanharPonto: React.FC = () => {
     }
     
     if (filtroClienteId !== 'todos') {
-        filtered = filtered.filter(u => u.proprietario_id === filtroClienteId); // CORREÇÃO: Usando proprietario_id
+        filtered = filtered.filter(u => u.cliente_id === filtroClienteId); // CORREÇÃO: Usando cliente_id
     }
 
     return filtered;

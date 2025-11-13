@@ -74,10 +74,12 @@ const FormGeral: React.FC<FormGeralProps> = ({
           {permissoesVisiveis.map((p: Permissao) => (
             <FormField key={p.key} control={control} name={`permissoes.${p.key}`} render={({ field }) => (
               <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} disabled={isSubmitting} /></FormControl>
+                <FormControl>
+                  <Checkbox checked={field.value} onCheckedChange={field.onChange} disabled={isSubmitting} />
+                </FormControl>
                 <FormLabel className="font-normal">{p.label}</FormLabel>
               </FormItem>
-            )} />
+            ))} />
           ))}
         </div>
       </div>

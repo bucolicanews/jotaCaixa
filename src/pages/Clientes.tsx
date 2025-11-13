@@ -85,7 +85,7 @@ const ClientesPage = () => {
   const getOwnerId = () => {
     if (role === 'Admin') return usuario?.id || null; // Admin usa seu próprio ID
     if (role === 'Cliente') return (perfil as ClienteProfile)?.id;
-    if (role === 'Usuario') return (perfil as UsuarioProfile)?.proprietario_id;
+    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id; // CORREÇÃO: Usando cliente_id
     return null;
   };
   
@@ -446,7 +446,7 @@ const ClientesPage = () => {
       try {
           // Usamos resetPasswordForEmail para reenviar o link de autenticação/atualização de senha,
           // que é o fluxo seguro e disponível no cliente para convites.
-          const { error } = await supabase.auth.resetPasswordForEmail(email, {
+          const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
               redirectTo: `${BASE_URL}/atualizar-senha`,
           });
           
@@ -455,10 +455,8 @@ const ClientesPage = () => {
           showSuccess(`Link de acesso reenviado para ${email}.`);
           
           // 2. Abrir o diálogo de ações para que o Admin possa copiar/enviar o link
-          // CORREÇÃO: Não podemos usar supabase.auth.admin.getUserByEmail no cliente.
-          // Apenas enviamos o email de reset e informamos o usuário.
-          
-          const resetLink = `${BASE_URL}/atualizar-senha`;
+          // CORREÇÃO DO ERRO 3: Acessando action_link da resposta de dados
+          const resetLink = (data as { action_link: string | null }).action_link || `${BASE_URL}/atualizar-senha`;
           
           const whatsappTemplate = `Olá ${nome}! Seu convite de acesso ao sistema está pronto. Clique no link abaixo para definir sua senha e acessar:\n\n${resetLink}`;
           

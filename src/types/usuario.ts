@@ -61,7 +61,7 @@ export interface UsuarioProfile {
   id: string;
   nome: string;
   email: string;
-  proprietario_id: string | null;
+  cliente_id: string | null; // RENOMEADO: proprietario_id -> cliente_id
   avatar_url?: string | null;
   permissoes: Record<string, boolean>;
   
@@ -113,7 +113,7 @@ export interface UsuarioProfile {
 // NOVO TIPO: Usuário gerenciado pelo Admin
 export interface AdminUsuarioProfile extends UsuarioProfile {
     admin_id: string;
-    proprietario_id: null; // Deve ser nulo para diferenciar
+    cliente_id: null; // Deve ser nulo para diferenciar
 }
 
 export type AnyProfile = AdminProfile | ClienteProfile | UsuarioProfile | AdminUsuarioProfile | null;

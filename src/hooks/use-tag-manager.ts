@@ -29,8 +29,8 @@ export function useTagManager(resourceId: string | undefined, tagMetadata: TagMe
         // 2. Se for Cliente (do sistema), o proprietário da tag é o próprio Cliente logado.
         if (role === 'Cliente') return (perfil as ClienteProfile)?.id;
         
-        // 3. Se for Usuário (funcionário), o proprietário da tag é o proprietario_id.
-        if (role === 'Usuario') return (perfil as UsuarioProfile)?.proprietario_id; // CORREÇÃO: Usando proprietario_id
+        // 3. Se for Usuário (funcionário), o proprietário da tag é o cliente_id.
+        if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id; // CORREÇÃO: Usando cliente_id
         
         return null;
     };
@@ -38,7 +38,7 @@ export function useTagManager(resourceId: string | undefined, tagMetadata: TagMe
     const empresaId = getOwnerId();
     
     // Determina a origem do dado (clientes para Cliente CR, tbl_usuarios para Usuário)
-    const isUserScope = perfil && 'proprietario_id' in perfil; // CORREÇÃO: Verifica proprietario_id
+    const isUserScope = perfil && 'cliente_id' in perfil; // CORREÇÃO: Verifica cliente_id
     const origemDado = isUserScope ? `tbl_usuarios` : `clientes`;
 
     const fetchTagStatus = useCallback(async () => {

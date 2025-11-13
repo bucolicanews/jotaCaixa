@@ -21,17 +21,17 @@ const CadastrarEmpresa = () => {
         return <LayoutPrincipal><div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div></LayoutPrincipal>;
     }
     
-    // CORREÇÃO: Verifica proprietario_id
-    const isUnassignedUser = role === 'Usuario' && !(perfil as UsuarioProfile)?.proprietario_id;
+    // CORREÇÃO: Verifica cliente_id
+    const isUnassignedUser = role === 'Usuario' && !(perfil as UsuarioProfile)?.cliente_id;
 
     if (!isUnassignedUser) {
-        // Se não for um Usuário não vinculado, redireciona para o painel
+        // Se não for um Usuário não vinculado, redireciona imediatamente para o painel
         if (role === 'Cliente' || role === 'Admin') {
             navigate('/painel', { replace: true });
             return null;
         }
         // Se for um Usuário já vinculado, não deve estar aqui
-        if (role === 'Usuario' && (perfil as UsuarioProfile)?.proprietario_id) {
+        if (role === 'Usuario' && (perfil as UsuarioProfile)?.cliente_id) {
             navigate('/painel', { replace: true });
             return null;
         }

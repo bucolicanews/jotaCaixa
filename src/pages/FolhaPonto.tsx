@@ -139,7 +139,7 @@ const FolhaPonto: React.FC = () => {
         const { data, error } = await supabase
             .from('tbl_usuarios')
             .select('id, nome, email, salario, horas_mensais, dias_folga_fixos, folga_domingo_obrigatoria')
-            .eq('proprietario_id', empresaId) // CORREÇÃO: Usando proprietario_id
+            .eq('cliente_id', empresaId) // CORREÇÃO AQUI: Usando cliente_id
             .order('nome');
         usersData = data;
         usersError = error;

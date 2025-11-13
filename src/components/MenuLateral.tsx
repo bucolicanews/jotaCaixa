@@ -108,7 +108,7 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick }) => {
   const localizacao = useLocation();
   const { role, perfil } = useSessao();
 
-  const isUnassignedUser = role === 'Usuario' && !(perfil as UsuarioProfile)?.proprietario_id;
+  const isUnassignedUser = role === 'Usuario' && !(perfil as UsuarioProfile)?.cliente_id;
   const isPendingClient = role === 'Cliente' && !(perfil as ClienteProfile)?.aprovado;
   const userProfile = perfil as UsuarioProfile;
   const clientProfile = perfil as ClienteProfile;
@@ -156,7 +156,7 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick }) => {
     if (role === 'Usuario') {
         // Usuários não vinculados só veem Cadastrar Empresa e Painel
         if (isUnassignedUser) {
-            return item.caminho === '/painel';
+            return item.caminho === '/painel' || item.caminho === '/cadastrar-empresa';
         }
         
         // Se for 'Acompanhar Ponto' (FolhaPonto), oculta para Usuário.

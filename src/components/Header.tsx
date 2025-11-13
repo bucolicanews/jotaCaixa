@@ -62,12 +62,12 @@ const Header: React.FC = () => {
         currentPlanoId = clienteProfile.plano_id || null; 
       } else if (role === 'Usuario') {
         const usuarioProfile = perfil as UsuarioProfile;
-        if (usuarioProfile.proprietario_id) {
+        if (usuarioProfile.cliente_id) {
           // Buscar o nome da empresa (Cliente)
           const { data } = await supabase
             .from('tbl_clientes')
             .select('nome, plano_id')
-            .eq('id', usuarioProfile.proprietario_id)
+            .eq('id', usuarioProfile.cliente_id)
             .single();
           
           if (data) {

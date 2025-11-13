@@ -103,15 +103,15 @@ const GerenciarUsuarios: React.FC = () => {
       if (clienteIds.length > 0) {
           const { data: clienteUsersData, error: clienteUsersError } = await supabase
             .from('tbl_usuarios')
-            .select('*')
-            .in('proprietario_id', clienteIds)
+            .select('*, cliente_id') // CORREÇÃO AQUI: Selecionando cliente_id
+            .in('cliente_id', clienteIds) // CORREÇÃO AQUI: Filtrando por cliente_id
             .order('nome', { ascending: true });
             
           if (clienteUsersError) console.error('Erro ao carregar usuários dos Clientes:', clienteUsersError);
           
           const clienteUsers = (clienteUsersData || []).map(item => {
-            const nomeEmpresa = fetchedClientes.find(c => c.id === item.proprietario_id)?.nome || 'N/A';
-            return { ...item, nome_empresa: nomeEmpresa } as UsuarioComEmpresa;
+            const nomeEmpresa = fetchedClientes.find(c => c.id === item.cliente_id)?.nome || 'N/A';
+            return { ...item, proprietario_id: item.cliente_id, nome_empresa: nomeEmpresa } as UsuarioComEmpresa; // Mapeando cliente_id para proprietario_id
           });
           
           fetchedUsers.push(...clienteUsers);
@@ -125,15 +125,16 @@ const GerenciarUsuarios: React.FC = () => {
       // CLIENTE: Busca APENAS seus próprios Usuários (Funcionários)
       const { data: usuariosData, error: usuariosError } = await supabase
         .from('tbl_usuarios')
-        .select('*')
-        .eq('proprietario_id', usuario.id)
+        .select('*, cliente_id') // CORREÇÃO AQUI: Selecionando cliente_id
+        .eq('cliente_id', usuario.id) // CORREÇÃO AQUI: Filtrando por cliente_id
         .order('nome', { ascending: true });
 
       if (usuariosError) {
         showError('Erro ao carregar usuários: ' + usuariosError.message);
         setUsuarios([]);
       } else {
-        setUsuarios(usuariosData as UsuarioComEmpresa[]);
+        const clientUsers = (usuariosData || []).map(item => ({ ...item, proprietario_id: item.cliente_id })) as UsuarioComEmpresa[];
+        setUsuarios(clientUsers);
       }
     }
     

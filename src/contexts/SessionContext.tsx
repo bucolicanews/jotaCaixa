@@ -50,7 +50,7 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
           const { data: adminUsuarioData } = await supabase.from('admin_usuarios').select('*, admin_id').eq('id', user.id).single();
           if (adminUsuarioData) {
             // Mapeia para o tipo UsuarioProfile, mas com admin_id
-            perfil = { ...adminUsuarioData, proprietario_id: adminUsuarioData.admin_id } as AdminUsuarioProfile;
+            perfil = { ...adminUsuarioData, cliente_id: null } as AdminUsuarioProfile; // CORREÇÃO: cliente_id é null
             role = 'Usuario';
           }
         }
@@ -88,9 +88,9 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
               }
           }
           // Usuários (Funcionários) são redirecionados para o painel se estiverem vinculados.
-          // Verifica proprietario_id (Cliente) ou admin_id (AdminUsuarioProfile)
+          // Verifica cliente_id (Cliente) ou admin_id (AdminUsuarioProfile)
           const isUsuarioVinculado = estado.role === 'Usuario' && (
-              (estado.perfil as UsuarioProfile)?.proprietario_id || 
+              (estado.perfil as UsuarioProfile)?.cliente_id || 
               (estado.perfil as AdminUsuarioProfile)?.admin_id
           );
           
