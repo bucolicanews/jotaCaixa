@@ -1,57 +1,55 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, FileText, Eye, Trash2, Building2 } from 'lucide-react';
+import { Loader2, FileText, PlusCircle, Edit, Trash2, Eye } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
 import { DocumentoSocietarioGerado } from '@/types/documentos-societarios';
+import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { UsuarioProfile } from '@/types/usuario';
+import { format } from 'date-fns';
 import { Link } from 'react-router-dom';
-import { format, parseISO } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
-import ContratoPreviewDialog from '@/components/contratos/ContratoPreviewDialog';
-import { useSessao } from '@/hooks/use-sessao';
 
-interface DocumentoComCliente extends DocumentoSocietarioGerado {
-    tbl_clientes: { nome: string } | null; // CORRIGIDO: Usando tbl_clientes
-    modelos_societarios: { titulo: string } | null;
-}
+type DocumentoComCliente = DocumentoSocietarioGerado & { clientes: { nome: string } | null };
 
 const DocumentosSocietarios: React.FC = () => {
-  const { role, perfil, carregando: carregandoSessao } = useSessao();
+  const { role, perfil, usuario, carregando: carregandoSessao } = useSessao();
   const [documentos, setDocumentos] = useState<DocumentoComCliente[]>([]);
-  const [carregandoDocumentos, setCarregandoDocumentos] = useState(true);
-  
-  const [previewOpen, setPreviewOpen] = useState(false);
-  const [previewContent, setPreviewContent] = useState('');
-  const [previewTitle, setPreviewTitle] = useState('');
+  const [carregando, setCarregando] = useState(true);
 
+  const isAdmin = role === 'Admin';
+  const isCliente = role === 'Cliente';
+  
   const getOwnerId = () => {
-    if (role === 'Admin' || role === 'Cliente') return (perfil as any)?.id;
-    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id;
+    if (isAdmin) return usuario?.id || null;
+    if (isCliente) return (perfil as ClienteProfile)?.id;
+    if (role === 'Usuario') return (perfil as UsuarioProfile)?.proprietario_id;
     return null;
   };
   
   const ownerId = getOwnerId();
 
   const buscarDocumentos = useCallback(async () => {
-    if (!ownerId) {
-        setCarregandoDocumentos(false);
+    if (!ownerId && !isAdmin) {
+        setDocumentos([]);
+        setCarregando(false);
         return;
     }
-    setCarregandoDocumentos(true);
+    
+    setCarregando(true);
     
     let query = supabase
       .from('documentos_societarios_gerados')
-      .select(`
-        *,
-        tbl_clientes ( nome ),
-        modelos_societarios ( titulo )
-      `)
-      .eq('proprietario_id', ownerId)
-      .order('data_registro', { ascending: false });
+      .select('*, clientes(nome)')
+      .order('criado_em', { ascending: false });
+      
+    // Se for Cliente/Usuário, filtra apenas pelos seus documentos
+    if (!isAdmin && ownerId) {
+        query = query.eq('proprietario_id', ownerId);
+    }
 
     const { data, error } = await query;
 
@@ -61,38 +59,34 @@ const DocumentosSocietarios: React.FC = () => {
     } else {
       setDocumentos(data as DocumentoComCliente[]);
     }
-    setCarregandoDocumentos(false);
-  }, [ownerId]);
+    setCarregando(false);
+  }, [ownerId, isAdmin]);
 
   useEffect(() => {
-    if (!carregandoSessao && ownerId) {
+    if (!carregandoSessao && (isAdmin || ownerId)) {
       buscarDocumentos();
     }
-  }, [carregandoSessao, ownerId, buscarDocumentos]);
+  }, [carregandoSessao, isAdmin, ownerId, buscarDocumentos]);
   
-  const handleDelete = async (id: string) => {
-    if (!window.confirm('Tem certeza que deseja excluir este documento gerado?')) return;
-
-    const { error } = await supabase
-      .from('documentos_societarios_gerados')
-      .delete()
-      .eq('id', id);
-
-    if (error) {
-      showError('Erro ao excluir documento: ' + error.message);
-    } else {
-      showSuccess('Documento excluído com sucesso.');
-      buscarDocumentos();
-    }
-  };
-  
-  const handleView = (doc: DocumentoComCliente) => {
-      setPreviewContent(doc.conteudo_renderizado || 'Conteúdo não renderizado.');
-      setPreviewTitle(doc.valores_tags_preenchidos?.titulo || doc.modelos_societarios?.titulo || 'Documento');
-      setPreviewOpen(true);
+  const handleDelete = async (documentoId: string) => {
+      if (!window.confirm('Tem certeza que deseja excluir este documento societário? Esta ação é irreversível.')) {
+          return;
+      }
+      
+      const { error } = await supabase
+          .from('documentos_societarios_gerados')
+          .delete()
+          .eq('id', documentoId);
+          
+      if (error) {
+          showError('Falha ao excluir documento: ' + error.message);
+      } else {
+          showSuccess('Documento excluído com sucesso!');
+          buscarDocumentos();
+      }
   };
 
-  if (carregandoSessao || carregandoDocumentos) {
+  if (carregandoSessao || carregando) {
     return (
       <LayoutPrincipal>
         <div className="flex justify-center items-center h-64">
@@ -102,75 +96,77 @@ const DocumentosSocietarios: React.FC = () => {
     );
   }
   
-  if (!ownerId) {
-    return <LayoutPrincipal><Card><CardHeader><CardTitle>Acesso Negado</CardTitle></CardHeader><CardContent><p>Você não tem permissão para gerenciar documentos.</p></CardContent></Card></LayoutPrincipal>;
+  if (!ownerId && !isAdmin) {
+      return (
+          <LayoutPrincipal>
+              <Card><CardContent className="p-6">Você não tem permissão para visualizar documentos societários.</CardContent></Card>
+          </LayoutPrincipal>
+      );
   }
 
   return (
     <LayoutPrincipal>
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
         <h1 className="text-2xl md:text-3xl font-bold flex items-center">
-          <FileText className="w-6 h-6 mr-2" /> Documentos Societários
+          <FileText className="w-6 h-6 mr-2" /> Documentos Societários Gerados
         </h1>
-        {/* Ajuste de responsividade para os botões de ação */}
-        <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2 w-full sm:w-auto">
-            <Link to="/documentos-societarios/modelos" className="w-full sm:w-auto">
-                <Button variant="secondary" className="w-full">
-                    <Building2 className="w-4 h-4 mr-2" />
-                    Gerenciar Modelos
-                </Button>
-            </Link>
-            <Link to="/documentos-societarios/blocos" className="w-full sm:w-auto">
-                <Button variant="secondary" className="w-full">
-                    <FileText className="w-4 h-4 mr-2" />
-                    Gerenciar Blocos
-                </Button>
-            </Link>
-        </div>
+        <Link to="/documentos-societarios/novo">
+            <Button className="w-full sm:w-auto">
+                <PlusCircle className="w-4 h-4 mr-2" />
+                Novo Documento
+            </Button>
+        </Link>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-xl">Documentos Gerados ({documentos.length})</CardTitle>
+          <CardTitle className="text-xl">Documentos ({documentos.length})</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="min-w-[200px]">Título</TableHead>
-                  <TableHead className="min-w-[150px] hidden md:table-cell">Modelo Base</TableHead>
-                  <TableHead className="min-w-[150px]">Cliente</TableHead>
-                  <TableHead className="w-[100px]">Data Registro</TableHead>
-                  <TableHead className="w-[100px]">Status</TableHead>
-                  <TableHead className="w-[150px] text-right">Ações</TableHead>
+                  <TableHead>Título</TableHead>
+                  <TableHead>Cliente</TableHead>
+                  <TableHead className="hidden md:table-cell">Modelo Base</TableHead>
+                  <TableHead className="w-[120px]">Status</TableHead>
+                  <TableHead className="w-[120px]">Criado em</TableHead>
+                  <TableHead className="w-[100px] text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {documentos.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center py-4 text-muted-foreground">
-                      Nenhum documento gerado.
+                      Nenhum documento societário gerado.
                     </TableCell>
                   </TableRow>
                 ) : (
                   documentos.map((doc) => (
                     <TableRow key={doc.id}>
-                      <TableCell className="font-medium">{doc.valores_tags_preenchidos?.titulo || doc.modelos_societarios?.titulo || 'Documento Sem Título'}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground hidden md:table-cell">{doc.modelos_societarios?.titulo || 'N/A'}</TableCell>
-                      <TableCell className="text-sm">{doc.tbl_clientes?.nome || 'N/A'}</TableCell>
-                      <TableCell className="text-sm">{format(parseISO(doc.data_registro), 'dd/MM/yyyy')}</TableCell>
+                      <TableCell className="font-medium">{doc.titulo}</TableCell>
+                      <TableCell>{doc.clientes?.nome || 'N/A'}</TableCell>
+                      <TableCell className="hidden md:table-cell text-sm text-muted-foreground">{doc.modelo_titulo}</TableCell>
                       <TableCell>
-                        <Badge variant={doc.status === 'finalizado' ? 'default' : 'secondary'}>
-                            {doc.status}
-                        </Badge>
+                          <Badge variant={doc.status === 'ativo' ? 'default' : 'secondary'}>
+                              {doc.status}
+                          </Badge>
                       </TableCell>
+                      <TableCell>{format(new Date(doc.criado_em), 'dd/MM/yyyy')}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end space-x-2">
-                            <Button variant="outline" size="icon" onClick={() => handleView(doc)} title="Visualizar">
-                                <Eye className="w-4 h-4" />
-                            </Button>
-                            <Button variant="ghost" size="icon" onClick={() => handleDelete(doc.id)}>
+                            <Link to={`/documentos-societarios/visualizar/${doc.id}`}>
+                                <Button variant="ghost" size="icon" title="Visualizar">
+                                    <Eye className="w-4 h-4" />
+                                </Button>
+                            </Link>
+                            <Link to={`/documentos-societarios/editar/${doc.id}`}>
+                                <Button variant="ghost" size="icon" title="Editar">
+                                    <Edit className="w-4 h-4" />
+                                </Button>
+                            </Link>
+                            <Button variant="ghost" size="icon" onClick={() => handleDelete(doc.id)} title="Excluir">
                                 <Trash2 className="w-4 h-4 text-red-500" />
                             </Button>
                         </div>
@@ -183,14 +179,6 @@ const DocumentosSocietarios: React.FC = () => {
           </div>
         </CardContent>
       </Card>
-      
-      <ContratoPreviewDialog
-        open={previewOpen}
-        onOpenChange={setPreviewOpen}
-        conteudoHtml={previewContent}
-        titulo={previewTitle}
-        isHtml={true} 
-      />
     </LayoutPrincipal>
   );
 };

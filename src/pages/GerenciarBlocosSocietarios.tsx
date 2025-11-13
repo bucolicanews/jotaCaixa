@@ -1,217 +1,60 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, PlusCircle, FileText, Edit, Trash2, Copy, Tag } from 'lucide-react';
+import { Loader2, Plus, FileText, Trash2, Edit, ChevronLeft, Building2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
 import { BlocoSocietario } from '@/types/documentos-societarios';
+import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 import { Button } from '@/components/ui/button';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
-import { UsuarioProfile } from '@/types/usuario';
-import { TAGS_PADRAO } from '@/config/contrato-tags-padrao';
-import { ScrollArea } from '@/components/ui/scroll-area';
-
-// Componente de Formulário Simples para Bloco
-interface FormBlocoSocietarioProps {
-    blocoInicial?: BlocoSocietario | null;
-    proprietarioId: string;
-    onSaveComplete: () => void;
-}
-
-const FormBlocoSocietario: React.FC<FormBlocoSocietarioProps> = ({ blocoInicial, proprietarioId, onSaveComplete }) => {
-    const [titulo, setTitulo] = useState(blocoInicial?.titulo || '');
-    const [conteudo, setConteudo] = useState(blocoInicial?.conteudo || '');
-    const [tipoBloco, setTipoBloco] = useState(blocoInicial?.tipo_bloco || 'Paragrafo');
-    const [loading, setLoading] = useState(false);
-    const isEditing = !!blocoInicial;
-    const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!titulo.trim() || !conteudo.trim()) {
-            showError('Título e conteúdo são obrigatórios.');
-            return;
-        }
-        setLoading(true);
-
-        const dataToSave = {
-            titulo: titulo.trim(),
-            conteudo: conteudo.trim(),
-            tipo_bloco: tipoBloco,
-            proprietario_id: proprietarioId,
-        };
-
-        let error = null;
-
-        if (isEditing) {
-            const result = await supabase.from('blocos_societarios').update(dataToSave).eq('id', blocoInicial.id);
-            error = result.error;
-        } else {
-            const result = await supabase.from('blocos_societarios').insert(dataToSave);
-            error = result.error;
-        }
-
-        if (error) {
-            showError(`Falha ao salvar bloco: ${error.message}`);
-        } else {
-            showSuccess(`Bloco salvo com sucesso!`);
-            onSaveComplete();
-        }
-        setLoading(false);
-    };
-    
-    const handleCopyTag = (tag: string) => {
-        navigator.clipboard.writeText(tag);
-        showSuccess(`Tag ${tag} copiada!`);
-    };
-    
-    const handleDragStart = (e: React.DragEvent<HTMLDivElement>, tag: string) => {
-        e.dataTransfer.setData('text/plain', tag);
-    };
-    
-    const handleDrop = (e: React.DragEvent<HTMLTextAreaElement>) => {
-        e.preventDefault();
-        const tag = e.dataTransfer.getData('text/plain');
-        
-        if (tag && textareaRef.current) {
-            const textarea = textareaRef.current;
-            const start = textarea.selectionStart;
-            const end = textarea.selectionEnd;
-            const currentValue = conteudo;
-            
-            const newValue = currentValue.substring(0, start) + tag + currentValue.substring(end);
-            setConteudo(newValue);
-            
-            setTimeout(() => {
-                textarea.focus();
-                textarea.selectionStart = start + tag.length;
-                textarea.selectionEnd = start + tag.length;
-            }, 0);
-        }
-    };
-    
-    const handleDragOver = (e: React.DragEvent<HTMLTextAreaElement>) => {
-        e.preventDefault();
-    };
-    
-    // Filtra apenas as tags de Cliente/Usuário/Empresa (excluindo as financeiras)
-    const tagsDisponiveis = useMemo(() => {
-        return TAGS_PADRAO.filter(t => 
-            !t.origem_dado?.startsWith('contas_receber')
-        ).sort((a, b) => a.nome_tag.localeCompare(b.nome_tag));
-    }, []);
-
-
-    return (
-        <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                
-                {/* Coluna 1 & 2: Formulário e Conteúdo */}
-                <div className="lg:col-span-2 space-y-4">
-                    <div className="space-y-2">
-                        <Label htmlFor="titulo">Título</Label>
-                        <Input id="titulo" placeholder="Ex: Cláusula de Rescisão" value={titulo} onChange={(e) => setTitulo(e.target.value)} disabled={loading} />
-                    </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="tipo">Tipo de Bloco</Label>
-                        <Input id="tipo" placeholder="Ex: Paragrafo, Inciso, Cláusula" value={tipoBloco} onChange={(e) => setTipoBloco(e.target.value)} disabled={loading} />
-                    </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="conteudo">Conteúdo (Use tags como {'{{CLIENTE_NOME}}'})</Label>
-                        <Textarea 
-                            ref={textareaRef}
-                            id="conteudo" 
-                            rows={8} 
-                            placeholder="Insira o texto completo do bloco aqui..." 
-                            value={conteudo} 
-                            onChange={(e) => setConteudo(e.target.value)} 
-                            disabled={loading}
-                            onDrop={handleDrop}
-                            onDragOver={handleDragOver}
-                        />
-                    </div>
-                </div>
-                
-                {/* Coluna 3: Tags Disponíveis */}
-                <Card className="lg:col-span-1 max-h-[500px] overflow-y-auto">
-                    <CardHeader className="p-3 border-b">
-                        <CardTitle className="text-sm">Tags de Cliente/Empresa</CardTitle>
-                        <Button type="button" variant="outline" size="sm" onClick={() => handleCopyTag(tagsDisponiveis.map(t => t.nome_tag).join(' '))} disabled={tagsDisponiveis.length === 0} className="w-full">
-                            <Copy className="w-3 h-3 mr-1" /> Copiar Todas
-                        </Button>
-                    </CardHeader>
-                    <ScrollArea className="h-[400px]">
-                        <CardContent className="p-3 space-y-2">
-                            {tagsDisponiveis.map((tag) => (
-                                <div 
-                                    key={tag.id} 
-                                    className="flex flex-col space-y-1 border-b pb-2 last:border-b-0 cursor-grab active:cursor-grabbing"
-                                    draggable
-                                    onDragStart={(e) => handleDragStart(e, tag.nome_tag)}
-                                >
-                                    <div className="flex justify-between items-start"> {/* Alterado para items-start */}
-                                        <span className="font-mono text-xs font-semibold text-primary break-all pr-2">{tag.nome_tag}</span> {/* Adicionado break-all e pr-2 */}
-                                        <Button 
-                                            type="button" 
-                                            variant="ghost" 
-                                            size="icon" 
-                                            className="h-6 w-6 flex-shrink-0"
-                                            onClick={() => handleCopyTag(tag.nome_tag)}
-                                        >
-                                            <Copy className="w-3 h-3" />
-                                        </Button>
-                                    </div>
-                                    <p className="text-xs text-muted-foreground">
-                                        <Tag className="w-3 h-3 mr-1 text-muted-foreground inline-block align-text-bottom" />
-                                        {tag.descricao}
-                                    </p>
-                                </div>
-                            ))}
-                        </CardContent>
-                    </ScrollArea>
-                </Card>
-            </div>
-            
-            <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : (isEditing ? 'Salvar Alterações' : 'Criar Bloco')}
-            </Button>
-        </form>
-    );
-};
-
+import FormBlocoSocietario from '@/components/documentos-societarios/FormBlocoSocietario';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Link } from 'react-router-dom';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useMemo } from 'react';
 
 const GerenciarBlocosSocietarios: React.FC = () => {
-  const { perfil, role, carregando: carregandoSessao } = useSessao();
+  const { role, perfil, usuario, carregando: carregandoSessao } = useSessao();
   const [blocos, setBlocos] = useState<BlocoSocietario[]>([]);
-  const [carregandoBlocos, setCarregandoBlocos] = useState(true);
-  const [dialogAberto, setDialogAberto] = useState(false);
+  const [carregando, setCarregando] = useState(true);
+  const [dialogOpen, setDialogOpen] = useState(false);
   const [blocoSelecionado, setBlocoSelecionado] = useState<BlocoSocietario | null>(null);
+  const [activeTab, setActiveTab] = useState('meus_blocos');
 
+  const isAdmin = role === 'Admin';
+  const isCliente = role === 'Cliente';
+  
+  // ID do proprietário (Admin ou Cliente)
   const getOwnerId = () => {
-    if (role === 'Admin' || role === 'Cliente') return (perfil as any)?.id;
-    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id;
+    if (isAdmin) return usuario?.id || null;
+    if (isCliente) return (perfil as ClienteProfile)?.id;
+    if (role === 'Usuario') return (perfil as UsuarioProfile)?.proprietario_id;
     return null;
   };
   
   const ownerId = getOwnerId();
 
   const buscarBlocos = useCallback(async () => {
-    if (!ownerId) {
-        setCarregandoBlocos(false);
+    if (!ownerId && !isAdmin) {
+        setBlocos([]);
+        setCarregando(false);
         return;
     }
-    setCarregandoBlocos(true);
+    
+    setCarregando(true);
     
     let query = supabase
-      .from('blocos_societarios')
+      .from('documentos_societarios_blocos')
       .select('*')
-      .eq('proprietario_id', ownerId)
       .order('titulo', { ascending: true });
+      
+    // Se for Cliente, busca apenas os seus blocos (ownerId) e blocos globais (proprietario_id is null)
+    if (isCliente) {
+        query = query.or(`proprietario_id.eq.${ownerId},proprietario_id.is.null`);
+    }
+    // Se for Admin, a RLS permite ver todos os blocos (seus e dos clientes)
 
     const { data, error } = await query;
 
@@ -221,48 +64,120 @@ const GerenciarBlocosSocietarios: React.FC = () => {
     } else {
       setBlocos(data as BlocoSocietario[]);
     }
-    setCarregandoBlocos(false);
-  }, [ownerId]);
+    setCarregando(false);
+  }, [ownerId, isAdmin, isCliente]);
 
   useEffect(() => {
-    if (!carregandoSessao && ownerId) {
+    if (!carregandoSessao && (isAdmin || ownerId)) {
       buscarBlocos();
     }
-  }, [carregandoSessao, ownerId, buscarBlocos]);
+  }, [carregandoSessao, isAdmin, ownerId, buscarBlocos]);
   
   const handleSaveComplete = () => {
-    setDialogAberto(false);
-    setBlocoSelecionado(null);
-    buscarBlocos();
-  };
-
-  const handleEdit = (bloco: BlocoSocietario) => {
-    setBlocoSelecionado(bloco);
-    setDialogAberto(true);
-  };
-
-  const handleDelete = async (id: string) => {
-    if (!window.confirm('Tem certeza que deseja excluir este bloco?')) return;
-
-    const { error } = await supabase
-      .from('blocos_societarios')
-      .delete()
-      .eq('id', id);
-
-    if (error) {
-      showError('Erro ao excluir bloco: ' + error.message);
-    } else {
-      showSuccess('Bloco excluído com sucesso.');
+      setDialogOpen(false);
+      setBlocoSelecionado(null);
       buscarBlocos();
-    }
   };
   
-  const handleCopyContent = (content: string) => {
-    navigator.clipboard.writeText(content);
-    showSuccess('Conteúdo copiado para a área de transferência!');
+  const handleEdit = (bloco: BlocoSocietario) => {
+      setBlocoSelecionado(bloco);
+      setDialogOpen(true);
   };
+  
+  const handleDelete = async (blocoId: string) => {
+      if (!window.confirm('Tem certeza que deseja excluir este bloco de conteúdo? Esta ação é irreversível.')) {
+          return;
+      }
+      
+      const { error } = await supabase
+          .from('documentos_societarios_blocos')
+          .delete()
+          .eq('id', blocoId);
+          
+      if (error) {
+          showError('Falha ao excluir bloco: ' + error.message);
+      } else {
+          showSuccess('Bloco excluído com sucesso!');
+          buscarBlocos();
+      }
+  };
+  
+  const handleNewBloco = () => {
+      setBlocoSelecionado(null);
+      setDialogOpen(true);
+  };
+  
+  const blocosFiltrados = useMemo(() => {
+      if (!isAdmin) {
+          // Cliente/Usuário só vê seus próprios blocos
+          return { meusBlocos: blocos, blocosClientes: [] };
+      }
+      
+      // Admin: Separa blocos próprios (proprietario_id = ownerId) e blocos de clientes (proprietario_id != ownerId)
+      const meusBlocos = blocos.filter(b => b.proprietario_id === ownerId);
+      const blocosClientes = blocos.filter(b => b.proprietario_id !== ownerId);
+      
+      return { meusBlocos, blocosClientes };
+  }, [blocos, isAdmin, ownerId]);
+  
+  const blocosParaExibir = isAdmin && activeTab === 'blocos_clientes' 
+      ? blocosFiltrados.blocosClientes 
+      : blocosFiltrados.meusBlocos;
+      
+  const isSupervisao = isAdmin && activeTab === 'blocos_clientes';
 
-  if (carregandoSessao || carregandoBlocos) {
+  // Helper para renderizar a lista de blocos
+  const renderBlocosList = (list: BlocoSocietario[], isSupervisao: boolean) => (
+      <div className="overflow-x-auto">
+          <Table>
+              <TableHeader>
+                  <TableRow>
+                      <TableHead>Título</TableHead>
+                      <TableHead className="hidden md:table-cell">Conteúdo (Início)</TableHead>
+                      {isSupervisao && <TableHead>Proprietário ID</TableHead>}
+                      <TableHead className="w-[100px] text-right">Ações</TableHead>
+                  </TableRow>
+              </TableHeader>
+              <TableBody>
+                  {list.length === 0 ? (
+                      <TableRow>
+                          <TableCell colSpan={isSupervisao ? 4 : 3} className="text-center py-4 text-muted-foreground">
+                              Nenhum bloco encontrado.
+                          </TableCell>
+                      </TableRow>
+                  ) : (
+                      list.map((bloco) => {
+                          // Apenas o proprietário ou Admin (no modo não supervisão) pode editar/deletar
+                          const canEditOrDelete = bloco.proprietario_id === ownerId || isAdmin && !isSupervisao;
+                          
+                          return (
+                              <TableRow key={bloco.id}>
+                                  <TableCell className="font-medium">{bloco.titulo}</TableCell>
+                                  <TableCell className="hidden md:table-cell text-sm text-muted-foreground truncate max-w-xs">
+                                      {bloco.conteudo_template.substring(0, 100)}...
+                                  </TableCell>
+                                  {isSupervisao && <TableCell className="text-sm text-muted-foreground">{bloco.proprietario_id}</TableCell>}
+                                  <TableCell className="text-right">
+                                      <div className="flex justify-end space-x-2">
+                                          <Button variant="ghost" size="icon" onClick={() => handleEdit(bloco)} disabled={!canEditOrDelete} title={canEditOrDelete ? "Editar Bloco" : "Apenas visualização"}>
+                                              <Edit className="w-4 h-4" />
+                                          </Button>
+                                          <Button variant="ghost" size="icon" onClick={() => handleDelete(bloco.id)} disabled={!canEditOrDelete} title={canEditOrDelete ? "Excluir Bloco" : "Apenas visualização"}>
+                                              <Trash2 className="w-4 h-4 text-red-500" />
+                                          </Button>
+                                      </div>
+                                  </TableCell>
+                              </TableRow>
+                          );
+                      })
+                  )}
+              </TableBody>
+          </Table>
+      </div>
+  );
+
+
+  if (carregandoSessao) {
     return (
       <LayoutPrincipal>
         <div className="flex justify-center items-center h-64">
@@ -272,85 +187,89 @@ const GerenciarBlocosSocietarios: React.FC = () => {
     );
   }
   
-  if (!ownerId) {
-    return <LayoutPrincipal><Card><CardHeader><CardTitle>Acesso Negado</CardTitle></CardHeader><CardContent><p>Você não tem permissão para gerenciar blocos.</p></CardContent></Card></LayoutPrincipal>;
+  if (!ownerId && !isAdmin) {
+      return (
+          <LayoutPrincipal>
+              <Card><CardContent className="p-6">Você não tem permissão para gerenciar blocos de conteúdo.</CardContent></Card>
+          </LayoutPrincipal>
+      );
   }
 
   return (
     <LayoutPrincipal>
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-        <h1 className="text-2xl md:text-3xl font-bold flex items-center">
-          <FileText className="w-6 h-6 mr-2" /> Gerenciar Blocos Societários
-        </h1>
-        <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
-          <DialogTrigger asChild>
-            <Button onClick={() => setBlocoSelecionado(null)} className="w-full sm:w-auto">
-              <PlusCircle className="w-4 h-4 mr-2" />
-              Novo Bloco
+      <div className="flex items-center mb-6">
+        <Link to="/documentos-societarios/modelos">
+            <Button 
+                variant="link" 
+                type="button"
+                className="text-muted-foreground hover:text-primary flex items-center mr-4 p-0 h-auto"
+            >
+                <ChevronLeft className="w-5 h-5" />
+                Voltar para Modelos
             </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>{blocoSelecionado ? 'Editar Bloco' : 'Novo Bloco'}</DialogTitle>
-            </DialogHeader>
-            <FormBlocoSocietario 
-              blocoInicial={blocoSelecionado}
-              proprietarioId={ownerId}
-              onSaveComplete={handleSaveComplete}
-            />
-          </DialogContent>
-        </Dialog>
+        </Link>
+        <h1 className="text-2xl md:text-3xl font-bold flex items-center">
+          <FileText className="w-6 h-6 mr-2" /> Gerenciar Blocos de Conteúdo
+        </h1>
+      </div>
+      
+      <div className="flex justify-end mb-4">
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+              <DialogTrigger asChild>
+                  <Button onClick={handleNewBloco} className="w-full sm:w-auto">
+                      <Plus className="w-4 h-4 mr-2" />
+                      Novo Bloco
+                  </Button>
+              </DialogTrigger>
+              <DialogContent className="w-full sm:max-w-4xl max-h-[95vh] overflow-y-auto">
+                  <DialogHeader>
+                      <DialogTitle>{blocoSelecionado ? 'Editar Bloco' : 'Criar Novo Bloco'}</DialogTitle>
+                  </DialogHeader>
+                  <FormBlocoSocietario
+                      blocoInicial={blocoSelecionado}
+                      onSaveComplete={handleSaveComplete}
+                  />
+              </DialogContent>
+          </Dialog>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-xl">Blocos Cadastrados ({blocos.length})</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[200px]">Título</TableHead>
-                  <TableHead className="w-[150px]">Tipo</TableHead>
-                  <TableHead>Conteúdo (Prévia)</TableHead>
-                  <TableHead className="w-[150px] text-right">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {blocos.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={4} className="text-center py-4 text-muted-foreground">
-                      Nenhum bloco cadastrado.
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  blocos.map((bloco) => (
-                    <TableRow key={bloco.id}>
-                      <TableCell className="font-medium">{bloco.titulo}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{bloco.tipo_bloco}</TableCell>
-                      <TableCell className="text-sm truncate max-w-xs">{bloco.conteudo}</TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end space-x-2">
-                            <Button variant="ghost" size="icon" onClick={() => handleCopyContent(bloco.conteudo)} title="Copiar Conteúdo">
-                                <Copy className="w-4 h-4" />
-                            </Button>
-                            <Button variant="ghost" size="icon" onClick={() => handleEdit(bloco)}>
-                                <Edit className="w-4 h-4" />
-                            </Button>
-                            <Button variant="ghost" size="icon" onClick={() => handleDelete(bloco.id)}>
-                                <Trash2 className="w-4 h-4 text-red-500" />
-                            </Button>
+      <Tabs value={isAdmin ? activeTab : 'meus_blocos'} onValueChange={setActiveTab} className="w-full">
+        {isAdmin && (
+            <TabsList className="grid w-full grid-cols-2 mb-4">
+                <TabsTrigger value="meus_blocos">Meus Blocos ({blocosFiltrados.meusBlocos.length})</TabsTrigger>
+                <TabsTrigger value="blocos_clientes">Blocos dos Clientes ({blocosFiltrados.blocosClientes.length})</TabsTrigger>
+            </TabsList>
+        )}
+        
+        {isAdmin && activeTab === 'blocos_clientes' && (
+            <div className="p-4 bg-yellow-100 dark:bg-yellow-900/20 border border-yellow-500 rounded-md mt-4 mb-4">
+                <p className="text-sm text-yellow-700 dark:text-yellow-300 font-semibold flex items-center">
+                    <Building2 className="w-4 h-4 mr-2" /> Modo Supervisão: Blocos de clientes são apenas para visualização.
+                </p>
+            </div>
+        )}
+
+        <TabsContent value={isAdmin ? activeTab : 'meus_blocos'} className="mt-0">
+            <Card>
+                <CardHeader>
+                    <CardTitle className="text-xl">
+                        Blocos Cadastrados ({blocosParaExibir.length})
+                    </CardTitle>
+                </CardHeader>
+                <CardContent>
+                    {carregando ? (
+                        <div className="flex justify-center items-center h-32">
+                            <Loader2 className="h-6 w-6 animate-spin text-primary" />
                         </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
+                    ) : blocosParaExibir.length === 0 ? (
+                        <p className="text-center text-muted-foreground py-8">Nenhum bloco de conteúdo encontrado.</p>
+                    ) : (
+                        renderBlocosList(blocosParaExibir, isSupervisao)
+                    )}
+                </CardContent>
+            </Card>
+        </TabsContent>
+      </Tabs>
     </LayoutPrincipal>
   );
 };

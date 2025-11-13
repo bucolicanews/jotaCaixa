@@ -8,6 +8,7 @@ import { ContratoModelo } from '@/types/contratos';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 import { Button } from '@/components/ui/button';
 import { Link, useNavigate } from 'react-router-dom';
+import { useSessao } from '@/hooks/use-sessao'; // CORRIGIDO: Importação useSessao
 
 const NovoContrato: React.FC = () => {
   const { role, perfil, usuario, carregando: carregandoSessao } = useSessao();

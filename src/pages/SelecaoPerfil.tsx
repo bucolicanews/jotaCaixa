@@ -1,227 +1,152 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useSessao } from '@/hooks/use-sessao';
 import { supabase } from '@/integrations/supabase/client';
-import { showError, showSuccess } from '@/utils/toast';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { useSessao } from '@/hooks/use-sessao';
+import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Loader2, User, Building2, Check, X, Package } from 'lucide-react';
-import LayoutPrincipal from '@/components/LayoutPrincipal';
-import { UsuarioProfile, ClienteProfile } from '@/types/usuario';
-import { Plano } from '@/types/plano';
-import { PERMISSOES_DISPONIVEIS } from '@/config/permissoes';
-import { cn } from '@/lib/utils';
-import { addDays } from 'date-fns';
+import { Loader2, User, Building2 } from 'lucide-react';
+import { showError } from '@/utils/toast';
+
+interface ClienteSimples {
+    id: string;
+    nome: string;
+    aprovado: boolean;
+}
 
 const SelecaoPerfil: React.FC = () => {
-  const { usuario, role, perfil, carregando, refetch } = useSessao();
+  const { usuario, perfil, role, carregando, refetch } = useSessao();
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(false);
-  const [planos, setPlanos] = useState<Plano[]>([]);
-  const [carregandoPlanos, setCarregandoPlanos] = useState(true);
+  const [clientes, setClientes] = useState<ClienteSimples[]>([]);
+  const [carregandoClientes, setCarregandoClientes] = useState(true);
+  const [clienteSelecionado, setClienteSelecionado] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
-  
-  const permissoesMap = PERMISSOES_DISPONIVEIS.filter(p => 
-    p.key !== 'ponto_eletronico' && p.key !== 'visualizar_proprio_ponto'
-  ).map(p => ({
-      key: p.key,
-      label: p.label,
-  }));
-
-  const buscarPlanos = useCallback(async () => {
-    setCarregandoPlanos(true);
-    
-    // Busca apenas planos visíveis para vendas
-    const { data, error } = await supabase
-      .from('planos')
-      .select('*')
-      .eq('visivel_vendas', true) // FILTRO ADICIONADO
-      .order('preco_mensal', { ascending: true });
-
-    if (error) {
-      showError('Erro ao carregar planos: ' + error.message);
-      setPlanos([]);
-    } else {
-      setPlanos(data as Plano[]);
-    }
-    setCarregandoPlanos(false);
-  }, []);
-
-  useEffect(() => {
-    buscarPlanos();
-  }, [buscarPlanos]);
-
-  // --- Redirecionamento de Segurança ---
-  if (carregando || carregandoPlanos) {
-    return <LayoutPrincipal><div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div></LayoutPrincipal>;
-  }
-
-  const isUnassignedUser = role === 'Usuario' && !(perfil as UsuarioProfile)?.cliente_id;
+  const isUnassignedUser = role === 'Usuario' && !(perfil as UsuarioProfile)?.proprietario_id;
   const isClientApproved = role === 'Cliente' && (perfil as ClienteProfile)?.aprovado;
 
-  if (role === 'Admin' || isClientApproved) {
-    navigate('/painel', { replace: true });
-    return null;
-  }
-  
-  // Se o usuário não for Admin, nem Cliente aprovado, e não for um Usuário não vinculado, algo está errado.
-  if (!isUnassignedUser && role !== 'Cliente') {
-      if (!usuario) {
-          navigate('/login', { replace: true });
-          return null;
-      }
-  }
-  // -------------------------------------
+  // Se o usuário não for um Usuário não vinculado, redireciona imediatamente
+  useEffect(() => {
+    if (!carregando && usuario && !isUnassignedUser && !isClientApproved) {
+        navigate('/painel', { replace: true });
+    }
+  }, [carregando, usuario, isUnassignedUser, isClientApproved, navigate]);
 
-  const handleSelectProfile = async (plano: Plano) => {
-    if (!usuario || !usuario.email) {
-        showError('Email do usuário não encontrado.');
+  const fetchClientes = useCallback(async () => {
+    if (!usuario || !isUnassignedUser) return;
+    
+    setCarregandoClientes(true);
+    
+    // Busca todos os clientes aprovados no sistema
+    const { data, error } = await supabase
+        .from('tbl_clientes')
+        .select('id, nome, aprovado')
+        .eq('aprovado', true)
+        .order('nome');
+
+    if (error) {
+        showError('Erro ao carregar lista de empresas: ' + error.message);
+        setClientes([]);
+    } else {
+        setClientes(data as ClienteSimples[]);
+    }
+    setCarregandoClientes(false);
+  }, [usuario, isUnassignedUser]);
+
+  useEffect(() => {
+    if (!carregando && isUnassignedUser) {
+        fetchClientes();
+    }
+  }, [carregando, isUnassignedUser, fetchClientes]);
+
+  const handleVincular = async () => {
+    if (!clienteSelecionado || !usuario?.id) {
+        showError('Selecione uma empresa para vincular.');
         return;
     }
-    setLoading(true);
-
-    const permissoes = plano.permissoes;
-    const nome = perfil?.nome || usuario.email?.split('@')[0] || 'Novo Cliente';
     
-    // Define a data de fim de acesso para 30 dias (simulando um trial padrão)
-    const dataFimAcesso = addDays(new Date(), 30).toISOString();
-
+    setIsSubmitting(true);
+    
     try {
-        // 1. Atualizar metadados do Auth para forçar a role 'Cliente' e passar dados para o trigger
-        const { error: authUpdateError } = await supabase.auth.updateUser({
-            data: { 
-                role: 'Cliente', 
-                nome: nome, 
-                cliente_id: null, 
-                plano_id: plano.id, 
-                permissoes: JSON.stringify(plano.permissoes), 
-                aprovado: true, // Marca como aprovado no fluxo de vendas
-            }
-        });
+        // 1. Atualiza o perfil do usuário na tbl_usuarios
+        const { error } = await supabase
+            .from('tbl_usuarios')
+            .update({ proprietario_id: clienteSelecionado })
+            .eq('id', usuario.id);
+            
+        if (error) throw error;
         
-        if (authUpdateError) throw authUpdateError;
-        
-        // 2. Inserir/Atualizar na tbl_clientes diretamente (o trigger route_new_user fará a maior parte,
-        // mas fazemos o upsert aqui para garantir que os dados do plano sejam salvos, caso o trigger falhe ou para dados adicionais)
-        const dataToInsert = {
-            id: usuario.id,
-            nome: nome,
-            email: usuario.email,
-            aprovado: true, 
-            limite_usuarios: 1, 
-            permissoes: permissoes,
-            tipo_cliente: plano.tipo_cliente,
-            plano_id: plano.id,
-            data_fim_acesso: dataFimAcesso, 
-        };
-        
-        // Se for um Usuário não vinculado, precisamos deletá-lo da tbl_usuarios primeiro
-        if (isUnassignedUser) {
-            await supabase.from('tbl_usuarios').delete().eq('id', usuario.id);
-        }
-        
-        // Inserir/Atualizar na tbl_clientes
-        const { error: insertError } = await supabase
-            .from('tbl_clientes')
-            .upsert(dataToInsert);
-
-        if (insertError) throw insertError;
-
-        showSuccess(`Plano ${plano.nome} selecionado com sucesso!`);
-        await refetch(); // Força a atualização da sessão
+        showSuccess('Usuário vinculado com sucesso!');
+        await refetch(); // Recarrega a sessão para atualizar o perfil
         navigate('/painel', { replace: true });
-
+        
     } catch (error: any) {
-        console.error('Erro ao selecionar perfil:', error);
-        showError('Falha ao configurar o perfil: ' + error.message);
+        showError('Falha ao vincular usuário: ' + error.message);
     } finally {
-        setLoading(false);
+        setIsSubmitting(false);
     }
   };
 
-  if (planos.length === 0) {
-      return (
-        <LayoutPrincipal>
-            <Card className="mt-10"><CardContent className="text-center py-8 text-muted-foreground">Nenhum plano de assinatura disponível. Contate o administrador.</CardContent></Card>
-        </LayoutPrincipal>
-      );
+  if (carregando || carregandoClientes) {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+  
+  if (!isUnassignedUser) {
+      // Se o usuário já está vinculado ou é Cliente/Admin, ele não deve ver esta tela.
+      return null; 
   }
 
   return (
-    <LayoutPrincipal>
-      <div className="flex items-center justify-center min-h-[80vh] p-4">
-        <Card className="w-full max-w-7xl"> {/* Aumentando o max-w para 7xl */}
-          <CardHeader className="text-center">
-            <CardTitle className="text-3xl">Selecione seu Plano</CardTitle>
-            <CardDescription className="text-lg font-semibold text-green-500">
-                Teste Grátis por 30 dias!
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"> {/* Ajustando o grid */}
-              
-              {planos.map((plano) => (
-                  <Card 
-                      key={plano.id} 
-                      className={cn(
-                          "p-4 flex flex-col items-center text-center transition-all duration-300",
-                          plano.tipo_cliente === 'PJ' ? "border-primary shadow-lg" : "border-secondary"
-                      )}
-                  >
-                      {plano.tipo_cliente === 'PJ' ? (
-                          <Building2 className="w-8 h-8 text-primary mb-3" />
-                      ) : (
-                          <User className="w-8 h-8 text-primary mb-3" />
-                      )}
-                      
-                      <h3 className="text-xl font-semibold mb-1">{plano.nome} ({plano.tipo_cliente})</h3>
-                      <p className="text-sm text-muted-foreground mb-4 h-10 overflow-hidden">
-                        {plano.descricao || (plano.tipo_cliente === 'PJ' ? 'Gestão completa para empresas.' : 'Uso pessoal e microempreendedores.')}
-                      </p>
-                      
-                      <div className="text-3xl font-extrabold text-foreground mb-4">
-                          {formatCurrency(plano.preco_mensal)}
-                          <span className="text-base font-medium text-muted-foreground">/mês</span>
-                      </div>
-                      
-                      <div className="space-y-3 flex-1 text-left w-full">
-                          <h4 className="font-semibold flex items-center text-primary mb-2">
-                              <Package className="w-4 h-4 mr-2" /> Módulos Incluídos:
-                          </h4>
-                          <div className="space-y-1">
-                              {permissoesMap.map(p => {
-                                  const isIncluded = plano.permissoes[p.key] === true;
-                                  return (
-                                      <div key={p.key} className="flex items-center space-x-2">
-                                          {isIncluded ? (
-                                              <Check className="w-4 h-4 text-green-500 flex-shrink-0" />
-                                          ) : (
-                                              <X className="w-4 h-4 text-red-500 flex-shrink-0" />
-                                          )}
-                                          <span className={cn("text-sm", !isIncluded && "text-muted-foreground line-through")}>
-                                              {p.label}
-                                          </span>
-                                      </div>
-                                  );
-                              })}
-                          </div>
-                      </div>
-                      
-                      <Button 
-                          onClick={() => handleSelectProfile(plano)} 
-                          disabled={loading}
-                          className="w-full mt-6"
-                      >
-                          {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : `Iniciar Trial de 30 dias`}
-                      </Button>
-                  </Card>
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+      <Card className="max-w-md w-full space-y-8">
+        <CardHeader>
+          <CardTitle className="text-2xl font-bold text-center">Vincular Usuário à Empresa</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <p className="text-sm text-muted-foreground text-center">
+            Seu perfil de usuário precisa ser vinculado a uma empresa ativa para acessar o sistema.
+          </p>
+          
+          <div className="space-y-2">
+            <label htmlFor="empresa-select" className="text-sm font-medium flex items-center">
+                <Building2 className="w-4 h-4 mr-2" /> Selecione a Empresa
+            </label>
+            <select
+              id="empresa-select"
+              value={clienteSelecionado || ''}
+              onChange={(e) => setClienteSelecionado(e.target.value)}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              disabled={isSubmitting}
+            >
+              <option value="" disabled>-- Selecione uma empresa --</option>
+              {clientes.map(cliente => (
+                <option key={cliente.id} value={cliente.id}>{cliente.nome}</option>
               ))}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    </LayoutPrincipal>
+            </select>
+          </div>
+          
+          <Button 
+            onClick={handleVincular} 
+            disabled={!clienteSelecionado || isSubmitting}
+            className="w-full"
+          >
+            {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <User className="mr-2 h-4 w-4" />}
+            Vincular e Acessar
+          </Button>
+          
+          <div className="text-center text-sm text-muted-foreground pt-4 border-t">
+              <p>Sua empresa não está na lista?</p>
+              <Button variant="link" onClick={() => navigate('/cadastrar-empresa')} disabled={isSubmitting}>
+                  Cadastrar Nova Empresa
+              </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 };
 

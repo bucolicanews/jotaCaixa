@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -6,22 +6,22 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Textarea } from '@/components/ui/textarea';
-import { Loader2, Copy, Eye, X, Tag } from 'lucide-react';
+import { Loader2, FileText, Tag, Save, Eye } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { ContratoModelo, ContratoTag } from '@/types/contratos';
-import { TAGS_PADRAO } from '@/config/contrato-tags-padrao'; // Importando TAGS_PADRAO
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
-import ModeloPreviewDialog from '../ModeloPreviewDialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { useSessao } from '@/hooks/use-sessao';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
-// import { cn } from '@/lib/utils'; // Removido: TS6133
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Separator } from '@/components/ui/separator';
+import ContratoPreviewDialog from '../contratos/ContratoPreviewDialog';
+import { TAGS_PADRAO } from '@/config/contrato-tags-padrao';
+import { cn } from '@/lib/utils';
 
 const formSchema = z.object({
   titulo: z.string().min(1, 'O título é obrigatório.'),
-  conteudo_template: z.string().min(50, 'O conteúdo do template deve ser detalhado (mínimo 50 caracteres).'),
-  tipo_conteudo: z.enum(['html', 'texto'], { required_error: 'Selecione o tipo de conteúdo.' }),
+  conteudo_template: z.string().min(10, 'O conteúdo do template é muito curto.'),
+  tipo_conteudo: z.enum(['html', 'texto']),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -33,96 +33,50 @@ interface FormContratoModeloProps {
 
 const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, onSaveComplete }) => {
   const isEditing = !!modeloInicial;
-  const [previewOpen, setPreviewOpen] = useState(false);
-  const [tagsCustomizadas, setTagsCustomizadas] = useState<ContratoTag[]>([]);
-  const [carregandoTags, setCarregandoTags] = useState(true);
   const { role, perfil, usuario } = useSessao();
-  // Tipagem explícita para MutableRefObject
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null); 
+  const [tagsCustomizadas, setTagsCustomizadas] = useState<ContratoTag[]>([]);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [conteudoPreview, setConteudoPreview] = useState('');
   
-  const isCliente = role === 'Cliente';
-  const isAdmin = role === 'Admin';
-  
-  // Determina o ID a ser usado na coluna empresa_id
   const getOwnerId = () => {
-    if (isAdmin) return usuario?.id || null;
-    if (isCliente) return (perfil as ClienteProfile)?.id;
-    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id;
+    if (role === 'Admin') return usuario?.id || null;
+    if (role === 'Cliente') return (perfil as ClienteProfile)?.id;
+    if (role === 'Usuario') return (perfil as UsuarioProfile)?.proprietario_id;
     return null;
   };
   
   const ownerId = getOwnerId();
+  const isAdmin = role === 'Admin';
 
-  const buscarTagsAtivas = useCallback(async () => {
-    setCarregandoTags(true);
+  const fetchTags = useCallback(async () => {
+    if (!ownerId) return;
     
-    let query = supabase
-      .from('contrato_tags')
-      .select('*')
-      .order('nome_tag', { ascending: true });
-      
-    if (ownerId) {
-        // Cliente/Admin vê suas próprias tags
-        query = query.eq('empresa_id', ownerId);
-    } else {
-        // Se não houver ownerId (ex: Usuário não vinculado), mostra apenas padrão
-        setTagsCustomizadas([]);
-        setCarregandoTags(false);
-        return;
-    }
-
-    const { data, error } = await query;
-
+    const { data, error } = await supabase
+        .from('contrato_tags')
+        .select('*')
+        .eq('empresa_id', ownerId)
+        .order('nome_tag', { ascending: true });
+        
     if (error) {
-      showError('Erro ao carregar tags customizadas: ' + error.message);
-      setTagsCustomizadas([]);
+        console.error('Erro ao carregar tags customizadas:', error);
+        setTagsCustomizadas([]);
     } else {
-      // A lista de tags customizadas é separada das tags padrão
-      setTagsCustomizadas(data as ContratoTag[]);
+        setTagsCustomizadas(data as ContratoTag[]);
     }
-    setCarregandoTags(false);
   }, [ownerId]);
   
   useEffect(() => {
-      buscarTagsAtivas();
-  }, [buscarTagsAtivas]);
-  
-  // Combina TAGS_PADRAO (sistema + financeiras) com as tags customizadas do usuário
-  const allAvailableTags = useMemo(() => {
-      const customTagsMap = tagsCustomizadas.reduce((acc, tag) => {
-          acc[tag.nome_tag] = tag;
-          return acc;
-      }, {} as Record<string, ContratoTag>);
-      
-      // Adiciona todas as TAGS_PADRAO e sobrescreve com as customizadas se houver conflito
-      const combined = [...TAGS_PADRAO, ...tagsCustomizadas];
-      
-      // Remove duplicatas e ordena
-      const uniqueTags = Array.from(new Set(combined.map(t => t.nome_tag)))
-          .map(tagKey => {
-              const customTag = customTagsMap[tagKey];
-              const defaultTag = TAGS_PADRAO.find(t => t.nome_tag === tagKey);
-              return customTag || defaultTag;
-          })
-          .filter((t): t is ContratoTag => !!t)
-          .sort((a, b) => a.nome_tag.localeCompare(b.nome_tag));
-          
-      return uniqueTags;
-  }, [tagsCustomizadas]);
-
+      fetchTags();
+  }, [fetchTags]);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       titulo: modeloInicial?.titulo || '',
       conteudo_template: modeloInicial?.conteudo_template || '',
-      tipo_conteudo: 'html', 
+      tipo_conteudo: modeloInicial?.tipo_conteudo || 'html',
     },
   });
-  
-  const templateContent = form.watch('conteudo_template');
-  const tituloModelo = form.watch('titulo');
-  const tipoConteudo = form.watch('tipo_conteudo');
 
   const onSubmit = async (values: FormValues) => {
     if (!ownerId) {
@@ -133,18 +87,21 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
     const dataToSave = {
       titulo: values.titulo,
       conteudo_template: values.conteudo_template,
-      empresa_id: ownerId, // Usando o ID do Admin/Cliente
+      tipo_conteudo: values.tipo_conteudo,
+      empresa_id: ownerId, // Vincula ao Admin ou Cliente
     };
 
     let error = null;
 
     if (isEditing) {
+      // Atualizar
       const result = await supabase
         .from('contrato_modelos')
         .update(dataToSave)
         .eq('id', modeloInicial.id);
       error = result.error;
     } else {
+      // Inserir
       const result = await supabase
         .from('contrato_modelos')
         .insert(dataToSave);
@@ -159,218 +116,134 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
     }
   };
   
-  const handleCopyTag = (tag: string) => {
-      navigator.clipboard.writeText(tag);
-      showSuccess(`Tag ${tag} copiada para a área de transferência!`);
-  };
-  
   const handlePreview = () => {
-      if (templateContent.length < 50) {
-          showError('O template deve ter pelo menos 50 caracteres para pré-visualização.');
-          return;
-      }
+      const template = form.getValues('conteudo_template');
+      const tipo = form.getValues('tipo_conteudo');
+      
+      // Substituição básica para a prévia (apenas tags padrão)
+      let previewContent = template;
+      [...TAGS_PADRAO, ...tagsCustomizadas].forEach(tag => {
+          const regex = new RegExp(tag.nome_tag, 'g');
+          previewContent = previewContent.replace(regex, `[${tag.descricao}]`);
+      });
+      
+      setConteudoPreview(previewContent);
       setPreviewOpen(true);
   };
   
-  const handleCopyAllTags = () => {
-      // Corrigido: Tipagem explícita para 't'
-      const allTags = allAvailableTags.map((t: ContratoTag) => t.nome_tag).join(' ');
-      navigator.clipboard.writeText(allTags);
-      showSuccess('Todas as tags ativas copiadas!');
-  };
-  
-  const handleClearTemplate = () => {
-      if (window.confirm('Tem certeza que deseja limpar todo o conteúdo do template?')) {
-          form.setValue('conteudo_template', '');
-          showSuccess('Template limpo.');
-      }
-  };
-  
-  // --- Drag and Drop Handlers ---
-  
-  const handleDragStart = (e: React.DragEvent<HTMLDivElement>, tag: string) => {
-    e.dataTransfer.setData('text/plain', tag);
-  };
-  
-  const handleDrop = (e: React.DragEvent<HTMLTextAreaElement>) => {
-    e.preventDefault();
-    const tag = e.dataTransfer.getData('text/plain');
-    
-    if (tag && textareaRef.current) {
-      const textarea = textareaRef.current;
-      const start = textarea.selectionStart;
-      const end = textarea.selectionEnd;
-      const currentValue = form.getValues('conteudo_template');
-      
-      // Insere a tag na posição do cursor
-      const newValue = currentValue.substring(0, start) + tag + currentValue.substring(end);
-      
-      form.setValue('conteudo_template', newValue, { shouldDirty: true });
-      
-      // Move o cursor para o final da tag inserida
-      setTimeout(() => {
-        textarea.focus();
-        textarea.selectionStart = start + tag.length;
-        textarea.selectionEnd = start + tag.length;
-      }, 0);
-    }
-  };
-  
-  const handleDragOver = (e: React.DragEvent<HTMLTextAreaElement>) => {
-    e.preventDefault(); // Necessário para permitir o drop
-  };
-  // -----------------------------
+  const allTags = useMemo(() => {
+      return [...TAGS_PADRAO, ...tagsCustomizadas].sort((a, b) => a.nome_tag.localeCompare(b.nome_tag));
+  }, [tagsCustomizadas]);
 
   return (
     <>
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-          <FormField
-            control={form.control}
-            name="titulo"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Título do Modelo</FormLabel>
-                <FormControl>
-                  <Input placeholder="Ex: Contrato de Prestação de Serviços Padrão" {...field} disabled={isEditing} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          
-          {/* 1. Layout Principal: Empilha em mobile, 3 colunas em lg */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-              {/* Coluna 1 & 2: Template e Tipo */}
-              <div className="lg:col-span-2 space-y-4">
-                  <FormField
-                      control={form.control}
-                      name="tipo_conteudo"
-                      render={({ field }) => (
-                          <FormItem>
-                              <FormLabel>Tipo de Conteúdo</FormLabel>
-                              <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                  <FormControl>
-                                      <SelectTrigger>
-                                          <SelectValue placeholder="Selecione o tipo" />
-                                      </SelectTrigger>
-                                  </FormControl>
-                                  <SelectContent>
-                                      <SelectItem value="html">HTML (Permite formatação avançada)</SelectItem>
-                                      <SelectItem value="texto">Texto Simples (Preserva quebras de linha)</SelectItem>
-                                  </SelectContent>
-                              </Select>
-                              <FormMessage />
-                          </FormItem>
-                      )}
-                  />
-                  <FormField
-                      control={form.control}
-                      name="conteudo_template"
-                      render={({ field: { ref: rhfRef, ...restField } }) => { // TS2783 Fix: Destructuring ref
-                          
-                          // Combina o ref do RHF com o ref customizado para manipulação do cursor
-                          const mergedRef = useCallback((element: HTMLTextAreaElement | null) => {
-                              rhfRef(element);
-                              // TS2540 Fix: A atribuição direta é permitida em MutableRefObject
-                              textareaRef.current = element; 
-                          }, [rhfRef]);
-                          
-                          return (
-                              <FormItem>
-                                  <FormLabel>Contéudo do Template (Use tags)</FormLabel>
-                                  <FormControl>
-                                      <Textarea 
-                                          ref={mergedRef} // Usando o ref combinado
-                                          placeholder="[CONTRATO] Pelo presente instrumento, o CONTRATANTE {{CLIENTE_NOME}}..." 
-                                          rows={25} // Aumentando a altura
-                                          {...restField} // Passando o restante das props do field
-                                          onDrop={handleDrop} // Adicionando drop handler
-                                          onDragOver={handleDragOver} // Adicionando drag over handler
-                                      />
-                                  </FormControl>
-                                  <FormMessage />
-                              </FormItem>
-                          );
-                      }}
-                  />
-              </div>
-              
-              {/* Coluna 3: Tags Padrão */}
-              <Card className="lg:col-span-1 max-h-[750px] overflow-y-auto">
-                  <CardHeader className="p-3 border-b">
-                      <CardTitle className="text-sm">Tags Ativas (Arraste para o Template)</CardTitle>
-                      {/* 2. Botões de Tags: Empilha em mobile */}
-                      <div className="flex flex-col sm:flex-row gap-2 mt-2"> 
-                          <Button type="button" variant="outline" size="sm" onClick={handleCopyAllTags} disabled={allAvailableTags.length === 0} className="w-full">
-                              <Copy className="w-3 h-3 mr-1" /> Copiar Todas
-                          </Button>
-                          <Button type="button" variant="destructive" size="sm" onClick={handleClearTemplate} className="w-full">
-                              <X className="w-3 h-3 mr-1" /> Limpar Template
-                          </Button>
-                      </div>
-                  </CardHeader>
-                  <CardContent className="p-3 space-y-2">
-                      {carregandoTags ? (
-                          <div className="flex justify-center items-center h-20"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>
-                      ) : (
-                          // Corrigido: Tipagem explícita para 'tag'
-                          allAvailableTags.map((tag: ContratoTag) => (
-                              <div 
-                                  key={tag.id} 
-                                  className="flex flex-col space-y-1 border-b pb-2 last:border-b-0 cursor-grab active:cursor-grabbing"
-                                  draggable
-                                  onDragStart={(e) => handleDragStart(e, tag.nome_tag)}
-                              >
-                                  <div className="flex justify-between items-center">
-                                      <span className="font-mono text-xs font-semibold text-primary">{tag.nome_tag}</span>
-                                      <Button 
-                                          type="button" 
-                                          variant="ghost" 
-                                          size="icon" 
-                                          className="h-6 w-6"
-                                          onClick={() => handleCopyTag(tag.nome_tag)}
-                                      >
-                                          <Copy className="w-3 h-3" />
-                                      </Button>
-                                  </div>
-                                  <p className="text-xs text-muted-foreground flex items-center">
-                                      <Tag className="w-3 h-3 mr-1 text-muted-foreground" />
-                                      {tag.descricao}
-                                  </p>
-                              </div>
-                          ))
-                      )}
-                  </CardContent>
-              </Card>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="md:col-span-2 space-y-4">
+              <FormField
+                control={form.control}
+                name="titulo"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Título do Modelo</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Ex: Contrato de Prestação de Serviços" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="tipo_conteudo"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Tipo de Conteúdo</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione o tipo de conteúdo" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="html">HTML (Permite formatação rica)</SelectItem>
+                        <SelectItem value="texto">Texto Simples</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="conteudo_template"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="flex justify-between items-center">
+                        Conteúdo do Template
+                        <Button type="button" variant="outline" size="sm" onClick={handlePreview} disabled={!field.value}>
+                            <Eye className="w-4 h-4 mr-2" /> Pré-visualizar
+                        </Button>
+                    </FormLabel>
+                    <FormControl>
+                      <Textarea 
+                        placeholder="Insira o conteúdo do contrato aqui, usando as tags dinâmicas." 
+                        {...field} 
+                        rows={15}
+                        className={cn("font-mono text-sm", form.watch('tipo_conteudo') === 'html' ? 'bg-yellow-50/50 dark:bg-yellow-900/10' : '')}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+            
+            {/* Coluna de Tags */}
+            <Card className="md:col-span-1 max-h-[600px] overflow-y-auto">
+                <CardHeader className="pb-2">
+                    <CardTitle className="text-lg flex items-center"><Tag className="w-4 h-4 mr-2" /> Tags Disponíveis</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <p className="text-sm text-muted-foreground mb-3">Clique para copiar a tag.</p>
+                    <div className="space-y-2">
+                        {allTags.map(tag => (
+                            <div 
+                                key={tag.nome_tag} 
+                                className="p-2 border rounded-md cursor-pointer hover:bg-accent/50 transition-colors"
+                                onClick={() => {
+                                    navigator.clipboard.writeText(tag.nome_tag);
+                                    showSuccess(`Tag ${tag.nome_tag} copiada!`);
+                                }}
+                            >
+                                <p className="font-mono text-xs font-semibold text-primary">{tag.nome_tag}</p>
+                                <p className="text-xs text-muted-foreground">{tag.descricao}</p>
+                            </div>
+                        ))}
+                    </div>
+                    <Separator className="my-4" />
+                    <p className="text-xs text-muted-foreground">
+                        Gerencie tags customizadas em <a href="/contratos/tags" className="underline">Cadastrar Tags</a>.
+                    </p>
+                </CardContent>
+            </Card>
           </div>
-          
-          {/* 3. Botões de Ação (Rodapé): Empilha em mobile */}
-          <div className="flex flex-col sm:flex-row gap-4">
-            <Button 
-                type="button" 
-                variant="outline" 
-                onClick={handlePreview} 
-                disabled={form.formState.isSubmitting || templateContent.length < 50}
-                className="flex-1 h-12"
-            >
-                <Eye className="mr-2 h-4 w-4" />
-                Pré-visualizar Template
-            </Button>
-            <Button type="submit" className="flex-1 h-12" disabled={form.formState.isSubmitting}>
-              {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {isEditing ? 'Salvar Alterações' : 'Criar Modelo'}
-            </Button>
-          </div>
+
+          <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
+            {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            <Save className="mr-2 h-4 w-4" />
+            Salvar Modelo
+          </Button>
         </form>
       </Form>
       
-      <ModeloPreviewDialog
+      <ContratoPreviewDialog
         open={previewOpen}
         onOpenChange={setPreviewOpen}
-        conteudoTemplate={templateContent}
-        titulo={tituloModelo}
-        isHtml={tipoConteudo === 'html'}
+        conteudoHtml={conteudoPreview}
+        titulo={form.getValues('titulo')}
+        isHtml={form.getValues('tipo_conteudo') === 'html'}
       />
     </>
   );

@@ -10,7 +10,7 @@ import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import FormContratoModelo from '@/components/formularios/FormContratoModelo';
-import { ImportarModeloContrato } from '@/components/contratos/ImportarModeloContrato';
+import ImportarModeloContrato from '@/components/contratos/ImportarModeloContrato'; // CORRIGIDO: Importação padrão
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 const GerenciarModelos: React.FC = () => {
@@ -202,7 +202,7 @@ const GerenciarModelos: React.FC = () => {
           </div>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+      <Tabs value={isAdmin ? activeTab : 'meus_modelos'} onValueChange={setActiveTab} className="w-full">
         {isAdmin && (
             <TabsList className="grid w-full grid-cols-2 mb-4">
                 <TabsTrigger value="meus_modelos">Meus Modelos ({modelosFiltrados.meusModelos.length})</TabsTrigger>
