@@ -239,14 +239,13 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
         let userId = usuarioInicial?.id;
         let isNewAuthUser = false;
         
-        // 1. Handle New User Creation (Auth)
+        // 1. Handle New User Creation (Auth) - USANDO EDGE FUNCTION
         if (!isEditing) {
             if (!values.senha) {
                 showError('A senha é obrigatória para novos usuários.');
                 return;
             }
             
-            // Determina a role e os metadados
             const targetRole = isNewClient ? 'Cliente' : 'Usuario';
             const metadata: Record<string, any> = { 
                 role: targetRole, 
@@ -256,28 +255,22 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
             if (targetRole === 'Usuario') {
                 metadata.proprietario_id = proprietarioId; // Vincula ao Admin ou Cliente
             } else if (targetRole === 'Cliente') {
-                // Novo Cliente do Sistema (Pendente de Aprovação)
                 metadata.aprovado = false;
             }
             
-            const { data: signUpData, error: authError } = await supabase.auth.signUp({
-                email: values.email,
-                password: values.senha,
-                options: {
-                    emailRedirectTo: `${BASE_URL}/atualizar-senha`,
-                    data: metadata,
-                }
+            // CHAMA A EDGE FUNCTION COM SERVICE ROLE
+            const { data, error: invokeError } = await supabase.functions.invoke('create-user-admin', {
+                body: {
+                    email: values.email,
+                    password: values.senha,
+                    user_metadata: metadata,
+                },
             });
-
-            if (authError) {
-                if (authError.message.includes('already registered')) {
-                    showError('Este email já está cadastrado.');
-                    return;
-                }
-                throw authError;
-            }
             
-            userId = signUpData.user?.id;
+            if (invokeError) throw invokeError;
+            if (data?.error) throw new Error(data.error);
+            
+            userId = data.userId;
             isNewAuthUser = true;
         }
         
@@ -291,19 +284,18 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                 nome: values.nome,
                 email: values.email,
                 admin_id: criadorRole === 'Admin' ? proprietarioId : (criadorPerfil as ClienteProfile)?.admin_id,
-                aprovado: false, // Sempre começa como pendente
+                aprovado: false,
                 limite_usuarios: 5,
-                permissoes: {}, // Permissões vazias até ser aprovado
+                permissoes: {},
                 
-                // Campos de Cliente
                 razao_social: values.razao_social || null,
                 nome_fantasia: values.nome_fantasia || null,
                 documento: values.documento || null,
                 cnpj: values.cnpj || null,
             };
             
-            // Se for novo, o trigger já inseriu o registro base, apenas atualizamos os campos
-            const { error } = await supabase.from('tbl_clientes').update(dataToUpdate).eq('id', userId);
+            // UPSERT MANUAL NA TBL_CLIENTES (para garantir que o perfil seja criado mesmo se o trigger falhar)
+            const { error } = await supabase.from('tbl_clientes').upsert({ ...dataToUpdate, id: userId }, { onConflict: 'id' });
             if (error) throw error;
             
         } else {
@@ -352,25 +344,26 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                 cnh_url: values.cnh_url || null,
                 cartao_pis_url: values.cartao_pis_url || null,
                 ja_admitido_anteriormente: values.ja_admitido_anteriormente,
+                
+                // Vinculação (apenas se for novo)
+                ...(isNewAuthUser && { proprietario_id: proprietarioId }),
             };
             
-            if (isEditing) {
-                if (values.senha) {
-                    const { error: authError } = await supabase.auth.updateUser({ password: values.senha });
-                    if (authError) throw authError;
-                }
-                const { error } = await supabase.from('tbl_usuarios').update(dataToUpdate).eq('id', userId);
-                if (error) throw error;
-            } else {
-                // Se for novo, o trigger já inseriu o registro base, apenas atualizamos os campos de RH
-                const { error } = await supabase.from('tbl_usuarios').update(dataToUpdate).eq('id', userId);
-                if (error) throw error;
+            // UPSERT MANUAL NA TBL_USUARIOS (para garantir que o perfil seja criado mesmo se o trigger falhar)
+            const { error } = await supabase.from('tbl_usuarios').upsert({ ...dataToUpdate, id: userId, email: values.email }, { onConflict: 'id' });
+            if (error) throw error;
+            
+            // Se estiver editando, atualiza a senha separadamente
+            if (isEditing && values.senha) {
+                const { error: authError } = await supabase.auth.updateUser({ password: values.senha });
+                if (authError) throw authError;
             }
         }
 
         showSuccess(`${isNewClient ? 'Cliente' : 'Usuário'} ${isEditing ? 'atualizado' : 'criado'} com sucesso!`);
         
         if (isNewAuthUser) {
+            // Envia o link de redefinição de senha (convite)
             const { error: resetError } = await supabase.auth.resetPasswordForEmail(values.email, {
                 redirectTo: `${BASE_URL}/atualizar-senha`,
             });
