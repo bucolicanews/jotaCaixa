@@ -111,9 +111,58 @@ export interface UsuarioProfile {
 }
 
 // NOVO TIPO: Usuário gerenciado pelo Admin
-export interface AdminUsuarioProfile extends UsuarioProfile {
-    admin_id: string;
+export interface AdminUsuarioProfile {
+    id: string;
+    nome: string;
+    email: string;
+    admin_id: string; // ID do Admin
     cliente_id: null; // Deve ser nulo para diferenciar
+    avatar_url?: string | null;
+    permissoes: Record<string, boolean>;
+    
+    // Campos de Folga
+    dias_folga_fixos?: string[] | null;
+    folga_domingo_obrigatoria?: boolean | null;
+    
+    // Campos de Salário/Jornada
+    salario?: number | null;
+    horas_semanais?: number | null;
+    horas_mensais?: number | null;
+    
+    // Campos cadastrais
+    cpf?: string | null;
+    rg?: string | null;
+    nome_mae?: string | null;
+    nome_pai?: string | null;
+    telefone?: string | null;
+    cep?: string | null;
+    endereco?: string | null;
+    numero?: string | null;
+    complemento?: string | null;
+    bairro?: string | null;
+    cidade?: string | null;
+    estado?: string | null;
+    
+    // Campos de admissão
+    data_inicio_contrato?: string | null;
+    data_fim_contrato?: string | null;
+    data_inicio_aviso?: string | null;
+    tipo_aviso?: string | null;
+    rg_url?: string | null;
+    cpf_url?: string | null;
+    titulo_eleitor_url?: string | null;
+    reservista_url?: string | null;
+    ctps_url?: string | null;
+    certidao_nascimento_url?: string | null;
+    certidao_casamento_url?: string | null;
+    comprovante_residencia_url?: string | null;
+    comprovante_escolaridade_url?: string | null;
+    exame_admissional_url?: string | null;
+    foto_3x4_url?: string | null;
+    cnh_url?: string | null;
+    cartao_pis_url?: string | null;
+    ja_admitido_anteriormente?: boolean | null;
+    certidoes_filhos_urls?: any;
 }
 
 export type AnyProfile = AdminProfile | ClienteProfile | UsuarioProfile | AdminUsuarioProfile | null;

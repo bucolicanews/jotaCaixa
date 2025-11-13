@@ -28,6 +28,8 @@ interface FuncionarioComDados extends UsuarioProfile {
     horas_mensais: number;
     dias_folga_fixos: string[] | null;
     folga_domingo_obrigatoria: boolean | null;
+    // Adicionado para AdminUsuarioProfile
+    admin_id?: string;
 }
 
 interface ClienteSimples {
@@ -70,11 +72,17 @@ const FolhaPonto: React.FC = () => {
   const [diaFolgaTrabalhada, setDiaFolgaTrabalhada] = useState<Date | null>(null);
   const [registrosFolgaTrabalhada, setRegistrosFolgaTrabalhada] = useState<RegistroPonto[]>([]);
 
-
   const isAdmin = role === 'Admin';
   const isCliente = role === 'Cliente' && (perfil as ClienteProfile)?.aprovado;
   
   const empresaIdParaFiltro = isAdmin ? clienteSelecionadoId : (isCliente ? perfil?.id : null);
+  
+  // Variável movida para o topo para resolver TS2448
+  const funcionarioDetalhe = funcionarios.find(f => f.id === funcionarioSelecionadoId);
+  
+  // Determina se o funcionário selecionado é um AdminUsuarioProfile
+  const isFuncionarioAdmin = funcionarioDetalhe?.admin_id === empresaIdParaFiltro && isAdmin;
+  // const tabelaRegistros = isFuncionarioAdmin ? 'admin_registros_ponto' : 'registros_ponto'; // Removido
 
   const fetchClientes = useCallback(async () => {
     if (!isAdmin || !usuario?.id) return;
@@ -129,7 +137,7 @@ const FolhaPonto: React.FC = () => {
         // Busca usuários do Admin
         const { data, error } = await supabase
             .from('admin_usuarios')
-            .select('id, nome, email, salario, horas_mensais, dias_folga_fixos, folga_domingo_obrigatoria')
+            .select('id, nome, email, salario, horas_mensais, dias_folga_fixos, folga_domingo_obrigatoria, admin_id')
             .eq('admin_id', empresaId)
             .order('nome');
         usersData = data;
@@ -138,7 +146,7 @@ const FolhaPonto: React.FC = () => {
         // Busca usuários do Cliente (tbl_usuarios)
         const { data, error } = await supabase
             .from('tbl_usuarios')
-            .select('id, nome, email, salario, horas_mensais, dias_folga_fixos, folga_domingo_obrigatoria')
+            .select('id, nome, email, salario, horas_mensais, dias_folga_fixos, folga_domingo_obrigatoria, cliente_id')
             .eq('cliente_id', empresaId) // CORREÇÃO AQUI: Usando cliente_id
             .order('nome');
         usersData = data;
@@ -179,13 +187,15 @@ const FolhaPonto: React.FC = () => {
     }
   }, []);
 
-  const fetchRegistros = useCallback(async (funcionarioId: string, data: Date) => {
+  const fetchRegistros = useCallback(async (funcionarioId: string, data: Date, isFuncionarioAdmin: boolean) => {
     setCarregandoDados(true);
     const inicioMes = format(startOfMonth(data), 'yyyy-MM-dd');
     const fimMes = format(endOfMonth(data), 'yyyy-MM-dd');
+    
+    const tabelaRegistros = isFuncionarioAdmin ? 'admin_registros_ponto' : 'registros_ponto';
 
     const { data: registros, error } = await supabase
-      .from('registros_ponto')
+      .from(tabelaRegistros) // ROTEAMENTO AQUI
       .select('id, funcionario_id, empresa_id, horario_registro, tipo, maps_url, selfie_url, atestado_url, observacao')
       .eq('funcionario_id', funcionarioId)
       .gte('horario_registro', inicioMes)
@@ -220,23 +230,24 @@ const FolhaPonto: React.FC = () => {
 
   // Efeito 3: Carregar Registros e Férias (depende do Funcionário e da Data)
   useEffect(() => {
-    if (funcionarioSelecionadoId) {
-      fetchRegistros(funcionarioSelecionadoId, dataSelecionada);
+    if (funcionarioSelecionadoId && funcionarioDetalhe) {
+      const isFuncAdmin = funcionarioDetalhe.admin_id === empresaIdParaFiltro && isAdmin;
+      fetchRegistros(funcionarioSelecionadoId, dataSelecionada, isFuncAdmin);
       fetchFerias(funcionarioSelecionadoId, dataSelecionada);
     } else {
         setRegistrosDoFuncionario([]);
         setFeriasDoFuncionario([]);
     }
-  }, [funcionarioSelecionadoId, dataSelecionada, fetchRegistros, fetchFerias]);
+  }, [funcionarioSelecionadoId, dataSelecionada, fetchRegistros, fetchFerias, funcionarioDetalhe, empresaIdParaFiltro, isAdmin]);
   
   // --- Lógica de Gerenciamento ---
   
-  const funcionarioDetalhe = funcionarios.find(f => f.id === funcionarioSelecionadoId);
   
   const handleFaltaRegistrada = async () => {
     // Re-busca os registros após registrar/editar/deletar a falta/ajuste/compensação
-    if (funcionarioSelecionadoId) {
-        await fetchRegistros(funcionarioSelecionadoId, dataSelecionada);
+    if (funcionarioSelecionadoId && funcionarioDetalhe) {
+        const isFuncAdmin = funcionarioDetalhe.admin_id === empresaIdParaFiltro && isAdmin;
+        await fetchRegistros(funcionarioSelecionadoId, dataSelecionada, isFuncAdmin);
         await fetchFerias(funcionarioSelecionadoId, dataSelecionada);
     }
     setRegistroParaEdicao(null);
@@ -311,6 +322,7 @@ const FolhaPonto: React.FC = () => {
         let hasPontoRecords = false;
         let decisionRecord: 'Compensacao' | 'Extra100' | null = null;
         let isCompensacaoAbono = false;
+        let isFaltaJustificada = false;
         
         const diaDaSemana = DAY_MAP[getDay(data)];
         let isFolgaFixa = funcionarioDetalhe.dias_folga_fixos?.includes(diaDaSemana) || false;
@@ -323,11 +335,24 @@ const FolhaPonto: React.FC = () => {
         });
 
         for (const registro of registrosDoDia) {
-            if (registro.tipo === 'Falta') { isFalta = true; break; }
+            if (registro.tipo === 'Falta') {
+                isFalta = true;
+                if (registro.atestado_url) {
+                    isFaltaJustificada = true;
+                    const horasAbonadas = parseInt(registro.observacao?.match(/(\d+)h/)?.[1] || '8'); 
+                    minutosAbonados = horasAbonadas * 60;
+                    minutosDia = minutosAbonados;
+                } else {
+                    minutosDia = 0;
+                }
+                break; 
+            }
             if (registro.tipo === 'Abono') {
                 isAbono = true;
                 if (registro.observacao?.includes('Compensação de folga trabalhada')) {
                     isCompensacaoAbono = true;
+                    minutosAbonados = 0;
+                    minutosDia = 0;
                 } else {
                     const horasAbonadas = parseInt(registro.observacao?.match(/(\d+)h/)?.[1] || '8'); 
                     minutosAbonados = horasAbonadas * 60;
@@ -371,18 +396,18 @@ const FolhaPonto: React.FC = () => {
             }
         }
         
-        if (!isFolgaFixa && !isFalta && !isFerias && !isCompensacaoAbono) {
+        if (!isFolgaFixa && !isFerias && !isCompensacaoAbono) {
             totalMinutosTrabalhados += minutosParaAcumular;
         } else if (isAbono && !isCompensacaoAbono) {
             totalMinutosTrabalhados += minutosParaAcumular;
         }
         
-        if (isFalta) minutosDia = 0;
+        if (isFalta && !isFaltaJustificada) minutosDia = 0;
 
         diasProcessados[diaString] = {
             minutos: minutosDia,
             registros: registrosDoDia,
-            isFalta, isAbono, isFolgaFixa, isFerias, hasPontoRecords, decisionRecord, needsManagement, minutosAbonados, minutosTrabalhadosFolga, isCompensacaoAbono,
+            isFalta, isAbono, isFolgaFixa, isFerias, hasPontoRecords, decisionRecord, needsManagement, minutosAbonados, minutosTrabalhadosFolga, isCompensacaoAbono, isFaltaJustificada,
         };
     }
     
@@ -405,7 +430,7 @@ const FolhaPonto: React.FC = () => {
             }}
             mes={dataSelecionada}
             diasProcessados={diasProcessados}
-            totalMinutosTrabalhados={totalMinutosTrabalhados} // Passa o total acumulado
+            totalMinutosTrabalhados={totalMinutosTrabalhados}
             minutosDiferenca={minutosDiferenca}
         />
     );

@@ -32,14 +32,20 @@ const RegistroPonto: React.FC = () => {
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [pendingRegistroType, setPendingRegistroType] = useState<RegistroTipo | null>(null);
 
-  // CORREÇÃO: Determina o ID da empresa/proprietário
+  // Determina o ID da empresa/proprietário e a tabela de destino
   const isUsuario = role === 'Usuario' && perfil && ('cliente_id' in perfil || 'admin_id' in perfil);
+  
+  const isFuncionarioAdmin = isUsuario && (perfil as AdminUsuarioProfile)?.admin_id;
   
   const empresaId = isUsuario 
     ? (perfil as UsuarioProfile)?.cliente_id || (perfil as AdminUsuarioProfile)?.admin_id 
     : null;
     
   const funcionarioId = usuario?.id;
+  
+  // Determina a tabela de destino
+  const tabelaRegistros = isFuncionarioAdmin ? 'admin_registros_ponto' : 'registros_ponto';
+  const ownerKey = isFuncionarioAdmin ? 'admin_id' : 'empresa_id';
   
   // Hook para status do ponto
   const { ultimoRegistro, proximaAcao, alerta4Horas, carregando: carregandoStatus, refetch: refetchStatus } = usePontoStatus(funcionarioId);
@@ -129,18 +135,20 @@ const RegistroPonto: React.FC = () => {
       // Constrói a URL do Google Maps
       const mapsUrl = `https://www.google.com/maps?q=${geo.latitude},${geo.longitude}`;
 
-      const { error } = await supabase
-        .from('registros_ponto')
-        .insert({
+      const payload = {
           funcionario_id: funcionarioId,
-          empresa_id: empresaId, // Usando o ID do Cliente ou Admin
+          [ownerKey]: empresaId, // empresa_id ou admin_id
           horario_registro: new Date().toISOString(),
           selfie_url: selfieUrl,
           tipo: tipo,
           latitude: geo.latitude,
           longitude: geo.longitude,
-          maps_url: mapsUrl, // Salva a URL no banco de dados
-        });
+          maps_url: mapsUrl,
+      };
+
+      const { error } = await supabase
+        .from(tabelaRegistros) // ROTEAMENTO AQUI
+        .insert(payload);
 
       if (error) {
         throw new Error('Erro ao registrar ponto: ' + error.message);

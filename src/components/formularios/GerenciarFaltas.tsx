@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils';
 import { RegistroPonto } from '@/types/ponto';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Textarea } from '../ui/textarea';
+import { useSessao } from '@/hooks/use-sessao';
 
 type Acao = 'Falta' | 'Abono' | 'Nenhum';
 type AbonoHoras = '8h' | '6h' | '4h' | '2h';
@@ -28,6 +29,7 @@ interface GerenciarFaltasProps {
 const ATESTADO_BUCKET = 'documentos-admissao'; 
 
 const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, funcionario, dataFalta, registroInicial, onFaltaRegistrada }) => {
+  const { role } = useSessao();
   const [loading, setLoading] = useState(false);
   const [acao, setAcao] = useState<Acao>(registroInicial ? (registroInicial.tipo === 'Falta' ? 'Falta' : 'Abono') : 'Falta');
   const [horasSelecionadas, setHorasSelecionadas] = useState<AbonoHoras>('8h');
@@ -40,8 +42,9 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
   const isFalta = acao === 'Falta';
   const isAbono = acao === 'Abono';
   
-  // Determina se o registro inicial era uma falta justificada (para manter o URL)
-  // const isInitialJustified = !!registroInicial && registroInicial.tipo === 'Falta' && !!registroInicial.atestado_url; // REMOVIDO
+  const isFuncionarioAdmin = role === 'Admin' && funcionario.empresa_id === funcionario.id;
+  const tabelaRegistros = isFuncionarioAdmin ? 'admin_registros_ponto' : 'registros_ponto';
+  const ownerKey = isFuncionarioAdmin ? 'admin_id' : 'empresa_id';
 
   useEffect(() => {
     if (open) {
@@ -82,21 +85,28 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
 
   const uploadAtestado = async (file: File): Promise<string> => {
     setLoading(true);
+    
+    // CORREÇÃO: O bucket de atestados é o 'documentos-admissao'
+    const bucket = ATESTADO_BUCKET; 
+    
     const fileExt = file.name.split('.').pop();
-    const filePath = `faltas/${funcionario.id}/${format(dataFalta!, 'yyyyMMdd')}-${Date.now()}.${fileExt}`;
+    const fileName = `faltas/${funcionario.id}/${format(dataFalta!, 'yyyyMMdd')}-${Date.now()}.${fileExt}`;
     
     try {
       const { data, error: uploadError } = await supabase.storage
-        .from(ATESTADO_BUCKET)
-        .upload(filePath, file, {
+        .from(bucket)
+        .upload(fileName, file, {
           cacheControl: '3600',
           upsert: false,
         });
 
-      if (uploadError) throw new Error(uploadError.message);
+      if (uploadError) {
+        throw new Error(uploadError.message);
+      }
       
+      // Obtém a URL pública
       const { data: publicUrlData } = supabase.storage
-        .from(ATESTADO_BUCKET)
+        .from(bucket)
         .getPublicUrl(data.path);
         
       showSuccess('Atestado enviado com sucesso!');
@@ -142,7 +152,7 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
       // 2. Deletar o registro inicial (se for edição)
       if (registroInicial) {
           const { error: deleteError } = await supabase
-              .from('registros_ponto')
+              .from(tabelaRegistros) // ROTEAMENTO AQUI
               .delete()
               .eq('id', registroInicial.id);
           if (deleteError) throw deleteError;
@@ -172,7 +182,7 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
 
       const dataToInsert = {
         funcionario_id: funcionario.id,
-        empresa_id: funcionario.empresa_id,
+        [ownerKey]: funcionario.empresa_id, // empresa_id ou admin_id
         horario_registro: dataNoonUTC.toISOString(),
         tipo: tipoRegistro,
         selfie_url: 'N/A',
@@ -182,7 +192,7 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
       };
 
       const { error: insertError } = await supabase
-        .from('registros_ponto')
+        .from(tabelaRegistros) // ROTEAMENTO AQUI
         .insert(dataToInsert);
             
       if (insertError) throw insertError;

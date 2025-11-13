@@ -10,6 +10,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { ptBR } from 'date-fns/locale';
+import { useSessao } from '@/hooks/use-sessao';
 
 interface GerenciarFolgaTrabalhadaProps {
   open: boolean;
@@ -46,11 +47,16 @@ const formatarHoras = (minutos: number): string => {
 };
 
 const GerenciarFolgaTrabalhada: React.FC<GerenciarFolgaTrabalhadaProps> = ({ open, onOpenChange, funcionario, dia, registrosDoDia, onSaveComplete }) => {
+  const { role } = useSessao();
   const [loading, setLoading] = useState(false);
   const [acaoSelecionada, setAcaoSelecionada] = useState<'Compensacao' | 'Extra100' | null>(null);
   const [dataCompensacao, setDataCompensacao] = useState<Date | undefined>(undefined);
   
   const diaFormatado = format(dia, 'dd/MM/yyyy');
+  
+  const isFuncionarioAdmin = role === 'Admin' && funcionario.empresa_id === funcionario.id;
+  const tabelaRegistros = isFuncionarioAdmin ? 'admin_registros_ponto' : 'registros_ponto';
+  const ownerKey = isFuncionarioAdmin ? 'admin_id' : 'empresa_id';
 
   const minutosTrabalhados = useMemo(() => calculateMinutesWorked(registrosDoDia), [registrosDoDia]);
   const horasTrabalhadas = formatarHoras(minutosTrabalhados);
@@ -76,7 +82,7 @@ const GerenciarFolgaTrabalhada: React.FC<GerenciarFolgaTrabalhadaProps> = ({ ope
       const decisionRecords = registrosDoDia.filter(r => r.tipo === 'Compensacao' || r.tipo === 'Extra100');
       if (decisionRecords.length > 0) {
         const { error: deleteError } = await supabase
-          .from('registros_ponto')
+          .from(tabelaRegistros) // ROTEAMENTO AQUI
           .delete()
           .in('id', decisionRecords.map(r => r.id));
         if (deleteError) throw deleteError;
@@ -87,7 +93,7 @@ const GerenciarFolgaTrabalhada: React.FC<GerenciarFolgaTrabalhadaProps> = ({ ope
       
       const dataToInsert = {
         funcionario_id: funcionario.id,
-        empresa_id: funcionario.empresa_id,
+        [ownerKey]: funcionario.empresa_id, // empresa_id ou admin_id
         horario_registro: dataNoonUTC.toISOString(),
         tipo: tipo,
         selfie_url: 'N/A',
@@ -97,7 +103,7 @@ const GerenciarFolgaTrabalhada: React.FC<GerenciarFolgaTrabalhadaProps> = ({ ope
       };
 
       const { error: insertError } = await supabase
-        .from('registros_ponto')
+        .from(tabelaRegistros) // ROTEAMENTO AQUI
         .insert(dataToInsert);
             
       if (insertError) throw insertError;
@@ -108,7 +114,7 @@ const GerenciarFolgaTrabalhada: React.FC<GerenciarFolgaTrabalhadaProps> = ({ ope
           
           const abonoToInsert = {
             funcionario_id: funcionario.id,
-            empresa_id: funcionario.empresa_id,
+            [ownerKey]: funcionario.empresa_id, // empresa_id ou admin_id
             horario_registro: dataCompensacaoNoonUTC.toISOString(),
             tipo: 'Abono' as const, // Marca como Abono
             selfie_url: 'N/A',
@@ -118,7 +124,7 @@ const GerenciarFolgaTrabalhada: React.FC<GerenciarFolgaTrabalhadaProps> = ({ ope
           };
           
           const { error: abonoError } = await supabase
-            .from('registros_ponto')
+            .from(tabelaRegistros) // ROTEAMENTO AQUI
             .insert(abonoToInsert);
             
           if (abonoError) throw abonoError;

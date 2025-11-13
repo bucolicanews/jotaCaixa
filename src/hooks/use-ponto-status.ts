@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError } from '@/utils/toast';
 import { parseISO, differenceInHours, format } from 'date-fns';
+import { useSessao } from './use-sessao';
+import { AdminUsuarioProfile } from '@/types/usuario';
 
 interface RegistroPonto {
   id: string;
@@ -18,11 +20,15 @@ interface PontoStatus {
 }
 
 const usePontoStatus = (funcionarioId: string | undefined): PontoStatus => {
+  const { perfil, role } = useSessao();
   const [ultimoRegistro, setUltimoRegistro] = useState<RegistroPonto | null>(null);
   const [proximaAcao, setProximaAcao] = useState<'Entrada' | 'Saida'>('Entrada');
   const [alerta4Horas, setAlerta4Horas] = useState(false);
   const [carregando, setCarregando] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
+
+  const isFuncionarioAdmin = role === 'Usuario' && (perfil as AdminUsuarioProfile)?.admin_id;
+  const tabelaRegistros = isFuncionarioAdmin ? 'admin_registros_ponto' : 'registros_ponto';
 
   const refetch = useCallback(() => {
     setRefreshKey(prev => prev + 1);
@@ -41,7 +47,7 @@ const usePontoStatus = (funcionarioId: string | undefined): PontoStatus => {
       const today = format(new Date(), 'yyyy-MM-dd');
       
       const { data, error } = await supabase
-        .from('registros_ponto')
+        .from(tabelaRegistros) // ROTEAMENTO AQUI
         .select('id, horario_registro, tipo')
         .eq('funcionario_id', funcionarioId)
         .gte('horario_registro', today)
@@ -82,7 +88,7 @@ const usePontoStatus = (funcionarioId: string | undefined): PontoStatus => {
     };
 
     fetchStatus();
-  }, [funcionarioId, refreshKey]);
+  }, [funcionarioId, refreshKey, tabelaRegistros]);
 
   return { ultimoRegistro, proximaAcao, alerta4Horas, carregando, refetch };
 };

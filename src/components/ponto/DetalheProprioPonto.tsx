@@ -5,19 +5,22 @@ import { Card, CardContent } from '@/components/ui/card';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { showError } from '@/utils/toast';
-import { UsuarioProfile } from '@/types/usuario';
+import { UsuarioProfile, AdminUsuarioProfile } from '@/types/usuario';
 import DetalheFolhaPonto from './DetalheFolhaPonto';
 import { MonthPicker } from '@/components/MonthPicker';
 import { RegistroPonto, Ferias } from '@/types/ponto'; // Importando a interface centralizada
 
 const DetalheProprioPonto: React.FC = () => {
-  const { usuario, perfil, carregando } = useSessao();
+  const { usuario, perfil, role, carregando: carregandoSessao } = useSessao();
   const [dataSelecionada, setDataSelecionada] = useState<Date>(startOfMonth(new Date()));
   const [carregandoDados, setCarregandoDados] = useState(true);
   const [registrosDoFuncionario, setRegistrosDoFuncionario] = useState<RegistroPonto[]>([]);
   const [feriasDoFuncionario, setFeriasDoFuncionario] = useState<Ferias[]>([]);
   
-  const usuarioProfile = perfil as UsuarioProfile;
+  const isFuncionarioAdmin = role === 'Usuario' && (perfil as AdminUsuarioProfile)?.admin_id;
+  const tabelaRegistros = isFuncionarioAdmin ? 'admin_registros_ponto' : 'registros_ponto';
+  const tabelaFerias = 'ferias'; // A tabela de férias é única
+
   const funcionarioId = usuario?.id;
 
   const fetchFerias = useCallback(async (id: string, data: Date) => {
@@ -25,7 +28,7 @@ const DetalheProprioPonto: React.FC = () => {
     const fimMes = format(endOfMonth(data), 'yyyy-MM-dd');
     
     const { data: feriasData, error } = await supabase
-        .from('ferias')
+        .from(tabelaFerias)
         .select('*')
         .eq('funcionario_id', id)
         .lte('data_inicio', fimMes)
@@ -46,8 +49,8 @@ const DetalheProprioPonto: React.FC = () => {
     const fimMes = format(endOfMonth(data), 'yyyy-MM-dd'); 
 
     const { data: registros, error } = await supabase
-      .from('registros_ponto')
-      .select('*, selfie_url')
+      .from(tabelaRegistros) // ROTEAMENTO AQUI
+      .select('id, funcionario_id, empresa_id, horario_registro, tipo, maps_url, selfie_url, atestado_url, observacao')
       .eq('funcionario_id', id)
       .gte('horario_registro', inicioMes)
       .lte('horario_registro', fimMes)
@@ -60,7 +63,7 @@ const DetalheProprioPonto: React.FC = () => {
       setRegistrosDoFuncionario(registros as RegistroPonto[]);
     }
     setCarregandoDados(false);
-  }, []);
+  }, [tabelaRegistros]);
 
   useEffect(() => {
     if (funcionarioId) {
@@ -69,7 +72,7 @@ const DetalheProprioPonto: React.FC = () => {
     }
   }, [funcionarioId, dataSelecionada, fetchRegistros, fetchFerias]);
 
-  if (carregando || carregandoDados) {
+  if (carregandoSessao || carregandoDados) {
     return (
       <div className="flex justify-center items-center h-40">
         <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -77,7 +80,10 @@ const DetalheProprioPonto: React.FC = () => {
     );
   }
   
-  if (!usuarioProfile || !usuarioProfile.salario || !usuarioProfile.horas_mensais) {
+  // CORREÇÃO: Verifica se o perfil é AdminUsuarioProfile e usa os campos corretos
+  const profileData = isFuncionarioAdmin ? (perfil as AdminUsuarioProfile) : (perfil as UsuarioProfile);
+  
+  if (!profileData || !profileData.salario || !profileData.horas_mensais) {
       return (
         <Card className="mt-4">
             <CardContent className="text-center py-8 text-muted-foreground">
@@ -99,13 +105,13 @@ const DetalheProprioPonto: React.FC = () => {
         </div>
         <DetalheFolhaPonto 
             funcionario={{
-                id: usuarioProfile.id,
-                nome: usuarioProfile.nome,
-                salario: usuarioProfile.salario,
-                horas_mensais: usuarioProfile.horas_mensais,
+                id: profileData.id,
+                nome: profileData.nome,
+                salario: profileData.salario,
+                horas_mensais: profileData.horas_mensais,
                 registros: registrosDoFuncionario,
-                dias_folga_fixos: usuarioProfile.dias_folga_fixos || [],
-                folga_domingo_obrigatoria: usuarioProfile.folga_domingo_obrigatoria ?? true,
+                dias_folga_fixos: profileData.dias_folga_fixos || [],
+                folga_domingo_obrigatoria: profileData.folga_domingo_obrigatoria ?? true,
                 ferias: feriasDoFuncionario,
             }}
             mes={dataSelecionada}

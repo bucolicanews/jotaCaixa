@@ -10,6 +10,7 @@ import { RegistroPonto } from '@/types/ponto';
 import { format, parseISO, setHours, setMinutes } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useSessao } from '@/hooks/use-sessao';
 
 interface AjustarPontoDialogProps {
   open: boolean;
@@ -28,9 +29,14 @@ interface RegistroLocal {
 }
 
 const AjustarPontoDialog: React.FC<AjustarPontoDialogProps> = ({ open, onOpenChange, funcionario, dia, registrosIniciais, onSaveComplete }) => {
+  const { role } = useSessao();
   const [loading, setLoading] = useState(false);
   const [registrosLocais, setRegistrosLocais] = useState<RegistroLocal[]>([]);
   const diaFormatado = format(dia, 'dd/MM/yyyy');
+  
+  const isFuncionarioAdmin = role === 'Admin' && funcionario.empresa_id === funcionario.id;
+  const tabelaRegistros = isFuncionarioAdmin ? 'admin_registros_ponto' : 'registros_ponto';
+  const ownerKey = isFuncionarioAdmin ? 'admin_id' : 'empresa_id';
 
   useEffect(() => {
     if (open) {
@@ -91,13 +97,9 @@ const AjustarPontoDialog: React.FC<AjustarPontoDialogProps> = ({ open, onOpenCha
         const [hours, minutes] = r.horario.split(':').map(Number);
         let dataHora = setMinutes(setHours(dia, hours), minutes);
         
-        // Se a hora for muito cedo (ex: 00:01) e o registro anterior for do dia anterior,
-        // pode ser necessário ajustar a data, mas para simplificar, vamos assumir que
-        // todos os registros são do dia 'dia' para o ajuste manual.
-        
         return {
             funcionario_id: funcionario.id,
-            empresa_id: funcionario.empresa_id,
+            [ownerKey]: funcionario.empresa_id, // empresa_id ou admin_id
             horario_registro: dataHora.toISOString(),
             tipo: r.tipo,
             selfie_url: 'Ajuste Manual',
@@ -115,7 +117,7 @@ const AjustarPontoDialog: React.FC<AjustarPontoDialogProps> = ({ open, onOpenCha
             
         if (registrosExistentesIds.length > 0) {
             const { error: deleteError } = await supabase
-                .from('registros_ponto')
+                .from(tabelaRegistros) // ROTEAMENTO AQUI
                 .delete()
                 .in('id', registrosExistentesIds);
             if (deleteError) throw deleteError;
@@ -123,7 +125,7 @@ const AjustarPontoDialog: React.FC<AjustarPontoDialogProps> = ({ open, onOpenCha
         
         // 4. Inserir os novos/ajustados registros
         const { error: insertError } = await supabase
-            .from('registros_ponto')
+            .from(tabelaRegistros) // ROTEAMENTO AQUI
             .insert(registrosParaSalvar);
             
         if (insertError) throw insertError;
