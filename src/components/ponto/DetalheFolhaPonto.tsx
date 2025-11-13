@@ -384,13 +384,19 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
                                 statusDisplay = <span className="text-sm text-muted-foreground">Folga Fixa</span>;
                             }
                         } else if (isFalta) {
-                            const atestadoUrl = registros.find(r => r.tipo === 'Falta')?.atestado_url;
+                            const faltaRegistro = registros.find(r => r.tipo === 'Falta');
+                            const atestadoUrl = faltaRegistro?.atestado_url;
+                            
+                            // NOVO: Exibe a observação da falta
+                            const observacaoFalta = faltaRegistro?.observacao || 'Falta Injustificada';
+                            
                             statusDisplay = atestadoUrl 
-                                ? <span className="text-sm text-green-600 flex items-center"><FileText className="w-4 h-4 mr-1" /> Falta Justificada</span>
-                                : <span className="text-sm text-red-600 flex items-center"><AlertTriangle className="w-4 h-4 mr-1" /> Falta Injustificada</span>;
+                                ? <span className="text-sm text-green-600 flex items-center"><FileText className="w-4 h-4 mr-1" /> {observacaoFalta}</span>
+                                : <span className="text-sm text-red-600 flex items-center"><AlertTriangle className="w-4 h-4 mr-1" /> {observacaoFalta}</span>;
                         } else if (isAbono) {
-                            const observacao = registros.find(r => r.tipo === 'Abono')?.observacao;
-                            statusDisplay = <span className="text-sm text-blue-600 flex items-center"><Clock className="w-4 h-4 mr-1" /> Abono ({observacao})</span>;
+                            const abonoRegistro = registros.find(r => r.tipo === 'Abono');
+                            const observacaoAbono = abonoRegistro?.observacao || 'Abono';
+                            statusDisplay = <span className="text-sm text-blue-600 flex items-center"><Clock className="w-4 h-4 mr-1" /> {observacaoAbono}</span>;
                         } else if (registros.length === 0) {
                             statusDisplay = <span className="text-sm text-muted-foreground">{isDiaFuturo ? 'Futuro' : 'Sem Registro'}</span>;
                         } else {
@@ -453,9 +459,12 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
                                             let registroDisplay;
                                             
                                             if (r.tipo === 'Falta') {
+                                                // NOVO: Exibe a observação da falta
+                                                const observacaoFalta = r.observacao || 'Falta Injustificada';
+                                                
                                                 registroDisplay = (
                                                     <>
-                                                        {r.atestado_url ? 'Falta Justificada' : 'Falta Injustificada'}
+                                                        {observacaoFalta}
                                                         {r.atestado_url && (
                                                             <a 
                                                                 href={r.atestado_url} 
