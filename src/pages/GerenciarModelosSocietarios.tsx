@@ -88,7 +88,7 @@ const GerenciarModelosSocietarios: React.FC = () => {
       }
       
       const { error } = await supabase
-          .from('documentos_societarios_modelos')
+          .from('modelos_societarios')
           .delete()
           .eq('id', modeloId);
           

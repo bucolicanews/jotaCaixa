@@ -158,7 +158,7 @@ const GerenciarBlocosSocietarios: React.FC = () => {
                               <TableRow key={bloco.id}>
                                   <TableCell className="font-medium">{bloco.titulo}</TableCell>
                                   <TableCell className="hidden md:table-cell text-sm text-muted-foreground truncate max-w-xs">
-                                      {(bloco as ExtendedBlocoSocietario).conteudo_template.substring(0, 100)}...
+                                      {(bloco as ExtendedBlocoSocietario).conteudo.substring(0, 100)}...
                                   </TableCell>
                                   {isSupervisao && <TableCell className="text-sm text-muted-foreground">{bloco.proprietario_id}</TableCell>}
                                   <TableCell className="text-right">

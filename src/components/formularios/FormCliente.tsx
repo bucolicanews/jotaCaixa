@@ -15,16 +15,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import FormDadosCadastrais from '../usuario-forms/FormDadosCadastrais';
 import { useBulkTagManager } from '@/hooks/use-bulk-tag-manager';
 
-// Definindo a interface de props esperada para FormDadosCadastrais (para resolver TS2322)
-interface FormDadosCadastraisProps {
-    control: Control<FormValues>;
-    isSubmitting: boolean;
-    resourceId: string | undefined;
-    tagRefreshKey: number;
-    onTagToggle: () => void;
-    isClientScope: boolean;
-}
-
 const textOptional = z.string().optional().or(z.literal(''));
 
 const formSchema = z.object({
@@ -231,7 +221,7 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
                                 <FormLabel>Telefone (Celular)</FormLabel>
                                 <FormControl>
                                     <Input placeholder="(00) 90000-0000" {...field} />
-                                </FormControl>
+                            </FormControl>
                                 <FormMessage />
                             </FormItem>
                         )}
@@ -259,8 +249,6 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
                     resourceId={resourceId}
                     tagRefreshKey={refreshKey}
                     onTagToggle={handleTagToggle}
-                    // Passando campos específicos do cliente para o FormDadosCadastrais
-                    isClientScope={true}
                 />
             </TabsContent>
         </Tabs>

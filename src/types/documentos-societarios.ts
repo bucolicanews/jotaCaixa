@@ -6,6 +6,7 @@ export interface ModeloSocietario {
   tipo_documento: string | null;
   criado_em: string;
 }
+export type DocumentoSocietarioModelo = ModeloSocietario;
 
 export interface BlocoSocietario {
   id: string;
@@ -21,7 +22,7 @@ export interface DocumentoSocietarioGerado {
   modelo_id: string | null;
   cliente_id: string | null;
   proprietario_id: string;
-  status: 'rascunho' | 'finalizado' | 'arquivado';
+  status: 'rascunho' | 'finalizado' | 'arquivado' | 'ativo';
   valores_tags_preenchidos: Record<string, any> | null;
   conteudo_renderizado: string | null;
   data_registro: string;

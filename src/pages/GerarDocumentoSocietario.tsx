@@ -11,7 +11,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ClienteProfile, UsuarioProfile, AdminProfile } from '@/types/usuario';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { format } from 'date-fns';
 import DocumentoPreviewDialog from '@/components/documentos-societarios/DocumentoPreviewDialog';
 import { useSessao } from '@/hooks/use-sessao';
 import { TAGS_PADRAO } from '@/config/contrato-tags-padrao';
@@ -107,6 +106,9 @@ const GerarDocumentoSocietario: React.FC = () => {
   const [empresaLogada, setEmpresaLogada] = useState<EmpresaLogada | null>(null);
   const [tipoConteudo, setTipoConteudo] = useState<TipoConteudo>('html'); 
   
+  // FIX 39, 40, 41, 42, 43, 44, 45, 46, 47: Definindo estado local para clientesCR
+  const [clientesCR, setClientesCR] = useState<ClienteCRCompleto[]>([]);
+  
   const isEditing = !!documentoId;
   const modeloId = modeloIdParam || documentoInicial?.modelo_id;
 
@@ -124,7 +126,7 @@ const GerarDocumentoSocietario: React.FC = () => {
 
   // Cliente selecionado (para preenchimento de tags)
   const clienteSelecionado = useMemo(() => {
-      return clientesCR.find(c => c.id === clienteSelecionadoId);
+      return clientesCR.find((c: ClienteCRCompleto) => c.id === clienteSelecionadoId);
   }, [clientesCR, clienteSelecionadoId]);
 
   // Dados da Empresa Logada (para preenchimento de tags {{EMPRESA_*}})
@@ -179,11 +181,11 @@ const GerarDocumentoSocietario: React.FC = () => {
         showError('Erro ao carregar clientes CR: ' + errorCR.message);
         setClientesCR([]);
     } else {
-        const mappedClients = (clientesCRData as ClienteCRCompleto[]).filter(c => c.id !== targetEmpresaId); // Filtra o próprio proprietário
+        const mappedClients = (clientesCRData as ClienteCRCompleto[]).filter((c: ClienteCRCompleto) => c.id !== targetEmpresaId); // Filtra o próprio proprietário
         setClientesCR(mappedClients);
         
         // Se o cliente selecionado não estiver mais na lista, limpa a seleção
-        if (clienteSelecionadoId && !mappedClients.some(c => c.id === clienteSelecionadoId)) {
+        if (clienteSelecionadoId && !mappedClients.some((c: ClienteCRCompleto) => c.id === clienteSelecionadoId)) {
             setClienteSelecionadoId('');
         }
     }
@@ -407,7 +409,7 @@ const GerarDocumentoSocietario: React.FC = () => {
     
     try {
         // 0. GARANTIR QUE O CLIENTE EXISTA NA TABELA 'clientes' (para FK)
-        const clienteSelecionado = clientesCR.find(c => c.id === clienteSelecionadoId);
+        const clienteSelecionado = clientesCR.find((c: ClienteCRCompleto) => c.id === clienteSelecionadoId);
         if (!clienteSelecionado) throw new Error('Cliente selecionado não encontrado.');
         
         // 1. Renderizar Conteúdo Final
@@ -453,7 +455,7 @@ const GerarDocumentoSocietario: React.FC = () => {
   
   const handleInsertBloco = (bloco: ExtendedBlocoSocietario) => {
       const currentContent = valoresTags['{{CONTEUDO_PRINCIPAL}}'] || modelo?.conteudo_template || '';
-      const newContent = currentContent + '\n\n' + bloco.conteudo_template;
+      const newContent = currentContent + '\n\n' + bloco.conteudo;
       handleTagChange('{{CONTEUDO_PRINCIPAL}}', newContent);
       showSuccess(`Bloco '${bloco.titulo}' inserido no conteúdo.`);
   };
@@ -565,7 +567,7 @@ const GerarDocumentoSocietario: React.FC = () => {
                             <SelectValue placeholder="Selecione o Cliente" />
                         </SelectTrigger>
                         <SelectContent>
-                            {clientesCR.map(c => (
+                            {clientesCR.map((c: ClienteCRCompleto) => (
                                 <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
                             ))}
                         </SelectContent>
