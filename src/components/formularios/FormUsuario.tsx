@@ -11,7 +11,7 @@ import { PERMISSOES_DISPONIVEIS, Permissao } from '@/config/permissoes';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import FormDadosCadastrais from '../usuario-forms/FormDadosCadastrais';
 import { Input } from '../ui/input';
-import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from '../ui/form';
+import { FormField, FormItem, FormLabel, FormControl, FormMessage } from '../ui/form';
 import { useBulkTagManager } from '@/hooks/use-bulk-tag-manager';
 import { format } from 'date-fns';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
@@ -116,6 +116,14 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
   
   const profileToEdit = usuarioInicial as UsuarioProfile | ClienteProfile;
   
+  // Define targetTable no escopo do componente (Correção de escopo)
+  let targetTable: 'tbl_usuarios' | 'tbl_clientes' = 'tbl_usuarios';
+  if (isClientBeingManagedByAdmin || isNewClient) {
+      targetTable = 'tbl_clientes';
+  } else if (isUserBeingManagedByClient || isNewUser) {
+      targetTable = 'tbl_usuarios';
+  }
+  
   const [activeTab, setActiveTab] = useState('pessoal');
   const [isSubmitting, setIsSubmitting] = useState(false);
   
@@ -209,23 +217,16 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
     });
   };
   
-  const handleTagToggle = useCallback(() => {
-      refetchStatus();
-  }, [refetchStatus]);
-
   const onSubmit = async (values: FormValues) => {
     setIsSubmitting(true);
     
-    // Determine the target table and owner ID
-    let targetTable: 'tbl_usuarios' | 'tbl_clientes' = 'tbl_usuarios';
+    // targetTable já está definida no escopo do componente.
     let ownerId: string | null = null;
     let isNewAuthUser = false;
     
     if (isClientBeingManagedByAdmin || isNewClient) {
-        targetTable = 'tbl_clientes';
         ownerId = criadorPerfil?.id || null; // Admin's ID
     } else if (isUserBeingManagedByClient || isNewUser) {
-        targetTable = 'tbl_usuarios';
         ownerId = (criadorPerfil as ClienteProfile)?.id || (criadorPerfil as UsuarioProfile)?.proprietario_id || null; // Client's ID
     }
     
