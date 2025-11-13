@@ -48,8 +48,9 @@ const DetalheProprioPonto: React.FC = () => {
     // Usar endOfMonth para garantir que todos os registros até o final do último dia do mês sejam incluídos.
     const fimMes = format(endOfMonth(data), 'yyyy-MM-dd'); 
     
-    // CORREÇÃO DE SINTAXE: Usando 'coluna:alias' para renomear
+    // Se for admin_registros_ponto, renomeia admin_id para empresa_id
     const ownerIdSelect = isFuncionarioAdmin ? 'admin_id:empresa_id' : 'empresa_id';
+    
     const selectColumns = `id, funcionario_id, ${ownerIdSelect}, horario_registro, tipo, maps_url, selfie_url, atestado_url, observacao`;
 
     const { data: registros, error } = await supabase

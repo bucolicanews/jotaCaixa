@@ -370,7 +370,7 @@ const FolhaPonto: React.FC = () => {
                 const horario = parseISO(registro.horario_registro);
                 if (registro.tipo === 'Entrada') {
                     entrada = horario;
-                } else if (registro.tipo === 'Saida' && entrada && isSameDay(horario, entrada)) {
+                } else if (registro.tipo === 'Saida' && entrada) {
                     minutosDia += differenceInMinutes(horario, entrada);
                     entrada = null;
                 }
