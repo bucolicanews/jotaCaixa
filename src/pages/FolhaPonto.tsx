@@ -190,9 +190,8 @@ const FolhaPonto: React.FC = () => {
     
     const tabelaRegistros = isFuncionarioAdmin ? 'admin_registros_ponto' : 'registros_ponto';
     
-    // CORREÇÃO DE SINTAXE: Usando 'coluna:alias' para renomear
-    // Se for admin_registros_ponto, renomeia admin_id para empresa_id
-    const ownerIdSelect = isFuncionarioAdmin ? 'admin_id:empresa_id' : 'empresa_id';
+    // CORREÇÃO: Usamos o nome da coluna real no select.
+    const ownerIdSelect = isFuncionarioAdmin ? 'admin_id' : 'empresa_id';
     
     const selectColumns = `id, funcionario_id, ${ownerIdSelect}, horario_registro, tipo, maps_url, selfie_url, atestado_url, observacao`;
 
@@ -208,7 +207,14 @@ const FolhaPonto: React.FC = () => {
       showError('Erro ao carregar registros de ponto: ' + error.message);
       setRegistrosDoFuncionario([]);
     } else {
-      setRegistrosDoFuncionario(registros as unknown as RegistroPonto[]);
+      // Mapeamento no frontend para garantir que o campo 'empresa_id' exista na interface RegistroPonto
+      const mappedRegistros = (registros as any[]).map(r => ({
+          ...r,
+          // Se for admin_registros_ponto, move admin_id para empresa_id
+          empresa_id: r.admin_id || r.empresa_id,
+      })) as RegistroPonto[];
+      
+      setRegistrosDoFuncionario(mappedRegistros);
     }
     setCarregandoDados(false);
   }, []);
