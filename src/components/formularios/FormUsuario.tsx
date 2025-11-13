@@ -101,7 +101,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
   onSaveComplete,
 }) => {
   const isEditing = !!usuarioInicial;
-  const isClientBeingManagedByAdmin = criadorRole === 'Admin' && usuarioInicial && 'limite_usuarios' in usuarioInicial;
+  // REMOVIDO: isClientBeingManagedByAdmin não é mais usado (Erro 1)
   
   const profileToEdit = usuarioInicial as UsuarioProfile;
   
@@ -117,11 +117,9 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
     return isNaN(date.getTime()) ? undefined : date;
   };
 
-  const targetTable = 'tbl_usuarios'; // Sempre tbl_usuarios para este formulário
-
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
-    defaultValues: () => {
+    defaultValues: (function() { // IIFE para resolver TS2322 (Erro 2)
         const defaultPermissoes = PERMISSOES_DISPONIVEIS.reduce((acc: Record<string, boolean>, p: Permissao) => {
             // Filtra apenas as permissões relevantes para o Usuário (Funcionário)
             if (p.key === 'ponto_eletronico' || p.key === 'visualizar_proprio_ponto' || p.key === 'folha_ponto' || p.key === 'cadastrar_usuarios') {
@@ -186,7 +184,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
             cartao_pis_url: profileToEdit?.cartao_pis_url || '',
             ja_admitido_anteriormente: profileToEdit?.ja_admitido_anteriormente ?? false,
         };
-    }
+    })(),
   });
 
   const handleSelectAll = (select: boolean) => {
@@ -303,11 +301,11 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                 const { error: authError } = await supabase.auth.updateUser({ password: values.senha });
                 if (authError) throw authError;
             }
-            const { error } = await supabase.from(targetTable).update(dataToUpdate).eq('id', userId);
+            const { error } = await supabase.from('tbl_usuarios').update(dataToUpdate).eq('id', userId);
             if (error) throw error;
         } else {
             // Se for novo, o trigger já inseriu o registro base, apenas atualizamos os campos de RH
-            const { error } = await supabase.from(targetTable).update(dataToUpdate).eq('id', userId);
+            const { error } = await supabase.from('tbl_usuarios').update(dataToUpdate).eq('id', userId);
             if (error) throw error;
         }
 
