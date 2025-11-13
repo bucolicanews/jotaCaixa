@@ -48,10 +48,8 @@ const DetalheProprioPonto: React.FC = () => {
     // Usar endOfMonth para garantir que todos os registros até o final do último dia do mês sejam incluídos.
     const fimMes = format(endOfMonth(data), 'yyyy-MM-dd'); 
     
-    // CORREÇÃO: Usamos o nome da coluna real no select.
-    const ownerIdSelect = isFuncionarioAdmin ? 'admin_id' : 'empresa_id';
-    
-    const selectColumns = `id, funcionario_id, ${ownerIdSelect}, horario_registro, tipo, maps_url, selfie_url, atestado_url, observacao`;
+    // CORREÇÃO: Seleciona as duas colunas, mas apenas a que existe terá valor.
+    const selectColumns = `id, funcionario_id, empresa_id, admin_id, horario_registro, tipo, maps_url, selfie_url, atestado_url, observacao`;
 
     const { data: registros, error } = await supabase
       .from(tabelaRegistros) // ROTEAMENTO AQUI
@@ -68,7 +66,7 @@ const DetalheProprioPonto: React.FC = () => {
       // Mapeamento no frontend para garantir que o campo 'empresa_id' exista na interface RegistroPonto
       const mappedRegistros = (registros as any[]).map(r => ({
           ...r,
-          // Se for admin_registros_ponto, move admin_id para empresa_id
+          // Se for admin_registros_ponto, usa admin_id. Caso contrário, usa empresa_id.
           empresa_id: r.admin_id || r.empresa_id,
       })) as RegistroPonto[];
       

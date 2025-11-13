@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { format, startOfMonth, endOfMonth, parseISO, isSameDay, eachDayOfInterval, isWithinInterval, getDay, differenceInMinutes } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { showError } from '@/utils/toast';
-import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
+import { ClienteProfile, UsuarioProfile, AdminUsuarioProfile } from '@/types/usuario';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import DetalheFolhaPonto from '@/components/ponto/DetalheFolhaPonto';
 import { MonthPicker } from '@/components/MonthPicker';
@@ -190,10 +190,8 @@ const FolhaPonto: React.FC = () => {
     
     const tabelaRegistros = isFuncionarioAdmin ? 'admin_registros_ponto' : 'registros_ponto';
     
-    // CORREÇÃO: Usamos o nome da coluna real no select.
-    const ownerIdSelect = isFuncionarioAdmin ? 'admin_id' : 'empresa_id';
-    
-    const selectColumns = `id, funcionario_id, ${ownerIdSelect}, horario_registro, tipo, maps_url, selfie_url, atestado_url, observacao`;
+    // Seleciona as duas colunas, mas apenas a que existe terá valor.
+    const selectColumns = `id, funcionario_id, empresa_id, admin_id, horario_registro, tipo, maps_url, selfie_url, atestado_url, observacao`;
 
     const { data: registros, error } = await supabase
       .from(tabelaRegistros) // ROTEAMENTO AQUI
@@ -210,7 +208,7 @@ const FolhaPonto: React.FC = () => {
       // Mapeamento no frontend para garantir que o campo 'empresa_id' exista na interface RegistroPonto
       const mappedRegistros = (registros as any[]).map(r => ({
           ...r,
-          // Se for admin_registros_ponto, move admin_id para empresa_id
+          // Se for admin_registros_ponto, usa admin_id. Caso contrário, usa empresa_id.
           empresa_id: r.admin_id || r.empresa_id,
       })) as RegistroPonto[];
       
@@ -239,7 +237,7 @@ const FolhaPonto: React.FC = () => {
   // Efeito 3: Carregar Registros e Férias (depende do Funcionário e da Data)
   useEffect(() => {
     if (funcionarioSelecionadoId && funcionarioDetalhe) {
-      const isFuncAdmin = funcionarioDetalhe.admin_id === empresaIdParaFiltro && isAdmin;
+      const isFuncAdmin = !!(funcionarioDetalhe as AdminUsuarioProfile).admin_id;
       fetchRegistros(funcionarioSelecionadoId, dataSelecionada, isFuncAdmin);
       fetchFerias(funcionarioSelecionadoId, dataSelecionada);
     } else {
@@ -254,7 +252,7 @@ const FolhaPonto: React.FC = () => {
   const handleFaltaRegistrada = async () => {
     // Re-busca os registros após registrar/editar/deletar a falta/ajuste/compensação
     if (funcionarioSelecionadoId && funcionarioDetalhe) {
-        const isFuncAdmin = funcionarioDetalhe.admin_id === empresaIdParaFiltro && isAdmin;
+        const isFuncAdmin = !!(funcionarioDetalhe as AdminUsuarioProfile).admin_id;
         await fetchRegistros(funcionarioSelecionadoId, dataSelecionada, isFuncAdmin);
         await fetchFerias(funcionarioSelecionadoId, dataSelecionada);
     }
