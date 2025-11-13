@@ -3,7 +3,7 @@ import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Edit, Trash2, PlusCircle, Filter, Building2, CheckCircle, Users as UsersIcon, Mail, PowerOff, Printer, ArrowRight, LogIn, Undo2 } from 'lucide-react';
+import { Loader2, Edit, Trash2, PlusCircle, Filter, Building2, CheckCircle, Users as UsersIcon, Mail, PowerOff, Printer, LogIn, Undo2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
@@ -113,9 +113,7 @@ const ClientesPage = () => {
     
     const { data, error } = await supabase
         .from('tbl_clientes')
-        .select('id, nome')
-        .eq('aprovado', true)
-        .order('nome');
+        .select('id, nome');
 
     if (error) {
         showError('Erro ao carregar lista de empresas: ' + error.message);
@@ -297,7 +295,7 @@ const ClientesPage = () => {
     }
 
     setCarregandoDados(false);
-  }, [isAdmin, ownerId, filtroEmpresaId, filtroNome]);
+  }, [isAdmin, ownerId, filtroEmpresaId, filtroNome, usuario?.id]);
 
   useEffect(() => {
     if (!carregandoSessao && usuario) {
@@ -455,6 +453,23 @@ const ClientesPage = () => {
           if (error) throw error;
           
           showSuccess(`Link de acesso reenviado para ${email}.`);
+          
+          // 2. Abrir o diálogo de ações para que o Admin possa copiar/enviar o link
+          // CORREÇÃO: Não podemos usar supabase.auth.admin.getUserByEmail no cliente.
+          // Apenas enviamos o email de reset e informamos o usuário.
+          
+          const resetLink = `${BASE_URL}/atualizar-senha`;
+          
+          const whatsappTemplate = `Olá ${nome}! Seu convite de acesso ao sistema está pronto. Clique no link abaixo para definir sua senha e acessar:\n\n${resetLink}`;
+          
+          if (window.confirm(`Link de Acesso Gerado para ${nome}. Deseja copiar o link para enviar manualmente?`)) {
+              navigator.clipboard.writeText(resetLink);
+              showSuccess('Link copiado para a área de transferência.');
+          }
+          
+          // Abre o WhatsApp com o template
+          window.open(`https://wa.me/${(empresasSistema.find(e => e.email === email)?.telefone || '').replace(/\D/g, '') || ''}?text=${encodeURIComponent(whatsappTemplate)}`, '_blank');
+          
       } catch (error: any) {
           showError('Falha ao reenviar convite: ' + error.message);
       } finally {
@@ -466,59 +481,6 @@ const ClientesPage = () => {
       setClienteSelecionado(null);
       setPerfilParaEditar(null);
       setDialogAberto(true);
-  };
-  
-  // NOVO HANDLER: Promover Cliente CR para Cliente Sistema (Sem Convite)
-  const handlePromoteToSystem = async (cliente: Cliente) => {
-    if (!cliente.email) {
-        showError('O cliente deve ter um email cadastrado para ser promovido.');
-        return;
-    }
-    
-    // 1. VERIFICAÇÃO DE DUPLICIDADE NA TBL_CLIENTES
-    const existingSystemClient = empresasSistema.find(e => e.email === cliente.email);
-    if (existingSystemClient) {
-        showError(`O email ${cliente.email} já está em uso pela empresa ${existingSystemClient.nome} (ID: ${existingSystemClient.id.substring(0, 8)}...). Por favor, corrija o email do cliente CR antes de promover.`);
-        return;
-    }
-    
-    if (!window.confirm(`Tem certeza que deseja PROMOVER ${cliente.nome} para Cliente do Sistema? Isso criará um perfil de usuário sem enviar um convite de login.`)) return;
-    
-    setCarregandoDados(true);
-    
-    try {
-        // 1. Chamar a Edge Function para criar o usuário no Auth e na tbl_clientes
-        const { data, error: invokeError } = await supabase.functions.invoke('promote-client-to-system', {
-            body: { 
-                email: cliente.email, 
-                nome: cliente.nome, 
-                clienteId: cliente.id, 
-                proprietarioId: ownerId 
-            },
-        });
-        
-        if (invokeError) throw invokeError;
-        if (data?.error) throw new Error(data.error);
-        
-        // 2. Atualizar o registro na tabela 'clientes' para marcar como Cliente do Sistema
-        const { error: updateCRError } = await supabase
-            .from('clientes')
-            .update({ is_system_client: true })
-            .eq('id', cliente.id);
-            
-        if (updateCRError) console.error('Aviso: Falha ao atualizar is_system_client na tabela clientes:', updateCRError);
-        
-        showSuccess(`Cliente ${cliente.nome} promovido para Cliente do Sistema com sucesso!`);
-        
-        // 3. Re-busca os dados para atualizar a lista (o cliente promovido deve sumir desta lista)
-        buscarDados();
-        
-    } catch (error: any) {
-        console.error('Erro ao promover cliente:', error);
-        showError('Falha ao promover cliente: ' + error.message);
-    } finally {
-        setCarregandoDados(false);
-    }
   };
   
   // NOVO HANDLER: Enviar Convite de Acesso (Substitui PromoteToSystem)
@@ -801,28 +763,14 @@ const ClientesPage = () => {
                                                 <Button 
                                                     variant="default" 
                                                     size="sm" 
-                                                    onClick={() => handlePromoteToSystem(cliente)}
-                                                    title="Promover para Cliente do Sistema (Sem Convite de Login)"
+                                                    onClick={() => handleSendInvite(cliente)} // ALTERADO: Agora envia convite
+                                                    title="Enviar Convite de Acesso (Cria perfil no sistema)"
                                                     disabled={isActionDisabled}
                                                     className="h-8 bg-orange-500 hover:bg-orange-600"
                                                 >
-                                                    <ArrowRight className="w-4 h-4 mr-1" /> Promover
+                                                    <Mail className="w-4 h-4 mr-1" /> Convite
                                                 </Button>
                                             )
-                                        )}
-                                        
-                                        {/* BOTÃO CONVITE (Para clientes CR que não são do sistema) */}
-                                        {isAdmin && cliente.email && !isSystemClient && (
-                                            <Button 
-                                                variant="secondary" 
-                                                size="sm" 
-                                                onClick={() => handleSendInvite(cliente)}
-                                                title="Enviar Convite de Acesso (Cria perfil no sistema)"
-                                                disabled={isActionDisabled}
-                                                className="h-8"
-                                            >
-                                                <Mail className="w-4 h-4 mr-1" /> Convite
-                                            </Button>
                                         )}
                                         
                                         {/* BOTÃO ACESSO - SÓ APARECE SE FOR CLIENTE DO SISTEMA E NÃO TIVER VÍNCULOS */}

@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import FormUsuario from '@/components/formularios/FormUsuario';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
-import { AnyProfile, UsuarioProfile, UserRole } from '@/types/usuario';
+import { AnyProfile, UsuarioProfile, UserRole, ClienteProfile } from '@/types/usuario';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -44,7 +44,7 @@ const GerenciarUsuarios: React.FC = () => {
       if (!carregando && isAdmin) {
           setActiveTab('meus_funcionarios');
       } else if (!carregando && isCliente) {
-          setActiveTab('meus_funcionarios'); // Cliente só tem uma aba de usuários
+          setActiveTab('meus_funcionarios');
       }
   }, [carregando, isAdmin, isCliente]);
 
@@ -58,9 +58,6 @@ const GerenciarUsuarios: React.FC = () => {
     setCarregandoDados(true);
     
     let fetchedClientes: EmpresaFiltro[] = [];
-    let fetchedUsuarios: UsuarioComEmpresa[] = [];
-    
-    // IDs que podem ser proprietários de usuários (Admin ID + todos os Clientes IDs)
     let allowedProprietarioIds: string[] = [];
 
     if (isAdmin) {
@@ -89,22 +86,22 @@ const GerenciarUsuarios: React.FC = () => {
       // ADMIN: Busca TODOS os Usuários (Funcionários) do sistema
       const { data: usuariosData, error: usuariosError } = await supabase
         .from('tbl_usuarios')
-        .select('*, tbl_clientes(nome)')
-        .in('proprietario_id', allowedProprietarioIds) // CORREÇÃO: Usando proprietario_id
+        .select('*')
+        .in('proprietario_id', allowedProprietarioIds)
         .order('nome', { ascending: true });
 
       if (usuariosError) {
         showError('Erro ao carregar usuários: ' + usuariosError.message);
         setUsuarios([]);
       } else {
-        fetchedUsuarios = (usuariosData as any[]).map(item => {
+        const fetchedUsers = (usuariosData as UsuarioProfile[]).map(item => {
           // O nome da empresa é o nome do Cliente OU 'Meus Usuários (Admin)' se proprietario_id for o ID do Admin
           const nomeEmpresa = fetchedClientes.find(c => c.id === item.proprietario_id)?.nome || 'N/A';
           return { ...item, nome_empresa: nomeEmpresa } as UsuarioComEmpresa;
         });
         
         // FILTRA O PRÓPRIO ADMIN DA LISTA DE USUÁRIOS (tbl_usuarios)
-        const filteredUsers = fetchedUsuarios.filter(u => u.id !== usuario.id);
+        const filteredUsers = fetchedUsers.filter(u => u.id !== usuario.id);
         setUsuarios(filteredUsers);
       }
 
@@ -113,19 +110,19 @@ const GerenciarUsuarios: React.FC = () => {
       const { data: usuariosData, error: usuariosError } = await supabase
         .from('tbl_usuarios')
         .select('*')
-        .eq('proprietario_id', usuario.id) // CORREÇÃO: Usando proprietario_id
+        .eq('proprietario_id', usuario.id)
         .order('nome', { ascending: true });
 
       if (usuariosError) {
         showError('Erro ao carregar usuários: ' + usuariosError.message);
-        setUsuarios([]);
+        setUsuarios(usuariosData as UsuarioComEmpresa[]);
       } else {
         setUsuarios(usuariosData as UsuarioComEmpresa[]);
       }
     }
     
     setCarregandoDados(false);
-  }, [usuario, role, isAdmin, isCliente, filtroEmpresaId]); // Adicionado filtroEmpresaId para re-fetch
+  }, [usuario, role, isAdmin, isCliente, filtroEmpresaId]);
 
   useEffect(() => {
     if (!carregando) {
@@ -157,7 +154,7 @@ const GerenciarUsuarios: React.FC = () => {
         if (!textMatch) return false;
         
         if (isAdmin && currentTab === 'funcionarios_clientes' && filtroEmpresaId !== 'todos') {
-            return u.proprietario_id === filtroEmpresaId; // CORREÇÃO: Usando proprietario_id
+            return u.proprietario_id === filtroEmpresaId;
         }
 
         return true;
@@ -208,7 +205,7 @@ const GerenciarUsuarios: React.FC = () => {
   // O targetRole é sempre 'Usuario' nesta página
   const targetRole: UserRole = 'Usuario';
   const title = 'Gerenciar Funcionários'; 
-  const buttonText = 'Novo Usuário (Funcionário)';
+  const buttonText = 'Novo Usuário (Funcionário)'; 
   
   // Helper function to render the table content
   const renderTableContent = (profiles: AnyProfile[], currentTab: string) => {
