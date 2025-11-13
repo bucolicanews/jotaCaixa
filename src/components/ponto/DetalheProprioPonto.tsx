@@ -47,10 +47,14 @@ const DetalheProprioPonto: React.FC = () => {
     const inicioMes = format(startOfMonth(data), 'yyyy-MM-dd');
     // Usar endOfMonth para garantir que todos os registros até o final do último dia do mês sejam incluídos.
     const fimMes = format(endOfMonth(data), 'yyyy-MM-dd'); 
+    
+    // Determine the correct owner ID column to select and alias it to 'empresa_id'
+    const ownerIdSelect = isFuncionarioAdmin ? 'admin_id!empresa_id' : 'empresa_id';
+    const selectColumns = `id, funcionario_id, ${ownerIdSelect}, horario_registro, tipo, maps_url, selfie_url, atestado_url, observacao`;
 
     const { data: registros, error } = await supabase
       .from(tabelaRegistros) // ROTEAMENTO AQUI
-      .select('id, funcionario_id, empresa_id, horario_registro, tipo, maps_url, selfie_url, atestado_url, observacao')
+      .select(selectColumns)
       .eq('funcionario_id', id)
       .gte('horario_registro', inicioMes)
       .lte('horario_registro', fimMes)
@@ -60,10 +64,10 @@ const DetalheProprioPonto: React.FC = () => {
       showError('Erro ao carregar registros de ponto: ' + error.message);
       setRegistrosDoFuncionario([]);
     } else {
-      setRegistrosDoFuncionario(registros as RegistroPonto[]);
+      setRegistrosDoFuncionario(registros as unknown as RegistroPonto[]);
     }
     setCarregandoDados(false);
-  }, [tabelaRegistros]);
+  }, [tabelaRegistros, isFuncionarioAdmin]);
 
   useEffect(() => {
     if (funcionarioId) {

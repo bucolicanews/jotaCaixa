@@ -80,10 +80,6 @@ const FolhaPonto: React.FC = () => {
   // Variável movida para o topo para resolver TS2448
   const funcionarioDetalhe = funcionarios.find(f => f.id === funcionarioSelecionadoId);
   
-  // Determina se o funcionário selecionado é um AdminUsuarioProfile
-  // const isFuncionarioAdmin = funcionarioDetalhe?.admin_id === empresaIdParaFiltro && isAdmin; 
-  // const tabelaRegistros = isFuncionarioAdmin ? 'admin_registros_ponto' : 'registros_ponto'; // Removido
-
   const fetchClientes = useCallback(async () => {
     if (!isAdmin || !usuario?.id) return;
     
@@ -193,10 +189,16 @@ const FolhaPonto: React.FC = () => {
     const fimMes = format(endOfMonth(data), 'yyyy-MM-dd');
     
     const tabelaRegistros = isFuncionarioAdmin ? 'admin_registros_ponto' : 'registros_ponto';
+    
+    // Determine the correct owner ID column to select and alias it to 'empresa_id'
+    // If admin_registros_ponto, select admin_id and alias it to empresa_id to match RegistroPonto interface
+    const ownerIdSelect = isFuncionarioAdmin ? 'admin_id!empresa_id' : 'empresa_id';
+    
+    const selectColumns = `id, funcionario_id, ${ownerIdSelect}, horario_registro, tipo, maps_url, selfie_url, atestado_url, observacao`;
 
     const { data: registros, error } = await supabase
       .from(tabelaRegistros) // ROTEAMENTO AQUI
-      .select('id, funcionario_id, empresa_id, horario_registro, tipo, maps_url, selfie_url, atestado_url, observacao')
+      .select(selectColumns)
       .eq('funcionario_id', funcionarioId)
       .gte('horario_registro', inicioMes)
       .lte('horario_registro', fimMes)
@@ -206,7 +208,7 @@ const FolhaPonto: React.FC = () => {
       showError('Erro ao carregar registros de ponto: ' + error.message);
       setRegistrosDoFuncionario([]);
     } else {
-      setRegistrosDoFuncionario(registros as RegistroPonto[]);
+      setRegistrosDoFuncionario(registros as unknown as RegistroPonto[]);
     }
     setCarregandoDados(false);
   }, []);
