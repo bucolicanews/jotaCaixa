@@ -55,22 +55,21 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
 
   useEffect(() => {
     if (open) {
-        // Resetar estados ao abrir
-        setAcao(registroInicial ? (registroInicial.tipo === 'Falta' ? 'Falta' : 'Abono') : 'Falta');
-        setAtestadoUrl(registroInicial?.atestado_url || null);
-        setAtestadoFile(null);
-        
         // Lógica de inicialização de Horas e Observação
         let initialObs = registroInicial?.observacao || '';
         let initialHoras: AbonoHoras = '8h';
         
         if (registroInicial) {
+            // Tenta extrair as horas da observação (ex: "Falta Justificada (4h)")
             const match = registroInicial.observacao?.match(/(\d+)h/);
             if (match) {
                 initialHoras = match[0] as AbonoHoras;
             }
         }
         
+        setAcao(registroInicial ? (registroInicial.tipo === 'Falta' ? 'Falta' : 'Abono') : 'Falta');
+        setAtestadoUrl(registroInicial?.atestado_url || null);
+        setAtestadoFile(null);
         setHorasSelecionadas(initialHoras);
         setObservacao(initialObs);
     }
@@ -139,8 +138,8 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
         return;
     }
     
-    if (isAbono && !horasSelecionadas) {
-        showError('Selecione a quantidade de horas para o abono.');
+    if ((isFalta || isAbono) && !horasSelecionadas) {
+        showError('Selecione a quantidade de horas.');
         return;
     }
 
