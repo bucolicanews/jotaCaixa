@@ -52,7 +52,11 @@ const DocumentosSocietarios: React.FC = () => {
     
     let query = supabase
       .from('documentos_societarios_gerados')
-      .select('*, clientes(nome)')
+      .select(`
+        *, 
+        clientes:cliente_id ( nome ),
+        modelos_societarios ( titulo )
+      `)
       .order('criado_em', { ascending: false });
       
     // Se for Cliente/Usuário, filtra apenas pelos seus documentos
@@ -66,7 +70,13 @@ const DocumentosSocietarios: React.FC = () => {
       showError('Erro ao carregar documentos: ' + error.message);
       setDocumentos([]);
     } else {
-      setDocumentos(data as DocumentoComCliente[]);
+      const mappedData = (data as any[]).map(d => ({
+          ...d,
+          titulo: d.valores_tags_preenchidos?.titulo || 'Documento Sem Título',
+          modelo_titulo: d.modelos_societarios?.titulo || 'Modelo Excluído',
+      })) as DocumentoComCliente[];
+      
+      setDocumentos(mappedData);
     }
     setCarregando(false);
   }, [ownerId, isAdmin]);
@@ -119,7 +129,7 @@ const DocumentosSocietarios: React.FC = () => {
         <h1 className="text-2xl md:text-3xl font-bold flex items-center">
           <FileText className="w-6 h-6 mr-2" /> Documentos Societários Gerados
         </h1>
-        <Link to="/documentos-societarios/novo">
+        <Link to="/documentos-societarios/modelos">
             <Button className="w-full sm:w-auto">
                 <PlusCircle className="w-4 h-4 mr-2" />
                 Novo Documento
@@ -170,7 +180,7 @@ const DocumentosSocietarios: React.FC = () => {
                                     <Eye className="w-4 h-4" />
                                 </Button>
                             </Link>
-                            <Link to={`/documentos-societarios/editar/${doc.id}`}>
+                            <Link to={`/documentos-societarios/gerar/${doc.modelo_id}?documentoId=${doc.id}`}>
                                 <Button variant="ghost" size="icon" title="Editar">
                                     <Edit className="w-4 h-4" />
                                 </Button>
