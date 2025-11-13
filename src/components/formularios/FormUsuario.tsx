@@ -371,7 +371,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                 <FormFolgasFerias
                     control={form.control as unknown as Control<any>}
                     isSubmitting={isSubmitting}
-                    usuarioInicial={profileToEdit as UsuarioProfile}
+                    usuarioInicial={profileToEdit} // Passa o perfil (que pode ser null na criação)
                 />
             </TabsContent>
 

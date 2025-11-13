@@ -8,7 +8,7 @@ import { UsuarioProfile } from '@/types/usuario';
 interface FormFolgasFeriasProps {
   control: Control<any>;
   isSubmitting: boolean;
-  usuarioInicial: UsuarioProfile;
+  usuarioInicial: UsuarioProfile | null; // Permitindo que seja null
 }
 
 const DIAS_DA_SEMANA = [
@@ -22,6 +22,17 @@ const DIAS_DA_SEMANA = [
 ];
 
 const FormFolgasFerias: React.FC<FormFolgasFeriasProps> = ({ control, isSubmitting, usuarioInicial }) => {
+  
+  // Adicionando verificação de segurança
+  if (!usuarioInicial) {
+      return (
+          <div className="space-y-6">
+              <p className="text-sm text-muted-foreground">
+                  As configurações de folgas e férias estarão disponíveis após a criação do usuário.
+              </p>
+          </div>
+      );
+  }
   
   const proprietarioId = usuarioInicial.proprietario_id; // CORREÇÃO: Usando proprietario_id
 
