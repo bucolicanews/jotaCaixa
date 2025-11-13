@@ -50,18 +50,26 @@ const JORNADA_DIARIA_PADRAO = 8; // Horas diárias padrão CLT
 
 /**
  * Função robusta para extrair horas de uma string de observação.
- * Aceita formatos como "8h", "4", "2.5", "6,0 horas".
+ * Ajustada para priorizar o último número (que representa o crédito) em observações complexas.
  */
 const parseHorasObservacao = (obs: string | null | undefined, fallback = JORNADA_DIARIA_PADRAO): number => {
     if (!obs) return fallback;
-    // normaliza vírgula para ponto e remove texto irrelevante
+    
     const normalized = obs.replace(',', '.').toLowerCase();
-    // busca o primeiro número com opcional casa decimal
-    const m = normalized.match(/(\d+(\.\d+)?)/);
-    if (!m) return fallback;
-    const valor = parseFloat(m[1]);
-    if (isNaN(valor)) return fallback;
-    return valor;
+    
+    // Remove o "0m" ou "0 minutos" no final, se for o caso, para isolar o valor de crédito
+    const cleanedObs = normalized.replace(/-\s*\d+(\.\d+)?\s*m\s*creditadas/, '').replace(/-\s*0\s*m/, '');
+    
+    // Encontra todas as ocorrências de números (inteiros ou decimais)
+    const matches = cleanedObs.match(/(\d+(\.\d+)?)/g);
+    
+    if (matches && matches.length > 0) {
+        // Retorna o ÚLTIMO número encontrado (que deve ser o tempo creditado)
+        const valor = parseFloat(matches[matches.length - 1]);
+        if (!isNaN(valor)) return valor;
+    }
+    
+    return fallback;
 };
 
 
@@ -147,10 +155,10 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
             if (registro.tipo === 'Falta') isFalta = true;
             if (registro.tipo === 'Abono') isAbono = true;
             
-            // --- NOVO PARSING ROBUSTO ---
+            // --- PARSING ROBUSTO PARA HORAS CREDITADAS ---
             const horasCreditadas = parseHorasObservacao(registro.observacao, JORNADA_DIARIA_PADRAO);
             minutosAbonados = Math.round(horasCreditadas * 60);
-            // ---------------------------
+            // --------------------------------------------
             
             if (registro.observacao?.includes('Compensação de folga trabalhada')) {
                 isCompensacaoAbono = true;
