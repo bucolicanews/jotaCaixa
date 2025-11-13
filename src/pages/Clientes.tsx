@@ -233,20 +233,25 @@ const ClientesPage = () => {
           
           if (isSystemClient && systemClient) {
               const dataFimAcesso = systemClient.data_fim_acesso ? parseISO(systemClient.data_fim_acesso) : null;
-              const isAtivo = dataFimAcesso && isPast(new Date()) === false; // Data de fim de acesso é futura ou hoje
-              const isBlocked = dataFimAcesso === null && systemClient.aprovado; // Aprovado, mas sem data de fim (desativado)
+              
+              // Lógica de Bloqueio/Expiração (Ajustada para a nova regra)
+              let isBlockedOrExpired = false;
+              if (dataFimAcesso === null) {
+                  // Regra 1: Nulo = Vitalício (Ativo)
+                  isBlockedOrExpired = false;
+              } else if (isPast(dataFimAcesso)) {
+                  // Regra 3: Passada = Expirado
+                  isBlockedOrExpired = true;
+              }
               
               if (!systemClient.aprovado) {
                   systemStatus = 'Pendente';
-              } else if (isBlocked) {
-                  systemStatus = 'Bloqueado';
-                  origemCR = 'Promovido'; // Promovido Ativo
-              } else if (isAtivo) {
-                  systemStatus = 'Ativo';
-                  origemCR = 'Promovido'; // Promovido Expirado
-              } else {
+              } else if (isBlockedOrExpired) {
                   systemStatus = 'Expirado';
-                  origemCR = 'Promovido'; // Promovido Expirado
+                  origemCR = 'Promovido';
+              } else {
+                  systemStatus = 'Ativo';
+                  origemCR = 'Promovido';
               }
               
           } else {
@@ -636,21 +641,30 @@ const ClientesPage = () => {
       
       return empresasSistema.filter((e: EmpresaSistema) => {
           const dataFimAcesso = e.data_fim_acesso ? parseISO(e.data_fim_acesso) : null;
-          const isAtivo = dataFimAcesso && isPast(new Date()) === false; // Data de fim de acesso é futura ou hoje
+          
+          // Lógica de Bloqueio/Expiração (Ajustada para a nova regra)
+          let isBlockedOrExpired = false;
+          if (dataFimAcesso === null) {
+              // Regra 1: Nulo = Vitalício (Ativo)
+              isBlockedOrExpired = false;
+          } else if (isPast(dataFimAcesso)) {
+              // Regra 3: Passada = Expirado
+              isBlockedOrExpired = true;
+          }
+          
           const isAvulso = e.tipo_cliente?.endsWith('_Avulso') ?? false; // Verifica o novo sufixo
-          const isBlocked = dataFimAcesso === null && e.aprovado; // Aprovado, mas sem data de fim (desativado)
           
           if (status === 'pendentes') {
               return !e.aprovado;
           }
           
           if (status === 'ativos') {
-              // Ativos: Aprovados, não avulsos e com acesso futuro
-              return e.aprovado && !isAvulso && isAtivo;
+              // Ativos: Aprovados, não avulsos e com acesso futuro/vitalício
+              return e.aprovado && !isAvulso && !isBlockedOrExpired;
           }
           if (status === 'inativos') {
-              // Inativos: Aprovados, não avulsos e com acesso expirado OU bloqueado
-              return e.aprovado && !isAvulso && (!isAtivo || isBlocked);
+              // Inativos: Aprovados, não avulsos e com acesso expirado
+              return e.aprovado && !isAvulso && isBlockedOrExpired;
           }
           if (status === 'avulsos') {
               // Avulsos: Aprovados e com o sufixo _Avulso
@@ -717,7 +731,7 @@ const ClientesPage = () => {
                             // Se é cliente do sistema, exibe o status real (Ativo, Bloqueado, Expirado)
                             let variant: 'default' | 'warning' | 'destructive' = 'default';
                             if (systemStatus === 'Pendente') variant = 'warning';
-                            if (systemStatus === 'Bloqueado' || systemStatus === 'Expirado') variant = 'destructive';
+                            if (systemStatus === 'Expirado') variant = 'destructive';
                             
                             statusBadge = <Badge variant={variant}>{systemStatus}</Badge>;
                         } else {
@@ -870,33 +884,40 @@ const ClientesPage = () => {
                 ) : (
                     empresas.map((empresa) => {
                         const dataFimAcesso = empresa.data_fim_acesso ? parseISO(empresa.data_fim_acesso) : null;
-                        const isAtivo = dataFimAcesso && isPast(new Date()) === false; // Data de fim de acesso é futura ou hoje
+                        
+                        // Lógica de Bloqueio/Expiração (Ajustada para a nova regra)
+                        let isBlockedOrExpired = false;
+                        if (dataFimAcesso === null) {
+                            // Regra 1: Nulo = Vitalício (Ativo)
+                            isBlockedOrExpired = false;
+                        } else if (isPast(dataFimAcesso)) {
+                            // Regra 3: Passada = Expirado
+                            isBlockedOrExpired = true;
+                        }
+                        
                         const isAvulso = empresa.tipo_cliente?.endsWith('_Avulso') ?? false; // Verifica o novo sufixo
-                        const isBlocked = dataFimAcesso === null && empresa.aprovado; // Aprovado, mas sem data de fim (desativado)
                         
                         let statusBadge;
                         if (!empresa.aprovado) {
                             statusBadge = <Badge variant="warning">Pendente</Badge>;
-                        } else if (isBlocked) {
-                            // Se aprovado e data_fim_acesso é NULL
-                            statusBadge = <Badge variant="destructive">Bloqueado</Badge>;
+                        } else if (isBlockedOrExpired) {
+                            statusBadge = <Badge variant="destructive">Expirado</Badge>;
                         } else if (isAvulso) {
                             // Se for avulso, o status reflete se o acesso está ativo ou expirado
-                            statusBadge = <Badge variant={isAtivo ? 'default' : 'destructive'}>{isAtivo ? 'Avulso Ativo' : 'Avulso Expirado'}</Badge>;
-                        } else if (isAtivo) {
-                            statusBadge = <Badge variant="default">Ativo</Badge>;
+                            statusBadge = <Badge variant={!isBlockedOrExpired ? 'default' : 'destructive'}>{!isBlockedOrExpired ? 'Avulso Ativo' : 'Avulso Expirado'}</Badge>;
                         } else {
-                            statusBadge = <Badge variant="destructive">Expirado</Badge>;
+                            statusBadge = <Badge variant="default">Ativo</Badge>;
                         }
                         
-                        const dataExpiracaoDisplay = dataFimAcesso ? format(dataFimAcesso, 'dd/MM/yyyy') : 'Bloqueado'; // ALTERADO: Exibe 'Bloqueado' se for nulo
+                        // ALTERAÇÃO AQUI: Se dataFimAcesso for nulo, exibe 'Vitalício'
+                        const dataExpiracaoDisplay = dataFimAcesso ? format(dataFimAcesso, 'dd/MM/yyyy') : 'Vitalício'; 
                         const planoNome = empresa.plano_id ? planosMap[empresa.plano_id] || 'N/A' : 'N/A';
                         
                         // Verifica se o cliente foi promovido de um cliente CR (cliente_id_promovido não é nulo)
                         const isPromoted = !!(empresa as any).cliente_id_promovido;
 
                         return (
-                            <TableRow key={empresa.id} className={cn(!empresa.aprovado && "bg-yellow-500/10", isBlocked && "bg-red-500/10")}>
+                            <TableRow key={empresa.id} className={cn(!empresa.aprovado && "bg-yellow-500/10", isBlockedOrExpired && "bg-red-500/10")}>
                                 <TableCell className="font-medium">{empresa.nome}</TableCell>
                                 <TableCell>{empresa.email}</TableCell>
                                 <TableCell className="text-sm text-muted-foreground">{planoNome}</TableCell>
@@ -927,8 +948,8 @@ const ClientesPage = () => {
                                         </Button>
                                     )}
                                     
-                                    {/* Botão de Desativar (Aparece se estiver Ativo ou Avulso e não bloqueado) */}
-                                    {(isAtivo || isAvulso) && !isBlocked && (
+                                    {/* Botão de Desativar (Aparece se estiver Ativo ou Avulso e não expirado) */}
+                                    {!isBlockedOrExpired && (
                                         <Button 
                                             variant="destructive" 
                                             size="icon" 
