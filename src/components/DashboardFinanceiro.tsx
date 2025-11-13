@@ -45,14 +45,14 @@ const DashboardFinanceiro: React.FC = () => {
     const getOwnerId = () => {
         if (isAdmin) return usuario?.id || null;
         if (role === 'Cliente') return (perfil as ClienteProfile)?.id || null;
-        if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id || null;
+        if (role === 'Usuario') return (perfil as UsuarioProfile)?.proprietario_id || null;
         return null;
     };
     
     const ownerId = getOwnerId();
 
     // Hook para buscar saldos de contas (Ativo/Passivo)
-    const { contas, totalSaldo, carregando: carregandoSaldos } = useSaldoContaCalculado('todos', 'todos', '');
+    const { contas, totalSaldo, carregando: carregandoSaldos } = useSaldoContaCalculado('todos', 'todos', '', 'bancos');
     
     // Filtra as contas para o gráfico de Saldo por Conta
     const contasFiltradas = useMemo(() => {

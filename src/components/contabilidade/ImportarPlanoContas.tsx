@@ -52,7 +52,7 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
   const getProprietarioId = (): string | null => {
     if (role === 'Admin') return usuario?.id || null;
     if (role === 'Cliente') return (perfil as ClienteProfile)?.id || null;
-    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id || null;
+    if (role === 'Usuario') return (perfil as UsuarioProfile)?.proprietario_id || null;
     return null;
   };
   

@@ -7,10 +7,8 @@ export interface AdminProfile {
   nome: string;
   email: string;
   avatar_url?: string | null;
-  cpf?: string | null; // NOVO CAMPO
-  cnpj?: string | null; // NOVO CAMPO
-  
-  // Campos de Endereço e Documentos (Adicionados para compatibilidade com FormPerfil)
+  cpf?: string | null;
+  cnpj?: string | null;
   rg?: string | null;
   nome_mae?: string | null;
   nome_pai?: string | null;
@@ -32,17 +30,16 @@ export interface ClienteProfile {
   limite_usuarios: number;
   aprovado: boolean;
   permissoes: Record<string, boolean>;
-  tipo_cliente?: 'PF' | 'PJ' | 'PF_Avulso' | 'PJ_Avulso' | null; // NOVOS TIPOS
-  plano_id?: string | null; // NOVO CAMPO
-  data_fim_acesso?: string | null; // NOVO CAMPO: Data e hora do fim do acesso
-  admin_id?: string | null; // ADICIONADO PARA CORRIGIR O ERRO
-  // Novos campos para Contrato
+  tipo_cliente?: 'PF' | 'PJ' | 'PF_Avulso' | 'PJ_Avulso' | null;
+  plano_id?: string | null;
+  data_fim_acesso?: string | null;
+  admin_id?: string | null;
   endereco_completo?: string | null;
-  criado_em: string; // ADICIONADO
+  criado_em: string;
   
-  // Campos cadastrais adicionados para tags de contrato (Erro 8)
+  // Campos cadastrais adicionados para tags de contrato
   cpf?: string | null;
-  cnpj?: string | null; // NOVO CAMPO
+  cnpj?: string | null;
   rg?: string | null;
   nome_mae?: string | null;
   nome_pai?: string | null;
@@ -64,20 +61,20 @@ export interface UsuarioProfile {
   id: string;
   nome: string;
   email: string;
+  proprietario_id: string | null;
   avatar_url?: string | null;
-  cliente_id: string | null;
-  permissoes: Record<string, boolean>; // Ex: { "contas_pagar": true, "relatorios": false }
+  permissoes: Record<string, boolean>;
   
-  // Novos campos de Folga
-  dias_folga_fixos?: string[] | null; // Ex: ['Saturday', 'Sunday']
+  // Campos de Folga
+  dias_folga_fixos?: string[] | null;
   folga_domingo_obrigatoria?: boolean | null;
   
-  // Novos campos de Salário/Jornada
+  // Campos de Salário/Jornada
   salario?: number | null;
   horas_semanais?: number | null;
   horas_mensais?: number | null;
   
-  // Novos campos cadastrais
+  // Campos cadastrais
   cpf?: string | null;
   rg?: string | null;
   nome_mae?: string | null;

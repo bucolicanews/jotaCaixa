@@ -116,7 +116,7 @@ const GerenciarHistoricos: React.FC = () => {
 
   const getOwnerId = () => {
     if (role === 'Admin' || role === 'Cliente') return (perfil as any)?.id;
-    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id;
+    if (role === 'Usuario') return (perfil as UsuarioProfile)?.proprietario_id;
     return null;
   };
   
@@ -371,26 +371,24 @@ const GerenciarHistoricos: React.FC = () => {
         <h1 className="text-2xl md:text-3xl font-bold flex items-center">
           <History className="w-6 h-6 mr-2" /> Gerenciar Históricos
         </h1>
-        <div className="flex space-x-2 w-full sm:w-auto">
-            <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
-              <DialogTrigger asChild>
-                <Button onClick={() => setHistoricoSelecionado(null)} className="w-full sm:w-auto">
-                  <PlusCircle className="w-4 h-4 mr-2" />
-                  Novo Histórico
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[425px]">
-                <DialogHeader>
-                  <DialogTitle>{historicoSelecionado ? 'Editar Histórico' : 'Novo Histórico'}</DialogTitle>
-                </DialogHeader>
-                <FormHistorico 
-                  historicoInicial={historicoSelecionado}
-                  proprietarioId={ownerId}
-                  onSaveComplete={handleSaveComplete}
-                />
-              </DialogContent>
-            </Dialog>
-        </div>
+        <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
+          <DialogTrigger asChild>
+            <Button onClick={() => setHistoricoSelecionado(null)} className="w-full sm:w-auto">
+              <PlusCircle className="w-4 h-4 mr-2" />
+              Novo Histórico
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>{historicoSelecionado ? 'Editar Histórico' : 'Novo Histórico'}</DialogTitle>
+            </DialogHeader>
+            <FormHistorico 
+              historicoInicial={historicoSelecionado}
+              proprietarioId={ownerId}
+              onSaveComplete={handleSaveComplete}
+            />
+          </DialogContent>
+        </Dialog>
       </div>
       
       <Card className="mb-6">

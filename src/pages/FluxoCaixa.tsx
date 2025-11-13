@@ -13,14 +13,14 @@ const FluxoCaixa: React.FC = () => {
   const getEmpresaId = () => {
     if (role === 'Admin') return usuario?.id || null;
     if (role === 'Cliente') return (perfil as ClienteProfile)?.id || null;
-    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id || null;
+    if (role === 'Usuario') return (perfil as UsuarioProfile)?.proprietario_id || null;
     return null;
   };
   
   const empresaId = getEmpresaId();
   
   // Usamos o hook de saldo calculado para obter todas as contas e o saldo total
-  const { contas, totalSaldo, carregando: carregandoSaldos } = useSaldoContaCalculado('todos', 'todos', '');
+  const { contas, totalSaldo, carregando: carregandoSaldos } = useSaldoContaCalculado('todos', 'todos', '', 'bancos');
 
   if (carregandoSessao || carregandoSaldos) {
     return (

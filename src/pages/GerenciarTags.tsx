@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -35,7 +35,7 @@ const GerenciarTags = () => {
   
   const getEmpresaId = () => {
     if (isCliente) return (perfil as ClienteProfile)?.id;
-    if (isUsuario) return (perfil as UsuarioProfile)?.cliente_id;
+    if (isUsuario) return (perfil as UsuarioProfile)?.proprietario_id;
     // Se for Admin, o proprietário da tag é o próprio Admin logado.
     if (isAdmin) return (perfil as any)?.id;
     return null;

@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Loader2, Tag } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
-import { AnyProfile, ClienteProfile, UsuarioProfile, UserRole } from '@/types/usuario';
+import { AnyProfile, ClienteProfile, UsuarioProfile, UserRole, AdminProfile } from '@/types/usuario';
 import { PERMISSOES_DISPONIVEIS, Permissao } from '@/config/permissoes';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { format } from 'date-fns';
@@ -22,8 +22,8 @@ import { Calendar } from '../ui/calendar';
 import { CalendarIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ptBR } from 'date-fns/locale';
-import { BASE_URL } from '@/config/app-config'; // Importando BASE_URL
-import { useBulkTagManager } from '@/hooks/use-bulk-tag-manager'; // Importando useBulkTagManager
+import { BASE_URL } from '@/config/app-config';
+import { useBulkTagManager } from '@/hooks/use-bulk-tag-manager';
 import { Separator } from '../ui/separator';
 
 const textOptional = z.string().optional().or(z.literal(''));
@@ -107,7 +107,9 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
 }) => {
   const isEditing = !!usuarioInicial;
   const isClientBeingManagedByAdmin = criadorRole === 'Admin' && usuarioInicial && 'limite_usuarios' in usuarioInicial;
-  const isUserBeingManagedByClient = (criadorRole === 'Cliente' || criadorRole === 'Admin') && usuarioInicial && 'cliente_id' in usuarioInicial;
+  // CORREÇÃO: Verifica se o perfil inicial é um UsuarioProfile
+  const isUserBeingManagedByClient = (criadorRole === 'Cliente' || criadorRole === 'Admin') && usuarioInicial && 'proprietario_id' in usuarioInicial;
+  
   const isNewClient = criadorRole === 'Admin' && !isEditing;
   const isNewUser = !isEditing && !isClientBeingManagedByAdmin && !isNewClient;
   
@@ -117,7 +119,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   const resourceId = usuarioInicial?.id;
-  const { refetchStatus, refreshKey } = useBulkTagManager(resourceId); // Mantendo a chamada para refetchStatus
+  const { refetchStatus, refreshKey } = useBulkTagManager(resourceId);
 
   const parseDate = (dateString: string | null | undefined): Date | undefined => {
     if (!dateString) return undefined;
@@ -220,7 +222,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
     if (isNewUser) return 'tbl_usuarios';
     if (!profile) return null;
     if ('limite_usuarios' in profile) return 'tbl_clientes';
-    if ('cliente_id' in profile) return 'tbl_usuarios';
+    if ('proprietario_id' in profile) return 'tbl_usuarios'; // CORREÇÃO: Verifica proprietario_id
     return null;
   };
 
@@ -278,8 +280,8 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                 email: values.email,
                 password: Math.random().toString(36).substring(2, 15),
                 options: {
-                    emailRedirectTo: `${BASE_URL}/atualizar-senha`, // Usando BASE_URL
-                    data: { role: 'Cliente', nome: values.nome, cliente_id: null }
+                    emailRedirectTo: `${BASE_URL}/atualizar-senha`,
+                    data: { role: 'Cliente', nome: values.nome, proprietario_id: null } // CORREÇÃO: Usando proprietario_id
                 }
             });
             
@@ -296,14 +298,10 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
       } else if (isUserBeingManagedByClient || isNewUser) {
         // Edição/Criação de Usuário (Funcionário)
         
-        let targetClienteId: string | null = null;
-        if (isNewUser) {
-            targetClienteId = criadorPerfil?.id || null;
-        } else {
-            targetClienteId = (usuarioInicial as UsuarioProfile)?.cliente_id;
-        }
+        // O proprietário é o ID do Admin ou Cliente logado
+        const targetProprietarioId = criadorPerfil?.id || null;
         
-        if (!targetClienteId) throw new Error('ID do cliente não encontrado para vincular o usuário.');
+        if (!targetProprietarioId) throw new Error('ID do proprietário não encontrado para vincular o usuário.');
 
         dataToUpdate.permissoes = values.permissoes;
         dataToUpdate.dias_folga_fixos = values.dias_folga_fixos || [];
@@ -347,8 +345,8 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                 email: values.email,
                 password: Math.random().toString(36).substring(2, 15),
                 options: {
-                    emailRedirectTo: `${BASE_URL}/atualizar-senha`, // Usando BASE_URL
-                    data: { role: 'Usuario', nome: values.nome, cliente_id: targetClienteId }
+                    emailRedirectTo: `${BASE_URL}/atualizar-senha`,
+                    data: { role: 'Usuario', nome: values.nome, proprietario_id: targetProprietarioId } // CORREÇÃO: Usando proprietario_id
                 }
             });
             
@@ -475,24 +473,40 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                 <TabsContent value="cadastrais" className="mt-4 space-y-6 p-4">
                     <div className="flex justify-between items-center">
                         <h3 className="font-semibold text-lg flex items-center"><Tag className="w-5 h-5 mr-2" /> Tags de Contrato</h3>
+                        {/* Botões de Marcar/Desmarcar Todos Removidos */}
                     </div>
                     <p className="text-sm text-muted-foreground mb-4">Estes campos são usados para preencher tags dinâmicas em contratos.</p>
                     
-                    {/* Campos de Identificação (Razão Social, Nome Fantasia, Documento) */}
-                    <div className="space-y-4">
-                        <FormField control={form.control} name="razao_social" render={({ field }) => (
-                            <FormItem><FormLabel>Razão Social (Opcional)</FormLabel><FormControl><Input placeholder="Razão Social" {...field} /></FormControl><FormMessage /></FormItem>
-                        )} />
-                        <FormField control={form.control} name="nome_fantasia" render={({ field }) => (
-                            <FormItem><FormLabel>Nome Fantasia (Opcional)</FormLabel><FormControl><Input placeholder="Nome Fantasia" {...field} /></FormControl><FormMessage /></FormItem>
-                        )} />
-                        <FormField control={form.control} name="documento" render={({ field }) => (
-                            <FormItem><FormLabel>Documento (CPF/CNPJ)</FormLabel><FormControl><Input placeholder="00.000.000/0000-00" {...field} /></FormControl><FormMessage /></FormItem>
-                        )} />
-                        <Separator />
-                    </div>
+                    {/* Campos específicos do Admin (CPF/CNPJ) */}
+                    {criadorRole === 'Admin' && (
+                        <div className="space-y-4">
+                            <FormField control={form.control} name="cpf" render={({ field }) => (
+                                <FormItem><FormLabel>CPF (Opcional)</FormLabel><FormControl><Input placeholder="000.000.000-00" {...field} /></FormControl><FormMessage /></FormItem>
+                            )} />
+                            <FormField control={form.control} name="cnpj" render={({ field }) => (
+                                <FormItem><FormLabel>CNPJ (Opcional)</FormLabel><FormControl><Input placeholder="00.000.000/0000-00" {...field} /></FormControl><FormMessage /></FormItem>
+                            )} />
+                            <Separator />
+                        </div>
+                    )}
                     
-                    <FormDadosCadastrais
+                    {/* Campos de Identificação (Razão Social, Nome Fantasia, Documento) */}
+                    {isClientBeingManagedByAdmin && (
+                        <div className="space-y-4">
+                            <FormField control={form.control} name="razao_social" render={({ field }) => (
+                                <FormItem><FormLabel>Razão Social (Opcional)</FormLabel><FormControl><Input placeholder="Razão Social" {...field} /></FormControl><FormMessage /></FormItem>
+                            )} />
+                            <FormField control={form.control} name="nome_fantasia" render={({ field }) => (
+                                <FormItem><FormLabel>Nome Fantasia (Opcional)</FormLabel><FormControl><Input placeholder="Nome Fantasia" {...field} /></FormControl><FormMessage /></FormItem>
+                            )} />
+                            <FormField control={form.control} name="documento" render={({ field }) => (
+                                <FormItem><FormLabel>Documento (CPF/CNPJ)</FormLabel><FormControl><Input placeholder="00.000.000/0000-00" {...field} /></FormControl><FormMessage /></FormItem>
+                            )} />
+                            <Separator />
+                        </div>
+                    )}
+                    
+                    <FormDadosCadastrais 
                         control={form.control}
                         isSubmitting={isSubmitting}
                         resourceId={resourceId}
@@ -503,7 +517,6 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
             </Tabs>
 
             <Button type="submit" className="w-full" disabled={isSubmitting}>
-              {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {isEditing ? 'Salvar Alterações' : 'Enviar Convite de Cadastro'}
             </Button>
           </form>

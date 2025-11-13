@@ -3,7 +3,6 @@ import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader2, FileTextIcon, PlusCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { useSessao } from '@/hooks/use-sessao';
 import { showError } from '@/utils/toast';
 import { ContratoModelo } from '@/types/contratos';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
@@ -23,7 +22,7 @@ const NovoContrato: React.FC = () => {
   const getOwnerId = () => {
     if (isAdmin) return usuario?.id || null;
     if (isCliente) return (perfil as ClienteProfile)?.id;
-    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id;
+    if (role === 'Usuario') return (perfil as UsuarioProfile)?.proprietario_id;
     return null;
   };
   

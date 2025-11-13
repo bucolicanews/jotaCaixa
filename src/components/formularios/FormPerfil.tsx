@@ -98,7 +98,8 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
   if (!perfilInicial) return null; 
     
   const isClient = 'limite_usuarios' in perfilInicial;
-  const isUser = 'cliente_id' in perfilInicial;
+  // CORREÇÃO: Verifica proprietario_id
+  const isUser = 'proprietario_id' in perfilInicial;
   const isAdminProfile = role === 'Admin';
   
   const profileToEdit = perfilInicial as UsuarioProfile | ClienteProfile | AdminProfile;
@@ -408,7 +409,7 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
                         control={form.control}
                         isSubmitting={isSubmitting}
                         resourceId={resourceId}
-                        tagRefreshKey={refreshKey} // Passando o refreshKey do bulk manager
+                        tagRefreshKey={refreshKey}
                         onTagToggle={handleTagToggle}
                     />
                 </TabsContent>

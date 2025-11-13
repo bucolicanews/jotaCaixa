@@ -56,7 +56,7 @@ export function useContratos(): ContratosHook {
     const getEmpresaId = () => {
         if (isAdmin) return usuario?.id || null;
         if (isCliente) return (perfil as ClienteProfile)?.id;
-        if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id;
+        if (role === 'Usuario') return (perfil as UsuarioProfile)?.proprietario_id;
         return null;
     };
     

@@ -1,4 +1,42 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import<dyad-problem-report summary="20 problems">
+<problem file="src/pages/ContasReceber.tsx" line="68" column="64" code="2339">Property 'cliente_id' does not exist on type 'UsuarioProfile'.</problem>
+<problem file="src/components/contabilidade/ImportarPlanoContas.tsx" line="55" column="64" code="2339">Property 'cliente_id' does not exist on type 'UsuarioProfile'.</problem>
+<problem file="src/components/formularios/FormUsuario.tsx" line="9" column="64" code="6133">'AdminProfile' is declared but its value is never read.</problem>
+<problem file="src/components/formularios/FormUsuario.tsx" line="486" column="63" code="2322">Type '&quot;cnpj&quot;' is not assignable to type '&quot;limite_usuarios&quot; | &quot;email&quot; | &quot;nome&quot; | &quot;data_fim_acesso&quot; | &quot;documento&quot; | &quot;estado&quot; | &quot;numero&quot; | &quot;folga_domingo_obrigatoria&quot; | &quot;dias_folga_fixos&quot; | &quot;endereco&quot; | &quot;bairro&quot; | &quot;cidade&quot; | ... 33 more ... | `permissoes.${string}`'.</problem>
+<problem file="src/components/formularios/FormUsuario.tsx" line="487" column="95" code="2322">Type '{ onChange: (...event: any[]) =&gt; void; onBlur: Noop; value: string | number | boolean | Record&lt;string, boolean&gt; | string[] | Date | null | undefined; disabled?: boolean | undefined; name: &quot;limite_usuarios&quot; | ... 44 more ... | `permissoes.${string}`; ref: RefCallBack; placeholder: string; }' is not assignable to type 'Omit&lt;DetailedHTMLProps&lt;InputHTMLAttributes&lt;HTMLInputElement&gt;, HTMLInputElement&gt;, &quot;ref&quot;&gt;'.
+  Types of property 'value' are incompatible.
+    Type 'string | number | boolean | Record&lt;string, boolean&gt; | string[] | Date | null | undefined' is not assignable to type 'string | number | readonly string[] | undefined'.
+      Type 'null' is not assignable to type 'string | number | readonly string[] | undefined'.</problem>
+<problem file="src/components/formularios/GerenciarFaltas.tsx" line="6" column="38" code="6133">'CheckCircle2' is declared but its value is never read.</problem>
+<problem file="src/hooks/use-contratos.ts" line="59" column="68" code="2339">Property 'cliente_id' does not exist on type 'UsuarioProfile'.</problem>
+<problem file="src/components/formularios/FormContratoTag.tsx" line="36" column="64" code="2339">Property 'cliente_id' does not exist on type 'UsuarioProfile'.</problem>
+<problem file="src/pages/GerenciarTags.tsx" line="38" column="55" code="2339">Property 'cliente_id' does not exist on type 'UsuarioProfile'.</problem>
+<problem file="src/components/formularios/FormContratoModelo.tsx" line="50" column="64" code="2339">Property 'cliente_id' does not exist on type 'UsuarioProfile'.</problem>
+<problem file="src/pages/GerenciarModelos.tsx" line="31" column="64" code="2339">Property 'cliente_id' does not exist on type 'UsuarioProfile'.</problem>
+<problem file="src/pages/NovoContrato.tsx" line="26" column="64" code="2339">Property 'cliente_id' does not exist on type 'UsuarioProfile'.</problem>
+<problem file="src/pages/PreencherContrato.tsx" line="110" column="64" code="2339">Property 'cliente_id' does not exist on type 'UsuarioProfile'.</problem>
+<problem file="src/components/formularios/FormCliente.tsx" line="80" column="54" code="2339">Property 'cliente_id' does not exist on type 'UsuarioProfile'.</problem>
+<problem file="src/pages/Clientes.tsx" line="88" column="64" code="2339">Property 'cliente_id' does not exist on type 'UsuarioProfile'.</problem>
+<problem file="src/pages/DocumentosSocietarios.tsx" line="33" column="64" code="2339">Property 'cliente_id' does not exist on type 'UsuarioProfile'.</problem>
+<problem file="src/pages/GerenciarModelosSocietarios.tsx" line="309" column="64" code="2339">Property 'cliente_id' does not exist on type 'UsuarioProfile'.</problem>
+<problem file="src/pages/GerenciarBlocosSocietarios.tsx" line="197" column="64" code="2339">Property 'cliente_id' does not exist on type 'UsuarioProfile'.</problem>
+<problem file="src/pages/GerarDocumentoSocietario.tsx" line="100" column="64" code="2339">Property 'cliente_id' does not exist on type 'UsuarioProfile'.</problem>
+<problem file="src/pages/SelecaoPerfil.tsx" line="60" column="79" code="2339">Property 'cliente_id' does not exist on type 'UsuarioProfile'.</problem>
+</dyad-problem-report>Entendido. Os erros restantes são de dois tipos:
+
+1.  **Referências a `cliente_id`:** A maioria dos erros ocorre porque a coluna `cliente_id` foi renomeada para `proprietario_id` na `tbl_usuarios`, mas o código frontend ainda tenta acessar `cliente_id` em `UsuarioProfile`.
+2.  **Erro `TS6133`:** Variável declarada, mas não lida (`CheckCircle2` e `AdminProfile`).
+3.  **Erro `TS2322` (FormUsuario):** O campo `cnpj` no `FormUsuario` está sendo mapeado para um campo que não existe no esquema de validação do formulário, causando um erro de atribuição de tipo.
+
+Vou corrigir todas as referências de `cliente_id` para `proprietario_id` e resolver os erros de importação e mapeamento de formulário.
+
+### 1. Corrigindo Referências de `cliente_id` para `proprietario_id` (18 arquivos)
+
+Vou aplicar a correção `?.cliente_id` -> `?.proprietario_id` em todos os arquivos listados.
+
+<dyad-write path="src/pages/ContasReceber.tsx" description="Corrigindo referência de cliente_id para proprietario_id em UsuarioProfile.">
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -65,7 +103,7 @@ const ContasReceber = () => {
   const getOwnerId = () => {
     if (isAdmin) return usuario?.id || null;
     if (role === 'Cliente') return (perfil as ClienteProfile)?.id || null;
-    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id || null;
+    if (role === 'Usuario') return (perfil as UsuarioProfile)?.proprietario_id || null;
     return null;
   };
   

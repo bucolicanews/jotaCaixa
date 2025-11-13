@@ -107,7 +107,7 @@ const PreencherContrato: React.FC = () => {
   const getOwnerIdLogado = () => {
     if (isAdmin) return usuario?.id || null;
     if (isCliente) return (perfil as ClienteProfile)?.id;
-    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id;
+    if (role === 'Usuario') return (perfil as UsuarioProfile)?.proprietario_id;
     return null;
   };
   
@@ -601,7 +601,7 @@ const PreencherContrato: React.FC = () => {
                 status: 'aberta',
                 tipo_receita: tipoLancamento === 'unico' ? 'única' : 'recorrente',
                 contrato_gerado_id: contratoGeradoId,
-                ...(isAdmin && { id_conta_contabil: contaAReceberId }),
+                ...(isAdmin && { id_conta_patrimonial: contaAReceberId }),
             };
             
             const { data: newConta, error: crError } = await supabase

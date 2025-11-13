@@ -23,7 +23,7 @@ const DIAS_DA_SEMANA = [
 
 const FormFolgasFerias: React.FC<FormFolgasFeriasProps> = ({ control, isSubmitting, usuarioInicial }) => {
   
-  const clienteId = usuarioInicial.cliente_id;
+  const proprietarioId = usuarioInicial.proprietario_id; // CORREÇÃO: Usando proprietario_id
 
   return (
     <div className="space-y-6">
@@ -100,11 +100,11 @@ const FormFolgasFerias: React.FC<FormFolgasFeriasProps> = ({ control, isSubmitti
             )}
         />
         
-        {clienteId && (
+        {proprietarioId && (
             <div className="pt-6 border-t">
                 <GerenciarFerias 
                     funcionarioId={usuarioInicial.id} 
-                    empresaId={clienteId} 
+                    empresaId={proprietarioId} 
                 />
             </div>
         )}

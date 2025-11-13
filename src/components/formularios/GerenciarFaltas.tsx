@@ -265,7 +265,6 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
               {atestadoPronto && (
                 <div className="flex justify-between items-center text-sm">
                     <p className={cn("flex items-center", atestadoPronto ? "text-green-600" : "text-red-500")}>
-                        <CheckCircle2 className="w-4 h-4 mr-1" />
                         {atestadoFile ? `Novo arquivo: ${atestadoFile.name}` : 'Atestado já anexado.'}
                     </p>
                     <div className="flex space-x-2">

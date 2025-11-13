@@ -40,7 +40,7 @@ const getTipoDRE = (conta: string, configMap: ContabilConfigMap): ContaBalanco['
 
 const compareContas = (a: ContaBalanco, b: ContaBalanco): number => {
     const partsA = a.Conta.split('.').map(Number);
-    const partsB = b.Conta.split('.').map(Number);
+    const partsB = b.Conta.split('.map').map(Number);
 
     for (let i = 0; i < Math.max(partsA.length, partsB.length); i++) {
         const numA = partsA[i] || 0;
@@ -113,7 +113,7 @@ export function useBalancoPatrimonial(endDate: Date | undefined): BalancoData {
   const getEmpresaId = () => {
     if (role === 'Admin') return usuario?.id || null;
     if (role === 'Cliente') return (perfil as ClienteProfile)?.id || null;
-    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id || null;
+    if (role === 'Usuario') return (perfil as UsuarioProfile)?.proprietario_id || null;
     return null;
   };
 
@@ -245,7 +245,7 @@ export function useBalancoPatrimonial(endDate: Date | undefined): BalancoData {
     if (!carregandoSessao && empresaId && !loadingConfig) fetchBalanco();
   }, [carregandoSessao, empresaId, fetchBalanco, loadingConfig]);
   
-  // 8. Calcular totais usando o saldo consolidado do código de nível 1
+  // 8. Calcular totais
   const getSaldoPorCodigoNivel1 = (codigo: string) => {
     const found = contasBalanco.find(c => c.Conta === codigo);
     return found ? (found.saldo_final || 0) : 0;

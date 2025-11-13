@@ -6,11 +6,11 @@ import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
 import { ContratoModelo } from '@/types/contratos';
+import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import FormContratoModelo from '@/components/formularios/FormContratoModelo';
-import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
-import ImportarModeloContrato from '@/components/contratos/ImportarModeloContrato';
+import { ImportarModeloContrato } from '@/components/contratos/ImportarModeloContrato';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 const GerenciarModelos: React.FC = () => {
@@ -28,7 +28,7 @@ const GerenciarModelos: React.FC = () => {
   const getOwnerId = () => {
     if (isAdmin) return usuario?.id || null;
     if (isCliente) return (perfil as ClienteProfile)?.id;
-    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id;
+    if (role === 'Usuario') return (perfil as UsuarioProfile)?.proprietario_id;
     return null;
   };
   

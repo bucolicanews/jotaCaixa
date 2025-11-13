@@ -59,6 +59,9 @@ const GerenciarUsuarios: React.FC = () => {
     
     let fetchedClientes: EmpresaFiltro[] = [];
     let fetchedUsuarios: UsuarioComEmpresa[] = [];
+    
+    // IDs que podem ser proprietários de usuários (Admin ID + todos os Clientes IDs)
+    let allowedProprietarioIds: string[] = [];
 
     if (isAdmin) {
       // 1. Admin: Busca todos os clientes
@@ -74,13 +77,12 @@ const GerenciarUsuarios: React.FC = () => {
       
       fetchedClientes = clientesData as EmpresaFiltro[];
       
-      // Adiciona o próprio Admin como um "cliente" para seus próprios usuários
+      // Adiciona o próprio Admin como um "proprietário"
       if (usuario.id) {
-          fetchedClientes.unshift({ id: usuario.id, nome: 'Meus Usuários (Admin)' } as EmpresaFiltro);
+          const adminOption: EmpresaFiltro = { id: usuario.id, nome: 'Meus Usuários (Admin)' };
+          fetchedClientes.unshift(adminOption);
+          allowedProprietarioIds = fetchedClientes.map(c => c.id);
       }
-      
-      // IDs permitidos: Admin's ID + todos os IDs de clientes
-      const allowedClientIds = fetchedClientes.map(c => c.id);
       
       setEmpresasFiltro(fetchedClientes);
 
@@ -88,7 +90,7 @@ const GerenciarUsuarios: React.FC = () => {
       const { data: usuariosData, error: usuariosError } = await supabase
         .from('tbl_usuarios')
         .select('*, tbl_clientes(nome)')
-        .in('cliente_id', allowedClientIds)
+        .in('proprietario_id', allowedProprietarioIds) // CORREÇÃO: Usando proprietario_id
         .order('nome', { ascending: true });
 
       if (usuariosError) {
@@ -96,7 +98,8 @@ const GerenciarUsuarios: React.FC = () => {
         setUsuarios([]);
       } else {
         fetchedUsuarios = (usuariosData as any[]).map(item => {
-          const nomeEmpresa = fetchedClientes.find(c => c.id === item.cliente_id)?.nome || 'N/A';
+          // O nome da empresa é o nome do Cliente OU 'Meus Usuários (Admin)' se proprietario_id for o ID do Admin
+          const nomeEmpresa = fetchedClientes.find(c => c.id === item.proprietario_id)?.nome || 'N/A';
           return { ...item, nome_empresa: nomeEmpresa } as UsuarioComEmpresa;
         });
         
@@ -110,7 +113,7 @@ const GerenciarUsuarios: React.FC = () => {
       const { data: usuariosData, error: usuariosError } = await supabase
         .from('tbl_usuarios')
         .select('*')
-        .eq('cliente_id', usuario.id)
+        .eq('proprietario_id', usuario.id) // CORREÇÃO: Usando proprietario_id
         .order('nome', { ascending: true });
 
       if (usuariosError) {
@@ -122,7 +125,7 @@ const GerenciarUsuarios: React.FC = () => {
     }
     
     setCarregandoDados(false);
-  }, [usuario, role, isAdmin, isCliente]);
+  }, [usuario, role, isAdmin, isCliente, filtroEmpresaId]); // Adicionado filtroEmpresaId para re-fetch
 
   useEffect(() => {
     if (!carregando) {
@@ -138,8 +141,9 @@ const GerenciarUsuarios: React.FC = () => {
     setFiltro(e.target.value);
   };
 
-  const meusFuncionarios = usuarios.filter(u => u.cliente_id === usuario?.id);
-  const funcionariosClientes = usuarios.filter(u => u.cliente_id !== usuario?.id);
+  // CORREÇÃO: Filtrando por proprietario_id
+  const meusFuncionarios = usuarios.filter(u => u.proprietario_id === usuario?.id);
+  const funcionariosClientes = usuarios.filter(u => u.proprietario_id !== usuario?.id);
 
   const filterUsers = (userList: UsuarioComEmpresa[], currentTab: string) => {
     const termoBusca = filtro.toLowerCase();
@@ -153,7 +157,7 @@ const GerenciarUsuarios: React.FC = () => {
         if (!textMatch) return false;
         
         if (isAdmin && currentTab === 'funcionarios_clientes' && filtroEmpresaId !== 'todos') {
-            return u.cliente_id === filtroEmpresaId;
+            return u.proprietario_id === filtroEmpresaId; // CORREÇÃO: Usando proprietario_id
         }
 
         return true;
@@ -182,7 +186,6 @@ const GerenciarUsuarios: React.FC = () => {
       // Deleta o usuário do auth.users
       // Nota: O RLS impede que um Cliente/Usuário delete outro usuário, apenas o Admin pode fazer isso.
       // Se o Admin estiver deletando, ele precisa de permissão de service_role, que não temos aqui.
-      // Vamos confiar que a exclusão do perfil é suficiente para o fluxo de UI, e o Admin pode limpar o auth.users manualmente se necessário.
       
       showSuccess(`Conta de ${nome} deletada com sucesso.`);
       fetchDados();
@@ -210,7 +213,7 @@ const GerenciarUsuarios: React.FC = () => {
   // Helper function to render the table content
   const renderTableContent = (profiles: AnyProfile[], currentTab: string) => {
     // Filtra perfis nulos para satisfazer o TypeScript
-    const nonNullProfiles = profiles.filter((p): p is UsuarioComEmpresa => p !== null && 'cliente_id' in p);
+    const nonNullProfiles = profiles.filter((p): p is UsuarioComEmpresa => p !== null && 'proprietario_id' in p);
     
     if (nonNullProfiles.length === 0) {
         return <p className="text-center text-muted-foreground">Nenhum funcionário encontrado.</p>;

@@ -108,7 +108,7 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick }) => {
   const localizacao = useLocation();
   const { role, perfil } = useSessao();
 
-  const isUnassignedUser = role === 'Usuario' && !(perfil as UsuarioProfile)?.cliente_id;
+  const isUnassignedUser = role === 'Usuario' && !(perfil as UsuarioProfile)?.proprietario_id;
   const isPendingClient = role === 'Cliente' && !(perfil as ClienteProfile)?.aprovado;
   const userProfile = perfil as UsuarioProfile;
   const clientProfile = perfil as ClienteProfile;

@@ -39,7 +39,7 @@ const FormSaldoConta: React.FC<FormSaldoContaProps> = ({ contaInicial, onSaveCom
   const getEmpresaId = () => {
     if (role === 'Admin') return usuario?.id || null;
     if (role === 'Cliente') return (perfil as ClienteProfile)?.id || null;
-    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id || null;
+    if (role === 'Usuario') return (perfil as UsuarioProfile)?.proprietario_id || null;
     return null;
   };
   
@@ -186,7 +186,7 @@ const FormSaldoConta: React.FC<FormSaldoContaProps> = ({ contaInicial, onSaveCom
                 </SelectContent>
               </Select>
               <FormMessage />
-              {contasContabeis.length === 0 && (
+              {contasContabeis.length === 0 && !loadingContas && (
                   <p className="text-sm text-red-500">
                       Nenhuma conta contábil marcada como "Conta de Saldo" ou "Conta Patrimonial". Marque as contas em <a href="/plano-contas" className="underline">Plano de Contas</a>.
                   </p>

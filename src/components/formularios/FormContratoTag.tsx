@@ -33,7 +33,7 @@ const FormContratoTag: React.FC<FormContratoTagProps> = ({ tagInicial, onSaveCom
   const getOwnerId = () => {
     if (role === 'Admin') return usuario?.id || null;
     if (role === 'Cliente') return (perfil as ClienteProfile)?.id;
-    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id;
+    if (role === 'Usuario') return (perfil as UsuarioProfile)?.proprietario_id;
     return null;
   };
   
