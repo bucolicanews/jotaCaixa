@@ -21,6 +21,7 @@ import { UsuarioProfile } from '@/types/usuario';
 import { Historico } from '@/types/historico';
 import { PlanoContas } from '@/types/plano-contas';
 import { useContabilConfig } from '@/hooks/use-contabil-config';
+import { ContaReceber } from '@/types/contas-receber'; // FIX: Importando ContaReceber
 
 const formSchema = z.object({
   cliente_id: z.string({ required_error: 'Selecione um cliente.' }).uuid('Cliente inválido.'),

@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React from 'react';
 import { Control } from 'react-hook-form';
 import { FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
@@ -71,9 +71,12 @@ const TaggedFormField: React.FC<TaggedFormFieldProps> = ({ control, fieldName, l
                             Usar como Tag
                         </Label>
                     </div>
-                </FormItem>
-            )} />
-        );
-    };
+                </div>
+                <FormControl><Input placeholder={placeholder} {...field} value={(field.value as string) || ''} disabled={disabled} /></FormControl>
+                <FormMessage />
+            </FormItem>
+        )} />
+    );
+};
 
 export { TaggedFormField };
