@@ -1,12 +1,3 @@
-# 🗄️ Arquitetura do Banco de Dados (Supabase/PostgreSQL)
-
-Este documento detalha o esquema do banco de dados, incluindo a criação de tabelas, funções RPC e políticas de Row Level Security (RLS).
-
-## 1. SQL de Criação de Schema (Tabelas Essenciais)
-
-O esquema abaixo inclui as tabelas de perfis (`tbl_admins`, `tbl_clientes`, `tbl_usuarios`), cadastros (`clientes`, `planos`, `historicos`, `plano_contas`), e módulos (`registros_ponto`, `contratos_gerados`, `admin_contas_receber`, `lancamentos`, `saldo_contas`).
-
-```sql
 -- Habilita extensões necessárias
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
@@ -63,14 +54,14 @@ CREATE TABLE public.tbl_clientes (
 ALTER TABLE public.tbl_clientes ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Admins podem gerenciar todos os clientes" ON public.tbl_clientes FOR ALL TO authenticated USING ((SELECT count(*) FROM tbl_admins WHERE id = auth.uid()) > 0) WITH CHECK ((SELECT count(*) FROM tbl_admins WHERE id = auth.uid()) > 0);
 CREATE POLICY "Clientes podem ver seus próprios dados" ON public.tbl_clientes FOR SELECT TO authenticated USING (auth.uid() = id);
-CREATE POLICY "Usuarios podem ler os dados da sua empresa" ON public.tbl_clientes FOR SELECT TO authenticated USING (EXISTS ( SELECT 1 FROM tbl_usuarios WHERE ((tbl_usuarios.id = auth.uid()) AND (tbl_clientes.id = tbl_usuarios.cliente_id))));
+CREATE POLICY "Usuarios podem ler os dados da sua empresa" ON public.tbl_clientes FOR SELECT TO authenticated USING (EXISTS ( SELECT 1 FROM tbl_usuarios WHERE ((tbl_usuarios.id = auth.uid()) AND (tbl_clientes.id = tbl_usuarios.proprietario_id))));
 CREATE POLICY "Allow authenticated users to update their own client profile" ON public.tbl_clientes FOR UPDATE TO authenticated USING (auth.uid() = id);
 
 
 -- Tabela de Usuários (Funcionários)
 CREATE TABLE public.tbl_usuarios (
   id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
-  cliente_id UUID REFERENCES public.tbl_clientes(id) ON DELETE SET NULL,
+  proprietario_id UUID, -- ID do Admin ou Cliente (tbl_admins/tbl_clientes)
   nome TEXT NOT NULL,
   email TEXT NOT NULL UNIQUE,
   permissoes JSONB DEFAULT '{"visualizar_proprio_ponto": true}'::jsonb,
@@ -94,7 +85,7 @@ CREATE TABLE public.tbl_usuarios (
 );
 ALTER TABLE public.tbl_usuarios ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Usuarios podem ver seus próprios dados" ON public.tbl_usuarios FOR SELECT TO authenticated USING (auth.uid() = id);
-CREATE POLICY "Clientes podem gerenciar seus próprios usuários" ON public.tbl_usuarios FOR ALL TO authenticated USING (cliente_id = auth.uid());
+CREATE POLICY "Proprietarios podem gerenciar seus proprios usuarios" ON public.tbl_usuarios FOR ALL TO authenticated USING (proprietario_id = auth.uid()) WITH CHECK (proprietario_id = auth.uid());
 CREATE POLICY "Admins podem ver todos os usuários" ON public.tbl_usuarios FOR SELECT TO authenticated USING ((SELECT count(*) FROM tbl_admins WHERE id = auth.uid()) > 0);
 
 
@@ -118,7 +109,7 @@ CREATE TABLE public.clientes (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 ALTER TABLE public.clientes ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Empresas podem gerenciar seus próprios clientes" ON public.clientes FOR ALL TO authenticated USING (proprietario_id IN ( SELECT tbl_clientes.id FROM tbl_clientes WHERE (tbl_clientes.id = auth.uid()) UNION SELECT tbl_usuarios.cliente_id FROM tbl_usuarios WHERE ((tbl_usuarios.id = auth.uid()) AND (tbl_usuarios.cliente_id IS NOT NULL))));
+CREATE POLICY "Empresas podem gerenciar seus próprios clientes" ON public.clientes FOR ALL TO authenticated USING (proprietario_id IN ( SELECT tbl_clientes.id FROM tbl_clientes WHERE (tbl_clientes.id = auth.uid()) UNION SELECT tbl_usuarios.proprietario_id FROM tbl_usuarios WHERE ((tbl_usuarios.id = auth.uid()) AND (tbl_usuarios.proprietario_id IS NOT NULL)))) WITH CHECK (proprietario_id IN ( SELECT tbl_clientes.id FROM tbl_clientes WHERE (tbl_clientes.id = auth.uid()) UNION SELECT tbl_usuarios.proprietario_id FROM tbl_usuarios WHERE ((tbl_usuarios.id = auth.uid()) AND (tbl_usuarios.proprietario_id IS NOT NULL))));
 CREATE POLICY "Admins podem ver todos os clientes" ON public.clientes FOR SELECT USING (EXISTS ( SELECT 1 FROM tbl_admins WHERE (tbl_admins.id = auth.uid())));
 CREATE POLICY "Admin select own clients" ON public.clientes FOR SELECT TO authenticated USING (auth.uid() = proprietario_id);
 CREATE POLICY "Admin insert own clients" ON public.clientes FOR INSERT TO authenticated WITH CHECK (auth.uid() = proprietario_id);
@@ -151,7 +142,7 @@ CREATE TABLE public.historicos (
 );
 ALTER TABLE public.historicos ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Allow owner to manage historicos" ON public.historicos FOR ALL TO authenticated USING (auth.uid() = proprietario_id);
-CREATE POLICY "Allow users to manage company historicos" ON public.historicos FOR ALL TO authenticated USING (proprietario_id IN ( SELECT tbl_clientes.id FROM tbl_clientes WHERE (tbl_clientes.id = auth.uid()) UNION SELECT tbl_usuarios.cliente_id FROM tbl_usuarios WHERE ((tbl_usuarios.id = auth.uid()) AND (tbl_usuarios.cliente_id IS NOT NULL))));
+CREATE POLICY "Allow users to manage company historicos" ON public.historicos FOR ALL TO authenticated USING (proprietario_id IN ( SELECT tbl_clientes.id FROM tbl_clientes WHERE (tbl_clientes.id = auth.uid()) UNION SELECT tbl_usuarios.proprietario_id FROM tbl_usuarios WHERE ((tbl_usuarios.id = auth.uid()) AND (tbl_usuarios.proprietario_id IS NOT NULL))));
 
 
 -- Tabela de Plano de Contas
@@ -169,7 +160,7 @@ CREATE TABLE public.plano_contas (
   atualizado_em TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 ALTER TABLE public.plano_contas ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Allow authenticated users to manage their own plan of accounts" ON public.plano_contas FOR ALL TO authenticated USING ((auth.uid() = proprietario_id) OR (proprietario_id IN ( SELECT tbl_usuarios.cliente_id FROM tbl_usuarios WHERE ((tbl_usuarios.id = auth.uid()) AND (tbl_usuarios.cliente_id IS NOT NULL)))));
+CREATE POLICY "Allow authenticated users to manage their own plan of accounts" ON public.plano_contas FOR ALL TO authenticated USING ((auth.uid() = proprietario_id) OR (proprietario_id IN ( SELECT tbl_usuarios.proprietario_id FROM tbl_usuarios WHERE ((tbl_usuarios.id = auth.uid()) AND (tbl_usuarios.proprietario_id IS NOT NULL)))));
 
 
 -- ----------------------------------------------------------------
@@ -190,7 +181,7 @@ CREATE TABLE public.saldo_contas (
 );
 ALTER TABLE public.saldo_contas ENABLE ROW LEVEL SECURITY;
 -- Políticas atualizadas para usar proprietario_id
-CREATE POLICY "Empresas podem gerenciar seus saldos de contas" ON public.saldo_contas FOR ALL TO authenticated USING (proprietario_id IN ( SELECT tbl_clientes.id FROM tbl_clientes WHERE (tbl_clientes.id = auth.uid()) UNION SELECT tbl_usuarios.cliente_id FROM tbl_usuarios WHERE ((tbl_usuarios.id = auth.uid()) AND (tbl_usuarios.cliente_id IS NOT NULL)))) WITH CHECK (proprietario_id IN ( SELECT tbl_clientes.id FROM tbl_clientes WHERE (tbl_clientes.id = auth.uid()) UNION SELECT tbl_usuarios.cliente_id FROM tbl_usuarios WHERE ((tbl_usuarios.id = auth.uid()) AND (tbl_usuarios.cliente_id IS NOT NULL))));
+CREATE POLICY "Empresas podem gerenciar seus saldos de contas" ON public.saldo_contas FOR ALL TO authenticated USING (proprietario_id IN ( SELECT tbl_clientes.id FROM tbl_clientes WHERE (tbl_clientes.id = auth.uid()) UNION SELECT tbl_usuarios.proprietario_id FROM tbl_usuarios WHERE ((tbl_usuarios.id = auth.uid()) AND (tbl_usuarios.proprietario_id IS NOT NULL)))) WITH CHECK (proprietario_id IN ( SELECT tbl_clientes.id FROM tbl_clientes WHERE (tbl_clientes.id = auth.uid()) UNION SELECT tbl_usuarios.proprietario_id FROM tbl_usuarios WHERE ((tbl_usuarios.id = auth.uid()) AND (tbl_usuarios.proprietario_id IS NOT NULL))));
 CREATE POLICY "Admin pode gerenciar suas contas" ON public.saldo_contas FOR ALL TO authenticated USING (auth.uid() = proprietario_id) WITH CHECK (auth.uid() = proprietario_id);
 
 
@@ -354,12 +345,12 @@ CREATE TABLE public.contratos_gerados (
 );
 ALTER TABLE public.contratos_gerados ENABLE ROW LEVEL SECURITY;
 -- Políticas recriadas usando proprietario_id
-CREATE POLICY "Restrict client view to own contracts, admin views all" ON public.contratos_gerados FOR SELECT TO authenticated USING ((EXISTS ( SELECT 1 FROM tbl_admins WHERE (tbl_admins.id = auth.uid()))) OR (proprietario_id = auth.uid()) OR (proprietario_id IN ( SELECT tbl_usuarios.cliente_id FROM tbl_usuarios WHERE (tbl_usuarios.id = auth.uid()))));
+CREATE POLICY "Restrict client view to own contracts, admin views all" ON public.contratos_gerados FOR SELECT TO authenticated USING ((EXISTS ( SELECT 1 FROM tbl_admins WHERE (tbl_admins.id = auth.uid()))) OR (proprietario_id = auth.uid()) OR (proprietario_id IN ( SELECT tbl_usuarios.proprietario_id AS cliente_id FROM tbl_usuarios WHERE (tbl_usuarios.id = auth.uid()))));
 CREATE POLICY "Admin select own generated contracts" ON public.contratos_gerados FOR SELECT TO authenticated USING (auth.uid() = proprietario_id);
 CREATE POLICY "Admin update own generated contracts" ON public.contratos_gerados FOR UPDATE TO authenticated USING (auth.uid() = proprietario_id);
 CREATE POLICY "Admin delete own generated contracts" ON public.contratos_gerados FOR DELETE TO authenticated USING (auth.uid() = proprietario_id);
 CREATE POLICY "Admin insert own generated contracts" ON public.contratos_gerados FOR INSERT TO authenticated WITH CHECK (auth.uid() = proprietario_id);
-CREATE POLICY "Clients and users can manage their generated contracts" ON public.contratos_gerados FOR ALL TO authenticated USING ((proprietario_id IN ( SELECT tbl_clientes.id FROM tbl_clientes WHERE (tbl_clientes.id = auth.uid()))) OR (proprietario_id IN ( SELECT tbl_usuarios.cliente_id FROM tbl_usuarios WHERE (tbl_usuarios.id = auth.uid())))) WITH CHECK ((proprietario_id IN ( SELECT tbl_clientes.id FROM tbl_clientes WHERE (tbl_clientes.id = auth.uid()))) OR (proprietario_id IN ( SELECT tbl_usuarios.cliente_id FROM tbl_usuarios WHERE (tbl_usuarios.id = auth.uid()))));
+CREATE POLICY "Clients and users can manage their generated contracts" ON public.contratos_gerados FOR ALL TO authenticated USING ((proprietario_id IN ( SELECT tbl_clientes.id FROM tbl_clientes WHERE (tbl_clientes.id = auth.uid()))) OR (proprietario_id IN ( SELECT tbl_usuarios.proprietario_id AS cliente_id FROM tbl_usuarios WHERE (tbl_usuarios.id = auth.uid())))) WITH CHECK ((proprietario_id IN ( SELECT tbl_clientes.id FROM tbl_clientes WHERE (tbl_clientes.id = auth.uid()))) OR (proprietario_id IN ( SELECT tbl_usuarios.proprietario_id AS cliente_id FROM tbl_usuarios WHERE (tbl_usuarios.id = auth.uid()))));
 
 
 -- ----------------------------------------------------------------
@@ -371,11 +362,11 @@ CREATE OR REPLACE FUNCTION public.route_new_user()
 RETURNS TRIGGER
 LANGUAGE PLPGSQL
 SECURITY DEFINER SET search_path = ''
-AS $$
+AS $function$
 DECLARE
   user_role TEXT;
   user_nome TEXT;
-  p_cliente_id UUID;
+  p_proprietario_id UUID; -- RENOMEADO
   p_plano_id UUID;
   p_permissoes JSONB;
   p_limite_usuarios INTEGER;
@@ -384,7 +375,8 @@ BEGIN
   user_role := COALESCE(new.raw_user_meta_data ->> 'role', 'Cliente');
   user_nome := COALESCE(new.raw_user_meta_data ->> 'nome', split_part(new.email, '@', 1));
   
-  BEGIN p_cliente_id := (new.raw_user_meta_data ->> 'cliente_id')::uuid; EXCEPTION WHEN invalid_text_representation THEN p_cliente_id := NULL; END;
+  -- Tenta converter proprietario_id (antigo cliente_id), se existir
+  BEGIN p_proprietario_id := (new.raw_user_meta_data ->> 'proprietario_id')::uuid; EXCEPTION WHEN invalid_text_representation THEN p_proprietario_id := NULL; END;
   BEGIN p_plano_id := (new.raw_user_meta_data ->> 'plano_id')::uuid; EXCEPTION WHEN invalid_text_representation THEN p_plano_id := NULL; END;
   BEGIN p_permissoes := (new.raw_user_meta_data ->> 'permissoes')::jsonb; EXCEPTION WHEN others THEN p_permissoes := NULL; END;
   p_limite_usuarios := COALESCE((new.raw_user_meta_data ->> 'limite_usuarios')::integer, 5);
@@ -407,19 +399,14 @@ BEGIN
         (new.raw_user_meta_data ->> 'data_fim_acesso')::timestamp with time zone
     );
   ELSIF user_role = 'Usuario' THEN
-    INSERT INTO public.tbl_usuarios (id, nome, email, cliente_id) VALUES (new.id, user_nome, new.email, p_cliente_id);
+    -- Usa p_proprietario_id (que pode ser o ID do Admin ou Cliente)
+    INSERT INTO public.tbl_usuarios (id, nome, email, proprietario_id) VALUES (new.id, user_nome, new.email, p_proprietario_id);
   ELSE
     RAISE EXCEPTION 'Papel de usuário inválido: %', user_role;
   END IF;
   RETURN new;
 END;
-$$;
-
--- Trigger para rotear novos usuários
-DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
-CREATE TRIGGER on_auth_user_created
-  AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE FUNCTION public.route_new_user();
+$function$;
 
 
 -- Função RPC para ativar a assinatura após o pagamento (Fluxo de Adesão)
