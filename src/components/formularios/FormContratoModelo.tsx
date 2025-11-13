@@ -1,22 +1,28 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { useForm } from 'react-hook-form';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useForm, ControllerRenderProps, FieldValues, ControllerFieldState, UseFormStateReturn } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Textarea } from '@/components/ui/textarea';
-import { Loader2, FileText, Tag, Save, Eye } from 'lucide-react';
+import { Loader2, Tag, Save, Eye } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { ContratoModelo, ContratoTag } from '@/types/contratos';
 import { useSessao } from '@/hooks/use-sessao';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
 import ContratoPreviewDialog from '../contratos/ContratoPreviewDialog';
 import { TAGS_PADRAO } from '@/config/contrato-tags-padrao';
 import { cn } from '@/lib/utils';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+
+// Extensão local para ContratoModelo
+interface ExtendedContratoModelo extends ContratoModelo {
+    tipo_conteudo?: 'html' | 'texto';
+}
 
 const formSchema = z.object({
   titulo: z.string().min(1, 'O título é obrigatório.'),
@@ -27,7 +33,7 @@ const formSchema = z.object({
 type FormValues = z.infer<typeof formSchema>;
 
 interface FormContratoModeloProps {
-  modeloInicial?: ContratoModelo | null;
+  modeloInicial?: ExtendedContratoModelo | null;
   onSaveComplete: () => void;
 }
 
@@ -46,7 +52,6 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
   };
   
   const ownerId = getOwnerId();
-  const isAdmin = role === 'Admin';
 
   const fetchTags = useCallback(async () => {
     if (!ownerId) return;
@@ -118,7 +123,6 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
   
   const handlePreview = () => {
       const template = form.getValues('conteudo_template');
-      const tipo = form.getValues('tipo_conteudo');
       
       // Substituição básica para a prévia (apenas tags padrão)
       let previewContent = template;
@@ -183,7 +187,7 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
                     <FormLabel className="flex justify-between items-center">
                         Conteúdo do Template
                         <Button type="button" variant="outline" size="sm" onClick={handlePreview} disabled={!field.value}>
-                            <Eye className="w-4 h-4 mr-2" /> Pré-visualizar
+                            <Eye className="mr-2 h-4 w-4" /> Pré-visualizar
                         </Button>
                     </FormLabel>
                     <FormControl>
@@ -208,7 +212,7 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
                 <CardContent>
                     <p className="text-sm text-muted-foreground mb-3">Clique para copiar a tag.</p>
                     <div className="space-y-2">
-                        {allTags.map(tag => (
+                        {allTags.map((tag: ContratoTag) => (
                             <div 
                                 key={tag.nome_tag} 
                                 className="p-2 border rounded-md cursor-pointer hover:bg-accent/50 transition-colors"

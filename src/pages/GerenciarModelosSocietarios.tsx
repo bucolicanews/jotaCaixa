@@ -48,7 +48,7 @@ const GerenciarModelosSocietarios: React.FC = () => {
       .select('*')
       .order('titulo', { ascending: true });
       
-    // Se for Cliente, busca apenas os seus modelos (ownerId) e modelos globais (empresa_id is null)
+    // Se for Cliente, busca apenas os seus modelos (ownerId) e modelos globais (proprietario_id is null)
     if (isCliente) {
         query = query.or(`proprietario_id.eq.${ownerId},proprietario_id.is.null`);
     }

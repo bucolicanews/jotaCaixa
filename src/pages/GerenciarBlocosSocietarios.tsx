@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, Plus, FileText, Trash2, Edit, ChevronLeft, Building2 } from 'lucide-react';
@@ -13,7 +13,11 @@ import FormBlocoSocietario from '@/components/documentos-societarios/FormBlocoSo
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Link } from 'react-router-dom';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useMemo } from 'react';
+
+// Extensão local para BlocoSocietario
+interface ExtendedBlocoSocietario extends BlocoSocietario {
+    conteudo_template: string;
+}
 
 const GerenciarBlocosSocietarios: React.FC = () => {
   const { role, perfil, usuario, carregando: carregandoSessao } = useSessao();
@@ -146,7 +150,7 @@ const GerenciarBlocosSocietarios: React.FC = () => {
                           </TableCell>
                       </TableRow>
                   ) : (
-                      list.map((bloco) => {
+                      list.map((bloco: BlocoSocietario) => {
                           // Apenas o proprietário ou Admin (no modo não supervisão) pode editar/deletar
                           const canEditOrDelete = bloco.proprietario_id === ownerId || isAdmin && !isSupervisao;
                           
@@ -154,7 +158,7 @@ const GerenciarBlocosSocietarios: React.FC = () => {
                               <TableRow key={bloco.id}>
                                   <TableCell className="font-medium">{bloco.titulo}</TableCell>
                                   <TableCell className="hidden md:table-cell text-sm text-muted-foreground truncate max-w-xs">
-                                      {bloco.conteudo_template.substring(0, 100)}...
+                                      {(bloco as ExtendedBlocoSocietario).conteudo_template.substring(0, 100)}...
                                   </TableCell>
                                   {isSupervisao && <TableCell className="text-sm text-muted-foreground">{bloco.proprietario_id}</TableCell>}
                                   <TableCell className="text-right">

@@ -13,7 +13,16 @@ import { format } from 'date-fns';
 import { Link } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 
-type DocumentoComCliente = DocumentoSocietarioGerado & { clientes: { nome: string } | null };
+// Extensão local para DocumentoSocietarioGerado
+type DocumentoStatus = 'rascunho' | 'finalizado' | 'arquivado' | 'ativo';
+
+interface ExtendedDocumentoSocietarioGerado extends DocumentoSocietarioGerado {
+    titulo: string;
+    modelo_titulo: string;
+    status: DocumentoStatus;
+}
+
+type DocumentoComCliente = ExtendedDocumentoSocietarioGerado & { clientes: { nome: string } | null };
 
 const DocumentosSocietarios: React.FC = () => {
   const { role, perfil, usuario, carregando: carregandoSessao } = useSessao();
@@ -167,7 +176,7 @@ const DocumentosSocietarios: React.FC = () => {
                                 </Button>
                             </Link>
                             <Button variant="ghost" size="icon" onClick={() => handleDelete(doc.id)} title="Excluir">
-                                <Trash2 className="w-4 h-4 text-red-500" />
+                                <Trash2 className="w-4 h-4" />
                             </Button>
                         </div>
                       </TableCell>

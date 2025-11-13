@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useForm } from 'react-hook-form';
+import React, { useState, useCallback } from 'react';
+import { useForm, Control } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from '@/components/ui/button';
@@ -14,6 +14,16 @@ import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import FormDadosCadastrais from '../usuario-forms/FormDadosCadastrais';
 import { useBulkTagManager } from '@/hooks/use-bulk-tag-manager';
+
+// Definindo a interface de props esperada para FormDadosCadastrais (para resolver TS2322)
+interface FormDadosCadastraisProps {
+    control: Control<FormValues>;
+    isSubmitting: boolean;
+    resourceId: string | undefined;
+    tagRefreshKey: number;
+    onTagToggle: () => void;
+    isClientScope: boolean;
+}
 
 const textOptional = z.string().optional().or(z.literal(''));
 
@@ -244,7 +254,7 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
             
             <TabsContent value="cadastrais" className="mt-4 space-y-6 p-4">
                 <FormDadosCadastrais
-                    control={form.control}
+                    control={form.control as unknown as Control<any>}
                     isSubmitting={form.formState.isSubmitting}
                     resourceId={resourceId}
                     tagRefreshKey={refreshKey}

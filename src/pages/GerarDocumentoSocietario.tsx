@@ -20,6 +20,18 @@ import { Separator } from '@/components/ui/separator';
 
 type TipoConteudo = 'html' | 'texto';
 
+// FIX 224, 234, 47: Define status type locally
+type DocumentoStatus = 'rascunho' | 'finalizado' | 'arquivado' | 'ativo';
+
+interface ExtendedDocumentoSocietarioGerado extends DocumentoSocietarioGerado {
+    titulo: string;
+    status: DocumentoStatus;
+}
+
+interface ExtendedBlocoSocietario extends BlocoSocietario {
+    conteudo_template: string;
+}
+
 interface EmpresaLogada {
     nome: string;
     email: string;
@@ -75,10 +87,9 @@ const GerarDocumentoSocietario: React.FC = () => {
   const { role, perfil, usuario, carregando: carregandoSessao } = useSessao();
   
   const [modelo, setModelo] = useState<DocumentoSocietarioModelo | null>(null);
-  const [documentoInicial, setDocumentoInicial] = useState<DocumentoSocietarioGerado | null>(null);
+  const [documentoInicial, setDocumentoInicial] = useState<ExtendedDocumentoSocietarioGerado | null>(null);
   const [blocos, setBlocos] = useState<BlocoSocietario[]>([]);
-  const [tagsCustomizadas, setTagsCustomizadas] = useState<any[]>([]); // Usando any[] para tags
-  const [clientesCR, setClientesCR] = useState<ClienteCRCompleto[]>([]);
+  const [tagsCustomizadas, setTagsCustomizadas] = useState<any[]>([]);
   
   const [valoresTags, setValoresTags] = useState<Record<string, string>>({});
   const [carregandoDados, setCarregandoDados] = useState(true);
@@ -219,11 +230,11 @@ const GerarDocumentoSocietario: React.FC = () => {
             return;
         }
         
-        const doc = docData as DocumentoSocietarioGerado;
+        const doc = docData as ExtendedDocumentoSocietarioGerado;
         setDocumentoInicial(doc);
-        initialProprietarioDocumentoId = doc.proprietario_id; // Sobrescreve o ID inicial
+        initialProprietarioDocumentoId = doc.proprietario_id;
         
-        setClienteSelecionadoId(doc.cliente_id);
+        setClienteSelecionadoId(doc.cliente_id || '');
         setValoresTags(doc.valores_tags_preenchidos || {});
         setTituloDocumento(doc.titulo);
         setTipoConteudo(doc.valores_tags_preenchidos?.tipo_conteudo || 'html');
@@ -344,9 +355,6 @@ const GerarDocumentoSocietario: React.FC = () => {
                     tagValue = String(clienteData[sourceField]);
                 }
             } 
-            
-            // Mapeamento de Tags Financeiras (Não aplicável a documentos societários, mas mantido para consistência)
-            // ...
         }
         
         // 2. Se o valor foi preenchido automaticamente, usa-o.
@@ -389,7 +397,7 @@ const GerarDocumentoSocietario: React.FC = () => {
       setPreviewOpen(true);
   };
 
-  const handleSalvarDocumento = async (status: DocumentoSocietarioGerado['status']) => {
+  const handleSalvarDocumento = async (status: DocumentoStatus) => {
     if (!modelo || !clienteSelecionadoId || !ownerIdLogado || !tituloDocumento || !proprietarioDocumentoId) {
         showError('Preencha Título, Cliente e Proprietário.');
         return;
@@ -408,7 +416,7 @@ const GerarDocumentoSocietario: React.FC = () => {
         // 2. Preparar dados do Documento Gerado
         const documentoPayload = {
             modelo_id: modelo.id,
-            cliente_id: clienteSelecionadoId, // Referencia tbl_clientes(id)
+            cliente_id: clienteSelecionadoId,
             proprietario_id: proprietarioDocumentoId,
             status: status,
             titulo: tituloDocumento,
@@ -443,7 +451,7 @@ const GerarDocumentoSocietario: React.FC = () => {
     }
   };
   
-  const handleInsertBloco = (bloco: BlocoSocietario) => {
+  const handleInsertBloco = (bloco: ExtendedBlocoSocietario) => {
       const currentContent = valoresTags['{{CONTEUDO_PRINCIPAL}}'] || modelo?.conteudo_template || '';
       const newContent = currentContent + '\n\n' + bloco.conteudo_template;
       handleTagChange('{{CONTEUDO_PRINCIPAL}}', newContent);
@@ -645,7 +653,7 @@ const GerarDocumentoSocietario: React.FC = () => {
                                     key={bloco.id} 
                                     variant="outline" 
                                     size="sm" 
-                                    onClick={() => handleInsertBloco(bloco)}
+                                    onClick={() => handleInsertBloco(bloco as ExtendedBlocoSocietario)}
                                     className="justify-start truncate"
                                 >
                                     {bloco.titulo}
