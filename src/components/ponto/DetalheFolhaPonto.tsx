@@ -348,7 +348,7 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
                 ) : (
                     todosOsDiasDoMes.map(data => {
                         const diaString = format(data, 'yyyy-MM-dd');
-                        const { minutos, registros, isFalta, isAbono, isTurnoAberto, isFolgaFixa, isFerias, hasPontoRecords, decisionRecord, needsManagement, minutosTrabalhadosFolga, isCompensacaoAbono, isFaltaJustificada } = diasProcessados[diaString];
+                        const { minutos, registros, isFalta, isAbono, isTurnoAberto, isFolgaFixa, isFerias, hasPontoRecords, decisionRecord, needsManagement, minutosTrabalhadosFolga, isCompensacaoAbono, isFaltaJustificada, minutosAbonados } = diasProcessados[diaString];
                         
                         const isDiaAtual = isSameDay(data, hoje);
                         const isDiaFuturo = data > hoje;
@@ -390,9 +390,20 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
                             // NOVO: Exibe a observação da falta
                             const observacaoFalta = faltaRegistro?.observacao || 'Falta Injustificada';
                             
+                            // Lógica de exibição para Falta Injustificada (parcial ou total)
+                            let displayObs = observacaoFalta;
+                            if (!atestadoUrl && observacaoFalta.includes('Falta Injustificada')) {
+                                const horas = minutosAbonados / 60;
+                                if (horas < 8) {
+                                    displayObs = `Falta Injustificada (${horas}h)`;
+                                } else {
+                                    displayObs = 'Falta Injustificada';
+                                }
+                            }
+                            
                             statusDisplay = atestadoUrl 
-                                ? <span className="text-sm text-green-600 flex items-center"><FileText className="w-4 h-4 mr-1" /> {observacaoFalta}</span>
-                                : <span className="text-sm text-red-600 flex items-center"><AlertTriangle className="w-4 h-4 mr-1" /> {observacaoFalta}</span>;
+                                ? <span className="text-sm text-green-600 flex items-center"><FileText className="w-4 h-4 mr-1" /> {displayObs}</span>
+                                : <span className="text-sm text-red-600 flex items-center"><AlertTriangle className="w-4 h-4 mr-1" /> {displayObs}</span>;
                         } else if (isAbono) {
                             const abonoRegistro = registros.find(r => r.tipo === 'Abono');
                             const observacaoAbono = abonoRegistro?.observacao || 'Abono';

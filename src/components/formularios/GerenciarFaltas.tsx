@@ -11,7 +11,6 @@ import { cn } from '@/lib/utils';
 import { RegistroPonto } from '@/types/ponto';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Textarea } from '../ui/textarea';
-// import { useSessao } from '@/hooks/use-sessao'; // Removido
 
 type Acao = 'Falta' | 'Abono' | 'Nenhum';
 type AbonoHoras = '8h' | '6h' | '4h' | '2h';
@@ -60,19 +59,20 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
         setAcao(registroInicial ? (registroInicial.tipo === 'Falta' ? 'Falta' : 'Abono') : 'Falta');
         setAtestadoUrl(registroInicial?.atestado_url || null);
         setAtestadoFile(null);
-        setObservacao(registroInicial?.observacao || '');
         
-        // Tenta extrair as horas do abono/falta justificada se for edição
-        if (registroInicial?.observacao) {
-            const match = registroInicial.observacao.match(/(\d+)h/);
+        // Lógica de inicialização de Horas e Observação
+        let initialObs = registroInicial?.observacao || '';
+        let initialHoras: AbonoHoras = '8h';
+        
+        if (registroInicial) {
+            const match = registroInicial.observacao?.match(/(\d+)h/);
             if (match) {
-                setHorasSelecionadas(match[0] as AbonoHoras);
-            } else {
-                setHorasSelecionadas('8h');
+                initialHoras = match[0] as AbonoHoras;
             }
-        } else {
-            setHorasSelecionadas('8h');
         }
+        
+        setHorasSelecionadas(initialHoras);
+        setObservacao(initialObs);
     }
   }, [registroInicial, open]);
 
@@ -135,8 +135,8 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
     
     const isJustificada = isFalta && (atestadoUrl || atestadoFile);
     
-    if (isFalta && !isJustificada) {
-        if (!window.confirm('Você está registrando uma Falta Injustificada. Deseja continuar?')) return;
+    if (isFalta && !isJustificada && !window.confirm('Você está registrando uma Falta Injustificada. Deseja continuar?')) {
+        return;
     }
     
     if (isAbono && !horasSelecionadas) {
@@ -181,10 +181,15 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
       let observacaoFinal = observacao;
       if (isAbono) {
           observacaoFinal = `${horasSelecionadas} de Abono`;
-      } else if (isFalta && isJustificada) {
-          observacaoFinal = `Falta Justificada (${horasSelecionadas})`;
-      } else if (isFalta && !isJustificada) {
-          observacaoFinal = observacao || 'Falta Injustificada';
+      } else if (isFalta) {
+          // CORREÇÃO: Para falta, a observação deve incluir as horas selecionadas
+          const horas = horasSelecionadas;
+          if (isJustificada) {
+              observacaoFinal = `Falta Justificada (${horas})`;
+          } else {
+              // Falta Injustificada: Inclui as horas para o cálculo de saldo
+              observacaoFinal = `Falta Injustificada (${horas})`;
+          }
       }
 
       const dataToInsert = {
