@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import FormUsuario from '@/components/formularios/FormUsuario';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
-import { AnyProfile, UsuarioProfile, UserRole, ClienteProfile } from '@/types/usuario';
+import { AnyProfile, UsuarioProfile, UserRole } from '@/types/usuario';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -115,7 +115,7 @@ const GerenciarUsuarios: React.FC = () => {
 
       if (usuariosError) {
         showError('Erro ao carregar usuários: ' + usuariosError.message);
-        setUsuarios(usuariosData as UsuarioComEmpresa[]);
+        setUsuarios([]);
       } else {
         setUsuarios(usuariosData as UsuarioComEmpresa[]);
       }

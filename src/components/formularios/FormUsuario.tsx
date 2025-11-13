@@ -20,12 +20,6 @@ import FormGeral from '../usuario-forms/FormGeral';
 import FormFolgasFerias from '../usuario-forms/FormFolgasFerias';
 import FormDocumentos from '../usuario-forms/FormDocumentos';
 import FormDadosContratuais from '../usuario-forms/FormDadosContratuais';
-import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
-import { Calendar } from '../ui/calendar';
-import { CalendarIcon } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { ptBR } from 'date-fns/locale';
-import { Checkbox } from '../ui/checkbox';
 
 const textOptional = z.string().optional().or(z.literal(''));
 const urlSchema = z.string().url('URL inválida.').optional().or(z.literal(''));
@@ -108,20 +102,8 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
 }) => {
   const isEditing = !!usuarioInicial;
   const isClientBeingManagedByAdmin = criadorRole === 'Admin' && usuarioInicial && 'limite_usuarios' in usuarioInicial;
-  const isUserBeingManagedByClient = (criadorRole === 'Cliente' || criadorRole === 'Admin') && usuarioInicial && 'proprietario_id' in usuarioInicial;
-  
-  const isNewClient = criadorRole === 'Admin' && !isEditing;
-  const isNewUser = !isEditing && !isClientBeingManagedByAdmin && !isNewClient;
   
   const profileToEdit = usuarioInicial as UsuarioProfile;
-  
-  // Define targetTable no escopo do componente (Correção de escopo)
-  let targetTable: 'tbl_usuarios' | 'tbl_clientes' = 'tbl_usuarios';
-  if (isClientBeingManagedByAdmin || isNewClient) {
-      targetTable = 'tbl_clientes';
-  } else if (isUserBeingManagedByClient || isNewUser) {
-      targetTable = 'tbl_usuarios';
-  }
   
   const [activeTab, setActiveTab] = useState('pessoal');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -135,71 +117,76 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
     return isNaN(date.getTime()) ? undefined : date;
   };
 
-  const defaultPermissoes = PERMISSOES_DISPONIVEIS.reduce((acc: Record<string, boolean>, p: Permissao) => {
-    // Filtra apenas as permissões relevantes para o Usuário (Funcionário)
-    if (p.key === 'ponto_eletronico' || p.key === 'visualizar_proprio_ponto' || p.key === 'folha_ponto' || p.key === 'cadastrar_usuarios') {
-        if (profileToEdit && 'permissoes' in profileToEdit && (profileToEdit as any).permissoes) {
-            acc[p.key] = (profileToEdit as any).permissoes[p.key] !== false;
-        } else {
-            // Padrão para novo usuário: Ponto Eletrônico e Visualizar Próprio Ponto
-            acc[p.key] = p.key === 'ponto_eletronico' || p.key === 'visualizar_proprio_ponto';
-        }
-    }
-    return acc;
-  }, {} as Record<string, boolean>);
+  const targetTable = 'tbl_usuarios'; // Sempre tbl_usuarios para este formulário
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
-    defaultValues: {
-      nome: profileToEdit?.nome || '',
-      email: profileToEdit?.email || '',
-      senha: '',
-      
-      // Dados de Folga (Apenas Usuário)
-      dias_folga_fixos: profileToEdit?.dias_folga_fixos || ['Saturday', 'Sunday'],
-      folga_domingo_obrigatoria: profileToEdit?.folga_domingo_obrigatoria ?? true,
-      
-      // Dados de Salário/Jornada
-      salario: profileToEdit?.salario || 0,
-      horas_semanais: profileToEdit?.horas_semanais || 44,
-      horas_mensais: profileToEdit?.horas_mensais || 220,
-      
-      // Dados Cadastrais
-      cpf: profileToEdit?.cpf || '',
-      rg: profileToEdit?.rg || '',
-      nome_mae: profileToEdit?.nome_mae || '',
-      nome_pai: profileToEdit?.nome_pai || '',
-      telefone: profileToEdit?.telefone || '',
-      cep: profileToEdit?.cep || '',
-      endereco: profileToEdit?.endereco || '',
-      numero: profileToEdit?.numero || '',
-      complemento: profileToEdit?.complemento || '',
-      bairro: profileToEdit?.bairro || '',
-      cidade: profileToEdit?.cidade || '',
-      estado: profileToEdit?.estado || '',
-      
-      // Dados Contratuais (Apenas Usuário)
-      data_inicio_contrato: parseDate(profileToEdit?.data_inicio_contrato),
-      data_fim_contrato: parseDate(profileToEdit?.data_fim_contrato),
-      data_inicio_aviso: parseDate(profileToEdit?.data_inicio_aviso),
-      tipo_aviso: (profileToEdit?.tipo_aviso || 'Nenhum') as FormValues['tipo_aviso'],
-      
-      // Documentos (URLs)
-      rg_url: profileToEdit?.rg_url || '',
-      cpf_url: profileToEdit?.cpf_url || '',
-      titulo_eleitor_url: profileToEdit?.titulo_eleitor_url || '',
-      reservista_url: profileToEdit?.reservista_url || '',
-      ctps_url: profileToEdit?.ctps_url || '',
-      certidao_nascimento_url: profileToEdit?.certidao_nascimento_url || '',
-      certidao_casamento_url: profileToEdit?.certidao_casamento_url || '',
-      comprovante_residencia_url: profileToEdit?.comprovante_residencia_url || '',
-      comprovante_escolaridade_url: profileToEdit?.comprovante_escolaridade_url || '',
-      exame_admissional_url: profileToEdit?.exame_admissional_url || '',
-      foto_3x4_url: profileToEdit?.foto_3x4_url || '',
-      cnh_url: profileToEdit?.cnh_url || '',
-      cartao_pis_url: profileToEdit?.cartao_pis_url || '',
-      ja_admitido_anteriormente: profileToEdit?.ja_admitido_anteriormente ?? false,
-    },
+    defaultValues: () => {
+        const defaultPermissoes = PERMISSOES_DISPONIVEIS.reduce((acc: Record<string, boolean>, p: Permissao) => {
+            // Filtra apenas as permissões relevantes para o Usuário (Funcionário)
+            if (p.key === 'ponto_eletronico' || p.key === 'visualizar_proprio_ponto' || p.key === 'folha_ponto' || p.key === 'cadastrar_usuarios') {
+                if (profileToEdit && 'permissoes' in profileToEdit && (profileToEdit as any).permissoes) {
+                    acc[p.key] = (profileToEdit as any).permissoes[p.key] !== false;
+                } else {
+                    // Padrão para novo usuário: Ponto Eletrônico e Visualizar Próprio Ponto
+                    acc[p.key] = p.key === 'ponto_eletronico' || p.key === 'visualizar_proprio_ponto';
+                }
+            }
+            return acc;
+        }, {} as Record<string, boolean>);
+        
+        return {
+            nome: profileToEdit?.nome || '',
+            email: profileToEdit?.email || '',
+            senha: '',
+            permissoes: defaultPermissoes,
+            
+            // Dados de Folga (Apenas Usuário)
+            dias_folga_fixos: profileToEdit?.dias_folga_fixos || ['Saturday', 'Sunday'],
+            folga_domingo_obrigatoria: profileToEdit?.folga_domingo_obrigatoria ?? true,
+            
+            // Dados de Salário/Jornada
+            salario: profileToEdit?.salario || 0,
+            horas_semanais: profileToEdit?.horas_semanais || 44,
+            horas_mensais: profileToEdit?.horas_mensais || 220,
+            
+            // Dados Cadastrais
+            cpf: profileToEdit?.cpf || '',
+            rg: profileToEdit?.rg || '',
+            nome_mae: profileToEdit?.nome_mae || '',
+            nome_pai: profileToEdit?.nome_pai || '',
+            telefone: profileToEdit?.telefone || '',
+            cep: profileToEdit?.cep || '',
+            endereco: profileToEdit?.endereco || '',
+            numero: profileToEdit?.numero || '',
+            complemento: profileToEdit?.complemento || '',
+            bairro: profileToEdit?.bairro || '',
+            cidade: profileToEdit?.cidade || '',
+            estado: profileToEdit?.estado || '',
+            
+            // Dados Contratuais (Apenas Usuário)
+            data_inicio_contrato: parseDate(profileToEdit?.data_inicio_contrato),
+            data_fim_contrato: parseDate(profileToEdit?.data_fim_contrato),
+            data_inicio_aviso: parseDate(profileToEdit?.data_inicio_aviso),
+            tipo_aviso: (profileToEdit?.tipo_aviso || 'Nenhum') as FormValues['tipo_aviso'],
+            
+            // Documentos (URLs)
+            rg_url: profileToEdit?.rg_url || '',
+            cpf_url: profileToEdit?.cpf_url || '',
+            titulo_eleitor_url: profileToEdit?.titulo_eleitor_url || '',
+            reservista_url: profileToEdit?.reservista_url || '',
+            ctps_url: profileToEdit?.ctps_url || '',
+            certidao_nascimento_url: profileToEdit?.certidao_nascimento_url || '',
+            certidao_casamento_url: profileToEdit?.certidao_casamento_url || '',
+            comprovante_residencia_url: profileToEdit?.comprovante_residencia_url || '',
+            comprovante_escolaridade_url: profileToEdit?.comprovante_escolaridade_url || '',
+            exame_admissional_url: profileToEdit?.exame_admissional_url || '',
+            foto_3x4_url: profileToEdit?.foto_3x4_url || '',
+            cnh_url: profileToEdit?.cnh_url || '',
+            cartao_pis_url: profileToEdit?.cartao_pis_url || '',
+            ja_admitido_anteriormente: profileToEdit?.ja_admitido_anteriormente ?? false,
+        };
+    }
   });
 
   const handleSelectAll = (select: boolean) => {
@@ -220,7 +207,6 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
   const onSubmit = async (values: FormValues) => {
     setIsSubmitting(true);
     
-    const targetTable = 'tbl_usuarios';
     const proprietarioId = criadorRole === 'Admin' ? criadorPerfil?.id : (criadorPerfil as ClienteProfile)?.id;
     
     if (!proprietarioId) {

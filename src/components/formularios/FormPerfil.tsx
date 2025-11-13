@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState } from 'react';
 import { useForm, FormProvider } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -68,11 +68,10 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
   
   const profileToEdit = perfilInicial as ClienteProfile | AdminProfile;
   
-  const [activeTab, setActiveTab] = useState('pessoal');
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   const resourceId = perfilInicial.id; 
-  const { refetchStatus, refreshKey } = useBulkTagManager(resourceId);
+  const { refetchStatus } = useBulkTagManager(resourceId);
 
   const defaultPermissoes = PERMISSOES_DISPONIVEIS.reduce((acc: Record<string, boolean>, p: Permissao) => {
     if (profileToEdit && 'permissoes' in profileToEdit && (profileToEdit as any).permissoes) {
@@ -121,10 +120,6 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
     });
   };
   
-  const handleTagToggle = useCallback(() => {
-      refetchStatus();
-  }, [refetchStatus]);
-
   const onSubmit = async (values: FormValues) => {
     setIsSubmitting(true);
     try {
