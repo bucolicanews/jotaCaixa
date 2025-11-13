@@ -528,7 +528,6 @@ const ClientesPage = () => {
         if (resetError) throw resetError;
         
         // CORREÇÃO DO ERRO 3: Acessando action_link da resposta de dados
-        // Forçando a tipagem para resolver o TS2339
         const resetLink = (data as { action_link: string | null }).action_link || `${BASE_URL}/atualizar-senha`;
         
         showSuccess('Convite de acesso enviado! Use o botão de Ações para enviar o link.');
@@ -1086,6 +1085,7 @@ const ClientesPage = () => {
                             criadorPerfil={perfil!}
                             usuarioInicial={null}
                             onSaveComplete={handleSaveComplete}
+                            isNewClient={true} // NOVO PROP PARA MUDAR O COMPORTAMENTO
                         />
                     </DialogContent>
                 </Dialog>

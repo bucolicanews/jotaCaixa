@@ -53,7 +53,7 @@ const formSchema = z.object({
   cidade: textOptional,
   estado: textOptional,
   
-  // NOVOS CAMPOS DE CLIENTE
+  // NOVOS CAMPOS DE CLIENTE (Apenas para isNewClient)
   razao_social: textOptional,
   nome_fantasia: textOptional,
   documento: textOptional,
@@ -92,17 +92,28 @@ interface FormUsuarioProps {
   criadorPerfil: AnyProfile;
   usuarioInicial?: AnyProfile | null;
   onSaveComplete: () => void;
+  isNewClient?: boolean; // NOVO PROP
 }
+
+// Type guard para verificar se o perfil é UsuarioProfile
+const isUsuarioProfile = (profile: AnyProfile): profile is UsuarioProfile => {
+    return !!profile && 'proprietario_id' in profile;
+};
 
 const FormUsuario: React.FC<FormUsuarioProps> = ({
   criadorRole,
   criadorPerfil,
   usuarioInicial,
   onSaveComplete,
+  isNewClient = false, // Default é false (criação de funcionário)
 }) => {
   const isEditing = !!usuarioInicial;
   
-  const profileToEdit = usuarioInicial as UsuarioProfile;
+  // Se for criação de novo cliente, o perfil inicial é o perfil do criador (Admin)
+  const profileToEdit = isNewClient ? (criadorPerfil as ClienteProfile) : usuarioInicial;
+  
+  // Variável de escopo principal para o perfil de usuário (funcionário)
+  const userProfile: UsuarioProfile | null = isUsuarioProfile(profileToEdit) ? profileToEdit : null;
   
   const [activeTab, setActiveTab] = useState('pessoal');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -138,6 +149,8 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
             return acc;
         }, {} as Record<string, boolean>);
         
+        const clientProfile = profileToEdit && 'limite_usuarios' in profileToEdit ? profileToEdit as ClienteProfile : null;
+        
         return {
             nome: profileToEdit?.nome || '',
             email: profileToEdit?.email || '',
@@ -145,49 +158,55 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
             permissoes: defaultPermissoes,
             
             // Dados de Folga (Apenas Usuário)
-            dias_folga_fixos: profileToEdit?.dias_folga_fixos || ['Saturday', 'Sunday'],
-            folga_domingo_obrigatoria: profileToEdit?.folga_domingo_obrigatoria ?? true,
+            dias_folga_fixos: userProfile?.dias_folga_fixos || ['Saturday', 'Sunday'],
+            folga_domingo_obrigatoria: userProfile?.folga_domingo_obrigatoria ?? true,
             
             // Dados de Salário/Jornada
-            salario: profileToEdit?.salario || 0,
-            horas_semanais: profileToEdit?.horas_semanais || 44,
-            horas_mensais: profileToEdit?.horas_mensais || 220,
+            salario: userProfile?.salario || 0,
+            horas_semanais: userProfile?.horas_semanais || 44,
+            horas_mensais: userProfile?.horas_mensais || 220,
             
             // Dados Cadastrais
-            cpf: profileToEdit?.cpf || '',
-            rg: profileToEdit?.rg || '',
-            nome_mae: profileToEdit?.nome_mae || '',
-            nome_pai: profileToEdit?.nome_pai || '',
-            telefone: profileToEdit?.telefone || '',
-            cep: profileToEdit?.cep || '',
-            endereco: profileToEdit?.endereco || '',
-            numero: profileToEdit?.numero || '',
-            complemento: profileToEdit?.complemento || '',
-            bairro: profileToEdit?.bairro || '',
-            cidade: profileToEdit?.cidade || '',
-            estado: profileToEdit?.estado || '',
+            cpf: userProfile?.cpf || clientProfile?.cpf || '',
+            rg: userProfile?.rg || clientProfile?.rg || '',
+            nome_mae: userProfile?.nome_mae || '',
+            nome_pai: userProfile?.nome_pai || '',
+            telefone: userProfile?.telefone || clientProfile?.telefone || '',
+            cep: userProfile?.cep || clientProfile?.cep || '',
+            endereco: userProfile?.endereco || clientProfile?.endereco || '',
+            numero: userProfile?.numero || clientProfile?.numero || '',
+            complemento: userProfile?.complemento || clientProfile?.complemento || '',
+            bairro: userProfile?.bairro || clientProfile?.bairro || '',
+            cidade: userProfile?.cidade || clientProfile?.cidade || '',
+            estado: userProfile?.estado || clientProfile?.estado || '',
             
+            // Campos de Cliente (Apenas para isNewClient)
+            razao_social: clientProfile?.razao_social || '',
+            nome_fantasia: clientProfile?.nome_fantasia || '',
+            documento: clientProfile?.documento || '',
+            cnpj: clientProfile?.cnpj || '',
+
             // Dados Contratuais (Apenas Usuário)
-            data_inicio_contrato: parseDate(profileToEdit?.data_inicio_contrato),
-            data_fim_contrato: parseDate(profileToEdit?.data_fim_contrato),
-            data_inicio_aviso: parseDate(profileToEdit?.data_inicio_aviso),
-            tipo_aviso: (profileToEdit?.tipo_aviso || 'Nenhum') as FormValues['tipo_aviso'],
+            data_inicio_contrato: parseDate(userProfile?.data_inicio_contrato),
+            data_fim_contrato: parseDate(userProfile?.data_fim_contrato),
+            data_inicio_aviso: parseDate(userProfile?.data_inicio_aviso),
+            tipo_aviso: (userProfile?.tipo_aviso || 'Nenhum') as FormValues['tipo_aviso'],
             
             // Documentos (URLs)
-            rg_url: profileToEdit?.rg_url || '',
-            cpf_url: profileToEdit?.cpf_url || '',
-            titulo_eleitor_url: profileToEdit?.titulo_eleitor_url || '',
-            reservista_url: profileToEdit?.reservista_url || '',
-            ctps_url: profileToEdit?.ctps_url || '',
-            certidao_nascimento_url: profileToEdit?.certidao_nascimento_url || '',
-            certidao_casamento_url: profileToEdit?.certidao_casamento_url || '',
-            comprovante_residencia_url: profileToEdit?.comprovante_residencia_url || '',
-            comprovante_escolaridade_url: profileToEdit?.comprovante_escolaridade_url || '',
-            exame_admissional_url: profileToEdit?.exame_admissional_url || '',
-            foto_3x4_url: profileToEdit?.foto_3x4_url || '',
-            cnh_url: profileToEdit?.cnh_url || '',
-            cartao_pis_url: profileToEdit?.cartao_pis_url || '',
-            ja_admitido_anteriormente: profileToEdit?.ja_admitido_anteriormente ?? false,
+            rg_url: userProfile?.rg_url || '',
+            cpf_url: userProfile?.cpf_url || '',
+            titulo_eleitor_url: userProfile?.titulo_eleitor_url || '',
+            reservista_url: userProfile?.reservista_url || '',
+            ctps_url: userProfile?.ctps_url || '',
+            certidao_nascimento_url: userProfile?.certidao_nascimento_url || '',
+            certidao_casamento_url: userProfile?.certidao_casamento_url || '',
+            comprovante_residencia_url: userProfile?.comprovante_residencia_url || '',
+            comprovante_escolaridade_url: userProfile?.comprovante_escolaridade_url || '',
+            exame_admissional_url: userProfile?.exame_admissional_url || '',
+            foto_3x4_url: userProfile?.foto_3x4_url || '',
+            cnh_url: userProfile?.cnh_url || '',
+            cartao_pis_url: userProfile?.cartao_pis_url || '',
+            ja_admitido_anteriormente: userProfile?.ja_admitido_anteriormente ?? false,
         };
     })(),
   });
@@ -226,16 +245,26 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                 return;
             }
             
+            // Determina a role e os metadados
+            const targetRole = isNewClient ? 'Cliente' : 'Usuario';
+            const metadata: Record<string, any> = { 
+                role: targetRole, 
+                nome: values.nome, 
+            };
+            
+            if (targetRole === 'Usuario') {
+                metadata.proprietario_id = proprietarioId; // Vincula ao Admin ou Cliente
+            } else if (targetRole === 'Cliente') {
+                // Novo Cliente do Sistema (Pendente de Aprovação)
+                metadata.aprovado = false;
+            }
+            
             const { data: signUpData, error: authError } = await supabase.auth.signUp({
                 email: values.email,
                 password: values.senha,
                 options: {
                     emailRedirectTo: `${BASE_URL}/atualizar-senha`,
-                    data: { 
-                        role: 'Usuario', 
-                        nome: values.nome, 
-                        proprietario_id: proprietarioId, // Vincula ao Admin ou Cliente
-                    }
+                    data: metadata,
                 }
             });
 
@@ -253,65 +282,90 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
         
         if (!userId) throw new Error('Falha ao obter ID do usuário.');
 
-        // 2. Prepare Data Payload (tbl_usuarios)
-        const dataToUpdate: any = { 
-            nome: values.nome,
-            permissoes: values.permissoes,
-            
-            // Dados de RH/Contrato
-            dias_folga_fixos: values.dias_folga_fixos || [],
-            folga_domingo_obrigatoria: values.folga_domingo_obrigatoria,
-            salario: values.salario,
-            horas_semanais: values.horas_semanais,
-            horas_mensais: values.horas_mensais,
-            data_inicio_contrato: values.data_inicio_contrato ? format(values.data_inicio_contrato, 'yyyy-MM-dd') : null,
-            data_fim_contrato: values.data_fim_contrato ? format(values.data_fim_contrato, 'yyyy-MM-dd') : null,
-            data_inicio_aviso: values.data_inicio_aviso ? format(values.data_inicio_aviso, 'yyyy-MM-dd') : null,
-            tipo_aviso: values.tipo_aviso === 'Nenhum' ? null : values.tipo_aviso,
-            
-            // Dados Cadastrais e Documentos
-            cpf: values.cpf || null,
-            rg: values.rg || null,
-            nome_mae: values.nome_mae || null,
-            nome_pai: values.nome_pai || null,
-            telefone: values.telefone || null,
-            cep: values.cep || null,
-            endereco: values.endereco || null,
-            numero: values.numero || null,
-            complemento: values.complemento || null,
-            bairro: values.bairro || null,
-            cidade: values.cidade || null,
-            estado: values.estado || null,
-            rg_url: values.rg_url || null,
-            cpf_url: values.cpf_url || null,
-            titulo_eleitor_url: values.titulo_eleitor_url || null,
-            reservista_url: values.reservista_url || null,
-            ctps_url: values.ctps_url || null,
-            certidao_nascimento_url: values.certidao_nascimento_url || null,
-            certidao_casamento_url: values.certidao_casamento_url || null,
-            comprovante_residencia_url: values.comprovante_residencia_url || null,
-            comprovante_escolaridade_url: values.comprovante_escolaridade_url || null,
-            exame_admissional_url: values.exame_admissional_url || null,
-            foto_3x4_url: values.foto_3x4_url || null,
-            cnh_url: values.cnh_url || null,
-            cartao_pis_url: values.cartao_pis_url || null,
-            ja_admitido_anteriormente: values.ja_admitido_anteriormente,
-        };
+        // 2. Prepare Data Payload (tbl_usuarios OU tbl_clientes)
         
-        if (isEditing) {
-            if (values.senha) {
-                const { error: authError } = await supabase.auth.updateUser({ password: values.senha });
-                if (authError) throw authError;
-            }
-            const { error } = await supabase.from('tbl_usuarios').update(dataToUpdate).eq('id', userId);
+        if (isNewClient) {
+            // FLUXO DE CRIAÇÃO DE NOVO CLIENTE DO SISTEMA (tbl_clientes)
+            const dataToUpdate: Partial<ClienteProfile> = {
+                nome: values.nome,
+                email: values.email,
+                admin_id: criadorRole === 'Admin' ? proprietarioId : (criadorPerfil as ClienteProfile)?.admin_id,
+                aprovado: false, // Sempre começa como pendente
+                limite_usuarios: 5,
+                permissoes: {}, // Permissões vazias até ser aprovado
+                
+                // Campos de Cliente
+                razao_social: values.razao_social || null,
+                nome_fantasia: values.nome_fantasia || null,
+                documento: values.documento || null,
+                cnpj: values.cnpj || null,
+            };
+            
+            // Se for novo, o trigger já inseriu o registro base, apenas atualizamos os campos
+            const { error } = await supabase.from('tbl_clientes').update(dataToUpdate).eq('id', userId);
             if (error) throw error;
+            
         } else {
-            // Se for novo, o trigger já inseriu o registro base, apenas atualizamos os campos de RH
-            const { error } = await supabase.from('tbl_usuarios').update(dataToUpdate).eq('id', userId);
-            if (error) throw error;
+            // FLUXO DE CRIAÇÃO/EDIÇÃO DE FUNCIONÁRIO (tbl_usuarios)
+            const dataToUpdate: any = { 
+                nome: values.nome,
+                permissoes: values.permissoes,
+                
+                // Dados de RH/Contrato
+                dias_folga_fixos: values.dias_folga_fixos || [],
+                folga_domingo_obrigatoria: values.folga_domingo_obrigatoria,
+                salario: values.salario,
+                horas_semanais: values.horas_semanais,
+                horas_mensais: values.horas_mensais,
+                data_inicio_contrato: values.data_inicio_contrato ? format(values.data_inicio_contrato, 'yyyy-MM-dd') : null,
+                data_fim_contrato: values.data_fim_contrato ? format(values.data_fim_contrato, 'yyyy-MM-dd') : null,
+                data_inicio_aviso: values.data_inicio_aviso ? format(values.data_inicio_aviso, 'yyyy-MM-dd') : null,
+                tipo_aviso: values.tipo_aviso === 'Nenhum' ? null : values.tipo_aviso,
+                
+                // Dados Cadastrais e Documentos
+                cpf: values.cpf || null,
+                rg: values.rg || null,
+                nome_mae: values.nome_mae || null,
+                nome_pai: values.nome_pai || null,
+                telefone: values.telefone || null,
+                cep: values.cep || null,
+                endereco: values.endereco || null,
+                numero: values.numero || null,
+                complemento: values.complemento || null,
+                bairro: values.bairro || null,
+                cidade: values.cidade || null,
+                estado: values.estado || null,
+                rg_url: values.rg_url || null,
+                cpf_url: values.cpf_url || null,
+                titulo_eleitor_url: values.titulo_eleitor_url || null,
+                reservista_url: values.reservista_url || null,
+                ctps_url: values.ctps_url || null,
+                certidao_nascimento_url: values.certidao_nascimento_url || null,
+                certidao_casamento_url: values.certidao_casamento_url || null,
+                comprovante_residencia_url: values.comprovante_residencia_url || null,
+                comprovante_escolaridade_url: values.comprovante_escolaridade_url || null,
+                exame_admissional_url: values.exame_admissional_url || null,
+                foto_3x4_url: values.foto_3x4_url || null,
+                cnh_url: values.cnh_url || null,
+                cartao_pis_url: values.cartao_pis_url || null,
+                ja_admitido_anteriormente: values.ja_admitido_anteriormente,
+            };
+            
+            if (isEditing) {
+                if (values.senha) {
+                    const { error: authError } = await supabase.auth.updateUser({ password: values.senha });
+                    if (authError) throw authError;
+                }
+                const { error } = await supabase.from('tbl_usuarios').update(dataToUpdate).eq('id', userId);
+                if (error) throw error;
+            } else {
+                // Se for novo, o trigger já inseriu o registro base, apenas atualizamos os campos de RH
+                const { error } = await supabase.from('tbl_usuarios').update(dataToUpdate).eq('id', userId);
+                if (error) throw error;
+            }
         }
 
-        showSuccess(`Usuário ${isEditing ? 'atualizado' : 'criado'} com sucesso!`);
+        showSuccess(`${isNewClient ? 'Cliente' : 'Usuário'} ${isEditing ? 'atualizado' : 'criado'} com sucesso!`);
         
         if (isNewAuthUser) {
             const { error: resetError } = await supabase.auth.resetPasswordForEmail(values.email, {
@@ -329,7 +383,43 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
         setIsSubmitting(false);
     }
   };
+  
+  // Se for criação de novo cliente, o formulário é simplificado
+  if (isNewClient) {
+      return (
+        <FormProvider {...form}>
+            <Form {...form}>
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                    <h3 className="font-semibold text-lg">Dados de Acesso e Empresa</h3>
+                    <FormField control={form.control} name="nome" render={({ field }) => (
+                        <FormItem><FormLabel>Nome da Empresa / Pessoa</FormLabel><FormControl><Input placeholder="Nome Fantasia ou Nome Completo" {...field} disabled={isSubmitting} /></FormControl><FormMessage /></FormItem>
+                    )} />
+                    <FormField control={form.control} name="email" render={({ field }) => (
+                        <FormItem><FormLabel>Email (Login)</FormLabel><FormControl><Input type="email" placeholder="email@empresa.com" {...field} disabled={isSubmitting} /></FormControl><FormMessage /></FormItem>
+                    )} />
+                    <FormField control={form.control} name="senha" render={({ field }) => (
+                        <FormItem><FormLabel>Criar Senha</FormLabel><FormControl><Input type="password" placeholder="••••••••" {...field} disabled={isSubmitting} /></FormControl><FormMessage /></FormItem>
+                    )} />
+                    
+                    <Separator />
+                    <h3 className="font-semibold text-lg">Documentos (Opcional)</h3>
+                    <FormField control={form.control} name="documento" render={({ field }) => (
+                        <FormItem><FormLabel>CPF/CNPJ</FormLabel><FormControl><Input placeholder="00.000.000/0000-00" {...field} disabled={isSubmitting} /></FormControl><FormMessage /></FormItem>
+                    )} />
+                    <FormField control={form.control} name="razao_social" render={({ field }) => (
+                        <FormItem><FormLabel>Razão Social</FormLabel><FormControl><Input placeholder="Razão Social" {...field} disabled={isSubmitting} /></FormControl><FormMessage /></FormItem>
+                    )} />
 
+                    <Button type="submit" className="w-full" disabled={isSubmitting}>
+                        {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Convidar Cliente'}
+                    </Button>
+                </form>
+            </Form>
+        </FormProvider>
+      );
+  }
+
+  // Renderização para Usuário (Funcionário)
   return (
     <FormProvider {...form}>
       <Form {...form}>
@@ -371,7 +461,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                 <FormFolgasFerias
                     control={form.control as unknown as Control<any>}
                     isSubmitting={isSubmitting}
-                    usuarioInicial={profileToEdit} // Passa o perfil (que pode ser null na criação)
+                    usuarioInicial={userProfile} // Passa o perfil de usuário (ou null)
                 />
             </TabsContent>
 
