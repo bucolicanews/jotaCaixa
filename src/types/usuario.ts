@@ -110,7 +110,13 @@ export interface UsuarioProfile {
   certidoes_filhos_urls?: any;
 }
 
-export type AnyProfile = AdminProfile | ClienteProfile | UsuarioProfile | null;
+// NOVO TIPO: Usuário gerenciado pelo Admin
+export interface AdminUsuarioProfile extends UsuarioProfile {
+    admin_id: string;
+    proprietario_id: null; // Deve ser nulo para diferenciar
+}
+
+export type AnyProfile = AdminProfile | ClienteProfile | UsuarioProfile | AdminUsuarioProfile | null;
 
 export interface DadosSessao {
   usuario: User | null;

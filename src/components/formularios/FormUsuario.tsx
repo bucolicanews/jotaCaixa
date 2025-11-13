@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Loader2, Tag } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
-import { AnyProfile, ClienteProfile, UsuarioProfile, UserRole } from '@/types/usuario';
+import { AnyProfile, ClienteProfile, UsuarioProfile, UserRole, AdminUsuarioProfile } from '@/types/usuario';
 import { PERMISSOES_DISPONIVEIS, Permissao } from '@/config/permissoes';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import FormDadosCadastrais from '../usuario-forms/FormDadosCadastrais';
@@ -100,6 +100,11 @@ const isUsuarioProfile = (profile: AnyProfile): profile is UsuarioProfile => {
     return !!profile && 'proprietario_id' in profile;
 };
 
+// Type guard para verificar se o perfil é AdminUsuarioProfile
+const isAdminUsuarioProfile = (profile: AnyProfile): profile is AdminUsuarioProfile => {
+    return !!profile && 'admin_id' in profile;
+};
+
 const FormUsuario: React.FC<FormUsuarioProps> = ({
   criadorRole,
   criadorPerfil,
@@ -113,8 +118,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
   const profileToEdit = isNewClient ? (criadorPerfil as ClienteProfile) : usuarioInicial;
   
   // Variável de escopo principal para o perfil de usuário (funcionário)
-  // Correção: Garante que profileToEdit seja AnyProfile (null | ClienteProfile | UsuarioProfile)
-  const userProfile: UsuarioProfile | null = isUsuarioProfile(profileToEdit as AnyProfile) ? profileToEdit as UsuarioProfile : null;
+  const userProfile: UsuarioProfile | AdminUsuarioProfile | null = isUsuarioProfile(profileToEdit as AnyProfile) || isAdminUsuarioProfile(profileToEdit as AnyProfile) ? profileToEdit as UsuarioProfile | AdminUsuarioProfile : null;
   
   const [activeTab, setActiveTab] = useState('pessoal');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -139,7 +143,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
-    defaultValues: (function() { // IIFE para resolver TS2322 (Erro 2)
+    defaultValues: (function() {
         const defaultPermissoes = permissoesVisiveis.reduce((acc: Record<string, boolean>, p: Permissao) => {
             if (profileToEdit && 'permissoes' in profileToEdit && (profileToEdit as any).permissoes) {
                 acc[p.key] = (profileToEdit as any).permissoes[p.key] !== false;
@@ -227,6 +231,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
   const onSubmit = async (values: FormValues) => {
     setIsSubmitting(true);
     
+    // O ID do proprietário é o ID do Cliente ou Admin que está criando/editando
     const proprietarioId = criadorRole === 'Admin' ? criadorPerfil?.id : (criadorPerfil as ClienteProfile)?.id;
     
     if (!proprietarioId) {
@@ -253,7 +258,13 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
             };
             
             if (targetRole === 'Usuario') {
-                metadata.proprietario_id = proprietarioId; // Vincula ao Admin ou Cliente
+                // Se o criador é Admin, o novo usuário é um AdminUsuarioProfile
+                if (criadorRole === 'Admin') {
+                    metadata.proprietario_id = proprietarioId; // O trigger irá rotear para admin_usuarios
+                } else {
+                    // Se o criador é Cliente, o novo usuário é um UsuarioProfile
+                    metadata.proprietario_id = proprietarioId; // O trigger irá rotear para tbl_usuarios
+                }
             } else if (targetRole === 'Cliente') {
                 metadata.aprovado = false;
             }
@@ -276,7 +287,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
         
         if (!userId) throw new Error('Falha ao obter ID do usuário.');
 
-        // 2. Prepare Data Payload (tbl_usuarios OU tbl_clientes)
+        // 2. Prepare Data Payload (tbl_usuarios OU tbl_clientes OU admin_usuarios)
         
         if (isNewClient) {
             // FLUXO DE CRIAÇÃO DE NOVO CLIENTE DO SISTEMA (tbl_clientes)
@@ -294,14 +305,16 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                 cnpj: values.cnpj || null,
             };
             
-            // UPSERT MANUAL NA TBL_CLIENTES (para garantir que o perfil seja criado mesmo se o trigger falhar)
+            // UPSERT MANUAL NA TBL_CLIENTES
             const { error } = await supabase.from('tbl_clientes').upsert({ ...dataToUpdate, id: userId }, { onConflict: 'id' });
             if (error) throw error;
             
         } else {
-            // FLUXO DE CRIAÇÃO/EDIÇÃO DE FUNCIONÁRIO (tbl_usuarios)
+            // FLUXO DE CRIAÇÃO/EDIÇÃO DE FUNCIONÁRIO (tbl_usuarios ou admin_usuarios)
             
-            // --- DADOS PARA ATUALIZAÇÃO NA TBL_USUARIOS ---
+            const tabelaDestino = criadorRole === 'Admin' ? 'admin_usuarios' : 'tbl_usuarios';
+            
+            // --- DADOS PARA ATUALIZAÇÃO NA TABELA DE USUÁRIOS ---
             const dataToUpdate: any = { 
                 nome: values.nome,
                 permissoes: values.permissoes,
@@ -346,11 +359,12 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                 ja_admitido_anteriormente: values.ja_admitido_anteriormente,
                 
                 // Vinculação (apenas se for novo)
-                ...(isNewAuthUser && { proprietario_id: proprietarioId }),
+                ...(isNewAuthUser && tabelaDestino === 'tbl_usuarios' && { proprietario_id: proprietarioId }),
+                ...(isNewAuthUser && tabelaDestino === 'admin_usuarios' && { admin_id: proprietarioId }),
             };
             
-            // UPSERT MANUAL NA TBL_USUARIOS (para garantir que o perfil seja criado mesmo se o trigger falhar)
-            const { error } = await supabase.from('tbl_usuarios').upsert({ ...dataToUpdate, id: userId, email: values.email }, { onConflict: 'id' });
+            // UPSERT MANUAL NA TABELA CORRETA
+            const { error } = await supabase.from(tabelaDestino).upsert({ ...dataToUpdate, id: userId, email: values.email }, { onConflict: 'id' });
             if (error) throw error;
             
             // Se estiver editando, atualiza a senha separadamente
@@ -457,7 +471,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                 <FormFolgasFerias
                     control={form.control as unknown as Control<any>}
                     isSubmitting={isSubmitting}
-                    usuarioInicial={userProfile} // Passa o perfil de usuário (ou null)
+                    usuarioInicial={userProfile}
                 />
             </TabsContent>
 

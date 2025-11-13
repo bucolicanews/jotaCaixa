@@ -2,7 +2,7 @@ import React, { createContext, useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { User } from '@supabase/supabase-js';
-import { DadosSessao, AnyProfile, UserRole, UsuarioProfile } from '@/types/usuario';
+import { DadosSessao, AnyProfile, UserRole, UsuarioProfile, AdminUsuarioProfile } from '@/types/usuario';
 
 interface SessionContextType extends DadosSessao {
   refetch: () => Promise<void>;
@@ -28,21 +28,31 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     let perfil: AnyProfile = null;
     let role: UserRole = null;
 
+    // 1. Buscar Admin
     const { data: adminData } = await supabase.from('tbl_admins').select('*').eq('id', user.id).single();
     if (adminData) {
       perfil = adminData;
       role = 'Admin';
     } else {
+      // 2. Buscar Cliente
       const { data: clienteData } = await supabase.from('tbl_clientes').select('*').eq('id', user.id).single();
       if (clienteData) {
         perfil = clienteData;
         role = 'Cliente';
       } else {
-        // CORREÇÃO: Busca na tbl_usuarios
+        // 3. Buscar Usuário (Funcionário do Cliente)
         const { data: usuarioData } = await supabase.from('tbl_usuarios').select('*').eq('id', user.id).single();
         if (usuarioData) {
           perfil = usuarioData;
           role = 'Usuario';
+        } else {
+          // 4. Buscar Usuário (Funcionário do Admin) - NOVO
+          const { data: adminUsuarioData } = await supabase.from('admin_usuarios').select('*, admin_id').eq('id', user.id).single();
+          if (adminUsuarioData) {
+            // Mapeia para o tipo UsuarioProfile, mas com admin_id
+            perfil = { ...adminUsuarioData, proprietario_id: adminUsuarioData.admin_id } as AdminUsuarioProfile;
+            role = 'Usuario';
+          }
         }
       }
     }
@@ -78,8 +88,13 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
               }
           }
           // Usuários (Funcionários) são redirecionados para o painel se estiverem vinculados.
-          // CORREÇÃO: Verifica proprietario_id
-          if (estado.role === 'Usuario' && (estado.perfil as UsuarioProfile)?.proprietario_id) {
+          // Verifica proprietario_id (Cliente) ou admin_id (AdminUsuarioProfile)
+          const isUsuarioVinculado = estado.role === 'Usuario' && (
+              (estado.perfil as UsuarioProfile)?.proprietario_id || 
+              (estado.perfil as AdminUsuarioProfile)?.admin_id
+          );
+          
+          if (isUsuarioVinculado) {
               if (window.location.pathname === '/login' || window.location.pathname === '/') {
                   navigate('/painel', { replace: true });
               }
