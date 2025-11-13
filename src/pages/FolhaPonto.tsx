@@ -8,7 +8,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { showError } from '@/utils/toast';
 import { ClienteProfile, UsuarioProfile, AdminUsuarioProfile } from '@/types/usuario';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import DetalheFolhaPonto from '@/components/ponto/DetalheFolhaPonto';
+import { DetalheFolhaPonto, parseHorasObservacao } from '@/components/ponto/DetalheFolhaPonto';
 import { MonthPicker } from '@/components/MonthPicker';
 import GerenciarFaltas from '@/components/formularios/GerenciarFaltas';
 import AjustarPontoDialog from '@/components/ponto/AjustarPontoDialog';
@@ -39,6 +39,7 @@ interface ClienteSimples {
 
 // Constantes CLT (Simplificadas)
 const JORNADA_MENSAL_PADRAO = 220; // Horas mensais padrão CLT
+const JORNADA_DIARIA_PADRAO = 8; // Horas diárias padrão CLT
 
 const FolhaPonto: React.FC = () => {
   const { role, perfil, usuario, carregando } = useSessao();
@@ -329,6 +330,7 @@ const FolhaPonto: React.FC = () => {
         let isFalta = false;
         let isAbono = false;
         let minutosAbonados = 0; 
+        let isTurnoAberto = false;
         let hasPontoRecords = false;
         let decisionRecord: 'Compensacao' | 'Extra100' | null = null;
         let isCompensacaoAbono = false;
@@ -345,56 +347,68 @@ const FolhaPonto: React.FC = () => {
         });
 
         for (const registro of registrosDoDia) {
-            if (registro.tipo === 'Falta') {
-                isFalta = true;
-                if (registro.atestado_url) {
-                    isFaltaJustificada = true;
-                    const horasAbonadas = parseInt(registro.observacao?.match(/(\d+)h/)?.[1] || '8'); 
-                    minutosAbonados = horasAbonadas * 60;
-                    minutosDia = minutosAbonados;
-                } else {
-                    minutosDia = 0;
-                }
-                break; 
-            }
-            if (registro.tipo === 'Abono') {
-                isAbono = true;
+            if (registro.tipo === 'Falta' || registro.tipo === 'Abono') {
+                if (registro.tipo === 'Falta') isFalta = true;
+                if (registro.tipo === 'Abono') isAbono = true;
+                
+                const horasCreditadas = parseHorasObservacao(registro.observacao, JORNADA_DIARIA_PADRAO);
+                minutosAbonados = Math.round(horasCreditadas * 60);
+                
                 if (registro.observacao?.includes('Compensação de folga trabalhada')) {
                     isCompensacaoAbono = true;
                     minutosAbonados = 0;
-                    minutosDia = 0;
-                } else {
-                    const horasAbonadas = parseInt(registro.observacao?.match(/(\d+)h/)?.[1] || '8'); 
-                    minutosAbonados = horasAbonadas * 60;
-                    minutosDia = minutosAbonados;
+                } else if (isFalta && registro.atestado_url) {
+                    isFaltaJustificada = true;
                 }
-                break; 
+                
+                minutosDia = minutosAbonados; 
+                
+                if (isFalta && !isFaltaJustificada) {
+                    minutosDia = 0;
+                }
+                
+                continue;
             }
+            
             if (registro.tipo === 'Compensacao') decisionRecord = 'Compensacao';
             if (registro.tipo === 'Extra100') decisionRecord = 'Extra100';
             
             if (registro.tipo === 'Entrada' || registro.tipo === 'Saida') {
                 hasPontoRecords = true;
                 const horario = parseISO(registro.horario_registro);
+                
                 if (registro.tipo === 'Entrada') {
                     entrada = horario;
+                    isTurnoAberto = true;
                 } else if (registro.tipo === 'Saida' && entrada) {
-                    minutosDia += differenceInMinutes(horario, entrada);
+                    const minutosTrabalhados = differenceInMinutes(horario, entrada);
+                    minutosDia += minutosTrabalhados;
                     entrada = null;
+                    isTurnoAberto = false;
+                } else if (registro.tipo === 'Saida' && !entrada) {
+                    isTurnoAberto = false;
                 }
             }
         }
         
-        if (entrada && isSameDay(data, hoje)) {
-            minutosDia += differenceInMinutes(hoje, entrada);
+        if (entrada) {
+            if (isSameDay(data, hoje)) {
+                minutosDia += differenceInMinutes(hoje, entrada);
+                isTurnoAberto = true;
+            } else {
+                isTurnoAberto = true;
+            }
+        } else {
+            isTurnoAberto = false;
         }
         
-        let minutosTrabalhadosFolga = 0;
         let minutosParaAcumular = minutosDia;
+        let minutosTrabalhadosFolga = 0;
         let needsManagement = false;
         
         if (isFolgaFixa && hasPontoRecords && !isFerias) {
             minutosTrabalhadosFolga = minutosDia;
+            
             if (!decisionRecord) {
                 needsManagement = true;
                 minutosParaAcumular = 0;
@@ -408,16 +422,30 @@ const FolhaPonto: React.FC = () => {
         
         if (!isFolgaFixa && !isFerias && !isCompensacaoAbono) {
             totalMinutosTrabalhados += minutosParaAcumular;
-        } else if (isAbono && !isCompensacaoAbono) {
-            totalMinutosTrabalhados += minutosParaAcumular;
         }
         
-        if (isFalta && !isFaltaJustificada) minutosDia = 0;
+        if (isFaltaJustificada || (isAbono && !isCompensacaoAbono)) {
+            minutosDia = minutosAbonados;
+        } else if (isFalta && !isFaltaJustificada) {
+            minutosDia = 0;
+        }
+
 
         diasProcessados[diaString] = {
             minutos: minutosDia,
             registros: registrosDoDia,
-            isFalta, isAbono, isFolgaFixa, isFerias, hasPontoRecords, decisionRecord, needsManagement, minutosAbonados, minutosTrabalhadosFolga, isCompensacaoAbono, isFaltaJustificada,
+            isFalta,
+            isAbono,
+            minutosAbonados, 
+            isTurnoAberto,
+            isFolgaFixa,
+            isFerias,
+            hasPontoRecords,
+            decisionRecord,
+            needsManagement,
+            minutosTrabalhadosFolga,
+            isCompensacaoAbono,
+            isFaltaJustificada,
         };
     }
     

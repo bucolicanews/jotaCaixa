@@ -6,7 +6,7 @@ import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { showError } from '@/utils/toast';
 import { UsuarioProfile, AdminUsuarioProfile } from '@/types/usuario';
-import DetalheFolhaPonto from './DetalheFolhaPonto';
+import { DetalheFolhaPonto } from './DetalheFolhaPonto';
 import { MonthPicker } from '@/components/MonthPicker';
 import { RegistroPonto, Ferias } from '@/types/ponto'; // Importando a interface centralizada
 
@@ -27,7 +27,7 @@ const DetalheProprioPonto: React.FC = () => {
     const inicioMes = format(startOfMonth(data), 'yyyy-MM-dd');
     const fimMes = format(endOfMonth(data), 'yyyy-MM-dd');
     
-    const { data: feriasData, error } = await supabase
+    const { data: feriasRes, error } = await supabase
         .from(tabelaFerias)
         .select('*')
         .eq('funcionario_id', id)
@@ -38,6 +38,11 @@ const DetalheProprioPonto: React.FC = () => {
         showError('Erro ao carregar férias: ' + error.message);
         setFeriasDoFuncionario([]);
     } else {
+        // Mapeando dados para incluir o status, que é usado na interface Ferias
+        const feriasData = (feriasRes as Ferias[]).map(f => ({
+            ...f,
+            status: f.status || 'agendada' 
+        }));
         setFeriasDoFuncionario(feriasData as Ferias[]);
     }
   }, []);
