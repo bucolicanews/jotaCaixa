@@ -311,7 +311,11 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
         } else {
             // FLUXO DE CRIAÇÃO/EDIÇÃO DE FUNCIONÁRIO (tbl_usuarios ou admin_usuarios)
             
-            const tabelaDestino = criadorRole === 'Admin' ? 'admin_usuarios' : 'tbl_usuarios';
+            const isUserOfAdmin = isAdminUsuarioProfile(usuarioInicial as AnyProfile);
+            const tabelaDestino = isUserOfAdmin ? 'admin_usuarios' : 'tbl_usuarios';
+            
+            // Determina o ID do proprietário para a tabela de destino
+            const proprietarioKey = isUserOfAdmin ? 'admin_id' : 'cliente_id';
             
             // --- DADOS PARA ATUALIZAÇÃO NA TABELA DE USUÁRIOS ---
             const dataToUpdate: any = { 
@@ -358,8 +362,10 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                 ja_admitido_anteriormente: values.ja_admitido_anteriormente,
                 
                 // Vinculação (apenas se for novo)
-                ...(isNewAuthUser && tabelaDestino === 'tbl_usuarios' && { cliente_id: proprietarioId }), // CORREÇÃO: Usando cliente_id
-                ...(isNewAuthUser && tabelaDestino === 'admin_usuarios' && { admin_id: proprietarioId }),
+                ...(isNewAuthUser && { [proprietarioKey]: proprietarioId }),
+                
+                // Se for edição de usuário do Admin, garante que o admin_id esteja no payload
+                ...(isEditing && isUserOfAdmin && { admin_id: (usuarioInicial as AdminUsuarioProfile).admin_id }),
             };
             
             // UPSERT MANUAL NA TABELA CORRETA
@@ -457,10 +463,10 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                   <FormItem><FormLabel>Email (Login)</FormLabel><FormControl><Input type="email" placeholder="email@exemplo.com" {...field} disabled={isEditing} /></FormControl><FormMessage /></FormItem>
               )} />
               {!isEditing && <FormField control={form.control} name="senha" render={({ field }) => (
-                  <FormItem><FormLabel>Criar Senha</FormLabel><FormControl><Input type="password" placeholder="••••••••" {...field} /></FormControl><FormMessage /></FormItem>
+                  <FormItem><FormLabel>Criar Senha</FormLabel><FormControl><Input type="password" placeholder="••••••••" {...field} disabled={isSubmitting} /></FormControl><FormMessage /></FormItem>
               )} />}
               {isEditing && <FormField control={form.control} name="senha" render={({ field }) => (
-                  <FormItem><FormLabel>Alterar Senha (Opcional)</FormLabel><FormControl><Input type="password" placeholder="••••••••" {...field} /></FormControl><FormMessage /></FormItem>
+                  <FormItem><FormLabel>Alterar Senha (Opcional)</FormLabel><FormControl><Input type="password" placeholder="••••••••" {...field} disabled={isSubmitting} /></FormControl><FormMessage /></FormItem>
               )} />}
             </TabsContent>
             
