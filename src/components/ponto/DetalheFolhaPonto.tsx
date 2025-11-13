@@ -90,6 +90,7 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
     minutosAbonados: number, // Novo campo para armazenar minutos de abono
     minutosTrabalhadosFolga: number, // Novo campo para armazenar minutos trabalhados na folga
     isCompensacaoAbono: boolean, // Novo: Indica se é um abono de compensação
+    isFaltaJustificada: boolean, // NOVO: Indica se é uma falta justificada
   }> = {};
   
   for (const data of todosOsDiasDoMes) {
@@ -106,6 +107,7 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
     let hasPontoRecords = false;
     let decisionRecord: 'Compensacao' | 'Extra100' | null = null;
     let isCompensacaoAbono = false;
+    let isFaltaJustificada = false; // NOVO
     
     // Lógica de Folga Fixa
     const diaDaSemana = DAY_MAP[getDay(data)];
@@ -125,6 +127,16 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
     for (const registro of registrosDoDia) {
         if (registro.tipo === 'Falta') {
             isFalta = true;
+            
+            // NOVO: Se for Falta E tiver atestado, trata como Abono de 8h (ou o valor na observação)
+            if (registro.atestado_url) {
+                isFaltaJustificada = true;
+                const horasAbonadas = parseInt(registro.observacao?.match(/(\d+)h/)?.[1] || '8'); 
+                minutosAbonados = horasAbonadas * 60;
+                minutosDia = minutosAbonados; // Define o total do dia como o abono
+            } else {
+                minutosDia = 0; // Falta Injustificada
+            }
             break; 
         }
         if (registro.tipo === 'Abono') {
@@ -211,24 +223,22 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
         }
     }
     
-    // Acumular totais (apenas se não for folga trabalhada, nem falta/abono de compensação, nem férias)
-    if (!isFolgaFixa && !isFalta && !isFerias && !isCompensacaoAbono) {
-        // Se for abono normal, minutosDia já está definido como minutosAbonados
-        // Se for ponto batido, minutosDia é o tempo trabalhado
-        totalMinutosTrabalhados += minutosParaAcumular;
-    } else if (isAbono && !isCompensacaoAbono) {
-        // Abonos normais sempre contam para o total de horas trabalhadas
+    // Acumular totais (apenas se não for folga trabalhada, nem abono de compensação, nem férias)
+    if (!isFolgaFixa && !isFerias && !isCompensacaoAbono) {
+        // Se for Falta Injustificada, minutosDia é 0, então não acumula.
+        // Se for Falta Justificada ou Abono, minutosDia é minutosAbonados, então acumula.
+        // Se for ponto batido, minutosDia é o tempo trabalhado, então acumula.
         totalMinutosTrabalhados += minutosParaAcumular;
     }
     
-    // Se for falta, zera minutosDia para evitar contagem dupla
-    if (isFalta) {
+    // Se for falta injustificada, zera minutosDia para evitar contagem dupla
+    if (isFalta && !isFaltaJustificada) {
         minutosDia = 0;
     }
 
 
     diasProcessados[diaString] = {
-        minutos: minutosDia, // Mantém o tempo calculado para exibição diária (ou 0 se for falta/abono compensação)
+        minutos: minutosDia, // Mantém o tempo calculado para exibição diária (ou minutosAbonados se for abono/falta justificada)
         registros: registrosDoDia,
         isFalta,
         isAbono,
@@ -241,6 +251,7 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
         needsManagement,
         minutosTrabalhadosFolga,
         isCompensacaoAbono,
+        isFaltaJustificada, // NOVO
     };
   }
   
@@ -346,7 +357,7 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
                 ) : (
                     todosOsDiasDoMes.map(data => {
                         const diaString = format(data, 'yyyy-MM-dd');
-                        const { minutos, registros, isFalta, isAbono, isTurnoAberto, isFolgaFixa, isFerias, hasPontoRecords, decisionRecord, needsManagement, minutosAbonados, minutosTrabalhadosFolga, isCompensacaoAbono } = diasProcessados[diaString];
+                        const { minutos, registros, isFalta, isAbono, isTurnoAberto, isFolgaFixa, isFerias, hasPontoRecords, decisionRecord, needsManagement, minutosAbonados, minutosTrabalhadosFolga, isCompensacaoAbono, isFaltaJustificada } = diasProcessados[diaString];
                         
                         const isDiaAtual = isSameDay(data, hoje);
                         const isDiaFuturo = data > hoje;
@@ -418,7 +429,7 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
                         // Determina o tempo a ser exibido na coluna Total Dia
                         const totalDiaDisplay = isFolgaFixa && hasPontoRecords && (decisionRecord || needsManagement) 
                             ? formatarHoras(minutosTrabalhadosFolga) 
-                            : (isAbono && !isCompensacaoAbono ? formatarHoras(minutosAbonados) : statusDisplay);
+                            : (isFaltaJustificada || isAbono && !isCompensacaoAbono ? formatarHoras(minutosAbonados) : statusDisplay);
 
                         return (
                             <TableRow key={diaString} className={rowClassName}>

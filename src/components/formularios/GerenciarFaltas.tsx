@@ -25,14 +25,14 @@ interface GerenciarFaltasProps {
 }
 
 // Nome do bucket de armazenamento para atestados
-const ATESTADO_BUCKET = 'atestados'; 
+const ATESTADO_BUCKET = 'documentos-admissao'; 
 
 const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, funcionario, dataFalta, registroInicial, onFaltaRegistrada }) => {
   const [loading, setLoading] = useState(false);
   const [acao, setAcao] = useState<Acao>(registroInicial ? (registroInicial.tipo === 'Falta' ? 'Falta' : 'Abono') : 'Falta');
-  const [abonoHoras, setAbonoHoras] = useState<AbonoHoras>('8h');
+  const [horasSelecionadas, setHorasSelecionadas] = useState<AbonoHoras>('8h');
   const [atestadoFile, setAtestadoFile] = useState<File | null>(null);
-  const [atestadoUrl, setAtestadoUrl] = useState<string | null>(registroInicial?.atestado_url || null); // Renomeado para atestadoUrl
+  const [atestadoUrl, setAtestadoUrl] = useState<string | null>(registroInicial?.atestado_url || null);
   const [observacao, setObservacao] = useState(registroInicial?.observacao || '');
 
   const isEditing = !!registroInicial;
@@ -40,8 +40,8 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
   const isFalta = acao === 'Falta';
   const isAbono = acao === 'Abono';
   
-  // Determina se o registro inicial é uma falta justificada (para manter o URL)
-  const isInitialJustified = !!registroInicial && registroInicial.tipo === 'Falta' && !!registroInicial.atestado_url;
+  // Determina se o registro inicial era uma falta justificada (para manter o URL)
+  // const isInitialJustified = !!registroInicial && registroInicial.tipo === 'Falta' && !!registroInicial.atestado_url; // REMOVIDO
 
   useEffect(() => {
     if (open) {
@@ -51,14 +51,16 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
         setAtestadoFile(null);
         setObservacao(registroInicial?.observacao || '');
         
-        // Tenta extrair as horas do abono se for edição
-        if (registroInicial?.tipo === 'Abono' && registroInicial.observacao) {
+        // Tenta extrair as horas do abono/falta justificada se for edição
+        if (registroInicial?.observacao) {
             const match = registroInicial.observacao.match(/(\d+)h/);
             if (match) {
-                setAbonoHoras(match[0] as AbonoHoras);
+                setHorasSelecionadas(match[0] as AbonoHoras);
+            } else {
+                setHorasSelecionadas('8h');
             }
         } else {
-            setAbonoHoras('8h');
+            setHorasSelecionadas('8h');
         }
     }
   }, [registroInicial, open]);
@@ -74,28 +76,38 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
   
   const handleRemoveAtestado = () => {
     setAtestadoFile(null);
-    setAtestadoUrl(null); // Usando o estado correto
+    setAtestadoUrl(null);
     showSuccess('Link do atestado removido. Salve para confirmar.');
   };
 
   const uploadAtestado = async (file: File): Promise<string> => {
+    setLoading(true);
     const fileExt = file.name.split('.').pop();
     const filePath = `faltas/${funcionario.id}/${format(dataFalta!, 'yyyyMMdd')}-${Date.now()}.${fileExt}`;
+    
+    try {
+      const { data, error: uploadError } = await supabase.storage
+        .from(ATESTADO_BUCKET)
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false,
+        });
 
-    const { error } = await supabase.storage
-      .from(ATESTADO_BUCKET)
-      .upload(filePath, file, {
-        cacheControl: '3600',
-        upsert: false,
-      });
-
-    if (error) {
-      console.error("Erro de upload:", error);
-      throw new Error('Falha ao fazer upload do atestado: ' + error.message);
+      if (uploadError) throw new Error(uploadError.message);
+      
+      const { data: publicUrlData } = supabase.storage
+        .from(ATESTADO_BUCKET)
+        .getPublicUrl(data.path);
+        
+      showSuccess('Atestado enviado com sucesso!');
+      return publicUrlData.publicUrl;
+      
+    } catch (error: any) {
+      showError('Falha ao fazer upload do atestado: ' + error.message);
+      throw error;
+    } finally {
+      setLoading(false);
     }
-
-    const { data: publicUrlData } = supabase.storage.from(ATESTADO_BUCKET).getPublicUrl(filePath);
-    return publicUrlData.publicUrl;
   };
 
   const handleSubmit = async () => {
@@ -104,11 +116,13 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
       return;
     }
     
-    if (isFalta && !atestadoUrl && !atestadoFile) {
+    const isJustificada = isFalta && (atestadoUrl || atestadoFile);
+    
+    if (isFalta && !isJustificada) {
         if (!window.confirm('Você está registrando uma Falta Injustificada. Deseja continuar?')) return;
     }
     
-    if (isAbono && !abonoHoras) {
+    if (isAbono && !horasSelecionadas) {
         showError('Selecione a quantidade de horas para o abono.');
         return;
     }
@@ -118,16 +132,11 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
     try {
       let finalAtestadoUrl = atestadoUrl;
       
-      // 1. Lidar com o upload do atestado (se for justificada e houver novo arquivo)
-      if (isFalta) {
-        if (atestadoFile) {
+      // 1. Lidar com o upload do atestado (se for falta justificada e houver novo arquivo)
+      if (isFalta && atestadoFile) {
           finalAtestadoUrl = await uploadAtestado(atestadoFile);
-        } else if (!finalAtestadoUrl && isInitialJustified) {
-            // Se estava justificado e o usuário removeu o link
-            finalAtestadoUrl = null;
-        }
-      } else {
-        finalAtestadoUrl = null; // Garante que não haja atestado se for abono
+      } else if (isAbono) {
+          finalAtestadoUrl = null; // Abono não usa atestado
       }
       
       // 2. Deletar o registro inicial (se for edição)
@@ -151,15 +160,23 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
           return;
       }
       
-      const observacaoFinal = isAbono ? `${abonoHoras} de Abono` : observacao;
+      // Observação final:
+      let observacaoFinal = observacao;
+      if (isAbono) {
+          observacaoFinal = `${horasSelecionadas} de Abono`;
+      } else if (isFalta && isJustificada) {
+          observacaoFinal = `Falta Justificada (${horasSelecionadas})`;
+      } else if (isFalta && !isJustificada) {
+          observacaoFinal = observacao || 'Falta Injustificada';
+      }
 
       const dataToInsert = {
         funcionario_id: funcionario.id,
         empresa_id: funcionario.empresa_id,
         horario_registro: dataNoonUTC.toISOString(),
         tipo: tipoRegistro,
-        selfie_url: 'N/A', // Não aplicável
-        maps_url: 'N/A', // Não aplicável
+        selfie_url: 'N/A',
+        maps_url: 'N/A',
         atestado_url: finalAtestadoUrl,
         observacao: observacaoFinal,
       };
@@ -182,7 +199,7 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
     }
   };
 
-  const atestadoPronto = atestadoFile || atestadoUrl; // Usando atestadoUrl
+  const atestadoPronto = atestadoFile || atestadoUrl;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -205,14 +222,30 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
             </RadioGroup>
           </div>
 
+          {/* Opções de Horas (Comum a Falta Justificada e Abono) */}
+          {(isFalta || isAbono) && (
+            <div className="space-y-4 p-4 border rounded-md">
+              <h4 className="font-semibold">Horas a Abonar/Justificar</h4>
+              <p className="text-sm text-muted-foreground">Selecione a quantidade de horas.</p>
+              <RadioGroup value={horasSelecionadas} onValueChange={(v: AbonoHoras) => setHorasSelecionadas(v)} className="grid grid-cols-2 gap-4">
+                {['8h', '6h', '4h', '2h'].map(h => (
+                    <div key={h} className="flex items-center space-x-2 border p-2 rounded-md">
+                        <RadioGroupItem value={h} id={`horas-${h}`} />
+                        <Label htmlFor={`horas-${h}`}>{h}</Label>
+                    </div>
+                ))}
+              </RadioGroup>
+            </div>
+          )}
+
           {/* Opções de Falta */}
           {isFalta && (
             <div className="space-y-4 p-4 border rounded-md">
-              <h4 className="font-semibold">Falta (Dia Inteiro)</h4>
+              <h4 className="font-semibold">Detalhes da Falta</h4>
               
               <div className="space-y-2">
                 <Label htmlFor="atestado-file" className="flex items-center">
-                    <FileText className="w-4 h-4 mr-2" /> Anexar Atestado Médico (Opcional)
+                    <FileText className="w-4 h-4 mr-2" /> Anexar Atestado Médico (Para Justificar)
                 </Label>
                 <Input 
                     id="atestado-file" 
@@ -251,16 +284,17 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
           {/* Opções de Abono */}
           {isAbono && (
             <div className="space-y-4 p-4 border rounded-md">
-              <h4 className="font-semibold">Abono de Horas</h4>
-              <p className="text-sm text-muted-foreground">Selecione a quantidade de horas a abonar.</p>
-              <RadioGroup value={abonoHoras} onValueChange={(v: AbonoHoras) => setAbonoHoras(v)} className="grid grid-cols-2 gap-4">
-                {['8h', '6h', '4h', '2h'].map(h => (
-                    <div key={h} className="flex items-center space-x-2 border p-2 rounded-md">
-                        <RadioGroupItem value={h} id={`abono-${h}`} />
-                        <Label htmlFor={`abono-${h}`}>{h} de Abono</Label>
-                    </div>
-                ))}
-              </RadioGroup>
+              <h4 className="font-semibold">Detalhes do Abono</h4>
+              <div className="space-y-2">
+                <Label htmlFor="observacao-abono">Observação (Opcional)</Label>
+                <Textarea 
+                    id="observacao-abono"
+                    value={observacao}
+                    onChange={(e) => setObservacao(e.target.value)}
+                    placeholder="Ex: Abono por consulta médica."
+                    disabled={loading}
+                />
+              </div>
             </div>
           )}
         </div>
