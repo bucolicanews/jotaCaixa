@@ -11,15 +11,22 @@ import { cn } from '@/lib/utils';
 import { RegistroPonto } from '@/types/ponto';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Textarea } from '../ui/textarea';
-import { useSessao } from '@/hooks/use-sessao';
+// import { useSessao } from '@/hooks/use-sessao'; // Removido
 
 type Acao = 'Falta' | 'Abono' | 'Nenhum';
 type AbonoHoras = '8h' | '6h' | '4h' | '2h';
 
+interface FuncionarioGerenciado {
+  id: string;
+  nome: string;
+  empresa_id: string; // ID do Cliente/Admin proprietário
+  isFuncionarioAdmin: boolean; // NOVO CAMPO
+}
+
 interface GerenciarFaltasProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  funcionario: { id: string, nome: string, empresa_id: string };
+  funcionario: FuncionarioGerenciado;
   dataFalta: Date | null;
   registroInicial: RegistroPonto | null; // Registro de Falta/Abono existente
   onFaltaRegistrada: () => void;
@@ -29,7 +36,8 @@ interface GerenciarFaltasProps {
 const ATESTADO_BUCKET = 'documentos-admissao'; 
 
 const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, funcionario, dataFalta, registroInicial, onFaltaRegistrada }) => {
-  const { role } = useSessao();
+  // const { perfil } = useSessao(); // Removido
+  
   const [loading, setLoading] = useState(false);
   const [acao, setAcao] = useState<Acao>(registroInicial ? (registroInicial.tipo === 'Falta' ? 'Falta' : 'Abono') : 'Falta');
   const [horasSelecionadas, setHorasSelecionadas] = useState<AbonoHoras>('8h');
@@ -42,9 +50,9 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
   const isFalta = acao === 'Falta';
   const isAbono = acao === 'Abono';
   
-  const isFuncionarioAdmin = role === 'Admin' && funcionario.empresa_id === funcionario.id;
-  const tabelaRegistros = isFuncionarioAdmin ? 'admin_registros_ponto' : 'registros_ponto';
-  const ownerKey = isFuncionarioAdmin ? 'admin_id' : 'empresa_id';
+  // Determina a tabela de destino e a chave do proprietário
+  const tabelaRegistros = funcionario.isFuncionarioAdmin ? 'admin_registros_ponto' : 'registros_ponto';
+  const ownerKey = funcionario.isFuncionarioAdmin ? 'admin_id' : 'empresa_id';
 
   useEffect(() => {
     if (open) {
@@ -86,7 +94,6 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
   const uploadAtestado = async (file: File): Promise<string> => {
     setLoading(true);
     
-    // CORREÇÃO: O bucket de atestados é o 'documentos-admissao'
     const bucket = ATESTADO_BUCKET; 
     
     const fileExt = file.name.split('.').pop();

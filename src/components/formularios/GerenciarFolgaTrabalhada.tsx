@@ -10,12 +10,19 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { ptBR } from 'date-fns/locale';
-import { useSessao } from '@/hooks/use-sessao';
+// import { useSessao } from '@/hooks/use-sessao'; // Removido
+
+interface FuncionarioGerenciado {
+  id: string;
+  nome: string;
+  empresa_id: string; // ID do Cliente/Admin proprietário
+  isFuncionarioAdmin: boolean; // NOVO CAMPO
+}
 
 interface GerenciarFolgaTrabalhadaProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  funcionario: { id: string, nome: string, empresa_id: string };
+  funcionario: FuncionarioGerenciado;
   dia: Date;
   registrosDoDia: RegistroPonto[];
   onSaveComplete: () => void;
@@ -47,16 +54,15 @@ const formatarHoras = (minutos: number): string => {
 };
 
 const GerenciarFolgaTrabalhada: React.FC<GerenciarFolgaTrabalhadaProps> = ({ open, onOpenChange, funcionario, dia, registrosDoDia, onSaveComplete }) => {
-  const { role } = useSessao();
   const [loading, setLoading] = useState(false);
   const [acaoSelecionada, setAcaoSelecionada] = useState<'Compensacao' | 'Extra100' | null>(null);
   const [dataCompensacao, setDataCompensacao] = useState<Date | undefined>(undefined);
   
   const diaFormatado = format(dia, 'dd/MM/yyyy');
   
-  const isFuncionarioAdmin = role === 'Admin' && funcionario.empresa_id === funcionario.id;
-  const tabelaRegistros = isFuncionarioAdmin ? 'admin_registros_ponto' : 'registros_ponto';
-  const ownerKey = isFuncionarioAdmin ? 'admin_id' : 'empresa_id';
+  // Determina a tabela de destino e a chave do proprietário
+  const tabelaRegistros = funcionario.isFuncionarioAdmin ? 'admin_registros_ponto' : 'registros_ponto';
+  const ownerKey = funcionario.isFuncionarioAdmin ? 'admin_id' : 'empresa_id';
 
   const minutosTrabalhados = useMemo(() => calculateMinutesWorked(registrosDoDia), [registrosDoDia]);
   const horasTrabalhadas = formatarHoras(minutosTrabalhados);

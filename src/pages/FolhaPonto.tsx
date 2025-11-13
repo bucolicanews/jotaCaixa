@@ -80,6 +80,9 @@ const FolhaPonto: React.FC = () => {
   // Variável movida para o topo para resolver TS2448
   const funcionarioDetalhe = funcionarios.find(f => f.id === funcionarioSelecionadoId);
   
+  // NOVO CÁLCULO: Determina se o funcionário selecionado é um usuário do Admin
+  const isFuncionarioAdmin = !!(funcionarioDetalhe as AdminUsuarioProfile)?.admin_id;
+  
   const fetchClientes = useCallback(async () => {
     if (!isAdmin || !usuario?.id) return;
     
@@ -190,7 +193,7 @@ const FolhaPonto: React.FC = () => {
     
     const tabelaRegistros = isFuncionarioAdmin ? 'admin_registros_ponto' : 'registros_ponto';
     
-    // Seleciona todas as colunas que são comuns e as colunas de ID específicas
+    // Seleciona todas as colunas necessárias, incluindo ambas as chaves de proprietário
     const selectColumns = `id, funcionario_id, horario_registro, tipo, maps_url, selfie_url, atestado_url, observacao, empresa_id, admin_id`;
 
     const { data: registros, error } = await supabase
@@ -427,13 +430,14 @@ const FolhaPonto: React.FC = () => {
         <FolhaPontoPrint
             empresaNome={empresaNome}
             funcionario={{
-                ...funcionarioDetalhe,
+                id: funcionarioDetalhe.id,
+                nome: funcionarioDetalhe.nome,
                 salario: funcionarioDetalhe.salario || 0,
                 horas_mensais: funcionarioDetalhe.horas_mensais || JORNADA_MENSAL_PADRAO,
+                registros: registrosDoFuncionario,
                 dias_folga_fixos: funcionarioDetalhe.dias_folga_fixos || [],
                 folga_domingo_obrigatoria: funcionarioDetalhe.folga_domingo_obrigatoria ?? true,
                 ferias: feriasDoFuncionario,
-                registros: registrosDoFuncionario,
             }}
             mes={dataSelecionada}
             diasProcessados={diasProcessados}
@@ -568,7 +572,8 @@ const FolhaPonto: React.FC = () => {
             funcionario={{ 
                 id: funcionarioDetalhe.id, 
                 nome: funcionarioDetalhe.nome, 
-                empresa_id: empresaIdParaFiltro! 
+                empresa_id: empresaIdParaFiltro!,
+                isFuncionarioAdmin: isFuncionarioAdmin, // PASSANDO FLAG
             }}
             dataFalta={diaFaltaSelecionado}
             registroInicial={registroParaEdicao}
@@ -584,7 +589,8 @@ const FolhaPonto: React.FC = () => {
             funcionario={{ 
                 id: funcionarioDetalhe.id, 
                 nome: funcionarioDetalhe.nome, 
-                empresa_id: empresaIdParaFiltro! 
+                empresa_id: empresaIdParaFiltro!,
+                isFuncionarioAdmin: isFuncionarioAdmin, // PASSANDO FLAG
             }}
             dia={diaParaAjuste}
             registrosIniciais={registrosParaAjuste}
@@ -600,7 +606,8 @@ const FolhaPonto: React.FC = () => {
             funcionario={{ 
                 id: funcionarioDetalhe.id, 
                 nome: funcionarioDetalhe.nome, 
-                empresa_id: empresaIdParaFiltro! 
+                empresa_id: empresaIdParaFiltro!,
+                isFuncionarioAdmin: isFuncionarioAdmin, // PASSANDO FLAG
             }}
             dia={diaFolgaTrabalhada}
             registrosDoDia={registrosFolgaTrabalhada}

@@ -10,12 +10,12 @@ import { RegistroPonto } from '@/types/ponto';
 import { format, parseISO, setHours, setMinutes } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useSessao } from '@/hooks/use-sessao';
+// import { useSessao } from '@/hooks/use-sessao'; // Removido
 
 interface AjustarPontoDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  funcionario: { id: string, nome: string, empresa_id: string };
+  funcionario: { id: string, nome: string, empresa_id: string, isFuncionarioAdmin: boolean }; // NOVO CAMPO
   dia: Date;
   registrosIniciais: RegistroPonto[];
   onSaveComplete: () => void;
@@ -29,14 +29,13 @@ interface RegistroLocal {
 }
 
 const AjustarPontoDialog: React.FC<AjustarPontoDialogProps> = ({ open, onOpenChange, funcionario, dia, registrosIniciais, onSaveComplete }) => {
-  const { role } = useSessao();
   const [loading, setLoading] = useState(false);
   const [registrosLocais, setRegistrosLocais] = useState<RegistroLocal[]>([]);
   const diaFormatado = format(dia, 'dd/MM/yyyy');
   
-  const isFuncionarioAdmin = role === 'Admin' && funcionario.empresa_id === funcionario.id;
-  const tabelaRegistros = isFuncionarioAdmin ? 'admin_registros_ponto' : 'registros_ponto';
-  const ownerKey = isFuncionarioAdmin ? 'admin_id' : 'empresa_id';
+  // Determina a tabela de destino e a chave do proprietário
+  const tabelaRegistros = funcionario.isFuncionarioAdmin ? 'admin_registros_ponto' : 'registros_ponto';
+  const ownerKey = funcionario.isFuncionarioAdmin ? 'admin_id' : 'empresa_id';
 
   useEffect(() => {
     if (open) {
