@@ -190,9 +190,8 @@ const FolhaPonto: React.FC = () => {
     
     const tabelaRegistros = isFuncionarioAdmin ? 'admin_registros_ponto' : 'registros_ponto';
     
-    // Determine the correct owner ID column to select and alias it to 'empresa_id'
-    // If admin_registros_ponto, select admin_id and alias it to empresa_id to match RegistroPonto interface
-    const ownerIdSelect = isFuncionarioAdmin ? 'admin_id!empresa_id' : 'empresa_id';
+    // CORREÇÃO DE SINTAXE: Usando 'coluna:alias' para renomear
+    const ownerIdSelect = isFuncionarioAdmin ? 'admin_id:empresa_id' : 'empresa_id';
     
     const selectColumns = `id, funcionario_id, ${ownerIdSelect}, horario_registro, tipo, maps_url, selfie_url, atestado_url, observacao`;
 
