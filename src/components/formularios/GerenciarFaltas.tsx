@@ -9,7 +9,6 @@ import { showError, showSuccess } from '@/utils/toast';
 import { RegistroPonto } from '@/types/ponto';
 import { format } from 'date-fns';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { cn } from '@/lib/utils';
 import { Textarea } from '../ui/textarea';
 
 interface GerenciarFaltasProps {
@@ -161,6 +160,9 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
     }
   };
 
+  const isFileSelected = !!atestadoFile;
+  const isFileAttached = !!atestadoUrl || isFileSelected;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]">
@@ -191,12 +193,19 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
                 <Label htmlFor="atestado-file" className="flex items-center">
                     <FileText className="w-4 h-4 mr-2" /> Anexar Atestado Médico (Opcional)
                 </Label>
-                <Input type="file" id="atestado-file" accept="image/*, application/pdf" onChange={handleFileChange} disabled={loading} />
+                <Input 
+                    type="file" 
+                    id="atestado-file" 
+                    accept="image/*, application/pdf" 
+                    onChange={handleFileChange} 
+                    disabled={loading} 
+                />
                 
-                {(atestadoUrl || atestadoFile) && (
+                {isFileAttached && (
                     <div className="flex justify-between items-center text-sm text-green-600">
                         <span className="flex items-center">
-                            <CheckCircle2 className="w-4 h-4 mr-1" /> Atestado Anexado
+                            <CheckCircle2 className="w-4 h-4 mr-1" /> 
+                            {isFileSelected ? `Arquivo Selecionado: ${atestadoFile?.name}` : 'Atestado Anexado'}
                         </span>
                         <Button variant="link" size="sm" onClick={() => { setAtestadoUrl(null); setAtestadoFile(null); }} className="text-red-500 p-0 h-auto">
                             <XCircle className="w-4 h-4 mr-1" /> Remover
