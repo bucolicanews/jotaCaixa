@@ -113,7 +113,8 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
   const profileToEdit = isNewClient ? (criadorPerfil as ClienteProfile) : usuarioInicial;
   
   // Variável de escopo principal para o perfil de usuário (funcionário)
-  const userProfile: UsuarioProfile | null = isUsuarioProfile(profileToEdit) ? profileToEdit : null;
+  // Correção: Garante que profileToEdit seja AnyProfile (null | ClienteProfile | UsuarioProfile)
+  const userProfile: UsuarioProfile | null = isUsuarioProfile(profileToEdit as AnyProfile) ? profileToEdit as UsuarioProfile : null;
   
   const [activeTab, setActiveTab] = useState('pessoal');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -307,6 +308,8 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
             
         } else {
             // FLUXO DE CRIAÇÃO/EDIÇÃO DE FUNCIONÁRIO (tbl_usuarios)
+            
+            // --- DADOS PARA ATUALIZAÇÃO NA TBL_USUARIOS ---
             const dataToUpdate: any = { 
                 nome: values.nome,
                 permissoes: values.permissoes,
