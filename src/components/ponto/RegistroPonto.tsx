@@ -8,7 +8,7 @@ import { useSessao } from '@/hooks/use-sessao';
 import { Separator } from '@/components/ui/separator';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import CameraCapture from '../CameraCapture';
-import { UsuarioProfile } from '@/types/usuario';
+import { UsuarioProfile, AdminUsuarioProfile } from '@/types/usuario';
 import usePontoStatus from '@/hooks/use-ponto-status';
 import { format, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -32,9 +32,13 @@ const RegistroPonto: React.FC = () => {
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [pendingRegistroType, setPendingRegistroType] = useState<RegistroTipo | null>(null);
 
-  // CORREÇÃO: Usa cliente_id
-  const isUsuario = role === 'Usuario' && perfil && 'cliente_id' in perfil;
-  const empresaId = isUsuario ? (perfil as UsuarioProfile).cliente_id : null;
+  // CORREÇÃO: Determina o ID da empresa/proprietário
+  const isUsuario = role === 'Usuario' && perfil && ('cliente_id' in perfil || 'admin_id' in perfil);
+  
+  const empresaId = isUsuario 
+    ? (perfil as UsuarioProfile)?.cliente_id || (perfil as AdminUsuarioProfile)?.admin_id 
+    : null;
+    
   const funcionarioId = usuario?.id;
   
   // Hook para status do ponto
@@ -129,7 +133,7 @@ const RegistroPonto: React.FC = () => {
         .from('registros_ponto')
         .insert({
           funcionario_id: funcionarioId,
-          empresa_id: empresaId,
+          empresa_id: empresaId, // Usando o ID do Cliente ou Admin
           horario_registro: new Date().toISOString(),
           selfie_url: selfieUrl,
           tipo: tipo,
