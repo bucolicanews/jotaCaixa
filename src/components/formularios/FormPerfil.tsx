@@ -14,7 +14,6 @@ import { Input } from '../ui/input';
 import { FormField, FormItem, FormLabel, FormControl, FormMessage } from '../ui/form';
 import { Separator } from '../ui/separator';
 import { useBulkTagManager } from '@/hooks/use-bulk-tag-manager';
-import FormDocumentos from '../usuario-forms/FormDocumentos';
 import { Checkbox } from '../ui/checkbox';
 import { useSessao } from '@/hooks/use-sessao';
 
@@ -199,9 +198,9 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
           <Tabs defaultValue="pessoal" className="w-full">
               <TabsList className="flex flex-wrap justify-start w-full h-auto p-1">
-                  <TabsTrigger value="pessoal" className="flex-1 md:flex-none md:w-1/3">Geral</TabsTrigger>
-                  <TabsTrigger value="cadastrais" className="flex-1 md:flex-none md:w-1/3">Dados Cadastrais</TabsTrigger>
-                  {isClient && <TabsTrigger value="documentos" className="flex-1 md:flex-none md:w-1/3">Documentos</TabsTrigger>}
+                  <TabsTrigger value="pessoal" className="flex-1 md:flex-none md:w-1/2">Geral</TabsTrigger>
+                  <TabsTrigger value="cadastrais" className="flex-1 md:flex-none md:w-1/2">Dados Cadastrais</TabsTrigger>
+                  {/* Removido: {isClient && <TabsTrigger value="documentos" className="flex-1 md:flex-none md:w-1/3">Documentos</TabsTrigger>} */}
               </TabsList>
               
               {/* TAB 1: GERAL */}
@@ -317,19 +316,8 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
                   </div>
               </TabsContent>
               
-              {/* TAB 3: DOCUMENTOS (Apenas Cliente) */}
-              {isClient && (
-                  <TabsContent value="documentos" className="mt-4 space-y-6 p-4">
-                      <h3 className="font-semibold text-lg">Documentos da Empresa</h3>
-                      <p className="text-sm text-muted-foreground mb-4">Anexe documentos importantes da sua empresa.</p>
-                      
-                      <FormDocumentos
-                          control={form.control}
-                          isSubmitting={isSubmitting}
-                          resourceId={perfilInicial.id}
-                      />
-                  </TabsContent>
-              )}
+              {/* TAB 3: DOCUMENTOS (Apenas Cliente) - REMOVED */}
+              
           </Tabs>
 
           <Button type="submit" className="w-full" disabled={isSubmitting}>

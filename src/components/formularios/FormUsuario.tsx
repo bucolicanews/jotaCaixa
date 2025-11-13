@@ -18,7 +18,6 @@ import { BASE_URL } from '@/config/app-config';
 import { Separator } from '../ui/separator';
 import FormGeral from '../usuario-forms/FormGeral';
 import FormFolgasFerias from '../usuario-forms/FormFolgasFerias';
-import FormDocumentos from '../usuario-forms/FormDocumentos';
 import FormDadosContratuais from '../usuario-forms/FormDadosContratuais';
 
 const textOptional = z.string().optional().or(z.literal(''));
@@ -97,7 +96,7 @@ interface FormUsuarioProps {
 
 // Type guard para verificar se o perfil é UsuarioProfile
 const isUsuarioProfile = (profile: AnyProfile): profile is UsuarioProfile => {
-    return !!profile && 'proprietario_id' in profile;
+    return !!profile && 'cliente_id' in profile; // CORREÇÃO: Usando cliente_id
 };
 
 // Type guard para verificar se o perfil é AdminUsuarioProfile
@@ -359,7 +358,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                 ja_admitido_anteriormente: values.ja_admitido_anteriormente,
                 
                 // Vinculação (apenas se for novo)
-                ...(isNewAuthUser && tabelaDestino === 'tbl_usuarios' && { proprietario_id: proprietarioId }),
+                ...(isNewAuthUser && tabelaDestino === 'tbl_usuarios' && { cliente_id: proprietarioId }), // CORREÇÃO: Usando cliente_id
                 ...(isNewAuthUser && tabelaDestino === 'admin_usuarios' && { admin_id: proprietarioId }),
             };
             
@@ -436,11 +435,10 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <TabsList className="flex flex-wrap justify-start w-full h-auto p-1">
-              <TabsTrigger value="pessoal" className="flex-1 md:flex-none md:w-1/5">Geral</TabsTrigger>
-              <TabsTrigger value="folgas" className="flex-1 md:flex-none md:w-1/5">Folgas/Férias</TabsTrigger>
-              <TabsTrigger value="cadastrais" className="flex-1 md:flex-none md:w-1/5">Dados Cadastrais</TabsTrigger>
-              <TabsTrigger value="documentos" className="flex-1 md:flex-none md:w-1/5">Documentos</TabsTrigger>
-              <TabsTrigger value="contrato" className="flex-1 md:flex-none md:w-1/5">Contrato (RH)</TabsTrigger>
+              <TabsTrigger value="pessoal" className="flex-1 md:flex-none md:w-1/4">Geral</TabsTrigger>
+              <TabsTrigger value="folgas" className="flex-1 md:flex-none md:w-1/4">Folgas/Férias</TabsTrigger>
+              <TabsTrigger value="cadastrais" className="flex-1 md:flex-none md:w-1/4">Dados Cadastrais</TabsTrigger>
+              <TabsTrigger value="contrato" className="flex-1 md:flex-none md:w-1/4">Contrato (RH)</TabsTrigger>
             </TabsList>
             
             {/* TAB 1: GERAL */}
@@ -491,14 +489,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                 />
             </TabsContent>
             
-            {/* TAB 4: DOCUMENTOS DE ADMISSÃO */}
-            <TabsContent value="documentos" className="mt-4 space-y-6 p-4">
-                <FormDocumentos
-                    control={form.control as unknown as Control<any>}
-                    isSubmitting={isSubmitting}
-                    resourceId={resourceId}
-                />
-            </TabsContent>
+            {/* TAB 4: DOCUMENTOS DE ADMISSÃO - REMOVED */}
 
             {/* TAB 5: DADOS CONTRATUAIS (RH) */}
             <TabsContent value="contrato" className="mt-4 space-y-6 p-4">
