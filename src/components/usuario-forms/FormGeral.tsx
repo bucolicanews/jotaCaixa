@@ -53,7 +53,13 @@ const FormGeral: React.FC<FormGeralProps> = ({
   const nomeLabel = isUserScope ? 'Nome Completo do Usuário' : 'Nome da Empresa';
   
   // Se for edição de Admin/Cliente (não UserScope), o campo 'nome' deve ser editável.
-  const isNameEditable = isUserScope || (isEditing && !isUserScope);
+ // const isNameEditable = isUserScope || (isEditing && !isUserScope);
+// Depois (Admin também pode inserir nome ao criar):
+const isNameEditable = true;
+
+
+
+
 
   return (
     <div className="space-y-4">

@@ -878,6 +878,7 @@ const ClientesPage = () => {
                         if (!empresa.aprovado) {
                             statusBadge = <Badge variant="warning">Pendente</Badge>;
                         } else if (isBlocked) {
+                            // Se aprovado e data_fim_acesso é NULL
                             statusBadge = <Badge variant="destructive">Bloqueado</Badge>;
                         } else if (isAvulso) {
                             // Se for avulso, o status reflete se o acesso está ativo ou expirado
@@ -888,7 +889,7 @@ const ClientesPage = () => {
                             statusBadge = <Badge variant="destructive">Expirado</Badge>;
                         }
                         
-                        const dataExpiracaoDisplay = dataFimAcesso ? format(dataFimAcesso, 'dd/MM/yyyy') : 'N/A';
+                        const dataExpiracaoDisplay = dataFimAcesso ? format(dataFimAcesso, 'dd/MM/yyyy') : 'Bloqueado'; // ALTERADO: Exibe 'Bloqueado' se for nulo
                         const planoNome = empresa.plano_id ? planosMap[empresa.plano_id] || 'N/A' : 'N/A';
                         
                         // Verifica se o cliente foi promovido de um cliente CR (cliente_id_promovido não é nulo)
