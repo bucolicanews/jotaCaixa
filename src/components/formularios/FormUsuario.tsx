@@ -317,6 +317,11 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
             // Determina o ID do proprietário para a tabela de destino
             const proprietarioKey = isUserOfAdmin ? 'admin_id' : 'cliente_id';
             
+            // Obtém o ID do proprietário original do registro (para edição)
+            const originalProprietarioId = isUserOfAdmin 
+                ? (usuarioInicial as AdminUsuarioProfile)?.admin_id 
+                : (usuarioInicial as UsuarioProfile)?.cliente_id;
+            
             // --- DADOS PARA ATUALIZAÇÃO NA TABELA DE USUÁRIOS ---
             const dataToUpdate: any = { 
                 nome: values.nome,
@@ -361,11 +366,10 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                 cartao_pis_url: values.cartao_pis_url || null,
                 ja_admitido_anteriormente: values.ja_admitido_anteriormente,
                 
-                // Vinculação (apenas se for novo)
-                ...(isNewAuthUser && { [proprietarioKey]: proprietarioId }),
-                
-                // Se for edição de usuário do Admin, garante que o admin_id esteja no payload
-                ...(isEditing && isUserOfAdmin && { admin_id: (usuarioInicial as AdminUsuarioProfile).admin_id }),
+                // Vinculação (Para garantir que a RLS passe no WITH CHECK)
+                // Se for novo, usa o proprietarioId do criador.
+                // Se for edição, usa o proprietarioId original do registro.
+                [proprietarioKey]: isNewAuthUser ? proprietarioId : originalProprietarioId,
             };
             
             // UPSERT MANUAL NA TABELA CORRETA
