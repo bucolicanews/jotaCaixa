@@ -121,19 +121,35 @@ const FolhaPonto: React.FC = () => {
   const fetchFuncionarios = useCallback(async (empresaId: string) => {
     setCarregandoDados(true);
     
-    let query = supabase
-        .from('tbl_usuarios')
-        .select('id, nome, email, salario, horas_mensais, dias_folga_fixos, folga_domingo_obrigatoria')
-        .eq('cliente_id', empresaId)
-        .order('nome');
+    let usersData: any[] | null = null;
+    let usersError: any = null;
+    
+    // 1. Verifica se o ID é do Admin logado
+    if (isAdmin && empresaId === usuario?.id) {
+        // Busca usuários do Admin
+        const { data, error } = await supabase
+            .from('admin_usuarios')
+            .select('id, nome, email, salario, horas_mensais, dias_folga_fixos, folga_domingo_obrigatoria')
+            .eq('admin_id', empresaId)
+            .order('nome');
+        usersData = data;
+        usersError = error;
+    } else {
+        // Busca usuários do Cliente (tbl_usuarios)
+        const { data, error } = await supabase
+            .from('tbl_usuarios')
+            .select('id, nome, email, salario, horas_mensais, dias_folga_fixos, folga_domingo_obrigatoria')
+            .eq('proprietario_id', empresaId) // CORREÇÃO: Usando proprietario_id
+            .order('nome');
+        usersData = data;
+        usersError = error;
+    }
 
-    const { data, error } = await query;
-
-    if (error) {
-        showError('Erro ao carregar lista de funcionários: ' + error.message);
+    if (usersError) {
+        showError('Erro ao carregar lista de funcionários: ' + usersError.message);
         setFuncionarios([]);
     } else {
-        const funcs = data as FuncionarioComDados[];
+        const funcs = usersData as FuncionarioComDados[];
         setFuncionarios(funcs);
         if (!funcs.some(f => f.id === funcionarioSelecionadoId) && funcs.length > 0) {
             setFuncionarioSelecionadoId(funcs[0].id);
@@ -142,7 +158,7 @@ const FolhaPonto: React.FC = () => {
         }
     }
     setCarregandoDados(false);
-  }, [funcionarioSelecionadoId]);
+  }, [funcionarioSelecionadoId, isAdmin, usuario?.id]);
   
   const fetchFerias = useCallback(async (funcionarioId: string, data: Date) => {
     const inicioMes = format(startOfMonth(data), 'yyyy-MM-dd');
