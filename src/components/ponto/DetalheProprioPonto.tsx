@@ -66,7 +66,7 @@ const DetalheProprioPonto: React.FC = () => {
       // Mapeamento no frontend para garantir que o campo 'empresa_id' exista na interface RegistroPonto
       const mappedRegistros = (registros as any[]).map(r => ({
           ...r,
-          // Se for admin_registros_ponto, usa admin_id. Caso contrário, usa empresa_id.
+          // O ID do proprietário é o admin_id (se existir) OU o empresa_id
           empresa_id: r.admin_id || r.empresa_id,
       })) as RegistroPonto[];
       

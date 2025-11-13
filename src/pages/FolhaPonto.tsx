@@ -190,7 +190,9 @@ const FolhaPonto: React.FC = () => {
     
     const tabelaRegistros = isFuncionarioAdmin ? 'admin_registros_ponto' : 'registros_ponto';
     
-    // Seleciona as duas colunas, mas apenas a que existe terá valor.
+    // Seleciona as colunas que existem em ambas as tabelas.
+    // Se a tabela for admin_registros_ponto, empresa_id será NULL.
+    // Se a tabela for registros_ponto, admin_id será NULL.
     const selectColumns = `id, funcionario_id, empresa_id, admin_id, horario_registro, tipo, maps_url, selfie_url, atestado_url, observacao`;
 
     const { data: registros, error } = await supabase
@@ -208,7 +210,7 @@ const FolhaPonto: React.FC = () => {
       // Mapeamento no frontend para garantir que o campo 'empresa_id' exista na interface RegistroPonto
       const mappedRegistros = (registros as any[]).map(r => ({
           ...r,
-          // Se for admin_registros_ponto, usa admin_id. Caso contrário, usa empresa_id.
+          // O ID do proprietário é o admin_id (se existir) OU o empresa_id
           empresa_id: r.admin_id || r.empresa_id,
       })) as RegistroPonto[];
       
@@ -237,6 +239,7 @@ const FolhaPonto: React.FC = () => {
   // Efeito 3: Carregar Registros e Férias (depende do Funcionário e da Data)
   useEffect(() => {
     if (funcionarioSelecionadoId && funcionarioDetalhe) {
+      // Determina se o funcionário é gerenciado pelo Admin (admin_usuarios)
       const isFuncAdmin = !!(funcionarioDetalhe as AdminUsuarioProfile).admin_id;
       fetchRegistros(funcionarioSelecionadoId, dataSelecionada, isFuncAdmin);
       fetchFerias(funcionarioSelecionadoId, dataSelecionada);
