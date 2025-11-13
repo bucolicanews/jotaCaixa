@@ -23,7 +23,7 @@ const NovoContrato: React.FC = () => {
   const getOwnerId = () => {
     if (isAdmin) return usuario?.id || null;
     if (isCliente) return (perfil as ClienteProfile)?.id;
-    if (role === 'Usuario') return (perfil as UsuarioProfile)?.proprietario_id;
+    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id; // FIX: proprietario_id -> cliente_id
     return null;
   };
   
@@ -42,11 +42,7 @@ const NovoContrato: React.FC = () => {
         // Clientes veem seus próprios modelos (ownerId) e modelos globais (empresa_id is null)
         query = query.or(`empresa_id.eq.${ownerId},empresa_id.is.null`);
     } else if (isAdmin) {
-        // Admin vê seus próprios modelos (ownerId) e modelos de clientes (empresa_id is not null)
-        // Para simplificar, Admin vê todos os modelos (RLS deve garantir isso, mas a query explícita é mais segura)
-        // Vamos buscar todos os modelos onde empresa_id é o ID do Admin OU onde empresa_id é diferente do ID do Admin (supervisão)
-        // No entanto, para a tela de Novo Contrato, o Admin só deve usar modelos que ele criou (ownerId) ou modelos globais (null).
-        // Modelos criados por Clientes não devem ser usados pelo Admin para criar contratos.
+        // Admin vê seus próprios modelos (ownerId) e modelos globais (empresa_id is null)
         query = query.or(`empresa_id.eq.${ownerId},empresa_id.is.null`);
     }
 

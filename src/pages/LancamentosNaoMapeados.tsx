@@ -35,7 +35,7 @@ const LancamentosNaoMapeados: React.FC = () => {
 
     const getOwnerId = () => {
         if (role === 'Admin' || role === 'Cliente') return (perfil as any)?.id;
-        if (role === 'Usuario') return (perfil as UsuarioProfile)?.proprietario_id;
+        if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id; // FIX: proprietario_id -> cliente_id
         return null;
     };
     

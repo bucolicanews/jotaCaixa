@@ -34,7 +34,7 @@ const GerenciarBlocosSocietarios: React.FC = () => {
   const getOwnerId = () => {
     if (isAdmin) return usuario?.id || null;
     if (isCliente) return (perfil as ClienteProfile)?.id;
-    if (role === 'Usuario') return (perfil as UsuarioProfile)?.proprietario_id;
+    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id; // FIX: proprietario_id -> cliente_id
     return null;
   };
   
@@ -50,7 +50,7 @@ const GerenciarBlocosSocietarios: React.FC = () => {
     setCarregando(true);
     
     let query = supabase
-      .from('documentos_societarios_blocos')
+      .from('blocos_societarios')
       .select('*')
       .order('titulo', { ascending: true });
       
@@ -94,7 +94,7 @@ const GerenciarBlocosSocietarios: React.FC = () => {
       }
       
       const { error } = await supabase
-          .from('documentos_societarios_blocos')
+          .from('blocos_societarios')
           .delete()
           .eq('id', blocoId);
           

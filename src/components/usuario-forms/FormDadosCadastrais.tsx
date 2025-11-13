@@ -1,12 +1,6 @@
 import React, { useCallback, useEffect } from 'react';
 import { Control, useFormContext } from 'react-hook-form';
-import { FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Label } from '@/components/ui/label';
-import { Loader2, Tag } from 'lucide-react';
-import { cn } from '@/lib/utils';
 import { showError } from '@/utils/toast';
 import { useBulkTagManager } from '@/hooks/use-bulk-tag-manager';
 import { TaggedFormField } from './TaggedFormField'; // Importando o componente TaggedFormField

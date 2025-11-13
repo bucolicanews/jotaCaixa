@@ -65,7 +65,7 @@ const ContasReceber = () => {
   const getOwnerId = () => {
     if (isAdmin) return usuario?.id || null;
     if (role === 'Cliente') return (perfil as ClienteProfile)?.id || null;
-    if (role === 'Usuario') return (perfil as UsuarioProfile)?.proprietario_id || null;
+    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id || null; // FIX: proprietario_id -> cliente_id
     return null;
   };
   
@@ -273,7 +273,7 @@ const ContasReceber = () => {
       showSuccess('Conta excluída com sucesso.');
       buscarDados();
     } catch (error: any) {
-      showError('Erro ao excluir conta: ' + error.message);
+      showError('Falha ao excluir conta: ' + error.message);
       setCarregandoDados(false);
     }
   };

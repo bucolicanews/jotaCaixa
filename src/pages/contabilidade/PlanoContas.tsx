@@ -185,7 +185,7 @@ const PlanoContasPage = () => {
       } else if (role === 'Cliente') {
           ownerId = (perfil as ClienteProfile)?.id || null;
       } else if (role === 'Usuario') {
-          ownerId = (perfil as UsuarioProfile)?.proprietario_id || null;
+          ownerId = (perfil as UsuarioProfile)?.cliente_id || null; // FIX: proprietario_id -> cliente_id
       }
       
       if (ownerId) {

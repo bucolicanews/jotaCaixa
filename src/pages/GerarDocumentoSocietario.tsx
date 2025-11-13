@@ -118,7 +118,7 @@ const GerarDocumentoSocietario: React.FC = () => {
   const getOwnerIdLogado = () => {
     if (isAdmin) return usuario?.id || null;
     if (isCliente) return (perfil as ClienteProfile)?.id;
-    if (role === 'Usuario') return (perfil as UsuarioProfile)?.proprietario_id;
+    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id; // FIX: proprietario_id -> cliente_id
     return null;
   };
   
@@ -192,7 +192,7 @@ const GerarDocumentoSocietario: React.FC = () => {
     
     // 3. Buscar Blocos de Conteúdo
     const { data: blocosData, error: blocosError } = await supabase
-        .from('documentos_societarios_blocos')
+        .from('blocos_societarios')
         .select('*')
         .or(`proprietario_id.eq.${targetEmpresaId},proprietario_id.is.null`)
         .order('titulo');
@@ -243,7 +243,7 @@ const GerarDocumentoSocietario: React.FC = () => {
         
         // 1.1. Buscar Modelo associado
         const { data: modeloData } = await supabase
-            .from('documentos_societarios_modelos')
+            .from('modelos_societarios')
             .select('*')
             .eq('id', doc.modelo_id)
             .single();
@@ -252,7 +252,7 @@ const GerarDocumentoSocietario: React.FC = () => {
     } else if (modeloId) {
         // 2. Buscar Modelo (se for criação)
         const { data: modeloData, error: modeloError } = await supabase
-            .from('documentos_societarios_modelos')
+            .from('modelos_societarios')
             .select('*')
             .eq('id', modeloId)
             .single();

@@ -85,7 +85,7 @@ const ClientesPage = () => {
   const getOwnerId = () => {
     if (role === 'Admin') return usuario?.id || null; // Admin usa seu próprio ID
     if (role === 'Cliente') return (perfil as ClienteProfile)?.id;
-    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id; // CORREÇÃO: Usando cliente_id
+    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id; // FIX: proprietario_id -> cliente_id
     return null;
   };
   
@@ -451,8 +451,6 @@ const ClientesPage = () => {
           });
           
           if (error) throw error;
-          
-          showSuccess(`Link de acesso reenviado para ${email}.`);
           
           // 2. Abrir o diálogo de ações para que o Admin possa copiar/enviar o link
           // CORREÇÃO DO ERRO 3: Acessando action_link da resposta de dados

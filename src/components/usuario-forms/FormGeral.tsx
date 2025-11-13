@@ -79,7 +79,7 @@ const FormGeral: React.FC<FormGeralProps> = ({
                 </FormControl>
                 <FormLabel className="font-normal">{p.label}</FormLabel>
               </FormItem>
-            ))} />
+            )} />
           ))}
         </div>
       </div>

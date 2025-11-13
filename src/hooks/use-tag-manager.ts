@@ -30,7 +30,7 @@ export function useTagManager(resourceId: string | undefined, tagMetadata: TagMe
         if (role === 'Cliente') return (perfil as ClienteProfile)?.id;
         
         // 3. Se for Usuário (funcionário), o proprietário da tag é o cliente_id.
-        if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id; // CORREÇÃO: Usando cliente_id
+        if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id; // FIX: proprietario_id -> cliente_id
         
         return null;
     };

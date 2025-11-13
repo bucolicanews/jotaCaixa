@@ -40,7 +40,7 @@ const getTipoDRE = (conta: string, configMap: ContabilConfigMap): ContaBalanco['
 
 const compareContas = (a: ContaBalanco, b: ContaBalanco): number => {
     const partsA = a.Conta.split('.').map(Number);
-    const partsB = b.Conta.split('.map').map(Number);
+    const partsB = b.Conta.split('.').map(Number);
 
     for (let i = 0; i < Math.max(partsA.length, partsB.length); i++) {
         const numA = partsA[i] || 0;
@@ -113,7 +113,7 @@ export function useBalancoPatrimonial(endDate: Date | undefined): BalancoData {
   const getEmpresaId = () => {
     if (role === 'Admin') return usuario?.id || null;
     if (role === 'Cliente') return (perfil as ClienteProfile)?.id || null;
-    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id || null; // CORREÇÃO: Usando cliente_id
+    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id || null; // FIX: proprietario_id -> cliente_id
     return null;
   };
 

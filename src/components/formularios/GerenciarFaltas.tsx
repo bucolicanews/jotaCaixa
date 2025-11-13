@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, FileText, XCircle, CheckCircle2, Clock } from 'lucide-react';
+import { Loader2, FileText, XCircle, CheckCircle2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { format } from 'date-fns';
@@ -93,14 +93,6 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
 
     const { data: publicUrlData } = supabase.storage.from('documentos-admissao').getPublicUrl(filePath);
     return publicUrlData.publicUrl;
-  };
-
-  const getAcaoLabel = (acao: Acao) => {
-    switch (acao) {
-      case 'Falta': return 'Falta';
-      case 'Abono': return 'Abono';
-      default: return 'Ação';
-    }
   };
 
   const handleSubmit = async () => {

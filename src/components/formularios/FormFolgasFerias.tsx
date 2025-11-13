@@ -34,7 +34,7 @@ const FormFolgasFerias: React.FC<FormFolgasFeriasProps> = ({ control, isSubmitti
       );
   }
   
-  const proprietarioId = usuarioInicial.cliente_id; // CORREÇÃO: Usando cliente_id
+  const proprietarioId = usuarioInicial.cliente_id; // FIX: cliente_id
 
   return (
     <div className="space-y-6">

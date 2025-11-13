@@ -91,7 +91,8 @@ const GerenciarUsuarios: React.FC = () => {
       
       const adminUsers = (adminUsersData || []).map(u => ({ 
           ...u, 
-          proprietario_id: u.admin_id, 
+          cliente_id: null, // Garante que cliente_id é null
+          admin_id: u.admin_id,
           nome_empresa: 'Meus Usuários (Admin)' 
       })) as UsuarioComEmpresa[];
       
@@ -103,15 +104,15 @@ const GerenciarUsuarios: React.FC = () => {
       if (clienteIds.length > 0) {
           const { data: clienteUsersData, error: clienteUsersError } = await supabase
             .from('tbl_usuarios')
-            .select('*, cliente_id') // CORREÇÃO AQUI: Selecionando cliente_id
-            .in('cliente_id', clienteIds) // CORREÇÃO AQUI: Filtrando por cliente_id
+            .select('*')
+            .in('cliente_id', clienteIds) // Filtrando por cliente_id
             .order('nome', { ascending: true });
             
           if (clienteUsersError) console.error('Erro ao carregar usuários dos Clientes:', clienteUsersError);
           
           const clienteUsers = (clienteUsersData || []).map(item => {
-            const nomeEmpresa = fetchedClientes.find(c => c.id === item.cliente_id)?.nome || 'N/A';
-            return { ...item, proprietario_id: item.cliente_id, nome_empresa: nomeEmpresa } as UsuarioComEmpresa; // Mapeando cliente_id para proprietario_id
+            const nomeEmpresa = fetchedClientes.find(c => c.id === (item as UsuarioProfile).cliente_id)?.nome || 'N/A';
+            return { ...item, nome_empresa: nomeEmpresa } as UsuarioComEmpresa;
           });
           
           fetchedUsers.push(...clienteUsers);
@@ -125,15 +126,15 @@ const GerenciarUsuarios: React.FC = () => {
       // CLIENTE: Busca APENAS seus próprios Usuários (Funcionários)
       const { data: usuariosData, error: usuariosError } = await supabase
         .from('tbl_usuarios')
-        .select('*, cliente_id') // CORREÇÃO AQUI: Selecionando cliente_id
-        .eq('cliente_id', usuario.id) // CORREÇÃO AQUI: Filtrando por cliente_id
+        .select('*')
+        .eq('cliente_id', usuario.id) // Filtrando por cliente_id
         .order('nome', { ascending: true });
 
       if (usuariosError) {
         showError('Erro ao carregar usuários: ' + usuariosError.message);
         setUsuarios([]);
       } else {
-        const clientUsers = (usuariosData || []).map(item => ({ ...item, proprietario_id: item.cliente_id })) as UsuarioComEmpresa[];
+        const clientUsers = (usuariosData || []) as UsuarioComEmpresa[];
         setUsuarios(clientUsers);
       }
     }
@@ -156,8 +157,8 @@ const GerenciarUsuarios: React.FC = () => {
   };
 
   // Separação de usuários para as abas
-  const meusFuncionarios = usuarios.filter(u => u.proprietario_id === usuario?.id);
-  const funcionariosClientes = usuarios.filter(u => u.proprietario_id !== usuario?.id);
+  const meusFuncionarios = usuarios.filter(u => (u as UsuarioProfile).cliente_id === usuario?.id || (u as AdminUsuarioProfile).admin_id === usuario?.id);
+  const funcionariosClientes = usuarios.filter(u => (u as UsuarioProfile).cliente_id !== usuario?.id && (u as AdminUsuarioProfile).admin_id !== usuario?.id);
 
   const filterUsers = (userList: UsuarioComEmpresa[], currentTab: string) => {
     const termoBusca = filtro.toLowerCase();
@@ -171,7 +172,9 @@ const GerenciarUsuarios: React.FC = () => {
         if (!textMatch) return false;
         
         if (isAdmin && currentTab === 'funcionarios_clientes' && filtroEmpresaId !== 'todos') {
-            return u.proprietario_id === filtroEmpresaId;
+            // Filtra pelo ID do cliente (proprietario_id)
+            const proprietarioId = (u as UsuarioProfile).cliente_id || (u as AdminUsuarioProfile).admin_id;
+            return proprietarioId === filtroEmpresaId;
         }
 
         return true;
@@ -190,7 +193,9 @@ const GerenciarUsuarios: React.FC = () => {
 
     try {
       // Determina a tabela de origem
-      const tabela = usuarios.find(u => u.id === id)?.proprietario_id === usuario?.id && isAdmin ? 'admin_usuarios' : 'tbl_usuarios';
+      const userToDelete = usuarios.find(u => u.id === id);
+      const isMyUser = (userToDelete as UsuarioProfile)?.cliente_id === usuario?.id || (userToDelete as AdminUsuarioProfile)?.admin_id === usuario?.id;
+      const tabela = isMyUser && isAdmin ? 'admin_usuarios' : 'tbl_usuarios';
       
       // Deleta o perfil do usuário na tabela correta
       const { error: profileError } = await supabase

@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react';
-import { Control, useFormContext } from 'react-hook-form';
+import { Control } from 'react-hook-form';
 import { FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -20,7 +20,7 @@ interface TaggedFormFieldProps {
     fieldName: string;
     label: string;
     placeholder: string;
-    resourceId: string | undefined;
+    resourceId: string | undefined; // Propriedade renomeada
     disabled: boolean;
     isOptional?: boolean;
     tagRefreshKey: number;
@@ -71,12 +71,9 @@ const TaggedFormField: React.FC<TaggedFormFieldProps> = ({ control, fieldName, l
                             Usar como Tag
                         </Label>
                     </div>
-                </div>
-                <FormControl><Input placeholder={placeholder} {...field} value={(field.value as string) || ''} disabled={disabled} /></FormControl>
-                <FormMessage />
-            </FormItem>
-        )} />
-    );
-};
+                </FormItem>
+            )} />
+        );
+    };
 
 export { TaggedFormField };

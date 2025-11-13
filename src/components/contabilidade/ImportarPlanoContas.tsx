@@ -44,15 +44,18 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files[0]) {
       setFile(event.target.files[0]);
+      // Sugere o título baseado no nome do arquivo
+      // setTitulo(selectedFile.name.replace(/\.(txt|html|doc|docx)$/i, '').trim());
     } else {
       setFile(null);
+      // setTitulo('');
     }
   };
 
   const getProprietarioId = (): string | null => {
     if (role === 'Admin') return usuario?.id || null;
     if (role === 'Cliente') return (perfil as ClienteProfile)?.id || null;
-    if (role === 'Usuario') return (perfil as UsuarioProfile)?.proprietario_id || null;
+    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id || null; // FIX: proprietario_id -> cliente_id
     return null;
   };
   
@@ -226,7 +229,7 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
     } catch (error) {
       console.error('Erro durante a importação:', error);
       // MENSAGEM DE ERRO ALTERADA
-      showError('Cadastro do Plano de Contas realizado com sucesso.');
+      showError('Falha na importação do Plano de Contas: ' + (error as Error).message);
     } finally {
       setLoading(false);
     }

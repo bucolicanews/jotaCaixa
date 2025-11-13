@@ -35,7 +35,7 @@ const GerenciarTags = () => {
   
   const getEmpresaId = () => {
     if (isCliente) return (perfil as ClienteProfile)?.id;
-    if (isUsuario) return (perfil as UsuarioProfile)?.proprietario_id;
+    if (isUsuario) return (perfil as UsuarioProfile)?.cliente_id; // FIX: proprietario_id -> cliente_id
     // Se for Admin, o proprietário da tag é o próprio Admin logado.
     if (isAdmin) return (perfil as any)?.id;
     return null;
@@ -60,8 +60,7 @@ const GerenciarTags = () => {
     }
     
     if (filtroTextoDebounced) {
-        const termo = `%${filtroTextoDebounced}%`;
-        query = query.or(`nome_tag.ilike.${termo},descricao.ilike.${termo}`);
+        query = query.or(`nome_tag.ilike.%${filtroTextoDebounced}%,descricao.ilike.%${filtroTextoDebounced}%`);
     }
 
     const { data, error } = await query;

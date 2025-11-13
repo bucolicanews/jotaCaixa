@@ -28,7 +28,7 @@ const GerenciarModelosSocietarios: React.FC = () => {
   const getOwnerId = () => {
     if (isAdmin) return usuario?.id || null;
     if (isCliente) return (perfil as ClienteProfile)?.id;
-    if (role === 'Usuario') return (perfil as UsuarioProfile)?.proprietario_id;
+    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id; // FIX: proprietario_id -> cliente_id
     return null;
   };
   
@@ -44,7 +44,7 @@ const GerenciarModelosSocietarios: React.FC = () => {
     setCarregando(true);
     
     let query = supabase
-      .from('documentos_societarios_modelos')
+      .from('modelos_societarios')
       .select('*')
       .order('titulo', { ascending: true });
       
@@ -139,7 +139,7 @@ const GerenciarModelosSocietarios: React.FC = () => {
                           <p className="text-sm text-muted-foreground">Última atualização: {new Date(modelo.criado_em).toLocaleDateString()}</p>
                       </div>
                       <div className="flex space-x-2 ml-4">
-                          <Link to={`/documentos-societarios/novo?modeloId=${modelo.id}`}>
+                          <Link to={`/documentos-societarios/gerar/${modelo.id}`}>
                               <Button variant="secondary" size="icon" title="Usar Modelo">
                                   <ArrowRight className="w-4 h-4" />
                               </Button>

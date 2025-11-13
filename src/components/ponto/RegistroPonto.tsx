@@ -32,9 +32,9 @@ const RegistroPonto: React.FC = () => {
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [pendingRegistroType, setPendingRegistroType] = useState<RegistroTipo | null>(null);
 
-  // CORREÇÃO: Usa proprietario_id
-  const isUsuario = role === 'Usuario' && perfil && 'proprietario_id' in perfil;
-  const empresaId = isUsuario ? (perfil as UsuarioProfile).proprietario_id : null;
+  // CORREÇÃO: Usa cliente_id
+  const isUsuario = role === 'Usuario' && perfil && 'cliente_id' in perfil;
+  const empresaId = isUsuario ? (perfil as UsuarioProfile).cliente_id : null;
   const funcionarioId = usuario?.id;
   
   // Hook para status do ponto
