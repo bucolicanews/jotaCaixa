@@ -81,7 +81,7 @@ const FolhaPonto: React.FC = () => {
   const funcionarioDetalhe = funcionarios.find(f => f.id === funcionarioSelecionadoId);
   
   // Determina se o funcionário selecionado é um AdminUsuarioProfile
-  const isFuncionarioAdmin = funcionarioDetalhe?.admin_id === empresaIdParaFiltro && isAdmin;
+  // const isFuncionarioAdmin = funcionarioDetalhe?.admin_id === empresaIdParaFiltro && isAdmin; 
   // const tabelaRegistros = isFuncionarioAdmin ? 'admin_registros_ponto' : 'registros_ponto'; // Removido
 
   const fetchClientes = useCallback(async () => {
@@ -139,7 +139,7 @@ const FolhaPonto: React.FC = () => {
             .from('admin_usuarios')
             .select('id, nome, email, salario, horas_mensais, dias_folga_fixos, folga_domingo_obrigatoria, admin_id')
             .eq('admin_id', empresaId)
-            .order('nome');
+            .order('nome', { ascending: true });
         usersData = data;
         usersError = error;
     } else {
@@ -148,7 +148,7 @@ const FolhaPonto: React.FC = () => {
             .from('tbl_usuarios')
             .select('id, nome, email, salario, horas_mensais, dias_folga_fixos, folga_domingo_obrigatoria, cliente_id')
             .eq('cliente_id', empresaId) // CORREÇÃO AQUI: Usando cliente_id
-            .order('nome');
+            .order('nome', { ascending: true });
         usersData = data;
         usersError = error;
     }
