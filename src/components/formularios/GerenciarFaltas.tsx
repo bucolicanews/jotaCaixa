@@ -24,6 +24,9 @@ interface GerenciarFaltasProps {
   onFaltaRegistrada: () => void;
 }
 
+// Nome do bucket de armazenamento para atestados
+const ATESTADO_BUCKET = 'atestados'; 
+
 const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, funcionario, dataFalta, registroInicial, onFaltaRegistrada }) => {
   const [loading, setLoading] = useState(false);
   const [acao, setAcao] = useState<Acao>(registroInicial ? (registroInicial.tipo === 'Falta' ? 'Falta' : 'Abono') : 'Falta');
@@ -80,7 +83,7 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
     const filePath = `faltas/${funcionario.id}/${format(dataFalta!, 'yyyyMMdd')}-${Date.now()}.${fileExt}`;
 
     const { error } = await supabase.storage
-      .from('documentos-admissao')
+      .from(ATESTADO_BUCKET)
       .upload(filePath, file, {
         cacheControl: '3600',
         upsert: false,
@@ -91,7 +94,7 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
       throw new Error('Falha ao fazer upload do atestado: ' + error.message);
     }
 
-    const { data: publicUrlData } = supabase.storage.from('documentos-admissao').getPublicUrl(filePath);
+    const { data: publicUrlData } = supabase.storage.from(ATESTADO_BUCKET).getPublicUrl(filePath);
     return publicUrlData.publicUrl;
   };
 
