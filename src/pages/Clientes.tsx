@@ -67,6 +67,7 @@ const ClientesPage = () => {
   const [perfilParaEditar, setPerfilParaEditar] = useState<AnyProfile | null>(null);
   const [dialogAberto, setDialogAberto] = useState(false);
   const [dialogAvulsaAberto, setDialogAvulsaAberto] = useState(false); // Novo estado para dialog avulsa
+  const [dialogConviteAberto, setDialogConviteAberto] = useState(false); // NOVO ESTADO
   
   // NOVO ESTADO
   const [planosMap, setPlanosMap] = useState<Record<string, string>>({});
@@ -319,6 +320,7 @@ const ClientesPage = () => {
   const handleSaveComplete = () => {
     setDialogAberto(false);
     setDialogAvulsaAberto(false); // Fechar o dialog avulso
+    setDialogConviteAberto(false); // Fechar o dialog de convite
     setClienteSelecionado(null);
     setPerfilParaEditar(null);
     buscarDados();
@@ -1110,6 +1112,33 @@ const ClientesPage = () => {
                             <DialogTitle>Cadastrar Empresa Avulsa</DialogTitle>
                         </DialogHeader>
                         <FormEmpresaAvulsa onSaveComplete={handleSaveComplete} />
+                    </DialogContent>
+                </Dialog>
+            )}
+            
+            {/* NOVO BOTÃO: Convidar Cliente (Apenas Admin) */}
+            {isAdmin && (
+                <Dialog open={dialogConviteAberto} onOpenChange={setDialogConviteAberto}>
+                    <DialogTrigger asChild>
+                        <Button variant="outline" onClick={() => setDialogConviteAberto(true)} className="w-full sm:w-auto">
+                            <Mail className="w-4 h-4 mr-2" />
+                            Convidar Cliente
+                        </Button>
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+                        <DialogHeader>
+                            <DialogTitle>Convidar Novo Cliente do Sistema</DialogTitle>
+                            <p className="text-sm text-muted-foreground">
+                                Envia um link de cadastro para que o cliente defina a senha e inicie o processo de aprovação.
+                            </p>
+                        </DialogHeader>
+                        {/* Usando FormUsuario no modo de criação de novo cliente (isNewClient) */}
+                        <FormUsuario 
+                            criadorRole={role!}
+                            criadorPerfil={perfil!}
+                            usuarioInicial={null}
+                            onSaveComplete={handleSaveComplete}
+                        />
                     </DialogContent>
                 </Dialog>
             )}
