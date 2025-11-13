@@ -48,7 +48,7 @@ const DetalheProprioPonto: React.FC = () => {
     // Usar endOfMonth para garantir que todos os registros até o final do último dia do mês sejam incluídos.
     const fimMes = format(endOfMonth(data), 'yyyy-MM-dd'); 
     
-    // CORREÇÃO: Seleciona as duas colunas, mas apenas a que existe terá valor.
+    // Seleciona todas as colunas que são comuns e as colunas de ID específicas
     const selectColumns = `id, funcionario_id, empresa_id, admin_id, horario_registro, tipo, maps_url, selfie_url, atestado_url, observacao`;
 
     const { data: registros, error } = await supabase

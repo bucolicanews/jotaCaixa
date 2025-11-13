@@ -190,10 +190,8 @@ const FolhaPonto: React.FC = () => {
     
     const tabelaRegistros = isFuncionarioAdmin ? 'admin_registros_ponto' : 'registros_ponto';
     
-    // Seleciona as colunas que existem em ambas as tabelas.
-    // Se a tabela for admin_registros_ponto, empresa_id será NULL.
-    // Se a tabela for registros_ponto, admin_id será NULL.
-    const selectColumns = `id, funcionario_id, empresa_id, admin_id, horario_registro, tipo, maps_url, selfie_url, atestado_url, observacao`;
+    // Seleciona todas as colunas que são comuns e as colunas de ID específicas
+    const selectColumns = `id, funcionario_id, horario_registro, tipo, maps_url, selfie_url, atestado_url, observacao, empresa_id, admin_id`;
 
     const { data: registros, error } = await supabase
       .from(tabelaRegistros) // ROTEAMENTO AQUI
