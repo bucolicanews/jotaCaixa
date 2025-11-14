@@ -129,7 +129,7 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
   // NOVO HANDLER: Falta Dia Todo (0h Abonadas)
   const handleFaltaDiaTodo = () => {
       setAcao('Falta');
-      setHorasSelecionadas('8h'); // Mantém 8h para indicar o dia todo
+      setHorasSelecionadas('0h'); // Define 0h para Falta Dia Todo
       setAtestadoFile(null);
       setAtestadoUrl(null);
       setObservacao('Falta Dia Todo (0h Abonadas)'); // Observação especial para o cálculo
@@ -150,7 +150,8 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
         return;
     }
     
-    if ((isFalta || isAbono) && !horasSelecionadas) {
+    // A validação de horas só é necessária para Abono
+    if (isAbono && !horasSelecionadas) {
         showError('Selecione a quantidade de horas.');
         return;
     }
@@ -256,10 +257,10 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
             </RadioGroup>
           </div>
 
-          {/* Opções de Horas (Comum a Falta Justificada e Abono) */}
-          {(isFalta || isAbono) && (
+          {/* Opções de Horas (Apenas para Abono) */}
+          {isAbono && (
             <div className="space-y-4 p-4 border rounded-md">
-              <h4 className="font-semibold">Horas a Abonar/Justificar</h4>
+              <h4 className="font-semibold">Horas a Abonar</h4>
               <p className="text-sm text-muted-foreground">Selecione a quantidade de horas.</p>
               <RadioGroup value={horasSelecionadas} onValueChange={(v: AbonoHoras) => setHorasSelecionadas(v)} className="grid grid-cols-2 gap-4">
                 {['8h', '6h', '4h', '2h'].map(h => (
@@ -270,18 +271,16 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
                 ))}
               </RadioGroup>
               
-              {/* NOVO BOTÃO: Falta Dia Todo (0h Abonadas) */}
-              {isFalta && (
-                  <Button 
-                      type="button" 
-                      variant="destructive" 
-                      onClick={handleFaltaDiaTodo}
-                      className="w-full mt-3"
-                      disabled={loading}
-                  >
-                      Falta Dia Todo (0h Abonadas)
-                  </Button>
-              )}
+              <div className="space-y-2 pt-4 border-t">
+                <Label htmlFor="observacao-abono">Observação (Opcional)</Label>
+                <Textarea 
+                    id="observacao-abono"
+                    value={observacao}
+                    onChange={(e) => setObservacao(e.target.value)}
+                    placeholder="Ex: Abono por consulta médica."
+                    disabled={loading}
+                />
+              </div>
             </div>
           )}
 
@@ -290,7 +289,18 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
             <div className="space-y-4 p-4 border rounded-md">
               <h4 className="font-semibold">Detalhes da Falta</h4>
               
-              <div className="space-y-2">
+              {/* Botão Falta Dia Todo */}
+              <Button 
+                  type="button" 
+                  variant="destructive" 
+                  onClick={handleFaltaDiaTodo}
+                  className="w-full"
+                  disabled={loading}
+              >
+                  Falta Dia Todo (0h Abonadas)
+              </Button>
+              
+              <div className="space-y-2 pt-4 border-t">
                 <Label htmlFor="atestado-file" className="flex items-center">
                     <FileText className="w-4 h-4 mr-2" /> Anexar Atestado Médico (Para Justificar)
                 </Label>
@@ -322,23 +332,6 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
                     value={observacao}
                     onChange={(e) => setObservacao(e.target.value)}
                     placeholder="Ex: Motivo pessoal, sem atestado."
-                    disabled={loading}
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Opções de Abono */}
-          {isAbono && (
-            <div className="space-y-4 p-4 border rounded-md">
-              <h4 className="font-semibold">Detalhes do Abono</h4>
-              <div className="space-y-2">
-                <Label htmlFor="observacao-abono">Observação (Opcional)</Label>
-                <Textarea 
-                    id="observacao-abono"
-                    value={observacao}
-                    onChange={(e) => setObservacao(e.target.value)}
-                    placeholder="Ex: Abono por consulta médica."
                     disabled={loading}
                 />
               </div>
