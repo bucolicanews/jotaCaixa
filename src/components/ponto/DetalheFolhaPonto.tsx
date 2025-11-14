@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Edit, Trash2, FileSignature, Clock } from 'lucide-react';
+import { Loader2, Edit, Trash2, FileSignature, Clock, Eye } from 'lucide-react';
 import { format, parseISO, eachDayOfInterval, getDay, isSameDay, differenceInMinutes, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -228,14 +228,11 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
                     // Se for falta justificada, acumula as horas abonadas (6h no exemplo do usuário)
                     if (isFaltaJustificada) {
                         totalMinutosTrabalhados += minutosAbonadosCredited;
-                        minutosDia = minutosAbonadosCredited; // Define o total do dia para exibição
                     } else if (hasPontoRecords) {
                         // Se for falta injustificada mas com batidas (ajuste manual), acumula as batidas
                         totalMinutosTrabalhados += minutosDia;
-                    } else {
-                        // Falta injustificada sem batidas
-                        minutosDia = 0;
                     }
+                    // Se for falta injustificada sem batidas, acumula 0 (default)
                 } else {
                     // Dia normal com batidas
                     totalMinutosTrabalhados += minutosDia;
@@ -300,6 +297,10 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
         } finally {
             setIsDeleting(false);
         }
+    };
+    
+    const handleViewAtestado = (url: string) => {
+        window.open(url, '_blank');
     };
 
     return (
@@ -404,6 +405,10 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
                                 // Se precisar de gestão, sobrescreve
                                 if (needsManagement) statusPrincipal = 'Aguardando Gestão de Folga';
 
+                                // Encontra o registro de Falta/Abono para verificar o atestado
+                                const absenceRecord = registrosDoDia.find((r: RegistroPonto) => r.tipo === 'Falta' || r.tipo === 'Abono');
+                                const atestadoUrl = absenceRecord?.atestado_url;
+
                                 return (
                                     <TableRow key={diaString} className={rowClassName}>
                                         <TableCell className="font-medium">{format(data, 'dd/MM')}</TableCell>
@@ -411,9 +416,23 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
                                         <TableCell className="font-semibold">{totalDiaDisplay}</TableCell>
                                         <TableCell>
                                             <div className="flex flex-col space-y-1">
-                                                <Badge variant={isFalta ? 'destructive' : (isAbono ? 'success' : 'secondary')}>
-                                                    {statusPrincipal}
-                                                </Badge>
+                                                <div className="flex items-center space-x-2">
+                                                    <Badge variant={isFalta ? 'destructive' : (isAbono ? 'success' : 'secondary')}>
+                                                        {statusPrincipal}
+                                                    </Badge>
+                                                    {/* NOVO BOTÃO VISUALIZAR ATESTADO */}
+                                                    {atestadoUrl && (
+                                                        <Button 
+                                                            variant="link" 
+                                                            size="sm" 
+                                                            onClick={() => handleViewAtestado(atestadoUrl)}
+                                                            className="h-auto p-0 text-blue-500 hover:text-blue-700 text-xs"
+                                                            title="Visualizar Atestado Anexado"
+                                                        >
+                                                            <Eye className="w-3 h-3 mr-1" /> Atestado
+                                                        </Button>
+                                                    )}
+                                                </div>
                                                 {registrosDoDia.map((r: RegistroPonto) => {
                                                     // Se for Falta ou Abono, não exibe o horário (apenas o tipo e observação)
                                                     const isFaltaOrAbono = r.tipo === 'Falta' || r.tipo === 'Abono';
