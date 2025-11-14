@@ -1,32 +1,27 @@
-import React, { useMemo, useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Edit, Trash2, FileSignature, Clock } from 'lucide-react';
-import { format, parseISO, eachDayOfInterval, getDay, isSameDay, differenceInMinutes, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
-import { cn } from '@/lib/utils';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { RegistroPonto, Ferias } from '@/types/ponto';
-import { 
-    AlertDialog, 
-    AlertDialogAction, 
-    AlertDialogCancel, 
-    AlertDialogContent, 
-    AlertDialogDescription, 
-    AlertDialogFooter, 
-    AlertDialogHeader, 
-    AlertDialogTitle, 
-    AlertDialogTrigger // Importação adicionada
-} from '@/components/ui/alert-dialog';
-import { useSessao } from '@/hooks/use-sessao';
-import { AdminUsuarioProfile } from '@/types/usuario';
+import React, { useState, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
+import { useSessao } from '@/hooks/use-sessao';
+import { AdminUsuarioProfile, UsuarioProfile } from '@/types/usuario';
+import { RegistroPonto, Ferias } from '@/types/ponto';
+import { 
+    format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, getDay, 
+    isWithinInterval, isSameDay, differenceInMinutes 
+} from 'date-fns';
+import { cn } from '@/lib/utils';
+import { 
+    Card, CardContent, CardHeader, CardTitle, 
+    Table, TableBody, TableCell, TableHead, TableHeader, TableRow, 
+    Badge, Button, 
+    AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger 
+} from '@/components/ui/index';
+import { Clock, Edit, Trash2, FileSignature, Loader2 } from 'lucide-react';
 
 // Constantes CLT (Simplificadas)
-const JORNADA_MENSAL_PADRAO = 220; // Horas mensais padrão CLT
-const JORNADA_DIARIA_PADRAO = 8; // Horas diárias padrão CLT
+const JORNADA_MENSAL_PADRAO = 220; 
+const JORNADA_DIARIA_PADRAO = 8; 
 
+// Interfaces e Tipos
 interface FuncionarioDetalhe {
     id: string;
     nome: string;
@@ -36,6 +31,7 @@ interface FuncionarioDetalhe {
     dias_folga_fixos: string[];
     folga_domingo_obrigatoria: boolean;
     ferias: Ferias[];
+    admin_id?: string; // Para AdminUsuarioProfile
 }
 
 interface DetalheFolhaPontoProps {
@@ -47,24 +43,27 @@ interface DetalheFolhaPontoProps {
     onManageWorkedDayOff: (dia: Date, registros: RegistroPonto[]) => void;
 }
 
-// Exportando a função utilitária
-export const parseHorasObservacao = (observacao: string | null | undefined, defaultHours: number): number => {
-    if (!observacao) return defaultHours;
-    const match = observacao.match(/(\d+)h/);
-    if (match) {
-        return parseInt(match[1], 10);
-    }
-    return defaultHours;
-};
-
-// Definindo a função utilitária
-const formatarHoras = (minutos: number): string => {
+// Funções utilitárias (Exportada para uso em FolhaPonto.tsx)
+export const formatarHoras = (minutos: number): string => {
     const sign = minutos < 0 ? '-' : '';
     const absMinutos = Math.abs(minutos);
     const horas = Math.floor(absMinutos / 60);
     const mins = Math.round(absMinutos % 60);
     return `${sign}${horas}h ${mins}m`;
 };
+
+export const parseHorasObservacao = (observacao: string | null | undefined, defaultHours: number): number => {
+    if (!observacao) return defaultHours;
+    const match = observacao.match(/(\d+)h/);
+    if (match) {
+        return parseInt(match[1], 10);
+    }
+    if (observacao.includes('Falta Dia Todo (0h Abonadas)')) {
+        return 0;
+    }
+    return defaultHours;
+};
+
 
 // Exportando o componente principal
 export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
@@ -124,7 +123,7 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
             let isFolgaFixa = funcionario.dias_folga_fixos?.includes(diaDaSemana) || false;
             if ((funcionario.folga_domingo_obrigatoria ?? true) && diaDaSemana === 'Sunday') isFolgaFixa = true;
             
-            const isFerias = funcionario.ferias.some(f => {
+            const isFerias = funcionario.ferias.some((f: Ferias) => {
                 const start = parseISO(f.data_inicio + 'T00:00:00');
                 const end = parseISO(f.data_fim + 'T23:59:59');
                 return isWithinInterval(data, { start, end });
@@ -188,8 +187,6 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
                 isTurnoAberto = false;
             }
             
-            // Removendo a variável 'minutosParaAcumular' que não estava sendo lida (Erro TS6133)
-            // let minutosParaAcumular = minutosDia;
             let minutosTrabalhadosFolga = 0;
             let needsManagement = false;
             
@@ -198,12 +195,10 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
                 
                 if (!decisionRecord) {
                     needsManagement = true;
-                    // minutosParaAcumular = 0; // Removido
                 } else if (decisionRecord === 'Extra100') {
                     totalMinutosExtras100 += minutosTrabalhadosFolga;
-                    // minutosParaAcumular = 0; // Removido
                 } else if (decisionRecord === 'Compensacao') {
-                    // minutosParaAcumular = 0; // Removido
+                    // Não acumula minutos trabalhados
                 }
             }
             
@@ -257,11 +252,10 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
         const minutosDiferenca = totalMinutosTrabalhados - jornadaMensalMinutos; 
 
         return { diasProcessados, totalMinutosTrabalhados, minutosDiferenca, totalMinutosExtras100 };
-    }, [funcionario, mes, JORNADA_DIARIA_PADRAO, DAY_MAP]);
+    }, [funcionario, mes, JORNADA_DIARIA_PADRAO, DAY_MAP, JORNADA_MENSAL_PADRAO]);
 
     const diasOrdenados = Object.keys(diasProcessados).sort();
     const isExtraHours = minutosDiferenca > 0;
-    // Removendo isDeficit não utilizado (Linha 233)
     
     const handleDeleteRegistro = async (registroId: string) => {
         if (!window.confirm('Tem certeza que deseja excluir este registro?')) return;
@@ -352,7 +346,6 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
 
                                 // CORREÇÃO TS2304: Definindo 'hoje' no escopo do loop
                                 const hoje = new Date();
-                                // Removendo isTodayOrFuture não utilizado (Linha 324)
                                 
                                 let rowClassName = '';
                                 if (isFerias) rowClassName = 'bg-blue-500/10';
@@ -391,7 +384,14 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
                                         <TableCell className="font-semibold">{totalDiaDisplay}</TableCell>
                                         <TableCell>
                                             <div className="flex flex-col space-y-1">
-                                                <Badge variant={isFalta ? 'destructive' : (isAbono ? 'success' : 'secondary')}>
+                                                <Badge 
+                                                    variant={
+                                                        isFalta && isFaltaJustificada ? 'default' : // NOVO: Falta Justificada é default (azul)
+                                                        isFalta ? 'destructive' : 
+                                                        isAbono ? 'success' : 
+                                                        'secondary'
+                                                    }
+                                                >
                                                     {statusPrincipal}
                                                 </Badge>
                                                 {registrosDoDia.map((r: RegistroPonto) => {

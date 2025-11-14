@@ -8,7 +8,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { showError } from '@/utils/toast';
 import { ClienteProfile, UsuarioProfile, AdminUsuarioProfile } from '@/types/usuario';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { DetalheFolhaPonto, parseHorasObservacao } from '@/components/ponto/DetalheFolhaPonto';
+import { DetalheFolhaPonto } from '@/components/ponto/DetalheFolhaPonto';
 import { MonthPicker } from '@/components/MonthPicker';
 import GerenciarFaltas from '@/components/formularios/GerenciarFaltas';
 import AjustarPontoDialog from '@/components/ponto/AjustarPontoDialog';
@@ -26,6 +26,7 @@ interface FuncionarioComDados extends UsuarioProfile {
     email: string;
     salario: number;
     horas_mensais: number;
+    registros: RegistroPonto[];
     dias_folga_fixos: string[] | null;
     folga_domingo_obrigatoria: boolean | null;
     // Adicionado para AdminUsuarioProfile
@@ -183,6 +184,11 @@ const FolhaPonto: React.FC = () => {
         showError('Erro ao carregar férias: ' + error.message);
         setFeriasDoFuncionario([]);
     } else {
+        // Mapeando dados para incluir o status, que é usado na interface Ferias
+        const feriasData = (feriasRes as Ferias[]).map(f => ({
+            ...f,
+            status: f.status || 'agendada' 
+        }));
         setFeriasDoFuncionario(feriasData as Ferias[]);
     }
   }, []);
@@ -212,7 +218,7 @@ const FolhaPonto: React.FC = () => {
       // Mapeamento no frontend para garantir que o campo 'empresa_id' exista na interface RegistroPonto
       const mappedRegistros = (registros as any[]).map(r => ({
           ...r,
-          // O ID do proprietário é o admin_id (se existir) OU o empresa_id
+          // O ID do proprietário é o admin_id || o empresa_id
           empresa_id: r.admin_id || r.empresa_id,
       })) as RegistroPonto[];
       
@@ -351,7 +357,7 @@ const FolhaPonto: React.FC = () => {
                 if (registro.tipo === 'Falta') isFalta = true;
                 if (registro.tipo === 'Abono') isAbono = true;
                 
-                const horasCreditadas = parseHorasObservacao(registro.observacao, JORNADA_DIARIA_PADRAO);
+                const horasCreditadas = DetalheFolhaPonto.parseHorasObservacao(registro.observacao, JORNADA_DIARIA_PADRAO);
                 minutosAbonados = Math.round(horasCreditadas * 60);
                 
                 if (registro.observacao?.includes('Compensação de folga trabalhada')) {
@@ -361,10 +367,10 @@ const FolhaPonto: React.FC = () => {
                     isFaltaJustificada = true;
                 }
                 
-                minutosDia = minutosAbonados; 
-                
-                if (isFalta && !isFaltaJustificada) {
+                if (registro.observacao?.includes('Falta Dia Todo (0h Abonadas)')) {
                     minutosDia = 0;
+                } else {
+                    minutosDia = isAbono ? minutosAbonados : 0;
                 }
                 
                 continue;
@@ -402,7 +408,6 @@ const FolhaPonto: React.FC = () => {
             isTurnoAberto = false;
         }
         
-        let minutosParaAcumular = minutosDia;
         let minutosTrabalhadosFolga = 0;
         let needsManagement = false;
         
@@ -411,23 +416,31 @@ const FolhaPonto: React.FC = () => {
             
             if (!decisionRecord) {
                 needsManagement = true;
-                minutosParaAcumular = 0;
             } else if (decisionRecord === 'Extra100') {
                 totalMinutosExtras100 += minutosTrabalhadosFolga;
-                minutosParaAcumular = 0;
             } else if (decisionRecord === 'Compensacao') {
-                minutosParaAcumular = 0;
+                // Não acumula minutos trabalhados
             }
         }
         
         if (!isFolgaFixa && !isFerias && !isCompensacaoAbono) {
-            totalMinutosTrabalhados += minutosParaAcumular;
+            if (isAbono) {
+                totalMinutosTrabalhados += minutosAbonados;
+            } 
+            else if (isFalta) {
+                if (hasPontoRecords) {
+                    totalMinutosTrabalhados += minutosDia;
+                }
+            }
+            else {
+                totalMinutosTrabalhados += minutosDia;
+            }
         }
         
-        if (isFaltaJustificada || (isAbono && !isCompensacaoAbono)) {
-            minutosDia = minutosAbonados;
-        } else if (isFalta && !isFaltaJustificada) {
+        if (isFalta) {
             minutosDia = 0;
+        } else if (isAbono && !isCompensacaoAbono) {
+            minutosDia = minutosAbonados;
         }
 
 
@@ -450,7 +463,7 @@ const FolhaPonto: React.FC = () => {
     }
     
     const jornadaMensalMinutos = (funcionarioDetalhe.horas_mensais || JORNADA_MENSAL_PADRAO) * 60;
-    const minutosDiferenca = jornadaMensalMinutos - totalMinutosTrabalhados; 
+    const minutosDiferenca = totalMinutosTrabalhados - jornadaMensalMinutos; 
     
     // --- FIM DA DUPLICAÇÃO DA LÓGICA DE CÁLCULO ---
 
@@ -475,6 +488,7 @@ const FolhaPonto: React.FC = () => {
     );
 
     const htmlContent = ReactDOMServer.renderToStaticMarkup(printComponent);
+    DetalheFolhaPonto.formatarHoras = DetalheFolhaPonto.formatarHoras || ((minutos: number) => `${Math.floor(minutos / 60)}h ${Math.round(minutos % 60)}m`);
     printContent(htmlContent, `Folha de Ponto - ${funcionarioDetalhe.nome} - ${format(dataSelecionada, 'MM/yyyy')}`, orientation);
   };
 
