@@ -357,7 +357,7 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
                                 let statusPrincipal = '';
                                 if (isFerias) statusPrincipal = 'FÉRIAS';
                                 // ALTERAÇÃO DE TEXTO SOLICITADA AQUI
-                                else if (isFalta) statusPrincipal = isFaltaJustificada ? 'Falta Justificada' : 'Falta Abonada';
+                                else if (isFalta) statusPrincipal = isFaltaJustificada ? 'Falta Justificada' : 'Falta Injutificada';
                                 else if (isAbono) statusPrincipal = 'Abono';
                                 else if (isFolgaFixa && hasPontoRecords) statusPrincipal = 'Folga Trabalhada';
                                 else if (isFolgaFixa) statusPrincipal = 'Folga Fixa';

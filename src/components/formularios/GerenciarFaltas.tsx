@@ -32,7 +32,7 @@ interface GerenciarFaltasProps {
 }
 
 // Nome do bucket de armazenamento para atestados
-const ATESTADO_BUCKET = 'documentos-admissao'; 
+const ATESTADO_BUCKET = 'atestados'; 
 
 const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, funcionario, dataFalta, registroInicial, onFaltaRegistrada }) => {
   // const { perfil } = useSessao(); // Removido
@@ -194,7 +194,7 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
       if (isAbono) {
           observacaoFinal = `Abono de ${horasSelecionadas}`;
       } else if (isFalta) {
-          // Se for Falta Dia Todo (0h Abonadas), mantém a observação especial
+          // Se for Falta Dia Todo (0h Abonadas), garante que minutosDia seja 0
           if (isFaltaDiaTodo) {
               observacaoFinal = observacao;
           } else if (isJustificada) {
