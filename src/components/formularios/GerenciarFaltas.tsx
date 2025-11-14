@@ -141,7 +141,7 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
       return;
     }
     
-    // CORREÇÃO DO ERRO 8: Declarando a variável aqui
+    // CORREÇÃO DO ERRO 8: Definindo a variável isFaltaDiaTodo
     const isFaltaDiaTodo = observacao.includes('Falta Dia Todo (0h Abonadas)');
     const isJustificada = isFalta && (atestadoUrl || atestadoFile);
     
@@ -233,6 +233,8 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
   };
 
   const atestadoPronto = atestadoFile || atestadoUrl;
+  // CORREÇÃO DO ERRO 8: Definindo a variável isFaltaDiaTodo
+  const isFaltaDiaTodo = observacao.includes('Falta Dia Todo (0h Abonadas)');
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
