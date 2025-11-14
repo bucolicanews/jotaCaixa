@@ -1,391 +1,649 @@
-import React, { useCallback, useState, useMemo, useEffect } from 'react';
-import { format, startOfMonth, endOfMonth, parseISO } from 'date-fns';
-import { supabase } from '@/integrations/supabase/client';
-import { showError } from '@/utils/toast';
-import { Ferias, RegistroPonto } from '@/types/ponto';
-import ReactDOMServer from 'react-dom/server';
-import { ClienteProfile } from '@/types/usuario';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { DetalheFolhaPonto, formatarHoras, parseHorasObservacao } from '@/components/ponto/DetalheFolhaPonto';
-import { MonthPicker } from '@/components/MonthPicker';
+import React, { useState, useEffect, useCallback } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { useSessao } from '@/hooks/use-sessao';
-import { Loader2, Clock, Filter, Printer } from 'lucide-react';
+import { Loader2, Filter, Clock, Users, Building2, Printer } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import FolhaPontoPrint from '@/components/ponto/FolhaPontoPrint';
-import { usePrint } from '@/hooks/use-print';
-import AjustarPontoDialog from '@/components/ponto/AjustarPontoDialog';
+import { format, startOfMonth, endOfMonth, parseISO, isSameDay, eachDayOfInterval, isWithinInterval, getDay, differenceInMinutes } from 'date-fns';
+import { supabase } from '@/integrations/supabase/client';
+import { showError } from '@/utils/toast';
+import { ClienteProfile, UsuarioProfile, AdminUsuarioProfile } from '@/types/usuario';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { DetalheFolhaPonto, parseHorasObservacao } from '@/components/ponto/DetalheFolhaPonto';
+import { MonthPicker } from '@/components/MonthPicker';
 import GerenciarFaltas from '@/components/formularios/GerenciarFaltas';
+import AjustarPontoDialog from '@/components/ponto/AjustarPontoDialog';
+import { RegistroPonto, Ferias } from '@/types/ponto';
 import GerenciarFolgaTrabalhada from '@/components/formularios/GerenciarFolgaTrabalhada';
+import { Button } from '@/components/ui/button';
+import { usePrint } from '@/hooks/use-print';
+import FolhaPontoPrint from '@/components/ponto/FolhaPontoPrint';
+import ReactDOMServer from 'react-dom/server';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Input } from '@/components/ui/input';
+
+interface FuncionarioComDados extends UsuarioProfile {
+    id: string;
+    nome: string;
+    email: string;
+    salario: number;
+    horas_mensais: number;
+    dias_folga_fixos: string[] | null;
+    folga_domingo_obrigatoria: boolean | null;
+    // Adicionado para AdminUsuarioProfile
+    admin_id?: string;
+}
+
+interface ClienteSimples {
+    id: string;
+    nome: string;
+}
+
+// Constantes CLT (Simplificadas)
+const JORNADA_MENSAL_PADRAO = 220; // Horas mensais padrão CLT
+const JORNADA_DIARIA_PADRAO = 8; // Horas diárias padrão CLT
+
+const FolhaPonto: React.FC = () => {
+  const { role, perfil, usuario, carregando } = useSessao();
+  const { printContent } = usePrint();
+  const [dataSelecionada, setDataSelecionada] = useState<Date>(startOfMonth(new Date()));
+  const [carregandoDados, setCarregandoDados] = useState(false);
+  
+  // Estados para Admin
+  const [clientes, setClientes] = useState<ClienteSimples[]>([]);
+  const [clienteSelecionadoId, setClienteSelecionadoId] = useState<string | null>(null);
+  const [empresaNome, setEmpresaNome] = useState<string>('N/A');
+  
+  // Estados para Funcionários e Registros
+  const [funcionarios, setFuncionarios] = useState<FuncionarioComDados[]>([]);
+  const [funcionarioSelecionadoId, setFuncionarioSelecionadoId] = useState<string | null>(null);
+  const [registrosDoFuncionario, setRegistrosDoFuncionario] = useState<RegistroPonto[]>([]);
+  const [feriasDoFuncionario, setFeriasDoFuncionario] = useState<Ferias[]>([]);
+  
+  // Estado para Gerenciar Faltas/Abonos
+  const [faltaDialogOpen, setFaltaDialogOpen] = useState(false);
+  const [diaFaltaSelecionado, setDiaFaltaSelecionado] = useState<Date | null>(null);
+  const [registroParaEdicao, setRegistroParaEdicao] = useState<RegistroPonto | null>(null); 
+
+  // Estado para Ajustar Ponto (Entrada/Saída)
+  const [ajustarDialogOpen, setAjustarDialogOpen] = useState(false);
+  const [registrosParaAjuste, setRegistrosParaAjuste] = useState<RegistroPonto[]>([]);
+  const [diaParaAjuste, setDiaParaAjuste] = useState<Date | null>(null);
+  
+  // Estado para Gerenciar Folga Trabalhada
+  const [folgaTrabalhadaDialogOpen, setFolgaTrabalhadaDialogOpen] = useState(false);
+  const [diaFolgaTrabalhada, setDiaFolgaTrabalhada] = useState<Date | null>(null);
+  const [registrosFolgaTrabalhada, setRegistrosFolgaTrabalhada] = useState<RegistroPonto[]>([]);
+
+  const isAdmin = role === 'Admin';
+  const isCliente = role === 'Cliente' && (perfil as ClienteProfile)?.aprovado;
+  
+  const empresaIdParaFiltro = isAdmin ? clienteSelecionadoId : (isCliente ? perfil?.id : null);
+  
+  // Variável movida para o topo para resolver TS2448
+  const funcionarioDetalhe = funcionarios.find(f => f.id === funcionarioSelecionadoId);
+  
+  // NOVO CÁLCULO: Determina se o funcionário selecionado é um usuário do Admin
+  const isFuncionarioAdmin = !!(funcionarioDetalhe as AdminUsuarioProfile)?.admin_id;
+  
+  const fetchClientes = useCallback(async () => {
+    if (!isAdmin || !usuario?.id) return;
+    
+    setCarregandoDados(true);
+    const { data, error } = await supabase
+        .from('tbl_clientes')
+        .select('id, nome')
+        .eq('aprovado', true)
+        .order('nome');
+
+    if (error) {
+        showError('Erro ao carregar lista de clientes: ' + error.message);
+        setClientes([]);
+    } else {
+        const clientData = data as ClienteSimples[];
+        
+        // Adiciona a opção para os próprios usuários do Admin
+        const adminOption: ClienteSimples = { id: usuario.id, nome: 'Meus Usuários (Admin)' };
+        const allClients = [adminOption, ...clientData];
+        
+        setClientes(allClients);
+        
+        if (!clienteSelecionadoId && allClients.length > 0) {
+            setClienteSelecionadoId(allClients[0].id);
+        }
+    }
+    setCarregandoDados(false);
+  }, [isAdmin, clienteSelecionadoId, usuario?.id]);
+  
+  // Atualiza o nome da empresa
+  useEffect(() => {
+    if (isCliente) {
+        setEmpresaNome((perfil as ClienteProfile).nome);
+    } else if (isAdmin && clienteSelecionadoId && clientes.length > 0) {
+        const selectedClient = clientes.find(c => c.id === clienteSelecionadoId);
+        setEmpresaNome(selectedClient?.nome || 'N/A');
+    } else if (isAdmin && !clienteSelecionadoId) {
+        setEmpresaNome('Selecione a Empresa');
+    }
+  }, [isCliente, isAdmin, perfil, clienteSelecionadoId, clientes]);
 
 
-// Define constants used in the snippet
-const JORNADA_DIARIA_PADRAO = 8;
+  const fetchFuncionarios = useCallback(async (empresaId: string) => {
+    setCarregandoDados(true);
+    
+    let usersData: any[] | null = null;
+    let usersError: any = null;
+    
+    // 1. Verifica se o ID é do Admin logado
+    if (isAdmin && empresaId === usuario?.id) {
+        // Busca usuários do Admin
+        const { data, error } = await supabase
+            .from('admin_usuarios')
+            .select('id, nome, email, salario, horas_mensais, dias_folga_fixos, folga_domingo_obrigatoria, admin_id')
+            .eq('admin_id', empresaId)
+            .order('nome', { ascending: true });
+        usersData = data;
+        usersError = error;
+    } else {
+        // Busca usuários do Cliente (tbl_usuarios)
+        const { data, error } = await supabase
+            .from('tbl_usuarios')
+            .select('id, nome, email, salario, horas_mensais, dias_folga_fixos, folga_domingo_obrigatoria, cliente_id')
+            .eq('cliente_id', empresaId) // CORREÇÃO AQUI: Usando cliente_id
+            .order('nome', { ascending: true });
+        usersData = data;
+        usersError = error;
+    }
 
-// Placeholder for the main component structure
-export const FolhaPonto: React.FC = () => {
+    if (usersError) {
+        showError('Erro ao carregar lista de funcionários: ' + usersError.message);
+        setFuncionarios([]);
+    } else {
+        const funcs = usersData as FuncionarioComDados[];
+        setFuncionarios(funcs);
+        if (!funcs.some(f => f.id === funcionarioSelecionadoId) && funcs.length > 0) {
+            setFuncionarioSelecionadoId(funcs[0].id);
+        } else if (funcs.length === 0) {
+            setFuncionarioSelecionadoId(null);
+        }
+    }
+    setCarregandoDados(false);
+  }, [funcionarioSelecionadoId, isAdmin, usuario?.id]);
+  
+  const fetchFerias = useCallback(async (funcionarioId: string, data: Date) => {
+    const inicioMes = format(startOfMonth(data), 'yyyy-MM-dd');
+    const fimMes = format(endOfMonth(data), 'yyyy-MM-dd');
+    
+    const { data: feriasData, error } = await supabase
+        .from('ferias')
+        .select('*')
+        .eq('funcionario_id', funcionarioId)
+        .lte('data_inicio', fimMes)
+        .gte('data_fim', inicioMes);
 
-    // Placeholder state/context variables
-    const { usuario, perfil, role, carregando: carregandoSessao } = useSessao();
-    const { printContent } = usePrint();
+    if (error) {
+        showError('Erro ao carregar férias: ' + error.message);
+        setFeriasDoFuncionario([]);
+    } else {
+        setFeriasDoFuncionario(feriasData as Ferias[]);
+    }
+  }, []);
+
+  const fetchRegistros = useCallback(async (funcionarioId: string, data: Date, isFuncionarioAdmin: boolean) => {
+    setCarregandoDados(true);
+    const inicioMes = format(startOfMonth(data), 'yyyy-MM-dd');
+    const fimMes = format(endOfMonth(data), 'yyyy-MM-dd');
     
-    const [dataSelecionada, setDataSelecionada] = useState<Date>(startOfMonth(new Date()));
-    const [carregandoDados, setCarregandoDados] = useState(true);
-    const [funcionarios, setFuncionarios] = useState<any[]>([]);
-    const [funcionarioSelecionadoId, setFuncionarioSelecionadoId] = useState<string | null>(null);
-    const [registrosDoFuncionario, setRegistrosDoFuncionario] = useState<RegistroPonto[]>([]);
-    const [feriasDoFuncionario, setFeriasDoFuncionario] = useState<Ferias[]>([]);
-    
-    const [ajusteDialogOpen, setAjusteDialogOpen] = useState(false);
-    const [faltaAbonoDialogOpen, setFaltaAbonoDialogOpen] = useState(false);
-    const [folgaTrabalhadaDialogOpen, setFolgaTrabalhadaDialogOpen] = useState(false);
-    const [diaParaAjuste, setDiaParaAjuste] = useState<Date | null>(null);
-    const [registroFaltaAbonoInicial, setRegistroFaltaAbonoInicial] = useState<RegistroPonto | null>(null);
-    const [registrosDoDiaParaGestao, setRegistrosDoDiaParaGestao] = useState<RegistroPonto[]>([]);
-    
-    const [filtroNome, setFiltroNome] = useState('');
-    
-    const isAdmin = role === 'Admin';
-    const isCliente = role === 'Cliente';
-    
-    const getOwnerId = () => {
-        if (isAdmin) return usuario?.id || null;
-        if (isCliente) return (perfil as ClienteProfile)?.id || null;
-        return null;
-    };
-    
-    const ownerId = getOwnerId();
-    
-    const funcionarioSelecionado = useMemo(() => {
-        return funcionarios.find(f => f.id === funcionarioSelecionadoId);
-    }, [funcionarios, funcionarioSelecionadoId]);
-    
-    const isFuncionarioAdmin = funcionarioSelecionado?.admin_id === ownerId && isAdmin;
     const tabelaRegistros = isFuncionarioAdmin ? 'admin_registros_ponto' : 'registros_ponto';
-    const tabelaFerias = 'ferias';
+    
+    // Seleciona todas as colunas necessárias, incluindo ambas as chaves de proprietário
+    const selectColumns = `id, funcionario_id, horario_registro, tipo, maps_url, selfie_url, atestado_url, observacao, empresa_id, admin_id`;
 
-    const fetchFerias = useCallback(async (funcionarioId: string, data: Date) => {
-        const inicioMes = format(startOfMonth(data), 'yyyy-MM-dd');
-        const fimMes = format(endOfMonth(data), 'yyyy-MM-dd');
-        
-        const { data: feriasRes, error } = await supabase
-            .from(tabelaFerias)
-            .select('*')
-            .eq('funcionario_id', funcionarioId)
-            .lte('data_inicio', fimMes)
-            .gte('data_fim', inicioMes);
+    const { data: registros, error } = await supabase
+      .from(tabelaRegistros) // ROTEAMENTO AQUI
+      .select(selectColumns)
+      .eq('funcionario_id', funcionarioId)
+      .gte('horario_registro', inicioMes)
+      .lte('horario_registro', fimMes)
+      .order('horario_registro', { ascending: true });
 
-        if (error) {
-            showError('Erro ao carregar férias: ' + error.message);
-            setFeriasDoFuncionario([]);
-        } else {
-            const mappedFerias = (feriasRes as Ferias[]).map(f => ({
-                ...f,
-                status: f.status || 'agendada' 
-            }));
-            setFeriasDoFuncionario(mappedFerias as Ferias[]);
-        }
-    }, []);
+    if (error) {
+      showError('Erro ao carregar registros de ponto: ' + error.message);
+      setRegistrosDoFuncionario([]);
+    } else {
+      // Mapeamento no frontend para garantir que o campo 'empresa_id' exista na interface RegistroPonto
+      const mappedRegistros = (registros as any[]).map(r => ({
+          ...r,
+          // O ID do proprietário é o admin_id (se existir) OU o empresa_id
+          empresa_id: r.admin_id || r.empresa_id,
+      })) as RegistroPonto[];
+      
+      setRegistrosDoFuncionario(mappedRegistros);
+    }
+    setCarregandoDados(false);
+  }, []);
 
-    const fetchRegistros = useCallback(async (id: string, data: Date) => {
-        const inicioMes = format(startOfMonth(data), 'yyyy-MM-dd');
-        const fimMes = format(endOfMonth(data), 'yyyy-MM-dd'); 
-        
-        const selectColumns = `id, funcionario_id, empresa_id, admin_id, horario_registro, tipo, maps_url, selfie_url, atestado_url, observacao`;
+  // Efeito 1: Carregar Clientes (apenas Admin)
+  useEffect(() => {
+    if (!carregando && isAdmin) {
+      fetchClientes();
+    }
+  }, [carregando, isAdmin, fetchClientes]);
 
-        const { data: registros, error } = await supabase
-            .from(tabelaRegistros)
-            .select(selectColumns)
-            .eq('funcionario_id', id)
-            .gte('horario_registro', inicioMes)
-            .lte('horario_registro', fimMes)
-            .order('horario_registro', { ascending: true });
+  // Efeito 2: Carregar Funcionários (depende do Cliente selecionado ou do próprio Cliente logado)
+  useEffect(() => {
+    if (!carregando && empresaIdParaFiltro) {
+        fetchFuncionarios(empresaIdParaFiltro);
+    } else if (!carregando && isAdmin && !clienteSelecionadoId) {
+        setFuncionarios([]);
+        setFuncionarioSelecionadoId(null);
+    }
+  }, [carregando, empresaIdParaFiltro, isAdmin, clienteSelecionadoId, fetchFuncionarios]);
 
-        if (error) {
-            showError('Erro ao carregar registros de ponto: ' + error.message);
-            setRegistrosDoFuncionario([]);
-        } else {
-            const mappedRegistros = (registros as any[]).map(r => ({
-                ...r,
-                empresa_id: r.admin_id || r.empresa_id,
-            })) as RegistroPonto[];
-            
-            setRegistrosDoFuncionario(mappedRegistros);
-        }
-    }, [tabelaRegistros]);
+  // Efeito 3: Carregar Registros e Férias (depende do Funcionário e da Data)
+  useEffect(() => {
+    if (funcionarioSelecionadoId && funcionarioDetalhe) {
+      // Determina se o funcionário é gerenciado pelo Admin (admin_usuarios)
+      const isFuncAdmin = !!(funcionarioDetalhe as AdminUsuarioProfile).admin_id;
+      fetchRegistros(funcionarioSelecionadoId, dataSelecionada, isFuncAdmin);
+      fetchFerias(funcionarioSelecionadoId, dataSelecionada);
+    } else {
+        setRegistrosDoFuncionario([]);
+        setFeriasDoFuncionario([]);
+    }
+  }, [funcionarioSelecionadoId, dataSelecionada, fetchRegistros, fetchFerias, funcionarioDetalhe, empresaIdParaFiltro, isAdmin]);
+  
+  // --- Lógica de Gerenciamento ---
+  
+  
+  const handleFaltaRegistrada = async () => {
+    // Re-busca os registros após registrar/editar/deletar a falta/ajuste/compensação
+    if (funcionarioSelecionadoId && funcionarioDetalhe) {
+        const isFuncAdmin = !!(funcionarioDetalhe as AdminUsuarioProfile).admin_id;
+        await fetchRegistros(funcionarioSelecionadoId, dataSelecionada, isFuncAdmin);
+        await fetchFerias(funcionarioSelecionadoId, dataSelecionada);
+    }
+    setRegistroParaEdicao(null);
+  };
+  
+  const handleEditFaltaAbono = (registro: RegistroPonto | null, dia: Date) => {
+    if (!funcionarioDetalhe) return;
+    setRegistroParaEdicao(registro);
+    setDiaFaltaSelecionado(dia);
+    setFaltaDialogOpen(true);
+  };
+  
+  const handleAjustePonto = (dia: Date) => {
+    // Filtra todos os registros (Entrada/Saída) que pertencem ao dia
+    const registrosDoDia = registrosDoFuncionario.filter(r => 
+        (r.tipo === 'Entrada' || r.tipo === 'Saida') && isSameDay(parseISO(r.horario_registro), dia)
+    );
     
-    const fetchFuncionarios = useCallback(async () => {
-        if (!ownerId) return;
-        setCarregandoDados(true);
+    setRegistrosParaAjuste(registrosDoDia);
+    setDiaParaAjuste(dia);
+    setAjustarDialogOpen(true);
+  };
+  
+  const handleManageWorkedDayOff = (dia: Date, registros: RegistroPonto[]) => {
+    if (!funcionarioDetalhe) return;
+    setDiaFolgaTrabalhada(dia);
+    setRegistrosFolgaTrabalhada(registros);
+    setFolgaTrabalhadaDialogOpen(true);
+  };
+  
+  // --- Lógica de Impressão ---
+  
+  const handlePrint = (orientation: 'portrait' | 'landscape') => {
+    if (!funcionarioDetalhe || !empresaIdParaFiltro) {
+        showError('Selecione um funcionário e uma empresa para imprimir.');
+        return;
+    }
+    
+    // --- DUPLICAÇÃO DA LÓGICA DE CÁLCULO (Necessário para SSR/Impressão) ---
+    
+    const DAY_MAP: Record<number, string> = { 0: 'Sunday', 1: 'Monday', 2: 'Tuesday', 3: 'Wednesday', 4: 'Thursday', 5: 'Friday', 6: 'Saturday' };
+    
+    let totalMinutosTrabalhados = 0;
+    let totalMinutosExtras100 = 0;
+    
+    const registrosPorDia: Record<string, RegistroPonto[]> = {};
+    const registrosOrdenados = [...registrosDoFuncionario].sort((a, b) => parseISO(a.horario_registro).getTime() - parseISO(b.horario_registro).getTime());
+    
+    for (const registro of registrosOrdenados) {
+        const horario = parseISO(registro.horario_registro);
+        const dia = format(horario, 'yyyy-MM-dd');
+        if (!registrosPorDia[dia]) registrosPorDia[dia] = [];
+        registrosPorDia[dia].push(registro);
+    }
+    
+    const inicioMes = startOfMonth(dataSelecionada);
+    const fimMes = endOfMonth(dataSelecionada);
+    const hoje = new Date();
+    const todosOsDiasDoMes = eachDayOfInterval({ start: inicioMes, end: fimMes });
+    
+    const diasProcessados: Record<string, any> = {}; // Usando 'any' para simplificar a tipagem duplicada
+    
+    for (const data of todosOsDiasDoMes) {
+        const diaString = format(data, 'yyyy-MM-dd');
+        const registrosDoDia = registrosPorDia[diaString] || [];
         
-        let query = supabase.from('tbl_usuarios').select('id, nome, email, salario, horas_mensais, dias_folga_fixos, folga_domingo_obrigatoria, cliente_id');
+        let minutosDia = 0;
+        let entrada: Date | null = null;
+        let isFalta = false;
+        let isAbono = false;
+        let minutosAbonados = 0; 
+        let isTurnoAberto = false;
+        let hasPontoRecords = false;
+        let decisionRecord: 'Compensacao' | 'Extra100' | null = null;
+        let isCompensacaoAbono = false;
+        let isFaltaJustificada = false;
         
-        if (isAdmin) {
-            // Admin busca todos os usuários de todos os clientes
-            const { data: clientesData } = await supabase.from('tbl_clientes').select('id');
-            const clienteIds = (clientesData || []).map(c => c.id);
-            
-            // Busca usuários de clientes
-            const { data: usersData } = await supabase.from('tbl_usuarios').select('id, nome, email, salario, horas_mensais, dias_folga_fixos, folga_domingo_obrigatoria, cliente_id').in('cliente_id', clienteIds);
-            
-            // Busca usuários do próprio Admin
-            const { data: adminUsersData } = await supabase.from('admin_usuarios').select('id, nome, email, salario, horas_mensais, dias_folga_fixos, folga_domingo_obrigatoria, admin_id');
-            
-            const allUsers = [
-                ...(usersData || []).map(u => ({ ...u, admin_id: null })),
-                ...(adminUsersData || []).map(u => ({ ...u, cliente_id: null })),
-            ];
-            
-            setFuncionarios(allUsers);
-        } else {
-            // Cliente busca apenas seus próprios usuários
-            query = query.eq('cliente_id', ownerId);
-            const { data } = await query;
-            setFuncionarios(data || []);
-        }
+        const diaDaSemana = DAY_MAP[getDay(data)];
+        let isFolgaFixa = funcionarioDetalhe.dias_folga_fixos?.includes(diaDaSemana) || false;
+        if ((funcionarioDetalhe.folga_domingo_obrigatoria ?? true) && diaDaSemana === 'Sunday') isFolgaFixa = true;
         
-        if (funcionarios.length > 0 && !funcionarioSelecionadoId) {
-            setFuncionarioSelecionadoId(funcionarios[0].id);
-        }
-        
-        setCarregandoDados(false);
-    }, [ownerId, isAdmin]);
-
-    useEffect(() => {
-        if (!carregandoSessao && ownerId) {
-            fetchFuncionarios();
-        }
-    }, [carregandoSessao, ownerId, fetchFuncionarios]);
-    
-    useEffect(() => {
-        if (funcionarioSelecionadoId) {
-            fetchRegistros(funcionarioSelecionadoId, dataSelecionada);
-            fetchFerias(funcionarioSelecionadoId, dataSelecionada);
-        }
-    }, [funcionarioSelecionadoId, dataSelecionada, fetchRegistros, fetchFerias]);
-    
-    const handleSelectFuncionario = (id: string) => {
-        setFuncionarioSelecionadoId(id);
-    };
-    
-    const handleEditRegistro = (dia: Date) => {
-        setDiaParaAjuste(dia);
-        setAjusteDialogOpen(true);
-    };
-    
-    const handleEditFaltaAbono = (registro: RegistroPonto | null, dia: Date) => {
-        setRegistroFaltaAbonoInicial(registro);
-        setDiaParaAjuste(dia);
-        setFaltaAbonoDialogOpen(true);
-    };
-    
-    const handleManageWorkedDayOff = (dia: Date, registros: RegistroPonto[]) => {
-        setDiaParaAjuste(dia);
-        setRegistrosDoDiaParaGestao(registros);
-        setFolgaTrabalhadaDialogOpen(true);
-    };
-    
-    const handleSaveComplete = () => {
-        if (funcionarioSelecionadoId) {
-            fetchRegistros(funcionarioSelecionadoId, dataSelecionada);
-        }
-    };
-    
-    const handleDeleteRegistro = (registroId: string) => {
-        setRegistrosDoFuncionario(prev => prev.filter(r => r.id !== registroId));
-        // Não precisa de refetch completo, apenas atualização local
-    };
-    
-    const handlePrint = (orientation: 'portrait' | 'landscape') => {
-        if (!funcionarioSelecionado) {
-            showError('Selecione um funcionário para imprimir.');
-            return;
-        }
-        
-        // Placeholder variables needed for the snippet's loop context
-        const registrosDoDia: any[] = [{ tipo: 'Falta', observacao: 'Teste', atestado_url: null }]; 
-        
-        // Variáveis usadas para evitar TS6133
-        let totalMinutosTrabalhados = 0;
-        let minutosDiferenca = 0;
+        const isFerias = feriasDoFuncionario.some(f => {
+            const start = parseISO(f.data_inicio + 'T00:00:00');
+            const end = parseISO(f.data_fim + 'T23:59:59');
+            return isWithinInterval(data, { start, end });
+        });
 
         for (const registro of registrosDoDia) {
             if (registro.tipo === 'Falta' || registro.tipo === 'Abono') {
-                // Usando as funções importadas para evitar TS6133
+                if (registro.tipo === 'Falta') isFalta = true;
+                if (registro.tipo === 'Abono') isAbono = true;
+                
                 const horasCreditadas = parseHorasObservacao(registro.observacao, JORNADA_DIARIA_PADRAO);
-                totalMinutosTrabalhados += Math.round(horasCreditadas * 60);
+                minutosAbonados = Math.round(horasCreditadas * 60);
+                
+                if (registro.observacao?.includes('Compensação de folga trabalhada')) {
+                    isCompensacaoAbono = true;
+                    minutosAbonados = 0;
+                } else if (isFalta && registro.atestado_url) {
+                    isFaltaJustificada = true;
+                }
+                
+                minutosDia = minutosAbonados; 
+                
+                if (isFalta && !isFaltaJustificada) {
+                    minutosDia = 0;
+                }
+                
+                continue;
+            }
+            
+            if (registro.tipo === 'Compensacao') decisionRecord = 'Compensacao';
+            if (registro.tipo === 'Extra100') decisionRecord = 'Extra100';
+            
+            if (registro.tipo === 'Entrada' || registro.tipo === 'Saida') {
+                hasPontoRecords = true;
+                const horario = parseISO(registro.horario_registro);
+                
+                if (registro.tipo === 'Entrada') {
+                    entrada = horario;
+                    isTurnoAberto = true;
+                } else if (registro.tipo === 'Saida' && entrada) {
+                    const minutosTrabalhados = differenceInMinutes(horario, entrada);
+                    minutosDia += minutosTrabalhados;
+                    entrada = null;
+                    isTurnoAberto = false;
+                } else if (registro.tipo === 'Saida' && !entrada) {
+                    isTurnoAberto = false;
+                }
             }
         }
         
-        // Removendo as variáveis não utilizadas totalHorasDisplay e diferencaHorasDisplay
-        formatarHoras(totalMinutosTrabalhados);
-        formatarHoras(minutosDiferenca);
+        if (entrada) {
+            if (isSameDay(data, hoje)) {
+                minutosDia += differenceInMinutes(hoje, entrada);
+                isTurnoAberto = true;
+            } else {
+                isTurnoAberto = true;
+            }
+        } else {
+            isTurnoAberto = false;
+        }
+        
+        let minutosParaAcumular = minutosDia;
+        let minutosTrabalhadosFolga = 0;
+        let needsManagement = false;
+        
+        if (isFolgaFixa && hasPontoRecords && !isFerias) {
+            minutosTrabalhadosFolga = minutosDia;
+            
+            if (!decisionRecord) {
+                needsManagement = true;
+                minutosParaAcumular = 0;
+            } else if (decisionRecord === 'Extra100') {
+                totalMinutosExtras100 += minutosTrabalhadosFolga;
+                minutosParaAcumular = 0;
+            } else if (decisionRecord === 'Compensacao') {
+                minutosParaAcumular = 0;
+            }
+        }
+        
+        if (!isFolgaFixa && !isFerias && !isCompensacaoAbono) {
+            totalMinutosTrabalhados += minutosParaAcumular;
+        }
+        
+        if (isFaltaJustificada || (isAbono && !isCompensacaoAbono)) {
+            minutosDia = minutosAbonados;
+        } else if (isFalta && !isFaltaJustificada) {
+            minutosDia = 0;
+        }
 
-        const printComponent = (
-            <FolhaPontoPrint
-                empresaNome={funcionarioSelecionado.nome_empresa || 'Empresa'}
-                funcionario={{
-                    ...funcionarioSelecionado,
-                    registros: registrosDoFuncionario,
-                    ferias: feriasDoFuncionario,
-                }}
-                mes={dataSelecionada}
-                diasProcessados={{}} // Placeholder
-                totalMinutosTrabalhados={totalMinutosTrabalhados} // Usando a variável
-                minutosDiferenca={minutosDiferenca} // Usando a variável
-            />
-        );
 
-        const htmlContent = ReactDOMServer.renderToStaticMarkup(printComponent);
-        printContent(htmlContent, `Folha de Ponto - ${funcionarioSelecionado.nome} - ${format(dataSelecionada, 'MM/yyyy')}`, orientation);
-    };
-    
-    const funcionarioDetalhe = useMemo(() => {
-        if (!funcionarioSelecionado) return null;
-        return {
-            ...funcionarioSelecionado,
-            registros: registrosDoFuncionario,
-            ferias: feriasDoFuncionario,
+        diasProcessados[diaString] = {
+            minutos: minutosDia,
+            registros: registrosDoDia,
+            isFalta,
+            isAbono,
+            minutosAbonados, 
+            isTurnoAberto,
+            isFolgaFixa,
+            isFerias,
+            hasPontoRecords,
+            decisionRecord,
+            needsManagement,
+            minutosTrabalhadosFolga,
+            isCompensacaoAbono,
+            isFaltaJustificada,
         };
-    }, [funcionarioSelecionado, registrosDoFuncionario, feriasDoFuncionario]);
-    
-    const filteredFuncionarios = funcionarios.filter(f => f.nome.toLowerCase().includes(filtroNome.toLowerCase()));
-
-    if (carregandoSessao || carregandoDados) {
-        return (
-            <LayoutPrincipal>
-                <div className="flex justify-center items-center h-64">
-                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                </div>
-            </LayoutPrincipal>
-        );
     }
     
-    if (!ownerId) {
-        return (
-            <LayoutPrincipal>
-                <Card><CardContent className="p-6 text-red-500">Você não está vinculado a uma empresa para gerenciar a folha de ponto.</CardContent></Card>
-            </LayoutPrincipal>
-        );
-    }
+    const jornadaMensalMinutos = (funcionarioDetalhe.horas_mensais || JORNADA_MENSAL_PADRAO) * 60;
+    const minutosDiferenca = jornadaMensalMinutos - totalMinutosTrabalhados; 
+    
+    // --- FIM DA DUPLICAÇÃO DA LÓGICA DE CÁLCULO ---
 
-    return (
-        <LayoutPrincipal>
-            <h1 className="text-2xl md:text-3xl font-bold mb-6 flex items-center">
-                <Clock className="w-6 h-6 mr-2" /> Acompanhar Folha de Ponto
-            </h1>
-            
-            <Card className="mb-6">
-                <CardHeader><CardTitle className="text-lg flex items-center"><Filter className="w-4 h-4 mr-2" /> Seleção e Filtros</CardTitle></CardHeader>
-                <CardContent className="flex flex-col md:flex-row gap-4">
-                    <Select value={funcionarioSelecionadoId || ''} onValueChange={handleSelectFuncionario}>
-                        <SelectTrigger className="w-full md:w-[300px]">
-                            <SelectValue placeholder="Selecione o Funcionário" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {filteredFuncionarios.map(f => (
-                                <SelectItem key={f.id} value={f.id}>
-                                    {f.nome} {isAdmin && f.nome_empresa && `(${f.nome_empresa})`}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                    
-                    <Input
-                        placeholder="Filtrar por nome..."
-                        value={filtroNome}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFiltroNome(e.target.value)}
-                        className="w-full md:w-[200px]"
-                    />
-                    
-                    <MonthPicker
-                        date={dataSelecionada}
-                        setDate={setDataSelecionada}
-                        disabled={!funcionarioSelecionadoId}
-                    />
-                    
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button variant="outline" disabled={!funcionarioSelecionadoId}>
-                                <Printer className="w-4 h-4 mr-2" /> Imprimir
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => handlePrint('portrait')}>
-                                Imprimir (Retrato)
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handlePrint('landscape')}>
-                                Imprimir (Paisagem)
-                            </DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
-                </CardContent>
-            </Card>
-            
-            {funcionarioDetalhe ? (
-                <DetalheFolhaPonto
-                    funcionario={funcionarioDetalhe}
-                    mes={dataSelecionada}
-                    onEditRegistro={handleEditRegistro}
-                    onEditFaltaAbono={handleEditFaltaAbono}
-                    onDeleteRegistro={handleDeleteRegistro}
-                    onManageWorkedDayOff={handleManageWorkedDayOff}
-                />
-            ) : (
-                <Card className="mt-6">
-                    <CardContent className="p-6 text-center text-muted-foreground">
-                        Selecione um funcionário para visualizar a folha de ponto.
-                    </CardContent>
-                </Card>
-            )}
-            
-            {/* Diálogos de Gestão */}
-            {funcionarioSelecionado && diaParaAjuste && (
-                <>
-                    <AjustarPontoDialog
-                        open={ajusteDialogOpen}
-                        onOpenChange={setAjusteDialogOpen}
-                        funcionario={{ 
-                            id: funcionarioSelecionado.id, 
-                            nome: funcionarioSelecionado.nome, 
-                            empresa_id: funcionarioSelecionado.cliente_id || funcionarioSelecionado.admin_id,
-                            isFuncionarioAdmin: isFuncionarioAdmin,
-                        }}
-                        dia={diaParaAjuste}
-                        registrosIniciais={registrosDoFuncionario.filter(r => format(parseISO(r.horario_registro), 'yyyy-MM-dd') === format(diaParaAjuste, 'yyyy-MM-dd'))}
-                        onSaveComplete={handleSaveComplete}
-                    />
-                    <GerenciarFaltas
-                        open={faltaAbonoDialogOpen}
-                        onOpenChange={setFaltaAbonoDialogOpen}
-                        funcionario={{ 
-                            id: funcionarioSelecionado.id, 
-                            nome: funcionarioSelecionado.nome, 
-                            empresa_id: funcionarioSelecionado.cliente_id || funcionarioSelecionado.admin_id,
-                            isFuncionarioAdmin: isFuncionarioAdmin,
-                        }}
-                        dataFalta={diaParaAjuste}
-                        registroInicial={registroFaltaAbonoInicial}
-                        onFaltaRegistrada={handleSaveComplete}
-                    />
-                    <GerenciarFolgaTrabalhada
-                        open={folgaTrabalhadaDialogOpen}
-                        onOpenChange={setFolgaTrabalhadaDialogOpen}
-                        funcionario={{ 
-                            id: funcionarioSelecionado.id, 
-                            nome: funcionarioSelecionado.nome, 
-                            empresa_id: funcionarioSelecionado.cliente_id || funcionarioSelecionado.admin_id,
-                            isFuncionarioAdmin: isFuncionarioAdmin,
-                        }}
-                        dia={diaParaAjuste}
-                        registrosDoDia={registrosDoDiaParaGestao}
-                        onSaveComplete={handleSaveComplete}
-                    />
-                </>
-            )}
-        </LayoutPrincipal>
+    const printComponent = (
+        <FolhaPontoPrint
+            empresaNome={empresaNome}
+            funcionario={{
+                id: funcionarioDetalhe.id,
+                nome: funcionarioDetalhe.nome,
+                salario: funcionarioDetalhe.salario || 0,
+                horas_mensais: funcionarioDetalhe.horas_mensais || JORNADA_MENSAL_PADRAO,
+                registros: registrosDoFuncionario,
+                dias_folga_fixos: funcionarioDetalhe.dias_folga_fixos || [],
+                folga_domingo_obrigatoria: funcionarioDetalhe.folga_domingo_obrigatoria ?? true,
+                ferias: feriasDoFuncionario,
+            }}
+            mes={dataSelecionada}
+            diasProcessados={diasProcessados}
+            totalMinutosTrabalhados={totalMinutosTrabalhados}
+            minutosDiferenca={minutosDiferenca}
+        />
     );
+
+    const htmlContent = ReactDOMServer.renderToStaticMarkup(printComponent);
+    printContent(htmlContent, `Folha de Ponto - ${funcionarioDetalhe.nome} - ${format(dataSelecionada, 'MM/yyyy')}`, orientation);
+  };
+
+
+  if (carregando) {
+    return <LayoutPrincipal><div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div></LayoutPrincipal>;
+  }
+
+  if (!isAdmin && !isCliente) {
+    return <LayoutPrincipal><Card><CardHeader><CardTitle>Acesso Negado</CardTitle></CardHeader><CardContent><p>Você não tem permissão para acessar a folha de ponto.</p></CardContent></Card></LayoutPrincipal>;
+  }
+  
+  return (
+    <LayoutPrincipal>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+        <h1 className="text-2xl md:text-3xl font-bold flex items-center">
+          <Clock className="w-6 h-6 mr-2" /> Acompanhar Folha de Ponto
+        </h1>
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <Button 
+                    disabled={!funcionarioDetalhe || carregandoDados}
+                    className="w-full sm:w-auto"
+                >
+                    <Printer className="w-4 h-4 mr-2" /> Imprimir Folha
+                </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => handlePrint('portrait')}>
+                    Imprimir (Retrato)
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handlePrint('landscape')}>
+                    Imprimir (Paisagem)
+                </DropdownMenuItem>
+            </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
+      <Card className="mb-6">
+        <CardHeader className="flex flex-col md:flex-row items-start md:items-center justify-between space-y-4 md:space-y-0 pb-2">
+          <CardTitle className="text-lg font-medium flex items-center">
+            <Filter className="w-4 h-4 mr-2" /> Filtros
+          </CardTitle>
+          <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto">
+            
+            {isAdmin && (
+                <Select 
+                    value={clienteSelecionadoId || ''} 
+                    onValueChange={setClienteSelecionadoId}
+                    disabled={carregandoDados || clientes.length === 0}
+                >
+                    <SelectTrigger className="w-full sm:w-[200px]">
+                        <Building2 className="w-4 h-4 mr-2" />
+                        <SelectValue placeholder={carregandoDados ? "Carregando Clientes..." : "Selecione a Empresa"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {clientes.map(c => (
+                            <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            )}
+
+            <Select 
+                value={funcionarioSelecionadoId || ''} 
+                onValueChange={setFuncionarioSelecionadoId}
+                disabled={carregandoDados || funcionarios.length === 0 || (isAdmin && !clienteSelecionadoId)}
+            >
+                <SelectTrigger className="w-full sm:w-[200px]">
+                    <Users className="w-4 h-4 mr-2" />
+                    <SelectValue placeholder={carregandoDados ? "Carregando Funcionários..." : "Selecione o Funcionário"} />
+                </SelectTrigger>
+                <SelectContent>
+                    {funcionarios.map(f => (
+                        <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>
+                    ))}
+                </SelectContent>
+            </Select>
+            
+            <MonthPicker
+              date={dataSelecionada}
+              setDate={setDataSelecionada}
+              disabled={carregandoDados}
+            />
+          </div>
+        </CardHeader>
+      </Card>
+      
+      {funcionarioDetalhe && (
+        <DetalheFolhaPonto 
+            funcionario={{
+                id: funcionarioDetalhe.id,
+                nome: funcionarioDetalhe.nome,
+                salario: funcionarioDetalhe.salario || 0,
+                horas_mensais: funcionarioDetalhe.horas_mensais || JORNADA_MENSAL_PADRAO,
+                registros: registrosDoFuncionario,
+                dias_folga_fixos: funcionarioDetalhe.dias_folga_fixos || [],
+                folga_domingo_obrigatoria: funcionarioDetalhe.folga_domingo_obrigatoria ?? true,
+                ferias: feriasDoFuncionario,
+            }}
+            mes={dataSelecionada}
+            onEditRegistro={handleAjustePonto}
+            onEditFaltaAbono={handleEditFaltaAbono}
+            onDeleteRegistro={handleFaltaRegistrada}
+            onManageWorkedDayOff={handleManageWorkedDayOff}
+        />
+      )}
+
+      {!funcionarioDetalhe && !carregandoDados && (
+        <Card>
+            <CardContent className="text-center py-8 text-muted-foreground">
+                <Users className="w-8 h-8 mx-auto mb-2" />
+                {isAdmin && !clienteSelecionadoId ? 'Selecione uma empresa para carregar os funcionários.' : 'Selecione um funcionário para visualizar a folha de ponto.'}
+            </CardContent>
+        </Card>
+      )}
+      
+      {/* Modal de Gerenciamento de Faltas/Abonos */}
+      {funcionarioDetalhe && diaFaltaSelecionado && (
+        <GerenciarFaltas
+            open={faltaDialogOpen}
+            onOpenChange={setFaltaDialogOpen}
+            funcionario={{ 
+                id: funcionarioDetalhe.id, 
+                nome: funcionarioDetalhe.nome, 
+                empresa_id: empresaIdParaFiltro!,
+                isFuncionarioAdmin: isFuncionarioAdmin, // PASSANDO FLAG
+            }}
+            dataFalta={diaFaltaSelecionado}
+            registroInicial={registroParaEdicao}
+            onFaltaRegistrada={handleFaltaRegistrada}
+        />
+      )}
+      
+      {/* Modal de Ajuste de Ponto (Entrada/Saída) */}
+      {funcionarioDetalhe && diaParaAjuste && (
+        <AjustarPontoDialog
+            open={ajustarDialogOpen}
+            onOpenChange={setAjustarDialogOpen}
+            funcionario={{ 
+                id: funcionarioDetalhe.id, 
+                nome: funcionarioDetalhe.nome, 
+                empresa_id: empresaIdParaFiltro!,
+                isFuncionarioAdmin: isFuncionarioAdmin, // PASSANDO FLAG
+            }}
+            dia={diaParaAjuste}
+            registrosIniciais={registrosParaAjuste}
+            onSaveComplete={handleFaltaRegistrada}
+        />
+      )}
+      
+      {/* Modal de Gerenciamento de Folga Trabalhada */}
+      {funcionarioDetalhe && diaFolgaTrabalhada && (
+        <GerenciarFolgaTrabalhada
+            open={folgaTrabalhadaDialogOpen}
+            onOpenChange={setFolgaTrabalhadaDialogOpen}
+            funcionario={{ 
+                id: funcionarioDetalhe.id, 
+                nome: funcionarioDetalhe.nome, 
+                empresa_id: empresaIdParaFiltro!,
+                isFuncionarioAdmin: isFuncionarioAdmin, // PASSANDO FLAG
+            }}
+            dia={diaFolgaTrabalhada}
+            registrosDoDia={registrosFolgaTrabalhada}
+            onSaveComplete={handleFaltaRegistrada}
+        />
+      )}
+    </LayoutPrincipal>
+  );
 };
+
+export default FolhaPonto;

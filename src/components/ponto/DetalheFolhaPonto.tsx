@@ -1,26 +1,32 @@
-import React, { useState, useMemo } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import { showError, showSuccess } from '@/utils/toast';
-import { useSessao } from '@/hooks/use-sessao';
-import { AdminUsuarioProfile } from '@/types/usuario';
-import { RegistroPonto, Ferias } from '@/types/ponto';
-import { 
-    format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, getDay, 
-    isWithinInterval, isSameDay, differenceInMinutes 
-} from 'date-fns';
-import { cn } from '@/lib/utils';
+import React, { useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
+import { Loader2, Edit, Trash2, FileSignature, Clock } from 'lucide-react';
+import { format, parseISO, eachDayOfInterval, getDay, isSameDay, differenceInMinutes, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { Clock, Edit, Trash2, FileSignature, Loader2, MapPin, Camera, Download } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { RegistroPonto, Ferias } from '@/types/ponto';
+import { 
+    AlertDialog, 
+    AlertDialogAction, 
+    AlertDialogCancel, 
+    AlertDialogContent, 
+    AlertDialogDescription, 
+    AlertDialogFooter, 
+    AlertDialogHeader, 
+    AlertDialogTitle, 
+    AlertDialogTrigger // Importação adicionada
+} from '@/components/ui/alert-dialog';
+import { useSessao } from '@/hooks/use-sessao';
+import { AdminUsuarioProfile } from '@/types/usuario';
+import { supabase } from '@/integrations/supabase/client';
+import { showError, showSuccess } from '@/utils/toast';
 
 // Constantes CLT (Simplificadas)
-const JORNADA_MENSAL_PADRAO = 220; 
-const JORNADA_DIARIA_PADRAO = 8; 
+const JORNADA_MENSAL_PADRAO = 220; // Horas mensais padrão CLT
+const JORNADA_DIARIA_PADRAO = 8; // Horas diárias padrão CLT
 
-// Interfaces e Tipos
 interface FuncionarioDetalhe {
     id: string;
     nome: string;
@@ -30,7 +36,6 @@ interface FuncionarioDetalhe {
     dias_folga_fixos: string[];
     folga_domingo_obrigatoria: boolean;
     ferias: Ferias[];
-    admin_id?: string; 
 }
 
 interface DetalheFolhaPontoProps {
@@ -42,27 +47,24 @@ interface DetalheFolhaPontoProps {
     onManageWorkedDayOff: (dia: Date, registros: RegistroPonto[]) => void;
 }
 
-// Funções utilitárias (Exportada para uso em FolhaPonto.tsx)
-export const formatarHoras = (minutos: number): string => {
-    const sign = minutos < 0 ? '-' : '';
-    const absMinutos = Math.abs(minutos);
-    const horas = Math.floor(absMinutos / 60);
-    const mins = Math.round(absMinutos % 60);
-    return `${sign}${horas}h ${mins}m`;
-};
-
+// Exportando a função utilitária
 export const parseHorasObservacao = (observacao: string | null | undefined, defaultHours: number): number => {
     if (!observacao) return defaultHours;
     const match = observacao.match(/(\d+)h/);
     if (match) {
         return parseInt(match[1], 10);
     }
-    if (observacao.includes('Falta Dia Todo (0h Abonadas)')) {
-        return 0;
-    }
     return defaultHours;
 };
 
+// Definindo a função utilitária
+const formatarHoras = (minutos: number): string => {
+    const sign = minutos < 0 ? '-' : '';
+    const absMinutos = Math.abs(minutos);
+    const horas = Math.floor(absMinutos / 60);
+    const mins = Math.round(absMinutos % 60);
+    return `${sign}${horas}h ${mins}m`;
+};
 
 // Exportando o componente principal
 export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
@@ -122,7 +124,7 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
             let isFolgaFixa = funcionario.dias_folga_fixos?.includes(diaDaSemana) || false;
             if ((funcionario.folga_domingo_obrigatoria ?? true) && diaDaSemana === 'Sunday') isFolgaFixa = true;
             
-            const isFerias = funcionario.ferias.some((f: Ferias) => {
+            const isFerias = funcionario.ferias.some(f => {
                 const start = parseISO(f.data_inicio + 'T00:00:00');
                 const end = parseISO(f.data_fim + 'T23:59:59');
                 return isWithinInterval(data, { start, end });
@@ -186,6 +188,8 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
                 isTurnoAberto = false;
             }
             
+            // Removendo a variável 'minutosParaAcumular' que não estava sendo lida (Erro TS6133)
+            // let minutosParaAcumular = minutosDia;
             let minutosTrabalhadosFolga = 0;
             let needsManagement = false;
             
@@ -194,10 +198,12 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
                 
                 if (!decisionRecord) {
                     needsManagement = true;
+                    // minutosParaAcumular = 0; // Removido
                 } else if (decisionRecord === 'Extra100') {
                     totalMinutosExtras100 += minutosTrabalhadosFolga;
+                    // minutosParaAcumular = 0; // Removido
                 } else if (decisionRecord === 'Compensacao') {
-                    // Não acumula minutos trabalhados
+                    // minutosParaAcumular = 0; // Removido
                 }
             }
             
@@ -209,12 +215,8 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
                 } 
                 // Se for Falta, acumula 0 (a menos que tenha batidas, que já estão em minutosDia)
                 else if (isFalta) {
-                    // NOVO: Se for falta JUSTIFICADA, acumula a jornada padrão (8h)
-                    if (isFaltaJustificada) {
-                        totalMinutosTrabalhados += JORNADA_DIARIA_PADRAO * 60;
-                    }
                     // Se for falta, mas houver batidas (ajuste manual), acumula as batidas
-                    else if (hasPontoRecords) {
+                    if (hasPontoRecords) {
                         totalMinutosTrabalhados += minutosDia;
                     }
                     // Se for falta sem batidas, acumula 0
@@ -227,8 +229,7 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
             
             // LÓGICA CORRIGIDA: Define minutosDia para exibição
             if (isFalta) {
-                // NOVO: Se for falta justificada, exibe a jornada padrão (8h)
-                minutosDia = isFaltaJustificada ? JORNADA_DIARIA_PADRAO * 60 : 0; 
+                minutosDia = 0; // Falta = 0 horas trabalhadas no dia
             } else if (isAbono && !isCompensacaoAbono) {
                 minutosDia = minutosAbonados; // Abono = horas abonadas
             }
@@ -256,10 +257,11 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
         const minutosDiferenca = totalMinutosTrabalhados - jornadaMensalMinutos; 
 
         return { diasProcessados, totalMinutosTrabalhados, minutosDiferenca, totalMinutosExtras100 };
-    }, [funcionario, mes, JORNADA_DIARIA_PADRAO, DAY_MAP, JORNADA_MENSAL_PADRAO]);
+    }, [funcionario, mes, JORNADA_DIARIA_PADRAO, DAY_MAP]);
 
     const diasOrdenados = Object.keys(diasProcessados).sort();
     const isExtraHours = minutosDiferenca > 0;
+    // Removendo isDeficit não utilizado (Linha 233)
     
     const handleDeleteRegistro = async (registroId: string) => {
         if (!window.confirm('Tem certeza que deseja excluir este registro?')) return;
@@ -350,11 +352,12 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
 
                                 // CORREÇÃO TS2304: Definindo 'hoje' no escopo do loop
                                 const hoje = new Date();
+                                // Removendo isTodayOrFuture não utilizado (Linha 324)
                                 
                                 let rowClassName = '';
                                 if (isFerias) rowClassName = 'bg-blue-500/10';
                                 else if (isFolgaFixa && hasPontoRecords) rowClassName = 'bg-yellow-500/10';
-                                // Falta Justificada (Azul)
+                                // NOVO: Falta Justificada (Azul)
                                 else if (isFalta && isFaltaJustificada) rowClassName = 'bg-blue-500/10';
                                 // Falta Injustificada (Vermelho)
                                 else if (isFalta && !isFaltaJustificada) rowClassName = 'bg-red-500/10';
@@ -388,14 +391,7 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
                                         <TableCell className="font-semibold">{totalDiaDisplay}</TableCell>
                                         <TableCell>
                                             <div className="flex flex-col space-y-1">
-                                                <Badge 
-                                                    variant={
-                                                        isFalta && isFaltaJustificada ? 'default' : // Falta Justificada é default (azul)
-                                                        isFalta ? 'destructive' : 
-                                                        isAbono ? 'success' : 
-                                                        'secondary'
-                                                    }
-                                                >
+                                                <Badge variant={isFalta ? 'destructive' : (isAbono ? 'success' : 'secondary')}>
                                                     {statusPrincipal}
                                                 </Badge>
                                                 {registrosDoDia.map((r: RegistroPonto) => {
@@ -408,23 +404,6 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
                                                             {/* REMOÇÃO DO HORÁRIO PARA FALTA/ABONO */}
                                                             <span>{isFaltaOrAbono ? r.tipo : `${r.tipo}: ${format(parseISO(r.horario_registro), 'HH:mm')}`}</span>
                                                             {r.observacao && <span className="truncate max-w-[150px]">({r.observacao})</span>}
-                                                            
-                                                            {/* RESTAURANDO LINKS DE ANEXO */}
-                                                            {r.maps_url && (
-                                                                <a href={r.maps_url} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:text-blue-700" title="Ver Localização">
-                                                                    <MapPin className="w-3 h-3" />
-                                                                </a>
-                                                            )}
-                                                            {r.selfie_url && (
-                                                                <a href={r.selfie_url} target="_blank" rel="noopener noreferrer" className="text-purple-500 hover:text-purple-700" title="Ver Selfie">
-                                                                    <Camera className="w-3 h-3" />
-                                                                </a>
-                                                            )}
-                                                            {r.atestado_url && (
-                                                                <a href={r.atestado_url} target="_blank" rel="noopener noreferrer" className="text-green-500 hover:text-green-700" title="Baixar Atestado">
-                                                                    <Download className="w-3 h-3" />
-                                                                </a>
-                                                            )}
                                                         </div>
                                                     );
                                                 })}

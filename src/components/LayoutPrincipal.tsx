@@ -1,6 +1,6 @@
 import React from 'react';
 import { useSessao } from '@/hooks/use-sessao';
-import { useNavigate, Outlet } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { Loader2, Package, Phone } from 'lucide-react';
 import { ClienteProfile } from '@/types/usuario';
 import { Card, CardDescription, CardHeader, CardTitle, CardContent } from './ui/card';
@@ -13,10 +13,10 @@ import { Link } from 'react-router-dom';
 import { Button } from './ui/button';
 
 interface LayoutPrincipalProps {
-  // children: React.ReactNode; // Removido
+  children: React.ReactNode;
 }
 
-const LayoutPrincipal: React.FC<LayoutPrincipalProps> = () => {
+const LayoutPrincipal: React.FC<LayoutPrincipalProps> = ({ children }) => {
   const { usuario, carregando, role, perfil, refetch } = useSessao();
   const navegar = useNavigate();
 
@@ -115,7 +115,7 @@ const LayoutPrincipal: React.FC<LayoutPrincipalProps> = () => {
       
       {/* Conteúdo Principal (Rolável) */}
       <main className={cn("flex-1 p-4 md:p-8 w-full overflow-x-hidden")}>
-        <Outlet /> {/* RENDERIZA AS ROTAS FILHAS AQUI */}
+        {children}
       </main>
       
       {/* TODO: Adicionar Footer aqui se necessário */}
