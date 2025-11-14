@@ -7,7 +7,17 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { RegistroPonto, Ferias } from '@/types/ponto';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { 
+    AlertDialog, 
+    AlertDialogAction, 
+    AlertDialogCancel, 
+    AlertDialogContent, 
+    AlertDialogDescription, 
+    AlertDialogFooter, 
+    AlertDialogHeader, 
+    AlertDialogTitle, 
+    AlertDialogTrigger // Importação adicionada
+} from '@/components/ui/alert-dialog';
 import { useSessao } from '@/hooks/use-sessao';
 import { AdminUsuarioProfile } from '@/types/usuario';
 import { supabase } from '@/integrations/supabase/client';
@@ -247,7 +257,7 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
         const minutosDiferenca = totalMinutosTrabalhados - jornadaMensalMinutos; 
 
         return { diasProcessados, totalMinutosTrabalhados, minutosDiferenca, totalMinutosExtras100 };
-    }, [funcionario, mes, JORNADA_DIARIA_PADRAO]);
+    }, [funcionario, mes, JORNADA_DIARIA_PADRAO, DAY_MAP]);
 
     const diasOrdenados = Object.keys(diasProcessados).sort();
     const isExtraHours = minutosDiferenca > 0;
@@ -347,8 +357,11 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
                                 let rowClassName = '';
                                 if (isFerias) rowClassName = 'bg-blue-500/10';
                                 else if (isFolgaFixa && hasPontoRecords) rowClassName = 'bg-yellow-500/10';
+                                // NOVO: Falta Justificada (Azul)
+                                else if (isFalta && isFaltaJustificada) rowClassName = 'bg-blue-500/10';
+                                // Falta Injustificada (Vermelho)
                                 else if (isFalta && !isFaltaJustificada) rowClassName = 'bg-red-500/10';
-                                else if (isFaltaJustificada || isAbono) rowClassName = 'bg-green-500/10';
+                                else if (isAbono) rowClassName = 'bg-green-500/10';
                                 
                                 // CORREÇÃO TS7006: Tipando 'r' como RegistroPonto
                                 const batidas = registrosDoDia.filter((r: RegistroPonto) => r.tipo === 'Entrada' || r.tipo === 'Saida').map((r: RegistroPonto) => format(parseISO(r.horario_registro), 'HH:mm')).join(' / ');
