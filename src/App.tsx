@@ -60,15 +60,13 @@ export function App() {
             <Route path="contrato-link/:id" element={<ContratoLinkPage />} />
             <Route path="assinar-contrato/:id" element={<AssinarContrato />} />
             <Route path="atualizar-senha" element={<AtualizarSenha />} />
-            <Route path="*" element={<NotFound />} />
           </Route>
 
           {/* Rotas Protegidas (Layout Principal) */}
-          <Route path="/" element={<LayoutPrincipal>
-            <Routes>
+          <Route element={<LayoutPrincipal />}>
               <Route path="painel" element={<Painel />} />
               <Route path="perfil" element={<Perfil />} />
-              <Route path="ponto-eletronico" element={<Perfil />} /> {/* Redireciona para Perfil para ver o ponto */}
+              <Route path="ponto-eletronico" element={<Perfil />} />
               <Route path="folha-ponto" element={<FolhaPonto />} />
               <Route path="minha-assinatura" element={<MinhaAssinatura />} />
               <Route path="renovacao" element={<SelecaoPagamentoRenovacao />} />
@@ -117,11 +115,10 @@ export function App() {
               {/* Suporte */}
               <Route path="suporte" element={<Suporte />} />
               <Route path="admin/suporte" element={<AdminSuporte />} />
-              
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </LayoutPrincipal>}>
           </Route>
+          
+          {/* Catch-all for unhandled paths */}
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
       <Toaster />
