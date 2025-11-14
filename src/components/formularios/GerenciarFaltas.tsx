@@ -129,7 +129,7 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
   // NOVO HANDLER: Falta Dia Todo (0h Abonadas)
   const handleFaltaDiaTodo = () => {
       setAcao('Falta');
-      setHorasSelecionadas('8h'); // Marca 8h para indicar o dia todo
+      setHorasSelecionadas('8h'); // Mantém 8h para indicar o dia todo
       setAtestadoFile(null);
       setAtestadoUrl(null);
       setObservacao('Falta Dia Todo (0h Abonadas)'); // Observação especial para o cálculo
@@ -141,9 +141,11 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
       return;
     }
     
+    // CORREÇÃO DO ERRO 8: Declarando a variável aqui
+    const isFaltaDiaTodo = observacao.includes('Falta Dia Todo (0h Abonadas)');
     const isJustificada = isFalta && (atestadoUrl || atestadoFile);
     
-    if (isFalta && !isJustificada && !observacao.includes('Falta Dia Todo (0h Abonadas)') && !window.confirm('Você está registrando uma Falta Injustificada. Deseja continuar?')) {
+    if (isFalta && !isJustificada && !isFaltaDiaTodo && !window.confirm('Você está registrando uma Falta Injustificada. Deseja continuar?')) {
         return;
     }
     
@@ -191,7 +193,7 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
           observacaoFinal = `Abono de ${horasSelecionadas}`;
       } else if (isFalta) {
           // Se for Falta Dia Todo (0h Abonadas), mantém a observação especial
-          if (observacao.includes('Falta Dia Todo (0h Abonadas)')) {
+          if (isFaltaDiaTodo) {
               observacaoFinal = observacao;
           } else if (isJustificada) {
               observacaoFinal = `Falta Justificada (${horasSelecionadas})`;
@@ -271,9 +273,10 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
               {isFalta && (
                   <Button 
                       type="button" 
-                      variant="outline" 
+                      variant="destructive" 
                       onClick={handleFaltaDiaTodo}
                       className="w-full mt-3"
+                      disabled={loading}
                   >
                       Falta Dia Todo (0h Abonadas)
                   </Button>
@@ -344,7 +347,7 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
 
         <Button 
           onClick={handleSubmit} 
-          disabled={loading || (isFalta && !atestadoPronto && !observacao.includes('Falta Dia Todo (0h Abonadas)'))}
+          disabled={loading || (isFalta && !atestadoPronto && !isFaltaDiaTodo)}
           className="w-full"
         >
           {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : (isEditing ? 'Salvar Edição' : `Confirmar Registro`)}

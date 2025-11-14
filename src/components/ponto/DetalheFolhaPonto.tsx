@@ -135,15 +135,12 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
                         isFaltaJustificada = true;
                     }
                     
-                    minutosDia = minutosAbonados; 
-                    
-                    if (isFalta && !isFaltaJustificada) {
-                        minutosDia = 0;
-                    }
-                    
                     // Se for Falta Dia Todo (0h Abonadas), garante que minutosDia seja 0
                     if (registro.observacao?.includes('Falta Dia Todo (0h Abonadas)')) {
                         minutosDia = 0;
+                    } else {
+                        // Se for Abono, credita as horas. Se for Falta, minutosDia é 0 (a menos que seja justificada, mas a lógica de acumulação abaixo cuida disso)
+                        minutosDia = isAbono ? minutosAbonados : 0;
                     }
                     
                     continue;
@@ -181,7 +178,8 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
                 isTurnoAberto = false;
             }
             
-            let minutosParaAcumular = minutosDia;
+            // Removendo a variável 'minutosParaAcumular' que não estava sendo lida (Erro TS6133)
+            // let minutosParaAcumular = minutosDia;
             let minutosTrabalhadosFolga = 0;
             let needsManagement = false;
             
@@ -190,21 +188,40 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
                 
                 if (!decisionRecord) {
                     needsManagement = true;
-                    minutosParaAcumular = 0;
+                    // minutosParaAcumular = 0; // Removido
                 } else if (decisionRecord === 'Extra100') {
                     totalMinutosExtras100 += minutosTrabalhadosFolga;
-                    minutosParaAcumular = 0;
+                    // minutosParaAcumular = 0; // Removido
                 } else if (decisionRecord === 'Compensacao') {
-                    minutosParaAcumular = 0;
+                    // minutosParaAcumular = 0; // Removido
                 }
             }
             
+            // LÓGICA CORRIGIDA: Acumula minutos se não for folga fixa, não for férias E não for compensação
             if (!isFolgaFixa && !isFerias && !isCompensacaoAbono) {
-                totalMinutosTrabalhados += minutosParaAcumular;
+                // Se for Abono, acumula as horas abonadas (minutosAbonados)
+                if (isAbono) {
+                    totalMinutosTrabalhados += minutosAbonados;
+                } 
+                // Se for Falta, acumula 0 (a menos que tenha batidas, que já estão em minutosDia)
+                else if (isFalta) {
+                    // Se for falta, mas houver batidas (ajuste manual), acumula as batidas
+                    if (hasPontoRecords) {
+                        totalMinutosTrabalhados += minutosDia;
+                    }
+                    // Se for falta sem batidas, acumula 0
+                }
+                // Se for dia normal com batidas, acumula minutosDia
+                else {
+                    totalMinutosTrabalhados += minutosDia;
+                }
             }
             
-            if (isFalta && !isFaltaJustificada) {
-                minutosDia = 0;
+            // LÓGICA CORRIGIDA: Define minutosDia para exibição
+            if (isFalta) {
+                minutosDia = 0; // Falta = 0 horas trabalhadas no dia
+            } else if (isAbono && !isCompensacaoAbono) {
+                minutosDia = minutosAbonados; // Abono = horas abonadas
             }
 
 
@@ -234,6 +251,7 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
 
     const diasOrdenados = Object.keys(diasProcessados).sort();
     const isExtraHours = minutosDiferenca > 0;
+    // Removendo isDeficit não utilizado (Linha 233)
     
     const handleDeleteRegistro = async (registroId: string) => {
         if (!window.confirm('Tem certeza que deseja excluir este registro?')) return;
@@ -446,5 +464,3 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
         </Card>
     );
 };
-
-export { DetalheFolhaPonto, parseHorasObservacao };
