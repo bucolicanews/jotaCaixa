@@ -134,6 +134,9 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
       setAtestadoUrl(null);
       setObservacao('Falta Dia Todo (0h Abonadas)'); // Observação especial para o cálculo
   };
+  
+  // Variável de escopo do componente (para uso no disabled prop)
+  const isFaltaDiaTodo = observacao.includes('Falta Dia Todo (0h Abonadas)');
 
   const handleSubmit = async () => {
     if (!dataFalta || !funcionario.id || !funcionario.empresa_id) {
@@ -141,8 +144,6 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
       return;
     }
     
-    // CORREÇÃO DO ERRO 8: Definindo a variável isFaltaDiaTodo
-    const isFaltaDiaTodo = observacao.includes('Falta Dia Todo (0h Abonadas)');
     const isJustificada = isFalta && (atestadoUrl || atestadoFile);
     
     if (isFalta && !isJustificada && !isFaltaDiaTodo && !window.confirm('Você está registrando uma Falta Injustificada. Deseja continuar?')) {
@@ -233,8 +234,6 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
   };
 
   const atestadoPronto = atestadoFile || atestadoUrl;
-  // CORREÇÃO DO ERRO 8: Definindo a variável isFaltaDiaTodo
-  const isFaltaDiaTodo = observacao.includes('Falta Dia Todo (0h Abonadas)');
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
