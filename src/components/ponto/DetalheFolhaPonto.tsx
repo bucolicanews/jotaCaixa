@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { useSessao } from '@/hooks/use-sessao';
-import { AdminUsuarioProfile, UsuarioProfile } from '@/types/usuario';
+import { AdminUsuarioProfile } from '@/types/usuario'; // FIX 1: Removed UsuarioProfile
 import { RegistroPonto, Ferias } from '@/types/ponto';
 import { 
     format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, getDay, 
@@ -14,8 +14,7 @@ import {
     Table, TableBody, TableCell, TableHead, TableHeader, TableRow, 
     Badge, Button, 
     AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger 
-} from '@/components/ui/index';
-// ADICIONANDO MapPin, Camera, Download
+} from '@/components/ui'; // FIX 2: Corrected import path
 import { Clock, Edit, Trash2, FileSignature, Loader2, MapPin, Camera, Download } from 'lucide-react';
 
 // Constantes CLT (Simplificadas)
@@ -32,7 +31,7 @@ interface FuncionarioDetalhe {
     dias_folga_fixos: string[];
     folga_domingo_obrigatoria: boolean;
     ferias: Ferias[];
-    admin_id?: string; // Para AdminUsuarioProfile
+    admin_id?: string; 
 }
 
 interface DetalheFolhaPontoProps {
