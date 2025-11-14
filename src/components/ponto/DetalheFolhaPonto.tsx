@@ -2,19 +2,18 @@ import React, { useState, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { useSessao } from '@/hooks/use-sessao';
-import { AdminUsuarioProfile } from '@/types/usuario'; // FIX 1: Removed UsuarioProfile
+import { AdminUsuarioProfile } from '@/types/usuario';
 import { RegistroPonto, Ferias } from '@/types/ponto';
 import { 
     format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, getDay, 
     isWithinInterval, isSameDay, differenceInMinutes 
 } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { 
-    Card, CardContent, CardHeader, CardTitle, 
-    Table, TableBody, TableCell, TableHead, TableHeader, TableRow, 
-    Badge, Button, 
-    AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger 
-} from '@/components/ui'; // FIX 2: Corrected import path
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Clock, Edit, Trash2, FileSignature, Loader2, MapPin, Camera, Download } from 'lucide-react';
 
 // Constantes CLT (Simplificadas)
