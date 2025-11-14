@@ -424,9 +424,7 @@ const FolhaPonto: React.FC = () => {
             totalMinutosTrabalhados += minutosParaAcumular;
         }
         
-        if (isFaltaJustificada || (isAbono && !isCompensacaoAbono)) {
-            minutosDia = minutosAbonados;
-        } else if (isFalta && !isFaltaJustificada) {
+        if (isFalta && !isFaltaJustificada) {
             minutosDia = 0;
         }
 
@@ -450,7 +448,7 @@ const FolhaPonto: React.FC = () => {
     }
     
     const jornadaMensalMinutos = (funcionarioDetalhe.horas_mensais || JORNADA_MENSAL_PADRAO) * 60;
-    const minutosDiferenca = jornadaMensalMinutos - totalMinutosTrabalhados; 
+    const minutosDiferenca = totalMinutosTrabalhados - jornadaMensalMinutos; 
     
     // --- FIM DA DUPLICAÇÃO DA LÓGICA DE CÁLCULO ---
 
