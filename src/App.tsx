@@ -49,8 +49,8 @@ import Relatorios from './pages/Relatorios';
 
 export function App() {
   return (
-    <SessionProvider>
-      <BrowserRouter>
+    <BrowserRouter>
+      <SessionProvider>
         <Routes>
           {/* Rotas Públicas (Landing Page, Login, Assinatura Externa) */}
           <Route path="/" element={<SiteLayout />}>
@@ -66,7 +66,7 @@ export function App() {
           <Route element={<LayoutPrincipal />}>
               <Route path="painel" element={<Painel />} />
               <Route path="perfil" element={<Perfil />} />
-              <Route path="ponto-eletronico" element={<Perfil />} />
+              <Route path="ponto-eletronico" element={<PontoEletronico />} />
               <Route path="folha-ponto" element={<FolhaPonto />} />
               <Route path="minha-assinatura" element={<MinhaAssinatura />} />
               <Route path="renovacao" element={<SelecaoPagamentoRenovacao />} />
@@ -120,8 +120,8 @@ export function App() {
           {/* Catch-all for unhandled paths */}
           <Route path="*" element={<NotFound />} />
         </Routes>
-      </BrowserRouter>
+      </SessionProvider>
       <Toaster />
-    </SessionProvider>
+    </BrowserRouter>
   );
 }
