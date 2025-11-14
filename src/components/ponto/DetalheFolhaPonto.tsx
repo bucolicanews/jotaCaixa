@@ -37,7 +37,7 @@ interface DetalheFolhaPontoProps {
     onManageWorkedDayOff: (dia: Date, registros: RegistroPonto[]) => void;
 }
 
-// Exportando a função utilitária (Mantendo export const - Linha 41)
+// Exportando a função utilitária
 export const parseHorasObservacao = (observacao: string | null | undefined, defaultHours: number): number => {
     if (!observacao) return defaultHours;
     const match = observacao.match(/(\d+)h/);
@@ -56,7 +56,7 @@ const formatarHoras = (minutos: number): string => {
     return `${sign}${horas}h ${mins}m`;
 };
 
-// Exportando o componente principal (Mantendo export const - Linha 60)
+// Exportando o componente principal
 export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
     funcionario,
     mes,
@@ -65,7 +65,6 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
     onDeleteRegistro,
     onManageWorkedDayOff,
 }) => {
-    // Removendo 'usuario' e 'role' da desestruturação, pois não são usados no escopo principal do componente
     const { } = useSessao(); 
     const [isDeleting, setIsDeleting] = useState(false);
     
@@ -139,6 +138,11 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
                     minutosDia = minutosAbonados; 
                     
                     if (isFalta && !isFaltaJustificada) {
+                        minutosDia = 0;
+                    }
+                    
+                    // Se for Falta Dia Todo (0h Abonadas), garante que minutosDia seja 0
+                    if (registro.observacao?.includes('Falta Dia Todo (0h Abonadas)')) {
                         minutosDia = 0;
                     }
                     
@@ -230,7 +234,6 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
 
     const diasOrdenados = Object.keys(diasProcessados).sort();
     const isExtraHours = minutosDiferenca > 0;
-    // Removendo isDeficit não utilizado (Linha 233)
     
     const handleDeleteRegistro = async (registroId: string) => {
         if (!window.confirm('Tem certeza que deseja excluir este registro?')) return;
@@ -444,5 +447,4 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
     );
 };
 
-// Removendo a re-exportação duplicada (Linhas 449-450)
-// export { DetalheFolhaPonto, parseHorasObservacao };
+export { DetalheFolhaPonto, parseHorasObservacao };

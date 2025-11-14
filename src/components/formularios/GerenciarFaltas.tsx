@@ -13,7 +13,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Textarea } from '../ui/textarea';
 
 type Acao = 'Falta' | 'Abono' | 'Nenhum';
-type AbonoHoras = '8h' | '6h' | '4h' | '2h';
+type AbonoHoras = '8h' | '6h' | '4h' | '2h' | '0h'; // Adicionado '0h' para Falta Dia Todo
 
 interface FuncionarioGerenciado {
   id: string;
@@ -125,6 +125,15 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
       setLoading(false);
     }
   };
+  
+  // NOVO HANDLER: Falta Dia Todo (0h Abonadas)
+  const handleFaltaDiaTodo = () => {
+      setAcao('Falta');
+      setHorasSelecionadas('8h'); // Marca 8h para indicar o dia todo
+      setAtestadoFile(null);
+      setAtestadoUrl(null);
+      setObservacao('Falta Dia Todo (0h Abonadas)'); // Observação especial para o cálculo
+  };
 
   const handleSubmit = async () => {
     if (!dataFalta || !funcionario.id || !funcionario.empresa_id) {
@@ -134,7 +143,7 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
     
     const isJustificada = isFalta && (atestadoUrl || atestadoFile);
     
-    if (isFalta && !isJustificada && !window.confirm('Você está registrando uma Falta Injustificada. Deseja continuar?')) {
+    if (isFalta && !isJustificada && !observacao.includes('Falta Dia Todo (0h Abonadas)') && !window.confirm('Você está registrando uma Falta Injustificada. Deseja continuar?')) {
         return;
     }
     
@@ -179,15 +188,16 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
       // Observação final:
       let observacaoFinal = observacao;
       if (isAbono) {
-          observacaoFinal = `${horasSelecionadas} de Abono`;
+          observacaoFinal = `Abono de ${horasSelecionadas}`;
       } else if (isFalta) {
-          // CORREÇÃO: Para falta, a observação deve incluir as horas selecionadas
-          const horas = horasSelecionadas;
-          if (isJustificada) {
-              observacaoFinal = `Falta Justificada (${horas})`;
+          // Se for Falta Dia Todo (0h Abonadas), mantém a observação especial
+          if (observacao.includes('Falta Dia Todo (0h Abonadas)')) {
+              observacaoFinal = observacao;
+          } else if (isJustificada) {
+              observacaoFinal = `Falta Justificada (${horasSelecionadas})`;
           } else {
-              // Falta Injustificada: Inclui as horas para o cálculo de saldo
-              observacaoFinal = `Falta Injustificada (${horas})`;
+              // Falta Injustificada: Inclui as horas selecionadas para o cálculo de saldo
+              observacaoFinal = `Falta Injustificada (${horasSelecionadas})`;
           }
       }
 
@@ -256,6 +266,18 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
                     </div>
                 ))}
               </RadioGroup>
+              
+              {/* NOVO BOTÃO: Falta Dia Todo (0h Abonadas) */}
+              {isFalta && (
+                  <Button 
+                      type="button" 
+                      variant="outline" 
+                      onClick={handleFaltaDiaTodo}
+                      className="w-full mt-3"
+                  >
+                      Falta Dia Todo (0h Abonadas)
+                  </Button>
+              )}
             </div>
           )}
 
@@ -322,7 +344,7 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
 
         <Button 
           onClick={handleSubmit} 
-          disabled={loading || (isFalta && !atestadoPronto && !window.confirm)}
+          disabled={loading || (isFalta && !atestadoPronto && !observacao.includes('Falta Dia Todo (0h Abonadas)'))}
           className="w-full"
         >
           {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : (isEditing ? 'Salvar Edição' : `Confirmar Registro`)}
