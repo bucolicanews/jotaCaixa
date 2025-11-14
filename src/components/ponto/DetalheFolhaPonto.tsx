@@ -10,7 +10,7 @@ import { RegistroPonto, Ferias } from '@/types/ponto';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useSessao } from '@/hooks/use-sessao';
 import { AdminUsuarioProfile } from '@/types/usuario';
-import { supabase } => '@/integrations/supabase/client';
+import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 
 // Constantes CLT (Simplificadas)
@@ -37,7 +37,7 @@ interface DetalheFolhaPontoProps {
     onManageWorkedDayOff: (dia: Date, registros: RegistroPonto[]) => void;
 }
 
-// Exportando a função utilitária
+// Exportando a função utilitária (Mantendo export const - Linha 41)
 export const parseHorasObservacao = (observacao: string | null | undefined, defaultHours: number): number => {
     if (!observacao) return defaultHours;
     const match = observacao.match(/(\d+)h/);
@@ -56,7 +56,7 @@ const formatarHoras = (minutos: number): string => {
     return `${sign}${horas}h ${mins}m`;
 };
 
-// Exportando o componente principal
+// Exportando o componente principal (Mantendo export const - Linha 60)
 export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
     funcionario,
     mes,
@@ -230,7 +230,7 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
 
     const diasOrdenados = Object.keys(diasProcessados).sort();
     const isExtraHours = minutosDiferenca > 0;
-    const isDeficit = minutosDiferenca < 0;
+    // Removendo isDeficit não utilizado (Linha 233)
     
     const handleDeleteRegistro = async (registroId: string) => {
         if (!window.confirm('Tem certeza que deseja excluir este registro?')) return;
@@ -321,8 +321,7 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
 
                                 // CORREÇÃO TS2304: Definindo 'hoje' no escopo do loop
                                 const hoje = new Date();
-                                const isTodayOrFuture = data >= startOfMonth(hoje);
-                                // Removendo canEdit não utilizado
+                                // Removendo isTodayOrFuture não utilizado (Linha 324)
                                 
                                 let rowClassName = '';
                                 if (isFerias) rowClassName = 'bg-blue-500/10';
@@ -445,5 +444,5 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
     );
 };
 
-// Exportando o componente principal e a função utilitária
-export { DetalheFolhaPonto, parseHorasObservacao };
+// Removendo a re-exportação duplicada (Linhas 449-450)
+// export { DetalheFolhaPonto, parseHorasObservacao };
