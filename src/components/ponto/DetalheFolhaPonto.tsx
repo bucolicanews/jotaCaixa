@@ -48,7 +48,7 @@ interface DetalheFolhaPontoProps {
 }
 
 // Exportando a função utilitária
-export const parseHorasObservacao = (observacao: string | null | undefined, defaultHours: number): number => {
+export const parseHorasObservacao = (observacao: string | null, defaultHours: number = 0): number => {
     if (!observacao) return defaultHours;
     const match = observacao.match(/(\d+)h/);
     if (match) {
@@ -88,6 +88,22 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
         let totalMinutosTrabalhados = 0;
         let totalMinutosExtras100 = 0;
         
+        // Helper para extrair minutos de abono da observação (Faltas=Xh, Abono=Yh)
+        const parseAbonoMinutesFromObservation = (obs: string | null): number => {
+            if (!obs) return 0;
+            // 1. Tenta extrair Abono=Yh (para faltas justificadas parciais/totais)
+            const matchPartial = obs.match(/Abono=(\d+)h/);
+            if (matchPartial) {
+                return parseInt(matchPartial[1], 10) * 60;
+            }
+            // 2. Tenta extrair Xh (para abonos manuais simples)
+            const matchSimple = obs.match(/(\d+)h/);
+            if (matchSimple) {
+                return parseInt(matchSimple[1], 10) * 60;
+            }
+            return 0;
+        };
+        
         const registrosPorDia: Record<string, RegistroPonto[]> = {};
         const registrosOrdenados = [...funcionario.registros].sort((a, b) => parseISO(a.horario_registro).getTime() - parseISO(b.horario_registro).getTime());
         
@@ -118,7 +134,8 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
             let hasPontoRecords = false;
             let decisionRecord: 'Compensacao' | 'Extra100' | null = null;
             let isCompensacaoAbono = false;
-            let isFaltaJustificada = false;
+            let isFaltaJustificada = false; // Flag for justified absence
+            let minutosAbonadosCredited = 0; // Minutes credited via justified absence
             
             const diaDaSemana = DAY_MAP[getDay(data)];
             let isFolgaFixa = funcionario.dias_folga_fixos?.includes(diaDaSemana) || false;
@@ -135,24 +152,21 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
                     if (registro.tipo === 'Falta') isFalta = true;
                     if (registro.tipo === 'Abono') isAbono = true;
                     
-                    const horasCreditadas = parseHorasObservacao(registro.observacao, JORNADA_DIARIA_PADRAO);
-                    minutosAbonados = Math.round(horasCreditadas * 60);
+                    // 1. Check for justified absence and calculate credited minutes
+                    if (registro.tipo === 'Falta' && registro.atestado_url) {
+                        isFaltaJustificada = true;
+                        minutosAbonadosCredited = parseAbonoMinutesFromObservation(registro.observacao ?? null);
+                    }
+                    
+                    // 2. Calculate total minutes for simple abono/falta (used for accumulation if not justified)
+                    minutosAbonados = parseAbonoMinutesFromObservation(registro.observacao ?? null);
                     
                     if (registro.observacao?.includes('Compensação de folga trabalhada')) {
                         isCompensacaoAbono = true;
                         minutosAbonados = 0;
-                    } else if (isFalta && registro.atestado_url) {
-                        isFaltaJustificada = true;
                     }
                     
-                    // Se for Falta Dia Todo (0h Abonadas), garante que minutosDia seja 0
-                    if (registro.observacao?.includes('Falta Dia Todo (0h Abonadas)')) {
-                        minutosDia = 0;
-                    } else {
-                        // Se for Abono, credita as horas. Se for Falta, minutosDia é 0 (a menos que seja justificada, mas a lógica de acumulação abaixo cuida disso)
-                        minutosDia = isAbono ? minutosAbonados : 0;
-                    }
-                    
+                    // If it's a simple absence record (Falta/Abono), we continue the loop
                     continue;
                 }
                 
@@ -188,8 +202,6 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
                 isTurnoAberto = false;
             }
             
-            // Removendo a variável 'minutosParaAcumular' que não estava sendo lida (Erro TS6133)
-            // let minutosParaAcumular = minutosDia;
             let minutosTrabalhadosFolga = 0;
             let needsManagement = false;
             
@@ -198,40 +210,48 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
                 
                 if (!decisionRecord) {
                     needsManagement = true;
-                    // minutosParaAcumular = 0; // Removido
+                    minutosDia = 0; // Não acumula se precisar de gestão
                 } else if (decisionRecord === 'Extra100') {
                     totalMinutosExtras100 += minutosTrabalhadosFolga;
-                    // minutosParaAcumular = 0; // Removido
+                    minutosDia = 0;
                 } else if (decisionRecord === 'Compensacao') {
-                    // minutosParaAcumular = 0; // Removido
+                    minutosDia = 0;
                 }
             }
             
             // LÓGICA CORRIGIDA: Acumula minutos se não for folga fixa, não for férias E não for compensação
             if (!isFolgaFixa && !isFerias && !isCompensacaoAbono) {
-                // Se for Abono, acumula as horas abonadas (minutosAbonados)
                 if (isAbono) {
+                    // Abono manual
                     totalMinutosTrabalhados += minutosAbonados;
-                } 
-                // Se for Falta, acumula 0 (a menos que tenha batidas, que já estão em minutosDia)
-                else if (isFalta) {
-                    // Se for falta, mas houver batidas (ajuste manual), acumula as batidas
-                    if (hasPontoRecords) {
+                } else if (isFalta) {
+                    // Se for falta justificada, acumula as horas abonadas (6h no exemplo do usuário)
+                    if (isFaltaJustificada) {
+                        totalMinutosTrabalhados += minutosAbonadosCredited;
+                        minutosDia = minutosAbonadosCredited; // Define o total do dia para exibição
+                    } else if (hasPontoRecords) {
+                        // Se for falta injustificada mas com batidas (ajuste manual), acumula as batidas
                         totalMinutosTrabalhados += minutosDia;
+                    } else {
+                        // Falta injustificada sem batidas
+                        minutosDia = 0;
                     }
-                    // Se for falta sem batidas, acumula 0
-                }
-                // Se for dia normal com batidas, acumula minutosDia
-                else {
+                } else {
+                    // Dia normal com batidas
                     totalMinutosTrabalhados += minutosDia;
                 }
             }
             
             // LÓGICA CORRIGIDA: Define minutosDia para exibição
             if (isFalta) {
-                minutosDia = 0; // Falta = 0 horas trabalhadas no dia
+                // Se for falta justificada, exibe as horas abonadas (6h no exemplo)
+                if (isFaltaJustificada) {
+                    minutosDia = minutosAbonadosCredited;
+                } else {
+                    minutosDia = 0; // Falta injustificada = 0 horas trabalhadas no dia
+                }
             } else if (isAbono && !isCompensacaoAbono) {
-                minutosDia = minutosAbonados; // Abono = horas abonadas
+                minutosDia = minutosAbonados; // Abono manual = horas abonadas
             }
 
 
@@ -250,6 +270,7 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
                 minutosTrabalhadosFolga,
                 isCompensacaoAbono,
                 isFaltaJustificada,
+                minutosAbonadosCredited, // Adicionado para debug/referência
             };
         }
         
@@ -261,7 +282,6 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
 
     const diasOrdenados = Object.keys(diasProcessados).sort();
     const isExtraHours = minutosDiferenca > 0;
-    // Removendo isDeficit não utilizado (Linha 233)
     
     const handleDeleteRegistro = async (registroId: string) => {
         if (!window.confirm('Tem certeza que deseja excluir este registro?')) return;
@@ -345,14 +365,13 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
                                 
                                 const statusDisplay = isFalta ? 'FALTA' : (isAbono ? 'ABONO' : 'N/A');
                                 
-                                // Determines the time to be displayed in the Total Day column (Fixes Errors 3-15)
+                                // Determina o tempo a ser exibido na coluna Total Dia
                                 const totalDiaDisplay = isFolgaFixa && hasPontoRecords && (decisionRecord || needsManagement) 
                                     ? formatarHoras(minutosTrabalhadosFolga) 
                                     : (isFaltaJustificada || isAbono && !isCompensacaoAbono ? formatarHoras(minutos) : statusDisplay);
 
                                 // CORREÇÃO TS2304: Definindo 'hoje' no escopo do loop
                                 const hoje = new Date();
-                                // Removendo isTodayOrFuture não utilizado (Linha 324)
                                 
                                 let rowClassName = '';
                                 if (isFerias) rowClassName = 'bg-blue-500/10';
@@ -362,6 +381,7 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
                                 // Falta Injustificada (Vermelho)
                                 else if (isFalta && !isFaltaJustificada) rowClassName = 'bg-red-500/10';
                                 else if (isAbono) rowClassName = 'bg-green-500/10';
+                                else if (registrosDoDia.length === 0 && data < hoje) rowClassName = 'bg-red-500/10'; // Falta não registrada
                                 
                                 // CORREÇÃO TS7006: Tipando 'r' como RegistroPonto
                                 const batidas = registrosDoDia.filter((r: RegistroPonto) => r.tipo === 'Entrada' || r.tipo === 'Saida').map((r: RegistroPonto) => format(parseISO(r.horario_registro), 'HH:mm')).join(' / ');
