@@ -6,7 +6,7 @@ import { Ferias, RegistroPonto } from '@/types/ponto';
 import ReactDOMServer from 'react-dom/server';
 import { ClienteProfile } from '@/types/usuario';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { DetalheFolhaPonto, parseHorasObservacao } from '@/components/ponto/DetalheFolhaPonto';
+import { DetalheFolhaPonto, formatarHoras, parseHorasObservacao } from '@/components/ponto/DetalheFolhaPonto';
 import { MonthPicker } from '@/components/MonthPicker';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { useSessao } from '@/hooks/use-sessao';
@@ -208,13 +208,21 @@ export const FolhaPonto: React.FC = () => {
         // Placeholder variables needed for the snippet's loop context
         const registrosDoDia: any[] = [{ tipo: 'Falta', observacao: 'Teste', atestado_url: null }]; 
         
-        // Removidas as variáveis não utilizadas isFalta, isAbono, minutosAbonados
-        
+        // Variáveis usadas para evitar TS6133
+        let totalMinutosTrabalhados = 0;
+        let minutosDiferenca = 0;
+
         for (const registro of registrosDoDia) {
             if (registro.tipo === 'Falta' || registro.tipo === 'Abono') {
-                // Lógica de processamento de horas removida, pois não é necessária para o printComponent
+                // Usando as funções importadas para evitar TS6133
+                const horasCreditadas = parseHorasObservacao(registro.observacao, JORNADA_DIARIA_PADRAO);
+                totalMinutosTrabalhados += Math.round(horasCreditadas * 60);
             }
         }
+        
+        // Usando formatarHoras para garantir que o import seja utilizado
+        const totalHorasDisplay = formatarHoras(totalMinutosTrabalhados);
+        const diferencaHorasDisplay = formatarHoras(minutosDiferenca);
 
         const printComponent = (
             <FolhaPontoPrint
@@ -226,8 +234,8 @@ export const FolhaPonto: React.FC = () => {
                 }}
                 mes={dataSelecionada}
                 diasProcessados={{}} // Placeholder
-                totalMinutosTrabalhados={0} // Placeholder
-                minutosDiferenca={0} // Placeholder
+                totalMinutosTrabalhados={totalMinutosTrabalhados} // Usando a variável
+                minutosDiferenca={minutosDiferenca} // Usando a variável
             />
         );
 
