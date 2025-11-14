@@ -1,448 +1,703 @@
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Edit, Trash2, FileSignature } from 'lucide-react';
-import { format, parseISO, eachDayOfInterval, getDay, isSameDay, differenceInMinutes, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
+import { Clock, DollarSign, MapPin, Camera, FileText, AlertTriangle, Trash2, Edit, CalendarX, Plane, CalendarCheck } from 'lucide-react';
+import { format, parseISO, differenceInMinutes, isSameDay, startOfMonth, endOfMonth, eachDayOfInterval, isWithinInterval, getDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { RegistroPonto, Ferias } from '@/types/ponto';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
+import { Button } from '../ui/button';
 import { useSessao } from '@/hooks/use-sessao';
-import { AdminUsuarioProfile, UsuarioProfile } from '@/types/usuario';
+import { RegistroPonto, Ferias } from '@/types/ponto';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
+import { Progress } from '../ui/progress';
+
+interface FuncionarioDetalhe {
+  id: string;
+  nome: string;
+  salario: number;
+  horas_mensais: number;
+  registros: RegistroPonto[];
+  dias_folga_fixos: string[];
+  folga_domingo_obrigatoria: boolean;
+  ferias: Ferias[];
+}
+
+interface DetalheFolhaPontoProps {
+  funcionario: FuncionarioDetalhe;
+  mes: Date;
+  onEditRegistro: (dia: Date) => void; // Para Ajuste de Ponto (Entrada/Saída)
+  onEditFaltaAbono: (registro: RegistroPonto | null, dia: Date) => void; // Para Edição de Falta/Abono
+  onDeleteRegistro: () => void; 
+  onManageWorkedDayOff: (dia: Date, registros: RegistroPonto[]) => void; // NEW: Para gerenciar folga trabalhada
+}
+
+// Mapeamento de getDay() (0=Sunday, 6=Saturday) para strings
+const DAY_MAP: Record<number, string> = {
+    0: 'Sunday',
+    1: 'Monday',
+    2: 'Tuesday',
+    3: 'Wednesday',
+    4: 'Thursday',
+    5: 'Friday',
+    6: 'Saturday',
+};
 
 // Constantes CLT (Simplificadas)
 const JORNADA_MENSAL_PADRAO = 220; // Horas mensais padrão CLT
 const JORNADA_DIARIA_PADRAO = 8; // Horas diárias padrão CLT
 
-interface FuncionarioDetalhe {
-    id: string;
-    nome: string;
-    salario: number;
-    horas_mensais: number;
-    registros: RegistroPonto[];
-    dias_folga_fixos: string[];
-    folga_domingo_obrigatoria: boolean;
-    ferias: Ferias[];
-}
-
-interface DetalheFolhaPontoProps {
-    funcionario: FuncionarioDetalhe;
-    mes: Date;
-    onEditRegistro: (dia: Date) => void;
-    onEditFaltaAbono: (registro: RegistroPonto | null, dia: Date) => void;
-    onDeleteRegistro: (registroId: string) => void;
-    onManageWorkedDayOff: (dia: Date, registros: RegistroPonto[]) => void;
-}
-
-// Exportando a função utilitária
-export const parseHorasObservacao = (observacao: string | null | undefined, defaultHours: number): number => {
-    if (!observacao) return defaultHours;
-    const match = observacao.match(/(\d+)h/);
-    if (match) {
-        return parseInt(match[1], 10);
-    }
-    return defaultHours;
+/**
+ * Função robusta para extrair horas de uma string de observação.
+ * Aceita formatos como "8h", "4", "2.5", "6,0 horas".
+ */
+const parseHorasObservacao = (obs: string | null | undefined, fallback = JORNADA_DIARIA_PADRAO): number => {
+    if (!obs) return fallback;
+    // normaliza vírgula para ponto e remove texto irrelevante
+    const normalized = obs.replace(',', '.').toLowerCase();
+    // busca o primeiro número com opcional casa decimal
+    const m = normalized.match(/(\d+(\.\d+)?)/);
+    if (!m) return fallback;
+    const valor = parseFloat(m[1]);
+    if (isNaN(valor)) return fallback;
+    return valor;
 };
 
-// Definindo a função utilitária
-const formatarHoras = (minutos: number): string => {
+
+const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes, onEditRegistro, onDeleteRegistro, onManageWorkedDayOff, onEditFaltaAbono }) => {
+  const { salario, horas_mensais, registros, dias_folga_fixos, folga_domingo_obrigatoria, ferias } = funcionario;
+  const { role } = useSessao();
+  const [selfieModalOpen, setSelfieModalOpen] = useState(false);
+  const [selfieUrl, setSelfieUrl] = useState<string | null>(null);
+  
+  // FIX: Definir jornadaDiariaMinutos no escopo do componente
+  const jornadaDiariaMinutos = JORNADA_DIARIA_PADRAO * 60;
+  
+  let totalMinutosTrabalhados = 0; // Horas normais (inclui abonos, sem limite)
+  let totalMinutosExtras100 = 0; // Horas extras 100% (Folgas trabalhadas)
+  
+  // 1. Agrupamento de registros por dia (YYYY-MM-DD)
+  const registrosPorDia: Record<string, RegistroPonto[]> = {};
+  const registrosOrdenados = [...registros].sort((a, b) => parseISO(a.horario_registro).getTime() - parseISO(b.horario_registro).getTime());
+  
+  for (const registro of registrosOrdenados) {
+    const horario = parseISO(registro.horario_registro);
+    const dia = format(horario, 'yyyy-MM-dd');
+    
+    if (!registrosPorDia[dia]) {
+      registrosPorDia[dia] = [];
+    }
+    registrosPorDia[dia].push(registro);
+  }
+  
+  // 2. Processar todos os dias do mês
+  const inicioMes = startOfMonth(mes);
+  const fimMes = endOfMonth(mes);
+  const hoje = new Date();
+  const todosOsDiasDoMes = eachDayOfInterval({ start: inicioMes, end: fimMes });
+  
+  const diasProcessados: Record<string, { 
+    minutos: number, 
+    registros: RegistroPonto[], 
+    isFalta: boolean, 
+    isAbono: boolean, 
+    isTurnoAberto: boolean, 
+    isFolgaFixa: boolean, 
+    isFerias: boolean,
+    hasPontoRecords: boolean,
+    decisionRecord: 'Compensacao' | 'Extra100' | null,
+    needsManagement: boolean,
+    minutosAbonados: number, // Minutos creditados pelo abono/falta justificada
+    minutosTrabalhadosFolga: number, // Minutos trabalhados na folga
+    isCompensacaoAbono: boolean, // Indica se é um abono de compensação
+    isFaltaJustificada: boolean, // Indica se é uma falta justificada
+  }> = {};
+  
+  for (const data of todosOsDiasDoMes) {
+    const diaString = format(data, 'yyyy-MM-dd');
+    const registrosDoDia = registrosPorDia[diaString] || [];
+    
+    // Variáveis que precisam ser 'let' dentro do loop
+    let minutosDia = 0;
+    let entrada: Date | null = null;
+    let isFalta = false;
+    let isAbono = false;
+    let minutosAbonados = 0; 
+    let isTurnoAberto = false;
+    let hasPontoRecords = false;
+    let decisionRecord: 'Compensacao' | 'Extra100' | null = null;
+    let isCompensacaoAbono = false;
+    let isFaltaJustificada = false;
+    
+    // Lógica de Folga Fixa
+    const diaDaSemana = DAY_MAP[getDay(data)];
+    let isFolgaFixa = dias_folga_fixos.includes(diaDaSemana);
+    if (folga_domingo_obrigatoria && diaDaSemana === 'Sunday') {
+        isFolgaFixa = true;
+    }
+    
+    // Lógica de Férias
+    const isFerias = ferias.some((f: Ferias) => {
+        const start = parseISO(f.data_inicio + 'T00:00:00');
+        const end = parseISO(f.data_fim + 'T23:59:59');
+        return isWithinInterval(data, { start, end });
+    });
+
+    // Processamento de registros de ponto (Entrada/Saída, Falta, Abono, Compensacao, Extra100)
+    for (const registro of registrosDoDia) {
+        if (registro.tipo === 'Falta' || registro.tipo === 'Abono') {
+            if (registro.tipo === 'Falta') isFalta = true;
+            if (registro.tipo === 'Abono') isAbono = true;
+            
+            // --- NOVO PARSING ROBUSTO ---
+            const horasCreditadas = parseHorasObservacao(registro.observacao, JORNADA_DIARIA_PADRAO);
+            minutosAbonados = Math.round(horasCreditadas * 60);
+            // ---------------------------
+            
+            if (registro.observacao?.includes('Compensação de folga trabalhada')) {
+                isCompensacaoAbono = true;
+                minutosAbonados = 0; // Não conta horas, é um dia de folga
+            } else if (isFalta && registro.atestado_url) {
+                isFaltaJustificada = true;
+            }
+            
+            // Minutos creditados para o total mensal = Minutos Abonados
+            minutosDia = minutosAbonados; 
+            
+            // Se for Falta/Abono, ignora as batidas de ponto para o cálculo do dia
+            continue;
+        }
+        
+        if (registro.tipo === 'Compensacao') {
+            decisionRecord = 'Compensacao';
+        }
+        if (registro.tipo === 'Extra100') {
+            decisionRecord = 'Extra100';
+        }
+        
+        if (registro.tipo === 'Entrada' || registro.tipo === 'Saida') {
+            hasPontoRecords = true;
+            
+            const horario = parseISO(registro.horario_registro);
+            
+            if (registro.tipo === 'Entrada') {
+                entrada = horario;
+                isTurnoAberto = true;
+            } else if (registro.tipo === 'Saida' && entrada) {
+                // Verifica se a Saída é válida (após uma Entrada)
+                const minutosTrabalhados = differenceInMinutes(horario, entrada);
+                minutosDia += minutosTrabalhados;
+                entrada = null;
+                isTurnoAberto = false;
+            } else if (registro.tipo === 'Saida' && !entrada) {
+                isTurnoAberto = false;
+            }
+        }
+    }
+    
+    // Se o último registro do dia foi Entrada, o turno está aberto.
+    if (entrada) {
+        if (isSameDay(data, hoje)) {
+            minutosDia += differenceInMinutes(hoje, entrada);
+            isTurnoAberto = true;
+        } else {
+            isTurnoAberto = true;
+        }
+    } else {
+        isTurnoAberto = false;
+    }
+    
+    // --- LÓGICA DE CRÉDITO FINAL DO DIA (minutosDia) ---
+    
+    if (isFalta || isAbono) {
+        // Se for Falta/Abono, o tempo base é o abonado/justificado (minutosDia já foi setado no loop)
+        
+        if (isFalta) {
+            if (isFaltaJustificada) {
+                // Falta Justificada: Credita o tempo abonado (minutosDia já está correto)
+            } else {
+                // Falta Injustificada:
+                if (minutosAbonados >= jornadaDiariaMinutos) {
+                    // Falta Injustificada de jornada completa (>= 8h): Credita 0
+                    minutosDia = 0; 
+                } else {
+                    // Falta Injustificada parcial: Credita o tempo abonado (minutosDia já está correto)
+                }
+            }
+        } else if (isAbono && isCompensacaoAbono) {
+            // Abono de compensação: 0 crédito (minutosDia já foi setado como 0 no loop)
+        } else if (isAbono) {
+            // Abono normal: Credita o tempo abonado (minutosDia já está correto)
+        }
+    }
+    // Se não for Falta/Abono, minutosDia já contém o tempo das batidas.
+    
+    // Armazena o tempo trabalhado/abonado do dia antes de qualquer ajuste de folga
+    let minutosParaAcumular = minutosDia;
+    let minutosTrabalhadosFolga = 0;
+    let needsManagement = false;
+    
+    // --- LÓGICA DE FOLGA TRABALHADA ---
+    if (isFolgaFixa && hasPontoRecords && !isFerias) {
+        // Se trabalhou na folga, o tempo trabalhado é o minutosDia calculado pelas batidas
+        minutosTrabalhadosFolga = minutosDia;
+        
+        if (!decisionRecord) {
+            needsManagement = true;
+            minutosParaAcumular = 0; // Não acumula no total mensal até ter decisão
+        } else if (decisionRecord === 'Extra100') {
+            totalMinutosExtras100 += minutosTrabalhadosFolga;
+            minutosParaAcumular = 0; // Não conta como hora normal
+        } else if (decisionRecord === 'Compensacao') {
+            minutosParaAcumular = 0;
+        }
+    }
+    
+    // Acumular totais (apenas se não for folga trabalhada, nem abono de compensação, nem férias)
+    if (!isFolgaFixa && !isFerias && !isCompensacaoAbono) {
+        totalMinutosTrabalhados += minutosParaAcumular;
+    }
+    
+    // Se for Falta Justificada ou Abono, o total do dia é o tempo creditado
+    if (isFaltaJustificada || (isAbono && !isCompensacaoAbono)) {
+        minutosDia = minutosAbonados;
+    } 
+    // CORREÇÃO: Zera minutosDia APENAS se for Falta Injustificada E NENHUMA HORA FOI ABONADA.
+    else if (isFalta && !isFaltaJustificada && minutosAbonados === 0) {
+        minutosDia = 0;
+    }
+
+
+    diasProcessados[diaString] = {
+        minutos: minutosDia, // Minutos finais do dia (trabalhados ou creditados)
+        registros: registrosDoDia,
+        isFalta,
+        isAbono,
+        minutosAbonados, 
+        isTurnoAberto,
+        isFolgaFixa,
+        isFerias,
+        hasPontoRecords,
+        decisionRecord,
+        needsManagement,
+        minutosTrabalhadosFolga,
+        isCompensacaoAbono,
+        isFaltaJustificada,
+    };
+  }
+  
+  // 3. Calcular horas extras
+  const jornadaMensalMinutos = (horas_mensais || JORNADA_MENSAL_PADRAO) * 60;
+  const minutosDiferenca = jornadaMensalMinutos - totalMinutosTrabalhados; 
+  
+  // Helper functions defined inside the component scope
+  const formatarHoras = (minutos: number): string => {
     const sign = minutos < 0 ? '-' : '';
     const absMinutos = Math.abs(minutos);
     const horas = Math.floor(absMinutos / 60);
     const mins = Math.round(absMinutos % 60);
     return `${sign}${horas}h ${mins}m`;
-};
+  };
+  
+  const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
-// Exportando o componente principal
-export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
-    funcionario,
-    mes,
-    onEditRegistro,
-    onEditFaltaAbono,
-    onDeleteRegistro,
-    onManageWorkedDayOff,
-}) => {
-    const { usuario, role } = useSessao();
-    const [isDeleting, setIsDeleting] = useState(false);
-    
-    // CORREÇÃO TS2352: Usando 'as unknown as' para conversão segura
-    const isFuncionarioAdmin = !!((funcionario as unknown as AdminUsuarioProfile).admin_id);
+  const handleViewSelfie = (url: string) => {
+    setSelfieUrl(url);
+    setSelfieModalOpen(true);
+  };
+  
+  const handleDelete = async (registroId: string) => {
+    if (!window.confirm('Tem certeza que deseja excluir este registro de Falta/Abono/Compensação? O dia voltará ao estado anterior.')) return;
+
+    // Determina a tabela de destino
+    const isFuncionarioAdmin = !!(funcionario as any).admin_id;
     const tabelaRegistros = isFuncionarioAdmin ? 'admin_registros_ponto' : 'registros_ponto';
-    
-    const DAY_MAP: Record<number, string> = { 0: 'Sunday', 1: 'Monday', 2: 'Tuesday', 3: 'Wednesday', 4: 'Thursday', 5: 'Friday', 6: 'Saturday' };
 
-    const { diasProcessados, totalMinutosTrabalhados, minutosDiferenca, totalMinutosExtras100 } = useMemo(() => {
-        let totalMinutosTrabalhados = 0;
-        let totalMinutosExtras100 = 0;
-        
-        const registrosPorDia: Record<string, RegistroPonto[]> = {};
-        const registrosOrdenados = [...funcionario.registros].sort((a, b) => parseISO(a.horario_registro).getTime() - parseISO(b.horario_registro).getTime());
-        
-        for (const registro of registrosOrdenados) {
-            const horario = parseISO(registro.horario_registro);
-            const dia = format(horario, 'yyyy-MM-dd');
-            if (!registrosPorDia[dia]) registrosPorDia[dia] = [];
-            registrosPorDia[dia].push(registro);
-        }
-        
-        const inicioMes = startOfMonth(mes);
-        const fimMes = endOfMonth(mes);
-        const hoje = new Date();
-        const todosOsDiasDoMes = eachDayOfInterval({ start: inicioMes, end: fimMes });
-        
-        const diasProcessados: Record<string, any> = {};
-        
-        for (const data of todosOsDiasDoMes) {
-            const diaString = format(data, 'yyyy-MM-dd');
-            const registrosDoDia = registrosPorDia[diaString] || [];
-            
-            let minutosDia = 0;
-            let entrada: Date | null = null;
-            let isFalta = false;
-            let isAbono = false;
-            let minutosAbonados = 0; 
-            let isTurnoAberto = false;
-            let hasPontoRecords = false;
-            let decisionRecord: 'Compensacao' | 'Extra100' | null = null;
-            let isCompensacaoAbono = false;
-            let isFaltaJustificada = false;
-            
-            const diaDaSemana = DAY_MAP[getDay(data)];
-            let isFolgaFixa = funcionario.dias_folga_fixos?.includes(diaDaSemana) || false;
-            if ((funcionario.folga_domingo_obrigatoria ?? true) && diaDaSemana === 'Sunday') isFolgaFixa = true;
-            
-            const isFerias = funcionario.ferias.some(f => {
-                const start = parseISO(f.data_inicio + 'T00:00:00');
-                const end = parseISO(f.data_fim + 'T23:59:59');
-                return isWithinInterval(data, { start, end });
-            });
+    try {
+      const { error } = await supabase
+        .from(tabelaRegistros) // ROTEAMENTO AQUI
+        .delete()
+        .eq('id', registroId);
 
-            for (const registro of registrosDoDia) {
-                if (registro.tipo === 'Falta' || registro.tipo === 'Abono') {
-                    if (registro.tipo === 'Falta') isFalta = true;
-                    if (registro.tipo === 'Abono') isAbono = true;
-                    
-                    const horasCreditadas = parseHorasObservacao(registro.observacao, JORNADA_DIARIA_PADRAO);
-                    minutosAbonados = Math.round(horasCreditadas * 60);
-                    
-                    if (registro.observacao?.includes('Compensação de folga trabalhada')) {
-                        isCompensacaoAbono = true;
-                        minutosAbonados = 0;
-                    } else if (isFalta && registro.atestado_url) {
-                        isFaltaJustificada = true;
-                    }
-                    
-                    minutosDia = minutosAbonados; 
-                    
-                    if (isFalta && !isFaltaJustificada) {
-                        minutosDia = 0;
-                    }
-                    
-                    continue;
-                }
-                
-                if (registro.tipo === 'Compensacao') decisionRecord = 'Compensacao';
-                if (registro.tipo === 'Extra100') decisionRecord = 'Extra100';
-                
-                if (registro.tipo === 'Entrada' || registro.tipo === 'Saida') {
-                    hasPontoRecords = true;
-                    const horario = parseISO(registro.horario_registro);
-                    
-                    if (registro.tipo === 'Entrada') {
-                        entrada = horario;
-                        isTurnoAberto = true;
-                    } else if (registro.tipo === 'Saida' && entrada) {
-                        const minutosTrabalhados = differenceInMinutes(horario, entrada);
-                        minutosDia += minutosTrabalhados;
-                        entrada = null;
-                        isTurnoAberto = false;
-                    } else if (registro.tipo === 'Saida' && !entrada) {
-                        isTurnoAberto = false;
-                    }
-                }
-            }
-            
-            if (entrada) {
-                if (isSameDay(data, hoje)) {
-                    minutosDia += differenceInMinutes(hoje, entrada);
-                    isTurnoAberto = true;
-                } else {
-                    isTurnoAberto = true;
-                }
-            } else {
-                isTurnoAberto = false;
-            }
-            
-            let minutosParaAcumular = minutosDia;
-            let minutosTrabalhadosFolga = 0;
-            let needsManagement = false;
-            
-            if (isFolgaFixa && hasPontoRecords && !isFerias) {
-                minutosTrabalhadosFolga = minutosDia;
-                
-                if (!decisionRecord) {
-                    needsManagement = true;
-                    minutosParaAcumular = 0;
-                } else if (decisionRecord === 'Extra100') {
-                    totalMinutosExtras100 += minutosTrabalhadosFolga;
-                    minutosParaAcumular = 0;
-                } else if (decisionRecord === 'Compensacao') {
-                    minutosParaAcumular = 0;
-                }
-            }
-            
-            if (!isFolgaFixa && !isFerias && !isCompensacaoAbono) {
-                totalMinutosTrabalhados += minutosParaAcumular;
-            }
-            
-            if (isFalta && !isFaltaJustificada) {
-                minutosDia = 0;
-            }
+      if (error) {
+        throw new Error(error.message);
+      }
 
+      showSuccess('Registro excluído com sucesso.');
+      onDeleteRegistro(); // CHAMA A FUNÇÃO DE RECARREGAMENTO
+    } catch (error: any) {
+      showError('Erro ao excluir registro: ' + error.message);
+    }
+  };
 
-            diasProcessados[diaString] = {
-                minutos: minutosDia,
-                registros: registrosDoDia,
-                isFalta,
-                isAbono,
-                minutosAbonados, 
-                isTurnoAberto,
-                isFolgaFixa,
-                isFerias,
-                hasPontoRecords,
-                decisionRecord,
-                needsManagement,
-                minutosTrabalhadosFolga,
-                isCompensacaoAbono,
-                isFaltaJustificada,
-            };
-        }
-        
-        const jornadaMensalMinutos = (funcionario.horas_mensais || JORNADA_MENSAL_PADRAO) * 60;
-        const minutosDiferenca = totalMinutosTrabalhados - jornadaMensalMinutos; 
+  const canEdit = role === 'Admin' || role === 'Cliente';
+  
+  // Calcula o progresso da jornada mensal
+  const jornadaMensalMinutosCalc = (horas_mensais || JORNADA_MENSAL_PADRAO) * 60;
+  const progressoJornada = Math.min(100, Math.round((totalMinutosTrabalhados / jornadaMensalMinutosCalc) * 100));
 
-        return { diasProcessados, totalMinutosTrabalhados, minutosDiferenca, totalMinutosExtras100 };
-    }, [funcionario, mes, JORNADA_DIARIA_PADRAO]);
+  // Lógica de exibição da diferença
+  const isExtraHours = minutosDiferenca < 0;
+  const displayDifference = formatarHoras(minutosDiferenca);
+  const displayExtraHours = formatarHoras(Math.abs(minutosDiferenca));
 
-    const diasOrdenados = Object.keys(diasProcessados).sort();
-    const isExtraHours = minutosDiferenca > 0;
-    const isDeficit = minutosDiferenca < 0;
-    
-    const handleDeleteRegistro = async (registroId: string) => {
-        if (!window.confirm('Tem certeza que deseja excluir este registro?')) return;
-        setIsDeleting(true);
-        try {
-            const { error } = await supabase
-                .from(tabelaRegistros)
-                .delete()
-                .eq('id', registroId);
-            
-            if (error) throw error;
-            showSuccess('Registro excluído com sucesso.');
-            onDeleteRegistro(registroId);
-        } catch (error: any) {
-            showError('Falha ao excluir registro: ' + error.message);
-        } finally {
-            setIsDeleting(false);
-        }
-    };
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader><CardTitle className="text-xl flex items-center"><DollarSign className="w-5 h-5 mr-2" /> Resumo Financeiro ({format(mes, 'MMMM/yyyy', { locale: ptBR })})</CardTitle></CardHeader>
+        <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          
+          {/* LINHA 1: JORNADA E SALDO */}
+          <div className="col-span-2 md:col-span-4 grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div><p className="text-xs text-muted-foreground">Salário Base</p><p className="font-bold text-lg">{formatCurrency(salario)}</p></div>
+            <div><p className="text-xs text-muted-foreground">Jornada Mensal</p><p className="font-bold text-lg">{horas_mensais}h</p></div>
+            <div><p className="text-xs text-muted-foreground">Horas Trabalhadas</p><p className="font-bold text-lg">{formatarHoras(totalMinutosTrabalhados)}</p></div>
+            <div>
+                <p className="text-xs text-muted-foreground">{isExtraHours ? 'Horas Extras' : 'Diferença (Saldo)'}</p>
+                <p className={cn("font-bold text-lg", isExtraHours ? "text-green-600" : "text-red-500")}>
+                    {isExtraHours ? displayExtraHours : displayDifference}
+                </p>
+            </div>
+          </div>
+          
+          {/* Progresso da Jornada */}
+          <div className="col-span-2 md:col-span-4 space-y-2 pt-4 border-t">
+              <div className="flex justify-between items-center">
+                  <p className="text-sm font-medium">Progresso da Jornada Mensal</p>
+                  <span className="font-bold text-primary">{progressoJornada}%</span>
+              </div>
+              <Progress value={progressoJornada} className="h-2" />
+          </div>
+          
+        </CardContent>
+      </Card>
 
-    return (
-        <Card>
-            <CardHeader>
-                <CardTitle className="text-xl">Folha de Ponto de {funcionario.nome}</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
-                {/* Resumo */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="p-3 bg-secondary rounded-md">
-                        <p className="text-sm font-medium text-muted-foreground">Jornada Mensal</p>
-                        <p className="text-xl font-bold mt-1">{funcionario.horas_mensais}h</p>
-                    </div>
-                    <div className="p-3 bg-secondary rounded-md">
-                        <p className="text-sm font-medium text-muted-foreground">Horas Trabalhadas</p>
-                        <p className="text-xl font-bold mt-1">{formatarHoras(totalMinutosTrabalhados)}</p>
-                    </div>
-                    <div className={cn("p-3 rounded-md", isExtraHours ? "bg-green-100 dark:bg-green-900/20" : "bg-red-100 dark:bg-red-900/20")}>
-                        <p className="text-sm font-medium text-foreground">Saldo de Horas</p>
-                        <p className={cn("text-xl font-bold mt-1", isExtraHours ? "text-green-600" : "text-red-600")}>
-                            {formatarHoras(minutosDiferenca)}
-                        </p>
-                    </div>
-                    <div className="p-3 bg-yellow-100 dark:bg-yellow-900/20 rounded-md">
-                        <p className="text-sm font-medium text-yellow-700 dark:text-yellow-300">Horas Extras 100%</p>
-                        <p className="text-xl font-bold mt-1">{formatarHoras(totalMinutosExtras100)}</p>
-                    </div>
-                </div>
+      <Card>
+        <CardHeader><CardTitle className="text-xl flex items-center"><Clock className="w-5 h-5 mr-2" /> Detalhe Diário</CardTitle></CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[100px] md:w-[120px]">Data</TableHead>
+                  <TableHead className="hidden md:table-cell">Registros</TableHead>
+                  <TableHead className="w-[100px] text-right">Total Dia</TableHead>
+                  <TableHead className="w-[100px] text-right">Ações</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {todosOsDiasDoMes.length === 0 ? (
+                    <TableRow><TableCell colSpan={4} className="text-center py-4 text-muted-foreground">Nenhum dia encontrado para este mês.</TableCell></TableRow>
+                ) : (
+                    todosOsDiasDoMes.map((data: Date) => {
+                        const diaString = format(data, 'yyyy-MM-dd');
+                        const { minutos, registros, isFalta, isAbono, isTurnoAberto, isFolgaFixa, isFerias, hasPontoRecords, decisionRecord, needsManagement, minutosTrabalhadosFolga, isCompensacaoAbono, isFaltaJustificada, minutosAbonados } = diasProcessados[diaString];
+                        
+                        const isDiaAtual = isSameDay(data, hoje);
+                        const isDiaFuturo = data > hoje;
+                        
+                        let statusDisplay;
+                        let actionButton = null;
+                        
+                        // 1. Determinar Status e Ação
+                        if (isFerias) {
+                            statusDisplay = <span className="text-sm text-purple-600 flex items-center"><Plane className="w-4 h-4 mr-1" /> Férias</span>;
+                        } else if (isFolgaFixa) {
+                            if (needsManagement) {
+                                statusDisplay = <span className="text-sm text-yellow-600 flex items-center font-bold"><AlertTriangle className="w-4 h-4 mr-1" /> Folga Trabalhada (Aguardando Gestão)</span>;
+                                if (canEdit) {
+                                    actionButton = (
+                                        <Button 
+                                            variant="default" 
+                                            size="sm" 
+                                            onClick={() => onManageWorkedDayOff(data, registros.filter((r: RegistroPonto) => r.tipo === 'Entrada' || r.tipo === 'Saida'))}
+                                            title="Gerenciar Compensação"
+                                            className="h-6 text-xs bg-yellow-600 hover:bg-yellow-700"
+                                        >
+                                            Gerenciar
+                                        </Button>
+                                    );
+                                }
+                            } else if (decisionRecord === 'Extra100') {
+                                statusDisplay = <span className="text-sm text-red-600 flex items-center"><DollarSign className="w-4 h-4 mr-1" /> Pago Extra (100%)</span>;
+                            } else if (decisionRecord === 'Compensacao') {
+                                statusDisplay = <span className="text-sm text-blue-600 flex items-center"><CalendarCheck className="w-4 h-4 mr-1" /> Compensado (Banco de Horas)</span>;
+                            } else {
+                                // Folga Fixa sem trabalho ou decisão
+                                statusDisplay = <span className="text-sm text-muted-foreground">Folga Fixa</span>;
+                            }
+                        } else if (isFalta) {
+                            const faltaRegistro = registros.find((r: RegistroPonto) => r.tipo === 'Falta');
+                            const atestadoUrl = faltaRegistro?.atestado_url;
+                            
+                            let displayText: string;
+                            const horasCreditadas = minutosAbonados / 60;
+                            const horasPerdidas = Math.max(0, JORNADA_DIARIA_PADRAO - horasCreditadas);
+                            
+                            // Lógica de exibição para Falta Injustificada (parcial ou total)
+                            if (!atestadoUrl && isFalta && !isFaltaJustificada) {
+                                if (minutosAbonados >= jornadaDiariaMinutos) {
+                                    // Falta Injustificada de jornada completa (>= 8h): Exibe Falta Injustificada
+                                    displayText = 'Falta Injustificada';
+                                } else if (horasCreditadas > 0) {
+                                    // Falta Injustificada parcial: Exibe o tempo perdido
+                                    const horasPerdidasStr = Number.isInteger(horasPerdidas) ? `${horasPerdidas}h` : `${horasPerdidas.toFixed(1)}h`;
+                                    
+                                    // CORREÇÃO AQUI: A badge deve mostrar o tempo perdido (2h)
+                                    displayText = `Falta Injustificada (${horasPerdidasStr})`; 
+                                } else {
+                                    // Ausência injustificada total (0 horas creditadas)
+                                    displayText = 'Falta Injustificada';
+                                }
+                            } else {
+                                // Falta justificada (com atestado) ou outro tipo de Falta
+                                displayText = faltaRegistro?.observacao || 'Falta Justificada';
+                            }
+                            
+                            statusDisplay = atestadoUrl 
+                                ? <span className="text-sm text-green-600 flex items-center"><FileText className="w-4 h-4 mr-1" /> {displayText}</span>
+                                : <span className="text-sm text-red-600 flex items-center"><AlertTriangle className="w-4 h-4 mr-1" /> {displayText}</span>;
+                        } else if (isAbono) {
+                            const abonoRegistro = registros.find((r: RegistroPonto) => r.tipo === 'Abono');
+                            const observacaoAbono = abonoRegistro?.observacao || 'Abono';
+                            statusDisplay = <span className="text-sm text-blue-600 flex items-center"><Clock className="w-4 h-4 mr-1" /> {observacaoAbono}</span>;
+                        } else if (registros.length === 0) {
+                            statusDisplay = <span className="text-sm text-muted-foreground">{isDiaFuturo ? 'Futuro' : 'Sem Registro'}</span>;
+                        } else {
+                            // Exibe as horas calculadas
+                            statusDisplay = (
+                                <span className={cn(isTurnoAberto && !isFalta && !isAbono && !isDiaAtual ? "text-yellow-600 font-bold" : "")}>
+                                    {formatarHoras(minutos)}
+                                    {isTurnoAberto && !isFalta && !isAbono && !isDiaAtual && (
+                                        <AlertTriangle className="w-4 h-4 ml-1 inline-block align-text-bottom" />
+                                    )}
+                                </span>
+                            );
+                        }
 
-                {/* Tabela Detalhada */}
-                <div className="overflow-x-auto">
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead className="w-[80px]">Dia</TableHead>
-                                <TableHead className="w-[150px]">Batidas</TableHead>
-                                <TableHead className="w-[100px]">Total Dia</TableHead>
-                                <TableHead>Registros</TableHead>
-                                <TableHead className="w-[120px] text-right">Ações</TableHead>
+                        // 2. Encontra registros para edição/exclusão
+                        const registroFaltaAbonoCompensacao = registros.find((r: RegistroPonto) => r.tipo === 'Falta' || r.tipo === 'Abono' || r.tipo === 'Compensacao' || r.tipo === 'Extra100');
+                        const hasPontoRecordsOnly = hasPontoRecords && !registroFaltaAbonoCompensacao;
+                        
+                        // 3. Determina a cor de fundo
+                        const rowClassName = cn(
+                            isFolgaFixa && 'bg-secondary/30',
+                            isFerias && 'bg-purple-100/50 dark:bg-purple-900/20',
+                            (isFalta || isAbono) && 'bg-blue-100/50 dark:bg-blue-900/20',
+                            needsManagement && 'bg-yellow-100/50 dark:bg-yellow-900/20 border-l-4 border-yellow-500',
+                        );
+
+                        // Determina o tempo a ser exibido na coluna Total Dia
+                        const totalDiaDisplay = isFolgaFixa && hasPontoRecords && (decisionRecord || needsManagement) 
+                            ? formatarHoras(minutosTrabalhadosFolga) 
+                            : (isFaltaJustificada || isAbono && !isCompensacaoAbono ? formatarHoras(minutos) : statusDisplay);
+
+                        return (
+                            <TableRow key={diaString} className={rowClassName}>
+                                <TableCell className="font-medium text-xs md:text-sm">
+                                    {format(data, 'dd/MM')}
+                                    <span className="block text-muted-foreground text-[10px] md:hidden">{format(data, '(EEE)', { locale: ptBR })}</span>
+                                </TableCell>
+                                
+                                {/* Coluna de Registros (Oculta em Mobile) */}
+                                <TableCell className="hidden md:table-cell">
+                                    <div className="flex flex-wrap gap-2 items-center">
+                                        {/* AVISO DE FOLGA TRABALHADA (Sempre visível se trabalhou na folga) */}
+                                        {isFolgaFixa && hasPontoRecords && (
+                                            <span className="text-xs font-semibold text-red-600 bg-red-100 dark:bg-red-900/50 px-2 py-1 rounded-full">
+                                                TRABALHOU NA FOLGA
+                                            </span>
+                                        )}
+                                        
+                                        {/* AVISO DE DECISÃO (Pago Extra ou Compensado) */}
+                                        {isFolgaFixa && hasPontoRecords && decisionRecord && (
+                                            <span className={cn(
+                                                "text-xs font-semibold px-2 py-1 rounded-full",
+                                                decisionRecord === 'Extra100' ? "bg-red-500 text-white" : "bg-blue-500 text-white"
+                                            )}>
+                                                {decisionRecord === 'Extra100' ? 'PAGO EXTRA' : 'COMPENSADO'}
+                                            </span>
+                                        )}
+
+                                        {registros.filter((r: RegistroPonto) => r.tipo !== 'Compensacao' && r.tipo !== 'Extra100').map((r: RegistroPonto) => {
+                                            let registroDisplay;
+                                            
+                                            if (r.tipo === 'Falta') {
+                                                // NOVO: Exibe a observação da falta
+                                                const observacaoFalta = r.observacao || 'Falta Injustificada';
+                                                
+                                                registroDisplay = (
+                                                    <>
+                                                        {observacaoFalta}
+                                                        {r.atestado_url && (
+                                                            <a 
+                                                                href={r.atestado_url} 
+                                                                target="_blank" 
+                                                                rel="noopener noreferrer" 
+                                                                className="ml-1 text-primary hover:text-primary/80 inline-flex items-center"
+                                                                title="Ver Atestado"
+                                                            >
+                                                                <FileText className="w-3 h-3" />
+                                                            </a>
+                                                        )}
+                                                    </>
+                                                );
+                                            } else if (r.tipo === 'Abono') {
+                                                // Se for abono de compensação, exibe apenas a observação (sem a palavra Abono)
+                                                if (r.observacao?.includes('Compensação de folga trabalhada')) {
+                                                    registroDisplay = r.observacao;
+                                                } else {
+                                                    // Abono normal (4h, 6h, 8h)
+                                                    registroDisplay = `Abono (${r.observacao})`;
+                                                }
+                                            } else {
+                                                // Entrada/Saída
+                                                registroDisplay = (
+                                                    <>
+                                                        {r.tipo}: {format(parseISO(r.horario_registro), 'HH:mm')}
+                                                        {r.maps_url && (
+                                                            <a 
+                                                                href={r.maps_url} 
+                                                                target="_blank" 
+                                                                rel="noopener noreferrer" 
+                                                                className="ml-1 text-blue-500 hover:text-blue-700 inline-flex items-center"
+                                                                title="Ver Localização"
+                                                            >
+                                                                <MapPin className="w-3 h-3" />
+                                                            </a>
+                                                        )}
+                                                        {r.selfie_url && (
+                                                            <button 
+                                                                onClick={() => handleViewSelfie(r.selfie_url)} 
+                                                                className="ml-1 text-primary hover:text-primary/80 inline-flex items-center"
+                                                                title="Ver Selfie"
+                                                            >
+                                                                <Camera className="w-3 h-3" />
+                                                            </button>
+                                                        )}
+                                                    </>
+                                                );
+                                            }
+                                            
+                                            return (
+                                                <span key={r.id} className="text-sm bg-muted px-2 py-1 rounded-full flex items-center">
+                                                    {registroDisplay}
+                                                </span>
+                                            );
+                                        })}
+                                        
+                                        {/* Renderiza o botão de Gerenciar Folga Trabalhada se necessário */}
+                                        {actionButton}
+                                    </div>
+                                </TableCell>
+                                
+                                {/* Coluna Total Dia */}
+                                <TableCell className="text-right font-semibold text-xs md:text-sm">
+                                    {totalDiaDisplay}
+                                </TableCell>
+                                
+                                {/* Coluna Ações (Visível em Mobile) */}
+                                <TableCell className="text-right min-w-[100px]">
+                                    <div className="flex justify-end space-x-1">
+                                        {canEdit && !isDiaFuturo && !isFerias && !needsManagement && (
+                                            <>
+                                                {/* Edição/Exclusão de Falta/Abono/Compensação/Extra100 */}
+                                                {registroFaltaAbonoCompensacao && (
+                                                    <>
+                                                        <Button 
+                                                            variant="ghost" 
+                                                            size="icon" 
+                                                            onClick={() => {
+                                                                if (isFolgaFixa && hasPontoRecords) {
+                                                                    // Se for folga fixa trabalhada e já tem decisão, reabre o dialog de gestão de folga
+                                                                    onManageWorkedDayOff(data, registros.filter((r: RegistroPonto) => r.tipo === 'Entrada' || r.tipo === 'Saida'));
+                                                                } else {
+                                                                    // Se for Falta/Abono, usa o dialog de GerenciarFaltas
+                                                                    onEditFaltaAbono(registroFaltaAbonoCompensacao, data);
+                                                                }
+                                                            }}
+                                                            title="Editar Decisão"
+                                                            className="h-6 w-6 text-primary hover:text-primary/80"
+                                                        >
+                                                            <Edit className="w-4 h-4" />
+                                                        </Button>
+                                                        <Button 
+                                                            variant="ghost" 
+                                                            size="icon" 
+                                                            onClick={() => handleDelete(registroFaltaAbonoCompensacao.id)}
+                                                            title="Excluir Decisão"
+                                                            className="h-6 w-6 text-red-500 hover:text-red-700"
+                                                        >
+                                                            <Trash2 className="w-4 h-4" />
+                                                        </Button>
+                                                    </>
+                                                )}
+                                                {/* Botão de Ajuste de Ponto (Aparece se houver registros de Entrada/Saída E não houver decisão de Falta/Abono/Compensação) */}
+                                                {hasPontoRecordsOnly && (
+                                                    <Button 
+                                                        variant="outline" 
+                                                        size="icon" 
+                                                        onClick={() => onEditRegistro(data)} // Ajuste de Ponto (Entrada/Saída)
+                                                        title="Ajustar Ponto"
+                                                        className="h-6 w-6"
+                                                    >
+                                                        <Edit className="w-3 h-3" />
+                                                    </Button>
+                                                )}
+                                                {/* Botão de Marcar Falta (Aparece se não houver registro e não for folga fixa/ferias/futuro) */}
+                                                {!hasPontoRecordsOnly && !registroFaltaAbonoCompensacao && !isFolgaFixa && !isFerias && !isDiaFuturo && (
+                                                    <Button 
+                                                        variant="destructive" 
+                                                        size="icon" 
+                                                        onClick={() => onEditFaltaAbono(null, data)} // Marcar Falta (registro é null)
+                                                        title="Marcar Falta"
+                                                        className="h-6 w-6"
+                                                    >
+                                                        <CalendarX className="w-3 h-3" />
+                                                    </Button>
+                                                )}
+                                            </>
+                                        )}
+                                        {/* Renderiza o botão de Gerenciar Folga Trabalhada se necessário (apenas em desktop) */}
+                                        {needsManagement && canEdit && (
+                                            <Button 
+                                                variant="default" 
+                                                size="icon" 
+                                                onClick={() => onManageWorkedDayOff(data, registros.filter((r: RegistroPonto) => r.tipo === 'Entrada' || r.tipo === 'Saida'))}
+                                                title="Gerenciar Compensação"
+                                                className="h-6 w-6 bg-yellow-600 hover:bg-yellow-700"
+                                            >
+                                                <AlertTriangle className="w-3 h-3" />
+                                            </Button>
+                                        )}
+                                    </div>
+                                </TableCell>
                             </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {diasOrdenados.map(diaString => {
-                                const data = parseISO(diaString);
-                                const diaData = diasProcessados[diaString];
-                                
-                                // Fixes Errors 3-15 by defining the variables inside the loop scope
-                                const { 
-                                    minutos, 
-                                    registros: registrosDoDia, 
-                                    isFalta, 
-                                    isAbono, 
-                                    isFolgaFixa, 
-                                    isFerias, 
-                                    hasPontoRecords, 
-                                    decisionRecord, 
-                                    needsManagement, 
-                                    minutosTrabalhadosFolga, 
-                                    isCompensacaoAbono, 
-                                    isFaltaJustificada 
-                                } = diaData;
-                                
-                                const statusDisplay = isFalta ? 'FALTA' : (isAbono ? 'ABONO' : 'N/A');
-                                
-                                // Determines the time to be displayed in the Total Day column (Fixes Errors 3-15)
-                                const totalDiaDisplay = isFolgaFixa && hasPontoRecords && (decisionRecord || needsManagement) 
-                                    ? formatarHoras(minutosTrabalhadosFolga) 
-                                    : (isFaltaJustificada || isAbono && !isCompensacaoAbono ? formatarHoras(minutos) : statusDisplay);
+                        );
+                    })
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
 
-                                // CORREÇÃO TS2304: Definindo 'hoje' no escopo do loop
-                                const hoje = new Date();
-                                const isTodayOrFuture = data >= startOfMonth(hoje);
-                                const canEdit = !isFerias && !isTodayOrFuture; // Permite edição apenas para dias passados no mês atual
-                                
-                                let rowClassName = '';
-                                if (isFerias) rowClassName = 'bg-blue-500/10';
-                                else if (isFolgaFixa && hasPontoRecords) rowClassName = 'bg-yellow-500/10';
-                                else if (isFalta && !isFaltaJustificada) rowClassName = 'bg-red-500/10';
-                                else if (isFaltaJustificada || isAbono) rowClassName = 'bg-green-500/10';
-                                
-                                // CORREÇÃO TS7006: Tipando 'r' como RegistroPonto
-                                const batidas = registrosDoDia.filter((r: RegistroPonto) => r.tipo === 'Entrada' || r.tipo === 'Saida').map((r: RegistroPonto) => format(parseISO(r.horario_registro), 'HH:mm')).join(' / ');
-                                
-                                // Determina o status principal para a coluna de registros
-                                let statusPrincipal = '';
-                                if (isFerias) statusPrincipal = 'FÉRIAS';
-                                else if (isFalta) statusPrincipal = isFaltaJustificada ? 'Falta Justificada' : 'Falta Injustificada';
-                                else if (isAbono) statusPrincipal = 'Abono';
-                                else if (isFolgaFixa && hasPontoRecords) statusPrincipal = 'Folga Trabalhada';
-                                else if (isFolgaFixa) statusPrincipal = 'Folga Fixa';
-                                // CORREÇÃO TS2552: Usando 'hoje' definido no escopo
-                                else if (registrosDoDia.length === 0 && data < hoje) statusPrincipal = 'FALTA (Não Registrado)';
-                                
-                                // Se houver registros de decisão (Compensacao/Extra100), sobrescreve o status principal
-                                if (decisionRecord === 'Compensacao') statusPrincipal = 'Compensação Registrada';
-                                if (decisionRecord === 'Extra100') statusPrincipal = 'Extra 100% Registrado';
-                                
-                                // Se precisar de gestão, sobrescreve
-                                if (needsManagement) statusPrincipal = 'Aguardando Gestão de Folga';
-
-                                return (
-                                    <TableRow key={diaString} className={rowClassName}>
-                                        <TableCell className="font-medium">{format(data, 'dd/MM')}</TableCell>
-                                        <TableCell className="font-mono text-sm">{batidas || '-'}</TableCell>
-                                        <TableCell className="font-semibold">{totalDiaDisplay}</TableCell>
-                                        <TableCell>
-                                            <div className="flex flex-col space-y-1">
-                                                <Badge variant={isFalta ? 'destructive' : (isAbono ? 'success' : 'secondary')}>
-                                                    {statusPrincipal}
-                                                </Badge>
-                                                {registrosDoDia.map((r: RegistroPonto) => (
-                                                    <div key={r.id} className="text-xs text-muted-foreground flex items-center space-x-1">
-                                                        <Clock className="w-3 h-3" />
-                                                        <span>{r.tipo}: {format(parseISO(r.horario_registro), 'HH:mm')}</span>
-                                                        {r.observacao && <span className="truncate max-w-[150px]">({r.observacao})</span>}
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </TableCell>
-                                        <TableCell className="text-right">
-                                            <div className="flex justify-end space-x-1">
-                                                {/* Ações de Ajuste de Ponto (Entrada/Saída) */}
-                                                {hasPontoRecords && !isFerias && !isFalta && !isAbono && (
-                                                    <Button 
-                                                        variant="outline" 
-                                                        size="icon" 
-                                                        onClick={() => onEditRegistro(data)}
-                                                        title="Ajustar Batidas"
-                                                    >
-                                                        <Edit className="w-4 h-4" />
-                                                    </Button>
-                                                )}
-                                                
-                                                {/* Ações de Falta/Abono */}
-                                                {(!hasPontoRecords || isFalta || isAbono) && !isFerias && (
-                                                    <Button 
-                                                        variant="outline" 
-                                                        size="icon" 
-                                                        onClick={() => onEditFaltaAbono(registrosDoDia.find((r: RegistroPonto) => r.tipo === 'Falta' || r.tipo === 'Abono') || null, data)}
-                                                        title={isFalta || isAbono ? "Editar Falta/Abono" : "Registrar Falta/Abono"}
-                                                    >
-                                                        <FileSignature className="w-4 h-4" />
-                                                    </Button>
-                                                )}
-                                                
-                                                {/* Ações de Gestão de Folga Trabalhada */}
-                                                {needsManagement && (
-                                                    <Button 
-                                                        variant="default" 
-                                                        size="sm" 
-                                                        onClick={() => onManageWorkedDayOff(data, registrosDoDia)}
-                                                        title="Gerenciar Folga Trabalhada"
-                                                    >
-                                                        Gerenciar
-                                                    </Button>
-                                                )}
-                                                
-                                                {/* Ações de Deletar (Apenas Falta/Abono/Decisão) */}
-                                                {(isFalta || isAbono || decisionRecord) && (
-                                                    <AlertDialog>
-                                                        <AlertDialogTrigger asChild>
-                                                            <Button variant="ghost" size="icon" title="Excluir Registro">
-                                                                <Trash2 className="w-4 h-4 text-red-500" />
-                                                            </Button>
-                                                        </AlertDialogTrigger>
-                                                        <AlertDialogContent>
-                                                            <AlertDialogHeader>
-                                                                <AlertDialogTitle>Excluir Registro?</AlertDialogTitle>
-                                                                <AlertDialogDescription>
-                                                                    Esta ação irá remover o registro de {isFalta ? 'Falta' : (isAbono ? 'Abono' : 'Decisão')} para este dia.
-                                                                </AlertDialogDescription>
-                                                            </AlertDialogHeader>
-                                                            <AlertDialogFooter>
-                                                                <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
-                                                                <AlertDialogAction onClick={() => handleDeleteRegistro(registrosDoDia[0].id)} disabled={isDeleting}>
-                                                                    {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Excluir'}
-                                                                </AlertDialogAction>
-                                                            </AlertDialogFooter>
-                                                        </AlertDialogContent>
-                                                    </AlertDialog>
-                                                )}
-                                            </div>
-                                        </TableCell>
-                                    </TableRow>
-                                );
-                            })}
-                        </TableBody>
-                    </Table>
-                </div>
-            </CardContent>
-        </Card>
-    );
+      {/* Modal de Visualização da Selfie */}
+      <Dialog open={selfieModalOpen} onOpenChange={setSelfieModalOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Selfie do Registro de Ponto</DialogTitle>
+          </DialogHeader>
+          {selfieUrl ? (
+            <img src={selfieUrl} alt="Selfie do Registro" className="w-full h-auto rounded-md" />
+          ) : (
+            <p className="text-center text-muted-foreground">Nenhuma selfie disponível.</p>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
 };
 
-// Exportando o componente principal e a função utilitária
 export { DetalheFolhaPonto, parseHorasObservacao };
