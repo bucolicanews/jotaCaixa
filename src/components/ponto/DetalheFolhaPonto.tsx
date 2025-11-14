@@ -112,7 +112,6 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
     minutosTrabalhadosFolga: number, // Minutos trabalhados na folga
     isCompensacaoAbono: boolean, // Indica se é um abono de compensação
     isFaltaJustificada: boolean, // Indica se é uma falta justificada
-    minutosPerdidos: number, // Minutos perdidos (Falta Injustificada)
   }> = {};
   
   for (const data of todosOsDiasDoMes) {
@@ -130,7 +129,6 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
     let decisionRecord: 'Compensacao' | 'Extra100' | null = null;
     let isCompensacaoAbono = false;
     let isFaltaJustificada = false;
-    let minutosPerdidos = 0; 
     
     // Lógica de Folga Fixa
     const diaDaSemana = DAY_MAP[getDay(data)];
@@ -152,8 +150,10 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
             if (registro.tipo === 'Falta') isFalta = true;
             if (registro.tipo === 'Abono') isAbono = true;
             
+            // --- NOVO PARSING ROBUSTO ---
             const horasCreditadas = parseHorasObservacao(registro.observacao, JORNADA_DIARIA_PADRAO);
             minutosAbonados = Math.round(horasCreditadas * 60);
+            // ---------------------------
             
             if (registro.observacao?.includes('Compensação de folga trabalhada')) {
                 isCompensacaoAbono = true;
@@ -164,11 +164,6 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
             
             // Minutos creditados para o total mensal = Minutos Abonados
             minutosDia = minutosAbonados; 
-            
-            // Se for Falta Injustificada, calcula o tempo perdido
-            if (isFalta && !isFaltaJustificada) {
-                minutosPerdidos = Math.max(0, jornadaDiariaMinutos - minutosAbonados);
-            }
             
             // Se for Falta/Abono, ignora as batidas de ponto para o cálculo do dia
             continue;
@@ -215,6 +210,30 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
     
     // --- LÓGICA DE CRÉDITO FINAL DO DIA (minutosDia) ---
     
+    if (isFalta || isAbono) {
+        // Se for Falta/Abono, o tempo base é o abonado/justificado (minutosDia já foi setado no loop)
+        
+        if (isFalta) {
+            if (isFaltaJustificada) {
+                // Falta Justificada: Credita o tempo abonado (minutosDia já está correto)
+            } else {
+                // Falta Injustificada:
+                if (minutosAbonados >= jornadaDiariaMinutos) {
+                    // Falta Injustificada de jornada completa (>= 8h): Credita 0
+                    minutosDia = 0; 
+                } else {
+                    // Falta Injustificada parcial: Credita o tempo abonado (minutosDia já está correto)
+                }
+            }
+        } else if (isAbono && isCompensacaoAbono) {
+            // Abono de compensação: 0 crédito (minutosDia já foi setado como 0 no loop)
+        } else if (isAbono) {
+            // Abono normal: Credita o tempo abonado (minutosDia já está correto)
+        }
+    }
+    // Se não for Falta/Abono, minutosDia já contém o tempo das batidas.
+    
+    // Armazena o tempo trabalhado/abonado do dia antes de qualquer ajuste de folga
     let minutosParaAcumular = minutosDia;
     let minutosTrabalhadosFolga = 0;
     let needsManagement = false;
@@ -237,7 +256,6 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
     
     // Acumular totais (apenas se não for folga trabalhada, nem abono de compensação, nem férias)
     if (!isFolgaFixa && !isFerias && !isCompensacaoAbono) {
-        // Se for Falta Injustificada, minutosDia é 0, então não acumula.
         totalMinutosTrabalhados += minutosParaAcumular;
     }
     
@@ -245,9 +263,9 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
     if (isFaltaJustificada || (isAbono && !isCompensacaoAbono)) {
         minutosDia = minutosAbonados;
     } 
-    // Se for Falta Injustificada, o tempo final do dia é 0 (se for jornada completa) ou o tempo trabalhado
-    else if (isFalta && !isFaltaJustificada) {
-        minutosDia = 0; // O tempo final do dia é 0 para fins de totalização de horas trabalhadas
+    // CORREÇÃO: Zera minutosDia APENAS se for Falta Injustificada E NENHUMA HORA FOI ABONADA.
+    else if (isFalta && !isFaltaJustificada && minutosAbonados === 0) {
+        minutosDia = 0;
     }
 
 
@@ -266,7 +284,6 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
         minutosTrabalhadosFolga,
         isCompensacaoAbono,
         isFaltaJustificada,
-        minutosPerdidos, // NOVO
     };
   }
   
@@ -375,7 +392,7 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
                 ) : (
                     todosOsDiasDoMes.map((data: Date) => {
                         const diaString = format(data, 'yyyy-MM-dd');
-                        const { minutos, registros, isFalta, isAbono, isTurnoAberto, isFolgaFixa, isFerias, hasPontoRecords, decisionRecord, needsManagement, minutosTrabalhadosFolga, isCompensacaoAbono, isFaltaJustificada, minutosPerdidos: _minutosPerdidos } = diasProcessados[diaString];
+                        const { minutos, registros, isFalta, isAbono, isTurnoAberto, isFolgaFixa, isFerias, hasPontoRecords, decisionRecord, needsManagement, minutosTrabalhadosFolga, isCompensacaoAbono, isFaltaJustificada, minutosAbonados } = diasProcessados[diaString];
                         
                         const isDiaAtual = isSameDay(data, hoje);
                         const isDiaFuturo = data > hoje;
@@ -415,13 +432,27 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
                             const atestadoUrl = faltaRegistro?.atestado_url;
                             
                             let displayText: string;
+                            const horasCreditadas = minutosAbonados / 60;
+                            const horasPerdidas = Math.max(0, JORNADA_DIARIA_PADRAO - horasCreditadas);
                             
-                            if (isFaltaJustificada) {
-                                displayText = faltaRegistro?.observacao || 'Falta Justificada';
+                            // Lógica de exibição para Falta Injustificada (parcial ou total)
+                            if (!atestadoUrl && isFalta && !isFaltaJustificada) {
+                                if (minutosAbonados >= jornadaDiariaMinutos) {
+                                    // Falta Injustificada de jornada completa (>= 8h): Exibe Falta Injustificada
+                                    displayText = 'Falta Injustificada';
+                                } else if (horasCreditadas > 0) {
+                                    // Falta Injustificada parcial: Exibe o tempo perdido
+                                    const horasPerdidasStr = Number.isInteger(horasPerdidas) ? `${horasPerdidas}h` : `${horasPerdidas.toFixed(1)}h`;
+                                    
+                                    // CORREÇÃO AQUI: A badge deve mostrar o tempo perdido (2h)
+                                    displayText = `Falta Injustificada (${horasPerdidasStr})`; 
+                                } else {
+                                    // Ausência injustificada total (0 horas creditadas)
+                                    displayText = 'Falta Injustificada';
+                                }
                             } else {
-                                // Falta Injustificada
-                                // CORREÇÃO AQUI: Usando a frase exata solicitada
-                                displayText = 'Existem Faltas Injustificadas'; 
+                                // Falta justificada (com atestado) ou outro tipo de Falta
+                                displayText = faltaRegistro?.observacao || 'Falta Justificada';
                             }
                             
                             statusDisplay = atestadoUrl 
@@ -494,7 +525,7 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
                                             
                                             if (r.tipo === 'Falta') {
                                                 // NOVO: Exibe a observação da falta
-                                                const observacaoFalta = isFaltaJustificada ? 'Falta Justificada' : 'Existem Faltas Injustificadas';
+                                                const observacaoFalta = r.observacao || 'Falta Injustificada';
                                                 
                                                 registroDisplay = (
                                                     <>
@@ -523,7 +554,7 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
                                             } else {
                                                 // Entrada/Saída
                                                 registroDisplay = (
-                                                    <span className="flex items-center">
+                                                    <>
                                                         {r.tipo}: {format(parseISO(r.horario_registro), 'HH:mm')}
                                                         {r.maps_url && (
                                                             <a 
@@ -545,7 +576,7 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
                                                                 <Camera className="w-3 h-3" />
                                                             </button>
                                                         )}
-                                                    </span>
+                                                    </>
                                                 );
                                             }
                                             
