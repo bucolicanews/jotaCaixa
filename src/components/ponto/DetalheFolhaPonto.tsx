@@ -112,7 +112,7 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
     minutosTrabalhadosFolga: number, // Minutos trabalhados na folga
     isCompensacaoAbono: boolean, // Indica se é um abono de compensação
     isFaltaJustificada: boolean, // Indica se é uma falta justificada
-    minutosPerdidos: number, // NOVO: Minutos perdidos (Falta Injustificada)
+    minutosPerdidos: number, // Minutos perdidos (Falta Injustificada)
   }> = {};
   
   for (const data of todosOsDiasDoMes) {
@@ -130,7 +130,7 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
     let decisionRecord: 'Compensacao' | 'Extra100' | null = null;
     let isCompensacaoAbono = false;
     let isFaltaJustificada = false;
-    let minutosPerdidos = 0; // NOVO
+    let minutosPerdidos = 0; 
     
     // Lógica de Folga Fixa
     const diaDaSemana = DAY_MAP[getDay(data)];
@@ -152,10 +152,8 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
             if (registro.tipo === 'Falta') isFalta = true;
             if (registro.tipo === 'Abono') isAbono = true;
             
-            // --- NOVO PARSING ROBUSTO ---
             const horasCreditadas = parseHorasObservacao(registro.observacao, JORNADA_DIARIA_PADRAO);
             minutosAbonados = Math.round(horasCreditadas * 60);
-            // ---------------------------
             
             if (registro.observacao?.includes('Compensação de folga trabalhada')) {
                 isCompensacaoAbono = true;
@@ -239,6 +237,7 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
     
     // Acumular totais (apenas se não for folga trabalhada, nem abono de compensação, nem férias)
     if (!isFolgaFixa && !isFerias && !isCompensacaoAbono) {
+        // Se for Falta Injustificada, minutosDia é 0, então não acumula.
         totalMinutosTrabalhados += minutosParaAcumular;
     }
     
@@ -248,7 +247,7 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
     } 
     // Se for Falta Injustificada, o tempo final do dia é 0 (se for jornada completa) ou o tempo trabalhado
     else if (isFalta && !isFaltaJustificada) {
-        minutosDia = 0; // O tempo perdido já foi contabilizado em minutosPerdidos
+        minutosDia = 0; // O tempo final do dia é 0 para fins de totalização de horas trabalhadas
     }
 
 
@@ -421,8 +420,8 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
                                 displayText = faltaRegistro?.observacao || 'Falta Justificada';
                             } else {
                                 // Falta Injustificada
-                                // CORREÇÃO AQUI: Apenas a frase "Falta Injustificada"
-                                displayText = 'Falta Injustificada'; 
+                                // CORREÇÃO AQUI: Usando a frase exata solicitada
+                                displayText = 'Existem Faltas Injustificadas'; 
                             }
                             
                             statusDisplay = atestadoUrl 
@@ -495,7 +494,7 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
                                             
                                             if (r.tipo === 'Falta') {
                                                 // NOVO: Exibe a observação da falta
-                                                const observacaoFalta = isFaltaJustificada ? 'Falta Justificada' : 'Falta Injustificada';
+                                                const observacaoFalta = isFaltaJustificada ? 'Falta Justificada' : 'Existem Faltas Injustificadas';
                                                 
                                                 registroDisplay = (
                                                     <>
@@ -599,7 +598,7 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
                                                             title="Excluir Decisão"
                                                             className="h-6 w-6 text-red-500 hover:text-red-700"
                                                         >
-                             <Trash2 className="w-4 h-4" />
+                                                            <Trash2 className="w-4 h-4" />
                                                         </Button>
                                                     </>
                                                 )}
