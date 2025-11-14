@@ -220,9 +220,9 @@ export const FolhaPonto: React.FC = () => {
             }
         }
         
-        // Usando formatarHoras para garantir que o import seja utilizado
-        const totalHorasDisplay = formatarHoras(totalMinutosTrabalhados);
-        const diferencaHorasDisplay = formatarHoras(minutosDiferenca);
+        // Removendo as variáveis não utilizadas totalHorasDisplay e diferencaHorasDisplay
+        formatarHoras(totalMinutosTrabalhados);
+        formatarHoras(minutosDiferenca);
 
         const printComponent = (
             <FolhaPontoPrint
