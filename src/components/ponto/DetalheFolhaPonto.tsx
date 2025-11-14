@@ -376,7 +376,7 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
                 ) : (
                     todosOsDiasDoMes.map((data: Date) => {
                         const diaString = format(data, 'yyyy-MM-dd');
-                        const { minutos, registros, isFalta, isAbono, isTurnoAberto, isFolgaFixa, isFerias, hasPontoRecords, decisionRecord, needsManagement, minutosTrabalhadosFolga, isCompensacaoAbono, isFaltaJustificada, minutosPerdidos } = diasProcessados[diaString];
+                        const { minutos, registros, isFalta, isAbono, isTurnoAberto, isFolgaFixa, isFerias, hasPontoRecords, decisionRecord, needsManagement, minutosTrabalhadosFolga, isCompensacaoAbono, isFaltaJustificada, minutosPerdidos: _minutosPerdidos } = diasProcessados[diaString];
                         
                         const isDiaAtual = isSameDay(data, hoje);
                         const isDiaFuturo = data > hoje;
@@ -421,16 +421,8 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
                                 displayText = faltaRegistro?.observacao || 'Falta Justificada';
                             } else {
                                 // Falta Injustificada
-                                if (minutosPerdidos > 0) {
-                                    // Falta Injustificada parcial: Exibe o tempo perdido
-                                    const horasPerdidas = minutosPerdidos / 60;
-                                    const horasPerdidasStr = Number.isInteger(horasPerdidas) ? `${horasPerdidas}h` : `${horasPerdidas.toFixed(1)}h`;
-                                    // CORREÇÃO AQUI: Exibe o tempo perdido na Falta Injustificada
-                                    displayText = `Falta Injustificada (${horasPerdidasStr})`; 
-                                } else {
-                                    // Falta Injustificada total (0 horas creditadas)
-                                    displayText = 'Falta Injustificada';
-                                }
+                                // CORREÇÃO AQUI: Apenas a frase "Falta Injustificada"
+                                displayText = 'Falta Injustificada'; 
                             }
                             
                             statusDisplay = atestadoUrl 
@@ -607,7 +599,7 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
                                                             title="Excluir Decisão"
                                                             className="h-6 w-6 text-red-500 hover:text-red-700"
                                                         >
-                                                            <Trash2 className="w-4 h-4" />
+                             <Trash2 className="w-4 h-4" />
                                                         </Button>
                                                     </>
                                                 )}
