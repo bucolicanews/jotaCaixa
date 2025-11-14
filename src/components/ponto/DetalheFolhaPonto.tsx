@@ -15,7 +15,8 @@ import {
     Badge, Button, 
     AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger 
 } from '@/components/ui/index';
-import { Clock, Edit, Trash2, FileSignature, Loader2 } from 'lucide-react';
+// ADICIONANDO MapPin, Camera, Download
+import { Clock, Edit, Trash2, FileSignature, Loader2, MapPin, Camera, Download } from 'lucide-react';
 
 // Constantes CLT (Simplificadas)
 const JORNADA_MENSAL_PADRAO = 220; 
@@ -210,8 +211,12 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
                 } 
                 // Se for Falta, acumula 0 (a menos que tenha batidas, que já estão em minutosDia)
                 else if (isFalta) {
+                    // NOVO: Se for falta JUSTIFICADA, acumula a jornada padrão (8h)
+                    if (isFaltaJustificada) {
+                        totalMinutosTrabalhados += JORNADA_DIARIA_PADRAO * 60;
+                    }
                     // Se for falta, mas houver batidas (ajuste manual), acumula as batidas
-                    if (hasPontoRecords) {
+                    else if (hasPontoRecords) {
                         totalMinutosTrabalhados += minutosDia;
                     }
                     // Se for falta sem batidas, acumula 0
@@ -224,7 +229,8 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
             
             // LÓGICA CORRIGIDA: Define minutosDia para exibição
             if (isFalta) {
-                minutosDia = 0; // Falta = 0 horas trabalhadas no dia
+                // NOVO: Se for falta justificada, exibe a jornada padrão (8h)
+                minutosDia = isFaltaJustificada ? JORNADA_DIARIA_PADRAO * 60 : 0; 
             } else if (isAbono && !isCompensacaoAbono) {
                 minutosDia = minutosAbonados; // Abono = horas abonadas
             }
@@ -350,7 +356,7 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
                                 let rowClassName = '';
                                 if (isFerias) rowClassName = 'bg-blue-500/10';
                                 else if (isFolgaFixa && hasPontoRecords) rowClassName = 'bg-yellow-500/10';
-                                // NOVO: Falta Justificada (Azul)
+                                // Falta Justificada (Azul)
                                 else if (isFalta && isFaltaJustificada) rowClassName = 'bg-blue-500/10';
                                 // Falta Injustificada (Vermelho)
                                 else if (isFalta && !isFaltaJustificada) rowClassName = 'bg-red-500/10';
@@ -386,7 +392,7 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
                                             <div className="flex flex-col space-y-1">
                                                 <Badge 
                                                     variant={
-                                                        isFalta && isFaltaJustificada ? 'default' : // NOVO: Falta Justificada é default (azul)
+                                                        isFalta && isFaltaJustificada ? 'default' : // Falta Justificada é default (azul)
                                                         isFalta ? 'destructive' : 
                                                         isAbono ? 'success' : 
                                                         'secondary'
@@ -404,6 +410,23 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
                                                             {/* REMOÇÃO DO HORÁRIO PARA FALTA/ABONO */}
                                                             <span>{isFaltaOrAbono ? r.tipo : `${r.tipo}: ${format(parseISO(r.horario_registro), 'HH:mm')}`}</span>
                                                             {r.observacao && <span className="truncate max-w-[150px]">({r.observacao})</span>}
+                                                            
+                                                            {/* RESTAURANDO LINKS DE ANEXO */}
+                                                            {r.maps_url && (
+                                                                <a href={r.maps_url} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:text-blue-700" title="Ver Localização">
+                                                                    <MapPin className="w-3 h-3" />
+                                                                </a>
+                                                            )}
+                                                            {r.selfie_url && (
+                                                                <a href={r.selfie_url} target="_blank" rel="noopener noreferrer" className="text-purple-500 hover:text-purple-700" title="Ver Selfie">
+                                                                    <Camera className="w-3 h-3" />
+                                                                </a>
+                                                            )}
+                                                            {r.atestado_url && (
+                                                                <a href={r.atestado_url} target="_blank" rel="noopener noreferrer" className="text-green-500 hover:text-green-700" title="Baixar Atestado">
+                                                                    <Download className="w-3 h-3" />
+                                                                </a>
+                                                            )}
                                                         </div>
                                                     );
                                                 })}
