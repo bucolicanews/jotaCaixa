@@ -376,7 +376,7 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
                 ) : (
                     todosOsDiasDoMes.map((data: Date) => {
                         const diaString = format(data, 'yyyy-MM-dd');
-                        const { minutos, registros, isFalta, isAbono, isTurnoAberto, isFolgaFixa, isFerias, hasPontoRecords, decisionRecord, needsManagement, minutosTrabalhadosFolga, isCompensacaoAbono, isFaltaJustificada, minutosAbonados: _minutosAbonados, minutosPerdidos } = diasProcessados[diaString];
+                        const { minutos, registros, isFalta, isAbono, isTurnoAberto, isFolgaFixa, isFerias, hasPontoRecords, decisionRecord, needsManagement, minutosTrabalhadosFolga, isCompensacaoAbono, isFaltaJustificada, minutosPerdidos } = diasProcessados[diaString];
                         
                         const isDiaAtual = isSameDay(data, hoje);
                         const isDiaFuturo = data > hoje;
@@ -425,6 +425,7 @@ const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({ funcionario, mes,
                                     // Falta Injustificada parcial: Exibe o tempo perdido
                                     const horasPerdidas = minutosPerdidos / 60;
                                     const horasPerdidasStr = Number.isInteger(horasPerdidas) ? `${horasPerdidas}h` : `${horasPerdidas.toFixed(1)}h`;
+                                    // CORREÇÃO AQUI: Exibe o tempo perdido na Falta Injustificada
                                     displayText = `Falta Injustificada (${horasPerdidasStr})`; 
                                 } else {
                                     // Falta Injustificada total (0 horas creditadas)
