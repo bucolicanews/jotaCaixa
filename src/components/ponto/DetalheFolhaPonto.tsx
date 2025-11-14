@@ -381,13 +381,19 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
                                                 <Badge variant={isFalta ? 'destructive' : (isAbono ? 'success' : 'secondary')}>
                                                     {statusPrincipal}
                                                 </Badge>
-                                                {registrosDoDia.map((r: RegistroPonto) => (
-                                                    <div key={r.id} className="text-xs text-muted-foreground flex items-center space-x-1">
-                                                        <Clock className="w-3 h-3" />
-                                                        <span>{r.tipo}: {format(parseISO(r.horario_registro), 'HH:mm')}</span>
-                                                        {r.observacao && <span className="truncate max-w-[150px]">({r.observacao})</span>}
-                                                    </div>
-                                                ))}
+                                                {registrosDoDia.map((r: RegistroPonto) => {
+                                                    // Se for Falta ou Abono, não exibe o horário (apenas o tipo e observação)
+                                                    const isFaltaOrAbono = r.tipo === 'Falta' || r.tipo === 'Abono';
+                                                    
+                                                    return (
+                                                        <div key={r.id} className="text-xs text-muted-foreground flex items-center space-x-1">
+                                                            <Clock className="w-3 h-3" />
+                                                            {/* REMOÇÃO DO HORÁRIO PARA FALTA/ABONO */}
+                                                            <span>{isFaltaOrAbono ? r.tipo : `${r.tipo}: ${format(parseISO(r.horario_registro), 'HH:mm')}`}</span>
+                                                            {r.observacao && <span className="truncate max-w-[150px]">({r.observacao})</span>}
+                                                        </div>
+                                                    );
+                                                })}
                                             </div>
                                         </TableCell>
                                         <TableCell className="text-right">
