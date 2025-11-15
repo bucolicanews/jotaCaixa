@@ -77,6 +77,22 @@ const formatarHoras = (minutos: number): string => {
     return `${sign}${horas}h ${mins}m`;
 };
 
+// Função para extrair as 4 primeiras batidas do dia
+const getBatidasDoDia = (registros: RegistroPonto[]) => {
+    const batidas = registros
+        .filter(r => r.tipo === 'Entrada' || r.tipo === 'Saida')
+        .sort((a, b) => parseISO(a.horario_registro).getTime() - parseISO(b.horario_registro).getTime());
+        
+    const times = batidas.map(r => format(parseISO(r.horario_registro), 'HH:mm'));
+    
+    return {
+        e1: times[0] || '',
+        s1: times[1] || '',
+        e2: times[2] || '',
+        s2: times[3] || '',
+    };
+};
+
 // Exportando o componente principal
 export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
     funcionario,
@@ -311,20 +327,10 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
         return '';
     };
     
-    const getBatidasDoDia = (registros: RegistroPonto[]) => {
-        const batidas = registros
-            .filter(r => r.tipo === 'Entrada' || r.tipo === 'Saida')
-            .sort((a, b) => parseISO(a.horario_registro).getTime() - parseISO(b.horario_registro).getTime());
-            
-        const times = batidas.map(r => format(parseISO(r.horario_registro), 'HH:mm'));
-        
-        // Retorna as 4 primeiras batidas (E1, S1, E2, S2)
-        return {
-            e1: times[0] || '',
-            s1: times[1] || '',
-            e2: times[2] || '',
-            s2: times[3] || '',
-        };
+    // Função para extrair as batidas do dia (definida fora do useMemo)
+    // Já está definida no escopo global do arquivo, mas vamos garantir que a versão local seja usada.
+    const getBatidas = (registros: RegistroPonto[]) => {
+        return getBatidasDoDia(registros);
     };
 
 
@@ -403,7 +409,8 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
                                     minutosAbonadosCredited,
                                 } = diaData;
                                 
-                                const { e1, s1, e2, s2 } = getBatidasDoDia(registrosDoDia);
+                                // CORREÇÃO AQUI: Usando a função getBatidas
+                                const { e1, s1, e2, s2 } = getBatidas(registrosDoDia);
                                 
                                 const statusDisplay = isFalta ? 'FALTA' : (isAbono ? 'ABONO' : 'N/A');
                                 
