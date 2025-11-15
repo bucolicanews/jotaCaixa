@@ -259,24 +259,26 @@ const FolhaPonto: React.FC = () => {
 
   // --- LÓGICA DE MODO SELF (MEU PONTO) ---
   useEffect(() => {
-      if (isSelfMode && usuario && !carregandoDados && !funcionarioSelecionado) {
-          // Encontra o próprio perfil do usuário logado na lista de usuários
-          const selfProfile = usuarios.find(u => u.id === usuario.id);
-          if (selfProfile) {
-              setFuncionarioSelecionado(selfProfile);
-          } else if (role === 'Usuario') {
-              // Se for usuário mas não estiver na lista (ex: recém-criado), usa o perfil da sessão
-              const selfUser = perfil as UsuarioProfile | AdminUsuarioProfile;
-              const isFuncionarioAdmin = 'admin_id' in selfUser && !!selfUser.admin_id;
-              
-              setFuncionarioSelecionado({
-                  ...selfUser,
-                  is_admin_user: isFuncionarioAdmin,
-                  cliente_nome: isFuncionarioAdmin ? 'Meus Usuários (Admin)' : (perfil as ClienteProfile)?.nome || 'Minha Empresa',
-              } as UsuarioPonto);
+      if (isSelfMode && usuario && !carregandoSessao && !funcionarioSelecionado) {
+          const selfUser = perfil as UsuarioProfile | AdminUsuarioProfile;
+          const isFuncionarioAdmin = 'admin_id' in selfUser && !!selfUser.admin_id;
+          
+          // Inicializa o funcionário selecionado diretamente com o perfil da sessão
+          setFuncionarioSelecionado({
+              ...selfUser,
+              is_admin_user: isFuncionarioAdmin,
+              cliente_nome: isFuncionarioAdmin ? 'Meus Usuários (Admin)' : (perfil as ClienteProfile)?.nome || 'Minha Empresa',
+          } as UsuarioPonto);
+          
+          // Define carregandoDados como false, pois o perfil já foi carregado
+          setCarregandoDados(false);
+      } else if (!isSelfMode && !carregandoSessao && !funcionarioSelecionado) {
+          // Se não for modo self, e a lista de usuários já foi carregada, define carregandoDados como false
+          if (usuarios.length > 0 || ownerId) {
+              setCarregandoDados(false);
           }
       }
-  }, [isSelfMode, usuario, carregandoDados, usuarios, funcionarioSelecionado, role, perfil]);
+  }, [isSelfMode, usuario, carregandoSessao, perfil, funcionarioSelecionado, role, ownerId, usuarios.length]);
   
   // Determina se o modo de edição deve ser desativado
   const isReadOnlyMode = isSelfMode;
