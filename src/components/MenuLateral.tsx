@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
-import { LayoutDashboard, DollarSign, ArrowUpCircle, ArrowDownCircle, Banknote, FileText, Upload, Settings, BookOpen, Users, Building2, Clock, Contact, CalendarCheck, User, FileSignature, Tag, FileTextIcon, Package, History, FileDown, MessageSquare, Scale, Loader2 } from 'lucide-react';
+import { LayoutDashboard, DollarSign, ArrowUpCircle, ArrowDownCircle, Banknote, FileText, Upload, Settings, BookOpen, Users, Building2, Clock, Contact, CalendarCheck, User, FileSignature, Tag, FileTextIcon, Package, History, FileDown, MessageSquare, Scale } from 'lucide-react';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSessao } from '@/hooks/use-sessao';
 import { ClienteProfile, UsuarioProfile, AdminUsuarioProfile, AdminProfile } from '@/types/usuario';
@@ -48,7 +48,7 @@ const SECOES_MENU: MenuSection[] = [
             { nome: 'Contas a Receber', caminho: '/contas-receber', icone: ArrowUpCircle, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'contas_receber' },
             { nome: 'Contas e Saldos', caminho: '/bancos', icone: Banknote, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'bancos' },
             { nome: 'Contas Patrimoniais', caminho: '/contas-patrimoniais', icone: Scale, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'bancos' },
-            { nome: 'Conciliação', caminho: '/conciliacao', icone: DollarSign, perfos: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'conciliacao' },
+            { nome: 'Conciliação', caminho: '/conciliacao', icone: DollarSign, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'conciliacao' },
         ]
     },
     {
@@ -108,7 +108,7 @@ interface MenuLateralProps {
 
 const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick }) => {
   const localizacao = useLocation();
-  const { role, perfil, carregando: carregandoSessao } = useSessao();
+  const { role, perfil } = useSessao();
 
   // NOVO ESTADO para armazenar o branding do Admin (se o usuário for funcionário dele)
   const [adminBranding, setAdminBranding] = useState<{ logoUrl: string | null, nome: string | null } | null>(null);
@@ -162,10 +162,8 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick }) => {
   }, [targetAdminId]);
 
   useEffect(() => {
-      if (!carregandoSessao) {
-          fetchAdminBranding();
-      }
-  }, [carregandoSessao, fetchAdminBranding]);
+      fetchAdminBranding();
+  }, [fetchAdminBranding]);
   
   // Usa o branding correto
   const branding = isAdmin ? { logoUrl: (perfil as AdminProfile)?.logo_url, nome: (perfil as AdminProfile)?.nome } : adminBranding;
@@ -231,9 +229,7 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick }) => {
         {/* Lógica de exibição da Logo e Nome do Admin/Empresa */}
         {shouldShowAdminBranding ? (
             <>
-                {loadingBranding ? (
-                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                ) : logoUrl ? (
+                {logoUrl ? (
                     <img 
                         src={logoUrl} 
                         alt="Logo da Empresa" 
@@ -241,9 +237,7 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick }) => {
                         style={{ maxWidth: '100%' }}
                     />
                 ) : (
-                    <h1 className="text-xl font-bold text-primary">
-                        {adminNome || 'Admin'}
-                    </h1>
+                    <h1 className="text-xl font-bold text-primary">Admin Logo</h1>
                 )}
                 <p className="text-sm text-muted-foreground text-center">{adminNome}</p>
             </>
