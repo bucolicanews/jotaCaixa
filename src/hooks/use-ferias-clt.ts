@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { parseISO, addYears, isBefore, isAfter, startOfMonth, endOfMonth } from 'date-fns';
 import { RegistroPonto } from '@/types/ponto';
+import { supabase } from '@/integrations/supabase/client';
 
 interface PeriodoAquisitivo {
     data_inicio_aquisitivo: Date;
@@ -13,6 +14,7 @@ interface PeriodoAquisitivo {
 
 interface FeriasCLTData {
     periodoAquisitivo: PeriodoAquisitivo | null;
+    ultimaFeriasFim: Date | null; // NOVO: Data final da última férias gozada
     faltasInjustificadasMes: number;
     faltasInjustificadasAcumuladas: number;
     diasDeFeriasDireito: number;
@@ -43,7 +45,7 @@ export function useFeriasCLT(
     todosRegistrosDoFuncionario: RegistroPonto[]
 ): FeriasCLTData {
     const [periodoAquisitivo, setPeriodoAquisitivo] = useState<PeriodoAquisitivo | null>(null);
-    // CORREÇÃO: Renomeando o setter para faltas mensais
+    const [ultimaFeriasFim, setUltimaFeriasFim] = useState<Date | null>(null);
     const [faltasInjustificadasMes, setFaltasInjustificadasMes] = useState(0);
     const [faltasInjustificadasAcumuladas, setFaltasInjustificadasAcumuladas] = useState(0);
     const [diasDeFeriasDireito, setDiasDeFeriasDireito] = useState(30);
@@ -121,13 +123,41 @@ export function useFeriasCLT(
         setCarregando(false);
 
     }, [funcionarioId, dataInicioContrato, mesReferencia, todosRegistrosDoFuncionario, refreshKey]);
+    
+    const fetchUltimaFerias = useCallback(async () => {
+        if (!funcionarioId) return;
+        
+        // Busca a última data de fim de férias gozada (status 'concluida' ou 'paga')
+        // Nota: A tabela 'ferias' não tem status, então buscamos a última data_fim
+        const { data, error } = await supabase
+            .from('ferias')
+            .select('data_fim')
+            .eq('funcionario_id', funcionarioId)
+            .order('data_fim', { ascending: false })
+            .limit(1);
+            
+        if (error) {
+            console.error('Erro ao buscar última férias:', error);
+            setUltimaFeriasFim(null);
+            return;
+        }
+        
+        if (data && data.length > 0) {
+            const lastDate = parseISO(data[0].data_fim + 'T00:00:00');
+            setUltimaFeriasFim(lastDate);
+        } else {
+            setUltimaFeriasFim(null);
+        }
+    }, [funcionarioId, refreshKey]);
 
     useEffect(() => {
         calcularFaltas();
-    }, [calcularFaltas]);
+        fetchUltimaFerias();
+    }, [calcularFaltas, fetchUltimaFerias]);
 
     return {
         periodoAquisitivo,
+        ultimaFeriasFim,
         faltasInjustificadasMes,
         faltasInjustificadasAcumuladas,
         diasDeFeriasDireito,

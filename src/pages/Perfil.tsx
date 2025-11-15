@@ -62,7 +62,7 @@ const Perfil: React.FC = () => {
           <h1 className="text-2xl md:text-3xl font-bold mb-6">Meu Perfil (Funcionário)</h1>
           
           <FormUsuario
-            criadorRole={role}
+            criadorRole={role!}
             criadorPerfil={perfil}
             usuarioInicial={perfil}
             onSaveComplete={handleSaveComplete}
