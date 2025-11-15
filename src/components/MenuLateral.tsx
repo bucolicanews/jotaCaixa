@@ -203,7 +203,10 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick, adminBranding, l
                         style={{ maxWidth: '100%' }}
                     />
                 ) : (
-                    <h1 className="text-xl font-bold text-primary">Admin Logo</h1>
+                    <h1 className="text-xl font-bold text-primary">
+                        {/* CORREÇÃO: Se não houver logo, usa o nome do Admin */}
+                        {adminNome || 'Admin'}
+                    </h1>
                 )}
                 <p className="text-sm text-muted-foreground text-center">{adminNome}</p>
             </>

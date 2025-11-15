@@ -93,6 +93,9 @@ const Header: React.FC = () => {
         setTituloApp('Fluxo de Caixa');
         return;
       }
+      
+      // CRÍTICO: Se estiver carregando o branding, espera.
+      if (loadingBranding && (isAdmin || isUserOfAdmin)) return;
 
       let currentPlanoId: string | null = null;
       let appName = 'Fluxo de Caixa';
@@ -104,9 +107,8 @@ const Header: React.FC = () => {
         appName = clienteProfile.nome;
         currentPlanoId = clienteProfile.plano_id || null; 
       } else if (role === 'Usuario') {
-        // Se for funcionário do Admin, AGUARDA O BRANDING
+        // Se for funcionário do Admin, usa o nome do Admin (já carregado no branding)
         if (isUserOfAdmin) {
-            if (loadingBranding) return;
             appName = adminBranding?.nome ?? 'Admin';
         } else if (userProfile.cliente_id) {
             // Se for funcionário de Cliente, usa o nome do Cliente
@@ -147,7 +149,7 @@ const Header: React.FC = () => {
           setPlanoDetalhes(null);
       }
     };
-    // Adicionando loadingBranding como dependência para garantir que o título seja atualizado após o carregamento
+    
     updateTitle();
   }, [perfil, role, isClient, isAdmin, isUserOfAdmin, clienteProfile, userProfile, adminBranding, loadingBranding]);
 
