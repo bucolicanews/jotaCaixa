@@ -54,6 +54,14 @@ const FormFerias: React.FC<FormFeriasProps> = ({ usuarioInicial }) => {
       );
   }
   
+  if (carregandoCLT) {
+      return (
+          <div className="flex justify-center items-center h-20">
+              <Loader2 className="h-5 w-5 animate-spin text-primary" />
+          </div>
+      );
+  }
+  
   const ultimaFeriasDisplay = ultimaFeriasFim 
     ? format(ultimaFeriasFim, 'dd/MM/yyyy', { locale: ptBR }) 
     : 'Nenhuma férias gozada registrada.';
@@ -101,58 +109,54 @@ const FormFerias: React.FC<FormFeriasProps> = ({ usuarioInicial }) => {
         <Card>
             <CardHeader><CardTitle className="text-lg flex items-center"><Clock className="w-5 h-5 mr-2" /> Cálculo CLT de Férias</CardTitle></CardHeader>
             <CardContent>
-                {carregandoCLT ? (
-                    <div className="flex justify-center items-center h-20"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>
-                ) : (
-                    <div className="space-y-4">
-                        
-                        {/* ALERTA DE DOBRA DE FÉRIAS */}
-                        {isVencidoEmDobro && periodoAquisitivoAnterior && (
-                            <div className="p-3 bg-red-100 dark:bg-red-900/20 border border-red-500 rounded-md flex items-center space-x-3">
-                                <AlertTriangle className="w-5 h-5 flex-shrink-0 text-red-600" />
-                                <p className="text-sm font-semibold text-red-700 dark:text-red-300">
-                                    DOBRA DE FÉRIAS: O período aquisitivo de <span className="font-bold">{periodoAquisitivoAnterior.inicio} a {periodoAquisitivoAnterior.fim}</span> venceu em dobro.
-                                </p>
-                            </div>
-                        )}
-
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                            <div className="p-3 bg-secondary rounded-md">
-                                <p className="text-sm font-medium text-muted-foreground flex items-center"><CalendarCheck className="w-4 h-4 mr-2" /> Início do Contrato</p>
-                                <p className="text-lg font-bold mt-1">{dataInicioContrato ? format(parseISO(dataInicioContrato), 'dd/MM/yyyy', { locale: ptBR }) : 'N/A'}</p>
-                            </div>
-                            <div className="p-3 bg-secondary rounded-md">
-                                <p className="text-sm font-medium text-muted-foreground flex items-center"><CalendarCheck className="w-4 h-4 mr-2" /> Última Férias Gozada</p>
-                                <p className="text-lg font-bold mt-1">{ultimaFeriasDisplay}</p>
-                            </div>
-                            <div className="p-3 bg-blue-100 dark:bg-blue-900/20 rounded-md">
-                                <p className="text-sm font-medium text-blue-700 dark:text-blue-300">Período Aquisitivo Atual</p>
-                                <p className="text-sm font-bold mt-1">{proximoAquisitivoInicio} a {proximoAquisitivoFim}</p>
-                            </div>
-                            <div className={cn("p-3 rounded-md", isVencidoEmDobro ? 'bg-red-500/20' : 'bg-green-100 dark:bg-green-900/20')}>
-                                <p className="text-sm font-medium text-foreground flex items-center">
-                                    <Scale className="w-4 h-4 mr-2" /> Dias de Direito
-                                </p>
-                                <p className={cn("text-2xl font-bold mt-1", isVencidoEmDobro ? 'text-red-600' : 'text-green-600')}>
-                                    {diasDeFeriasDireito} dias
-                                </p>
-                            </div>
+                <div className="space-y-4">
+                    
+                    {/* ALERTA DE DOBRA DE FÉRIAS */}
+                    {isVencidoEmDobro && periodoAquisitivoAnterior && (
+                        <div className="p-3 bg-red-100 dark:bg-red-900/20 border border-red-500 rounded-md flex items-center space-x-3">
+                            <AlertTriangle className="w-5 h-5 flex-shrink-0 text-red-600" />
+                            <p className="text-sm font-semibold text-red-700 dark:text-red-300">
+                                DOBRA DE FÉRIAS: O período aquisitivo de <span className="font-bold">{periodoAquisitivoAnterior.inicio} a {periodoAquisitivoAnterior.fim}</span> venceu em dobro.
+                            </p>
                         </div>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div className={cn("p-3 rounded-md md:col-span-2", periodoAtual?.status === 'Em Aberto' ? 'bg-yellow-100 dark:bg-yellow-900/20' : 'bg-secondary')}>
-                                <p className="text-sm font-medium text-foreground flex items-center">
-                                    <AlertTriangle className="w-4 h-4 mr-2" /> Limite Concessivo
-                                </p>
-                                <p className="text-lg font-bold mt-1">{limiteConcessivo}</p>
-                            </div>
-                            <div className="p-3 bg-secondary rounded-md md:col-span-1">
-                                <p className="text-sm font-medium text-muted-foreground">Faltas Injustificadas</p>
-                                <p className="text-lg font-bold mt-1 text-red-600">{faltasInjustificadasAcumuladas}</p>
-                            </div>
+                    )}
+
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div className="p-3 bg-secondary rounded-md">
+                            <p className="text-sm font-medium text-muted-foreground flex items-center"><CalendarCheck className="w-4 h-4 mr-2" /> Início do Contrato</p>
+                            <p className="text-lg font-bold mt-1">{dataInicioContrato ? format(parseISO(dataInicioContrato), 'dd/MM/yyyy', { locale: ptBR }) : 'N/A'}</p>
+                        </div>
+                        <div className="p-3 bg-secondary rounded-md">
+                            <p className="text-sm font-medium text-muted-foreground flex items-center"><CalendarCheck className="w-4 h-4 mr-2" /> Última Férias Gozada</p>
+                            <p className className="text-lg font-bold mt-1">{ultimaFeriasDisplay}</p>
+                        </div>
+                        <div className="p-3 bg-blue-100 dark:bg-blue-900/20 rounded-md">
+                            <p className="text-sm font-medium text-blue-700 dark:text-blue-300">Período Aquisitivo Atual</p>
+                            <p className="text-sm font-bold mt-1">{proximoAquisitivoInicio} a {proximoAquisitivoFim}</p>
+                        </div>
+                        <div className={cn("p-3 rounded-md", isVencidoEmDobro ? 'bg-red-500/20' : 'bg-green-100 dark:bg-green-900/20')}>
+                            <p className="text-sm font-medium text-foreground flex items-center">
+                                <Scale className="w-4 h-4 mr-2" /> Dias de Direito
+                            </p>
+                            <p className={cn("text-2xl font-bold mt-1", isVencidoEmDobro ? 'text-red-600' : 'text-green-600')}>
+                                {diasDeFeriasDireito} dias
+                            </p>
                         </div>
                     </div>
-                )}
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className={cn("p-3 rounded-md md:col-span-2", periodoAtual?.status === 'Em Aberto' ? 'bg-yellow-100 dark:bg-yellow-900/20' : 'bg-secondary')}>
+                            <p className="text-sm font-medium text-foreground flex items-center">
+                                <AlertTriangle className="w-4 h-4 mr-2" /> Limite Concessivo
+                            </p>
+                            <p className="text-lg font-bold mt-1">{limiteConcessivo}</p>
+                        </div>
+                        <div className="p-3 bg-secondary rounded-md md:col-span-1">
+                            <p className="text-sm font-medium text-muted-foreground">Faltas Injustificadas</p>
+                            <p className="text-lg font-bold mt-1 text-red-600">{faltasInjustificadasAcumuladas}</p>
+                        </div>
+                    </div>
+                </div>
             </CardContent>
         </Card>
         
@@ -160,48 +164,44 @@ const FormFerias: React.FC<FormFeriasProps> = ({ usuarioInicial }) => {
         <Card>
             <CardHeader><CardTitle className="text-lg flex items-center"><ListChecks className="w-5 h-5 mr-2" /> Histórico de Períodos Aquisitivos</CardTitle></CardHeader>
             <CardContent>
-                {carregandoCLT ? (
-                    <div className="flex justify-center items-center h-20"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>
-                ) : (
-                    <div className="overflow-x-auto">
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>Período Aquisitivo</TableHead>
-                                    <TableHead>Limite Concessivo</TableHead>
-                                    <TableHead className="text-center">Faltas</TableHead>
-                                    <TableHead className="text-center">Dias Direito</TableHead>
-                                    <TableHead>Status</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {periodos.length === 0 ? (
-                                    <TableRow><TableCell colSpan={5} className="text-center">Nenhum período aquisitivo encontrado.</TableCell></TableRow>
-                                ) : (
-                                    periodos.map((p, index) => (
-                                        <TableRow key={index} className={cn(p.status === 'Vencida em Dobro' && 'bg-red-500/10')}>
-                                            <TableCell className="font-medium">
-                                                {format(p.inicio_aquisitivo, 'dd/MM/yyyy')} - {format(p.fim_aquisitivo, 'dd/MM/yyyy')}
-                                            </TableCell>
-                                            <TableCell>
-                                                {format(p.limite_concessivo, 'dd/MM/yyyy')}
-                                            </TableCell>
-                                            <TableCell className="text-center text-red-600 font-semibold">
-                                                {p.faltas_injustificadas}
-                                            </TableCell>
-                                            <TableCell className="text-center">
-                                                {p.dias_direito}
-                                            </TableCell>
-                                            <TableCell>
-                                                {getStatusBadge(p.status)}
-                                            </TableCell>
-                                        </TableRow>
-                                    ))
-                                )}
-                            </TableBody>
-                        </Table>
-                    </div>
-                )}
+                <div className="overflow-x-auto">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Período Aquisitivo</TableHead>
+                                <TableHead>Limite Concessivo</TableHead>
+                                <TableHead className="text-center">Faltas</TableHead>
+                                <TableHead className="text-center">Dias Direito</TableHead>
+                                <TableHead>Status</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {periodos.length === 0 ? (
+                                <TableRow><TableCell colSpan={5} className="text-center">Nenhum período aquisitivo encontrado.</TableCell></TableRow>
+                            ) : (
+                                periodos.map((p, index) => (
+                                    <TableRow key={index} className={cn(p.status === 'Vencida em Dobro' && 'bg-red-500/10')}>
+                                        <TableCell className="font-medium">
+                                            {format(p.inicio_aquisitivo, 'dd/MM/yyyy')} - {format(p.fim_aquisitivo, 'dd/MM/yyyy')}
+                                        </TableCell>
+                                        <TableCell>
+                                            {format(p.limite_concessivo, 'dd/MM/yyyy')}
+                                        </TableCell>
+                                        <TableCell className="text-center text-red-600 font-semibold">
+                                            {p.faltas_injustificadas}
+                                        </TableCell>
+                                        <TableCell className="text-center">
+                                            {p.dias_direito}
+                                        </TableCell>
+                                        <TableCell>
+                                            {getStatusBadge(p.status)}
+                                        </TableCell>
+                                    </TableRow>
+                                ))
+                            )}
+                        </TableBody>
+                    </Table>
+                </div>
             </CardContent>
         </Card>
         

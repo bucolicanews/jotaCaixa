@@ -153,7 +153,9 @@ export function useFeriasCLT(
     }, []);
 
     const calcularPeriodos = useCallback(async () => {
+        // SAÍDA RÁPIDA: Se não houver dados essenciais, define carregando como false e retorna.
         if (!dataInicioContrato || !funcionarioId) {
+            setPeriodos([]);
             setCarregando(false);
             return;
         }
