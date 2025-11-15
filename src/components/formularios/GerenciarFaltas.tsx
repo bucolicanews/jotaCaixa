@@ -140,7 +140,8 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
     const bucket = ATESTADO_BUCKET; 
     
     const fileExt = file.name.split('.').pop();
-    const fileName = `faltas/${funcionario.id}/${format(dataFalta!, 'yyyyMMdd')}-${Date.now()}.${fileExt}`;
+    // CORREÇÃO: Usando um caminho simples dentro do bucket, sem prefixo 'faltas/'
+    const fileName = `${funcionario.id}/${format(dataFalta!, 'yyyyMMdd')}-${Date.now()}.${fileExt}`;
     
     try {
       const { data, error: uploadError } = await supabase.storage
