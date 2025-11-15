@@ -14,7 +14,7 @@ interface TaggedFormFieldProps {
     isOptional?: boolean;
     tagRefreshKey: number;
     onTagToggle: () => void;
-    isReadOnly: boolean; // FIX: NOVO PROP
+    isReadOnly: boolean; // FIX: Garantido que isReadOnly está na interface
 }
 
 // Componente wrapper para campos de Usuário (Funcionário)
