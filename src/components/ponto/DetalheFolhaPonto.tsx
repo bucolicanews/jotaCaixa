@@ -382,7 +382,7 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
                                 <TableHead colSpan={2} className="text-center border-x">Primeiro Turno</TableHead>
                                 <TableHead colSpan={2} className="text-center border-r">Segundo Turno</TableHead>
                                 <TableHead className="w-[100px]">Total Dia</TableHead>
-                                <TableHead>Observações</TableHead>
+                                <TableHead className="min-w-[200px]">Observações</TableHead> {/* AUMENTADO O MIN-WIDTH */}
                                 {/* OCULTA A COLUNA AÇÕES SE FOR READONLY */}
                                 {!isReadOnly && <TableHead className="w-[120px] text-right">Ações</TableHead>}
                             </TableRow>
@@ -394,7 +394,7 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
                                 <TableHead className="w-[60px] text-center">Entrada</TableHead>
                                 <TableHead className="w-[60px] text-center border-r">Saída</TableHead>
                                 <TableHead className="w-[100px]"></TableHead>
-                                <TableHead></TableHead>
+                                <TableHead className="min-w-[200px]"></TableHead>
                                 {!isReadOnly && <TableHead className="w-[120px] text-right"></TableHead>}
                             </TableRow>
                         </TableHeader>
