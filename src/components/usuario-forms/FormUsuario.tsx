@@ -416,6 +416,15 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
       return false;
   };
   
+  // NOVO HANDLER: Intercepta a mudança de aba para bloquear se estiver desabilitada
+  const handleTabChange = (newTab: string) => {
+      if (isTabDisabled(newTab)) {
+          // Se a aba estiver desabilitada, não faz nada.
+          return;
+      }
+      setActiveTab(newTab);
+  };
+  
   // Read-Only status para os componentes filhos
   const isChildFormReadOnly = (tabValue: string) => {
       if (isReadOnly) return true;
@@ -464,7 +473,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
     <FormProvider {...form}>
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
             <TabsList className="flex flex-wrap justify-start w-full h-auto p-1">
               <TabsTrigger value="pessoal" className="flex-1 md:flex-none md:w-1/6" disabled={isTabDisabled('pessoal')}>Geral</TabsTrigger>
               <TabsTrigger value="folgas" className="flex-1 md:flex-none md:w-1/6" disabled={isTabDisabled('folgas')}>Folgas</TabsTrigger>
