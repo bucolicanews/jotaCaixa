@@ -3,7 +3,7 @@ import { Control } from 'react-hook-form';
 import { FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/components/ui/form';
 import { Checkbox } from '@/components/ui/checkbox';
 import GerenciarFerias from '@/components/formularios/GerenciarFerias';
-import GerenciarFeriasAdmin from '@/components/formularios/GerenciarFeriasAdmin'; // CORRIGIDO: Usando alias de caminho
+import GerenciarFeriasAdmin from '@/components/formularios/GerenciarFeriasAdmin'; // Importação corrigida
 import { UsuarioProfile, AdminUsuarioProfile } from '@/types/usuario';
 
 interface FormFolgasFeriasProps {
