@@ -3,7 +3,7 @@ import { cn } from '@/lib/utils';
 import { LayoutDashboard, DollarSign, ArrowUpCircle, ArrowDownCircle, Banknote, FileText, Upload, Settings, BookOpen, Users, Building2, Clock, Contact, CalendarCheck, User, FileSignature, Tag, FileTextIcon, Package, History, FileDown, MessageSquare, Scale } from 'lucide-react';
 import React from 'react';
 import { useSessao } from '@/hooks/use-sessao';
-import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
+import { ClienteProfile, UsuarioProfile, AdminUsuarioProfile } from '@/types/usuario';
 import { isPast, parseISO } from 'date-fns';
 
 interface ItemMenu {
@@ -45,7 +45,7 @@ const SECOES_MENU: MenuSection[] = [
             { nome: 'Contas a Pagar', caminho: '/contas-pagar', icone: ArrowDownCircle, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'contas_pagar' },
             { nome: 'Contas a Receber', caminho: '/contas-receber', icone: ArrowUpCircle, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'contas_receber' },
             { nome: 'Contas e Saldos', caminho: '/bancos', icone: Banknote, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'bancos' },
-            { nome: 'Contas Patrimoniais', caminho: '/contas-patrimoniais', icone: Scale, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'bancos' }, // NOVO ITEM
+            { nome: 'Contas Patrimoniais', caminho: '/contas-patrimoniais', icone: Scale, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'bancos' },
             { nome: 'Conciliação', caminho: '/conciliacao', icone: DollarSign, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'conciliacao' },
         ]
     },
@@ -108,9 +108,11 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick }) => {
   const localizacao = useLocation();
   const { role, perfil } = useSessao();
 
-  const isUnassignedUser = role === 'Usuario' && !(perfil as UsuarioProfile)?.cliente_id;
+  // Verifica se é um usuário não vinculado (apenas se for Usuario E não tiver cliente_id OU admin_id)
+  const isUnassignedUser = role === 'Usuario' && !(perfil as UsuarioProfile)?.cliente_id && !(perfil as AdminUsuarioProfile)?.admin_id;
   const isPendingClient = role === 'Cliente' && !(perfil as ClienteProfile)?.aprovado;
-  const userProfile = perfil as UsuarioProfile;
+  
+  const userProfile = perfil as UsuarioProfile | AdminUsuarioProfile;
   const clientProfile = perfil as ClienteProfile;
   
   // Lógica de Expiração: Se for Cliente, aprovado, e a data de fim de acesso for passada.
@@ -149,12 +151,11 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick }) => {
             return false;
         }
         // Verifica a permissão do Cliente
-        // Se a permissão for explicitamente false ou não existir, bloqueia.
         return clientProfile.permissoes?.[item.permissionKey] === true;
     }
 
     if (role === 'Usuario') {
-        // Usuários não vinculados só veem Cadastrar Empresa e Painel
+        // Usuários não vinculados (sem cliente_id E sem admin_id) só veem Cadastrar Empresa e Painel
         if (isUnassignedUser) {
             return item.caminho === '/painel' || item.caminho === '/cadastrar-empresa';
         }
@@ -163,11 +164,12 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick }) => {
         if (item.caminho === '/folha-ponto') {
             return false;
         }
-        // Verifica a permissão do Usuário
-        if (item.caminho === '/perfil' && item.permissionKey === 'visualizar_proprio_ponto') {
+        
+        // Verifica a permissão do Usuário (Funcionário do Cliente OU do Admin)
+        if (item.permissionKey) {
             return userProfile.permissoes?.[item.permissionKey] === true;
         }
-        return userProfile.permissoes?.[item.permissionKey] === true;
+        return false;
     }
     return false;
   };

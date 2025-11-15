@@ -1,6 +1,6 @@
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { useSessao } from '@/hooks/use-sessao';
-import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
+import { ClienteProfile, UsuarioProfile, AdminUsuarioProfile } from '@/types/usuario';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
@@ -23,7 +23,19 @@ const Painel = () => {
       hasFinancePermissions = permissoes.contas_pagar || permissoes.contas_receber || permissoes.bancos;
     }
   } else if (role === 'Usuario') {
-    const usuarioProfile = perfil as UsuarioProfile;
+    const usuarioProfile = perfil as UsuarioProfile | AdminUsuarioProfile;
+    
+    // Se for AdminUsuarioProfile, ele é considerado aprovado se estiver vinculado
+    if ('admin_id' in usuarioProfile && usuarioProfile.admin_id) {
+        isClientApproved = true;
+    } else if ('cliente_id' in usuarioProfile && usuarioProfile.cliente_id) {
+        // Se for UsuarioProfile, assumimos que o cliente já foi aprovado (lógica no LayoutPrincipal)
+        isClientApproved = true; 
+    } else {
+        // Usuário não vinculado
+        isClientApproved = false;
+    }
+    
     const permissoes = usuarioProfile?.permissoes || {};
     hasFinancePermissions = permissoes.contas_pagar || permissoes.contas_receber || permissoes.bancos;
   }
@@ -66,7 +78,7 @@ const Painel = () => {
           )}
         </>
       ) : (
-        // Este caso já é tratado pelo LayoutPrincipal, mas mantemos a clareza
+        // Este caso só deve ser alcançado por um Cliente Pendente (que é tratado no LayoutPrincipal)
         <p className="text-lg text-muted-foreground">Aguardando aprovação da empresa.</p>
       )}
     </LayoutPrincipal>

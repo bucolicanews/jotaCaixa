@@ -49,8 +49,8 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
           // 4. Buscar Usuário (Funcionário do Admin) - NOVO
           const { data: adminUsuarioData } = await supabase.from('admin_usuarios').select('*, admin_id').eq('id', user.id).single();
           if (adminUsuarioData) {
-            // Mapeia para o tipo UsuarioProfile, mas com admin_id
-            perfil = { ...adminUsuarioData, cliente_id: null } as AdminUsuarioProfile; // CORREÇÃO: cliente_id é null
+            // Mapeia para o tipo AdminUsuarioProfile
+            perfil = { ...adminUsuarioData, cliente_id: null } as AdminUsuarioProfile;
             role = 'Usuario';
           }
         }
