@@ -4,10 +4,9 @@ import GerenciarFeriasAdmin from '@/components/formularios/GerenciarFeriasAdmin'
 import { UsuarioProfile, AdminUsuarioProfile } from '@/types/usuario';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useFeriasCLT } from '@/hooks/use-ferias-clt';
-import { format, parseISO } from 'date-fns'; // Adicionado parseISO
+import { format, parseISO, subYears } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Loader2, CalendarCheck, Clock, AlertTriangle } from 'lucide-react';
-import { Separator } from '../ui/separator';
+import { Loader2, CalendarCheck, Clock, AlertTriangle, Scale } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface FormFeriasProps {
@@ -33,23 +32,17 @@ const FormFerias: React.FC<FormFeriasProps> = ({ usuarioInicial }) => {
   // Dados necessários para o hook CLT
   const dataInicioContrato = usuarioInicial.data_inicio_contrato;
   
-  // NOTA: O hook useFeriasCLT precisa de todos os registros de ponto para calcular as faltas.
-  // Como estamos no formulário de edição, não temos acesso fácil a todos os registros.
-  // Para fins de demonstração do cálculo, passaremos um array vazio para os registros,
-  // mas o cálculo de faltas acumuladas será impreciso aqui.
-  // Em um cenário real, o componente pai (GerenciarUsuarios) precisaria fornecer todos os registros.
   const {
       periodoAquisitivo,
       ultimaFeriasFim,
       diasDeFeriasDireito,
       faltasInjustificadasAcumuladas,
       carregando: carregandoCLT,
-      // refetch: refetchCLT, // Removido
   } = useFeriasCLT(
       usuarioInicial.id,
       dataInicioContrato,
       new Date(), // Mês de referência atual
-      [] // Array vazio para registros (para evitar erro de dependência circular)
+      [] // Array vazio para registros
   );
 
   if (!proprietarioId) {
@@ -73,6 +66,16 @@ const FormFerias: React.FC<FormFeriasProps> = ({ usuarioInicial }) => {
   const limiteConcessivo = periodoAquisitivo?.data_limite_concessivo 
     ? format(periodoAquisitivo.data_limite_concessivo, 'dd/MM/yyyy', { locale: ptBR }) 
     : 'N/A';
+    
+  const isVencidoEmDobro = periodoAquisitivo?.isVencidoEmDobro ?? false;
+  
+  // Calcula o período aquisitivo anterior para exibição
+  const inicioContrato = dataInicioContrato ? parseISO(dataInicioContrato + 'T00:00:00') : null;
+  const periodoAquisitivoAnterior = inicioContrato && periodoAquisitivo?.data_inicio_aquisitivo
+    ? {
+        inicio: format(subYears(periodoAquisitivo.data_inicio_aquisitivo, 1), 'dd/MM/yyyy'),
+        fim: format(subYears(periodoAquisitivo.data_fim_aquisitivo, 1), 'dd/MM/yyyy'),
+    } : null;
 
   return (
     <div className="space-y-6">
@@ -83,7 +86,18 @@ const FormFerias: React.FC<FormFeriasProps> = ({ usuarioInicial }) => {
                     <div className="flex justify-center items-center h-20"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>
                 ) : (
                     <div className="space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        
+                        {/* ALERTA DE DOBRA DE FÉRIAS */}
+                        {isVencidoEmDobro && periodoAquisitivoAnterior && (
+                            <div className="p-3 bg-red-100 dark:bg-red-900/20 border border-red-500 rounded-md flex items-center space-x-3">
+                                <AlertTriangle className="w-5 h-5 flex-shrink-0 text-red-600" />
+                                <p className="text-sm font-semibold text-red-700 dark:text-red-300">
+                                    DOBRA DE FÉRIAS: O período aquisitivo de {periodoAquisitivoAnterior.inicio} a {periodoAquisitivoAnterior.fim} venceu em dobro.
+                                </p>
+                            </div>
+                        )}
+
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                             <div className="p-3 bg-secondary rounded-md">
                                 <p className="text-sm font-medium text-muted-foreground flex items-center"><CalendarCheck className="w-4 h-4 mr-2" /> Início do Contrato</p>
                                 <p className="text-lg font-bold mt-1">{dataInicioContrato ? format(parseISO(dataInicioContrato), 'dd/MM/yyyy', { locale: ptBR }) : 'N/A'}</p>
@@ -92,30 +106,32 @@ const FormFerias: React.FC<FormFeriasProps> = ({ usuarioInicial }) => {
                                 <p className="text-sm font-medium text-muted-foreground flex items-center"><CalendarCheck className="w-4 h-4 mr-2" /> Última Férias Gozada</p>
                                 <p className="text-lg font-bold mt-1">{ultimaFeriasDisplay}</p>
                             </div>
-                        </div>
-                        
-                        <Separator />
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div className="p-3 bg-blue-100 dark:bg-blue-900/20 rounded-md">
                                 <p className="text-sm font-medium text-blue-700 dark:text-blue-300">Período Aquisitivo</p>
                                 <p className="text-sm font-bold mt-1">{proximoAquisitivoInicio} a {proximoAquisitivoFim}</p>
                             </div>
-                            <div className="p-3 bg-green-100 dark:bg-green-900/20 rounded-md">
-                                <p className="text-sm font-medium text-green-700 dark:text-green-300">Dias de Direito</p>
-                                <p className="text-2xl font-bold mt-1">{diasDeFeriasDireito} dias</p>
+                            <div className={cn("p-3 rounded-md", isVencidoEmDobro ? 'bg-red-500/20' : 'bg-green-100 dark:bg-green-900/20')}>
+                                <p className="text-sm font-medium text-foreground flex items-center">
+                                    <Scale className="w-4 h-4 mr-2" /> Dias de Direito
+                                </p>
+                                <p className={cn("text-2xl font-bold mt-1", isVencidoEmDobro ? 'text-red-600' : 'text-green-600')}>
+                                    {diasDeFeriasDireito} dias
+                                </p>
                             </div>
-                            <div className={cn("p-3 rounded-md", periodoAquisitivo?.status === 'Concessivo Aberto' ? 'bg-red-100 dark:bg-red-900/20' : 'bg-secondary')}>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className={cn("p-3 rounded-md md:col-span-2", periodoAquisitivo?.status === 'Concessivo Aberto' ? 'bg-yellow-100 dark:bg-yellow-900/20' : 'bg-secondary')}>
                                 <p className="text-sm font-medium text-foreground flex items-center">
                                     <AlertTriangle className="w-4 h-4 mr-2" /> Limite Concessivo
                                 </p>
                                 <p className="text-lg font-bold mt-1">{limiteConcessivo}</p>
                             </div>
+                            <div className="p-3 bg-secondary rounded-md md:col-span-1">
+                                <p className="text-sm font-medium text-muted-foreground">Faltas Injustificadas</p>
+                                <p className="text-lg font-bold mt-1 text-red-600">{faltasInjustificadasAcumuladas}</p>
+                            </div>
                         </div>
-                        
-                        <p className="text-sm text-muted-foreground">
-                            Faltas Injustificadas Acumuladas no Período: <span className="font-bold text-red-600">{faltasInjustificadasAcumuladas}</span>
-                        </p>
                     </div>
                 )}
             </CardContent>

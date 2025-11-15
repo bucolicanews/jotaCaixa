@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { parseISO, addYears, isBefore, isAfter, startOfMonth, endOfMonth } from 'date-fns';
+import { parseISO, addYears, isBefore, isAfter, startOfMonth, endOfMonth, subYears } from 'date-fns';
 import { RegistroPonto } from '@/types/ponto';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -10,11 +10,12 @@ interface PeriodoAquisitivo {
     dias_direito: number;
     faltas_injustificadas: number;
     status: string;
+    isVencidoEmDobro: boolean; // NOVO CAMPO
 }
 
 interface FeriasCLTData {
     periodoAquisitivo: PeriodoAquisitivo | null;
-    ultimaFeriasFim: Date | null; // NOVO: Data final da última férias gozada
+    ultimaFeriasFim: Date | null;
     faltasInjustificadasMes: number;
     faltasInjustificadasAcumuladas: number;
     diasDeFeriasDireito: number;
@@ -33,10 +34,6 @@ const getDiasDireito = (faltas: number): number => {
 
 /**
  * Hook para calcular o direito a férias de um funcionário.
- * @param funcionarioId ID do funcionário.
- * @param dataInicioContrato Data de início do contrato (para calcular o período aquisitivo).
- * @param mesReferencia Mês atual sendo visualizado (para calcular faltas mensais).
- * @param todosRegistrosDoFuncionario Todos os registros de ponto do funcionário.
  */
 export function useFeriasCLT(
     funcionarioId: string | undefined,
@@ -53,8 +50,18 @@ export function useFeriasCLT(
     const [refreshKey, setRefreshKey] = useState(0);
 
     const refetch = useCallback(() => setRefreshKey(k => k + 1), []);
+    
+    // Função para buscar todas as férias gozadas (para verificar a dobra)
+    const fetchFeriasGozadas = useCallback(async (id: string) => {
+        const { data } = await supabase
+            .from('ferias')
+            .select('data_inicio, data_fim')
+            .eq('funcionario_id', id)
+            .order('data_fim', { ascending: false });
+        return data || [];
+    }, []);
 
-    const calcularFaltas = useCallback(() => {
+    const calcularFaltasEDobra = useCallback(async () => {
         if (!dataInicioContrato || !funcionarioId) {
             setCarregando(false);
             return;
@@ -65,19 +72,43 @@ export function useFeriasCLT(
         const inicioContrato = parseISO(dataInicioContrato + 'T00:00:00');
         const hoje = new Date();
         
-        // 1. Determinar o Período Aquisitivo Atual
+        // 1. Determinar o Período Aquisitivo ATUAL
         let inicioAquisitivo = inicioContrato;
         let fimAquisitivo = addYears(inicioContrato, 1);
         
-        // Avança o período aquisitivo até o período atual
         while (isBefore(fimAquisitivo, hoje)) {
             inicioAquisitivo = fimAquisitivo;
             fimAquisitivo = addYears(inicioAquisitivo, 1);
         }
         
         const dataLimiteConcessivo = addYears(fimAquisitivo, 1);
+        
+        // 2. Determinar o Período Aquisitivo ANTERIOR
+        // const inicioAquisitivoAnterior = subYears(inicioAquisitivo, 1); // Removido
+        const fimAquisitivoAnterior = subYears(fimAquisitivo, 1);
+        const limiteConcessivoAnterior = addYears(fimAquisitivoAnterior, 1);
+        
+        // 3. Verificar a Dobra de Férias (Regra CLT)
+        let isVencidoEmDobro = false;
+        
+        if (isAfter(hoje, limiteConcessivoAnterior)) {
+            // O período concessivo anterior expirou.
+            
+            // Buscar todas as férias gozadas
+            const feriasGozadas = await fetchFeriasGozadas(funcionarioId);
+            
+            // Verificar se alguma férias foi gozada DENTRO do período concessivo anterior
+            const gozadaNoPeriodo = feriasGozadas.some(f => {
+                const dataFim = parseISO(f.data_fim + 'T00:00:00');
+                return isAfter(dataFim, fimAquisitivoAnterior) && isBefore(dataFim, limiteConcessivoAnterior);
+            });
+            
+            if (!gozadaNoPeriodo) {
+                isVencidoEmDobro = true;
+            }
+        }
 
-        // 2. Filtrar Faltas Injustificadas no Período Aquisitivo
+        // 4. Filtrar Faltas Injustificadas no Período Aquisitivo ATUAL
         let faltasAcumuladas = 0;
         let faltasMes = 0;
         
@@ -87,7 +118,6 @@ export function useFeriasCLT(
         for (const registro of todosRegistrosDoFuncionario) {
             const dataRegistro = parseISO(registro.horario_registro);
             
-            // Verifica se é uma Falta Injustificada
             const isFalta = registro.tipo === 'Falta';
             const isJustificada = registro.atestado_url || registro.observacao?.includes('Falta Justificada');
             
@@ -104,17 +134,21 @@ export function useFeriasCLT(
             }
         }
         
-        // 3. Determinar Dias de Direito
-        const diasDireito = getDiasDireito(faltasAcumuladas);
+        // 5. Determinar Dias de Direito (30 ou 60 se em dobro)
+        let diasDireito = getDiasDireito(faltasAcumuladas);
+        if (isVencidoEmDobro) {
+            diasDireito = 60; // Férias em dobro
+        }
 
-        // 4. Atualizar Estados
+        // 6. Atualizar Estados
         setPeriodoAquisitivo({
             data_inicio_aquisitivo: inicioAquisitivo,
             data_fim_aquisitivo: fimAquisitivo,
             data_limite_concessivo: dataLimiteConcessivo,
             dias_direito: diasDireito,
             faltas_injustificadas: faltasAcumuladas,
-            status: isBefore(hoje, fimAquisitivo) ? 'Em Andamento' : 'Concessivo Aberto',
+            status: isVencidoEmDobro ? 'Vencido em Dobro' : (isBefore(hoje, fimAquisitivo) ? 'Em Andamento' : 'Concessivo Aberto'),
+            isVencidoEmDobro: isVencidoEmDobro,
         });
         
         setFaltasInjustificadasMes(faltasMes);
@@ -122,7 +156,7 @@ export function useFeriasCLT(
         setDiasDeFeriasDireito(diasDireito);
         setCarregando(false);
 
-    }, [funcionarioId, dataInicioContrato, mesReferencia, todosRegistrosDoFuncionario, refreshKey]);
+    }, [funcionarioId, dataInicioContrato, mesReferencia, todosRegistrosDoFuncionario, refreshKey, fetchFeriasGozadas]);
     
     const fetchUltimaFerias = useCallback(async () => {
         if (!funcionarioId) return;
@@ -151,9 +185,9 @@ export function useFeriasCLT(
     }, [funcionarioId, refreshKey]);
 
     useEffect(() => {
-        calcularFaltas();
+        calcularFaltasEDobra();
         fetchUltimaFerias();
-    }, [calcularFaltas, fetchUltimaFerias]);
+    }, [calcularFaltasEDobra, fetchUltimaFerias]);
 
     return {
         periodoAquisitivo,
