@@ -89,7 +89,7 @@ const FolhaPonto: React.FC = () => {
   
   // NOVO HOOK: Cálculo de Férias CLT
   const {
-      periodoAquisitivo,
+      periodoAtual, // USANDO periodoAtual
       faltasInjustificadasMes,
       faltasInjustificadasAcumuladas,
       diasDeFeriasDireito,
@@ -113,14 +113,17 @@ const FolhaPonto: React.FC = () => {
         .order('nome');
 
     if (error) {
-        showError('Erro ao carregar lista de clientes: ' + error.message);
+        showError('Erro ao carregar clientes: ' + error.message);
         setClientes([]);
     } else {
         const clientData = data as ClienteSimples[];
         
+        let allClients = [...clientData];
+        
         // Adiciona a opção para os próprios usuários do Admin
-        const adminOption: ClienteSimples = { id: usuario.id, nome: 'Meus Usuários (Admin)' };
-        const allClients = [adminOption, ...clientData];
+        if (usuario?.id) {
+            allClients.unshift({ id: usuario.id, nome: 'Meus Usuários (Admin)' } as ClienteSimples);
+        }
         
         setClientes(allClients);
         
@@ -618,10 +621,10 @@ const FolhaPonto: React.FC = () => {
                     <CardHeader className="p-0 pb-2"><CardTitle className="text-sm font-medium">Período Aquisitivo</CardTitle></CardHeader>
                     <CardContent className="p-0">
                         <div className="text-sm font-bold">
-                            {periodoAquisitivo ? format(periodoAquisitivo.data_inicio_aquisitivo, 'dd/MM/yyyy') : 'N/A'}
+                            {periodoAtual ? format(periodoAtual.inicio_aquisitivo, 'dd/MM/yyyy') : 'N/A'}
                         </div>
                         <div className="text-xs text-muted-foreground">
-                            até {periodoAquisitivo ? format(periodoAquisitivo.data_fim_aquisitivo, 'dd/MM/yyyy') : 'N/A'}
+                            até {periodoAtual ? format(periodoAtual.fim_aquisitivo, 'dd/MM/yyyy') : 'N/A'}
                         </div>
                     </CardContent>
                 </Card>
