@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { useForm, FormProvider } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -73,14 +73,16 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
   const resourceId = perfilInicial.id; 
   const { refetchStatus, refreshKey } = useBulkTagManager(resourceId);
 
-  const defaultPermissoes = PERMISSOES_DISPONIVEIS.reduce((acc: Record<string, boolean>, p: Permissao) => {
-    if (profileToEdit && 'permissoes' in profileToEdit && (profileToEdit as any).permissoes) {
-      acc[p.key] = (profileToEdit as any).permissoes[p.key] !== false;
-    } else {
-      acc[p.key] = true;
-    }
-    return acc;
-  }, {} as Record<string, boolean>);
+  const defaultPermissoes = useMemo(() => {
+      return PERMISSOES_DISPONIVEIS.reduce((acc: Record<string, boolean>, p: Permissao) => {
+        if (profileToEdit && 'permissoes' in profileToEdit && (profileToEdit as any).permissoes) {
+          acc[p.key] = (profileToEdit as any).permissoes[p.key] !== false;
+        } else {
+          acc[p.key] = true;
+        }
+        return acc;
+      }, {} as Record<string, boolean>);
+  }, [profileToEdit]);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
