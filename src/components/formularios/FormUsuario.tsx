@@ -16,7 +16,7 @@ import { useBulkTagManager } from '@/hooks/use-bulk-tag-manager';
 import { format } from 'date-fns';
 import { BASE_URL } from '@/config/app-config';
 import { Separator } from '../ui/separator';
-import FormGeral from '../usuario-forms/FormGeral';
+import FormGeral from './FormGeral';
 import FormFolgas from './FormFolgas';
 import FormDocumentos from '../usuario-forms/FormDocumentos';
 import FormDadosContratuais from '../usuario-forms/FormDadosContratuais';
@@ -439,12 +439,12 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <TabsList className="flex flex-wrap justify-start w-full h-auto p-1">
-              <TabsTrigger value="pessoal" className="flex-1 md:flex-none md:w-1/6">Geral</TabsTrigger>
-              <TabsTrigger value="folgas" className="flex-1 md:flex-none md:w-1/6">Folgas</TabsTrigger>
-              <TabsTrigger value="ferias" className="flex-1 md:flex-none md:w-1/6">Férias</TabsTrigger>
+              <TabsTrigger value="pessoal" className="flex-1 md:flex-none md:w-1/6" disabled={isReadOnly}>Geral</TabsTrigger>
+              <TabsTrigger value="folgas" className="flex-1 md:flex-none md:w-1/6" disabled={isReadOnly}>Folgas</TabsTrigger>
+              <TabsTrigger value="ferias" className="flex-1 md:flex-none md:w-1/6" disabled={isReadOnly}>Férias</TabsTrigger>
               <TabsTrigger value="cadastrais" className="flex-1 md:flex-none md:w-1/6">Dados Cadastrais</TabsTrigger>
               <TabsTrigger value="documentos" className="flex-1 md:flex-none md:w-1/6">Documentos</TabsTrigger>
-              <TabsTrigger value="contrato" className="flex-1 md:flex-none md:w-1/6">Contrato (RH)</TabsTrigger>
+              <TabsTrigger value="contrato" className="flex-1 md:flex-none md:w-1/6" disabled={isReadOnly}>Contrato (RH)</TabsTrigger>
             </TabsList>
             
             {/* TAB 1: GERAL */}
@@ -502,7 +502,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                     resourceId={resourceId}
                     tagRefreshKey={refreshKey}
                     onTagToggle={handleTagToggle}
-                    isReadOnly={isReadOnly} // Propagação correta
+                    isReadOnly={isReadOnly}
                 />
             </TabsContent>
             
@@ -512,7 +512,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                     control={form.control as unknown as Control<any>}
                     isSubmitting={isSubmitting}
                     resourceId={resourceId}
-                    isReadOnly={isReadOnly} // Propagação correta
+                    isReadOnly={isReadOnly}
                 />
             </TabsContent>
 
@@ -522,7 +522,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                     control={form.control as unknown as Control<any>}
                     isSubmitting={isSubmitting}
                     isContractEditable={isContractEditable}
-                    isReadOnly={isReadOnly} // Propagação correta
+                    isReadOnly={isReadOnly}
                 />
             </TabsContent>
           </Tabs>
