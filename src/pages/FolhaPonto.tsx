@@ -370,7 +370,7 @@ const FolhaPonto: React.FC = () => {
                 <MonthPicker
                     date={dataSelecionada}
                     setDate={setDataSelecionada}
-                    disabled={isReadOnlyMode}
+                    // Removido disabled={isReadOnlyMode}
                 />
             </div>
             
