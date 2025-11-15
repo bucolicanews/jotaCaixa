@@ -13,8 +13,8 @@ import { Link } from 'react-router-dom';
 import { UsuarioProfile, ClienteProfile, AdminProfile, AdminUsuarioProfile } from '@/types/usuario';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { BASE_URL } from '@/config/app-config'; // Importando BASE_URL
-import { useTicketNotifications } from '@/hooks/use-ticket-notifications'; // NOVO HOOK
+import { BASE_URL } from '@/config/app-config';
+import { useTicketNotifications } from '@/hooks/use-ticket-notifications';
 
 const ThemeToggle = () => {
   const { theme, setTheme } = useTheme();
@@ -41,7 +41,6 @@ const Header: React.FC = () => {
   const { perfil, role } = useSessao();
   const [tituloApp, setTituloApp] = useState('Fluxo de Caixa');
   const [planoDetalhes, setPlanoDetalhes] = useState<{ nome: string, preco: number } | null>(null);
-  const [logoUrl, setLogoUrl] = useState<string | null>(null); // NOVO ESTADO PARA LOGO
   
   // NOVO: Hook de Notificações (usando mensagensParaResponder)
   const { mensagensParaResponder, carregando: carregandoNotificacoes } = useTicketNotifications();
@@ -50,7 +49,6 @@ const Header: React.FC = () => {
     const updateTitle = async () => {
       if (!perfil || !role) {
         setTituloApp('Fluxo de Caixa');
-        setLogoUrl(null);
         return;
       }
 
@@ -59,12 +57,10 @@ const Header: React.FC = () => {
       if (role === 'Admin') {
         const adminProfile = perfil as AdminProfile;
         setTituloApp(adminProfile.nome); // Usa o nome completo do Admin
-        setLogoUrl(adminProfile.logo_url || null); // Define a logo
       } else if (role === 'Cliente') {
         const clienteProfile = perfil as ClienteProfile;
         setTituloApp(clienteProfile.nome);
         currentPlanoId = clienteProfile.plano_id || null; 
-        setLogoUrl(null); // Clientes não usam logo no header (por enquanto)
       } else if (role === 'Usuario') {
         const usuarioProfile = perfil as UsuarioProfile | AdminUsuarioProfile;
         
@@ -90,13 +86,12 @@ const Header: React.FC = () => {
             // Se for usuário do Admin, busca o nome do Admin
             const { data: adminData } = await supabase
                 .from('tbl_admins')
-                .select('nome, logo_url')
+                .select('nome')
                 .eq('id', proprietarioId)
                 .single();
             
             if (adminData) {
                 setTituloApp(adminData.nome);
-                setLogoUrl(adminData.logo_url || null);
             } else {
                 setTituloApp('Usuário - Sem Empresa');
             }
@@ -132,7 +127,7 @@ const Header: React.FC = () => {
   
   const handlePasswordReset = async () => {
     if (!perfil?.email) return;
-    const { error } = await supabase.auth.resetPasswordForEmail(perfil.email, { redirectTo: `${BASE_URL}/atualizar-senha` }); // Usando BASE_URL
+    const { error } = await supabase.auth.resetPasswordForEmail(perfil.email, { redirectTo: `${BASE_URL}/atualizar-senha` });
     if (error) console.error('Falha ao enviar email de reset:', error);
     else alert('Link de redefinição de senha enviado para seu email.');
   };
@@ -161,13 +156,9 @@ const Header: React.FC = () => {
           </SheetContent>
         </Sheet>
         
-        {/* Título/Logo Dinâmico */}
+        {/* Título Dinâmico */}
         <h1 className="text-xl font-bold text-primary truncate max-w-[200px] sm:max-w-none" title={tituloApp}>
-            {logoUrl ? (
-                <img src={logoUrl} alt="Logo da Empresa" className="h-8 object-contain" />
-            ) : (
-                tituloApp
-            )}
+            {tituloApp}
         </h1>
       </div>
       

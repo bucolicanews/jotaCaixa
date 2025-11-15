@@ -181,9 +181,15 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick }) => {
 
   return (
     <div className="flex flex-col h-full bg-background text-foreground">
-      <div className="p-4 border-b">
-        {logoUrl ? (
-            <img src={logoUrl} alt="Logo da Empresa" className="h-8 object-contain" />
+      <div className="p-4 border-b flex flex-col items-center justify-center space-y-2">
+        {/* Lógica de exibição da Logo (Apenas Admin) */}
+        {role === 'Admin' && logoUrl ? (
+            <img 
+                src={logoUrl} 
+                alt="Logo da Empresa" 
+                className="object-contain max-h-16 w-auto" 
+                style={{ maxWidth: '100%' }}
+            />
         ) : (
             <h1 className="text-xl font-bold text-primary">Navegação</h1>
         )}
