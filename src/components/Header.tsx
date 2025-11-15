@@ -42,6 +42,7 @@ const Header: React.FC = () => {
   const [tituloApp, setTituloApp] = useState('Fluxo de Caixa');
   const [planoDetalhes, setPlanoDetalhes] = useState<{ nome: string, preco: number } | null>(null);
   const [adminBranding, setAdminBranding] = useState<{ logoUrl: string | null, nome: string | null } | null>(null);
+  const [loadingBranding, setLoadingBranding] = useState(true); // NOVO ESTADO DE LOADING
   
   // NOVO: Hook de Notificações (usando mensagensParaResponder)
   const { mensagensParaResponder, carregando: carregandoNotificacoes } = useTicketNotifications();
@@ -57,7 +58,13 @@ const Header: React.FC = () => {
   const targetAdminId = isAdmin ? perfil?.id : (isUserOfAdmin ? (perfil as AdminUsuarioProfile).admin_id : null);
 
   const fetchAdminBranding = useCallback(async () => {
-      if (!targetAdminId) return;
+      if (!targetAdminId) {
+          setLoadingBranding(false);
+          setAdminBranding(null);
+          return;
+      }
+      
+      setLoadingBranding(true);
       
       // Busca o perfil do Admin (que contém logo_url e nome)
       const { data, error } = await supabase
@@ -72,6 +79,7 @@ const Header: React.FC = () => {
       } else {
           setAdminBranding({ logoUrl: data.logo_url, nome: data.nome });
       }
+      setLoadingBranding(false);
   }, [targetAdminId]);
 
   useEffect(() => {
@@ -96,11 +104,12 @@ const Header: React.FC = () => {
         appName = clienteProfile.nome;
         currentPlanoId = clienteProfile.plano_id || null; 
       } else if (role === 'Usuario') {
-        // Se for funcionário do Admin, usa o nome do Admin
-        if (isUserOfAdmin && adminBranding?.nome) {
-            appName = adminBranding.nome;
+        // Se for funcionário do Admin, AGUARDA O BRANDING
+        if (isUserOfAdmin) {
+            if (loadingBranding) return; // <-- CORREÇÃO: Sai se o branding ainda estiver carregando
+            appName = adminBranding?.nome ?? 'Admin';
         } else if (userProfile.cliente_id) {
-            // Se for funcionário de Cliente, usa o nome do Cliente (já definido no useEffect anterior)
+            // Se for funcionário de Cliente, usa o nome do Cliente
             const proprietarioId = userProfile.cliente_id;
             const { data: clienteData } = await supabase
                 .from('tbl_clientes')
@@ -138,8 +147,9 @@ const Header: React.FC = () => {
           setPlanoDetalhes(null);
       }
     };
+    // Adicionando loadingBranding como dependência para garantir que o título seja atualizado após o carregamento
     updateTitle();
-  }, [perfil, role, isClient, isAdmin, isUserOfAdmin, clienteProfile, userProfile, adminBranding]);
+  }, [perfil, role, isClient, isAdmin, isUserOfAdmin, clienteProfile, userProfile, adminBranding, loadingBranding]);
 
   const lidarComSair = async () => {
     await supabase.auth.signOut();
