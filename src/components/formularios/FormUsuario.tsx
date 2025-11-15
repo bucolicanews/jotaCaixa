@@ -94,7 +94,7 @@ interface FormUsuarioProps {
   usuarioInicial?: AnyProfile | null;
   onSaveComplete: () => void;
   isNewClient?: boolean;
-  isReadOnly?: boolean; // NOVO PROP
+  isReadOnly?: boolean; // FIX: NOVO PROP
 }
 
 // Type guard para verificar se o perfil é UsuarioProfile

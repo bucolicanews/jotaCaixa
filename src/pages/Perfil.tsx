@@ -57,8 +57,8 @@ const Perfil: React.FC = () => {
   
   // Se for Usuário (Funcionário), usa o FormUsuario no modo de edição
   if (role === 'Usuario') {
-      // Se o usuário está editando o próprio perfil, ele é somente leitura
-      const isReadOnly = true; 
+      // O usuário pode editar o próprio perfil, então isReadOnly é false
+      const isReadOnly = false; 
       
       return (
         <LayoutPrincipal>
