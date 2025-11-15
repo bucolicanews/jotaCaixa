@@ -21,6 +21,7 @@ import FormFolgas from '../formularios/FormFolgas';
 import FormDocumentos from '../usuario-forms/FormDocumentos';
 import FormDadosContratuais from '../usuario-forms/FormDadosContratuais';
 import FormFerias from '@/components/usuario-forms/FormFerias';
+import { cn } from '@/lib/utils';
 
 const textOptional = z.string().optional().or(z.literal(''));
 const urlSchema = z.string().url('URL inválida.').optional().or(z.literal(''));
@@ -409,10 +410,10 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
   
   // Read-Only status para os componentes filhos
   const isChildFormReadOnly = (tabValue: string) => {
-      // Se o modo read-only global estiver ativo, todos os filhos são read-only.
+      // 1. Se o modo read-only global (passado pelo gestor) estiver ativo, todos os filhos são read-only.
       if (isReadOnly) return true;
       
-      // Se for edição de perfil de funcionário por ele mesmo
+      // 2. Se for edição de perfil de funcionário por ele mesmo
       if (isSelfEditUsuario) {
           // Apenas 'cadastrais' deve ser editável. Todos os outros são read-only.
           return tabValue !== 'cadastrais';
@@ -420,6 +421,9 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
       
       return false;
   };
+  
+  // 3. Controla a visibilidade do botão de salvar
+  const shouldShowSaveButton = !isReadOnly && (!isSelfEditUsuario || activeTab === 'cadastrais');
   
   if (isNewClient) {
       return (
@@ -461,6 +465,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
           <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
             <TabsList className="flex flex-wrap justify-start w-full h-auto p-1">
+              {/* Removido disabled dos TabsTrigger */}
               <TabsTrigger value="pessoal" className="flex-1 md:flex-none md:w-1/6">Geral</TabsTrigger>
               <TabsTrigger value="folgas" className="flex-1 md:flex-none md:w-1/6">Folgas</TabsTrigger>
               <TabsTrigger value="ferias" className="flex-1 md:flex-none md:w-1/6">Férias</TabsTrigger>
@@ -549,8 +554,8 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
             </TabsContent>
           </Tabs>
           
-          {/* O botão de salvar só é habilitado se não for read-only globalmente */}
-          {!isReadOnly && (
+          {/* O botão de salvar só é habilitado se não for read-only globalmente E se for a aba editável para o usuário funcionário */}
+          {shouldShowSaveButton && (
               <Button type="submit" className="w-full" disabled={isSubmitting}>
                 {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Salvar Alterações
