@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { useSessao } from '@/hooks/use-sessao';
-import { Loader2, Filter, Clock, Users, Building2, Printer, CalendarCheck } from 'lucide-react';
+import { Loader2, Filter, Clock, Users, Building2, Printer } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { format, startOfMonth, endOfMonth, parseISO, isSameDay, eachDayOfInterval, isWithinInterval, getDay, differenceInMinutes } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
@@ -46,6 +46,7 @@ const JORNADA_DIARIA_PADRAO = 8; // Horas diárias padrão CLT
 const FolhaPonto: React.FC = () => {
   const { role, perfil, usuario, carregando } = useSessao();
   const { printContent } = usePrint();
+  
   const [dataSelecionada, setDataSelecionada] = useState<Date>(startOfMonth(new Date()));
   const [carregandoDados, setCarregandoDados] = useState(false);
   
@@ -80,7 +81,7 @@ const FolhaPonto: React.FC = () => {
   
   const empresaIdParaFiltro = isAdmin ? clienteSelecionadoId : (isCliente ? perfil?.id : null);
   
-  // Variável movida para o topo para resolver TS2448
+  // Variável para o funcionário selecionado
   const funcionarioDetalhe = funcionarios.find(f => f.id === funcionarioSelecionadoId);
   
   // NOVO CÁLCULO: Determina se o funcionário selecionado é um usuário do Admin
@@ -95,7 +96,7 @@ const FolhaPonto: React.FC = () => {
       carregando: carregandoFerias,
       refetch: refetchFerias,
   } = useFeriasCLT(
-      funcionarioSelecionadoId,
+      funcionarioSelecionadoId || undefined, // CORREÇÃO TS2345: Passa undefined se for null
       funcionarioDetalhe?.data_inicio_contrato,
       dataSelecionada,
       registrosDoFuncionario // Passa todos os registros para o cálculo de faltas
@@ -309,16 +310,10 @@ const FolhaPonto: React.FC = () => {
   
   // --- Lógica de Impressão ---
   
-  const handlePrint = (orientation: 'portrait' | 'landscape') => {
-    if (!funcionarioDetalhe || !empresaIdParaFiltro) {
-        showError('Selecione um funcionário e uma empresa para imprimir.');
-        return;
-    }
-    
-    // --- DUPLICAÇÃO DA LÓGICA DE CÁLCULO (Necessário para SSR/Impressão) ---
-    
-    const DAY_MAP: Record<number, string> = { 0: 'Sunday', 1: 'Monday', 2: 'Tuesday', 3: 'Wednesday', 4: 'Thursday', 5: 'Friday', 6: 'Saturday' };
-    
+  // Variáveis calculadas do useMemo (movidas para o escopo do componente para serem acessíveis)
+  const { diasProcessados, totalMinutosTrabalhados, minutosDiferenca, totalMinutosExtras100 } = useMemo(() => {
+    if (!funcionarioDetalhe) return { diasProcessados: {}, totalMinutosTrabalhados: 0, minutosDiferenca: 0, totalMinutosExtras100: 0 };
+
     let totalMinutosTrabalhados = 0;
     let totalMinutosExtras100 = 0;
     
@@ -337,8 +332,10 @@ const FolhaPonto: React.FC = () => {
     const hoje = new Date();
     const todosOsDiasDoMes = eachDayOfInterval({ start: inicioMes, end: fimMes });
     
-    const diasProcessados: Record<string, any> = {}; // Usando 'any' para simplificar a tipagem duplicada
+    const diasProcessados: Record<string, any> = {};
     
+    const DAY_MAP: Record<number, string> = { 0: 'Sunday', 1: 'Monday', 2: 'Tuesday', 3: 'Wednesday', 4: 'Thursday', 5: 'Friday', 6: 'Saturday' };
+
     for (const data of todosOsDiasDoMes) {
         const diaString = format(data, 'yyyy-MM-dd');
         const registrosDoDia = registrosPorDia[diaString] || [];
@@ -483,9 +480,15 @@ const FolhaPonto: React.FC = () => {
     const minutosDiferenca = jornadaMensalMinutos - totalMinutosTrabalhados; 
 
     return { diasProcessados, totalMinutosTrabalhados, minutosDiferenca, totalMinutosExtras100 };
-  }, [funcionario, mes, JORNADA_DIARIA_PADRAO, DAY_MAP, registrosDoFuncionario, feriasDoFuncionario]);
+  }, [funcionarioDetalhe, dataSelecionada, registrosDoFuncionario, feriasDoFuncionario]);
 
 
+  const handlePrint = (orientation: 'portrait' | 'landscape') => {
+    if (!funcionarioDetalhe || !empresaIdParaFiltro) {
+        showError('Selecione um funcionário e uma empresa para imprimir.');
+        return;
+    }
+    
     const printComponent = (
         <FolhaPontoPrint
             empresaNome={empresaNome}
@@ -519,10 +522,6 @@ const FolhaPonto: React.FC = () => {
     return <LayoutPrincipal><Card><CardHeader><CardTitle>Acesso Negado</CardTitle></CardHeader><CardContent><p>Você não tem permissão para acessar a folha de ponto.</p></CardContent></Card></LayoutPrincipal>;
   }
   
-  // Calcula faltas injustificadas no mês
-  const faltasInjustificadasMesAtual = Object.values(diasProcessados).filter(d => d.isFalta && !d.isFaltaJustificada && isWithinInterval(parseISO(d.registros[0]?.horario_registro || format(dataSelecionada, 'yyyy-MM-dd')), { start: startOfMonth(dataSelecionada), end: endOfMonth(dataSelecionada) })).length;
-
-
   return (
     <LayoutPrincipal>
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">

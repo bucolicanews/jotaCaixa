@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { parseISO, addYears, isBefore, isAfter, format, startOfMonth, endOfMonth } from 'date-fns';
+import { parseISO, addYears, isBefore, isAfter, startOfMonth, endOfMonth } from 'date-fns';
 import { RegistroPonto } from '@/types/ponto';
 
 interface PeriodoAquisitivo {
@@ -43,7 +43,8 @@ export function useFeriasCLT(
     todosRegistrosDoFuncionario: RegistroPonto[]
 ): FeriasCLTData {
     const [periodoAquisitivo, setPeriodoAquisitivo] = useState<PeriodoAquisitivo | null>(null);
-    const [faltasInjustificadasMes, setFaltasInjustificadasAcumuladas] = useState(0);
+    // CORREÇÃO: Renomeando o setter para faltas mensais
+    const [faltasInjustificadasMes, setFaltasInjustificadasMes] = useState(0);
     const [faltasInjustificadasAcumuladas, setFaltasInjustificadasAcumuladas] = useState(0);
     const [diasDeFeriasDireito, setDiasDeFeriasDireito] = useState(30);
     const [carregando, setCarregando] = useState(true);
