@@ -399,6 +399,33 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
     }
   };
   
+  // --- Lógica de Read-Only para Tabs ---
+  const isSelfEditUsuario = criadorRole === 'Usuario';
+  
+  const isTabDisabled = (tabValue: string) => {
+      // Se o formulário estiver em modo somente leitura (passado pelo pai), todas as abas são desabilitadas.
+      if (isReadOnly) return true; 
+      
+      // Se for edição de perfil de funcionário por ele mesmo
+      if (isSelfEditUsuario) {
+          // Tabs que o usuário não deve acessar/editar
+          const restrictedTabs = ['pessoal', 'folgas', 'ferias', 'contrato', 'documentos'];
+          return restrictedTabs.includes(tabValue);
+      }
+      
+      return false;
+  };
+  
+  // Read-Only status para os componentes filhos
+  const isChildFormReadOnly = (tabValue: string) => {
+      if (isReadOnly) return true;
+      
+      if (!isSelfEditUsuario) return false;
+      
+      // Apenas 'cadastrais' deve ser editável. Todos os outros são read-only.
+      return tabValue !== 'cadastrais';
+  };
+  
   if (isNewClient) {
       return (
         <FormProvider {...form}>
@@ -439,12 +466,12 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <TabsList className="flex flex-wrap justify-start w-full h-auto p-1">
-              <TabsTrigger value="pessoal" className="flex-1 md:flex-none md:w-1/6" disabled={isReadOnly}>Geral</TabsTrigger>
-              <TabsTrigger value="folgas" className="flex-1 md:flex-none md:w-1/6" disabled={isReadOnly}>Folgas</TabsTrigger>
-              <TabsTrigger value="ferias" className="flex-1 md:flex-none md:w-1/6" disabled={isReadOnly}>Férias</TabsTrigger>
+              <TabsTrigger value="pessoal" className="flex-1 md:flex-none md:w-1/6" disabled={isTabDisabled('pessoal')}>Geral</TabsTrigger>
+              <TabsTrigger value="folgas" className="flex-1 md:flex-none md:w-1/6" disabled={isTabDisabled('folgas')}>Folgas</TabsTrigger>
+              <TabsTrigger value="ferias" className="flex-1 md:flex-none md:w-1/6" disabled={isTabDisabled('ferias')}>Férias</TabsTrigger>
               <TabsTrigger value="cadastrais" className="flex-1 md:flex-none md:w-1/6">Dados Cadastrais</TabsTrigger>
-              <TabsTrigger value="documentos" className="flex-1 md:flex-none md:w-1/6">Documentos</TabsTrigger>
-              <TabsTrigger value="contrato" className="flex-1 md:flex-none md:w-1/6" disabled={isReadOnly}>Contrato (RH)</TabsTrigger>
+              <TabsTrigger value="documentos" className="flex-1 md:flex-none md:w-1/6" disabled={isTabDisabled('documentos')}>Documentos</TabsTrigger>
+              <TabsTrigger value="contrato" className="flex-1 md:flex-none md:w-1/6" disabled={isTabDisabled('contrato')}>Contrato (RH)</TabsTrigger>
             </TabsList>
             
             {/* TAB 1: GERAL */}
@@ -454,20 +481,20 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                   isSubmitting={isSubmitting}
                   permissoesVisiveis={permissoesVisiveis}
                   handleSelectAll={handleSelectAll}
-                  isReadOnly={isReadOnly}
+                  isReadOnly={isChildFormReadOnly('pessoal')}
               />
               
               {/* Campos de Login (Apenas para criação ou alteração de senha) */}
               <Separator />
               <h3 className="font-semibold text-lg">Acesso e Login</h3>
               <FormField control={form.control} name="email" render={({ field }) => (
-                  <FormItem><FormLabel>Email (Login)</FormLabel><FormControl><Input type="email" placeholder="email@exemplo.com" {...field} disabled={isEditing || isReadOnly} /></FormControl><FormMessage /></FormItem>
+                  <FormItem><FormLabel>Email (Login)</FormLabel><FormControl><Input type="email" placeholder="email@exemplo.com" {...field} disabled={isEditing || isChildFormReadOnly('pessoal')} /></FormControl><FormMessage /></FormItem>
               )} />
               {!isEditing && <FormField control={form.control} name="senha" render={({ field }) => (
-                  <FormItem><FormLabel>Criar Senha</FormLabel><FormControl><Input type="password" placeholder="••••••••" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
+                  <FormItem><FormLabel>Criar Senha</FormLabel><FormControl><Input type="password" placeholder="••••••••" {...field} disabled={isChildFormReadOnly('pessoal')} /></FormControl><FormMessage /></FormItem>
               )} />}
               {isEditing && <FormField control={form.control} name="senha" render={({ field }) => (
-                  <FormItem><FormLabel>Alterar Senha (Opcional)</FormLabel><FormControl><Input type="password" placeholder="••••••••" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
+                  <FormItem><FormLabel>Alterar Senha (Opcional)</FormLabel><FormControl><Input type="password" placeholder="••••••••" {...field} disabled={isChildFormReadOnly('pessoal')} /></FormControl><FormMessage /></FormItem>
               )} />}
             </TabsContent>
             
@@ -477,7 +504,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                     control={form.control as unknown as Control<any>}
                     isSubmitting={isSubmitting}
                     usuarioInicial={userProfile}
-                    isReadOnly={isReadOnly}
+                    isReadOnly={isChildFormReadOnly('folgas')}
                 />
             </TabsContent>
             
@@ -485,11 +512,11 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
             <TabsContent value="ferias" className="mt-4 space-y-6 p-4">
                 <FormFerias
                     usuarioInicial={userProfile}
-                    isReadOnly={isReadOnly}
+                    isReadOnly={isChildFormReadOnly('ferias')}
                 />
             </TabsContent>
 
-            {/* TAB 4: DADOS CADASTRAIS */}
+            {/* TAB 4: DADOS CADASTRAIS (EDITÁVEL) */}
             <TabsContent value="cadastrais" className="mt-4 space-y-6 p-4">
                 <div className="flex justify-between items-center">
                     <h3 className="font-semibold text-lg flex items-center"><Tag className="w-5 h-5 mr-2" /> Tags de Contrato</h3>
@@ -502,7 +529,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                     resourceId={resourceId}
                     tagRefreshKey={refreshKey}
                     onTagToggle={handleTagToggle}
-                    isReadOnly={isReadOnly}
+                    isReadOnly={isChildFormReadOnly('cadastrais')}
                 />
             </TabsContent>
             
@@ -512,7 +539,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                     control={form.control as unknown as Control<any>}
                     isSubmitting={isSubmitting}
                     resourceId={resourceId}
-                    isReadOnly={isReadOnly}
+                    isReadOnly={isChildFormReadOnly('documentos')}
                 />
             </TabsContent>
 
@@ -522,11 +549,12 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                     control={form.control as unknown as Control<any>}
                     isSubmitting={isSubmitting}
                     isContractEditable={isContractEditable}
-                    isReadOnly={isReadOnly}
+                    isReadOnly={isChildFormReadOnly('contrato')}
                 />
             </TabsContent>
           </Tabs>
           
+          {/* O botão de salvar só é habilitado se não for read-only globalmente */}
           {!isReadOnly && (
               <Button type="submit" className="w-full" disabled={isSubmitting}>
                 {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
