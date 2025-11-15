@@ -42,7 +42,7 @@ const Header: React.FC = () => {
   const [tituloApp, setTituloApp] = useState('Fluxo de Caixa');
   const [planoDetalhes, setPlanoDetalhes] = useState<{ nome: string, preco: number } | null>(null);
   const [adminBranding, setAdminBranding] = useState<{ logoUrl: string | null, nome: string | null } | null>(null);
-  const [loadingBranding, setLoadingBranding] = useState(true); // NOVO ESTADO DE LOADING
+  const [loadingBranding, setLoadingBranding] = useState(true);
   
   // NOVO: Hook de Notificações (usando mensagensParaResponder)
   const { mensagensParaResponder, carregando: carregandoNotificacoes } = useTicketNotifications();
@@ -106,7 +106,7 @@ const Header: React.FC = () => {
       } else if (role === 'Usuario') {
         // Se for funcionário do Admin, AGUARDA O BRANDING
         if (isUserOfAdmin) {
-            if (loadingBranding) return; // <-- CORREÇÃO: Sai se o branding ainda estiver carregando
+            if (loadingBranding) return;
             appName = adminBranding?.nome ?? 'Admin';
         } else if (userProfile.cliente_id) {
             // Se for funcionário de Cliente, usa o nome do Cliente
@@ -181,7 +181,11 @@ const Header: React.FC = () => {
             </Button>
           </SheetTrigger>
           <SheetContent side="left" className="p-0 w-64">
-            <MenuLateral onLinkClick={() => setSheetOpen(false)} />
+            <MenuLateral 
+                onLinkClick={() => setSheetOpen(false)} 
+                adminBranding={adminBranding} // PASSANDO O BRANDING
+                loadingBranding={loadingBranding} // PASSANDO O LOADING
+            />
           </SheetContent>
         </Sheet>
         

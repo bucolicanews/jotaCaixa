@@ -1,11 +1,11 @@
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { LayoutDashboard, DollarSign, ArrowUpCircle, ArrowDownCircle, Banknote, FileText, Upload, Settings, BookOpen, Users, Building2, Clock, Contact, CalendarCheck, User, FileSignature, Tag, FileTextIcon, Package, History, FileDown, MessageSquare, Scale } from 'lucide-react';
-import React, { useState, useEffect, useCallback } from 'react';
+import React from 'react';
 import { useSessao } from '@/hooks/use-sessao';
 import { ClienteProfile, UsuarioProfile, AdminUsuarioProfile, AdminProfile } from '@/types/usuario';
 import { isPast, parseISO } from 'date-fns';
-import { supabase } from '@/integrations/supabase/client';
+import { Loader2 } from '@/components/ui/loader'; // Importando Loader2
 
 interface ItemMenu {
   nome: string;
@@ -104,15 +104,13 @@ const SECOES_MENU: MenuSection[] = [
 
 interface MenuLateralProps {
   onLinkClick?: () => void;
+  adminBranding: { logoUrl: string | null, nome: string | null } | null; // NOVO PROP
+  loadingBranding: boolean; // NOVO PROP
 }
 
-const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick }) => {
+const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick, adminBranding, loadingBranding }) => {
   const localizacao = useLocation();
   const { role, perfil } = useSessao();
-
-  // NOVO ESTADO para armazenar o branding do Admin (se o usuário for funcionário dele)
-  const [adminBranding, setAdminBranding] = useState<{ logoUrl: string | null, nome: string | null } | null>(null);
-  const [loadingBranding, setLoadingBranding] = useState(true);
 
   // Verifica se é um usuário não vinculado (apenas se for Usuario E não tiver cliente_id OU admin_id)
   const isUnassignedUser = role === 'Usuario' && !(perfil as UsuarioProfile)?.cliente_id && !(perfil as AdminUsuarioProfile)?.admin_id;
@@ -129,41 +127,8 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick }) => {
   // ele não deve ver o menu completo.
   const isPreAuthFlow = localizacao.pathname === '/selecao-perfil';
   
-  // Lógica para a Logo do Admin
   const isAdmin = role === 'Admin';
   const isUserOfAdmin = role === 'Usuario' && 'admin_id' in userProfile && !!userProfile.admin_id;
-  
-  // Determina o ID do Admin para buscar o branding
-  const targetAdminId = isAdmin ? perfil?.id : (isUserOfAdmin ? (perfil as AdminUsuarioProfile).admin_id : null);
-
-  const fetchAdminBranding = useCallback(async () => {
-      if (!targetAdminId) {
-          setLoadingBranding(false);
-          setAdminBranding(null);
-          return;
-      }
-      
-      setLoadingBranding(true);
-      
-      // Busca o perfil do Admin (que contém logo_url e nome)
-      const { data, error } = await supabase
-          .from('tbl_admins')
-          .select('nome, logo_url')
-          .eq('id', targetAdminId)
-          .single();
-          
-      if (error) {
-          console.error('Erro ao buscar branding do Admin:', error);
-          setAdminBranding(null);
-      } else {
-          setAdminBranding({ logoUrl: data.logo_url, nome: data.nome });
-      }
-      setLoadingBranding(false);
-  }, [targetAdminId]);
-
-  useEffect(() => {
-      fetchAdminBranding();
-  }, [fetchAdminBranding]);
   
   // Usa o branding correto
   const branding = isAdmin ? { logoUrl: (perfil as AdminProfile)?.logo_url, nome: (perfil as AdminProfile)?.nome } : adminBranding;
@@ -227,7 +192,9 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick }) => {
     <div className="flex flex-col h-full bg-background text-foreground">
       <div className="p-4 border-b flex flex-col items-center justify-center space-y-2">
         {/* Lógica de exibição da Logo e Nome do Admin/Empresa */}
-        {shouldShowAdminBranding ? (
+        {loadingBranding && shouldShowAdminBranding ? (
+            <div className="h-16 flex items-center"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
+        ) : shouldShowAdminBranding && branding ? (
             <>
                 {logoUrl ? (
                     <img 
@@ -278,7 +245,7 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick }) => {
                         const estaAtivo = localizacao.pathname === item.caminho || localizacao.pathname + localizacao.search === item.caminho;
                         const Icone = item.icone;
                         
-                        // Se o acesso expirou e não é Painel ou Minha Assinatura, desabilita o link
+                        // Se o acesso expirou, desabilita o link
                         const isDisabled = isAccessExpired && item.caminho !== '/painel' && item.caminho !== '/minha-assinatura';
 
                         return (
