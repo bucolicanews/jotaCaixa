@@ -128,7 +128,7 @@ const FormFerias: React.FC<FormFeriasProps> = ({ usuarioInicial }) => {
                         </div>
                         <div className="p-3 bg-secondary rounded-md">
                             <p className="text-sm font-medium text-muted-foreground flex items-center"><CalendarCheck className="w-4 h-4 mr-2" /> Última Férias Gozada</p>
-                            <p className className="text-lg font-bold mt-1">{ultimaFeriasDisplay}</p>
+                            <p className="text-lg font-bold mt-1">{ultimaFeriasDisplay}</p>
                         </div>
                         <div className="p-3 bg-blue-100 dark:bg-blue-900/20 rounded-md">
                             <p className="text-sm font-medium text-blue-700 dark:text-blue-300">Período Aquisitivo Atual</p>
