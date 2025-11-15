@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Loader2, Edit, Trash2, FileSignature, Clock, Eye } from 'lucide-react';
 import { format, parseISO, eachDayOfInterval, getDay, isSameDay, differenceInMinutes, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
+import { ptBR } from 'date-fns/locale'; // IMPORT CORRIGIDO
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -103,7 +104,6 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
     onManageWorkedDayOff,
     isReadOnly, // USANDO O NOVO PROP
 }) => {
-    const { } = useSessao(); 
     const [isDeleting, setIsDeleting] = useState(false);
     
     // CORREÇÃO TS2352: Usando 'as unknown as' para conversão segura
@@ -327,10 +327,20 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
         return '';
     };
     
-    // Função para extrair as batidas do dia (definida fora do useMemo)
-    // Já está definida no escopo global do arquivo, mas vamos garantir que a versão local seja usada.
     const getBatidas = (registros: RegistroPonto[]) => {
-        return getBatidasDoDia(registros);
+        const batidas = registros
+            .filter(r => r.tipo === 'Entrada' || r.tipo === 'Saida')
+            .sort((a, b) => parseISO(a.horario_registro).getTime() - parseISO(b.horario_registro).getTime());
+            
+        const times = batidas.map(r => format(parseISO(r.horario_registro), 'HH:mm'));
+        
+        // Retorna as 4 primeiras batidas (E1, S1, E2, S2)
+        return {
+            e1: times[0] || '',
+            s1: times[1] || '',
+            e2: times[2] || '',
+            s2: times[3] || '',
+        };
     };
 
 
@@ -409,7 +419,6 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
                                     minutosAbonadosCredited,
                                 } = diaData;
                                 
-                                // CORREÇÃO AQUI: Usando a função getBatidas
                                 const { e1, s1, e2, s2 } = getBatidas(registrosDoDia);
                                 
                                 const statusDisplay = isFalta ? 'FALTA' : (isAbono ? 'ABONO' : 'N/A');
