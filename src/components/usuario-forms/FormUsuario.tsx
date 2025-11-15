@@ -21,7 +21,6 @@ import FormFolgas from '../formularios/FormFolgas';
 import FormDocumentos from '../usuario-forms/FormDocumentos';
 import FormDadosContratuais from '../usuario-forms/FormDadosContratuais';
 import FormFerias from '@/components/usuario-forms/FormFerias';
-import { cn } from '@/lib/utils';
 
 const textOptional = z.string().optional().or(z.literal(''));
 const urlSchema = z.string().url('URL inválida.').optional().or(z.literal(''));
@@ -419,7 +418,6 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
   
   // NOVO HANDLER: Intercepta a mudança de aba para bloquear se estiver desabilitada
   const handleTabChange = (newTab: string) => {
-      // REMOVIDO: A verificação de isTabDisabled aqui, pois queremos que a aba seja navegável.
       setActiveTab(newTab);
   };
   
@@ -477,13 +475,13 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
           <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
             <TabsList className="flex flex-wrap justify-start w-full h-auto p-1">
-              {/* REMOVIDO: disabled={isTabDisabled('pessoal')} */}
-              <TabsTrigger value="pessoal" className={cn("flex-1 md:flex-none md:w-1/6", isTabDisabled('pessoal') && 'opacity-50')}>Geral</TabsTrigger>
-              <TabsTrigger value="folgas" className={cn("flex-1 md:flex-none md:w-1/6", isTabDisabled('folgas') && 'opacity-50')}>Folgas</TabsTrigger>
-              <TabsTrigger value="ferias" className={cn("flex-1 md:flex-none md:w-1/6", isTabDisabled('ferias') && 'opacity-50')}>Férias</TabsTrigger>
+              {/* REMOVIDO: disabled={isTabDisabled('pessoal')} e a classe cn que aplicava opacity-50 */}
+              <TabsTrigger value="pessoal" className="flex-1 md:flex-none md:w-1/6">Geral</TabsTrigger>
+              <TabsTrigger value="folgas" className="flex-1 md:flex-none md:w-1/6">Folgas</TabsTrigger>
+              <TabsTrigger value="ferias" className="flex-1 md:flex-none md:w-1/6">Férias</TabsTrigger>
               <TabsTrigger value="cadastrais" className="flex-1 md:flex-none md:w-1/6">Dados Cadastrais</TabsTrigger>
-              <TabsTrigger value="documentos" className={cn("flex-1 md:flex-none md:w-1/6", isTabDisabled('documentos') && 'opacity-50')}>Documentos</TabsTrigger>
-              <TabsTrigger value="contrato" className={cn("flex-1 md:flex-none md:w-1/6", isTabDisabled('contrato') && 'opacity-50')}>Contrato (RH)</TabsTrigger>
+              <TabsTrigger value="documentos" className="flex-1 md:flex-none md:w-1/6">Documentos</TabsTrigger>
+              <TabsTrigger value="contrato" className="flex-1 md:flex-none md:w-1/6">Contrato (RH)</TabsTrigger>
             </TabsList>
             
             {/* TAB 1: GERAL */}
