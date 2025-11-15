@@ -1,10 +1,11 @@
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { LayoutDashboard, DollarSign, ArrowUpCircle, ArrowDownCircle, Banknote, FileText, Upload, Settings, BookOpen, Users, Building2, Clock, Contact, CalendarCheck, User, FileSignature, Tag, FileTextIcon, Package, History, FileDown, MessageSquare, Scale } from 'lucide-react';
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useSessao } from '@/hooks/use-sessao';
 import { ClienteProfile, UsuarioProfile, AdminUsuarioProfile, AdminProfile } from '@/types/usuario';
 import { isPast, parseISO } from 'date-fns';
+import { supabase } from '@/integrations/supabase/client';
 
 interface ItemMenu {
   nome: string;
@@ -109,6 +110,10 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick }) => {
   const localizacao = useLocation();
   const { role, perfil } = useSessao();
 
+  // NOVO ESTADO para armazenar o branding do Admin (se o usuário for funcionário dele)
+  const [adminBranding, setAdminBranding] = useState<{ logoUrl: string | null, nome: string | null } | null>(null);
+  const [loadingBranding, setLoadingBranding] = useState(true);
+
   // Verifica se é um usuário não vinculado (apenas se for Usuario E não tiver cliente_id OU admin_id)
   const isUnassignedUser = role === 'Usuario' && !(perfil as UsuarioProfile)?.cliente_id && !(perfil as AdminUsuarioProfile)?.admin_id;
   const isPendingClient = role === 'Cliente' && !(perfil as ClienteProfile)?.aprovado;
@@ -125,15 +130,47 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick }) => {
   const isPreAuthFlow = localizacao.pathname === '/selecao-perfil';
   
   // Lógica para a Logo do Admin
-  const adminProfile = role === 'Admin' ? perfil as AdminProfile : null;
-  const logoUrl = adminProfile?.logo_url;
-  const adminNome = adminProfile?.nome;
-  
-  // NOVO: Verifica se o usuário logado é um funcionário do Admin
+  const isAdmin = role === 'Admin';
   const isUserOfAdmin = role === 'Usuario' && 'admin_id' in userProfile && !!userProfile.admin_id;
   
-  // Se for funcionário do Admin, usa a logo e o nome do Admin
-  const shouldShowAdminBranding = role === 'Admin' || isUserOfAdmin;
+  // Determina o ID do Admin para buscar o branding
+  const targetAdminId = isAdmin ? perfil?.id : (isUserOfAdmin ? (perfil as AdminUsuarioProfile).admin_id : null);
+
+  const fetchAdminBranding = useCallback(async () => {
+      if (!targetAdminId) {
+          setLoadingBranding(false);
+          setAdminBranding(null);
+          return;
+      }
+      
+      setLoadingBranding(true);
+      
+      // Busca o perfil do Admin (que contém logo_url e nome)
+      const { data, error } = await supabase
+          .from('tbl_admins')
+          .select('nome, logo_url')
+          .eq('id', targetAdminId)
+          .single();
+          
+      if (error) {
+          console.error('Erro ao buscar branding do Admin:', error);
+          setAdminBranding(null);
+      } else {
+          setAdminBranding({ logoUrl: data.logo_url, nome: data.nome });
+      }
+      setLoadingBranding(false);
+  }, [targetAdminId]);
+
+  useEffect(() => {
+      fetchAdminBranding();
+  }, [fetchAdminBranding]);
+  
+  // Usa o branding correto
+  const branding = isAdmin ? { logoUrl: (perfil as AdminProfile)?.logo_url, nome: (perfil as AdminProfile)?.nome } : adminBranding;
+  const logoUrl = branding?.logoUrl;
+  const adminNome = branding?.nome;
+  
+  const shouldShowAdminBranding = isAdmin || isUserOfAdmin;
 
   const checkPermission = (item: ItemMenu) => {
     if (!item.permissionKey) return true;
