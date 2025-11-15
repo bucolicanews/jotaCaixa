@@ -15,7 +15,7 @@ interface FormDocumentosProps {
   control: Control<any>;
   isSubmitting: boolean;
   resourceId: string | undefined;
-  isReadOnly: boolean; // NOVO PROP
+  isReadOnly: boolean; // FIX: NOVO PROP
 }
 
 const FormDocumentos: React.FC<FormDocumentosProps> = ({ control, isSubmitting, resourceId, isReadOnly }) => {
