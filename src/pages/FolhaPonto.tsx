@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { useSessao } from '@/hooks/use-sessao';
-import { Loader2, Clock, User, Filter, CalendarCheck } from 'lucide-react';
+import { Loader2, Clock, User, Filter, CalendarCheck, ChevronLeft } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { supabase } from '@/integrations/supabase/client';
 import { showError } from '@/utils/toast';
-import { UsuarioProfile, ClienteProfile } from '@/types/usuario';
+import { UsuarioProfile, ClienteProfile, AdminUsuarioProfile } from '@/types/usuario';
 import { Cliente } from '@/types/cliente';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';

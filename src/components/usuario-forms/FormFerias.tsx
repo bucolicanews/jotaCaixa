@@ -59,9 +59,7 @@ const FormFerias: React.FC<FormFeriasProps> = ({ usuarioInicial }) => {
       );
   }
   
-  const ultimaFeriasDisplay = ultimaFeriasFim 
-    ? format(ultimaFeriasFim, 'dd/MM/yyyy', { locale: ptBR }) 
-    : 'Nenhuma férias gozada registrada.';
+  // Removido: const ultimaFeriasDisplay = ultimaFeriasFim ...
     
   // Datas já são Date objects
   const proximoAquisitivoInicio = periodoAtual?.inicio_aquisitivo 
