@@ -10,7 +10,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { useSessao } from '@/hooks/use-sessao';
 import UserAvatar from './UserAvatar';
 import { Link } from 'react-router-dom';
-import { UsuarioProfile, ClienteProfile } from '@/types/usuario';
+import { UsuarioProfile, ClienteProfile, AdminProfile, AdminUsuarioProfile } from '@/types/usuario';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { BASE_URL } from '@/config/app-config'; // Importando BASE_URL
@@ -41,6 +41,7 @@ const Header: React.FC = () => {
   const { perfil, role } = useSessao();
   const [tituloApp, setTituloApp] = useState('Fluxo de Caixa');
   const [planoDetalhes, setPlanoDetalhes] = useState<{ nome: string, preco: number } | null>(null);
+  const [logoUrl, setLogoUrl] = useState<string | null>(null); // NOVO ESTADO PARA LOGO
   
   // NOVO: Hook de Notificações (usando mensagensParaResponder)
   const { mensagensParaResponder, carregando: carregandoNotificacoes } = useTicketNotifications();
@@ -49,32 +50,56 @@ const Header: React.FC = () => {
     const updateTitle = async () => {
       if (!perfil || !role) {
         setTituloApp('Fluxo de Caixa');
+        setLogoUrl(null);
         return;
       }
 
       let currentPlanoId: string | null = null;
 
       if (role === 'Admin') {
-        setTituloApp('Admin Dashboard');
+        const adminProfile = perfil as AdminProfile;
+        setTituloApp(adminProfile.nome); // Usa o nome completo do Admin
+        setLogoUrl(adminProfile.logo_url || null); // Define a logo
       } else if (role === 'Cliente') {
         const clienteProfile = perfil as ClienteProfile;
         setTituloApp(clienteProfile.nome);
         currentPlanoId = clienteProfile.plano_id || null; 
+        setLogoUrl(null); // Clientes não usam logo no header (por enquanto)
       } else if (role === 'Usuario') {
-        const usuarioProfile = perfil as UsuarioProfile;
-        if (usuarioProfile.cliente_id) {
-          // Buscar o nome da empresa (Cliente)
-          const { data } = await supabase
+        const usuarioProfile = perfil as UsuarioProfile | AdminUsuarioProfile;
+        
+        let proprietarioId: string | null = null;
+        if ('admin_id' in usuarioProfile && usuarioProfile.admin_id) {
+            proprietarioId = usuarioProfile.admin_id;
+        } else if ('cliente_id' in usuarioProfile && usuarioProfile.cliente_id) {
+            proprietarioId = usuarioProfile.cliente_id;
+        }
+        
+        if (proprietarioId) {
+          // Buscar o nome da empresa (Cliente ou Admin)
+          const { data: clienteData } = await supabase
             .from('tbl_clientes')
             .select('nome, plano_id')
-            .eq('id', usuarioProfile.cliente_id)
+            .eq('id', proprietarioId)
             .single();
-          
-          if (data) {
-            setTituloApp(data.nome);
-            currentPlanoId = data.plano_id || null;
+            
+          if (clienteData) {
+            setTituloApp(clienteData.nome);
+            currentPlanoId = clienteData.plano_id || null;
           } else {
-            setTituloApp('Usuário - Sem Empresa');
+            // Se for usuário do Admin, busca o nome do Admin
+            const { data: adminData } = await supabase
+                .from('tbl_admins')
+                .select('nome, logo_url')
+                .eq('id', proprietarioId)
+                .single();
+            
+            if (adminData) {
+                setTituloApp(adminData.nome);
+                setLogoUrl(adminData.logo_url || null);
+            } else {
+                setTituloApp('Usuário - Sem Empresa');
+            }
           }
         } else {
           setTituloApp('Usuário Não Vinculado');
@@ -136,8 +161,13 @@ const Header: React.FC = () => {
           </SheetContent>
         </Sheet>
         
+        {/* Título/Logo Dinâmico */}
         <h1 className="text-xl font-bold text-primary truncate max-w-[200px] sm:max-w-none" title={tituloApp}>
-          {tituloApp}
+            {logoUrl ? (
+                <img src={logoUrl} alt="Logo da Empresa" className="h-8 object-contain" />
+            ) : (
+                tituloApp
+            )}
         </h1>
       </div>
       

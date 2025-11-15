@@ -7,6 +7,7 @@ export interface AdminProfile {
   nome: string;
   email: string;
   avatar_url?: string | null;
+  logo_url?: string | null; // NOVO CAMPO
   cpf?: string | null;
   cnpj?: string | null;
   rg?: string | null;
@@ -20,6 +21,7 @@ export interface AdminProfile {
   bairro?: string | null;
   cidade?: string | null;
   estado?: string | null;
+  criado_em?: string;
 }
 
 export interface ClienteProfile {

@@ -16,6 +16,7 @@ import { Separator } from '../ui/separator';
 import { useBulkTagManager } from '@/hooks/use-bulk-tag-manager';
 import { Checkbox } from '../ui/checkbox';
 import { useSessao } from '@/hooks/use-sessao';
+import LogoUpload from '../LogoUpload'; // NOVO IMPORT
 
 const textOptional = z.string().optional().or(z.literal(''));
 
@@ -58,7 +59,7 @@ interface FormPerfilProps {
 }
 
 const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }) => {
-  const { role } = useSessao();
+  const { role, refetch } = useSessao();
   
   if (!perfilInicial) return null; 
     
@@ -70,7 +71,7 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   const resourceId = perfilInicial.id; 
-  const { refetchStatus } = useBulkTagManager(resourceId);
+  const { refetchStatus, refreshKey } = useBulkTagManager(resourceId);
 
   const defaultPermissoes = PERMISSOES_DISPONIVEIS.reduce((acc: Record<string, boolean>, p: Permissao) => {
     if (profileToEdit && 'permissoes' in profileToEdit && (profileToEdit as any).permissoes) {
@@ -119,6 +120,15 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
     });
   };
   
+  const handleTagToggle = useCallback(() => {
+      refetchStatus();
+  }, [refetchStatus]);
+  
+  const handleLogoUploadComplete = useCallback(async (url: string | null) => {
+      // Força o refetch da sessão para atualizar o Header
+      await refetch();
+  }, [refetch]);
+
   const onSubmit = async (values: FormValues) => {
     setIsSubmitting(true);
     try {
@@ -200,7 +210,6 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
               <TabsList className="flex flex-wrap justify-start w-full h-auto p-1">
                   <TabsTrigger value="pessoal" className="flex-1 md:flex-none md:w-1/2">Geral</TabsTrigger>
                   <TabsTrigger value="cadastrais" className="flex-1 md:flex-none md:w-1/2">Dados Cadastrais</TabsTrigger>
-                  {/* Removido: {isClient && <TabsTrigger value="documentos" className="flex-1 md:flex-none md:w-1/3">Documentos</TabsTrigger>} */}
               </TabsList>
               
               {/* TAB 1: GERAL */}
@@ -214,6 +223,19 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
                   <FormField control={form.control} name="senha" render={({ field }) => (
                       <FormItem><FormLabel>Alterar Senha (Opcional)</FormLabel><FormControl><Input type="password" placeholder="••••••••" {...field} /></FormControl><FormMessage /></FormItem>
                   )} />
+                  
+                  {isAdminProfile && (
+                      <>
+                          <Separator />
+                          <h3 className="font-semibold text-lg">Configurações de Branding</h3>
+                          <LogoUpload 
+                              adminId={perfilInicial.id}
+                              initialLogoUrl={(perfilInicial as AdminProfile).logo_url}
+                              onUploadComplete={handleLogoUploadComplete}
+                              isReadOnly={isSubmitting}
+                          />
+                      </>
+                  )}
                   
                   {isClient && (
                       <>
@@ -315,8 +337,6 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
                       )} />
                   </div>
               </TabsContent>
-              
-              {/* TAB 3: DOCUMENTOS (Apenas Cliente) - REMOVED */}
               
           </Tabs>
 
