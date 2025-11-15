@@ -5,7 +5,7 @@ import { Loader2, Clock, User, Filter, CalendarCheck, ChevronLeft } from 'lucide
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { supabase } from '@/integrations/supabase/client';
 import { showError } from '@/utils/toast';
-import { UsuarioProfile, ClienteProfile } from '@/types/usuario'; // CORRIGIDO: AdminUsuarioProfile removido
+import { UsuarioProfile, ClienteProfile, AdminUsuarioProfile } from '@/types/usuario';
 import { Cliente } from '@/types/cliente';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -19,6 +19,7 @@ import GerenciarFolgaTrabalhada from '@/components/formularios/GerenciarFolgaTra
 import { format, startOfMonth, endOfMonth, parseISO } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { useSearchParams } from 'react-router-dom';
 
 // Tipo simplificado para o usuário que estamos buscando
 interface UsuarioPonto extends UsuarioProfile {
@@ -29,6 +30,8 @@ interface UsuarioPonto extends UsuarioProfile {
 
 const FolhaPonto: React.FC = () => {
   const { role, perfil, usuario, carregando: carregandoSessao } = useSessao();
+  const [searchParams] = useSearchParams();
+  const mode = searchParams.get('mode');
   
   const [usuarios, setUsuarios] = useState<UsuarioPonto[]>([]);
   const [carregandoDados, setCarregandoDados] = useState(true);
@@ -49,6 +52,7 @@ const FolhaPonto: React.FC = () => {
   const [gerenciarFolgaDialog, setGerenciarFolgaDialog] = useState<{ open: boolean, dia: Date | null, registros: RegistroPonto[] }>({ open: false, dia: null, registros: [] });
 
   const isAdmin = role === 'Admin';
+  const isSelfMode = mode === 'self'; // NOVO: Modo de visualização própria
   
   const getOwnerId = () => {
     if (isAdmin) return usuario?.id || null;
@@ -109,7 +113,7 @@ const FolhaPonto: React.FC = () => {
         if (clientIds.length > 0) {
             const { data: clientUsersData } = await supabase
                 .from('tbl_usuarios')
-                .select('*, admin_id') // Incluindo admin_id para tipagem correta
+                .select('*, admin_id')
                 .in('cliente_id', clientIds)
                 .order('nome');
                 
@@ -168,7 +172,11 @@ const FolhaPonto: React.FC = () => {
       showError('Erro ao carregar registros de ponto: ' + regError.message);
       setRegistrosDoFuncionario([]);
     } else {
-      setRegistrosDoFuncionario(registros as RegistroPonto[]);
+      const mappedRegistros = (registros as any[]).map(r => ({
+          ...r,
+          empresa_id: r.admin_id || r.empresa_id,
+      })) as RegistroPonto[];
+      setRegistrosDoFuncionario(mappedRegistros);
     }
     
     // 2. Buscar Férias
@@ -249,6 +257,41 @@ const FolhaPonto: React.FC = () => {
   }, [usuarios, filtroNomeDebounced, filtroClienteId]);
 
 
+  // --- LÓGICA DE MODO SELF (MEU PONTO) ---
+  useEffect(() => {
+      if (isSelfMode && usuario && !carregandoDados && !funcionarioSelecionado) {
+          // Encontra o próprio perfil do usuário logado na lista de usuários
+          const selfProfile = usuarios.find(u => u.id === usuario.id);
+          if (selfProfile) {
+              setFuncionarioSelecionado(selfProfile);
+          } else if (role === 'Usuario') {
+              // Se for usuário mas não estiver na lista (ex: recém-criado), usa o perfil da sessão
+              const selfUser = perfil as UsuarioProfile | AdminUsuarioProfile;
+              const isFuncionarioAdmin = 'admin_id' in selfUser && !!selfUser.admin_id;
+              
+              setFuncionarioSelecionado({
+                  ...selfUser,
+                  is_admin_user: isFuncionarioAdmin,
+                  cliente_nome: isFuncionarioAdmin ? 'Meus Usuários (Admin)' : (perfil as ClienteProfile)?.nome || 'Minha Empresa',
+              } as UsuarioPonto);
+          }
+      }
+  }, [isSelfMode, usuario, carregandoDados, usuarios, funcionarioSelecionado, role, perfil]);
+  
+  // Determina se o modo de edição deve ser desativado
+  const isReadOnlyMode = isSelfMode;
+  
+  // Verifica se o usuário tem permissão para acessar a página de gestão
+  const canAccessManagement = isAdmin || (role === 'Cliente' && (perfil as ClienteProfile)?.permissoes?.folha_ponto === true);
+  
+  if (!isSelfMode && !canAccessManagement) {
+      return (
+          <LayoutPrincipal>
+              <Card><CardContent className="p-6">Você não tem permissão para acompanhar a folha de ponto de outros usuários.</CardContent></Card>
+          </LayoutPrincipal>
+      );
+  }
+  
   if (carregandoSessao || carregandoDados) {
     return (
       <LayoutPrincipal>
@@ -259,15 +302,7 @@ const FolhaPonto: React.FC = () => {
     );
   }
   
-  if (!ownerId && !isAdmin) {
-      return (
-          <LayoutPrincipal>
-              <Card><CardContent className="p-6">Você não tem permissão para acompanhar a folha de ponto.</CardContent></Card>
-          </LayoutPrincipal>
-      );
-  }
-  
-  // --- VISUALIZAÇÃO DE DETALHES DO FUNCIONÁRIO ---
+  // --- VISUALIZAÇÃO DE DETALHES DO FUNCIONÁRIO (SELF OU GESTÃO) ---
   if (funcionarioSelecionado) {
     const isFuncionarioAdmin = funcionarioSelecionado.is_admin_user;
     const proprietarioIdFuncionario = isFuncionarioAdmin ? funcionarioSelecionado.admin_id : funcionarioSelecionado.cliente_id;
@@ -275,17 +310,19 @@ const FolhaPonto: React.FC = () => {
     return (
         <LayoutPrincipal>
             <div className="flex items-center mb-6">
-                <Button 
-                    onClick={handleBackToUsers} 
-                    variant="link" 
-                    type="button"
-                    className="text-muted-foreground hover:text-primary flex items-center mr-4 p-0 h-auto"
-                >
-                    <ChevronLeft className="w-5 h-5" />
-                    Voltar para Usuários
-                </Button>
+                {!isSelfMode && (
+                    <Button 
+                        onClick={handleBackToUsers} 
+                        variant="link" 
+                        type="button"
+                        className="text-muted-foreground hover:text-primary flex items-center mr-4 p-0 h-auto"
+                    >
+                        <ChevronLeft className="w-5 h-5" />
+                        Voltar para Usuários
+                    </Button>
+                )}
                 <h1 className="text-2xl md:text-3xl font-bold flex items-center">
-                    <Clock className="w-6 h-6 mr-2" /> Folha de Ponto: {funcionarioSelecionado.nome}
+                    <Clock className="w-6 h-6 mr-2" /> {isSelfMode ? 'Minha Folha de Ponto' : `Folha de Ponto: ${funcionarioSelecionado.nome}`}
                 </h1>
             </div>
             
@@ -293,6 +330,7 @@ const FolhaPonto: React.FC = () => {
                 <MonthPicker
                     date={dataSelecionada}
                     setDate={setDataSelecionada}
+                    disabled={isReadOnlyMode}
                 />
             </div>
             
@@ -309,14 +347,14 @@ const FolhaPonto: React.FC = () => {
                     data_inicio_contrato: funcionarioSelecionado.data_inicio_contrato,
                 }}
                 mes={dataSelecionada}
-                onEditRegistro={handleOpenAjustarPonto}
-                onEditFaltaAbono={handleOpenGerenciarFaltas}
-                onDeleteRegistro={handleDeleteRegistro}
-                onManageWorkedDayOff={handleOpenGerenciarFolga}
+                onEditRegistro={isReadOnlyMode ? () => {} : handleOpenAjustarPonto}
+                onEditFaltaAbono={isReadOnlyMode ? () => {} : handleOpenGerenciarFaltas}
+                onDeleteRegistro={isReadOnlyMode ? () => {} : handleDeleteRegistro}
+                onManageWorkedDayOff={isReadOnlyMode ? () => {} : handleOpenGerenciarFolga}
             />
             
-            {/* Diálogos */}
-            {ajustarPontoDialog.dia && (
+            {/* Diálogos (Apenas no modo de Gestão) */}
+            {!isReadOnlyMode && ajustarPontoDialog.dia && (
                 <AjustarPontoDialog
                     open={ajustarPontoDialog.open}
                     onOpenChange={(open) => setAjustarPontoDialog({ open, dia: null, registros: [] })}
@@ -327,7 +365,7 @@ const FolhaPonto: React.FC = () => {
                 />
             )}
             
-            {gerenciarFaltasDialog.dia && (
+            {!isReadOnlyMode && gerenciarFaltasDialog.dia && (
                 <GerenciarFaltas
                     open={gerenciarFaltasDialog.open}
                     onOpenChange={(open) => setGerenciarFaltasDialog({ open, dia: null, registro: null })}
@@ -338,7 +376,7 @@ const FolhaPonto: React.FC = () => {
                 />
             )}
             
-            {gerenciarFolgaDialog.dia && (
+            {!isReadOnlyMode && gerenciarFolgaDialog.dia && (
                 <GerenciarFolgaTrabalhada
                     open={gerenciarFolgaDialog.open}
                     onOpenChange={(open) => setGerenciarFolgaDialog({ open, dia: null, registros: [] })}
@@ -352,7 +390,7 @@ const FolhaPonto: React.FC = () => {
     );
   }
 
-  // --- VISUALIZAÇÃO DA LISTA DE USUÁRIOS ---
+  // --- VISUALIZAÇÃO DA LISTA DE USUÁRIOS (Modo Gestão) ---
   return (
     <LayoutPrincipal>
       <div className="flex items-center mb-6">

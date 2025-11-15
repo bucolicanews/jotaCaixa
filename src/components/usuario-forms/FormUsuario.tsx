@@ -21,7 +21,7 @@ import FormFolgas from '../formularios/FormFolgas';
 import FormDocumentos from '../usuario-forms/FormDocumentos';
 import FormDadosContratuais from '../usuario-forms/FormDadosContratuais';
 import FormFerias from '@/components/usuario-forms/FormFerias';
-import { cn } from '@/lib/utils';
+
 
 const textOptional = z.string().optional().or(z.literal(''));
 const urlSchema = z.string().url('URL inválida.').optional().or(z.literal(''));

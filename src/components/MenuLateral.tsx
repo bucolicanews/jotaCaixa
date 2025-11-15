@@ -33,7 +33,8 @@ const SECOES_MENU: MenuSection[] = [
         perfis: ['Admin', 'Cliente', 'Usuario'],
         itens: [
             { nome: 'Bater Ponto', caminho: '/ponto-eletronico', icone: Clock, perfis: ['Usuario'], permissionKey: 'ponto_eletronico' },
-            { nome: 'Meu Ponto', caminho: '/perfil', icone: User, perfis: ['Usuario'], permissionKey: 'visualizar_proprio_ponto' },
+            // CORREÇÃO AQUI: Mudar para /folha-ponto com parâmetro de modo
+            { nome: 'Meu Ponto', caminho: '/folha-ponto?mode=self', icone: User, perfis: ['Usuario'], permissionKey: 'visualizar_proprio_ponto' },
             { nome: 'Acompanhar Ponto', caminho: '/folha-ponto', icone: CalendarCheck, perfis: ['Admin', 'Cliente'], permissionKey: 'folha_ponto' },
         ]
     },
@@ -147,7 +148,7 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick }) => {
             return item.caminho === '/painel';
         }
         // Se for 'Meu Ponto', oculta para Cliente (que usa Acompanhar Ponto)
-        if (item.caminho === '/perfil' && item.permissionKey === 'visualizar_proprio_ponto') {
+        if (item.caminho.includes('/folha-ponto?mode=self')) {
             return false;
         }
         // Verifica a permissão do Cliente
@@ -209,7 +210,7 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick }) => {
                 <div key={secao.titulo} className="space-y-1">
                     <h3 className="text-sm font-semibold text-muted-foreground px-3 pt-2">{secao.titulo}</h3>
                     {itensVisiveis.map((item) => {
-                        const estaAtivo = localizacao.pathname === item.caminho;
+                        const estaAtivo = localizacao.pathname === item.caminho || localizacao.pathname + localizacao.search === item.caminho;
                         const Icone = item.icone;
                         
                         // Se o acesso expirou e não é Painel ou Minha Assinatura, desabilita o link
