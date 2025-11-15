@@ -3,12 +3,13 @@ import { Control } from 'react-hook-form';
 import { FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/components/ui/form';
 import { Checkbox } from '@/components/ui/checkbox';
 import GerenciarFerias from '@/components/formularios/GerenciarFerias';
-import { UsuarioProfile } from '@/types/usuario';
+import GerenciarFeriasAdmin from '../formularios/GerenciarFeriasAdmin'; // CORRIGIDO: Caminho relativo
+import { UsuarioProfile, AdminUsuarioProfile } from '@/types/usuario';
 
 interface FormFolgasFeriasProps {
   control: Control<any>;
   isSubmitting: boolean;
-  usuarioInicial: UsuarioProfile | null; // Permitindo que seja null
+  usuarioInicial: UsuarioProfile | AdminUsuarioProfile | null; // Tipo atualizado
 }
 
 const DIAS_DA_SEMANA = [
@@ -23,7 +24,6 @@ const DIAS_DA_SEMANA = [
 
 const FormFolgasFerias: React.FC<FormFolgasFeriasProps> = ({ control, isSubmitting, usuarioInicial }) => {
   
-  // Adicionando verificação de segurança
   if (!usuarioInicial) {
       return (
           <div className="space-y-6">
@@ -34,7 +34,13 @@ const FormFolgasFerias: React.FC<FormFolgasFeriasProps> = ({ control, isSubmitti
       );
   }
   
-  const proprietarioId = usuarioInicial.cliente_id; // FIX: cliente_id
+  // Determina se o usuário é um funcionário do Admin (tem admin_id e não cliente_id)
+  const isUserOfAdmin = !!(usuarioInicial as AdminUsuarioProfile).admin_id;
+  
+  // O ID do proprietário é o ID do Cliente ou Admin
+  const proprietarioId = isUserOfAdmin 
+    ? (usuarioInicial as AdminUsuarioProfile).admin_id 
+    : (usuarioInicial as UsuarioProfile).cliente_id;
 
   return (
     <div className="space-y-6">
@@ -113,10 +119,17 @@ const FormFolgasFerias: React.FC<FormFolgasFeriasProps> = ({ control, isSubmitti
         
         {proprietarioId && (
             <div className="pt-6 border-t">
-                <GerenciarFerias 
-                    funcionarioId={usuarioInicial.id} 
-                    empresaId={proprietarioId} 
-                />
+                {isUserOfAdmin ? (
+                    <GerenciarFeriasAdmin
+                        funcionarioId={usuarioInicial.id} 
+                        adminId={proprietarioId} 
+                    />
+                ) : (
+                    <GerenciarFerias 
+                        funcionarioId={usuarioInicial.id} 
+                        empresaId={proprietarioId} 
+                    />
+                )}
             </div>
         )}
     </div>
