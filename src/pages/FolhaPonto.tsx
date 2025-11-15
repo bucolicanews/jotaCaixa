@@ -21,7 +21,7 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useSearchParams } from 'react-router-dom';
 import { usePrint } from '@/hooks/use-print';
-import ReactDOMServer from 'react-dom/server';
+import * as ReactDOMServer from 'react-dom/server'; // CORREÇÃO: Importação como namespace
 import FolhaPontoPrint from '@/components/ponto/FolhaPontoPrint';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 
@@ -344,43 +344,6 @@ const FolhaPonto: React.FC = () => {
           return;
       }
       
-      // O componente DetalheFolhaPonto precisa ser renderizado para calcular os totais
-      const DetalheComponent = DetalheFolhaPonto as React.FC<any>;
-      
-      // Renderiza o componente DetalheFolhaPonto para obter os dados processados
-      const tempElement = document.createElement('div');
-      ReactDOMServer.renderToString(
-          <DetalheComponent
-              funcionario={{
-                  id: funcionarioSelecionado.id,
-                  nome: funcionarioSelecionado.nome,
-                  salario: funcionarioSelecionado.salario || 0,
-                  horas_mensais: funcionarioSelecionado.horas_mensais || 220,
-                  registros: registrosDoFuncionario,
-                  dias_folga_fixos: funcionarioSelecionado.dias_folga_fixos || [],
-                  folga_domingo_obrigatoria: funcionarioSelecionado.folga_domingo_obrigatoria ?? true,
-                  ferias: feriasDoFuncionario,
-                  data_inicio_contrato: funcionarioSelecionado.data_inicio_contrato,
-              }}
-              mes={dataSelecionada}
-              onEditRegistro={() => {}}
-              onEditFaltaAbono={() => {}}
-              onDeleteRegistro={() => {}}
-              onManageWorkedDayOff={() => {}}
-              isReadOnly={true}
-          />
-      );
-      
-      // Acessa os dados processados (simulação, pois o useMemo está dentro do componente)
-      // Para contornar isso, precisamos re-executar a lógica de cálculo aqui ou refatorar o DetalheFolhaPonto.
-      // Vamos refatorar o DetalheFolhaPonto para expor a lógica de cálculo.
-      
-      // Como não podemos acessar o useMemo de DetalheFolhaPonto diretamente,
-      // vamos extrair a lógica de cálculo para um utilitário ou re-executá-la.
-      
-      // Para simplificar, vamos passar os dados brutos e o componente de impressão
-      // fará a formatação e cálculo de totais.
-      
       const printComponent = (
           <FolhaPontoPrint
               empresaNome={funcionarioSelecionado.cliente_nome || 'N/A'}
@@ -395,10 +358,6 @@ const FolhaPonto: React.FC = () => {
                   ferias: feriasDoFuncionario,
               }}
               mes={dataSelecionada}
-              // Estes campos serão calculados dentro do FolhaPontoPrint
-              diasProcessados={{}} 
-              totalMinutosTrabalhados={0}
-              minutosDiferenca={0}
           />
       );
 
