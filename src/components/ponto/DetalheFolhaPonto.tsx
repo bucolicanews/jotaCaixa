@@ -196,7 +196,6 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
                     minutosDia += differenceInMinutes(hoje, entrada);
                     isTurnoAberto = true;
                 } else {
-                    minutosDia = 0; // Turno aberto em dia anterior é considerado erro ou falta de saída
                     isTurnoAberto = true;
                 }
             } else {
@@ -378,8 +377,8 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
                                 let rowClassName = '';
                                 if (isFerias) rowClassName = 'bg-blue-500/10';
                                 else if (isFolgaFixa && hasPontoRecords) rowClassName = 'bg-yellow-500/10';
-                                // NOVO: Falta Justificada (Azul) - ALTERADO PARA MAIOR VISIBILIDADE
-                                else if (isFalta && isFaltaJustificada) rowClassName = 'bg-blue-100 dark:bg-blue-900/20';
+                                // NOVO: Falta Justificada (Azul)
+                                else if (isFalta && isFaltaJustificada) rowClassName = 'bg-blue-500/10';
                                 // Falta Injustificada (Vermelho)
                                 else if (isFalta && !isFaltaJustificada) rowClassName = 'bg-red-500/10';
                                 else if (isAbono) rowClassName = 'bg-green-500/10';
