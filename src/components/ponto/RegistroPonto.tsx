@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, MapPin, Clock, ArrowUpCircle, ArrowDownCircle, Camera, AlertTriangle } from 'lucide-react';
+import { Loader2, MapPin, Clock, ArrowUpCircle, ArrowDownCircle, Camera, AlertTriangle, CheckCircle2, XCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { useSessao } from '@/hooks/use-sessao';
@@ -18,12 +18,14 @@ type RegistroTipo = 'Entrada' | 'Saida';
 interface GeoLocation {
   latitude: number;
   longitude: number;
+  accuracy?: number; // Adicionando precisão
 }
 
 const RegistroPonto: React.FC = () => {
   const { usuario, perfil, role } = useSessao();
   const [loading, setLoading] = useState(false);
   const [location, setLocation] = useState<GeoLocation | null>(null);
+  const [locationStatus, setLocationStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   
   // State for camera capture
   const [selfieFile, setSelfieFile] = useState<File | null>(null); 
@@ -53,26 +55,42 @@ const RegistroPonto: React.FC = () => {
   // Nova verificação de permissão
   const podeVisualizarProprioPonto = isUsuario && (perfil as UsuarioProfile)?.permissoes?.visualizar_proprio_ponto;
 
-  const getGeoLocation = (): Promise<GeoLocation> => {
+  const getGeoLocation = useCallback((): Promise<GeoLocation> => {
+    setLocationStatus('loading');
     return new Promise((resolve, reject) => {
       if (!navigator.geolocation) {
+        setLocationStatus('error');
         reject(new Error('Geolocalização não suportada pelo seu navegador.'));
         return;
       }
       navigator.geolocation.getCurrentPosition(
         (position) => {
+          setLocationStatus('success');
           resolve({
             latitude: position.coords.latitude,
             longitude: position.coords.longitude,
+            accuracy: position.coords.accuracy,
           });
         },
         (error) => {
+          setLocationStatus('error');
           reject(new Error(`Erro ao obter localização: ${error.message}`));
         },
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
     });
-  };
+  }, []);
+  
+  // Efeito para tentar obter a localização assim que o componente carrega
+  React.useEffect(() => {
+      if (funcionarioId && locationStatus === 'idle') {
+          getGeoLocation().then(setLocation).catch(error => {
+              console.error("Erro inicial de geolocalização:", error);
+              setLocation(null);
+          });
+      }
+  }, [funcionarioId, locationStatus, getGeoLocation]);
+
 
   const uploadSelfie = async (file: File): Promise<string> => {
     const fileExt = file.name.split('.').pop();
@@ -109,6 +127,11 @@ const RegistroPonto: React.FC = () => {
       return;
     }
     
+    if (locationStatus !== 'success' || !location) {
+        showError('Aguarde a obtenção da localização ou tente novamente.');
+        return;
+    }
+    
     // Regra 2: Verifica se a ação é a esperada
     if (tipo !== proximaAcao) {
         showError(`A próxima ação esperada é ${proximaAcao}, não ${tipo}.`);
@@ -120,15 +143,15 @@ const RegistroPonto: React.FC = () => {
   };
 
   const registrarPonto = async (tipo: RegistroTipo) => {
-    if (!funcionarioId || !empresaId || !selfieFile) {
+    if (!funcionarioId || !empresaId || !selfieFile || !location) {
       showError('Dados incompletos para registro.');
       return;
     }
 
     setLoading(true);
     try {
-      const geo = await getGeoLocation();
-      setLocation(geo);
+      // Não precisa chamar getGeoLocation novamente, usa o estado 'location'
+      const geo = location;
 
       const selfieUrl = await uploadSelfie(selfieFile);
       
@@ -141,9 +164,9 @@ const RegistroPonto: React.FC = () => {
           horario_registro: new Date().toISOString(),
           selfie_url: selfieUrl,
           tipo: tipo,
-          latitude: geo.latitude,
-          longitude: geo.longitude,
-          maps_url: mapsUrl,
+          latitude: geo.latitude, // SALVANDO LATITUDE
+          longitude: geo.longitude, // SALVANDO LONGITUDE
+          maps_url: mapsUrl, // SALVANDO LINK DO MAPA
       };
 
       const { error } = await supabase
@@ -170,6 +193,28 @@ const RegistroPonto: React.FC = () => {
       setIsConfirmDialogOpen(false);
     }
   };
+  
+  const renderLocationStatus = () => {
+      if (locationStatus === 'loading') {
+          return <span className="text-yellow-600 flex items-center"><Loader2 className="w-4 h-4 mr-1 animate-spin" /> Buscando Localização...</span>;
+      }
+      if (locationStatus === 'success' && location) {
+          const accuracy = location.accuracy;
+          const isAccurate = accuracy && accuracy < 50; // Considera < 50m preciso
+          
+          return (
+              <span className={cn("flex items-center", isAccurate ? "text-green-600" : "text-orange-600")}>
+                  <CheckCircle2 className="w-4 h-4 mr-1" /> 
+                  Localização Obtida. 
+                  {accuracy && <span className="ml-1 text-xs"> (Precisão: {accuracy.toFixed(0)}m)</span>}
+              </span>
+          );
+      }
+      if (locationStatus === 'error') {
+          return <span className="text-red-600 flex items-center"><XCircle className="w-4 h-4 mr-1" /> Erro ao obter localização.</span>;
+      }
+      return <span className="text-muted-foreground flex items-center"><MapPin className="w-4 h-4 mr-1" /> Aguardando...</span>;
+  };
 
   if (!isUsuario) {
     return (
@@ -182,6 +227,7 @@ const RegistroPonto: React.FC = () => {
   
   const isEntrada = proximaAcao === 'Entrada';
   const isSaida = proximaAcao === 'Saida';
+  const isPontoDisabled = loading || carregandoStatus || !selfieFile || locationStatus !== 'success';
 
   return (
     <Card className="w-full max-w-xl mx-auto">
@@ -218,9 +264,26 @@ const RegistroPonto: React.FC = () => {
         </div>
 
         <Separator />
+        
+        {/* Status da Localização */}
+        <div className="space-y-2">
+            <h3 className="text-lg font-semibold flex items-center">
+                <MapPin className="w-5 h-5 mr-2" /> 2. Localização
+            </h3>
+            <div className="p-3 border rounded-md">
+                {renderLocationStatus()}
+                {locationStatus === 'error' && (
+                    <Button variant="link" size="sm" onClick={() => getGeoLocation().then(setLocation).catch(() => {})} disabled={loading} className="mt-1 p-0 h-auto">
+                        Tentar Obter Localização Novamente
+                    </Button>
+                )}
+            </div>
+        </div>
+
+        <Separator />
 
         <div className="space-y-4">
-          <h3 className="text-lg font-semibold">2. Registrar Horário</h3>
+          <h3 className="text-lg font-semibold">3. Registrar Horário</h3>
           <p className="text-sm text-muted-foreground">
             A próxima ação esperada é: <span className={cn("font-bold", isEntrada ? "text-green-600" : "text-red-600")}>{proximaAcao}</span>.
           </p>
@@ -228,7 +291,7 @@ const RegistroPonto: React.FC = () => {
           <div className="flex flex-col space-y-4 sm:flex-row sm:space-x-4 sm:space-y-0"> 
             <Button 
               onClick={() => handlePreRegister('Entrada')} 
-              disabled={loading || carregandoStatus || !selfieFile || isSaida}
+              disabled={isPontoDisabled || isSaida}
               className="flex-1 bg-green-600 hover:bg-green-700"
             >
               {loading && pendingRegistroType === 'Entrada' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ArrowUpCircle className="mr-2 h-4 w-4" />}
@@ -236,7 +299,7 @@ const RegistroPonto: React.FC = () => {
             </Button>
             <Button 
               onClick={() => handlePreRegister('Saida')} 
-              disabled={loading || carregandoStatus || !selfieFile || isEntrada}
+              disabled={isPontoDisabled || isEntrada}
               className="flex-1 bg-red-600 hover:bg-red-700"
             >
               {loading && pendingRegistroType === 'Saida' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ArrowDownCircle className="mr-2 h-4 w-4" />}
@@ -251,9 +314,9 @@ const RegistroPonto: React.FC = () => {
             <p className={ultimoRegistro.tipo === 'Entrada' ? 'text-green-600' : 'text-red-600'}>
               {ultimoRegistro.tipo} às {format(parseISO(ultimoRegistro.horario_registro), 'HH:mm:ss')}
             </p>
-            {location && (
+            {ultimoRegistro.maps_url && (
               <a
-                href={`https://www.google.com/maps?q=${location.latitude},${location.longitude}`}
+                href={ultimoRegistro.maps_url}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-xs text-blue-600 hover:underline flex items-center mt-1"
@@ -278,6 +341,9 @@ const RegistroPonto: React.FC = () => {
             <AlertDialogTitle>Confirmar Registro de Ponto</AlertDialogTitle>
             <div className="text-sm text-muted-foreground">
               Você está prestes a registrar um ponto de <span className="font-bold text-primary">{pendingRegistroType}</span>.
+              {location && (
+                  <p className="mt-2 text-xs">Localização: {location.latitude.toFixed(4)}, {location.longitude.toFixed(4)} (Precisão: {location.accuracy?.toFixed(0)}m)</p>
+              )}
             </div>
           </AlertDialogHeader>
           <AlertDialogFooter>
