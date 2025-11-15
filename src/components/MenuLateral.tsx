@@ -229,7 +229,9 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick }) => {
         {/* Lógica de exibição da Logo e Nome do Admin/Empresa */}
         {shouldShowAdminBranding ? (
             <>
-                {logoUrl ? (
+                {loadingBranding ? (
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                ) : logoUrl ? (
                     <img 
                         src={logoUrl} 
                         alt="Logo da Empresa" 
@@ -237,7 +239,9 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick }) => {
                         style={{ maxWidth: '100%' }}
                     />
                 ) : (
-                    <h1 className="text-xl font-bold text-primary">Admin Logo</h1>
+                    <h1 className="text-xl font-bold text-primary">
+                        {adminNome || 'Admin'}
+                    </h1>
                 )}
                 <p className="text-sm text-muted-foreground text-center">{adminNome}</p>
             </>
