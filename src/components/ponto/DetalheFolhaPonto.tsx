@@ -377,24 +377,24 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
                     <Table>
                         <TableHeader>
                             <TableRow>
-                                <TableHead className="w-[80px]">Data</TableHead>
-                                <TableHead className="w-[80px]">Dia</TableHead>
+                                <TableHead className="w-[60px]">Data</TableHead>
+                                <TableHead className="w-[60px]">Dia</TableHead>
                                 <TableHead colSpan={2} className="text-center border-x">Primeiro Turno</TableHead>
                                 <TableHead colSpan={2} className="text-center border-r">Segundo Turno</TableHead>
-                                <TableHead className="w-[150px]">Total Dia</TableHead> {/* AUMENTADO */}
-                                <TableHead className="min-w-[100px]">Observações</TableHead> {/* REDUZIDO */}
+                                <TableHead className="w-[160px]">Total Dia</TableHead>
+                                <TableHead className="min-w-[80px]">Observações</TableHead> {/* REDUZIDO O MIN-WIDTH */}
                                 {/* OCULTA A COLUNA AÇÕES SE FOR READONLY */}
                                 {!isReadOnly && <TableHead className="w-[120px] text-right">Ações</TableHead>}
                             </TableRow>
                             <TableRow>
-                                <TableHead className="w-[80px]"></TableHead>
-                                <TableHead className="w-[80px]"></TableHead>
-                                <TableHead className="w-[100px] text-center">Entrada</TableHead> {/* AUMENTADO */}
-                                <TableHead className="w-[100px] text-center border-r">Saída</TableHead> {/* AUMENTADO */}
-                                <TableHead className="w-[100px] text-center">Entrada</TableHead> {/* AUMENTADO */}
-                                <TableHead className="w-[100px] text-center border-r">Saída</TableHead> {/* AUMENTADO */}
-                                <TableHead className="w-[150px]"></TableHead> {/* AUMENTADO */}
-                                <TableHead className="min-w-[100px]"></TableHead>
+                                <TableHead className="w-[60px]"></TableHead>
+                                <TableHead className="w-[60px]"></TableHead>
+                                <TableHead className="w-[110px] text-center">Entrada</TableHead> {/* AUMENTADO */}
+                                <TableHead className="w-[110px] text-center border-r">Saída</TableHead> {/* AUMENTADO */}
+                                <TableHead className="w-[110px] text-center">Entrada</TableHead> {/* AUMENTADO */}
+                                <TableHead className="w-[110px] text-center border-r">Saída</TableHead> {/* AUMENTADO */}
+                                <TableHead className="w-[160px]"></TableHead>
+                                <TableHead className="min-w-[80px]"></TableHead>
                                 {!isReadOnly && <TableHead className="w-[120px] text-right"></TableHead>}
                             </TableRow>
                         </TableHeader>
@@ -445,7 +445,7 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
                                 return (
                                     <TableRow key={diaString} className={rowClassName}>
                                         <TableCell className="font-medium">{format(data, 'dd/MM')}</TableCell>
-                                        <TableCell className="text-sm">{format(data, 'EEEE', { locale: ptBR })}</TableCell>
+                                        <TableCell className="text-sm">{format(data, 'EEE', { locale: ptBR })}</TableCell>
                                         
                                         {/* Batidas em Colunas Separadas */}
                                         <TableCell className="font-mono text-xs text-center">{e1}</TableCell>
