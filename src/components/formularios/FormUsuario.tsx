@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useForm, FormProvider, Control } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -20,7 +20,7 @@ import FormGeral from '../usuario-forms/FormGeral';
 import FormFolgas from './FormFolgas';
 import FormDocumentos from '../usuario-forms/FormDocumentos';
 import FormDadosContratuais from '../usuario-forms/FormDadosContratuais';
-import FormFerias from '@/components/usuario-forms/FormFerias'; // FIX: Corrigido o caminho para usuario-forms
+import FormFerias from '@/components/usuario-forms/FormFerias';
 
 const textOptional = z.string().optional().or(z.literal(''));
 const urlSchema = z.string().url('URL inválida.').optional().or(z.literal(''));
@@ -98,7 +98,7 @@ interface FormUsuarioProps {
 
 // Type guard para verificar se o perfil é UsuarioProfile
 const isUsuarioProfile = (profile: AnyProfile): profile is UsuarioProfile => {
-    return !!profile && 'cliente_id' in profile; // CORREÇÃO: Usando cliente_id
+    return !!profile && 'cliente_id' in profile;
 };
 
 // Type guard para verificar se o perfil é AdminUsuarioProfile
@@ -111,14 +111,12 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
   criadorPerfil,
   usuarioInicial,
   onSaveComplete,
-  isNewClient = false, // Default é false (criação de funcionário)
+  isNewClient = false,
 }) => {
   const isEditing = !!usuarioInicial;
   
-  // Se for criação de novo cliente, o perfil inicial é o perfil do criador (Admin)
   const profileToEdit = isNewClient ? (criadorPerfil as ClienteProfile) : usuarioInicial;
   
-  // Variável de escopo principal para o perfil de usuário (funcionário)
   const userProfile: UsuarioProfile | AdminUsuarioProfile | null = isUsuarioProfile(profileToEdit as AnyProfile) || isAdminUsuarioProfile(profileToEdit as AnyProfile) ? profileToEdit as UsuarioProfile | AdminUsuarioProfile : null;
   
   const [activeTab, setActiveTab] = useState('pessoal');
@@ -133,89 +131,98 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
     return isNaN(date.getTime()) ? undefined : date;
   };
 
-  // Determina as permissões visíveis
   const permissoesVisiveis = PERMISSOES_DISPONIVEIS.filter((p: Permissao) => {
-      // Se for Admin, mostra todas as permissões
       if (criadorRole === 'Admin') return true;
-      
-      // Se for Cliente, mostra apenas as permissões de Usuário (Funcionário)
       return p.key === 'ponto_eletronico' || p.key === 'visualizar_proprio_ponto' || p.key === 'folha_ponto' || p.key === 'cadastrar_usuarios';
   });
 
+  // 1. Inicialização do useForm (incondicionalmente no topo)
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
-    defaultValues: (function() {
-        const defaultPermissoes = permissoesVisiveis.reduce((acc: Record<string, boolean>, p: Permissao) => {
-            if (profileToEdit && 'permissoes' in profileToEdit && (profileToEdit as any).permissoes) {
-                acc[p.key] = (profileToEdit as any).permissoes[p.key] !== false;
-            } else {
-                // Padrão para novo usuário: Ponto Eletrônico e Visualizar Próprio Ponto
-                acc[p.key] = p.key === 'ponto_eletronico' || p.key === 'visualizar_proprio_ponto';
-            }
-            return acc;
-        }, {} as Record<string, boolean>);
-        
-        const clientProfile = profileToEdit && 'limite_usuarios' in profileToEdit ? profileToEdit as ClienteProfile : null;
-        
-        return {
-            nome: profileToEdit?.nome || '',
-            email: profileToEdit?.email || '',
-            senha: '',
-            permissoes: defaultPermissoes,
-            
-            // Dados de Folga (Apenas Usuário)
-            dias_folga_fixos: userProfile?.dias_folga_fixos || ['Saturday', 'Sunday'],
-            folga_domingo_obrigatoria: userProfile?.folga_domingo_obrigatoria ?? true,
-            
-            // Dados de Salário/Jornada
-            salario: userProfile?.salario || 0,
-            horas_semanais: userProfile?.horas_semanais || 44,
-            horas_mensais: userProfile?.horas_mensais || 220,
-            
-            // Dados Cadastrais
-            cpf: userProfile?.cpf || clientProfile?.cpf || '',
-            rg: userProfile?.rg || clientProfile?.rg || '',
-            nome_mae: userProfile?.nome_mae || '',
-            nome_pai: userProfile?.nome_pai || '',
-            telefone: userProfile?.telefone || clientProfile?.telefone || '',
-            cep: userProfile?.cep || clientProfile?.cep || '',
-            endereco: userProfile?.endereco || clientProfile?.endereco || '',
-            numero: userProfile?.numero || clientProfile?.numero || '',
-            complemento: userProfile?.complemento || clientProfile?.complemento || '',
-            bairro: userProfile?.bairro || clientProfile?.bairro || '',
-            cidade: userProfile?.cidade || clientProfile?.cidade || '',
-            estado: userProfile?.estado || clientProfile?.estado || '',
-            
-            // Campos de Cliente (Apenas para isNewClient)
-            razao_social: clientProfile?.razao_social || '',
-            nome_fantasia: clientProfile?.nome_fantasia || '',
-            documento: clientProfile?.documento || '',
-            cnpj: clientProfile?.cnpj || '',
-
-            // Dados Contratuais (Apenas Usuário)
-            data_inicio_contrato: parseDate(userProfile?.data_inicio_contrato),
-            data_fim_contrato: parseDate(userProfile?.data_fim_contrato),
-            data_inicio_aviso: parseDate(userProfile?.data_inicio_aviso),
-            tipo_aviso: (userProfile?.tipo_aviso || 'Nenhum') as FormValues['tipo_aviso'],
-            
-            // Documentos (URLs)
-            rg_url: userProfile?.rg_url || '',
-            cpf_url: userProfile?.cpf_url || '',
-            titulo_eleitor_url: userProfile?.titulo_eleitor_url || '',
-            reservista_url: userProfile?.reservista_url || '',
-            ctps_url: userProfile?.ctps_url || '',
-            certidao_nascimento_url: userProfile?.certidao_nascimento_url || '',
-            certidao_casamento_url: userProfile?.certidao_casamento_url || '',
-            comprovante_residencia_url: userProfile?.comprovante_residencia_url || '',
-            comprovante_escolaridade_url: userProfile?.comprovante_escolaridade_url || '',
-            exame_admissional_url: userProfile?.exame_admissional_url || '',
-            foto_3x4_url: userProfile?.foto_3x4_url || '',
-            cnh_url: userProfile?.cnh_url || '',
-            cartao_pis_url: userProfile?.cartao_pis_url || '',
-            ja_admitido_anteriormente: userProfile?.ja_admitido_anteriormente ?? false,
-        };
-    })(),
+    // Definindo um defaultValues mínimo para evitar o erro de hooks
+    defaultValues: {
+        nome: '',
+        email: '',
+        senha: '',
+        permissoes: {},
+    },
   });
+
+  // 2. Lógica de Reset/Inicialização usando useEffect
+  useEffect(() => {
+    if (!profileToEdit) return;
+
+    const defaultPermissoes = permissoesVisiveis.reduce((acc: Record<string, boolean>, p: Permissao) => {
+        if (profileToEdit && 'permissoes' in profileToEdit && (profileToEdit as any).permissoes) {
+            acc[p.key] = (profileToEdit as any).permissoes[p.key] !== false;
+        } else {
+            acc[p.key] = p.key === 'ponto_eletronico' || p.key === 'visualizar_proprio_ponto';
+        }
+        return acc;
+    }, {} as Record<string, boolean>);
+    
+    const clientProfile = profileToEdit && 'limite_usuarios' in profileToEdit ? profileToEdit as ClienteProfile : null;
+    
+    const resetValues: Partial<FormValues> = {
+        nome: profileToEdit?.nome || '',
+        email: profileToEdit?.email || '',
+        senha: '',
+        permissoes: defaultPermissoes,
+        
+        // Dados de Folga (Apenas Usuário)
+        dias_folga_fixos: userProfile?.dias_folga_fixos || ['Saturday', 'Sunday'],
+        folga_domingo_obrigatoria: userProfile?.folga_domingo_obrigatoria ?? true,
+        
+        // Dados de Salário/Jornada
+        salario: userProfile?.salario || 0,
+        horas_semanais: userProfile?.horas_semanais || 44,
+        horas_mensais: userProfile?.horas_mensais || 220,
+        
+        // Dados Cadastrais
+        cpf: userProfile?.cpf || clientProfile?.cpf || '',
+        rg: userProfile?.rg || clientProfile?.rg || '',
+        nome_mae: userProfile?.nome_mae || '',
+        nome_pai: userProfile?.nome_pai || '',
+        telefone: userProfile?.telefone || clientProfile?.telefone || '',
+        cep: userProfile?.cep || clientProfile?.cep || '',
+        endereco: userProfile?.endereco || clientProfile?.endereco || '',
+        numero: userProfile?.numero || clientProfile?.numero || '',
+        complemento: userProfile?.complemento || clientProfile?.complemento || '',
+        bairro: userProfile?.bairro || clientProfile?.bairro || '',
+        cidade: userProfile?.cidade || clientProfile?.cidade || '',
+        estado: userProfile?.estado || clientProfile?.estado || '',
+        
+        // Campos de Cliente (Apenas para isNewClient)
+        razao_social: clientProfile?.razao_social || '',
+        nome_fantasia: clientProfile?.nome_fantasia || '',
+        documento: clientProfile?.documento || '',
+        cnpj: clientProfile?.cnpj || '',
+
+        // Dados Contratuais (Apenas Usuário)
+        data_inicio_contrato: parseDate(userProfile?.data_inicio_contrato),
+        data_fim_contrato: parseDate(userProfile?.data_fim_contrato),
+        data_inicio_aviso: parseDate(userProfile?.data_inicio_aviso),
+        tipo_aviso: (userProfile?.tipo_aviso || 'Nenhum') as FormValues['tipo_aviso'],
+        
+        // Documentos (URLs)
+        rg_url: userProfile?.rg_url || '',
+        cpf_url: userProfile?.cpf_url || '',
+        titulo_eleitor_url: userProfile?.titulo_eleitor_url || '',
+        reservista_url: userProfile?.reservista_url || '',
+        ctps_url: userProfile?.ctps_url || '',
+        certidao_nascimento_url: userProfile?.certidao_nascimento_url || '',
+        certidao_casamento_url: userProfile?.certidao_casamento_url || '',
+        comprovante_residencia_url: userProfile?.comprovante_residencia_url || '',
+        comprovante_escolaridade_url: userProfile?.comprovante_escolaridade_url || '',
+        exame_admissional_url: userProfile?.exame_admissional_url || '',
+        foto_3x4_url: userProfile?.foto_3x4_url || '',
+        cnh_url: userProfile?.cnh_url || '',
+        cartao_pis_url: userProfile?.cartao_pis_url || '',
+        ja_admitido_anteriormente: userProfile?.ja_admitido_anteriormente ?? false,
+    };
+
+    form.reset(resetValues);
+  }, [profileToEdit, isNewClient, permissoesVisiveis]); // Dependências do useEffect
 
   const handleSelectAll = (select: boolean) => {
     permissoesVisiveis.forEach((p: Permissao) => {
@@ -232,7 +239,6 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
   const onSubmit = async (values: FormValues) => {
     setIsSubmitting(true);
     
-    // O ID do proprietário é o ID do Cliente ou Admin que está criando/editando
     const proprietarioId = criadorRole === 'Admin' ? criadorPerfil?.id : (criadorPerfil as ClienteProfile)?.id;
     
     if (!proprietarioId) {
@@ -259,18 +265,15 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
             };
             
             if (targetRole === 'Usuario') {
-                // Se o criador é Admin, o novo usuário é um AdminUsuarioProfile
                 if (criadorRole === 'Admin') {
-                    metadata.proprietario_id = proprietarioId; // O trigger irá rotear para admin_usuarios
+                    metadata.proprietario_id = proprietarioId;
                 } else {
-                    // Se o criador é Cliente, o novo usuário é um UsuarioProfile
-                    metadata.proprietario_id = proprietarioId; // O trigger irá rotear para tbl_usuarios
+                    metadata.proprietario_id = proprietarioId;
                 }
             } else if (targetRole === 'Cliente') {
                 metadata.aprovado = false;
             }
             
-            // CHAMA A EDGE FUNCTION COM SERVICE ROLE
             const { data, error: invokeError } = await supabase.functions.invoke('create-user-admin', {
                 body: {
                     email: values.email,
@@ -291,7 +294,6 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
         // 2. Prepare Data Payload (tbl_usuarios OU tbl_clientes OU admin_usuarios)
         
         if (isNewClient) {
-            // FLUXO DE CRIAÇÃO DE NOVO CLIENTE DO SISTEMA (tbl_clientes)
             const dataToUpdate: Partial<ClienteProfile> = {
                 nome: values.nome,
                 email: values.email,
@@ -306,16 +308,12 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                 cnpj: values.cnpj || null,
             };
             
-            // UPSERT MANUAL NA TBL_CLIENTES
             const { error } = await supabase.from('tbl_clientes').upsert({ ...dataToUpdate, id: userId }, { onConflict: 'id' });
             if (error) throw error;
             
         } else {
-            // FLUXO DE CRIAÇÃO/EDIÇÃO DE FUNCIONÁRIO (tbl_usuarios ou admin_usuarios)
-            
             const tabelaDestino = criadorRole === 'Admin' ? 'admin_usuarios' : 'tbl_usuarios';
             
-            // --- DADOS PARA ATUALIZAÇÃO NA TABELA DE USUÁRIOS ---
             const dataToUpdate: any = { 
                 nome: values.nome,
                 permissoes: values.permissoes,
@@ -360,18 +358,16 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                 ja_admitido_anteriormente: values.ja_admitido_anteriormente,
                 
                 // Vinculação (apenas se for novo)
-                ...(isNewAuthUser && tabelaDestino === 'tbl_usuarios' && { cliente_id: proprietarioId }), // CORREÇÃO: Usando cliente_id
+                ...(isNewAuthUser && tabelaDestino === 'tbl_usuarios' && { cliente_id: proprietarioId }),
                 ...(isNewAuthUser && tabelaDestino === 'admin_usuarios' && { admin_id: proprietarioId }),
                 
                 // Se for edição de AdminUsuario, garante que o admin_id seja mantido no payload
                 ...(isEditing && tabelaDestino === 'admin_usuarios' && { admin_id: (usuarioInicial as AdminUsuarioProfile)?.admin_id }),
             };
             
-            // UPSERT MANUAL NA TABELA CORRETA
             const { error } = await supabase.from(tabelaDestino).upsert({ ...dataToUpdate, id: userId, email: values.email }, { onConflict: 'id' });
             if (error) throw error;
             
-            // Se estiver editando, atualiza a senha separadamente
             if (isEditing && values.senha) {
                 const { error: authError } = await supabase.auth.updateUser({ password: values.senha });
                 if (authError) throw authError;
@@ -381,7 +377,6 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
         showSuccess(`${isNewClient ? 'Cliente' : 'Usuário'} ${isEditing ? 'atualizado' : 'criado'} com sucesso!`);
         
         if (isNewAuthUser) {
-            // Envia o link de redefinição de senha (convite)
             const { error: resetError } = await supabase.auth.resetPasswordForEmail(values.email, {
                 redirectTo: `${BASE_URL}/atualizar-senha`,
             });
@@ -398,7 +393,6 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
     }
   };
   
-  // Se for criação de novo cliente, o formulário é simplificado
   if (isNewClient) {
       return (
         <FormProvider {...form}>
@@ -433,7 +427,6 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
       );
   }
 
-  // Renderização para Usuário (Funcionário)
   return (
     <FormProvider {...form}>
       <Form {...form}>
