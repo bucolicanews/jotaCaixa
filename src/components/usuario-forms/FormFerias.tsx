@@ -34,6 +34,10 @@ const FormFerias: React.FC<FormFeriasProps> = ({ usuarioInicial }) => {
   // Dados necessários para o hook CLT
   const dataInicioContrato = usuarioInicial.data_inicio_contrato;
   
+  // FIX 2: Estabilizar new Date() e o array vazio
+  const mesReferencia = useMemo(() => new Date(), []);
+  const registrosEstaveis = useMemo(() => [], []);
+
   // Chamada do hook useFeriasCLT
   const {
       periodos,
@@ -45,8 +49,8 @@ const FormFerias: React.FC<FormFeriasProps> = ({ usuarioInicial }) => {
   } = useFeriasCLT(
       usuarioInicial.id,
       dataInicioContrato,
-      new Date(), 
-      [] 
+      mesReferencia, // Usando data memoizada
+      registrosEstaveis // Usando array memoizado
   );
 
   if (!proprietarioId) {
@@ -89,8 +93,8 @@ const FormFerias: React.FC<FormFeriasProps> = ({ usuarioInicial }) => {
       const fim = subYears(periodoAtual.fim_aquisitivo, 1);
       
       return {
-          inicio: format(inicio, 'dd/MM/yyyy'),
-          fim: format(fim, 'dd/MM/yyyy'),
+          inicio: format(inicio, 'dd/MM/yyyy', { locale: ptBR }),
+          fim: format(fim, 'dd/MM/yyyy', { locale: ptBR }),
       };
   }, [isVencidoEmDobro, periodoAtual]);
   
@@ -183,10 +187,10 @@ const FormFerias: React.FC<FormFeriasProps> = ({ usuarioInicial }) => {
                                 periodos.map((p, index) => (
                                     <TableRow key={index} className={cn(p.status === 'Vencida em Dobro' && 'bg-red-500/10')}>
                                         <TableCell className="font-medium">
-                                            {format(p.inicio_aquisitivo, 'dd/MM/yyyy')} - {format(p.fim_aquisitivo, 'dd/MM/yyyy')}
+                                            {format(p.inicio_aquisitivo, 'dd/MM/yyyy', { locale: ptBR })} - {format(p.fim_aquisitivo, 'dd/MM/yyyy', { locale: ptBR })}
                                         </TableCell>
                                         <TableCell>
-                                            {format(p.limite_concessivo, 'dd/MM/yyyy')}
+                                            {format(p.limite_concessivo, 'dd/MM/yyyy', { locale: ptBR })}
                                         </TableCell>
                                         <TableCell className="text-center text-red-600 font-semibold">
                                             {p.faltas_injustificadas}

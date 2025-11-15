@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { useForm, FormProvider, Control } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -131,10 +131,13 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
     return isNaN(date.getTime()) ? undefined : date;
   };
 
-  const permissoesVisiveis = PERMISSOES_DISPONIVEIS.filter((p: Permissao) => {
-      if (criadorRole === 'Admin') return true;
-      return p.key === 'ponto_eletronico' || p.key === 'visualizar_proprio_ponto' || p.key === 'folha_ponto' || p.key === 'cadastrar_usuarios';
-  });
+  // FIX 1: Memoizar permissoesVisiveis para estabilidade
+  const permissoesVisiveis = useMemo(() => {
+      return PERMISSOES_DISPONIVEIS.filter((p: Permissao) => {
+          if (criadorRole === 'Admin') return true;
+          return p.key === 'ponto_eletronico' || p.key === 'visualizar_proprio_ponto' || p.key === 'folha_ponto' || p.key === 'cadastrar_usuarios';
+      });
+  }, [criadorRole]);
 
   // 1. Inicialização do useForm (incondicionalmente no topo)
   const form = useForm<FormValues>({
