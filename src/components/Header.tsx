@@ -111,7 +111,7 @@ const Header: React.FC = () => {
         if (isUserOfAdmin) {
             appName = adminBranding?.nome ?? 'Admin';
         } else if (userProfile.cliente_id) {
-            // Se for funcionário de Cliente, usa o nome do Cliente
+            // Se for funcionário de Cliente, busca o nome do Cliente
             const proprietarioId = userProfile.cliente_id;
             const { data: clienteData } = await supabase
                 .from('tbl_clientes')
