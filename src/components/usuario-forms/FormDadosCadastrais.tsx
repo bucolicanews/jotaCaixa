@@ -14,7 +14,7 @@ interface TaggedFormFieldProps {
     isOptional?: boolean;
     tagRefreshKey: number;
     onTagToggle: () => void;
-    isReadOnly: boolean; // FIX: NOVO PROP
+    isReadOnly: boolean; // NOVO PROP
 }
 
 // Componente wrapper para campos de Usuário (Funcionário)
@@ -86,7 +86,7 @@ interface FormDadosCadastraisProps {
     resourceId: string | undefined;
     tagRefreshKey: number;
     onTagToggle: () => void;
-    isReadOnly: boolean; // FIX: NOVO PROP
+    isReadOnly: boolean; // NOVO PROP
 }
 
 const FormDadosCadastrais: React.FC<FormDadosCadastraisProps> = ({ isSubmitting, resourceId, tagRefreshKey, onTagToggle, isReadOnly }) => {

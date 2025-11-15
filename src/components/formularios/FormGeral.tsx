@@ -11,7 +11,7 @@ interface FormGeralProps {
   isSubmitting: boolean;
   permissoesVisiveis: Permissao[];
   handleSelectAll: (select: boolean) => void;
-  isReadOnly: boolean; // FIX: Garantido que isReadOnly está na interface
+  isReadOnly: boolean; // FIX: Adicionado isReadOnly
 }
 
 const FormGeral: React.FC<FormGeralProps> = ({

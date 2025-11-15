@@ -94,7 +94,7 @@ interface FormUsuarioProps {
   usuarioInicial?: AnyProfile | null;
   onSaveComplete: () => void;
   isNewClient?: boolean;
-  isReadOnly?: boolean; // FIX: NOVO PROP
+  isReadOnly?: boolean; // NOVO PROP
 }
 
 // Type guard para verificar se o perfil é UsuarioProfile
@@ -454,7 +454,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                   isSubmitting={isSubmitting}
                   permissoesVisiveis={permissoesVisiveis}
                   handleSelectAll={handleSelectAll}
-                  isReadOnly={isReadOnly} // Propagação correta
+                  isReadOnly={isReadOnly}
               />
               
               {/* Campos de Login (Apenas para criação ou alteração de senha) */}
@@ -502,7 +502,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                     resourceId={resourceId}
                     tagRefreshKey={refreshKey}
                     onTagToggle={handleTagToggle}
-                    isReadOnly={isReadOnly} // Propagação correta
+                    isReadOnly={isReadOnly}
                 />
             </TabsContent>
             
@@ -512,7 +512,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                     control={form.control as unknown as Control<any>}
                     isSubmitting={isSubmitting}
                     resourceId={resourceId}
-                    isReadOnly={isReadOnly} // Propagação correta
+                    isReadOnly={isReadOnly}
                 />
             </TabsContent>
 
@@ -522,7 +522,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                     control={form.control as unknown as Control<any>}
                     isSubmitting={isSubmitting}
                     isContractEditable={isContractEditable}
-                    isReadOnly={isReadOnly} // Propagação correta
+                    isReadOnly={isReadOnly}
                 />
             </TabsContent>
           </Tabs>
