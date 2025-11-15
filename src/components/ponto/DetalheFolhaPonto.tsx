@@ -226,7 +226,6 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
                 }
             }
             
-            // LÓGICA DE EXIBIÇÃO CORRIGIDA
             if (isFalta) {
                 if (isFaltaJustificada) {
                     minutosDia = minutosAbonadosCredited;
@@ -288,6 +287,46 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
     const handleViewAtestado = (url: string) => {
         window.open(url, '_blank');
     };
+    
+    const getObservacaoPrincipal = (diaData: any): string => {
+        if (diaData.isFerias) return 'FÉRIAS';
+        if (diaData.isFalta) {
+            const faltaRegistro = diaData.registros.find((r: RegistroPonto) => r.tipo === 'Falta');
+            return faltaRegistro?.atestado_url ? 'Falta Justificada (Atestado Anexado)' : 'Falta Injustificada';
+        }
+        if (diaData.isAbono) {
+            const abonoRegistro = diaData.registros.find((r: RegistroPonto) => r.tipo === 'Abono');
+            if (diaData.isCompensacaoAbono) {
+                return abonoRegistro?.observacao || 'Folga Compensatória';
+            }
+            return `Abono (${parseHorasObservacao(abonoRegistro?.observacao || null, JORNADA_DIARIA_PADRAO)}h)`;
+        }
+        if (diaData.isFolgaFixa && diaData.hasPontoRecords) {
+            if (diaData.decisionRecord === 'Extra100') return 'Folga Trabalhada (Paga Extra 100%)';
+            if (diaData.decisionRecord === 'Compensacao') return 'Folga Trabalhada (Compensada)';
+            if (diaData.needsManagement) return 'Folga Trabalhada (Gestão Pendente)';
+        }
+        if (diaData.isFolgaFixa && !diaData.hasPontoRecords) return 'Folga Fixa';
+        
+        return '';
+    };
+    
+    const getBatidasDoDia = (registros: RegistroPonto[]) => {
+        const batidas = registros
+            .filter(r => r.tipo === 'Entrada' || r.tipo === 'Saida')
+            .sort((a, b) => parseISO(a.horario_registro).getTime() - parseISO(b.horario_registro).getTime());
+            
+        const times = batidas.map(r => format(parseISO(r.horario_registro), 'HH:mm'));
+        
+        // Retorna as 4 primeiras batidas (E1, S1, E2, S2)
+        return {
+            e1: times[0] || '',
+            s1: times[1] || '',
+            e2: times[2] || '',
+            s2: times[3] || '',
+        };
+    };
+
 
     return (
         <Card>
@@ -322,12 +361,25 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
                     <Table>
                         <TableHeader>
                             <TableRow>
+                                <TableHead className="w-[80px]">Data</TableHead>
                                 <TableHead className="w-[80px]">Dia</TableHead>
-                                <TableHead className="w-[150px]">Batidas</TableHead>
+                                <TableHead colSpan={2} className="text-center border-x">Primeiro Turno</TableHead>
+                                <TableHead colSpan={2} className="text-center border-r">Segundo Turno</TableHead>
                                 <TableHead className="w-[100px]">Total Dia</TableHead>
-                                <TableHead>Registros</TableHead>
+                                <TableHead>Observações</TableHead>
                                 {/* OCULTA A COLUNA AÇÕES SE FOR READONLY */}
                                 {!isReadOnly && <TableHead className="w-[120px] text-right">Ações</TableHead>}
+                            </TableRow>
+                            <TableRow>
+                                <TableHead className="w-[80px]"></TableHead>
+                                <TableHead className="w-[80px]"></TableHead>
+                                <TableHead className="w-[60px] text-center">Entrada</TableHead>
+                                <TableHead className="w-[60px] text-center border-r">Saída</TableHead>
+                                <TableHead className="w-[60px] text-center">Entrada</TableHead>
+                                <TableHead className="w-[60px] text-center border-r">Saída</TableHead>
+                                <TableHead className="w-[100px]"></TableHead>
+                                <TableHead></TableHead>
+                                {!isReadOnly && <TableHead className="w-[120px] text-right"></TableHead>}
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -351,6 +403,8 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
                                     minutosAbonadosCredited,
                                 } = diaData;
                                 
+                                const { e1, s1, e2, s2 } = getBatidasDoDia(registrosDoDia);
+                                
                                 const statusDisplay = isFalta ? 'FALTA' : (isAbono ? 'ABONO' : 'N/A');
                                 
                                 const totalDiaDisplay = isFolgaFixa && hasPontoRecords && (decisionRecord || needsManagement) 
@@ -367,20 +421,7 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
                                 else if (isAbono) rowClassName = 'bg-green-500/10';
                                 else if (registrosDoDia.length === 0 && data < hoje) rowClassName = 'bg-red-500/10';
                                 
-                                const batidas = registrosDoDia.filter((r: RegistroPonto) => r.tipo === 'Entrada' || r.tipo === 'Saida').map((r: RegistroPonto) => format(parseISO(r.horario_registro), 'HH:mm')).join(' / ');
-                                
-                                let statusPrincipal = '';
-                                if (isFerias) statusPrincipal = 'FÉRIAS';
-                                else if (isFalta) statusPrincipal = isFaltaJustificada ? 'Falta Justificada' : 'Falta Injutificada';
-                                else if (isAbono) statusPrincipal = 'Abono';
-                                else if (isFolgaFixa && hasPontoRecords) statusPrincipal = 'Folga Trabalhada';
-                                else if (isFolgaFixa) statusPrincipal = 'Folga Fixa';
-                                else if (registrosDoDia.length === 0 && data < hoje) statusPrincipal = 'FALTA (Não Registrado)';
-                                
-                                if (decisionRecord === 'Compensacao') statusPrincipal = 'Compensação Registrada';
-                                if (decisionRecord === 'Extra100') statusPrincipal = 'Extra 100% Registrado';
-                                
-                                if (needsManagement) statusPrincipal = 'Aguardando Gestão de Folga';
+                                const observacaoPrincipal = getObservacaoPrincipal(diaData);
 
                                 const absenceRecord = registrosDoDia.find((r: RegistroPonto) => r.tipo === 'Falta' || r.tipo === 'Abono');
                                 const atestadoUrl = absenceRecord?.atestado_url;
@@ -388,7 +429,14 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
                                 return (
                                     <TableRow key={diaString} className={rowClassName}>
                                         <TableCell className="font-medium">{format(data, 'dd/MM')}</TableCell>
-                                        <TableCell className="font-mono text-sm">{batidas || '-'}</TableCell>
+                                        <TableCell className="text-sm">{format(data, 'EEEE', { locale: ptBR })}</TableCell>
+                                        
+                                        {/* Batidas em Colunas Separadas */}
+                                        <TableCell className="font-mono text-xs text-center">{e1}</TableCell>
+                                        <TableCell className="font-mono text-xs text-center border-r">{s1}</TableCell>
+                                        <TableCell className="font-mono text-xs text-center">{e2}</TableCell>
+                                        <TableCell className="font-mono text-xs text-center border-r">{s2}</TableCell>
+                                        
                                         <TableCell className="font-semibold">{totalDiaDisplay}</TableCell>
                                         <TableCell>
                                             <div className="flex flex-col space-y-1">
@@ -398,7 +446,7 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
                                                         isFalta ? 'destructive' : 
                                                         isAbono ? 'success' : 'secondary'
                                                     }>
-                                                        {statusPrincipal}
+                                                        {observacaoPrincipal}
                                                     </Badge>
                                                     {atestadoUrl && (
                                                         <Button 
@@ -412,17 +460,14 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
                                                         </Button>
                                                     )}
                                                 </div>
-                                                {registrosDoDia.map((r: RegistroPonto) => {
-                                                    const isFaltaOrAbono = r.tipo === 'Falta' || r.tipo === 'Abono';
-                                                    
-                                                    return (
-                                                        <div key={r.id} className="text-xs text-muted-foreground flex items-center space-x-1">
-                                                            <Clock className="w-3 h-3" />
-                                                            <span>{isFaltaOrAbono ? r.tipo : `${r.tipo}: ${format(parseISO(r.horario_registro), 'HH:mm')}`}</span>
-                                                            {r.observacao && <span className="truncate max-w-[150px]">({r.observacao})</span>}
-                                                        </div>
-                                                    );
-                                                })}
+                                                {/* Registros detalhados (apenas se houver mais de 4 batidas ou observações complexas) */}
+                                                {registrosDoDia.filter(r => r.tipo !== 'Falta' && r.tipo !== 'Abono' && r.tipo !== 'Entrada' && r.tipo !== 'Saida').map((r: RegistroPonto) => (
+                                                    <div key={r.id} className="text-xs text-muted-foreground flex items-center space-x-1">
+                                                        <Clock className="w-3 h-3" />
+                                                        <span>{r.tipo}</span>
+                                                        {r.observacao && <span className="truncate max-w-[150px]">({r.observacao})</span>}
+                                                    </div>
+                                                ))}
                                             </div>
                                         </TableCell>
                                         {/* COLUNA AÇÕES */}
