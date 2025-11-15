@@ -381,20 +381,20 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
                                 <TableHead className="w-[80px]">Dia</TableHead>
                                 <TableHead colSpan={2} className="text-center border-x">Primeiro Turno</TableHead>
                                 <TableHead colSpan={2} className="text-center border-r">Segundo Turno</TableHead>
-                                <TableHead className="w-[100px]">Total Dia</TableHead>
-                                <TableHead className="min-w-[200px]">Observações</TableHead> {/* AUMENTADO O MIN-WIDTH */}
+                                <TableHead className="w-[120px]">Total Dia</TableHead>
+                                <TableHead className="min-w-[150px]">Observações</TableHead> {/* REDUZIDO O MIN-WIDTH */}
                                 {/* OCULTA A COLUNA AÇÕES SE FOR READONLY */}
                                 {!isReadOnly && <TableHead className="w-[120px] text-right">Ações</TableHead>}
                             </TableRow>
                             <TableRow>
                                 <TableHead className="w-[80px]"></TableHead>
                                 <TableHead className="w-[80px]"></TableHead>
-                                <TableHead className="w-[60px] text-center">Entrada</TableHead>
-                                <TableHead className="w-[60px] text-center border-r">Saída</TableHead>
-                                <TableHead className="w-[60px] text-center">Entrada</TableHead>
-                                <TableHead className="w-[60px] text-center border-r">Saída</TableHead>
-                                <TableHead className="w-[100px]"></TableHead>
-                                <TableHead className="min-w-[200px]"></TableHead>
+                                <TableHead className="w-[80px] text-center">Entrada</TableHead> {/* AUMENTADO */}
+                                <TableHead className="w-[80px] text-center border-r">Saída</TableHead> {/* AUMENTADO */}
+                                <TableHead className="w-[80px] text-center">Entrada</TableHead> {/* AUMENTADO */}
+                                <TableHead className="w-[80px] text-center border-r">Saída</TableHead> {/* AUMENTADO */}
+                                <TableHead className="w-[120px]"></TableHead>
+                                <TableHead className="min-w-[150px]"></TableHead>
                                 {!isReadOnly && <TableHead className="w-[120px] text-right"></TableHead>}
                             </TableRow>
                         </TableHeader>
