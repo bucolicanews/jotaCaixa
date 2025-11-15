@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useTheme } from '@/contexts/ThemeProvider';
 import { Button } from '@/components/ui/button';
 import { Sun, Moon, LogOut, Menu, User, Settings, Key, CalendarCheck, Package, DollarSign, MessageSquare } from 'lucide-react';
@@ -38,12 +38,46 @@ const ThemeToggle = () => {
 
 const Header: React.FC = () => {
   const [sheetOpen, setSheetOpen] = useState(false);
-  const { perfil, role } = useSessao();
+  const { perfil, role, usuario } = useSessao();
   const [tituloApp, setTituloApp] = useState('Fluxo de Caixa');
   const [planoDetalhes, setPlanoDetalhes] = useState<{ nome: string, preco: number } | null>(null);
+  const [adminBranding, setAdminBranding] = useState<{ logoUrl: string | null, nome: string | null } | null>(null);
   
   // NOVO: Hook de Notificações (usando mensagensParaResponder)
   const { mensagensParaResponder, carregando: carregandoNotificacoes } = useTicketNotifications();
+
+  const isClient = role === 'Cliente';
+  const isAdmin = role === 'Admin';
+  const clienteProfile = perfil as ClienteProfile;
+  const userProfile = perfil as UsuarioProfile | AdminUsuarioProfile;
+  
+  const isUserOfAdmin = role === 'Usuario' && 'admin_id' in userProfile && !!userProfile.admin_id;
+  
+  // Determina o ID do Admin para buscar o branding
+  const targetAdminId = isAdmin ? perfil?.id : (isUserOfAdmin ? (perfil as AdminUsuarioProfile).admin_id : null);
+
+  const fetchAdminBranding = useCallback(async () => {
+      if (!targetAdminId) return;
+      
+      // Busca o perfil do Admin (que contém logo_url e nome)
+      const { data, error } = await supabase
+          .from('tbl_admins')
+          .select('nome, logo_url')
+          .eq('id', targetAdminId)
+          .single();
+          
+      if (error) {
+          console.error('Erro ao buscar branding do Admin:', error);
+          setAdminBranding(null);
+      } else {
+          setAdminBranding({ logoUrl: data.logo_url, nome: data.nome });
+      }
+  }, [targetAdminId]);
+
+  useEffect(() => {
+      fetchAdminBranding();
+  }, [fetchAdminBranding]);
+
 
   useEffect(() => {
     const updateTitle = async () => {
@@ -53,53 +87,39 @@ const Header: React.FC = () => {
       }
 
       let currentPlanoId: string | null = null;
+      let appName = 'Fluxo de Caixa';
 
-      if (role === 'Admin') {
+      if (isAdmin) {
         const adminProfile = perfil as AdminProfile;
-        setTituloApp(adminProfile.nome); // Usa o nome completo do Admin
-      } else if (role === 'Cliente') {
-        const clienteProfile = perfil as ClienteProfile;
-        setTituloApp(clienteProfile.nome);
+        appName = adminProfile.nome;
+      } else if (isClient) {
+        appName = clienteProfile.nome;
         currentPlanoId = clienteProfile.plano_id || null; 
       } else if (role === 'Usuario') {
-        const usuarioProfile = perfil as UsuarioProfile | AdminUsuarioProfile;
-        
-        let proprietarioId: string | null = null;
-        if ('admin_id' in usuarioProfile && usuarioProfile.admin_id) {
-            proprietarioId = usuarioProfile.admin_id;
-        } else if ('cliente_id' in usuarioProfile && usuarioProfile.cliente_id) {
-            proprietarioId = usuarioProfile.cliente_id;
-        }
-        
-        if (proprietarioId) {
-          // Buscar o nome da empresa (Cliente ou Admin)
-          const { data: clienteData } = await supabase
-            .from('tbl_clientes')
-            .select('nome, plano_id')
-            .eq('id', proprietarioId)
-            .single();
-            
-          if (clienteData) {
-            setTituloApp(clienteData.nome);
-            currentPlanoId = clienteData.plano_id || null;
-          } else {
-            // Se for usuário do Admin, busca o nome do Admin
-            const { data: adminData } = await supabase
-                .from('tbl_admins')
-                .select('nome')
+        // Se for funcionário do Admin, usa o nome do Admin
+        if (isUserOfAdmin && adminBranding?.nome) {
+            appName = adminBranding.nome;
+        } else if (userProfile.cliente_id) {
+            // Se for funcionário de Cliente, usa o nome do Cliente (já definido no useEffect anterior)
+            const proprietarioId = userProfile.cliente_id;
+            const { data: clienteData } = await supabase
+                .from('tbl_clientes')
+                .select('nome, plano_id')
                 .eq('id', proprietarioId)
                 .single();
-            
-            if (adminData) {
-                setTituloApp(adminData.nome);
+                
+            if (clienteData) {
+                appName = clienteData.nome;
+                currentPlanoId = clienteData.plano_id || null;
             } else {
-                setTituloApp('Usuário - Sem Empresa');
+                appName = 'Usuário - Sem Empresa';
             }
-          }
         } else {
-          setTituloApp('Usuário Não Vinculado');
+            appName = 'Usuário - Sem Empresa';
         }
       }
+      
+      setTituloApp(appName);
       
       // Buscar nome e preço do plano
       if (currentPlanoId) {
@@ -119,7 +139,7 @@ const Header: React.FC = () => {
       }
     };
     updateTitle();
-  }, [perfil, role]);
+  }, [perfil, role, isClient, isAdmin, isUserOfAdmin, clienteProfile, userProfile, adminBranding]);
 
   const lidarComSair = async () => {
     await supabase.auth.signOut();
@@ -132,7 +152,6 @@ const Header: React.FC = () => {
     else alert('Link de redefinição de senha enviado para seu email.');
   };
   
-  const clienteProfile = perfil && 'limite_usuarios' in perfil ? perfil as ClienteProfile : null;
   const dataFimAcesso = clienteProfile?.data_fim_acesso;
   const dataFimFormatada = dataFimAcesso ? format(parseISO(dataFimAcesso), 'dd/MM/yyyy', { locale: ptBR }) : null;
   
