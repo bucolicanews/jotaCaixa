@@ -311,7 +311,7 @@ const FolhaPonto: React.FC = () => {
   // --- Lógica de Impressão ---
   
   // Variáveis calculadas do useMemo (movidas para o escopo do componente para serem acessíveis)
-  const { diasProcessados, totalMinutosTrabalhados, minutosDiferenca, totalMinutosExtras100 } = useMemo(() => {
+  const { diasProcessados, totalMinutosTrabalhados, minutosDiferenca } = useMemo(() => {
     if (!funcionarioDetalhe) return { diasProcessados: {}, totalMinutosTrabalhados: 0, minutosDiferenca: 0, totalMinutosExtras100: 0 };
 
     let totalMinutosTrabalhados = 0;
