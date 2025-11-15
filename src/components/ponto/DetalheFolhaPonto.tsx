@@ -46,6 +46,7 @@ interface DetalheFolhaPontoProps {
     onEditFaltaAbono: (registro: RegistroPonto | null, dia: Date) => void;
     onDeleteRegistro: (registroId: string) => void;
     onManageWorkedDayOff: (dia: Date, registros: RegistroPonto[]) => void;
+    isReadOnly: boolean; // NOVO PROP
 }
 
 // Exportando a função utilitária
@@ -84,6 +85,7 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
     onEditFaltaAbono,
     onDeleteRegistro,
     onManageWorkedDayOff,
+    isReadOnly, // USANDO O NOVO PROP
 }) => {
     const { } = useSessao(); 
     const [isDeleting, setIsDeleting] = useState(false);
@@ -137,7 +139,7 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
             
             const isFerias = funcionario.ferias.some(f => {
                 const start = parseISO(f.data_inicio + 'T00:00:00');
-                const end = parseISO(f.data_fim + 'T23:59:59');
+                const end = endOfDay(parseISO(f.data_fim + 'T00:00:00')); // Usando endOfDay para incluir o dia final
                 return isWithinInterval(data, { start, end });
             });
 
@@ -324,7 +326,8 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
                                 <TableHead className="w-[150px]">Batidas</TableHead>
                                 <TableHead className="w-[100px]">Total Dia</TableHead>
                                 <TableHead>Registros</TableHead>
-                                <TableHead className="w-[120px] text-right">Ações</TableHead>
+                                {/* OCULTA A COLUNA AÇÕES SE FOR READONLY */}
+                                {!isReadOnly && <TableHead className="w-[120px] text-right">Ações</TableHead>}
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -421,66 +424,69 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
                                                 })}
                                             </div>
                                         </TableCell>
-                                        <TableCell className="text-right">
-                                            <div className="flex justify-end space-x-1">
-                                                {hasPontoRecords && !isFerias && !isFalta && !isAbono && (
-                                                    <Button 
-                                                        variant="outline" 
-                                                        size="icon" 
-                                                        onClick={() => onEditRegistro(data)}
-                                                        title="Ajustar Batidas"
-                                                    >
-                                                        <Edit className="w-4 h-4" />
-                                                    </Button>
-                                                )}
-                                                
-                                                {(!hasPontoRecords || isFalta || isAbono) && !isFerias && (
-                                                    <Button 
-                                                        variant="outline" 
-                                                        size="icon" 
-                                                        onClick={() => onEditFaltaAbono(registrosDoDia.find((r: RegistroPonto) => r.tipo === 'Falta' || r.tipo === 'Abono') || null, data)}
-                                                        title={isFalta || isAbono ? "Editar Falta/Abono" : "Registrar Falta/Abono"}
-                                                    >
-                                                        <FileSignature className="w-4 h-4" />
-                                                    </Button>
-                                                )}
-                                                
-                                                {needsManagement && (
-                                                    <Button 
-                                                        variant="default" 
-                                                        size="sm" 
-                                                        onClick={() => onManageWorkedDayOff(data, registrosDoDia)}
-                                                        title="Gerenciar Folga Trabalhada"
-                                                    >
-                                                        Gerenciar
-                                                    </Button>
-                                                )}
-                                                
-                                                {(isFalta || isAbono || decisionRecord) && (
-                                                    <AlertDialog>
-                                                        <AlertDialogTrigger asChild>
-                                                            <Button variant="ghost" size="icon" title="Excluir Registro">
-                                                                <Trash2 className="w-4 h-4 text-red-500" />
-                                                            </Button>
-                                                        </AlertDialogTrigger>
-                                                        <AlertDialogContent>
-                                                            <AlertDialogHeader>
-                                                                <AlertDialogTitle>Excluir Registro?</AlertDialogTitle>
-                                                                <AlertDialogDescription>
-                                                                    Esta ação irá remover o registro de {isFalta ? 'Falta' : (isAbono ? 'Abono' : 'Decisão')} para este dia.
-                                                                </AlertDialogDescription>
-                                                            </AlertDialogHeader>
-                                                            <AlertDialogFooter>
-                                                                <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
-                                                                <AlertDialogAction onClick={() => handleDeleteRegistro(registrosDoDia[0].id)} disabled={isDeleting}>
-                                                                    {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Excluir'}
-                                                                </AlertDialogAction>
-                                                            </AlertDialogFooter>
-                                                        </AlertDialogContent>
-                                                    </AlertDialog>
-                                                )}
-                                            </div>
-                                        </TableCell>
+                                        {/* COLUNA AÇÕES */}
+                                        {!isReadOnly && (
+                                            <TableCell className="text-right">
+                                                <div className="flex justify-end space-x-1">
+                                                    {hasPontoRecords && !isFerias && !isFalta && !isAbono && (
+                                                        <Button 
+                                                            variant="outline" 
+                                                            size="icon" 
+                                                            onClick={() => onEditRegistro(data)}
+                                                            title="Ajustar Batidas"
+                                                        >
+                                                            <Edit className="w-4 h-4" />
+                                                        </Button>
+                                                    )}
+                                                    
+                                                    {(!hasPontoRecords || isFalta || isAbono) && !isFerias && (
+                                                        <Button 
+                                                            variant="outline" 
+                                                            size="icon" 
+                                                            onClick={() => onEditFaltaAbono(registrosDoDia.find((r: RegistroPonto) => r.tipo === 'Falta' || r.tipo === 'Abono') || null, data)}
+                                                            title={isFalta || isAbono ? "Editar Falta/Abono" : "Registrar Falta/Abono"}
+                                                        >
+                                                            <FileSignature className="w-4 h-4" />
+                                                        </Button>
+                                                    )}
+                                                    
+                                                    {needsManagement && (
+                                                        <Button 
+                                                            variant="default" 
+                                                            size="sm" 
+                                                            onClick={() => onManageWorkedDayOff(data, registrosDoDia)}
+                                                            title="Gerenciar Folga Trabalhada"
+                                                        >
+                                                            Gerenciar
+                                                        </Button>
+                                                    )}
+                                                    
+                                                    {(isFalta || isAbono || decisionRecord) && (
+                                                        <AlertDialog>
+                                                            <AlertDialogTrigger asChild>
+                                                                <Button variant="ghost" size="icon" title="Excluir Registro">
+                                                                    <Trash2 className="w-4 h-4 text-red-500" />
+                                                                </Button>
+                                                            </AlertDialogTrigger>
+                                                            <AlertDialogContent>
+                                                                <AlertDialogHeader>
+                                                                    <AlertDialogTitle>Excluir Registro?</AlertDialogTitle>
+                                                                    <AlertDialogDescription>
+                                                                        Esta ação irá remover o registro de {isFalta ? 'Falta' : (isAbono ? 'Abono' : 'Decisão')} para este dia.
+                                                                    </AlertDialogDescription>
+                                                                </AlertDialogHeader>
+                                                                <AlertDialogFooter>
+                                                                    <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
+                                                                    <AlertDialogAction onClick={() => handleDeleteRegistro(registrosDoDia[0].id)} disabled={isDeleting}>
+                                                                        {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Excluir'}
+                                                                    </AlertDialogAction>
+                                                                </AlertDialogFooter>
+                                                            </AlertDialogContent>
+                                                        </AlertDialog>
+                                                    )}
+                                                </div>
+                                            </TableCell>
+                                        )}
                                     </TableRow>
                                 );
                             })}
