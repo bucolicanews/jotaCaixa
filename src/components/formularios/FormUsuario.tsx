@@ -94,7 +94,7 @@ interface FormUsuarioProps {
   usuarioInicial?: AnyProfile | null;
   onSaveComplete: () => void;
   isNewClient?: boolean;
-  isReadOnly?: boolean; // FIX: NOVO PROP
+  isReadOnly?: boolean;
 }
 
 // Type guard para verificar se o perfil é UsuarioProfile
@@ -113,7 +113,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
   usuarioInicial,
   onSaveComplete,
   isNewClient = false,
-  isReadOnly = false, // Default é false
+  isReadOnly = false,
 }) => {
   const isEditing = !!usuarioInicial;
   
@@ -454,7 +454,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                   isSubmitting={isSubmitting}
                   permissoesVisiveis={permissoesVisiveis}
                   handleSelectAll={handleSelectAll}
-                  isReadOnly={isReadOnly} // Propagação correta
+                  isReadOnly={isReadOnly}
               />
               
               {/* Campos de Login (Apenas para criação ou alteração de senha) */}
