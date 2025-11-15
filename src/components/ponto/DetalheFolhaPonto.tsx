@@ -196,6 +196,7 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
                     minutosDia += differenceInMinutes(hoje, entrada);
                     isTurnoAberto = true;
                 } else {
+                    minutosDia = 0; // Se o turno está aberto e não é hoje, não conta minutos
                     isTurnoAberto = true;
                 }
             } else {
@@ -272,7 +273,7 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
         }
         
         const jornadaMensalMinutos = (funcionario.horas_mensais || JORNADA_MENSAL_PADRAO) * 60;
-        const minutosDiferenca = totalMinutosTrabalhados - jornadaMensalMinutos; 
+        const minutosDiferenca = jornadaMensalMinutos - totalMinutosTrabalhados; 
 
         return { diasProcessados, totalMinutosTrabalhados, minutosDiferenca, totalMinutosExtras100 };
     }, [funcionario, mes, JORNADA_DIARIA_PADRAO, DAY_MAP]);
@@ -417,7 +418,11 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
                                         <TableCell>
                                             <div className="flex flex-col space-y-1">
                                                 <div className="flex items-center space-x-2">
-                                                    <Badge variant={isFalta ? 'destructive' : (isAbono ? 'success' : 'secondary')}>
+                                                    <Badge variant={
+                                                        isFalta && isFaltaJustificada ? 'default' : // AZUL para Falta Justificada
+                                                        isFalta ? 'destructive' : 
+                                                        isAbono ? 'success' : 'secondary'
+                                                    }>
                                                         {statusPrincipal}
                                                     </Badge>
                                                     {/* NOVO BOTÃO VISUALIZAR ATESTADO */}
