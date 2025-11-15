@@ -35,17 +35,6 @@ interface GerenciarFaltasProps {
 // Nome do bucket de armazenamento para atestados
 const ATESTADO_BUCKET = 'atestados'; 
 
-// Função utilitária para extrair horas da observação (mantida para compatibilidade)
-// REMOVIDA: const parseHorasObservacao = (observacao: string | null | undefined, defaultHours: number): number => {
-//     if (!observacao) return defaultHours;
-//     const match = observacao.match(/(\d+)h/);
-//     if (match) {
-//         return parseInt(match[1], 10);
-//     }
-//     return defaultHours;
-// };
-
-
 const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, funcionario, dataFalta, registroInicial, onFaltaRegistrada }) => {
   
   const [loading, setLoading] = useState(false);
@@ -59,7 +48,6 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
   const [abonoDecision, setAbonoDecision] = useState<AbonoDecision>(null);
   const [faltasHours, setFaltasHours] = useState(0);
   const [abonoHours, setAbonoHours] = useState(0);
-  // const [showDecisionModal, setShowDecisionModal] = useState(false); // Removido TS6133
 
   const isEditing = !!registroInicial;
   const diaFormatado = dataFalta ? format(dataFalta, 'dd/MM/yyyy') : 'N/A';
@@ -125,8 +113,6 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
       
       // Se for Falta e um novo atestado for anexado, abre o modal de decisão
       if (acao === 'Falta') {
-          // setShowDecisionModal(true); // Removido
-          // Como o modal de decisão não é um componente separado, forçamos a decisão aqui
           setAbonoDecision(null); 
       }
     } else {
@@ -187,7 +173,6 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
   const handleAbonoDecision = (decision: AbonoDecision) => {
       if (!decision) return;
       setAbonoDecision(decision);
-      // setShowDecisionModal(false); // Removido
       
       if (decision === 'total') {
           setFaltasHours(0);
@@ -385,7 +370,7 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
                   <Input 
                       id="atestado-file" 
                       type="file" 
-                      accept="image/*, application/pdf" 
+                      accept="image/png, image/jpeg, application/pdf" 
                       onChange={handleFileChange} 
                       disabled={loading} 
                   />
