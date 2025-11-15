@@ -10,7 +10,7 @@ interface PeriodoAquisitivo {
     dias_direito: number;
     faltas_injustificadas: number;
     status: string;
-    isVencidoEmDobro: boolean; // NOVO CAMPO
+    isVencidoEmDobro: boolean;
 }
 
 interface FeriasCLTData {
@@ -84,7 +84,6 @@ export function useFeriasCLT(
         const dataLimiteConcessivo = addYears(fimAquisitivo, 1);
         
         // 2. Determinar o Período Aquisitivo ANTERIOR
-        // const inicioAquisitivoAnterior = subYears(inicioAquisitivo, 1); // Removido
         const fimAquisitivoAnterior = subYears(fimAquisitivo, 1);
         const limiteConcessivoAnterior = addYears(fimAquisitivoAnterior, 1);
         
@@ -161,28 +160,15 @@ export function useFeriasCLT(
     const fetchUltimaFerias = useCallback(async () => {
         if (!funcionarioId) return;
         
-        // Busca a última data de fim de férias gozada (status 'concluida' ou 'paga')
-        // Nota: A tabela 'ferias' não tem status, então buscamos a última data_fim
-        const { data, error } = await supabase
-            .from('ferias')
-            .select('data_fim')
-            .eq('funcionario_id', funcionarioId)
-            .order('data_fim', { ascending: false })
-            .limit(1);
-            
-        if (error) {
-            console.error('Erro ao buscar última férias:', error);
-            setUltimaFeriasFim(null);
-            return;
-        }
+        const feriasGozadas = await fetchFeriasGozadas(funcionarioId);
         
-        if (data && data.length > 0) {
-            const lastDate = parseISO(data[0].data_fim + 'T00:00:00');
+        if (feriasGozadas.length > 0) {
+            const lastDate = parseISO(feriasGozadas[0].data_fim + 'T00:00:00');
             setUltimaFeriasFim(lastDate);
         } else {
             setUltimaFeriasFim(null);
         }
-    }, [funcionarioId, refreshKey]);
+    }, [funcionarioId, refreshKey, fetchFeriasGozadas]);
 
     useEffect(() => {
         calcularFaltasEDobra();

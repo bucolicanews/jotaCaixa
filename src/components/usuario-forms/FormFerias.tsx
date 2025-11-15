@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import GerenciarFerias from '@/components/formularios/GerenciarFerias';
 import GerenciarFeriasAdmin from '@/components/formularios/GerenciarFeriasAdmin';
 import { UsuarioProfile, AdminUsuarioProfile } from '@/types/usuario';
@@ -69,13 +69,19 @@ const FormFerias: React.FC<FormFeriasProps> = ({ usuarioInicial }) => {
     
   const isVencidoEmDobro = periodoAquisitivo?.isVencidoEmDobro ?? false;
   
-  // Calcula o período aquisitivo anterior para exibição
-  const inicioContrato = dataInicioContrato ? parseISO(dataInicioContrato + 'T00:00:00') : null;
-  const periodoAquisitivoAnterior = inicioContrato && periodoAquisitivo?.data_inicio_aquisitivo
-    ? {
-        inicio: format(subYears(periodoAquisitivo.data_inicio_aquisitivo, 1), 'dd/MM/yyyy'),
-        fim: format(subYears(periodoAquisitivo.data_fim_aquisitivo, 1), 'dd/MM/yyyy'),
-    } : null;
+  // Calcula o período aquisitivo anterior para exibição (apenas se estiver vencido em dobro)
+  const periodoAquisitivoAnterior = useMemo(() => {
+      if (!isVencidoEmDobro || !periodoAquisitivo?.data_inicio_aquisitivo) return null;
+      
+      const inicio = subYears(periodoAquisitivo.data_inicio_aquisitivo, 1);
+      const fim = subYears(periodoAquisitivo.data_fim_aquisitivo, 1);
+      
+      return {
+          inicio: format(inicio, 'dd/MM/yyyy'),
+          fim: format(fim, 'dd/MM/yyyy'),
+      };
+  }, [isVencidoEmDobro, periodoAquisitivo]);
+
 
   return (
     <div className="space-y-6">
@@ -92,7 +98,7 @@ const FormFerias: React.FC<FormFeriasProps> = ({ usuarioInicial }) => {
                             <div className="p-3 bg-red-100 dark:bg-red-900/20 border border-red-500 rounded-md flex items-center space-x-3">
                                 <AlertTriangle className="w-5 h-5 flex-shrink-0 text-red-600" />
                                 <p className="text-sm font-semibold text-red-700 dark:text-red-300">
-                                    DOBRA DE FÉRIAS: O período aquisitivo de {periodoAquisitivoAnterior.inicio} a {periodoAquisitivoAnterior.fim} venceu em dobro.
+                                    DOBRA DE FÉRIAS: O período aquisitivo de <span className="font-bold">{periodoAquisitivoAnterior.inicio} a {periodoAquisitivoAnterior.fim}</span> venceu em dobro.
                                 </p>
                             </div>
                         )}
