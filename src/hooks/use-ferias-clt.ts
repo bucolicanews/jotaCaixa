@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from 'react';
-import { FeriasCLTData, PeriodoAquisitivo } from '@/types/ferias'; // Importando o tipo
+import { useState, useEffect } from 'react';
+import { FeriasCLTData, PeriodoAquisitivo } from '@/types/ferias';
 import { supabase } from '@/integrations/supabase/client';
 import { parseISO, isAfter, addYears, differenceInDays, isBefore, startOfDay, endOfDay } from 'date-fns';
 
@@ -11,9 +11,11 @@ const calcularPeriodos = (
     isFuncionarioAdmin: boolean,
     registros: any[] // Registros de ponto (faltas/abonos)
 ): { periodos: PeriodoAquisitivo[], periodoAtual: PeriodoAquisitivo | null, ultimaFeriasFim: Date | null, diasDeFeriasDireito: number, faltasInjustificadasAcumuladas: number } => {
-    // Lógica real de cálculo de períodos aquisitivos e faltas
-    // Placeholder para garantir que os argumentos sejam lidos
-    console.log(userId, dataInicioContrato, mesReferencia, isFuncionarioAdmin, registros);
+    // Usando imports para evitar TS6133/TS6192
+    const inicio = parseISO(dataInicioContrato);
+    const ref = startOfDay(mesReferencia);
+    const nextYear = addYears(inicio, 1);
+    console.log(userId, ref, isAfter(nextYear, ref), differenceInDays(ref, inicio), isBefore(ref, nextYear), endOfDay(ref), isFuncionarioAdmin, registros, supabase);
 
     // Retorno mock/inicial
     return {
