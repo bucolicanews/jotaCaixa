@@ -59,14 +59,6 @@ const FormFerias: React.FC<FormFeriasProps> = ({ usuarioInicial }) => {
       );
   }
   
-  if (carregandoCLT) {
-      return (
-          <div className="flex justify-center items-center h-20">
-              <Loader2 className="h-5 w-5 animate-spin text-primary" />
-          </div>
-      );
-  }
-  
   const ultimaFeriasDisplay = ultimaFeriasFim 
     ? format(ultimaFeriasFim, 'dd/MM/yyyy', { locale: ptBR }) 
     : 'Nenhuma férias gozada registrada.';
@@ -108,60 +100,71 @@ const FormFerias: React.FC<FormFeriasProps> = ({ usuarioInicial }) => {
       }
   };
 
-
   return (
     <div className="space-y-6">
         <Card>
             <CardHeader><CardTitle className="text-lg flex items-center"><Clock className="w-5 h-5 mr-2" /> Cálculo CLT de Férias</CardTitle></CardHeader>
             <CardContent>
-                <div className="space-y-4">
-                    
-                    {/* ALERTA DE DOBRA DE FÉRIAS */}
-                    {isVencidoEmDobro && periodoAquisitivoAnterior && (
-                        <div className="p-3 bg-red-100 dark:bg-red-900/20 border border-red-500 rounded-md flex items-center space-x-3">
-                            <AlertTriangle className="w-5 h-5 flex-shrink-0 text-red-600" />
-                            <p className="text-sm font-semibold text-red-700 dark:text-red-300">
-                                DOBRA DE FÉRIAS: O período aquisitivo de <span className="font-bold">{periodoAquisitivoAnterior.inicio} a {periodoAquisitivoAnterior.fim}</span> venceu em dobro.
-                            </p>
-                        </div>
-                    )}
+                {carregandoCLT ? (
+                    <div className="flex justify-center items-center h-20">
+                        <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                    </div>
+                ) : !dataInicioContrato ? (
+                    <div className="p-4 bg-red-100 dark:bg-red-900/20 border border-red-500 rounded-md">
+                        <p className="text-sm font-semibold text-red-700 dark:text-red-300">
+                            Aviso: A data de início do contrato não está definida. Preencha na aba 'Contrato (RH)' para calcular os períodos aquisitivos.
+                        </p>
+                    </div>
+                ) : (
+                    <div className="space-y-4">
+                        
+                        {/* ALERTA DE DOBRA DE FÉRIAS */}
+                        {isVencidoEmDobro && periodoAquisitivoAnterior && (
+                            <div className="p-3 bg-red-100 dark:bg-red-900/20 border border-red-500 rounded-md flex items-center space-x-3">
+                                <AlertTriangle className="w-5 h-5 flex-shrink-0 text-red-600" />
+                                <p className="text-sm font-semibold text-red-700 dark:text-red-300">
+                                    DOBRA DE FÉRIAS: O período aquisitivo de <span className="font-bold">{periodoAquisitivoAnterior.inicio} a {periodoAquisitivoAnterior.fim}</span> venceu em dobro.
+                                </p>
+                            </div>
+                        )}
 
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                        <div className="p-3 bg-secondary rounded-md">
-                            <p className="text-sm font-medium text-muted-foreground flex items-center"><CalendarCheck className="w-4 h-4 mr-2" /> Início do Contrato</p>
-                            <p className="text-lg font-bold mt-1">{dataInicioContrato ? format(parseISO(dataInicioContrato), 'dd/MM/yyyy', { locale: ptBR }) : 'N/A'}</p>
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                            <div className="p-3 bg-secondary rounded-md">
+                                <p className="text-sm font-medium text-muted-foreground flex items-center"><CalendarCheck className="w-4 h-4 mr-2" /> Início do Contrato</p>
+                                <p className="text-lg font-bold mt-1">{dataInicioContrato ? format(parseISO(dataInicioContrato), 'dd/MM/yyyy', { locale: ptBR }) : 'N/A'}</p>
+                            </div>
+                            <div className="p-3 bg-secondary rounded-md">
+                                <p className="text-sm font-medium text-muted-foreground flex items-center"><CalendarCheck className="w-4 h-4 mr-2" /> Última Férias Gozada</p>
+                                <p className="text-lg font-bold mt-1">{ultimaFeriasDisplay}</p>
+                            </div>
+                            <div className="p-3 bg-blue-100 dark:bg-blue-900/20 rounded-md">
+                                <p className="text-sm font-medium text-blue-700 dark:text-blue-300">Período Aquisitivo Atual</p>
+                                <p className="text-sm font-bold mt-1">{proximoAquisitivoInicio} a {proximoAquisitivoFim}</p>
+                            </div>
+                            <div className={cn("p-3 rounded-md", isVencidoEmDobro ? 'bg-red-500/20' : 'bg-green-100 dark:bg-green-900/20')}>
+                                <p className="text-sm font-medium text-foreground flex items-center">
+                                    <Scale className="w-4 h-4 mr-2" /> Dias de Direito
+                                </p>
+                                <p className={cn("text-2xl font-bold mt-1", isVencidoEmDobro ? 'text-red-600' : 'text-green-600')}>
+                                    {diasDeFeriasDireito} dias
+                                </p>
+                            </div>
                         </div>
-                        <div className="p-3 bg-secondary rounded-md">
-                            <p className="text-sm font-medium text-muted-foreground flex items-center"><CalendarCheck className="w-4 h-4 mr-2" /> Última Férias Gozada</p>
-                            <p className="text-lg font-bold mt-1">{ultimaFeriasDisplay}</p>
-                        </div>
-                        <div className="p-3 bg-blue-100 dark:bg-blue-900/20 rounded-md">
-                            <p className="text-sm font-medium text-blue-700 dark:text-blue-300">Período Aquisitivo Atual</p>
-                            <p className="text-sm font-bold mt-1">{proximoAquisitivoInicio} a {proximoAquisitivoFim}</p>
-                        </div>
-                        <div className={cn("p-3 rounded-md", isVencidoEmDobro ? 'bg-red-500/20' : 'bg-green-100 dark:bg-green-900/20')}>
-                            <p className="text-sm font-medium text-foreground flex items-center">
-                                <Scale className="w-4 h-4 mr-2" /> Dias de Direito
-                            </p>
-                            <p className={cn("text-2xl font-bold mt-1", isVencidoEmDobro ? 'text-red-600' : 'text-green-600')}>
-                                {diasDeFeriasDireito} dias
-                            </p>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className={cn("p-3 rounded-md md:col-span-2", periodoAtual?.status === 'Em Aberto' ? 'bg-yellow-100 dark:bg-yellow-900/20' : 'bg-secondary')}>
+                                <p className="text-sm font-medium text-foreground flex items-center">
+                                    <AlertTriangle className="w-4 h-4 mr-2" /> Limite Concessivo
+                                </p>
+                                <p className="text-lg font-bold mt-1">{limiteConcessivo}</p>
+                            </div>
+                            <div className="p-3 bg-secondary rounded-md md:col-span-1">
+                                <p className="text-sm font-medium text-muted-foreground">Faltas Injustificadas</p>
+                                <p className="text-lg font-bold mt-1 text-red-600">{faltasInjustificadasAcumuladas}</p>
+                            </div>
                         </div>
                     </div>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className={cn("p-3 rounded-md md:col-span-2", periodoAtual?.status === 'Em Aberto' ? 'bg-yellow-100 dark:bg-yellow-900/20' : 'bg-secondary')}>
-                            <p className="text-sm font-medium text-foreground flex items-center">
-                                <AlertTriangle className="w-4 h-4 mr-2" /> Limite Concessivo
-                            </p>
-                            <p className="text-lg font-bold mt-1">{limiteConcessivo}</p>
-                        </div>
-                        <div className="p-3 bg-secondary rounded-md md:col-span-1">
-                            <p className="text-sm font-medium text-muted-foreground">Faltas Injustificadas</p>
-                            <p className="text-lg font-bold mt-1 text-red-600">{faltasInjustificadasAcumuladas}</p>
-                        </div>
-                    </div>
-                </div>
+                )}
             </CardContent>
         </Card>
         
