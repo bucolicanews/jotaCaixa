@@ -83,7 +83,7 @@ export function MonthPicker({
             table: "hidden", 
             head_row: "hidden", 
             row: "hidden", 
-            caption_dropdowns: "hidden",
+            // Removido 'caption_dropdowns: "hidden"' para exibir os dropdowns de mês/ano
           }}
         />
         <div className="p-2 border-t flex justify-end">
