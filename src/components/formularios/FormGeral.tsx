@@ -11,7 +11,7 @@ interface FormGeralProps {
   isSubmitting: boolean;
   permissoesVisiveis: Permissao[];
   handleSelectAll: (select: boolean) => void;
-  isReadOnly: boolean; // NOVO PROP
+  isReadOnly: boolean; // FIX: Adicionado isReadOnly
 }
 
 const FormGeral: React.FC<FormGeralProps> = ({
@@ -81,8 +81,8 @@ const FormGeral: React.FC<FormGeralProps> = ({
                 </FormControl>
                 <FormLabel className="font-normal">{p.label}</FormLabel>
               </FormItem>
-            )} />
-          ))}
+            ))}
+          )}
         </div>
       </div>
     </div>
