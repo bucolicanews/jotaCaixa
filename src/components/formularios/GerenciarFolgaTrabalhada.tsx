@@ -154,7 +154,8 @@ const GerenciarFolgaTrabalhada: React.FC<GerenciarFolgaTrabalhadaProps> = ({ ope
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
+      {/* Ajuste de responsividade: sm:max-w-full e max-h-[95vh] */}
+      <DialogContent className="w-full sm:max-w-full md:max-w-[500px] max-h-[95vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Gerenciar Folga Trabalhada</DialogTitle>
           <DialogDescription>

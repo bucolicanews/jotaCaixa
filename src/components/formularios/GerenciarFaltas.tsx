@@ -130,8 +130,6 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
   
   const handleViewAtestado = () => {
       if (atestadoUrl) {
-          // CORREÇÃO: Se a URL for assinada, ela já deve estar completa.
-          // Se for uma URL pública, ela também deve estar completa.
           window.open(atestadoUrl, '_blank');
       }
   };
@@ -142,7 +140,6 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
     const bucket = ATESTADO_BUCKET; 
     
     const fileExt = file.name.split('.').pop();
-    // CORREÇÃO: Usando um caminho simples dentro do bucket, sem prefixo 'faltas/'
     const fileName = `${funcionario.id}/${format(dataFalta!, 'yyyyMMdd')}-${Date.now()}.${fileExt}`;
     
     try {
@@ -157,7 +154,6 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
         throw new Error(uploadError.message);
       }
       
-      // CORREÇÃO CRÍTICA: Usar getPublicUrl para garantir que a URL salva seja a pública
       const { data: publicUrlData } = supabase.storage
         .from(bucket)
         .getPublicUrl(data.path);
@@ -173,7 +169,6 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
     }
   };
   
-  // Handler para a decisão de abono (chamado pelo RadioGroup)
   const handleAbonoDecision = (decision: AbonoDecision) => {
       if (!decision) return;
       setAbonoDecision(decision);
@@ -183,7 +178,6 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
           setAbonoHours(8);
           setObservacao('Falta Total Abonada (8h)');
       } else if (decision === 'partial') {
-          // Mantém os valores parciais existentes ou define 4h/4h como default
           if (faltasHours + abonoHours !== 8) {
               setFaltasHours(4);
               setAbonoHours(4);
@@ -210,11 +204,9 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
       setFaltasHours(newFaltas);
       setAbonoHours(newAbono);
       
-      // Atualiza a observação imediatamente
       setObservacao(`Falta Parcial Abonada. Faltas=${newFaltas}h, Abono=${newAbono}h`);
   };
   
-  // Determina o status de submissão
   const isReadyToSubmit = isAbono && horasSelecionadas || isJustified && isDecisionMade || isFalta && !isJustified;
 
   const handleSubmit = async () => {
@@ -247,23 +239,20 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
       
       // 2. Determinar o tipo de registro e observação
       if (isJustified) {
-          tipoRegistro = 'Falta'; // Registra como Falta, mas a observação define o abono
+          tipoRegistro = 'Falta';
           
           if (abonoDecision === 'total') {
               observacaoFinal = 'Falta Total Abonada (8h)';
           } else if (abonoDecision === 'partial') {
-              // Observação já foi atualizada em handlePartialHoursChange
               observacaoFinal = `Falta Parcial Abonada. Faltas=${faltasHours}h, Abono=${abonoHours}h`;
           }
           
       } else if (isFalta) {
-          // Falta Injustificada
           tipoRegistro = 'Falta';
           observacaoFinal = observacao.trim() || 'Falta Injustificada';
           finalAtestadoUrl = null;
           
       } else if (isAbono) {
-          // Abono Manual
           tipoRegistro = 'Abono';
           observacaoFinal = `Abono de ${horasSelecionadas}`;
           finalAtestadoUrl = null;
@@ -315,7 +304,8 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-[500px]">
+        {/* Ajuste de responsividade: sm:max-w-full e max-h-[95vh] */}
+        <DialogContent className="w-full sm:max-w-full md:max-w-[500px] max-h-[95vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-xl">Gerenciar Ausência</DialogTitle>
             <DialogDescription>
@@ -339,7 +329,7 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
               <div className="space-y-4 p-4 border rounded-md">
                 <h4 className="font-semibold">Horas a Abonar</h4>
                 <p className="text-sm text-muted-foreground">Selecione a quantidade de horas abonadas (será registrado como Abono).</p>
-                <RadioGroup value={horasSelecionadas} onValueChange={(v: AbonoHoras) => { setHorasSelecionadas(v); setObservacao(`Abono de ${v}`); }} className="grid grid-cols-2 gap-4">
+                <RadioGroup value={horasSelecionadas} onValueChange={(v: AbonoHoras) => { setHorasSelecionadas(v); setObservacao(`Abono de ${v}`); }} className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                   {['8h', '6h', '4h', '2h'].map(h => (
                       <div key={h} className="flex items-center space-x-2 border p-2 rounded-md">
                           <RadioGroupItem value={h} id={`horas-${h}`} />
@@ -380,12 +370,12 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
                   />
                   
                   {atestadoPronto && (
-                      <div className="flex justify-between items-center text-sm">
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center text-sm mt-2">
                           <p className={cn("flex items-center", atestadoPronto ? "text-green-600" : "text-red-500")}>
                               <CheckCircle2 className="w-4 h-4 mr-1" />
                               {atestadoFile ? `Novo arquivo: ${atestadoFile.name}` : 'Atestado anexado.'}
                           </p>
-                          <div className="flex space-x-2">
+                          <div className="flex space-x-2 mt-2 sm:mt-0">
                               <Button variant="link" size="sm" onClick={handleViewAtestado} className="h-auto p-0 text-blue-500 hover:text-blue-700" disabled={!atestadoUrl}>
                                   <Eye className="w-4 h-4 mr-1" /> Visualizar
                               </Button>
@@ -404,7 +394,7 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
                         <RadioGroup 
                             value={abonoDecision || ''} 
                             onValueChange={(v: string) => handleAbonoDecision(v as AbonoDecision)} 
-                            className="flex space-x-4"
+                            className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-4"
                         >
                             <div className="flex items-center space-x-2"><RadioGroupItem value="total" id="abono-total" /><Label htmlFor="abono-total">Total (8h Abono)</Label></div>
                             <div className="flex items-center space-x-2"><RadioGroupItem value="partial" id="abono-parcial" /><Label htmlFor="abono-parcial">Parcial</Label></div>

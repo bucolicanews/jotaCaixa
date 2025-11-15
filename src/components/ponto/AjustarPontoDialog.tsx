@@ -143,7 +143,8 @@ const AjustarPontoDialog: React.FC<AjustarPontoDialogProps> = ({ open, onOpenCha
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+      {/* Ajuste de responsividade: sm:max-w-full e max-h-[95vh] */}
+      <DialogContent className="w-full sm:max-w-full md:max-w-[600px] max-h-[95vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Ajustar Ponto Manualmente</DialogTitle>
           <DialogDescription>
