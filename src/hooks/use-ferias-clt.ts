@@ -119,7 +119,7 @@ export function useFeriasCLT(
     funcionarioId: string | undefined,
     dataInicioContrato: string | null | undefined,
     mesReferencia: Date,
-    todosRegistrosDoFuncionario: RegistroPonto[]
+    todosRegistrosDoFuncionario: RegistroPonto[] // Mantido como argumento
 ): FeriasCLTData {
     const [periodos, setPeriodos] = useState<AcquisitionPeriod[]>([]);
     const [carregando, setCarregando] = useState(true);
@@ -129,9 +129,6 @@ export function useFeriasCLT(
     
     // Fetch ALL ferias records for the employee
     const fetchAllFerias = useCallback(async (id: string) => {
-        // Tabela 'ferias' é usada para clientes, 'admin_ferias_user' para admin users.
-        // Consolidamos os registros de férias de ambas as tabelas.
-        
         const { data: feriasCliente } = await supabase
             .from('ferias')
             .select('id, data_inicio, data_fim, periodo_referencia')
@@ -146,27 +143,24 @@ export function useFeriasCLT(
             
         const allFerias = [...(feriasCliente || []), ...(feriasAdmin || [])];
         
-        // Ordena novamente por data_fim
         allFerias.sort((a, b) => parseISO(b.data_fim).getTime() - parseISO(a.data_fim).getTime());
         
         return allFerias as Ferias[];
     }, []);
 
-    const calcularPeriodos = useCallback(async () => {
-        // SAÍDA RÁPIDA: Se não houver dados essenciais, define carregando como false e retorna.
-        if (!dataInicioContrato || !funcionarioId) {
-            setPeriodos([]);
-            setCarregando(false);
-            return;
-        }
-        
+    // NOVO: Estabilizando a função de cálculo
+    const calcularPeriodos = useCallback(async (
+        id: string, 
+        inicioContrato: string, 
+        registros: RegistroPonto[]
+    ) => {
         setCarregando(true);
 
         try {
-            const inicioContrato = parseISO(dataInicioContrato + 'T00:00:00');
-            const allFerias = await fetchAllFerias(funcionarioId);
+            const inicioContratoDate = parseISO(inicioContrato + 'T00:00:00');
+            const allFerias = await fetchAllFerias(id);
             
-            const calculatedPeriods = calculatePeriods(inicioContrato, todosRegistrosDoFuncionario, allFerias);
+            const calculatedPeriods = calculatePeriods(inicioContratoDate, registros, allFerias);
             
             setPeriodos(calculatedPeriods);
 
@@ -177,18 +171,28 @@ export function useFeriasCLT(
         } finally {
             setCarregando(false);
         }
-    }, [funcionarioId, dataInicioContrato, todosRegistrosDoFuncionario, refreshKey, fetchAllFerias]);
+    }, [fetchAllFerias]);
 
+    // Efeito para chamar o cálculo quando as chaves mudam
     useEffect(() => {
-        calcularPeriodos();
-    }, [calcularPeriodos]);
+        if (funcionarioId && dataInicioContrato) {
+            // Chamamos o cálculo com as dependências estáveis
+            calcularPeriodos(funcionarioId, dataInicioContrato, todosRegistrosDoFuncionario);
+        } else {
+            setCarregando(false);
+        }
+    }, [funcionarioId, dataInicioContrato, todosRegistrosDoFuncionario, refreshKey, calcularPeriodos]);
     
     // The current period is the one that is 'Em Andamento' or 'Em Aberto'
     const periodoAtual = periodos.find(p => p.status === 'Em Andamento' || p.status === 'Em Aberto') || null;
     
     // Compatibility fields
-    const ultimaFeriasFim = periodos.find(p => p.ferias_gozadas.length > 0)?.ferias_gozadas[0]?.data_fim 
-        ? parseISO(periodos.find(p => p.ferias_gozadas.length > 0)?.ferias_gozadas[0]?.data_fim + 'T00:00:00') 
+    // FIX: Acessa corretamente a data_fim do primeiro item do array ferias_gozadas do período mais recente
+    const mostRecentPeriodWithVacation = periodos.find(p => p.ferias_gozadas.length > 0);
+    const mostRecentVacation = mostRecentPeriodWithVacation?.ferias_gozadas[0];
+    
+    const ultimaFeriasFim = mostRecentVacation?.data_fim 
+        ? parseISO(mostRecentVacation.data_fim + 'T00:00:00')
         : null;
         
     const faltasInjustificadasAcumuladas = periodoAtual?.faltas_injustificadas || 0;

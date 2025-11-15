@@ -34,9 +34,10 @@ const FormFerias: React.FC<FormFeriasProps> = ({ usuarioInicial }) => {
   // Dados necessários para o hook CLT
   const dataInicioContrato = usuarioInicial.data_inicio_contrato;
   
+  // Chamada do hook useFeriasCLT
   const {
-      periodos, // NEW: Array of all periods
-      periodoAtual, // NEW: The currently running period
+      periodos,
+      periodoAtual,
       ultimaFeriasFim,
       diasDeFeriasDireito,
       faltasInjustificadasAcumuladas,
