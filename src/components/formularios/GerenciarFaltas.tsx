@@ -130,6 +130,8 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
   
   const handleViewAtestado = () => {
       if (atestadoUrl) {
+          // CORREÇÃO: Se a URL for assinada, ela já deve estar completa.
+          // Se for uma URL pública, ela também deve estar completa.
           window.open(atestadoUrl, '_blank');
       }
   };
@@ -155,6 +157,7 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ open, onOpenChange, f
         throw new Error(uploadError.message);
       }
       
+      // CORREÇÃO CRÍTICA: Usar getPublicUrl para garantir que a URL salva seja a pública
       const { data: publicUrlData } = supabase.storage
         .from(bucket)
         .getPublicUrl(data.path);
