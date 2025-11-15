@@ -5,7 +5,7 @@ import { Loader2, Clock, User, Filter, CalendarCheck, ChevronLeft } from 'lucide
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { supabase } from '@/integrations/supabase/client';
 import { showError } from '@/utils/toast';
-import { UsuarioProfile, ClienteProfile } from '@/types/usuario';
+import { UsuarioProfile, ClienteProfile } from '@/types/usuario'; // CORRIGIDO: AdminUsuarioProfile removido
 import { Cliente } from '@/types/cliente';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -270,7 +270,7 @@ const FolhaPonto: React.FC = () => {
   // --- VISUALIZAÇÃO DE DETALHES DO FUNCIONÁRIO ---
   if (funcionarioSelecionado) {
     const isFuncionarioAdmin = funcionarioSelecionado.is_admin_user;
-    const proprietarioIdFuncionario = funcionarioSelecionado.admin_id || funcionarioSelecionado.cliente_id;
+    const proprietarioIdFuncionario = isFuncionarioAdmin ? funcionarioSelecionado.admin_id : funcionarioSelecionado.cliente_id;
     
     return (
         <LayoutPrincipal>
