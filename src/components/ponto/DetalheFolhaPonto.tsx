@@ -421,12 +421,26 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
                                 
                                 const { e1, s1, e2, s2 } = getBatidas(registrosDoDia);
                                 
-                                const statusDisplay = isFalta ? 'FALTA' : (isAbono ? 'ABONO' : 'N/A');
+                                // NOVO CÁLCULO DE totalDiaDisplay
+                                let totalDiaDisplay = 'N/A';
+                                if (isFerias) {
+                                    totalDiaDisplay = 'FÉRIAS';
+                                } else if (isFolgaFixa && !hasPontoRecords) {
+                                    totalDiaDisplay = 'FOLGA';
+                                } else if (isFalta && !isFaltaJustificada) {
+                                    totalDiaDisplay = 'FALTA';
+                                } else if (isFaltaJustificada || (isAbono && !isCompensacaoAbono)) {
+                                    // Falta Justificada ou Abono Manual (credita horas)
+                                    totalDiaDisplay = formatarHoras(minutosAbonadosCredited || minutos);
+                                } else if (isFolgaFixa && hasPontoRecords) {
+                                    // Folga Trabalhada (mostra horas trabalhadas para gestão)
+                                    totalDiaDisplay = formatarHoras(minutosTrabalhadosFolga);
+                                } else if (hasPontoRecords) {
+                                    // Dia normal com registros de ponto
+                                    totalDiaDisplay = formatarHoras(minutos);
+                                }
+                                // FIM NOVO CÁLCULO
                                 
-                                const totalDiaDisplay = isFolgaFixa && hasPontoRecords && (decisionRecord || needsManagement) 
-                                    ? formatarHoras(minutosTrabalhadosFolga) 
-                                    : (isFaltaJustificada || isAbono && !isCompensacaoAbono ? formatarHoras(minutosAbonadosCredited || minutos) : statusDisplay);
-
                                 const hoje = new Date();
                                 
                                 let rowClassName = '';
