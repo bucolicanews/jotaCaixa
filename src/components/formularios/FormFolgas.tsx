@@ -8,6 +8,7 @@ interface FormFolgasProps {
   control: Control<any>;
   isSubmitting: boolean;
   usuarioInicial: UsuarioProfile | AdminUsuarioProfile | null;
+  isReadOnly: boolean; // NOVO PROP
 }
 
 const DIAS_DA_SEMANA = [
@@ -20,7 +21,7 @@ const DIAS_DA_SEMANA = [
     { value: 'Sunday', label: 'Domingo' },
 ];
 
-const FormFolgas: React.FC<FormFolgasProps> = ({ control, isSubmitting, usuarioInicial }) => {
+const FormFolgas: React.FC<FormFolgasProps> = ({ control, isSubmitting, usuarioInicial, isReadOnly }) => {
   
   if (!usuarioInicial) {
       return (
@@ -44,7 +45,7 @@ const FormFolgas: React.FC<FormFolgasProps> = ({ control, isSubmitting, usuarioI
                         <Checkbox
                             checked={field.value}
                             onCheckedChange={field.onChange}
-                            disabled={isSubmitting}
+                            disabled={isSubmitting || isReadOnly} // Bloqueado se isReadOnly
                         />
                     </FormControl>
                     <div className="space-y-1 leading-none">
@@ -90,7 +91,7 @@ const FormFolgas: React.FC<FormFolgasProps> = ({ control, isSubmitting, usuarioI
                                                             );
                                                         }
                                                     }}
-                                                    disabled={isSubmitting}
+                                                    disabled={isSubmitting || isReadOnly} // Bloqueado se isReadOnly
                                                 />
                                             </FormControl>
                                             <FormLabel className="font-normal">

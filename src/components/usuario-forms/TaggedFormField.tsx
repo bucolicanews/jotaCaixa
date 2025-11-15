@@ -12,7 +12,7 @@ import { CAMPOS_USUARIO_MAPA, CAMPOS_CLIENTE_MAPA } from '@/config/contrato-camp
 interface TagMetadata {
     label: string;
     tag: string;
-    field: string;
+    field: string; // Adicionado para resolver TS2339
 }
 
 interface TaggedFormFieldProps {
@@ -25,10 +25,11 @@ interface TaggedFormFieldProps {
     isOptional?: boolean;
     tagRefreshKey: number;
     onTagToggle: () => void;
-    isClientScope?: boolean; // NEW PROP to determine which map to use
+    isClientScope?: boolean;
+    isReadOnly?: boolean; // NOVO PROP
 }
 
-const TaggedFormField: React.FC<TaggedFormFieldProps> = ({ control, fieldName, label, placeholder, resourceId, disabled, isOptional = true, tagRefreshKey, onTagToggle, isClientScope = false }) => {
+const TaggedFormField: React.FC<TaggedFormFieldProps> = ({ control, fieldName, label, placeholder, resourceId, disabled, isOptional = true, tagRefreshKey, onTagToggle, isClientScope = false, isReadOnly = false }) => {
     
     const fieldMap = isClientScope 
         ? CAMPOS_CLIENTE_MAPA.find(m => m.field === fieldName)
@@ -40,7 +41,7 @@ const TaggedFormField: React.FC<TaggedFormFieldProps> = ({ control, fieldName, l
             <FormField control={control} name={fieldName} render={({ field }) => (
                 <FormItem>
                     <FormLabel>{label} {isOptional && <span className="text-muted-foreground">(Opcional)</span>}</FormLabel>
-                    <FormControl><Input placeholder={placeholder} {...field} value={(field.value as string) || ''} disabled={disabled} /></FormControl>
+                    <FormControl><Input placeholder={placeholder} {...field} value={(field.value as string) || ''} disabled={disabled || isReadOnly} /></FormControl>
                     <FormMessage />
                 </FormItem>
             )} />
@@ -50,6 +51,7 @@ const TaggedFormField: React.FC<TaggedFormFieldProps> = ({ control, fieldName, l
     const { isTagActive, loading, toggleTag } = useTagManager(resourceId, fieldMap as TagMetadata, tagRefreshKey);
     
     const handleToggle = async (checked: boolean) => {
+        if (isReadOnly) return;
         await toggleTag(checked);
         onTagToggle(); // Chama o refetch do bulk manager no pai
     };
@@ -64,7 +66,7 @@ const TaggedFormField: React.FC<TaggedFormFieldProps> = ({ control, fieldName, l
                             id={`tag-${fieldName}`}
                             checked={isTagActive}
                             onCheckedChange={handleToggle}
-                            disabled={loading || disabled}
+                            disabled={loading || disabled || isReadOnly} // Bloqueado se isReadOnly
                         />
                         <Label htmlFor={`tag-${fieldName}`} className={cn("text-xs font-normal flex items-center", isTagActive ? "text-primary" : "text-muted-foreground")}>
                             {loading ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Tag className="w-3 h-3 mr-1" />}
@@ -72,7 +74,7 @@ const TaggedFormField: React.FC<TaggedFormFieldProps> = ({ control, fieldName, l
                         </Label>
                     </div>
                 </div>
-                <FormControl><Input placeholder={placeholder} {...field} value={(field.value as string) || ''} disabled={disabled} /></FormControl>
+                <FormControl><Input placeholder={placeholder} {...field} value={(field.value as string) || ''} disabled={disabled || isReadOnly} /></FormControl>
                 <FormMessage />
             </FormItem>
         )} />

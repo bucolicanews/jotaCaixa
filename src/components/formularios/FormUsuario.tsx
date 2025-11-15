@@ -93,7 +93,8 @@ interface FormUsuarioProps {
   criadorPerfil: AnyProfile;
   usuarioInicial?: AnyProfile | null;
   onSaveComplete: () => void;
-  isNewClient?: boolean; // NOVO PROP
+  isNewClient?: boolean;
+  isReadOnly?: boolean; // NOVO PROP
 }
 
 // Type guard para verificar se o perfil é UsuarioProfile
@@ -112,6 +113,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
   usuarioInicial,
   onSaveComplete,
   isNewClient = false,
+  isReadOnly = false, // Default é false
 }) => {
   const isEditing = !!usuarioInicial;
   
@@ -131,7 +133,6 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
     return isNaN(date.getTime()) ? undefined : date;
   };
 
-  // FIX 1: Memoizar permissoesVisiveis para estabilidade
   const permissoesVisiveis = useMemo(() => {
       return PERMISSOES_DISPONIVEIS.filter((p: Permissao) => {
           if (criadorRole === 'Admin') return true;
@@ -139,10 +140,8 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
       });
   }, [criadorRole]);
 
-  // 1. Inicialização do useForm (incondicionalmente no topo)
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
-    // Definindo um defaultValues mínimo para evitar o erro de hooks
     defaultValues: {
         nome: '',
         email: '',
@@ -151,7 +150,6 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
     },
   });
 
-  // 2. Lógica de Reset/Inicialização usando useEffect
   useEffect(() => {
     if (!profileToEdit) return;
 
@@ -225,7 +223,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
     };
 
     form.reset(resetValues);
-  }, [profileToEdit, isNewClient, permissoesVisiveis]); // Dependências do useEffect
+  }, [profileToEdit, isNewClient, permissoesVisiveis]);
 
   const handleSelectAll = (select: boolean) => {
     permissoesVisiveis.forEach((p: Permissao) => {
@@ -240,6 +238,11 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
   const isContractEditable = criadorRole === 'Admin' || criadorRole === 'Cliente';
 
   const onSubmit = async (values: FormValues) => {
+    if (isReadOnly) {
+        showError('O perfil está em modo somente leitura.');
+        return;
+    }
+    
     setIsSubmitting(true);
     
     const proprietarioId = criadorRole === 'Admin' ? criadorPerfil?.id : (criadorPerfil as ClienteProfile)?.id;
@@ -409,7 +412,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                         <FormItem><FormLabel>Email (Login)</FormLabel><FormControl><Input type="email" placeholder="email@empresa.com" {...field} disabled={isSubmitting} /></FormControl><FormMessage /></FormItem>
                     )} />
                     <FormField control={form.control} name="senha" render={({ field }) => (
-                        <FormItem><FormLabel>Criar Senha</FormLabel><FormControl><Input type="password" placeholder="••••••••" {...field} /></FormControl><FormMessage /></FormItem>
+                        <FormItem><FormLabel>Criar Senha</FormLabel><FormControl><Input type="password" placeholder="••••••••" {...field} disabled={isSubmitting} /></FormControl><FormMessage /></FormItem>
                     )} />
                     
                     <Separator />
@@ -451,19 +454,20 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                   isSubmitting={isSubmitting}
                   permissoesVisiveis={permissoesVisiveis}
                   handleSelectAll={handleSelectAll}
+                  isReadOnly={isReadOnly}
               />
               
               {/* Campos de Login (Apenas para criação ou alteração de senha) */}
               <Separator />
               <h3 className="font-semibold text-lg">Acesso e Login</h3>
               <FormField control={form.control} name="email" render={({ field }) => (
-                  <FormItem><FormLabel>Email (Login)</FormLabel><FormControl><Input type="email" placeholder="email@exemplo.com" {...field} disabled={isEditing} /></FormControl><FormMessage /></FormItem>
+                  <FormItem><FormLabel>Email (Login)</FormLabel><FormControl><Input type="email" placeholder="email@exemplo.com" {...field} disabled={isEditing || isReadOnly} /></FormControl><FormMessage /></FormItem>
               )} />
               {!isEditing && <FormField control={form.control} name="senha" render={({ field }) => (
-                  <FormItem><FormLabel>Criar Senha</FormLabel><FormControl><Input type="password" placeholder="••••••••" {...field} /></FormControl><FormMessage /></FormItem>
+                  <FormItem><FormLabel>Criar Senha</FormLabel><FormControl><Input type="password" placeholder="••••••••" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
               )} />}
               {isEditing && <FormField control={form.control} name="senha" render={({ field }) => (
-                  <FormItem><FormLabel>Alterar Senha (Opcional)</FormLabel><FormControl><Input type="password" placeholder="••••••••" {...field} /></FormControl><FormMessage /></FormItem>
+                  <FormItem><FormLabel>Alterar Senha (Opcional)</FormLabel><FormControl><Input type="password" placeholder="••••••••" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
               )} />}
             </TabsContent>
             
@@ -473,6 +477,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                     control={form.control as unknown as Control<any>}
                     isSubmitting={isSubmitting}
                     usuarioInicial={userProfile}
+                    isReadOnly={isReadOnly}
                 />
             </TabsContent>
             
@@ -480,6 +485,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
             <TabsContent value="ferias" className="mt-4 space-y-6 p-4">
                 <FormFerias
                     usuarioInicial={userProfile}
+                    isReadOnly={isReadOnly}
                 />
             </TabsContent>
 
@@ -496,6 +502,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                     resourceId={resourceId}
                     tagRefreshKey={refreshKey}
                     onTagToggle={handleTagToggle}
+                    isReadOnly={isReadOnly}
                 />
             </TabsContent>
             
@@ -505,6 +512,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                     control={form.control as unknown as Control<any>}
                     isSubmitting={isSubmitting}
                     resourceId={resourceId}
+                    isReadOnly={isReadOnly}
                 />
             </TabsContent>
 
@@ -514,14 +522,17 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                     control={form.control as unknown as Control<any>}
                     isSubmitting={isSubmitting}
                     isContractEditable={isContractEditable}
+                    isReadOnly={isReadOnly}
                 />
             </TabsContent>
           </Tabs>
           
-          <Button type="submit" className="w-full" disabled={isSubmitting}>
-            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Salvar Alterações
-          </Button>
+          {!isReadOnly && (
+              <Button type="submit" className="w-full" disabled={isSubmitting}>
+                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Salvar Alterações
+              </Button>
+          )}
         </form>
       </Form>
     </FormProvider>

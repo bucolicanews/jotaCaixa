@@ -249,6 +249,7 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
                     resourceId={resourceId}
                     tagRefreshKey={refreshKey}
                     onTagToggle={handleTagToggle}
+                    isReadOnly={false} // Cliente CR é sempre editável pelo gestor
                 />
             </TabsContent>
         </Tabs>

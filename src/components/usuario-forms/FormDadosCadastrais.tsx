@@ -13,7 +13,8 @@ interface TaggedFormFieldProps {
     disabled: boolean;
     isOptional?: boolean;
     tagRefreshKey: number;
-    onTagToggle: () => void; // NOVO PROP
+    onTagToggle: () => void;
+    isReadOnly: boolean; // NOVO PROP
 }
 
 // Componente wrapper para campos de Usuário (Funcionário)
@@ -83,15 +84,15 @@ interface FormDadosCadastraisProps {
     control: Control<any>;
     isSubmitting: boolean;
     resourceId: string | undefined;
-    tagRefreshKey: number; // Este prop não será mais usado diretamente, mas mantido para compatibilidade
-    onTagToggle: () => void; // ADICIONADO
+    tagRefreshKey: number;
+    onTagToggle: () => void;
+    isReadOnly: boolean; // NOVO PROP
 }
 
-const FormDadosCadastrais: React.FC<FormDadosCadastraisProps> = ({ isSubmitting, resourceId, tagRefreshKey, onTagToggle }) => {
+const FormDadosCadastrais: React.FC<FormDadosCadastraisProps> = ({ isSubmitting, resourceId, tagRefreshKey, onTagToggle, isReadOnly }) => {
     const { watch } = useFormContext();
     const { refetchStatus } = useBulkTagManager(resourceId);
     
-    // Função de callback para forçar a atualização do status das tags em massa
     const handleTagToggle = useCallback(() => {
         refetchStatus();
         onTagToggle();
@@ -104,7 +105,6 @@ const FormDadosCadastrais: React.FC<FormDadosCadastraisProps> = ({ isSubmitting,
         <div className="space-y-6">
             <div className="flex justify-between items-center">
                 <h3 className="font-semibold text-lg">Dados Cadastrais (Tags de Contrato)</h3>
-                {/* Botões de Marcar/Desmarcar Todos Removidos */}
             </div>
             <p className="text-sm text-muted-foreground mb-4">Dados pessoais e de contato do funcionário.</p>
             
@@ -114,18 +114,20 @@ const FormDadosCadastrais: React.FC<FormDadosCadastraisProps> = ({ isSubmitting,
                     label="CPF" 
                     placeholder="000.000.000-00" 
                     resourceId={resourceId} 
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || isReadOnly} // Bloqueado se isReadOnly
                     tagRefreshKey={tagRefreshKey}
                     onTagToggle={handleTagToggle}
+                    isReadOnly={isReadOnly}
                 />
                 <UserTaggedFormField 
                     fieldName="rg" 
                     label="RG" 
                     placeholder="00.000.000-0" 
                     resourceId={resourceId} 
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || isReadOnly} // Bloqueado se isReadOnly
                     tagRefreshKey={tagRefreshKey}
                     onTagToggle={handleTagToggle}
+                    isReadOnly={isReadOnly}
                 />
             </div>
 
@@ -134,28 +136,31 @@ const FormDadosCadastrais: React.FC<FormDadosCadastraisProps> = ({ isSubmitting,
                 label="Nome da Mãe" 
                 placeholder="Nome completo da mãe" 
                 resourceId={resourceId} 
-                disabled={isSubmitting}
+                disabled={isSubmitting || isReadOnly} // Bloqueado se isReadOnly
                 isOptional={false}
                 tagRefreshKey={tagRefreshKey}
                 onTagToggle={handleTagToggle}
+                isReadOnly={isReadOnly}
             />
             <UserTaggedFormField 
                 fieldName="nome_pai" 
                 label="Nome do Pai" 
                 placeholder="Nome completo do pai" 
                 resourceId={resourceId} 
-                disabled={isSubmitting}
+                disabled={isSubmitting || isReadOnly} // Bloqueado se isReadOnly
                 tagRefreshKey={tagRefreshKey}
                 onTagToggle={handleTagToggle}
+                isReadOnly={isReadOnly}
             />
             <UserTaggedFormField 
                 fieldName="telefone" 
                 label="Telefone de Contato" 
                 placeholder="(00) 90000-0000" 
                 resourceId={resourceId} 
-                disabled={isSubmitting}
+                disabled={isSubmitting || isReadOnly} // Bloqueado se isReadOnly
                 tagRefreshKey={tagRefreshKey}
                 onTagToggle={handleTagToggle}
+                isReadOnly={isReadOnly}
             />
 
             <Separator />
@@ -166,27 +171,30 @@ const FormDadosCadastrais: React.FC<FormDadosCadastraisProps> = ({ isSubmitting,
                     label="CEP" 
                     placeholder="00000-000" 
                     resourceId={resourceId} 
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || isReadOnly} // Bloqueado se isReadOnly
                     tagRefreshKey={tagRefreshKey}
                     onTagToggle={handleTagToggle}
+                    isReadOnly={isReadOnly}
                 />
                 <UserTaggedFormField 
                     fieldName="cidade" 
                     label="Cidade" 
                     placeholder="São Paulo" 
                     resourceId={resourceId} 
-                    disabled={isSubmitting || isAddressLoading}
+                    disabled={isSubmitting || isAddressLoading || isReadOnly} // Bloqueado se isReadOnly
                     tagRefreshKey={tagRefreshKey}
                     onTagToggle={handleTagToggle}
+                    isReadOnly={isReadOnly}
                 />
                 <UserTaggedFormField 
                     fieldName="estado" 
                     label="Estado (UF)" 
                     placeholder="SP" 
                     resourceId={resourceId} 
-                    disabled={isSubmitting || isAddressLoading}
+                    disabled={isSubmitting || isAddressLoading || isReadOnly} // Bloqueado se isReadOnly
                     tagRefreshKey={tagRefreshKey}
                     onTagToggle={handleTagToggle}
+                    isReadOnly={isReadOnly}
                 />
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -195,27 +203,30 @@ const FormDadosCadastrais: React.FC<FormDadosCadastraisProps> = ({ isSubmitting,
                     label="Logradouro/Rua" 
                     placeholder="Rua Exemplo" 
                     resourceId={resourceId} 
-                    disabled={isSubmitting || isAddressLoading}
+                    disabled={isSubmitting || isAddressLoading || isReadOnly} // Bloqueado se isReadOnly
                     tagRefreshKey={tagRefreshKey}
                     onTagToggle={handleTagToggle}
+                    isReadOnly={isReadOnly}
                 />
                 <UserTaggedFormField 
                     fieldName="numero" 
                     label="Número" 
                     placeholder="123" 
                     resourceId={resourceId} 
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || isReadOnly} // Bloqueado se isReadOnly
                     tagRefreshKey={tagRefreshKey}
                     onTagToggle={handleTagToggle}
+                    isReadOnly={isReadOnly}
                 />
                 <UserTaggedFormField 
                     fieldName="complemento" 
                     label="Complemento" 
                     placeholder="Apto 101" 
                     resourceId={resourceId} 
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || isReadOnly} // Bloqueado se isReadOnly
                     tagRefreshKey={tagRefreshKey}
                     onTagToggle={handleTagToggle}
+                    isReadOnly={isReadOnly}
                 />
             </div>
             <UserTaggedFormField 
@@ -223,9 +234,10 @@ const FormDadosCadastrais: React.FC<FormDadosCadastraisProps> = ({ isSubmitting,
                 label="Bairro" 
                 placeholder="Centro" 
                 resourceId={resourceId} 
-                disabled={isSubmitting || isAddressLoading}
+                disabled={isSubmitting || isAddressLoading || isReadOnly} // Bloqueado se isReadOnly
                 tagRefreshKey={tagRefreshKey}
                 onTagToggle={handleTagToggle}
+                isReadOnly={isReadOnly}
             />
         </div>
     );
