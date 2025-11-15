@@ -14,7 +14,7 @@ interface FormDadosContratuaisProps {
   control: Control<any>;
   isSubmitting: boolean;
   isContractEditable: boolean;
-  isReadOnly: boolean; // NOVO PROP
+  isReadOnly: boolean; // FIX: NOVO PROP
 }
 
 const FormDadosContratuais: React.FC<FormDadosContratuaisProps> = ({ control, isSubmitting, isContractEditable, isReadOnly }) => {
