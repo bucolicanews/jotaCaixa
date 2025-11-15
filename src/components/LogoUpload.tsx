@@ -6,6 +6,7 @@ import { Loader2, Upload, Image, Trash2, Link as LinkIcon } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { cn } from '@/lib/utils';
+import { Separator } from '@/components/ui/separator'; // IMPORT ADICIONADO
 
 interface LogoUploadProps {
   adminId: string;
