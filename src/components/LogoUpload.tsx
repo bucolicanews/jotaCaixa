@@ -6,7 +6,7 @@ import { Loader2, Upload, Image, Trash2, Link as LinkIcon } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { cn } from '@/lib/utils';
-import { Separator } from '@/components/ui/separator'; // IMPORT ADICIONADO
+import { Separator } from '@/components/ui/separator';
 
 interface LogoUploadProps {
   adminId: string;
@@ -35,7 +35,10 @@ const LogoUpload: React.FC<LogoUploadProps> = ({ adminId, initialLogoUrl, onUplo
           .update({ logo_url: url })
           .eq('id', adminId);
           
-      if (updateError) throw updateError;
+      if (updateError) {
+          console.error('Erro ao atualizar logo_url no DB:', updateError);
+          throw new Error(`Falha ao salvar URL no perfil: ${updateError.message}`);
+      }
   };
 
   const handleFileUpload = async () => {
@@ -106,6 +109,10 @@ const LogoUpload: React.FC<LogoUploadProps> = ({ adminId, initialLogoUrl, onUplo
     try {
         // 1. Remover a URL do perfil
         await updateAdminProfile(null);
+        
+        // 2. Tentar deletar o arquivo do storage (opcional, mas boa prática)
+        // Nota: O Supabase Storage não permite deletar arquivos diretamente do cliente sem RLS específica,
+        // mas a atualização do perfil já resolve o problema de exibição.
         
         showSuccess('Logo removida com sucesso!');
         setCurrentUrl(null);
