@@ -3,13 +3,13 @@ import { Control } from 'react-hook-form';
 import { FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/components/ui/form';
 import { Checkbox } from '@/components/ui/checkbox';
 import GerenciarFerias from '@/components/formularios/GerenciarFerias';
-import GerenciarFeriasAdmin from '@/components/formularios/GerenciarFeriasAdmin'; // Importação corrigida
+import GerenciarFeriasAdmin from '@/components/formularios/GerenciarFeriasAdmin';
 import { UsuarioProfile, AdminUsuarioProfile } from '@/types/usuario';
 
 interface FormFolgasFeriasProps {
   control: Control<any>;
   isSubmitting: boolean;
-  usuarioInicial: UsuarioProfile | AdminUsuarioProfile | null; // Tipo atualizado
+  usuarioInicial: UsuarioProfile | AdminUsuarioProfile | null;
 }
 
 const DIAS_DA_SEMANA = [
@@ -35,7 +35,7 @@ const FormFolgasFerias: React.FC<FormFolgasFeriasProps> = ({ control, isSubmitti
   }
   
   // Determina se o usuário é um funcionário do Admin (tem admin_id e não cliente_id)
-  const isUserOfAdmin = !!(usuarioInicial as AdminUsuarioProfile).admin_id;
+  const isUserOfAdmin = 'admin_id' in usuarioInicial && !!usuarioInicial.admin_id;
   
   // O ID do proprietário é o ID do Cliente ou Admin
   const proprietarioId = isUserOfAdmin 
