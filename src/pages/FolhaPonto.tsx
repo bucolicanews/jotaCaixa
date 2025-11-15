@@ -351,7 +351,7 @@ const FolhaPonto: React.FC = () => {
                 if (registro.tipo === 'Falta') isFalta = true;
                 if (registro.tipo === 'Abono') isAbono = true;
                 
-                const horasCreditadas = parseHorasObservacao(registro.observacao, JORNADA_DIARIA_PADRAO);
+                const horasCreditadas = parseHorasObservacao(registro.observacao ?? null, JORNADA_DIARIA_PADRAO);
                 minutosAbonados = Math.round(horasCreditadas * 60);
                 
                 if (registro.observacao?.includes('Compensação de folga trabalhada')) {
