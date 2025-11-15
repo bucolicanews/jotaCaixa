@@ -361,6 +361,9 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                 // Vinculação (apenas se for novo)
                 ...(isNewAuthUser && tabelaDestino === 'tbl_usuarios' && { cliente_id: proprietarioId }), // CORREÇÃO: Usando cliente_id
                 ...(isNewAuthUser && tabelaDestino === 'admin_usuarios' && { admin_id: proprietarioId }),
+                
+                // Se for edição de AdminUsuario, garante que o admin_id seja mantido no payload
+                ...(isEditing && tabelaDestino === 'admin_usuarios' && { admin_id: (usuarioInicial as AdminUsuarioProfile)?.admin_id }),
             };
             
             // UPSERT MANUAL NA TABELA CORRETA
