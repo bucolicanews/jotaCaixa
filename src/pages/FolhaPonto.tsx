@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { useSessao } from '@/hooks/use-sessao';
-import { Loader2, Clock, User, Filter, CalendarCheck, ChevronLeft } from 'lucide-react';
+import { Loader2, Clock, User, Filter, CalendarCheck, ChevronLeft, Printer } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { supabase } from '@/integrations/supabase/client';
 import { showError } from '@/utils/toast';
@@ -20,6 +20,10 @@ import { format, startOfMonth, endOfMonth, parseISO } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useSearchParams } from 'react-router-dom';
+import { usePrint } from '@/hooks/use-print';
+import ReactDOMServer from 'react-dom/server';
+import FolhaPontoPrint from '@/components/ponto/FolhaPontoPrint';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 
 // Tipo simplificado para o usuário que estamos buscando
 interface UsuarioPonto extends UsuarioProfile {
@@ -32,6 +36,7 @@ const FolhaPonto: React.FC = () => {
   const { role, perfil, usuario, carregando: carregandoSessao } = useSessao();
   const [searchParams] = useSearchParams();
   const mode = searchParams.get('mode');
+  const { printContent } = usePrint();
   
   const [usuarios, setUsuarios] = useState<UsuarioPonto[]>([]);
   const [carregandoDados, setCarregandoDados] = useState(true);
@@ -332,17 +337,75 @@ const FolhaPonto: React.FC = () => {
       );
   }
   
-  if (carregandoSessao || carregandoDados) {
-    return (
-      <LayoutPrincipal>
-        <div className="flex justify-center items-center h-64">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      </LayoutPrincipal>
-    );
-  }
+  // --- Lógica de Impressão ---
+  const handlePrint = (orientation: 'portrait' | 'landscape') => {
+      if (!funcionarioSelecionado) {
+          showError('Selecione um funcionário para imprimir.');
+          return;
+      }
+      
+      // O componente DetalheFolhaPonto precisa ser renderizado para calcular os totais
+      const DetalheComponent = DetalheFolhaPonto as React.FC<any>;
+      
+      // Renderiza o componente DetalheFolhaPonto para obter os dados processados
+      const tempElement = document.createElement('div');
+      ReactDOMServer.renderToString(
+          <DetalheComponent
+              funcionario={{
+                  id: funcionarioSelecionado.id,
+                  nome: funcionarioSelecionado.nome,
+                  salario: funcionarioSelecionado.salario || 0,
+                  horas_mensais: funcionarioSelecionado.horas_mensais || 220,
+                  registros: registrosDoFuncionario,
+                  dias_folga_fixos: funcionarioSelecionado.dias_folga_fixos || [],
+                  folga_domingo_obrigatoria: funcionarioSelecionado.folga_domingo_obrigatoria ?? true,
+                  ferias: feriasDoFuncionario,
+                  data_inicio_contrato: funcionarioSelecionado.data_inicio_contrato,
+              }}
+              mes={dataSelecionada}
+              onEditRegistro={() => {}}
+              onEditFaltaAbono={() => {}}
+              onDeleteRegistro={() => {}}
+              onManageWorkedDayOff={() => {}}
+              isReadOnly={true}
+          />
+      );
+      
+      // Acessa os dados processados (simulação, pois o useMemo está dentro do componente)
+      // Para contornar isso, precisamos re-executar a lógica de cálculo aqui ou refatorar o DetalheFolhaPonto.
+      // Vamos refatorar o DetalheFolhaPonto para expor a lógica de cálculo.
+      
+      // Como não podemos acessar o useMemo de DetalheFolhaPonto diretamente,
+      // vamos extrair a lógica de cálculo para um utilitário ou re-executá-la.
+      
+      // Para simplificar, vamos passar os dados brutos e o componente de impressão
+      // fará a formatação e cálculo de totais.
+      
+      const printComponent = (
+          <FolhaPontoPrint
+              empresaNome={funcionarioSelecionado.cliente_nome || 'N/A'}
+              funcionario={{
+                  id: funcionarioSelecionado.id,
+                  nome: funcionarioSelecionado.nome,
+                  salario: funcionarioSelecionado.salario || 0,
+                  horas_mensais: funcionarioSelecionado.horas_mensais || 220,
+                  registros: registrosDoFuncionario,
+                  dias_folga_fixos: funcionarioSelecionado.dias_folga_fixos || [],
+                  folga_domingo_obrigatoria: funcionarioSelecionado.folga_domingo_obrigatoria ?? true,
+                  ferias: feriasDoFuncionario,
+              }}
+              mes={dataSelecionada}
+              // Estes campos serão calculados dentro do FolhaPontoPrint
+              diasProcessados={{}} 
+              totalMinutosTrabalhados={0}
+              minutosDiferenca={0}
+          />
+      );
+
+      const htmlContent = ReactDOMServer.renderToStaticMarkup(printComponent);
+      printContent(htmlContent, `Folha de Ponto - ${funcionarioSelecionado.nome} - ${format(dataSelecionada, 'MMMM yyyy')}`, orientation);
+  };
   
-  // --- VISUALIZAÇÃO DE DETALHES DO FUNCIONÁRIO (SELF OU GESTÃO) ---
   if (funcionarioSelecionado) {
     const isFuncionarioAdmin = funcionarioSelecionado.is_admin_user;
     const proprietarioIdFuncionario = isFuncionarioAdmin ? funcionarioSelecionado.admin_id : funcionarioSelecionado.cliente_id;
@@ -366,12 +429,27 @@ const FolhaPonto: React.FC = () => {
                 </h1>
             </div>
             
-            <div className="flex justify-end mb-4">
+            <div className="flex justify-between items-center mb-4">
                 <MonthPicker
                     date={dataSelecionada}
                     setDate={setDataSelecionada}
-                    // Removido disabled={isReadOnlyMode}
                 />
+                
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button variant="outline">
+                            <Printer className="w-4 h-4 mr-2" /> Imprimir
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => handlePrint('portrait')}>
+                            Imprimir (Retrato)
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handlePrint('landscape')}>
+                            Imprimir (Paisagem)
+                        </DropdownMenuItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
             </div>
             
             <DetalheFolhaPonto

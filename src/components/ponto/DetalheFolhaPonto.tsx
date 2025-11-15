@@ -347,14 +347,15 @@ export const DetalheFolhaPonto: React.FC<DetalheFolhaPontoProps> = ({
                                     needsManagement, 
                                     minutosTrabalhadosFolga, 
                                     isCompensacaoAbono, 
-                                    isFaltaJustificada 
+                                    isFaltaJustificada,
+                                    minutosAbonadosCredited,
                                 } = diaData;
                                 
                                 const statusDisplay = isFalta ? 'FALTA' : (isAbono ? 'ABONO' : 'N/A');
                                 
                                 const totalDiaDisplay = isFolgaFixa && hasPontoRecords && (decisionRecord || needsManagement) 
                                     ? formatarHoras(minutosTrabalhadosFolga) 
-                                    : (isFaltaJustificada || isAbono && !isCompensacaoAbono ? formatarHoras(minutos) : statusDisplay);
+                                    : (isFaltaJustificada || isAbono && !isCompensacaoAbono ? formatarHoras(minutosAbonadosCredited || minutos) : statusDisplay);
 
                                 const hoje = new Date();
                                 

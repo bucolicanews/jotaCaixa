@@ -1,7 +1,8 @@
-import React from 'react';
-import { format, parseISO } from 'date-fns';
+import React, { useMemo } from 'react';
+import { format, parseISO, eachDayOfInterval, getDay, isSameDay, differenceInMinutes, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { RegistroPonto, Ferias } from '@/types/ponto';
+import { parseHorasObservacao } from '@/components/ponto/DetalheFolhaPonto'; // Importando a função utilitária
 
 interface FuncionarioDetalhe {
   id: string;
@@ -25,8 +26,7 @@ interface DiaProcessado {
     decisionRecord: 'Compensacao' | 'Extra100' | null;
     minutosTrabalhadosFolga: number;
     isCompensacaoAbono: boolean;
-    // Adicionando campos faltantes para resolver TS2339
-    minutosAbonados: number;
+    minutosAbonadosCredited: number;
     needsManagement: boolean;
 }
 
@@ -34,35 +34,194 @@ interface FolhaPontoPrintProps {
   empresaNome: string;
   funcionario: FuncionarioDetalhe;
   mes: Date;
-  diasProcessados: Record<string, DiaProcessado>;
-  totalMinutosTrabalhados: number;
-  minutosDiferenca: number;
 }
+
+const JORNADA_MENSAL_PADRAO = 220; 
+const JORNADA_DIARIA_PADRAO = 8; 
+const DAY_MAP: Record<number, string> = { 0: 'Sunday', 1: 'Monday', 2: 'Tuesday', 3: 'Wednesday', 4: 'Thursday', 5: 'Friday', 6: 'Saturday' };
+
+const formatarHoras = (minutos: number): string => {
+    const sign = minutos < 0 ? '-' : '';
+    const absMinutos = Math.abs(minutos);
+    const horas = Math.floor(absMinutos / 60);
+    const mins = Math.round(absMinutos % 60);
+    return `${sign}${horas}h ${mins}m`;
+};
+
+const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
 const FolhaPontoPrint: React.FC<FolhaPontoPrintProps> = ({ 
     empresaNome, 
     funcionario, 
     mes, 
-    diasProcessados, 
-    totalMinutosTrabalhados, 
-    minutosDiferenca 
 }) => {
     
-    const formatarHoras = (minutos: number): string => {
-        const sign = minutos < 0 ? '-' : '';
-        const absMinutos = Math.abs(minutos);
-        const horas = Math.floor(absMinutos / 60);
-        const mins = Math.round(absMinutos % 60);
-        return `${sign}${horas}h ${mins}m`;
-    };
-    
-    const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+    // --- Lógica de Cálculo (Replicada do DetalheFolhaPonto) ---
+    const { diasProcessados, totalMinutosTrabalhados, minutosDiferenca, totalMinutosExtras100 } = useMemo(() => {
+        let totalMinutosTrabalhados = 0;
+        let totalMinutosExtras100 = 0;
+        
+        const registrosPorDia: Record<string, RegistroPonto[]> = {};
+        const registrosOrdenados = [...funcionario.registros].sort((a, b) => parseISO(a.horario_registro).getTime() - parseISO(b.horario_registro).getTime());
+        
+        for (const registro of registrosOrdenados) {
+            const horario = parseISO(registro.horario_registro);
+            const dia = format(horario, 'yyyy-MM-dd');
+            if (!registrosPorDia[dia]) registrosPorDia[dia] = [];
+            registrosPorDia[dia].push(registro);
+        }
+        
+        const inicioMes = startOfMonth(mes);
+        const fimMes = endOfMonth(mes);
+        const hoje = new Date();
+        const todosOsDiasDoMes = eachDayOfInterval({ start: inicioMes, end: fimMes });
+        
+        const diasProcessados: Record<string, DiaProcessado> = {};
+        
+        for (const data of todosOsDiasDoMes) {
+            const diaString = format(data, 'yyyy-MM-dd');
+            const registrosDoDia = registrosPorDia[diaString] || [];
+            
+            let minutosDia = 0;
+            let entrada: Date | null = null;
+            let isFalta = false;
+            let isAbono = false;
+            let minutosAbonados = 0; 
+            let isTurnoAberto = false;
+            let hasPontoRecords = false;
+            let decisionRecord: 'Compensacao' | 'Extra100' | null = null;
+            let isCompensacaoAbono = false;
+            let isFaltaJustificada = false;
+            let minutosAbonadosCredited = 0;
+            
+            const diaDaSemana = DAY_MAP[getDay(data)];
+            let isFolgaFixa = funcionario.dias_folga_fixos?.includes(diaDaSemana) || false;
+            if ((funcionario.folga_domingo_obrigatoria ?? true) && diaDaSemana === 'Sunday') isFolgaFixa = true;
+            
+            const isFerias = funcionario.ferias.some(f => {
+                const start = parseISO(f.data_inicio + 'T00:00:00');
+                const end = endOfDay(parseISO(f.data_fim + 'T00:00:00'));
+                return isWithinInterval(data, { start, end });
+            });
 
-    const isExtraHours = minutosDiferenca < 0;
-    const displayDifference = formatarHoras(minutosDiferenca);
-    const displayExtraHours = formatarHoras(Math.abs(minutosDiferenca));
-    
+            for (const registro of registrosDoDia) {
+                if (registro.tipo === 'Falta' || registro.tipo === 'Abono') {
+                    if (registro.tipo === 'Falta') isFalta = true;
+                    if (registro.tipo === 'Abono') isAbono = true;
+                    
+                    if (registro.tipo === 'Falta' && registro.atestado_url) {
+                        isFaltaJustificada = true;
+                        minutosAbonadosCredited = parseHorasObservacao(registro.observacao ?? null, JORNADA_DIARIA_PADRAO) * 60;
+                    }
+                    
+                    minutosAbonados = parseHorasObservacao(registro.observacao ?? null, JORNADA_DIARIA_PADRAO) * 60;
+                    
+                    if (registro.observacao?.includes('Compensação de folga trabalhada')) {
+                        isCompensacaoAbono = true;
+                        minutosAbonados = 0;
+                    }
+                    
+                    continue;
+                }
+                
+                if (registro.tipo === 'Compensacao') decisionRecord = 'Compensacao';
+                if (registro.tipo === 'Extra100') decisionRecord = 'Extra100';
+                
+                if (registro.tipo === 'Entrada' || registro.tipo === 'Saida') {
+                    hasPontoRecords = true;
+                    const horario = parseISO(registro.horario_registro);
+                    
+                    if (registro.tipo === 'Entrada') {
+                        entrada = horario;
+                        isTurnoAberto = true;
+                    } else if (registro.tipo === 'Saida' && entrada) {
+                        const minutosTrabalhados = differenceInMinutes(horario, entrada);
+                        minutosDia += minutosTrabalhados;
+                        entrada = null;
+                        isTurnoAberto = false;
+                    } else if (registro.tipo === 'Saida' && !entrada) {
+                        isTurnoAberto = false;
+                    }
+                }
+            }
+            
+            if (entrada) {
+                if (isSameDay(data, hoje)) {
+                    minutosDia += differenceInMinutes(hoje, entrada);
+                    isTurnoAberto = true;
+                } else {
+                    minutosDia = 0;
+                    isTurnoAberto = true;
+                }
+            } else {
+                isTurnoAberto = false;
+            }
+            
+            let minutosTrabalhadosFolga = 0;
+            let needsManagement = false;
+            
+            if (isFolgaFixa && hasPontoRecords && !isFerias) {
+                minutosTrabalhadosFolga = minutosDia;
+                
+                if (!decisionRecord) {
+                    needsManagement = true;
+                } else if (decisionRecord === 'Extra100') {
+                    totalMinutosExtras100 += minutosTrabalhadosFolga;
+                }
+            }
+            
+            if (!isFolgaFixa && !isFerias && !isCompensacaoAbono) {
+                if (isAbono) {
+                    totalMinutosTrabalhados += minutosAbonados;
+                } else if (isFalta) {
+                    if (isFaltaJustificada) {
+                        totalMinutosTrabalhados += minutosAbonadosCredited;
+                    } else if (hasPontoRecords) {
+                        totalMinutosTrabalhados += minutosDia;
+                    }
+                } else {
+                    totalMinutosTrabalhados += minutosDia;
+                }
+            }
+            
+            if (isFalta) {
+                if (isFaltaJustificada) {
+                    minutosDia = minutosAbonadosCredited;
+                } else {
+                    minutosDia = 0;
+                }
+            } else if (isAbono && !isCompensacaoAbono) {
+                minutosDia = minutosAbonados;
+            }
+
+
+            diasProcessados[diaString] = {
+                minutos: minutosDia,
+                registros: registrosDoDia,
+                isFalta,
+                isAbono,
+                minutosAbonados, 
+                isTurnoAberto,
+                isFolgaFixa,
+                isFerias,
+                hasPontoRecords,
+                decisionRecord,
+                needsManagement,
+                minutosTrabalhadosFolga,
+                isCompensacaoAbono,
+                minutosAbonadosCredited,
+            };
+        }
+        
+        const jornadaMensalMinutos = (funcionario.horas_mensais || JORNADA_MENSAL_PADRAO) * 60;
+        const minutosDiferenca = jornadaMensalMinutos - totalMinutosTrabalhados; 
+
+        return { diasProcessados, totalMinutosTrabalhados, minutosDiferenca, totalMinutosExtras100 };
+    }, [funcionario, mes]);
+    // --- Fim Lógica de Cálculo ---
+
     const diasOrdenados = Object.keys(diasProcessados).sort();
+    const isExtraHours = minutosDiferenca < 0;
     
     const getObservacaoPrincipal = (diaData: DiaProcessado): string => {
         if (diaData.isFerias) return 'FÉRIAS';
@@ -75,7 +234,7 @@ const FolhaPontoPrint: React.FC<FolhaPontoPrintProps> = ({
             if (diaData.isCompensacaoAbono) {
                 return abonoRegistro?.observacao || 'Folga Compensatória';
             }
-            return `Abono (${abonoRegistro?.observacao || '8h'})`;
+            return `Abono (${parseHorasObservacao(abonoRegistro?.observacao || null, JORNADA_DIARIA_PADRAO)}h)`;
         }
         if (diaData.isFolgaFixa && diaData.hasPontoRecords) {
             if (diaData.decisionRecord === 'Extra100') return 'Folga Trabalhada (Paga Extra 100%)';
@@ -87,7 +246,6 @@ const FolhaPontoPrint: React.FC<FolhaPontoPrintProps> = ({
         return '';
     };
     
-    // Função auxiliar para extrair as 4 primeiras batidas
     const getBatidasDoDia = (registros: RegistroPonto[]) => {
         const batidas = registros
             .filter(r => r.tipo === 'Entrada' || r.tipo === 'Saida')
@@ -123,7 +281,7 @@ const FolhaPontoPrint: React.FC<FolhaPontoPrintProps> = ({
                         <tr>
                             <th>{isExtraHours ? 'Horas Extras' : 'Diferença (Saldo)'}</th>
                             <td style={{ color: isExtraHours ? 'green' : 'red' }}>
-                                {isExtraHours ? displayExtraHours : displayDifference}
+                                {isExtraHours ? formatarHoras(Math.abs(minutosDiferenca)) : formatarHoras(minutosDiferenca)}
                             </td>
                         </tr>
                     </tbody>
@@ -168,7 +326,7 @@ const FolhaPontoPrint: React.FC<FolhaPontoPrintProps> = ({
                             } else if (isFolga) {
                                 totalDiaDisplay = 'FOLGA';
                             } else if (isFaltaOuAbono) {
-                                totalDiaDisplay = diaData.isFalta ? 'FALTA' : formatarHoras(diaData.minutosAbonados);
+                                totalDiaDisplay = diaData.isFalta ? 'FALTA' : formatarHoras(diaData.minutosAbonadosCredited || diaData.minutosAbonados);
                             } else if (diaData.needsManagement) {
                                 totalDiaDisplay = formatarHoras(diaData.minutosTrabalhadosFolga);
                             } else {
