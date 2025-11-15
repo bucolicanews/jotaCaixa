@@ -454,7 +454,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                   isSubmitting={isSubmitting}
                   permissoesVisiveis={permissoesVisiveis}
                   handleSelectAll={handleSelectAll}
-                  isReadOnly={isReadOnly}
+                  isReadOnly={isReadOnly} // Propagação correta
               />
               
               {/* Campos de Login (Apenas para criação ou alteração de senha) */}
@@ -502,7 +502,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                     resourceId={resourceId}
                     tagRefreshKey={refreshKey}
                     onTagToggle={handleTagToggle}
-                    isReadOnly={isReadOnly}
+                    isReadOnly={isReadOnly} // Propagação correta
                 />
             </TabsContent>
             
@@ -512,7 +512,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                     control={form.control as unknown as Control<any>}
                     isSubmitting={isSubmitting}
                     resourceId={resourceId}
-                    isReadOnly={isReadOnly}
+                    isReadOnly={isReadOnly} // Propagação correta
                 />
             </TabsContent>
 
@@ -522,7 +522,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                     control={form.control as unknown as Control<any>}
                     isSubmitting={isSubmitting}
                     isContractEditable={isContractEditable}
-                    isReadOnly={isReadOnly}
+                    isReadOnly={isReadOnly} // Propagação correta
                 />
             </TabsContent>
           </Tabs>
