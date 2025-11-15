@@ -52,7 +52,7 @@ const FolhaPonto: React.FC = () => {
   const [gerenciarFolgaDialog, setGerenciarFolgaDialog] = useState<{ open: boolean, dia: Date | null, registros: RegistroPonto[] }>({ open: false, dia: null, registros: [] });
 
   const isAdmin = role === 'Admin';
-  const isSelfMode = mode === 'self'; // NOVO: Modo de visualização própria
+  const isSelfMode = mode === 'self';
   
   const getOwnerId = () => {
     if (isAdmin) return usuario?.id || null;
@@ -81,7 +81,7 @@ const FolhaPonto: React.FC = () => {
     setClientesDisponiveis(fetchedClients);
   }, [isAdmin, usuario?.id]);
 
-  const buscarUsuarios = useCallback(async () => {
+  const buscarUsuarios = useCallback(async (clientList: Cliente[]) => {
     if (!ownerId && !isAdmin) {
         setCarregandoDados(false);
         return;
@@ -91,6 +91,19 @@ const FolhaPonto: React.FC = () => {
     
     let fetchedUsers: UsuarioPonto[] = [];
     
+    let allowedClienteIds: string[] = [];
+    if (isAdmin) {
+        allowedClienteIds = clientList.map(c => c.id);
+    } else if (ownerId) {
+        allowedClienteIds = [ownerId];
+    }
+
+    if (allowedClienteIds.length === 0) {
+        setUsuarios([]);
+        setCarregandoDados(false);
+        return;
+    }
+
     if (isAdmin) {
         
         // Busca usuários do Admin
@@ -109,7 +122,7 @@ const FolhaPonto: React.FC = () => {
         fetchedUsers.push(...adminUsers);
 
         // Busca usuários dos Clientes
-        const clientIds = clientesDisponiveis.filter(c => c.id !== usuario?.id).map(c => c.id);
+        const clientIds = clientList.filter(c => c.id !== usuario?.id).map(c => c.id);
         if (clientIds.length > 0) {
             const { data: clientUsersData } = await supabase
                 .from('tbl_usuarios')
@@ -118,7 +131,7 @@ const FolhaPonto: React.FC = () => {
                 .order('nome');
                 
             const clientUsers = (clientUsersData || []).map(item => {
-                const nomeEmpresa = clientesDisponiveis.find(c => c.id === (item as UsuarioProfile).cliente_id)?.nome || 'N/A';
+                const nomeEmpresa = clientList.find(c => c.id === (item as UsuarioProfile).cliente_id)?.nome || 'N/A';
                 return { ...item, cliente_nome: nomeEmpresa, is_admin_user: false } as UsuarioPonto;
             });
             fetchedUsers.push(...clientUsers);
@@ -137,20 +150,44 @@ const FolhaPonto: React.FC = () => {
     
     setUsuarios(fetchedUsers);
     setCarregandoDados(false);
-  }, [ownerId, isAdmin, usuario?.id, clientesDisponiveis, perfil]);
+  }, [ownerId, isAdmin, usuario?.id, perfil]);
 
+  // 1. Fetch Clients (Admin only)
   useEffect(() => {
-    if (!carregandoSessao) {
+    if (!carregandoSessao && isAdmin) {
         fetchClientes();
     }
-  }, [carregandoSessao, fetchClientes]);
+  }, [carregandoSessao, fetchClientes, isAdmin]);
   
+  // 2. Fetch Subordinate Users (Management Mode)
   useEffect(() => {
-      if (!carregandoSessao && clientesDisponiveis.length > 0) {
-          buscarUsuarios();
+      if (!carregandoSessao && !isSelfMode && ownerId) {
+          // If Admin, wait for clientsDisponiveis. If Client, run immediately.
+          if (isAdmin && clientesDisponiveis.length === 0) return; 
+          
+          buscarUsuarios(clientesDisponiveis);
+      } else if (!carregandoSessao && !isSelfMode && !ownerId) {
+          // If not admin/client/user, stop loading
+          setCarregandoDados(false);
       }
-  }, [carregandoSessao, clientesDisponiveis, buscarUsuarios]);
+  }, [carregandoSessao, isSelfMode, ownerId, isAdmin, clientesDisponiveis, buscarUsuarios]);
 
+  // 3. Handle Self Mode Initialization (sets selected user and stops loading)
+  useEffect(() => {
+      if (isSelfMode && !carregandoSessao && usuario && perfil) {
+          const selfUser = perfil as UsuarioProfile | AdminUsuarioProfile;
+          const isFuncionarioAdmin = 'admin_id' in selfUser && !!(selfUser as AdminUsuarioProfile).admin_id;
+          
+          setFuncionarioSelecionado({
+              ...selfUser,
+              is_admin_user: isFuncionarioAdmin,
+              cliente_nome: isFuncionarioAdmin ? 'Meus Usuários (Admin)' : (perfil as ClienteProfile)?.nome || 'Minha Empresa',
+          } as UsuarioPonto);
+          
+          setCarregandoDados(false);
+      }
+  }, [isSelfMode, carregandoSessao, usuario, perfil]);
+  
   const fetchRegistrosFuncionario = useCallback(async (user: UsuarioPonto, data: Date) => {
     const isFuncionarioAdmin = user.is_admin_user;
     const tabelaRegistros = isFuncionarioAdmin ? 'admin_registros_ponto' : 'registros_ponto';
@@ -216,32 +253,32 @@ const FolhaPonto: React.FC = () => {
       if (funcionarioSelecionado) {
           fetchRegistrosFuncionario(funcionarioSelecionado, dataSelecionada);
       } else {
-          buscarUsuarios();
+          buscarUsuarios(clientesDisponiveis);
       }
   };
   
   // Handlers para os diálogos
-  const isReadOnlyMode = isSelfMode; // Determina se estamos no modo somente leitura
+  const isReadOnlyMode = isSelfMode;
   
   const handleOpenAjustarPonto = (dia: Date) => {
-    if (isReadOnlyMode) return; // Bloqueia se for read-only
+    if (isReadOnlyMode) return;
     const diaString = format(dia, 'yyyy-MM-dd');
     const registros = registrosDoFuncionario.filter(r => format(parseISO(r.horario_registro), 'yyyy-MM-dd') === diaString);
     setAjustarPontoDialog({ open: true, dia, registros });
   };
   
   const handleOpenGerenciarFaltas = (registro: RegistroPonto | null, dia: Date) => {
-    if (isReadOnlyMode) return; // Bloqueia se for read-only
+    if (isReadOnlyMode) return;
     setGerenciarFaltasDialog({ open: true, dia, registro });
   };
   
   const handleOpenGerenciarFolga = (dia: Date, registros: RegistroPonto[]) => {
-    if (isReadOnlyMode) return; // Bloqueia se for read-only
+    if (isReadOnlyMode) return;
     setGerenciarFolgaDialog({ open: true, dia, registros });
   };
   
   const handleDeleteRegistro = () => {
-      handleRefresh(); // Força o recarregamento dos registros
+      handleRefresh();
   };
 
   const usuariosFiltrados = useMemo(() => {
@@ -272,7 +309,7 @@ const FolhaPonto: React.FC = () => {
           } else if (role === 'Usuario') {
               // Se for usuário mas não estiver na lista (ex: recém-criado), usa o perfil da sessão
               const selfUser = perfil as UsuarioProfile | AdminUsuarioProfile;
-              const isFuncionarioAdmin = 'admin_id' in selfUser && !!selfUser.admin_id;
+              const isFuncionarioAdmin = 'admin_id' in selfUser && !!(selfUser as AdminUsuarioProfile).admin_id;
               
               setFuncionarioSelecionado({
                   ...selfUser,
@@ -354,7 +391,7 @@ const FolhaPonto: React.FC = () => {
                 onEditFaltaAbono={handleOpenGerenciarFaltas}
                 onDeleteRegistro={handleDeleteRegistro}
                 onManageWorkedDayOff={handleOpenGerenciarFolga}
-                isReadOnly={isReadOnlyMode} // PASSANDO A FLAG
+                isReadOnly={isReadOnlyMode}
             />
             
             {/* Diálogos (Apenas no modo de Gestão) */}
