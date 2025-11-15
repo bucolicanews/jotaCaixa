@@ -3,7 +3,7 @@ import { cn } from '@/lib/utils';
 import { LayoutDashboard, DollarSign, ArrowUpCircle, ArrowDownCircle, Banknote, FileText, Upload, Settings, BookOpen, Users, Building2, Clock, Contact, CalendarCheck, User, FileSignature, Tag, FileTextIcon, Package, History, FileDown, MessageSquare, Scale } from 'lucide-react';
 import React from 'react';
 import { useSessao } from '@/hooks/use-sessao';
-import { ClienteProfile, UsuarioProfile, AdminUsuarioProfile } from '@/types/usuario';
+import { ClienteProfile, UsuarioProfile, AdminUsuarioProfile, AdminProfile } from '@/types/usuario';
 import { isPast, parseISO } from 'date-fns';
 
 interface ItemMenu {
@@ -123,6 +123,10 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick }) => {
   // Se o usuário for recém-cadastrado e estiver na tela de seleção de perfil,
   // ele não deve ver o menu completo.
   const isPreAuthFlow = localizacao.pathname === '/selecao-perfil';
+  
+  // Lógica para a Logo do Admin
+  const adminProfile = role === 'Admin' ? perfil as AdminProfile : null;
+  const logoUrl = adminProfile?.logo_url;
 
   const checkPermission = (item: ItemMenu) => {
     if (!item.permissionKey) return true;
@@ -178,7 +182,11 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick }) => {
   return (
     <div className="flex flex-col h-full bg-background text-foreground">
       <div className="p-4 border-b">
-        <h1 className="text-xl font-bold text-primary">Navegação</h1>
+        {logoUrl ? (
+            <img src={logoUrl} alt="Logo da Empresa" className="h-8 object-contain" />
+        ) : (
+            <h1 className="text-xl font-bold text-primary">Navegação</h1>
+        )}
       </div>
       <nav className="flex-1 p-2 space-y-4 overflow-y-auto">
         {/* Item de Cadastro de Empresa (Visível apenas para Usuário não vinculado) */}
