@@ -127,6 +127,13 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick }) => {
   // Lógica para a Logo do Admin
   const adminProfile = role === 'Admin' ? perfil as AdminProfile : null;
   const logoUrl = adminProfile?.logo_url;
+  const adminNome = adminProfile?.nome;
+  
+  // NOVO: Verifica se o usuário logado é um funcionário do Admin
+  const isUserOfAdmin = role === 'Usuario' && 'admin_id' in userProfile && !!userProfile.admin_id;
+  
+  // Se for funcionário do Admin, usa a logo e o nome do Admin
+  const shouldShowAdminBranding = role === 'Admin' || isUserOfAdmin;
 
   const checkPermission = (item: ItemMenu) => {
     if (!item.permissionKey) return true;
@@ -182,14 +189,21 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick }) => {
   return (
     <div className="flex flex-col h-full bg-background text-foreground">
       <div className="p-4 border-b flex flex-col items-center justify-center space-y-2">
-        {/* Lógica de exibição da Logo (Apenas Admin) */}
-        {role === 'Admin' && logoUrl ? (
-            <img 
-                src={logoUrl} 
-                alt="Logo da Empresa" 
-                className="object-contain max-h-16 w-auto" 
-                style={{ maxWidth: '100%' }}
-            />
+        {/* Lógica de exibição da Logo e Nome do Admin/Empresa */}
+        {shouldShowAdminBranding ? (
+            <>
+                {logoUrl ? (
+                    <img 
+                        src={logoUrl} 
+                        alt="Logo da Empresa" 
+                        className="object-contain max-h-16 w-auto" 
+                        style={{ maxWidth: '100%' }}
+                    />
+                ) : (
+                    <h1 className="text-xl font-bold text-primary">Admin Logo</h1>
+                )}
+                <p className="text-sm text-muted-foreground text-center">{adminNome}</p>
+            </>
         ) : (
             <h1 className="text-xl font-bold text-primary">Navegação</h1>
         )}
