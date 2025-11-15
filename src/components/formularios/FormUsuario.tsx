@@ -17,9 +17,10 @@ import { format } from 'date-fns';
 import { BASE_URL } from '@/config/app-config';
 import { Separator } from '../ui/separator';
 import FormGeral from '../usuario-forms/FormGeral';
-import FormFolgasFerias from '../usuario-forms/FormFolgasFerias';
+import FormFolgas from '../formularios/FormFolgas'; // IMPORTAÇÃO CORRIGIDA
 import FormDocumentos from '../usuario-forms/FormDocumentos';
 import FormDadosContratuais from '../usuario-forms/FormDadosContratuais';
+import FormFerias from '../usuario-forms/FormFerias'; // NOVO IMPORT
 
 const textOptional = z.string().optional().or(z.literal(''));
 const urlSchema = z.string().url('URL inválida.').optional().or(z.literal(''));
@@ -439,11 +440,12 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <TabsList className="flex flex-wrap justify-start w-full h-auto p-1">
-              <TabsTrigger value="pessoal" className="flex-1 md:flex-none md:w-1/5">Geral</TabsTrigger>
-              <TabsTrigger value="folgas" className="flex-1 md:flex-none md:w-1/5">Folgas/Férias</TabsTrigger>
-              <TabsTrigger value="cadastrais" className="flex-1 md:flex-none md:w-1/5">Dados Cadastrais</TabsTrigger>
-              <TabsTrigger value="documentos" className="flex-1 md:flex-none md:w-1/5">Documentos</TabsTrigger>
-              <TabsTrigger value="contrato" className="flex-1 md:flex-none md:w-1/5">Contrato (RH)</TabsTrigger>
+              <TabsTrigger value="pessoal" className="flex-1 md:flex-none md:w-1/6">Geral</TabsTrigger>
+              <TabsTrigger value="folgas" className="flex-1 md:flex-none md:w-1/6">Folgas</TabsTrigger> {/* NOME CORRIGIDO */}
+              <TabsTrigger value="ferias" className="flex-1 md:flex-none md:w-1/6">Férias</TabsTrigger> {/* NOVA ABA */}
+              <TabsTrigger value="cadastrais" className="flex-1 md:flex-none md:w-1/6">Dados Cadastrais</TabsTrigger>
+              <TabsTrigger value="documentos" className="flex-1 md:flex-none md:w-1/6">Documentos</TabsTrigger>
+              <TabsTrigger value="contrato" className="flex-1 md:flex-none md:w-1/6">Contrato (RH)</TabsTrigger>
             </TabsList>
             
             {/* TAB 1: GERAL */}
@@ -469,16 +471,23 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
               )} />}
             </TabsContent>
             
-            {/* TAB 2: FOLGAS E FÉRIAS */}
+            {/* TAB 2: FOLGAS FIXAS */}
             <TabsContent value="folgas" className="mt-4 space-y-6 p-4">
-                <FormFolgasFerias
+                <FormFolgas
                     control={form.control as unknown as Control<any>}
                     isSubmitting={isSubmitting}
                     usuarioInicial={userProfile}
                 />
             </TabsContent>
+            
+            {/* TAB 3: FÉRIAS (CRUD) */}
+            <TabsContent value="ferias" className="mt-4 space-y-6 p-4">
+                <FormFerias
+                    usuarioInicial={userProfile}
+                />
+            </TabsContent>
 
-            {/* TAB 3: DADOS CADASTRAIS */}
+            {/* TAB 4: DADOS CADASTRAIS */}
             <TabsContent value="cadastrais" className="mt-4 space-y-6 p-4">
                 <div className="flex justify-between items-center">
                     <h3 className="font-semibold text-lg flex items-center"><Tag className="w-5 h-5 mr-2" /> Tags de Contrato</h3>
@@ -494,7 +503,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                 />
             </TabsContent>
             
-            {/* TAB 4: DOCUMENTOS DE ADMISSÃO */}
+            {/* TAB 5: DOCUMENTOS DE ADMISSÃO */}
             <TabsContent value="documentos" className="mt-4 space-y-6 p-4">
                 <FormDocumentos
                     control={form.control as unknown as Control<any>}
@@ -503,7 +512,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                 />
             </TabsContent>
 
-            {/* TAB 5: DADOS CONTRATUAIS (RH) */}
+            {/* TAB 6: DADOS CONTRATUAIS (RH) */}
             <TabsContent value="contrato" className="mt-4 space-y-6 p-4">
                 <FormDadosContratuais
                     control={form.control as unknown as Control<any>}

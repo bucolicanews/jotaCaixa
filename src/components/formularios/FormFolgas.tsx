@@ -2,11 +2,9 @@ import React from 'react';
 import { Control } from 'react-hook-form';
 import { FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/components/ui/form';
 import { Checkbox } from '@/components/ui/checkbox';
-import GerenciarFerias from '@/components/formularios/GerenciarFerias';
-import GerenciarFeriasAdmin from '@/components/formularios/GerenciarFeriasAdmin';
 import { UsuarioProfile, AdminUsuarioProfile } from '@/types/usuario';
 
-interface FormFolgasFeriasProps {
+interface FormFolgasProps {
   control: Control<any>;
   isSubmitting: boolean;
   usuarioInicial: UsuarioProfile | AdminUsuarioProfile | null;
@@ -22,25 +20,17 @@ const DIAS_DA_SEMANA = [
     { value: 'Sunday', label: 'Domingo' },
 ];
 
-const FormFolgasFerias: React.FC<FormFolgasFeriasProps> = ({ control, isSubmitting, usuarioInicial }) => {
+const FormFolgas: React.FC<FormFolgasProps> = ({ control, isSubmitting, usuarioInicial }) => {
   
   if (!usuarioInicial) {
       return (
           <div className="space-y-6">
               <p className="text-sm text-muted-foreground">
-                  As configurações de folgas e férias estarão disponíveis após a criação do usuário.
+                  As configurações de folgas estarão disponíveis após a criação do usuário.
               </p>
           </div>
       );
   }
-  
-  // Determina se o usuário é um funcionário do Admin (tem admin_id e não cliente_id)
-  const isUserOfAdmin = 'admin_id' in usuarioInicial && !!usuarioInicial.admin_id;
-  
-  // O ID do proprietário é o ID do Cliente ou Admin
-  const proprietarioId = isUserOfAdmin 
-    ? (usuarioInicial as AdminUsuarioProfile).admin_id 
-    : (usuarioInicial as UsuarioProfile).cliente_id;
 
   return (
     <div className="space-y-6">
@@ -116,24 +106,8 @@ const FormFolgasFerias: React.FC<FormFolgasFeriasProps> = ({ control, isSubmitti
                 </FormItem>
             )}
         />
-        
-        {proprietarioId && (
-            <div className="pt-6 border-t">
-                {isUserOfAdmin ? (
-                    <GerenciarFeriasAdmin
-                        funcionarioId={usuarioInicial.id} 
-                        adminId={proprietarioId} 
-                    />
-                ) : (
-                    <GerenciarFerias 
-                        funcionarioId={usuarioInicial.id} 
-                        empresaId={proprietarioId} 
-                    />
-                )}
-            </div>
-        )}
     </div>
   );
 };
 
-export default FormFolgasFerias;
+export default FormFolgas;
