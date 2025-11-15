@@ -89,7 +89,7 @@ export interface UsuarioProfile {
   estado?: string | null;
   
   // Campos de admissão
-  data_inicio_contrato?: string | null;
+  data_inicio_contrato?: string | null; // ADICIONADO
   data_fim_contrato?: string | null;
   data_inicio_aviso?: string | null;
   tipo_aviso?: string | null;
@@ -144,7 +144,7 @@ export interface AdminUsuarioProfile {
     estado?: string | null;
     
     // Campos de admissão
-    data_inicio_contrato?: string | null;
+    data_inicio_contrato?: string | null; // ADICIONADO
     data_fim_contrato?: string | null;
     data_inicio_aviso?: string | null;
     tipo_aviso?: string | null;

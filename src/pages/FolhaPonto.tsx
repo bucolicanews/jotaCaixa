@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { useSessao } from '@/hooks/use-sessao';
-import { Loader2, Filter, Clock, Users, Building2, Printer } from 'lucide-react';
+import { Loader2, Filter, Clock, Users, Building2, Printer, CalendarCheck } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { format, startOfMonth, endOfMonth, parseISO, isSameDay, eachDayOfInterval, isWithinInterval, getDay, differenceInMinutes } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
@@ -19,6 +19,7 @@ import { usePrint } from '@/hooks/use-print';
 import FolhaPontoPrint from '@/components/ponto/FolhaPontoPrint';
 import ReactDOMServer from 'react-dom/server';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { useFeriasCLT } from '@/hooks/use-ferias-clt'; // NOVO IMPORT
 
 interface FuncionarioComDados extends UsuarioProfile {
     id: string;
@@ -28,6 +29,7 @@ interface FuncionarioComDados extends UsuarioProfile {
     horas_mensais: number;
     dias_folga_fixos: string[] | null;
     folga_domingo_obrigatoria: boolean | null;
+    data_inicio_contrato: string | null; // ADICIONADO
     // Adicionado para AdminUsuarioProfile
     admin_id?: string;
 }
@@ -84,6 +86,21 @@ const FolhaPonto: React.FC = () => {
   // NOVO CÁLCULO: Determina se o funcionário selecionado é um usuário do Admin
   const isFuncionarioAdmin = !!(funcionarioDetalhe as AdminUsuarioProfile)?.admin_id;
   
+  // NOVO HOOK: Cálculo de Férias CLT
+  const {
+      periodoAquisitivo,
+      faltasInjustificadasMes,
+      faltasInjustificadasAcumuladas,
+      diasDeFeriasDireito,
+      carregando: carregandoFerias,
+      refetch: refetchFerias,
+  } = useFeriasCLT(
+      funcionarioSelecionadoId,
+      funcionarioDetalhe?.data_inicio_contrato,
+      dataSelecionada,
+      registrosDoFuncionario // Passa todos os registros para o cálculo de faltas
+  );
+  
   const fetchClientes = useCallback(async () => {
     if (!isAdmin || !usuario?.id) return;
     
@@ -137,7 +154,7 @@ const FolhaPonto: React.FC = () => {
         // Busca usuários do Admin
         const { data, error } = await supabase
             .from('admin_usuarios')
-            .select('id, nome, email, salario, horas_mensais, dias_folga_fixos, folga_domingo_obrigatoria, admin_id')
+            .select('id, nome, email, salario, horas_mensais, dias_folga_fixos, folga_domingo_obrigatoria, admin_id, data_inicio_contrato')
             .eq('admin_id', empresaId)
             .order('nome', { ascending: true });
         usersData = data;
@@ -146,7 +163,7 @@ const FolhaPonto: React.FC = () => {
         // Busca usuários do Cliente (tbl_usuarios)
         const { data, error } = await supabase
             .from('tbl_usuarios')
-            .select('id, nome, email, salario, horas_mensais, dias_folga_fixos, folga_domingo_obrigatoria, cliente_id')
+            .select('id, nome, email, salario, horas_mensais, dias_folga_fixos, folga_domingo_obrigatoria, cliente_id, data_inicio_contrato')
             .eq('cliente_id', empresaId) // CORREÇÃO AQUI: Usando cliente_id
             .order('nome', { ascending: true });
         usersData = data;
@@ -260,6 +277,7 @@ const FolhaPonto: React.FC = () => {
         const isFuncAdmin = !!(funcionarioDetalhe as AdminUsuarioProfile).admin_id;
         await fetchRegistros(funcionarioSelecionadoId, dataSelecionada, isFuncAdmin);
         await fetchFerias(funcionarioSelecionadoId, dataSelecionada);
+        refetchFerias(); // NOVO: Recarrega o cálculo de férias
     }
     setRegistroParaEdicao(null);
   };
@@ -335,6 +353,7 @@ const FolhaPonto: React.FC = () => {
         let decisionRecord: 'Compensacao' | 'Extra100' | null = null;
         let isCompensacaoAbono = false;
         let isFaltaJustificada = false;
+        let minutosAbonadosCredited = 0;
         
         const diaDaSemana = DAY_MAP[getDay(data)];
         let isFolgaFixa = funcionarioDetalhe.dias_folga_fixos?.includes(diaDaSemana) || false;
@@ -351,20 +370,18 @@ const FolhaPonto: React.FC = () => {
                 if (registro.tipo === 'Falta') isFalta = true;
                 if (registro.tipo === 'Abono') isAbono = true;
                 
-                const horasCreditadas = parseHorasObservacao(registro.observacao ?? null, JORNADA_DIARIA_PADRAO);
-                minutosAbonados = Math.round(horasCreditadas * 60);
+                // 1. Verifica se é falta justificada e calcula horas abonadas
+                if (registro.tipo === 'Falta' && registro.atestado_url) {
+                    isFaltaJustificada = true;
+                    minutosAbonadosCredited = parseHorasObservacao(registro.observacao ?? null, JORNADA_DIARIA_PADRAO) * 60;
+                }
+                
+                // 2. Calcula minutos para abono manual
+                minutosAbonados = parseHorasObservacao(registro.observacao ?? null, JORNADA_DIARIA_PADRAO) * 60;
                 
                 if (registro.observacao?.includes('Compensação de folga trabalhada')) {
                     isCompensacaoAbono = true;
                     minutosAbonados = 0;
-                } else if (isFalta && registro.atestado_url) {
-                    isFaltaJustificada = true;
-                }
-                
-                minutosDia = minutosAbonados; 
-                
-                if (isFalta && !isFaltaJustificada) {
-                    minutosDia = 0;
                 }
                 
                 continue;
@@ -396,13 +413,13 @@ const FolhaPonto: React.FC = () => {
                 minutosDia += differenceInMinutes(hoje, entrada);
                 isTurnoAberto = true;
             } else {
+                minutosDia = 0;
                 isTurnoAberto = true;
             }
         } else {
             isTurnoAberto = false;
         }
         
-        let minutosParaAcumular = minutosDia;
         let minutosTrabalhadosFolga = 0;
         let needsManagement = false;
         
@@ -411,23 +428,35 @@ const FolhaPonto: React.FC = () => {
             
             if (!decisionRecord) {
                 needsManagement = true;
-                minutosParaAcumular = 0;
             } else if (decisionRecord === 'Extra100') {
                 totalMinutosExtras100 += minutosTrabalhadosFolga;
-                minutosParaAcumular = 0;
-            } else if (decisionRecord === 'Compensacao') {
-                minutosParaAcumular = 0;
+            }
+        }
+            
+        // LÓGICA DE ACUMULAÇÃO CORRIGIDA
+        if (!isFolgaFixa && !isFerias && !isCompensacaoAbono) {
+            if (isAbono) {
+                totalMinutosTrabalhados += minutosAbonados;
+            } else if (isFalta) {
+                if (isFaltaJustificada) {
+                    totalMinutosTrabalhados += minutosAbonadosCredited;
+                } else if (hasPontoRecords) {
+                    totalMinutosTrabalhados += minutosDia;
+                }
+            } else {
+                totalMinutosTrabalhados += minutosDia;
             }
         }
         
-        if (!isFolgaFixa && !isFerias && !isCompensacaoAbono) {
-            totalMinutosTrabalhados += minutosParaAcumular;
-        }
-        
-        if (isFaltaJustificada || (isAbono && !isCompensacaoAbono)) {
+        // LÓGICA DE EXIBIÇÃO CORRIGIDA
+        if (isFalta) {
+            if (isFaltaJustificada) {
+                minutosDia = minutosAbonadosCredited;
+            } else {
+                minutosDia = 0;
+            }
+        } else if (isAbono && !isCompensacaoAbono) {
             minutosDia = minutosAbonados;
-        } else if (isFalta && !isFaltaJustificada) {
-            minutosDia = 0;
         }
 
 
@@ -446,13 +475,16 @@ const FolhaPonto: React.FC = () => {
             minutosTrabalhadosFolga,
             isCompensacaoAbono,
             isFaltaJustificada,
+            minutosAbonadosCredited,
         };
     }
     
     const jornadaMensalMinutos = (funcionarioDetalhe.horas_mensais || JORNADA_MENSAL_PADRAO) * 60;
     const minutosDiferenca = jornadaMensalMinutos - totalMinutosTrabalhados; 
-    
-    // --- FIM DA DUPLICAÇÃO DA LÓGICA DE CÁLCULO ---
+
+    return { diasProcessados, totalMinutosTrabalhados, minutosDiferenca, totalMinutosExtras100 };
+  }, [funcionario, mes, JORNADA_DIARIA_PADRAO, DAY_MAP, registrosDoFuncionario, feriasDoFuncionario]);
+
 
     const printComponent = (
         <FolhaPontoPrint
@@ -479,7 +511,7 @@ const FolhaPonto: React.FC = () => {
   };
 
 
-  if (carregando) {
+  if (carregando || carregandoDados || carregandoFerias) {
     return <LayoutPrincipal><div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div></LayoutPrincipal>;
   }
 
@@ -487,6 +519,10 @@ const FolhaPonto: React.FC = () => {
     return <LayoutPrincipal><Card><CardHeader><CardTitle>Acesso Negado</CardTitle></CardHeader><CardContent><p>Você não tem permissão para acessar a folha de ponto.</p></CardContent></Card></LayoutPrincipal>;
   }
   
+  // Calcula faltas injustificadas no mês
+  const faltasInjustificadasMesAtual = Object.values(diasProcessados).filter(d => d.isFalta && !d.isFaltaJustificada && isWithinInterval(parseISO(d.registros[0]?.horario_registro || format(dataSelecionada, 'yyyy-MM-dd')), { start: startOfMonth(dataSelecionada), end: endOfMonth(dataSelecionada) })).length;
+
+
   return (
     <LayoutPrincipal>
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
@@ -564,23 +600,53 @@ const FolhaPonto: React.FC = () => {
       </Card>
       
       {funcionarioDetalhe && (
-        <DetalheFolhaPonto 
-            funcionario={{
-                id: funcionarioDetalhe.id,
-                nome: funcionarioDetalhe.nome,
-                salario: funcionarioDetalhe.salario || 0,
-                horas_mensais: funcionarioDetalhe.horas_mensais || JORNADA_MENSAL_PADRAO,
-                registros: registrosDoFuncionario,
-                dias_folga_fixos: funcionarioDetalhe.dias_folga_fixos || [],
-                folga_domingo_obrigatoria: funcionarioDetalhe.folga_domingo_obrigatoria ?? true,
-                ferias: feriasDoFuncionario,
-            }}
-            mes={dataSelecionada}
-            onEditRegistro={handleAjustePonto}
-            onEditFaltaAbono={handleEditFaltaAbono}
-            onDeleteRegistro={handleFaltaRegistrada}
-            onManageWorkedDayOff={handleManageWorkedDayOff}
-        />
+        <>
+            {/* NOVOS CARDS DE FÉRIAS */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <Card className="p-3 border-l-4 border-red-500">
+                    <CardHeader className="p-0 pb-2"><CardTitle className="text-sm font-medium">Faltas Injustificadas (Mês)</CardTitle></CardHeader>
+                    <CardContent className="p-0"><div className="text-2xl font-bold text-red-600">{faltasInjustificadasMes}</div></CardContent>
+                </Card>
+                <Card className="p-3 border-l-4 border-red-700">
+                    <CardHeader className="p-0 pb-2"><CardTitle className="text-sm font-medium">Faltas Injustificadas (Período Aquisitivo)</CardTitle></CardHeader>
+                    <CardContent className="p-0"><div className="text-2xl font-bold text-red-800">{faltasInjustificadasAcumuladas}</div></CardContent>
+                </Card>
+                <Card className="p-3 border-l-4 border-green-500">
+                    <CardHeader className="p-0 pb-2"><CardTitle className="text-sm font-medium">Dias de Férias (Direito)</CardTitle></CardHeader>
+                    <CardContent className="p-0"><div className="text-2xl font-bold text-green-600">{diasDeFeriasDireito} dias</div></CardContent>
+                </Card>
+                <Card className="p-3 border-l-4 border-blue-500">
+                    <CardHeader className="p-0 pb-2"><CardTitle className="text-sm font-medium">Período Aquisitivo</CardTitle></CardHeader>
+                    <CardContent className="p-0">
+                        <div className="text-sm font-bold">
+                            {periodoAquisitivo ? format(periodoAquisitivo.data_inicio_aquisitivo, 'dd/MM/yyyy') : 'N/A'}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                            até {periodoAquisitivo ? format(periodoAquisitivo.data_fim_aquisitivo, 'dd/MM/yyyy') : 'N/A'}
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
+            {/* FIM NOVOS CARDS */}
+            
+            <DetalheFolhaPonto 
+                funcionario={{
+                    id: funcionarioDetalhe.id,
+                    nome: funcionarioDetalhe.nome,
+                    salario: funcionarioDetalhe.salario || 0,
+                    horas_mensais: funcionarioDetalhe.horas_mensais || JORNADA_MENSAL_PADRAO,
+                    registros: registrosDoFuncionario,
+                    dias_folga_fixos: funcionarioDetalhe.dias_folga_fixos || [],
+                    folga_domingo_obrigatoria: funcionarioDetalhe.folga_domingo_obrigatoria ?? true,
+                    ferias: feriasDoFuncionario,
+                }}
+                mes={dataSelecionada}
+                onEditRegistro={handleAjustePonto}
+                onEditFaltaAbono={handleEditFaltaAbono}
+                onDeleteRegistro={handleFaltaRegistrada}
+                onManageWorkedDayOff={handleManageWorkedDayOff}
+            />
+        </>
       )}
 
       {!funcionarioDetalhe && !carregandoDados && (

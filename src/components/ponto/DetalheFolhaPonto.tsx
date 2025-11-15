@@ -36,6 +36,7 @@ interface FuncionarioDetalhe {
     dias_folga_fixos: string[];
     folga_domingo_obrigatoria: boolean;
     ferias: Ferias[];
+    data_inicio_contrato?: string | null; // ADICIONADO
 }
 
 interface DetalheFolhaPontoProps {
