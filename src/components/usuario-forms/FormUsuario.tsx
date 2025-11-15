@@ -16,11 +16,12 @@ import { useBulkTagManager } from '@/hooks/use-bulk-tag-manager';
 import { format } from 'date-fns';
 import { BASE_URL } from '@/config/app-config';
 import { Separator } from '../ui/separator';
-import FormGeral from '../formularios/FormGeral'; // Ajuste de importação
-import FormFolgas from '../formularios/FormFolgas'; // Ajuste de importação
+import FormGeral from '../formularios/FormGeral';
+import FormFolgas from '../formularios/FormFolgas';
 import FormDocumentos from '../usuario-forms/FormDocumentos';
 import FormDadosContratuais from '../usuario-forms/FormDadosContratuais';
 import FormFerias from '@/components/usuario-forms/FormFerias';
+import { cn } from '@/lib/utils';
 
 const textOptional = z.string().optional().or(z.literal(''));
 const urlSchema = z.string().url('URL inválida.').optional().or(z.literal(''));
@@ -402,15 +403,15 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
   // --- Lógica de Read-Only para Tabs ---
   const isSelfEditUsuario = criadorRole === 'Usuario';
   
+  // Função que determina se a aba deve ser desabilitada (apenas para fins de edição)
   const isTabDisabled = (tabValue: string) => {
       // Se o formulário estiver em modo somente leitura (passado pelo pai), todas as abas são desabilitadas.
       if (isReadOnly) return true; 
       
       // Se for edição de perfil de funcionário por ele mesmo
       if (isSelfEditUsuario) {
-          // Tabs que o usuário não deve acessar/editar
-          const restrictedTabs = ['pessoal', 'folgas', 'ferias', 'contrato', 'documentos'];
-          return restrictedTabs.includes(tabValue);
+          // Apenas 'cadastrais' é editável. Todas as outras são somente leitura.
+          return tabValue !== 'cadastrais';
       }
       
       return false;
@@ -418,21 +419,22 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
   
   // NOVO HANDLER: Intercepta a mudança de aba para bloquear se estiver desabilitada
   const handleTabChange = (newTab: string) => {
-      if (isTabDisabled(newTab)) {
-          // Se a aba estiver desabilitada, não faz nada.
-          return;
-      }
+      // REMOVIDO: A verificação de isTabDisabled aqui, pois queremos que a aba seja navegável.
       setActiveTab(newTab);
   };
   
   // Read-Only status para os componentes filhos
   const isChildFormReadOnly = (tabValue: string) => {
+      // Se o modo read-only global estiver ativo, todos os filhos são read-only.
       if (isReadOnly) return true;
       
-      if (!isSelfEditUsuario) return false;
+      // Se for edição de perfil de funcionário por ele mesmo
+      if (isSelfEditUsuario) {
+          // Apenas 'cadastrais' deve ser editável. Todos os outros são read-only.
+          return tabValue !== 'cadastrais';
+      }
       
-      // Apenas 'cadastrais' deve ser editável. Todos os outros são read-only.
-      return tabValue !== 'cadastrais';
+      return false;
   };
   
   if (isNewClient) {
@@ -475,12 +477,13 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
           <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
             <TabsList className="flex flex-wrap justify-start w-full h-auto p-1">
-              <TabsTrigger value="pessoal" className="flex-1 md:flex-none md:w-1/6" disabled={isTabDisabled('pessoal')}>Geral</TabsTrigger>
-              <TabsTrigger value="folgas" className="flex-1 md:flex-none md:w-1/6" disabled={isTabDisabled('folgas')}>Folgas</TabsTrigger>
-              <TabsTrigger value="ferias" className="flex-1 md:flex-none md:w-1/6" disabled={isTabDisabled('ferias')}>Férias</TabsTrigger>
+              {/* REMOVIDO: disabled={isTabDisabled('pessoal')} */}
+              <TabsTrigger value="pessoal" className={cn("flex-1 md:flex-none md:w-1/6", isTabDisabled('pessoal') && 'opacity-50')}>Geral</TabsTrigger>
+              <TabsTrigger value="folgas" className={cn("flex-1 md:flex-none md:w-1/6", isTabDisabled('folgas') && 'opacity-50')}>Folgas</TabsTrigger>
+              <TabsTrigger value="ferias" className={cn("flex-1 md:flex-none md:w-1/6", isTabDisabled('ferias') && 'opacity-50')}>Férias</TabsTrigger>
               <TabsTrigger value="cadastrais" className="flex-1 md:flex-none md:w-1/6">Dados Cadastrais</TabsTrigger>
-              <TabsTrigger value="documentos" className="flex-1 md:flex-none md:w-1/6" disabled={isTabDisabled('documentos')}>Documentos</TabsTrigger>
-              <TabsTrigger value="contrato" className="flex-1 md:flex-none md:w-1/6" disabled={isTabDisabled('contrato')}>Contrato (RH)</TabsTrigger>
+              <TabsTrigger value="documentos" className={cn("flex-1 md:flex-none md:w-1/6", isTabDisabled('documentos') && 'opacity-50')}>Documentos</TabsTrigger>
+              <TabsTrigger value="contrato" className={cn("flex-1 md:flex-none md:w-1/6", isTabDisabled('contrato') && 'opacity-50')}>Contrato (RH)</TabsTrigger>
             </TabsList>
             
             {/* TAB 1: GERAL */}
