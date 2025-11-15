@@ -402,20 +402,6 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
   // --- Lógica de Read-Only para Tabs ---
   const isSelfEditUsuario = criadorRole === 'Usuario';
   
-  // Função que determina se a aba deve ser desabilitada (apenas para fins de edição)
-  const isTabDisabled = (tabValue: string) => {
-      // Se o formulário estiver em modo somente leitura (passado pelo pai), todas as abas são desabilitadas.
-      if (isReadOnly) return true; 
-      
-      // Se for edição de perfil de funcionário por ele mesmo
-      if (isSelfEditUsuario) {
-          // Apenas 'cadastrais' é editável. Todas as outras são somente leitura.
-          return tabValue !== 'cadastrais';
-      }
-      
-      return false;
-  };
-  
   // NOVO HANDLER: Intercepta a mudança de aba para bloquear se estiver desabilitada
   const handleTabChange = (newTab: string) => {
       setActiveTab(newTab);
@@ -475,7 +461,6 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
           <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
             <TabsList className="flex flex-wrap justify-start w-full h-auto p-1">
-              {/* REMOVIDO: disabled={isTabDisabled('pessoal')} e a classe cn que aplicava opacity-50 */}
               <TabsTrigger value="pessoal" className="flex-1 md:flex-none md:w-1/6">Geral</TabsTrigger>
               <TabsTrigger value="folgas" className="flex-1 md:flex-none md:w-1/6">Folgas</TabsTrigger>
               <TabsTrigger value="ferias" className="flex-1 md:flex-none md:w-1/6">Férias</TabsTrigger>
