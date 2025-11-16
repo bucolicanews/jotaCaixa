@@ -15,10 +15,10 @@ import { Historico } from '@/types/historico';
 
 // Tipos de registro que precisam de mapeamento contábil
 const TIPOS_REGISTRO_CONTABIL = [
-  { key: 'a_receber', label: 'Contas a Receber (Sintético)', tipo: 'Patrimonial' }, // NOVO TIPO
-  { key: 'parcela', label: 'Parcelas a Receber (Analítico)', tipo: 'Patrimonial' }, // NOVO TIPO
-  { key: 'recebimento', label: 'Recebimentos (Crédito)', tipo: 'Resultado' }, // NOVO TIPO
-  { key: 'desconto', label: 'Descontos Concedidos (Despesa)', tipo: 'Resultado' }, // NOVO TIPO
+  { key: 'a_receber', label: 'Contas a Receber (Sintético)', tipo: 'Patrimonial' }, // Ativo
+  { key: 'parcela', label: 'Parcelas a Receber (Analítico)', tipo: 'Patrimonial' }, // Ativo
+  { key: 'recebimento', label: 'Recebimentos (Crédito)', tipo: 'Resultado' }, // Receita (DRE)
+  { key: 'desconto', label: 'Descontos Concedidos (Despesa)', tipo: 'Resultado' }, // Despesa (DRE)
 ];
 
 // Esquema dinâmico para garantir que todos os campos estejam presentes
