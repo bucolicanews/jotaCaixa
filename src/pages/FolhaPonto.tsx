@@ -358,6 +358,7 @@ const FolhaPonto: React.FC = () => {
                   dias_folga_fixos: funcionarioSelecionado.dias_folga_fixos || [],
                   folga_domingo_obrigatoria: funcionarioSelecionado.folga_domingo_obrigatoria ?? true,
                   ferias: feriasDoFuncionario,
+                  data_inicio_contrato: funcionarioSelecionado.data_inicio_contrato,
               }}
               mes={dataSelecionada}
               logoUrl={logoUrl} // PASSANDO LOGO

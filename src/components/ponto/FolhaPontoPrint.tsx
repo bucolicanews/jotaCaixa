@@ -31,7 +31,7 @@ interface DiaProcessado {
 }
 
 interface FolhaPontoPrintProps {
-  empresaNome: string;
+  // empresaNome: string; // REMOVIDO
   funcionario: FuncionarioDetalhe;
   mes: Date;
   logoUrl: string | null; // NOVO PROP
@@ -53,7 +53,7 @@ const formatarHoras = (minutos: number): string => {
 const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
 const FolhaPontoPrint: React.FC<FolhaPontoPrintProps> = ({ 
-    empresaNome, 
+    // empresaNome, // REMOVIDO
     funcionario, 
     mes, 
     logoUrl, // USANDO NOVO PROP
