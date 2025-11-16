@@ -269,10 +269,10 @@ const FolhaPontoPrint: React.FC<FolhaPontoPrintProps> = ({
         <div className="print-container">
             <div className="print-header">
                 {logoUrl && <img src={logoUrl} alt={ownerName} className="print-logo" />}
-                <div className="print-header-content" style={{ marginLeft: logoUrl ? '15px' : '0' }}>
+                <div className="print-header-content" style={{ marginLeft: logoUrl ? '15px' : '0', textAlign: 'left' }}>
                     <h1 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '5px' }}>FOLHA DE PONTO MENSAL</h1>
                     <p style={{ fontSize: '10px', color: '#555' }}>Empresa: {ownerName}</p>
-                    <p style={{ fontSize: '10px', color: '#555' }}>Funcionário: {funcionario.nome}</p>
+                    {/* LINHA REMOVIDA: <p style={{ fontSize: '10px', color: '#555' }}>Funcionário: {funcionario.nome}</p> */}
                     <p style={{ fontSize: '10px', color: '#555' }}>Mês de Referência: {format(mes, 'MMMM/yyyy', { locale: ptBR })}</p>
                 </div>
             </div>
