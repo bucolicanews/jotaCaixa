@@ -135,6 +135,13 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick, adminBranding, l
   const adminNome = branding?.nome;
   
   const shouldShowAdminBranding = isAdmin || isUserOfAdmin;
+  
+  // NOVO: Determina o título principal do menu
+  const mainTitle = shouldShowAdminBranding && adminNome ? adminNome : (perfil?.nome || 'Navegação');
+  
+  // NOVO: Determina a descrição do perfil
+  const profileDescription = isAdmin ? 'Administrador' : (isUserOfAdmin ? `Funcionário de ${adminNome || 'Admin'}` : clientProfile?.nome || 'Cliente');
+
 
   const checkPermission = (item: ItemMenu) => {
     if (!item.permissionKey) return true;
@@ -144,7 +151,7 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick, adminBranding, l
         return item.caminho === '/painel' || item.caminho === '/minha-assinatura';
     }
 
-    // Se estiver no fluxo de seleção de perfil, só permite Painel (que mostra a mensagem de aprovação)
+    // Se estiver no fluxo de seleção de perfil, só permite Painel (que é o LayoutPrincipal)
     if (isPreAuthFlow) {
         return item.caminho === '/painel';
     }
@@ -193,26 +200,23 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick, adminBranding, l
         {/* Lógica de exibição da Logo e Nome do Admin/Empresa */}
         {loadingBranding && shouldShowAdminBranding ? (
             <div data-dyad-id="src\components\MenuLateral.tsx:217:12" data-dyad-name="h1" className="h-16 flex items-center"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
-        ) : shouldShowAdminBranding && branding ? (
+        ) : (
             <>
                 {logoUrl && (
                     <img 
                         src={logoUrl} 
                         alt="Logo da Empresa" 
-                        className="object-contain max-h-16 w-auto mb-2" 
+                        className="object-contain max-h-16 w-auto" 
                         style={{ maxWidth: '100%' }}
                     />
                 )}
                 <h1 data-dyad-id="src\components\MenuLateral.tsx:217:12" data-dyad-name="h1" className="text-xl font-bold text-foreground text-center">
-                    {adminNome || 'Admin'}
+                    {mainTitle}
                 </h1>
-                {/* NOVO: Exibe a descrição abaixo do nome */}
                 <p className="text-sm text-muted-foreground text-center">
-                    {isAdmin ? 'Administrador' : (isUserOfAdmin ? `Funcionário de ${adminNome}` : clientProfile?.nome || 'Cliente')}
+                    {profileDescription}
                 </p>
             </>
-        ) : (
-            <h1 data-dyad-id="src\components\MenuLateral.tsx:217:12" data-dyad-name="h1" className="text-xl font-bold text-primary">Navegação</h1>
         )}
       </div>
       <nav className="flex-1 p-2 space-y-4 overflow-y-auto">
