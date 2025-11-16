@@ -3,8 +3,9 @@ import { cn } from '@/lib/utils';
 import { LayoutDashboard, DollarSign, ArrowUpCircle, ArrowDownCircle, Banknote, FileText, Upload, Settings, BookOpen, Users, Building2, Clock, Contact, CalendarCheck, User, FileSignature, Tag, FileTextIcon, Package, History, FileDown, MessageSquare, Scale, Loader2 } from 'lucide-react';
 import React, { useMemo } from 'react';
 import { useSessao } from '@/hooks/use-sessao';
-import { ClienteProfile, UsuarioProfile, AdminUsuarioProfile, AdminProfile } from '@/types/usuario';
+import { ClienteProfile, UsuarioProfile, AdminUsuarioProfile } from '@/types/usuario';
 import { isPast, parseISO } from 'date-fns';
+import { useTicketNotifications } from '@/hooks/use-ticket-notifications'; // Importado
 
 interface ItemMenu {
   nome: string;
@@ -69,16 +70,6 @@ const SECOES_MENU: MenuSection[] = [
         ]
     },
     {
-        titulo: 'Cadastros',
-        perfis: ['Admin', 'Cliente', 'Usuario'],
-        itens: [
-            // Clientes está vinculado a 'contas_receber'
-            { nome: 'Clientes', caminho: '/clientes', icone: Contact, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'contas_receber' },
-            { nome: 'Plano de Contas', caminho: '/plano-contas', icone: BookOpen, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'plano_contas' },
-            { nome: 'Históricos', caminho: '/historicos', icone: History, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'plano_contas' },
-        ]
-    },
-    {
         titulo: 'Suporte', // NOVA SEÇÃO
         perfis: ['Admin', 'Cliente', 'Usuario'],
         itens: [
@@ -110,6 +101,9 @@ interface MenuLateralProps {
 const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick, adminBranding, loadingBranding }) => {
   const localizacao = useLocation();
   const { role, perfil } = useSessao();
+  
+  // Use notifications hook
+  const { ticketsAbertos, ticketsEmProgresso, ticketsPausados, mensagensParaResponder, carregando: carregandoNotificacoes } = useTicketNotifications();
 
   // Verifica se é um usuário não vinculado (apenas se for Usuario E não tiver cliente_id OU admin_id)
   const isUnassignedUser = role === 'Usuario' && !(perfil as UsuarioProfile)?.cliente_id && !(perfil as AdminUsuarioProfile)?.admin_id;
@@ -165,6 +159,16 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick, adminBranding, l
     : (isUserOfAdmin 
         ? 'Funcionário' // ALTERADO: Removido "de [Nome da Empresa]"
         : clientProfile?.nome || 'Cliente');
+        
+  // NOVO: Lógica para ocultar a seção de Suporte para non-Admin users sem tickets ativos
+  const shouldShowSuporte = useMemo(() => {
+      if (role === 'Admin') return true; // Admin sempre vê
+      if (carregandoNotificacoes) return true; // Assume true while loading to prevent flicker
+      
+      // Cliente/Usuário só vê se tiver tickets ativos ou para responder
+      const activeTickets = ticketsAbertos + ticketsEmProgresso + ticketsPausados;
+      return activeTickets > 0 || mensagensParaResponder > 0;
+  }, [role, carregandoNotificacoes, ticketsAbertos, ticketsEmProgresso, ticketsPausados, mensagensParaResponder]);
 
 
   const checkPermission = (item: ItemMenu) => {
@@ -263,6 +267,11 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick, adminBranding, l
         
         {SECOES_MENU.map(secao => {
             if (!role || !secao.perfis.includes(role)) return null;
+            
+            // NOVO: Conditionally hide Suporte section for non-Admin users
+            if (secao.titulo === 'Suporte' && !shouldShowSuporte) {
+                return null;
+            }
             
             const itensVisiveis = secao.itens.filter(item => 
                 item.perfis.includes(role) && 
