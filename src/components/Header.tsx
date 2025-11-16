@@ -101,17 +101,19 @@ const Header: React.FC = () => {
       let appName = 'Fluxo de Caixa';
 
       if (isAdmin) {
-        const adminProfile = perfil as AdminProfile;
-        appName = adminProfile.nome;
+        // Admin: Usa o nome do Admin (do perfil)
+        appName = (perfil as AdminProfile).nome;
       } else if (isClient) {
+        // Cliente: Usa o nome do Cliente (do perfil)
         appName = clienteProfile.nome;
         currentPlanoId = clienteProfile.plano_id || null; 
       } else if (role === 'Usuario') {
-        // Se for funcionário do Admin, usa o nome do Admin (já carregado no branding)
+        // Usuário:
         if (isUserOfAdmin) {
+            // Funcionário do Admin: Usa o nome do Admin (do branding)
             appName = adminBranding?.nome ?? 'Admin';
         } else if (userProfile.cliente_id) {
-            // Se for funcionário de Cliente, busca o nome do Cliente
+            // Funcionário de Cliente: Busca o nome do Cliente
             const proprietarioId = userProfile.cliente_id;
             const { data: clienteData } = await supabase
                 .from('tbl_clientes')

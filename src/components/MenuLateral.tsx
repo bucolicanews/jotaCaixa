@@ -130,7 +130,7 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick, adminBranding, l
   const isUserOfAdmin = role === 'Usuario' && 'admin_id' in userProfile && !!userProfile.admin_id;
   
   // Usa o branding correto
-  const branding = isAdmin ? { logoUrl: (perfil as AdminProfile)?.logo_url, nome: (perfil as AdminProfile)?.nome } : adminBranding;
+  const branding = isAdmin ? (perfil as AdminProfile)?.logo_url ? { logoUrl: (perfil as AdminProfile)?.logo_url, nome: (perfil as AdminProfile)?.nome } : adminBranding : adminBranding;
   const logoUrl = branding?.logoUrl;
   const adminNome = branding?.nome;
   
