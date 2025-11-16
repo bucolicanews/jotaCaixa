@@ -195,15 +195,9 @@ const Header: React.FC = () => {
         >
             {loadingBranding ? (
                 <Loader2 className="h-6 w-6 animate-spin text-primary" />
-            ) : finalLogoUrl ? (
-                <img 
-                    src={finalLogoUrl} 
-                    alt={textTitle} 
-                    className="h-8 w-auto object-contain" 
-                    style={{ maxWidth: '100%' }}
-                />
             ) : (
-                // Exibe o nome do Admin Proprietário em texto-primary (amarelo/laranja)
+                // ALTERAÇÃO AQUI: Se for Admin ou Cliente, exibe o nome em texto.
+                // Se for Usuário, exibe o nome do Admin/Cliente (que é o textTitle)
                 <span className="text-primary">
                     {textTitle}
                 </span>
