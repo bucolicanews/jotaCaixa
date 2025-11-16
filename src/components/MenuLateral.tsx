@@ -1,11 +1,12 @@
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { LayoutDashboard, DollarSign, ArrowUpCircle, ArrowDownCircle, Banknote, FileText, Upload, Settings, BookOpen, Users, Building2, Clock, Contact, CalendarCheck, User, FileSignature, Tag, FileTextIcon, Package, History, FileDown, MessageSquare, Scale, Loader2 } from 'lucide-react';
-import React, { useMemo } from 'react';
+import React, { useMemo, useCallback, useState, useEffect } from 'react';
 import { useSessao } from '@/hooks/use-sessao';
-import { ClienteProfile, UsuarioProfile, AdminUsuarioProfile } from '@/types/usuario';
+import { ClienteProfile, UsuarioProfile, AdminProfile, AdminUsuarioProfile } from '@/types/usuario';
 import { isPast, parseISO } from 'date-fns';
-import { useTicketNotifications } from '@/hooks/use-ticket-notifications'; // Importado
+import { useTicketNotifications } from '@/hooks/use-ticket-notifications';
+import { supabase } from '@/integrations/supabase/client'; // Importando supabase
 
 interface ItemMenu {
   nome: string;
@@ -87,6 +88,7 @@ const SECOES_MENU: MenuSection[] = [
             { nome: 'Relatórios', caminho: '/relatorios', icone: FileText, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'relatorios' },
             { nome: 'Importar Dados', caminho: '/importar', icone: Upload, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'importar' },
             { nome: 'Exportar Dados', caminho: '/exportar', icone: FileDown, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'relatorios' },
+            { nome: 'Gerenciar Históricos', caminho: '/historicos', icone: History, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'configuracoes' },
             { nome: 'Configurações', caminho: '/configuracoes', icone: Settings, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'configuracoes' },
         ]
     }
@@ -94,78 +96,93 @@ const SECOES_MENU: MenuSection[] = [
 
 interface MenuLateralProps {
   onLinkClick?: () => void;
-  adminBranding: { logoUrl: string | null, nome: string | null } | null; // NOVO PROP
-  loadingBranding: boolean; // NOVO PROP
+  adminBranding: { logoUrl: string | null, nome: string | null } | null;
+  loadingBranding: boolean;
 }
 
 const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick, adminBranding, loadingBranding }) => {
   const localizacao = useLocation();
-  const { role, perfil } = useSessao();
+  const { role, perfil, carregando } = useSessao();
+  const [clientBranding, setClientBranding] = useState<{ logoUrl: string | null, nome: string | null } | null>(null);
   
-  // Use notifications hook
   const { ticketsAbertos, ticketsEmProgresso, ticketsPausados, mensagensParaResponder, carregando: carregandoNotificacoes } = useTicketNotifications();
 
-  // Verifica se é um usuário não vinculado (apenas se for Usuario E não tiver cliente_id OU admin_id)
   const isUnassignedUser = role === 'Usuario' && !(perfil as UsuarioProfile)?.cliente_id && !(perfil as AdminUsuarioProfile)?.admin_id;
   const isPendingClient = role === 'Cliente' && !(perfil as ClienteProfile)?.aprovado;
   
   const userProfile = perfil as UsuarioProfile | AdminUsuarioProfile;
   const clientProfile = perfil as ClienteProfile;
   
-  // Lógica de Expiração: Se for Cliente, aprovado, e a data de fim de acesso for passada.
-  const dataFimAcesso = clientProfile?.data_fim_acesso ? parseISO(clientProfile.data_fim_acesso) : null;
-  const isAccessExpired = role === 'Cliente' && clientProfile?.aprovado && dataFimAcesso && isPast(dataFimAcesso);
-  
-  // Se o usuário for recém-cadastrado e estiver na tela de seleção de perfil,
-  // ele não deve ver o menu completo.
+  const isAccessExpired = role === 'Cliente' && clientProfile?.data_fim_acesso && isPast(parseISO(clientProfile.data_fim_acesso));
   const isPreAuthFlow = localizacao.pathname === '/selecao-perfil';
   
   const isAdmin = role === 'Admin';
   const isClient = role === 'Cliente';
+  const isUserOfClient = role === 'Usuario' && 'cliente_id' in userProfile && !!userProfile.cliente_id;
   const isUserOfAdmin = role === 'Usuario' && 'admin_id' in userProfile && !!userProfile.admin_id;
   
+  // Fetch Client Branding if User is a Client's employee
+  const fetchClientBranding = useCallback(async () => {
+      if (isUserOfClient && userProfile.cliente_id) {
+          const { data, error } = await supabase
+              .from('tbl_clientes')
+              .select('nome, logo_url')
+              .eq('id', userProfile.cliente_id)
+              .single();
+              
+          if (error) {
+              console.error('Erro ao buscar branding do Cliente:', error);
+              setClientBranding(null);
+          } else {
+              setClientBranding({ logoUrl: data.logo_url, nome: data.nome });
+          }
+      } else {
+          setClientBranding(null);
+      }
+  }, [isUserOfClient, userProfile]);
+  
+  useEffect(() => {
+      if (!carregando) {
+          fetchClientBranding();
+      }
+  }, [carregando, fetchClientBranding]);
+
   // Determina a logo e o nome a serem exibidos
   const { finalLogoUrl, textTitle } = useMemo(() => {
-      const clientLogoUrl = isClient ? clientProfile?.logo_url : null;
-      
-      // Se for funcionário do Admin, usa o branding do Admin (que vem do prop)
-      const adminLogoUrl = isUserOfAdmin ? (userProfile as AdminUsuarioProfile).logo_admin : adminBranding?.logoUrl;
-      const adminNome = isUserOfAdmin ? (userProfile as AdminUsuarioProfile).nome_admin : adminBranding?.nome;
-      
-      const finalLogoUrl = clientLogoUrl || adminLogoUrl;
-      
-      const clientNome = clientProfile?.nome;
-      
+      let finalLogoUrl: string | null = null;
       let textTitle = 'Fluxo de Caixa';
       
-      if (isUserOfAdmin) {
-          // Se for funcionário do Admin, usa o nome do Admin
-          textTitle = adminNome || 'Admin';
+      if (isAdmin) {
+          finalLogoUrl = adminBranding?.logoUrl || null;
+          textTitle = adminBranding?.nome || perfil?.nome || 'Administrador';
       } else if (isClient) {
-          textTitle = clientNome || 'Minha Empresa';
-      } else if (isAdmin) {
-          textTitle = adminNome || perfil?.nome || 'Administrador';
+          finalLogoUrl = clientProfile?.logo_url || null;
+          textTitle = clientProfile?.nome || 'Minha Empresa';
+      } else if (isUserOfClient) {
+          finalLogoUrl = clientBranding?.logoUrl || null;
+          textTitle = clientBranding?.nome || 'Empresa Cliente';
+      } else if (isUserOfAdmin) {
+          finalLogoUrl = adminBranding?.logoUrl || null;
+          textTitle = adminBranding?.nome || 'Admin';
       }
       
-      return { finalLogoUrl, textTitle };
-  }, [isClient, clientProfile, adminBranding, isAdmin, isUserOfAdmin, perfil, userProfile]);
+      const profileName = perfil?.nome || 'Usuário';
+      
+      return { finalLogoUrl, textTitle: textTitle || profileName };
+  }, [isAdmin, isClient, isUserOfClient, isUserOfAdmin, clientProfile, adminBranding, perfil, clientBranding]);
   
-  // NOVO: Determina o título principal do menu
   const mainTitle = textTitle;
   
-  // NOVO: Determina a descrição do perfil
   const profileDescription = isAdmin 
     ? 'Administrador' 
-    : (isUserOfAdmin 
-        ? 'Funcionário' // ALTERADO: Removido "de [Nome da Empresa]"
-        : clientProfile?.nome || 'Cliente');
+    : (isUserOfClient 
+        ? 'Funcionário (Cliente)'
+        : (isUserOfAdmin ? 'Funcionário (Admin)' : 'Cliente'));
         
-  // NOVO: Lógica para ocultar a seção de Suporte para non-Admin users sem tickets ativos
   const shouldShowSuporte = useMemo(() => {
-      if (role === 'Admin') return true; // Admin sempre vê
-      if (carregandoNotificacoes) return true; // Assume true while loading to prevent flicker
+      if (role === 'Admin') return true;
+      if (carregandoNotificacoes) return true;
       
-      // Cliente/Usuário só vê se tiver tickets ativos ou para responder
       const activeTickets = ticketsAbertos + ticketsEmProgresso + ticketsPausados;
       return activeTickets > 0 || mensagensParaResponder > 0;
   }, [role, carregandoNotificacoes, ticketsAbertos, ticketsEmProgresso, ticketsPausados, mensagensParaResponder]);
@@ -174,46 +191,37 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick, adminBranding, l
   const checkPermission = (item: ItemMenu) => {
     if (!item.permissionKey) return true;
 
-    // Se o acesso expirou, bloqueia todos os módulos, exceto Painel e Minha Assinatura
     if (isAccessExpired) {
         return item.caminho === '/painel' || item.caminho === '/minha-assinatura';
     }
 
-    // Se estiver no fluxo de seleção de perfil, só permite Painel (que é o LayoutPrincipal)
     if (isPreAuthFlow) {
         return item.caminho === '/painel';
     }
 
-    // O Admin agora tem acesso a todos os módulos listados, pois ele precisa gerenciar seus próprios lançamentos.
     if (role === 'Admin') {
         return true;
     }
 
     if (role === 'Cliente') {
-        // Clientes pendentes só veem Painel (que mostra a mensagem de aprovação)
         if (isPendingClient) {
             return item.caminho === '/painel';
         }
-        // Se for 'Meu Ponto', oculta para Cliente (que usa Acompanhar Ponto)
         if (item.caminho.includes('/folha-ponto?mode=self')) {
             return false;
         }
-        // Verifica a permissão do Cliente
         return clientProfile.permissoes?.[item.permissionKey] === true;
     }
 
     if (role === 'Usuario') {
-        // Usuários não vinculados (sem cliente_id E sem admin_id) só veem Cadastrar Empresa e Painel
         if (isUnassignedUser) {
             return item.caminho === '/painel' || item.caminho === '/cadastrar-empresa';
         }
         
-        // Se for 'Acompanhar Ponto' (FolhaPonto), oculta para Usuário.
         if (item.caminho === '/folha-ponto') {
             return false;
         }
         
-        // Verifica a permissão do Usuário (Funcionário do Cliente OU do Admin)
         if (item.permissionKey) {
             return userProfile.permissoes?.[item.permissionKey] === true;
         }
@@ -225,8 +233,7 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick, adminBranding, l
   return (
     <div className="flex flex-col h-full bg-background text-foreground">
       <div className="p-4 border-b flex flex-col items-center justify-center space-y-2">
-        {/* Lógica de exibição da Logo e Nome do Admin/Empresa */}
-        {loadingBranding ? (
+        {loadingBranding && carregando ? (
             <div data-dyad-id="src\components\MenuLateral.tsx:217:12" data-dyad-name="h1" className="h-16 flex items-center"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
         ) : (
             <>
@@ -268,7 +275,6 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick, adminBranding, l
         {SECOES_MENU.map(secao => {
             if (!role || !secao.perfis.includes(role)) return null;
             
-            // NOVO: Conditionally hide Suporte section for non-Admin users
             if (secao.titulo === 'Suporte' && !shouldShowSuporte) {
                 return null;
             }
@@ -287,13 +293,28 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick, adminBranding, l
                         const estaAtivo = localizacao.pathname === item.caminho || localizacao.pathname + localizacao.search === item.caminho;
                         const Icone = item.icone;
                         
-                        // Se o acesso expirou, desabilita o link
                         const isDisabled = isAccessExpired && item.caminho !== '/painel' && item.caminho !== '/minha-assinatura';
+                        
+                        // Lógica de Notificação para Suporte
+                        let notificationBadge = null;
+                        if (item.caminho === '/suporte' && mensagensParaResponder > 0 && !isAdmin) {
+                            notificationBadge = (
+                                <span className="ml-auto h-5 w-5 rounded-full bg-red-500 flex items-center justify-center text-white text-xs font-bold">
+                                    {mensagensParaResponder > 9 ? '9+' : mensagensParaResponder}
+                                </span>
+                            );
+                        } else if (item.caminho === '/admin/suporte' && mensagensParaResponder > 0 && isAdmin) {
+                            notificationBadge = (
+                                <span className="ml-auto h-5 w-5 rounded-full bg-red-500 flex items-center justify-center text-white text-xs font-bold">
+                                    {mensagensParaResponder > 9 ? '9+' : mensagensParaResponder}
+                                </span>
+                            );
+                        }
 
                         return (
                             <Link
                                 key={item.nome}
-                                to={isDisabled ? localizacao.pathname : item.caminho} // Se desabilitado, linka para a página atual
+                                to={isDisabled ? localizacao.pathname : item.caminho}
                                 onClick={isDisabled ? (e) => e.preventDefault() : onLinkClick}
                                 className={cn(
                                     "flex items-center p-3 rounded-lg transition-colors",
@@ -306,6 +327,7 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick, adminBranding, l
                             >
                                 <Icone className="w-5 h-5 mr-3" />
                                 {item.nome}
+                                {notificationBadge}
                             </Link>
                         );
                     })}
