@@ -10,9 +10,11 @@ import { startOfMonth, endOfMonth } from 'date-fns';
 import { ClienteProfile } from '@/types/usuario';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { useOwnerBranding } from '@/hooks/use-owner-branding'; // NOVO IMPORT
 
 const DRE: React.FC = () => {
   const { role, perfil, carregando: carregandoSessao } = useSessao();
+  const { logoUrl, ownerName } = useOwnerBranding(); // USANDO HOOK DE BRANDING
   
   // A DRE é calculada em um período. Padrão: Mês atual.
   const [filtroPeriodo, setFiltroPeriodo] = useState<DateRange | undefined>({
@@ -79,6 +81,8 @@ const DRE: React.FC = () => {
         <DREDetalhe 
             filtroPeriodo={filtroPeriodo}
             filtroSomenteComSaldo={filtroSomenteComSaldo}
+            logoUrl={logoUrl} // PASSANDO LOGO
+            ownerName={ownerName} // PASSANDO NOME
         />
       ) : (
         <Card className="mt-6">

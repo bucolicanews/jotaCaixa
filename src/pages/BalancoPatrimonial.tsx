@@ -9,9 +9,11 @@ import BalancoPatrimonialDetalhe from '@/components/contabilidade/BalancoPatrimo
 import { endOfMonth } from 'date-fns';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch'; // Importando Switch
+import { useOwnerBranding } from '@/hooks/use-owner-branding'; // NOVO IMPORT
 
 const BalancoPatrimonial: React.FC = () => {
   const { role, perfil, carregando: carregandoSessao } = useSessao();
+  const { logoUrl, ownerName } = useOwnerBranding(); // USANDO HOOK DE BRANDING
   
   // O Balanço Patrimonial é calculado ATÉ uma data específica. Usamos o 'to' do DateRange.
   const [filtroPeriodo, setFiltroPeriodo] = useState<DateRange | undefined>({
@@ -78,6 +80,8 @@ const BalancoPatrimonial: React.FC = () => {
         <BalancoPatrimonialDetalhe 
             endDate={endDate} 
             filtroSomenteComSaldo={filtroSomenteComSaldo} // Passando o novo filtro
+            logoUrl={logoUrl} // PASSANDO LOGO
+            ownerName={ownerName} // PASSANDO NOME
         />
       ) : (
         <Card className="mt-6">

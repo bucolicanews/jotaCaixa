@@ -10,9 +10,11 @@ interface ClientesPrintProps {
     isSupervisao: boolean;
     activeTab: 'clientes_cr' | 'empresas_sistema';
     activeEmpresaTab?: 'pendentes' | 'ativos' | 'inativos' | 'avulsos';
+    logoUrl: string | null; // NOVO PROP
+    ownerName: string; // NOVO PROP
 }
 
-const ClientesPrint: React.FC<ClientesPrintProps> = ({ data, titulo, isSupervisao, activeTab, activeEmpresaTab }) => {
+const ClientesPrint: React.FC<ClientesPrintProps> = ({ data, titulo, isSupervisao, activeTab, activeEmpresaTab, logoUrl, ownerName }) => {
     
     if (data.length === 0) {
         return <div>Nenhum dado para imprimir.</div>;
@@ -101,8 +103,11 @@ const ClientesPrint: React.FC<ClientesPrintProps> = ({ data, titulo, isSupervisa
     return (
         <div className="print-container">
             <div className="print-header">
-                <h1 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '5px' }}>{finalTitulo}</h1>
-                <p style={{ fontSize: '10px', color: '#555' }}>Gerado em: {format(new Date(), 'dd/MM/yyyy HH:mm', { locale: ptBR })}</p>
+                {logoUrl && <img src={logoUrl} alt={ownerName} className="print-logo" />}
+                <div className="print-header-content">
+                    <h1>{finalTitulo}</h1>
+                    <p>Empresa: {ownerName} | Gerado em: {format(new Date(), 'dd/MM/yyyy HH:mm', { locale: ptBR })}</p>
+                </div>
             </div>
 
             <div className="print-section">

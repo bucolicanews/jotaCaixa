@@ -20,6 +20,8 @@ import { useContabilConfig } from '@/hooks/use-contabil-config'; // Importando u
 interface DREDetalheProps {
   filtroPeriodo: DateRange | undefined;
   filtroSomenteComSaldo: boolean; // NOVO PROP
+  logoUrl: string | null; // NOVO PROP
+  ownerName: string; // NOVO PROP
 }
 
 // Tipo auxiliar para a conta (copiado do hook)
@@ -32,13 +34,13 @@ interface ContaDRE {
   tipo_dre: 'Receita' | 'Custo' | 'Despesa' | 'Resultado';
 }
 
-const DREDetalhe: React.FC<DREDetalheProps> = ({ filtroPeriodo, filtroSomenteComSaldo }) => {
+const DREDetalhe: React.FC<DREDetalheProps> = ({ filtroPeriodo, filtroSomenteComSaldo, logoUrl, ownerName }) => {
   const { perfil, role } = useSessao();
   const { configMap } = useContabilConfig(); // Obtendo o mapeamento
   const { contas, totalReceita, totalCusto, totalDespesa, resultadoLiquido, carregando } = useDRE(filtroPeriodo);
   const { printContent } = usePrint();
   
-  const empresaNome = role === 'Admin' ? 'Admin' : (perfil as ClienteProfile)?.nome || 'Empresa';
+  const empresaNome = ownerName; // USANDO O NOME PASSADO VIA PROP
 
   // Filtra as contas com base no estado local
   const contasFiltradas = useMemo(() => {
@@ -94,13 +96,14 @@ const DREDetalhe: React.FC<DREDetalheProps> = ({ filtroPeriodo, filtroSomenteCom
     
     const printComponent = (
         <DREPrint
-            empresaNome={empresaNome}
+            empresaNome={ownerName}
             filtroPeriodo={filtroPeriodo as DateRange}
             contas={contasParaImpressao}
             totalReceita={totalReceita}
             totalCusto={totalCusto}
             totalDespesa={totalDespesa}
             resultadoLiquido={resultadoLiquido}
+            logoUrl={logoUrl} // PASSANDO LOGO
         />
     );
 

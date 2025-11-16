@@ -34,6 +34,8 @@ interface FolhaPontoPrintProps {
   empresaNome: string;
   funcionario: FuncionarioDetalhe;
   mes: Date;
+  logoUrl: string | null; // NOVO PROP
+  ownerName: string; // NOVO PROP
 }
 
 const JORNADA_MENSAL_PADRAO = 220; 
@@ -54,6 +56,8 @@ const FolhaPontoPrint: React.FC<FolhaPontoPrintProps> = ({
     empresaNome, 
     funcionario, 
     mes, 
+    logoUrl, // USANDO NOVO PROP
+    ownerName, // USANDO NOVO PROP
 }) => {
     
     // --- Lógica de Cálculo (Replicada do DetalheFolhaPonto) ---
@@ -209,6 +213,7 @@ const FolhaPontoPrint: React.FC<FolhaPontoPrintProps> = ({
                 needsManagement,
                 minutosTrabalhadosFolga,
                 isCompensacaoAbono,
+                isFaltaJustificada,
                 minutosAbonadosCredited,
             };
         }
@@ -217,20 +222,20 @@ const FolhaPontoPrint: React.FC<FolhaPontoPrintProps> = ({
         const minutosDiferenca = jornadaMensalMinutos - totalMinutosTrabalhados; 
 
         return { diasProcessados, totalMinutosTrabalhados, minutosDiferenca, totalMinutosExtras100 };
-    }, [funcionario, mes]);
+    }, [funcionario, mes, JORNADA_DIARIA_PADRAO, DAY_MAP]);
     // --- Fim Lógica de Cálculo ---
 
     const diasOrdenados = Object.keys(diasProcessados).sort();
     const isExtraHours = minutosDiferenca < 0;
     
-    const getObservacaoPrincipal = (diaData: DiaProcessado): string => {
+    const getObservacaoPrincipal = (diaData: any): string => {
         if (diaData.isFerias) return 'FÉRIAS';
         if (diaData.isFalta) {
-            const faltaRegistro = diaData.registros.find(r => r.tipo === 'Falta');
+            const faltaRegistro = diaData.registros.find((r: RegistroPonto) => r.tipo === 'Falta');
             return faltaRegistro?.atestado_url ? 'Falta Justificada (Atestado Anexado)' : 'Falta Injustificada';
         }
         if (diaData.isAbono) {
-            const abonoRegistro = diaData.registros.find(r => r.tipo === 'Abono');
+            const abonoRegistro = diaData.registros.find((r: RegistroPonto) => r.tipo === 'Abono');
             if (diaData.isCompensacaoAbono) {
                 return abonoRegistro?.observacao || 'Folga Compensatória';
             }
@@ -265,10 +270,13 @@ const FolhaPontoPrint: React.FC<FolhaPontoPrintProps> = ({
     return (
         <div className="print-container">
             <div className="print-header">
-                <h1 style={{ fontSize: '18px', fontWeight: 'bold' }}>FOLHA DE PONTO MENSAL</h1>
-                <p style={{ fontSize: '14px' }}>Empresa: {empresaNome}</p>
-                <p style={{ fontSize: '14px' }}>Funcionário: {funcionario.nome}</p>
-                <p style={{ fontSize: '14px' }}>Mês de Referência: {format(mes, 'MMMM/yyyy', { locale: ptBR })}</p>
+                {logoUrl && <img src={logoUrl} alt={ownerName} className="print-logo" />}
+                <div className="print-header-content">
+                    <h1>FOLHA DE PONTO MENSAL</h1>
+                    <p>Empresa: {ownerName}</p>
+                    <p>Funcionário: {funcionario.nome}</p>
+                    <p>Mês de Referência: {format(mes, 'MMMM/yyyy', { locale: ptBR })}</p>
+                </div>
             </div>
 
             <div className="print-section">
@@ -352,7 +360,7 @@ const FolhaPontoPrint: React.FC<FolhaPontoPrintProps> = ({
             
             <div className="print-signatures">
                 <div className="print-signature-line">Assinatura do Funcionário</div>
-                <div className="print-signature-line">Assinatura da Empresa ({empresaNome})</div>
+                <div className="print-signature-line">Assinatura da Empresa ({ownerName})</div>
             </div>
         </div>
     );

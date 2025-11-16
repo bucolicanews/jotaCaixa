@@ -13,6 +13,7 @@ import { usePrint } from '@/hooks/use-print';
 import { SaldoContaDetalhada } from '@/types/saldo-conta';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../ui/dropdown-menu';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '../ui/alert-dialog';
+import { useOwnerBranding } from '@/hooks/use-owner-branding'; // NOVO IMPORT
 
 interface Lancamento {
   id: string;
@@ -36,6 +37,7 @@ const DetalhesLancamentosDialog: React.FC<DetalhesLancamentosDialogProps> = ({ c
   const [loading, setLoading] = useState(true);
   const [isDeleting, setIsDeleting] = useState(false);
   const { printContent } = usePrint();
+  const { logoUrl, ownerName } = useOwnerBranding(); // USANDO HOOK DE BRANDING
 
   const fetchLancamentos = useCallback(async () => {
     if (!conta) return;
@@ -94,8 +96,11 @@ const DetalhesLancamentosDialog: React.FC<DetalhesLancamentosDialogProps> = ({ c
 
     const printHtml = `
       <div class="print-header">
-        <h1>Extrato da Conta: ${conta.nome}</h1>
-        <p>Gerado em: ${format(new Date(), 'dd/MM/yyyy HH:mm', { locale: ptBR })}</p>
+        ${logoUrl ? `<img src="${logoUrl}" alt="${ownerName}" class="print-logo" />` : ''}
+        <div class="print-header-content">
+            <h1>Extrato da Conta: ${conta.nome}</h1>
+            <p>Empresa: ${ownerName} | Gerado em: ${format(new Date(), 'dd/MM/yyyy HH:mm', { locale: ptBR })}</p>
+        </div>
       </div>
       <div class="print-section">
         <h2 style="font-size: 14px; font-weight: bold;">Resumo</h2>
@@ -171,7 +176,7 @@ const DetalhesLancamentosDialog: React.FC<DetalhesLancamentosDialogProps> = ({ c
                     <TableHead className="w-[40%]">Descrição</TableHead>
                     <TableHead className="w-[15%]">Tipo</TableHead>
                     <TableHead className="w-[15%] text-right">Valor</TableHead>
-                    <TableHead className="w-[10%] text-right">Ações</TableHead> {/* NOVA COLUNA */}
+                    <TableHead className="w-[10%] text-right">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>

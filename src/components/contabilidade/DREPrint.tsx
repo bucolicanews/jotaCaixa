@@ -20,6 +20,7 @@ interface DREPrintProps {
   totalCusto: number;
   totalDespesa: number;
   resultadoLiquido: number;
+  logoUrl: string | null; // NOVO PROP
 }
 
 const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -32,6 +33,7 @@ const DREPrint: React.FC<DREPrintProps> = ({
   totalCusto,
   totalDespesa,
   resultadoLiquido,
+  logoUrl, // USANDO NOVO PROP
 }) => {
     
     const getPeriodoDisplay = () => {
@@ -104,9 +106,12 @@ const DREPrint: React.FC<DREPrintProps> = ({
     return (
         <div className="print-container">
             <div className="print-header">
-                <h1 style={{ fontSize: '18px', fontWeight: 'bold' }}>DEMONSTRAÇÃO DO RESULTADO DO EXERCÍCIO (DRE)</h1>
-                <p style={{ fontSize: '14px' }}>Empresa: {empresaNome}</p>
-                <p style={{ fontSize: '14px' }}>{getPeriodoDisplay()}</p>
+                {logoUrl && <img src={logoUrl} alt={empresaNome} className="print-logo" />}
+                <div className="print-header-content">
+                    <h1>DEMONSTRAÇÃO DO RESULTADO DO EXERCÍCIO (DRE)</h1>
+                    <p>Empresa: {empresaNome}</p>
+                    <p>{getPeriodoDisplay()} | Gerado em: {format(new Date(), 'dd/MM/yyyy HH:mm', { locale: ptBR })}</p>
+                </div>
             </div>
 
             {/* Seção de Receitas */}

@@ -24,6 +24,7 @@ import ReactDOMServer from 'react-dom/server';
 import ClientesPrint from '@/components/ClientesPrint';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { BASE_URL } from '@/config/app-config';
+import { useOwnerBranding } from '@/hooks/use-owner-branding'; // NOVO IMPORT
 
 // Tipo para o filtro de empresa (inclui o Admin)
 interface EmpresaFiltro {
@@ -60,6 +61,8 @@ interface ClienteCRComStatus extends Cliente {
 const ClientesPage = () => {
   const { usuario, perfil, role, carregando: carregandoSessao } = useSessao();
   const { printContent } = usePrint();
+  const { logoUrl, ownerName } = useOwnerBranding(); // USANDO HOOK DE BRANDING
+  
   const [clientesCR, setClientesCR] = useState<ClienteCRComStatus[]>([]); // Clientes de Contas a Receber
   const [empresasSistema, setEmpresasSistema] = useState<EmpresaSistema[]>([]); // Empresas do sistema (tbl_clientes)
   const [carregandoDados, setCarregandoDados] = useState(true);
@@ -971,6 +974,8 @@ const ClientesPage = () => {
               isSupervisao={isAdmin}
               activeTab={activeTab as 'clientes_cr' | 'empresas_sistema'}
               activeEmpresaTab={'ativos'} // Usando um valor padrão, pois as sub-abas foram removidas
+              logoUrl={logoUrl} // PASSANDO LOGO
+              ownerName={ownerName} // PASSANDO NOME
           />
       );
 

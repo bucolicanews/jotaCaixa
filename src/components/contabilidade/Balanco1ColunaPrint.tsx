@@ -19,6 +19,7 @@ interface Balanco1ColunaPrintProps {
   totalPassivo: number;
   totalPatrimonioLiquido: number;
   resultadoLiquido: number;
+  logoUrl: string | null; // NOVO PROP
 }
 
 const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -31,6 +32,7 @@ const Balanco1ColunaPrint: React.FC<Balanco1ColunaPrintProps> = ({
   totalPassivo,
   totalPatrimonioLiquido,
   resultadoLiquido,
+  logoUrl, // USANDO NOVO PROP
 }) => {
   
   const getContasPorTipo = (tipo: ContaBalanco['tipo_principal']) => {
@@ -65,9 +67,12 @@ const Balanco1ColunaPrint: React.FC<Balanco1ColunaPrintProps> = ({
   
   const renderHeader = (title: string) => (
     <div className="print-header" style={{ marginBottom: '15px' }}>
-      <h1 style={{ fontSize: '18px', fontWeight: 'bold' }}>{title}</h1>
-      <p style={{ fontSize: '14px' }}>Empresa: {empresaNome}</p>
-      <p style={{ fontSize: '14px' }}>Data de Referência: {format(endDate, 'dd/MM/yyyy', { locale: ptBR })}</p>
+        {logoUrl && <img src={logoUrl} alt={empresaNome} className="print-logo" />}
+        <div className="print-header-content">
+            <h1>{title}</h1>
+            <p>Empresa: {empresaNome}</p>
+            <p>Data de Referência: {format(endDate, 'dd/MM/yyyy', { locale: ptBR })}</p>
+        </div>
     </div>
   );
   
@@ -104,8 +109,8 @@ const Balanco1ColunaPrint: React.FC<Balanco1ColunaPrintProps> = ({
   const ativoContas = getContasPorTipo('Ativo');
   const passivoContas = getContasPorTipo('Passivo');
   const plContas = getContasPorTipo('Patrimonio Liquido');
-  const receitaContas = getContasPorTipo('Resultado').filter(c => c.Conta.startsWith('3'));
-  const despesaContas = getContasPorTipo('Resultado').filter(c => c.Conta.startsWith('4') || c.Conta.startsWith('5'));
+  const receitaContas = getContasPorTipo('Resultado').filter(c => c.Conta.startsWith('4'));
+  const despesaContas = getContasPorTipo('Resultado').filter(c => c.Conta.startsWith('5') || c.Conta.startsWith('6'));
   
   const totalReceita = receitaContas.reduce((sum, c) => sum + c.saldo_final, 0);
   const totalDespesa = despesaContas.reduce((sum, c) => sum + c.saldo_final, 0);

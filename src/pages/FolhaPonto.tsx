@@ -24,6 +24,7 @@ import { usePrint } from '@/hooks/use-print';
 import * as ReactDOMServer from 'react-dom/server'; // CORREÇÃO: Importação como namespace
 import FolhaPontoPrint from '@/components/ponto/FolhaPontoPrint';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { useOwnerBranding } from '@/hooks/use-owner-branding'; // NOVO IMPORT
 
 // Tipo simplificado para o usuário que estamos buscando
 interface UsuarioPonto extends UsuarioProfile {
@@ -37,6 +38,7 @@ const FolhaPonto: React.FC = () => {
   const [searchParams] = useSearchParams();
   const mode = searchParams.get('mode');
   const { printContent } = usePrint();
+  const { logoUrl, ownerName } = useOwnerBranding(); // USANDO HOOK DE BRANDING
   
   const [usuarios, setUsuarios] = useState<UsuarioPonto[]>([]);
   const [carregandoDados, setCarregandoDados] = useState(true);
@@ -346,7 +348,7 @@ const FolhaPonto: React.FC = () => {
       
       const printComponent = (
           <FolhaPontoPrint
-              empresaNome={funcionarioSelecionado.cliente_nome || 'N/A'}
+              empresaNome={funcionarioSelecionado.cliente_nome || ownerName}
               funcionario={{
                   id: funcionarioSelecionado.id,
                   nome: funcionarioSelecionado.nome,
@@ -358,6 +360,8 @@ const FolhaPonto: React.FC = () => {
                   ferias: feriasDoFuncionario,
               }}
               mes={dataSelecionada}
+              logoUrl={logoUrl} // PASSANDO LOGO
+              ownerName={ownerName} // PASSANDO NOME
           />
       );
 

@@ -19,7 +19,9 @@ interface FluxoCaixaPrintProps {
   saldoFinalOuVariacao: number;
   tituloSaldoFinal: string;
   filtroPeriodo: DateRange | undefined;
-  saldoInicialConta: number; // NOVO CAMPO
+  saldoInicialConta: number;
+  logoUrl: string | null; // NOVO PROP
+  ownerName: string; // NOVO PROP
 }
 
 const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -32,7 +34,9 @@ const FluxoCaixaPrint: React.FC<FluxoCaixaPrintProps> = ({
   saldoFinalOuVariacao,
   tituloSaldoFinal,
   filtroPeriodo,
-  saldoInicialConta, // Usando o novo campo
+  saldoInicialConta,
+  logoUrl, // USANDO NOVO PROP
+  ownerName, // USANDO NOVO PROP
 }) => {
     
     const getPeriodoDisplay = () => {
@@ -47,8 +51,11 @@ const FluxoCaixaPrint: React.FC<FluxoCaixaPrintProps> = ({
   return (
     <div className="print-container">
       <div className="print-header">
-        <h1 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '5px' }}>RELATÓRIO DE FLUXO DE CAIXA</h1>
-        <p style={{ fontSize: '10px', color: '#555' }}>{getPeriodoDisplay()} | Gerado em: {format(new Date(), 'dd/MM/yyyy HH:mm', { locale: ptBR })}</p>
+        {logoUrl && <img src={logoUrl} alt={ownerName} className="print-logo" />}
+        <div className="print-header-content">
+            <h1>RELATÓRIO DE FLUXO DE CAIXA</h1>
+            <p>{getPeriodoDisplay()} | Empresa: {ownerName} | Gerado em: {format(new Date(), 'dd/MM/yyyy HH:mm', { locale: ptBR })}</p>
+        </div>
       </div>
 
       <div className="print-section" style={{ marginBottom: '20px' }}>

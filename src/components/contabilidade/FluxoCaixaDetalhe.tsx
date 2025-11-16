@@ -40,9 +40,11 @@ interface FluxoCaixaDetalheProps {
   empresaId: string;
   contas: SaldoContaDetalhada[];
   totalSaldo: number;
+  logoUrl: string | null; // NOVO PROP
+  ownerName: string; // NOVO PROP
 }
 
-const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas, totalSaldo }) => {
+const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas, totalSaldo, logoUrl, ownerName }) => {
   const { printContent } = usePrint();
   
   const [lancamentos, setLancamentos] = useState<Lancamento[]>([]);
@@ -171,6 +173,8 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
             tituloSaldoFinal={tituloSaldoFinal}
             filtroPeriodo={filtroPeriodo}
             saldoInicialConta={saldoInicialConta}
+            logoUrl={logoUrl} // PASSANDO LOGO
+            ownerName={ownerName} // PASSANDO NOME
         />
     );
 

@@ -14,6 +14,7 @@ import { showError } from '@/utils/toast';
 import { format as formatDateFns } from 'date-fns';
 import { Input } from '@/components/ui/input';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { useOwnerBranding } from '@/hooks/use-owner-branding'; // NOVO IMPORT
 
 interface ContasPagarHeaderProps {
     isSupervisao: boolean;
@@ -53,6 +54,7 @@ const ContasPagarHeader: React.FC<ContasPagarHeaderProps> = ({
     setFiltroTexto,
 }) => {
     const { printContent } = usePrint();
+    const { logoUrl, ownerName } = useOwnerBranding(); // USANDO HOOK DE BRANDING
 
     const getDataForPrint = () => {
         let data: any[] = [];
@@ -71,10 +73,10 @@ const ContasPagarHeader: React.FC<ContasPagarHeaderProps> = ({
                 'Origem': c.origem,
             }));
         } else if (activeTab === 'parcelas') {
-            headers = ['ID Parcela', 'ID Conta', 'Fornecedor', 'Descrição', 'Nº Parcela', 'Vencimento', 'Valor Parcela', 'Vlr Pago', 'Status'];
+            headers = ['ID Parcela', 'ID Conta', 'Fornecedor', 'Descrição', 'Nº Parcela', 'Vencimento', 'Valor Parcela', 'Vlr Pago', 'Status', 'Origem'];
             data = parcelas.map(p => ({
                 'ID Parcela': p.id,
-                'ID Conta': p.conta_pagar_id,
+                'ID Conta': p.admin_contas_pagar?.id || 'N/A',
                 'Fornecedor': p.admin_contas_pagar?.fornecedor || 'N/A',
                 'Descrição': p.admin_contas_pagar?.descricao || 'N/A',
                 'Nº Parcela': p.numero_parcela,
@@ -82,6 +84,7 @@ const ContasPagarHeader: React.FC<ContasPagarHeaderProps> = ({
                 'Valor Parcela': p.valor_parcela,
                 'Vlr Pago': p.valor_pago || 0,
                 'Status': p.status,
+                'Origem': p.admin_contas_pagar?.origem || 'manual',
             }));
         } else if (activeTab === 'pagamentos') {
             headers = ['ID Pagamento', 'Data Pagamento', 'ID Conta', 'Fornecedor', 'Descrição', 'Valor Pago', 'Conta Origem'];
@@ -110,6 +113,8 @@ const ContasPagarHeader: React.FC<ContasPagarHeaderProps> = ({
                 data={data} 
                 activeTab={activeTab} 
                 filtroPeriodo={filtroPeriodo} 
+                logoUrl={logoUrl} // PASSANDO LOGO
+                ownerName={ownerName} // PASSANDO NOME
             />
         );
 

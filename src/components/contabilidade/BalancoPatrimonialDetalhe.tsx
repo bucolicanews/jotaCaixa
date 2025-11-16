@@ -17,10 +17,13 @@ import { ClienteProfile } from '@/types/usuario';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../ui/dropdown-menu';
 import Balanco1ColunaPrint from './Balanco1ColunaPrint';
 import { useContabilConfig } from '@/hooks/use-contabil-config';
+import { showError } from '@/utils/toast'; // NOVO IMPORT
 
 interface BalancoPatrimonialDetalheProps {
   endDate: Date;
   filtroSomenteComSaldo: boolean; // NOVO PROP
+  logoUrl: string | null; // NOVO PROP
+  ownerName: string; // NOVO PROP
 }
 
 // Tipo auxiliar para a conta (copiado do hook)
@@ -34,13 +37,13 @@ interface ContaBalanco {
   is_conta_resultado: boolean; // Adicionado para filtragem
 }
 
-const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ endDate, filtroSomenteComSaldo }) => {
+const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ endDate, filtroSomenteComSaldo, logoUrl, ownerName }) => {
   const { perfil, role } = useSessao();
   const { configMap } = useContabilConfig(); // Obtendo o mapeamento
   const { contas, totalAtivo, totalPassivo, totalPatrimonioLiquido, resultadoLiquido, totalPassivoPL, carregando } = useBalancoPatrimonial(endDate);
   const { printContent } = usePrint();
   
-  const empresaNome = role === 'Admin' ? 'Admin' : (perfil as ClienteProfile)?.nome || 'Empresa';
+  const empresaNome = ownerName; // USANDO O NOME PASSADO VIA PROP
 
   // CÁLCULO CORRIGIDO: Total do lado direito do balanço
   // const totalPassivoPL = totalPassivo + totalPatrimonioLiquido + resultadoLiquido; // REMOVIDO, AGORA VEM DO HOOK
@@ -69,7 +72,8 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
       contasComSaldo.forEach(c => {
           let currentConta = c.Conta;
           while (currentConta.includes('.')) {
-              currentConta = currentConta.substring(0, currentConta.lastIndexOf('.'));
+              const lastDot = currentConta.lastIndexOf('.');
+              currentConta = currentConta.substring(0, lastDot);
               const parent = list.find(p => p.Conta === currentConta && p.Analitica === 'Não');
               if (parent) {
                   contasIncluidas.add(parent.Conta);
@@ -150,7 +154,7 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
       if (filtroSomenteComSaldo && isZero && c.Analitica === 'Sim') return null;
 
       // Calcula o nível de indentação baseado no código da conta (ex: 1.1.1.1)
-      const level = c.Conta.split('.filter').length > 1 ? c.Conta.split('.').filter(p => p.length > 0).length : 1;
+      const level = c.Conta.split('.').filter(p => p.length > 0).length;
       const paddingLeft = (level - 1) * 10;
 
       return (
@@ -173,11 +177,21 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
   };
   
   const handlePrint = (onlyWithBalance: boolean, formatType: '2colunas' | '1coluna') => {
+    if (!endDate) {
+        showError('Selecione uma data final para imprimir.');
+        return;
+    }
+    
     // A filtragem é feita aqui antes de passar para o componente de impressão
     const contasParaImpressao = onlyWithBalance 
         ? contas.filter(c => Math.abs(c.saldo_final) >= 0.01 || c.Analitica === 'Não')
         : contas;
         
+    if (contasParaImpressao.length === 0) {
+        showError('Nenhum dado para imprimir.');
+        return;
+    }
+    
     let printComponent;
     let fileName;
     
@@ -203,25 +217,27 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
     if (formatType === '2colunas') {
         printComponent = (
             <BalancoPatrimonialPrint
-                empresaNome={empresaNome}
+                empresaNome={ownerName}
                 endDate={endDate}
                 contas={contasParaImpressao}
                 totalAtivo={totalAtivo}
                 totalPassivoPL={totalPassivoPL}
                 isBalanced={isBalanced}
+                logoUrl={logoUrl} // PASSANDO LOGO
             />
         );
         fileName = `Balanço 2 Colunas - ${format(endDate, 'dd/MM/yyyy')}`;
     } else {
         printComponent = (
             <Balanco1ColunaPrint
-                empresaNome={empresaNome}
+                empresaNome={ownerName}
                 endDate={endDate}
                 contas={contasParaImpressao}
                 totalAtivo={totalAtivo}
                 totalPassivo={totalPassivoBase} // Passando o Passivo real
                 totalPatrimonioLiquido={totalPatrimonioLiquido} // Passando o PL real
                 resultadoLiquido={resultadoLiquidoCalc}
+                logoUrl={logoUrl} // PASSANDO LOGO
             />
         );
         fileName = `Balanço 1 Coluna - ${format(endDate, 'dd/MM/yyyy')}`;

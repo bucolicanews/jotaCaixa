@@ -18,6 +18,7 @@ interface BalancoPatrimonialPrintProps {
   totalAtivo: number;
   totalPassivoPL: number;
   isBalanced: boolean;
+  logoUrl: string | null; // NOVO PROP
 }
 
 const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -29,6 +30,7 @@ const BalancoPatrimonialPrint: React.FC<BalancoPatrimonialPrintProps> = ({
   totalAtivo,
   totalPassivoPL,
   isBalanced,
+  logoUrl, // USANDO NOVO PROP
 }) => {
   
   // Função para renderizar assinaturas
@@ -76,10 +78,12 @@ const BalancoPatrimonialPrint: React.FC<BalancoPatrimonialPrintProps> = ({
   return (
     <div className="print-container">
       <div className="print-header">
-        <h1 style={{ fontSize: '18px', fontWeight: 'bold' }}>BALANÇO PATRIMONIAL</h1>
-        <p style={{ fontSize: '14px' }}>Empresa: {empresaNome}</p>
-        <p style={{ fontSize: '14px' }}>Data de Referência: {format(endDate, 'dd/MM/yyyy', { locale: ptBR })}</p>
-        <p style={{ fontSize: '14px', color: isBalanced ? 'green' : 'red' }}>Status: {isBalanced ? 'Equilibrado' : 'Desequilibrado'}</p>
+        {logoUrl && <img src={logoUrl} alt={empresaNome} className="print-logo" />}
+        <div className="print-header-content">
+            <h1>BALANÇO PATRIMONIAL</h1>
+            <p>Empresa: {empresaNome}</p>
+            <p>Data de Referência: {format(endDate, 'dd/MM/yyyy', { locale: ptBR })} | Status: {isBalanced ? 'Equilibrado' : 'Desequilibrado'}</p>
+        </div>
       </div>
 
       <div className="print-section" style={{ display: 'flex', justifyContent: 'space-between', gap: '20px' }}>

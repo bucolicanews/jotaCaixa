@@ -15,6 +15,7 @@ import { formatarData } from '@/utils/formatters';
 import { Input } from '@/components/ui/input';
 import { ExtendedParcelaDetalhada, ContaReceberComProgresso, AdminRecebimento } from '@/types/contas-receber'; // Importação corrigida
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../ui/dropdown-menu';
+import { useOwnerBranding } from '@/hooks/use-owner-branding'; // NOVO IMPORT
 
 type FiltroOrigem = 'todos' | 'contrato' | 'assinatura_recorrente' | 'manual';
 
@@ -49,6 +50,7 @@ const ContasReceberAcoes: React.FC<ContasReceberAcoesProps> = ({
   parcelasFiltradas,
   recebimentosFiltrados,
   clienteNomeMap,
+  isAdmin,
   filtroStatus,
   setFiltroStatus,
   filtroOrigem,
@@ -58,6 +60,7 @@ const ContasReceberAcoes: React.FC<ContasReceberAcoesProps> = ({
 }) => {
   const [exportLoading, setExportLoading] = useState(false);
   const { printContent } = usePrint();
+  const { logoUrl, ownerName } = useOwnerBranding(); // USANDO HOOK DE BRANDING
 
   const getDataForExport = () => {
     let data: any[] = [];
@@ -185,6 +188,8 @@ const ContasReceberAcoes: React.FC<ContasReceberAcoesProps> = ({
             data={data} 
             activeTab={activeTab} 
             filtroPeriodo={filtroPeriodo} 
+            logoUrl={logoUrl} // PASSANDO LOGO
+            ownerName={ownerName} // PASSANDO NOME
         />
     );
 

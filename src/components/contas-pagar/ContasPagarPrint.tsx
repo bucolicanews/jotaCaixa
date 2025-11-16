@@ -7,8 +7,8 @@ interface ContasPagarPrintProps {
     data: any[];
     activeTab: string;
     filtroPeriodo: DateRange | undefined;
-    // NOVO PROP: Orientação
-    orientation?: 'portrait' | 'landscape';
+    logoUrl: string | null; // NOVO PROP
+    ownerName: string; // NOVO PROP
 }
 
 const TAB_TITLES: Record<string, string> = {
@@ -19,7 +19,7 @@ const TAB_TITLES: Record<string, string> = {
 
 const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
-const ContasPagarPrint: React.FC<ContasPagarPrintProps> = ({ data, activeTab, filtroPeriodo }) => {
+const ContasPagarPrint: React.FC<ContasPagarPrintProps> = ({ data, activeTab, filtroPeriodo, logoUrl, ownerName }) => {
     
     const getPeriodoDisplay = () => {
         if (!filtroPeriodo?.from) return 'Todo o Período';
@@ -58,13 +58,13 @@ const ContasPagarPrint: React.FC<ContasPagarPrintProps> = ({ data, activeTab, fi
                 case 'ID Parcela': return { width: '8%', fontSize: '8pt' };
                 case 'ID Conta': return { width: '8%', fontSize: '8pt' };
                 case 'Fornecedor': return { width: '10%' };
-                case 'Descrição': return { width: '20%' };
+                case 'Descrição': return { width: '15%' };
                 case 'Nº Parcela': return { width: '5%', textAlign: 'center' as const };
                 case 'Vencimento': return { width: '8%' };
                 case 'Valor Parcela': return { width: '8%', textAlign: 'right' as const };
                 case 'Vlr Pago': return { width: '8%', textAlign: 'right' as const };
                 case 'Status': return { width: '8%' };
-                case 'Origem': return { width: '7%' };
+                case 'Origem': return { width: '12%' };
                 default: return {};
             }
         }
@@ -110,9 +110,12 @@ const ContasPagarPrint: React.FC<ContasPagarPrintProps> = ({ data, activeTab, fi
     return (
         <div className="print-container">
             <div className="print-header">
-                <h1 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '5px' }}>RELATÓRIO DE CONTAS A PAGAR</h1>
-                <h2 style={{ fontSize: '12px', fontWeight: 'normal', marginBottom: '5px' }}>{TAB_TITLES[activeTab] || 'Relatório Personalizado'}</h2>
-                <p style={{ fontSize: '10px', color: '#555' }}>{getPeriodoDisplay()} | Gerado em: {format(new Date(), 'dd/MM/yyyy HH:mm', { locale: ptBR })}</p>
+                {logoUrl && <img src={logoUrl} alt={ownerName} className="print-logo" />}
+                <div className="print-header-content">
+                    <h1>RELATÓRIO DE CONTAS A PAGAR</h1>
+                    <h2 style={{ fontSize: '12px', fontWeight: 'normal', marginBottom: '5px' }}>{TAB_TITLES[activeTab] || 'Relatório Personalizado'}</h2>
+                    <p>{getPeriodoDisplay()} | Empresa: {ownerName} | Gerado em: {format(new Date(), 'dd/MM/yyyy HH:mm', { locale: ptBR })}</p>
+                </div>
             </div>
 
             <div className="print-section">

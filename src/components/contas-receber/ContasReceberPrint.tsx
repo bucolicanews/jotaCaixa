@@ -8,8 +8,8 @@ interface ContasReceberPrintProps {
     data: any[];
     activeTab: string;
     filtroPeriodo: DateRange | undefined;
-    // NOVO PROP: Orientação
-    orientation?: 'portrait' | 'landscape';
+    logoUrl: string | null; // NOVO PROP
+    ownerName: string; // NOVO PROP
 }
 
 const TAB_TITLES: Record<string, string> = {
@@ -18,7 +18,7 @@ const TAB_TITLES: Record<string, string> = {
     'recebimentos': 'Histórico de Parcelas Recebidas',
 };
 
-const ContasReceberPrint: React.FC<ContasReceberPrintProps> = ({ data, activeTab, filtroPeriodo }) => {
+const ContasReceberPrint: React.FC<ContasReceberPrintProps> = ({ data, activeTab, filtroPeriodo, logoUrl, ownerName }) => {
     
     const getPeriodoDisplay = () => {
         if (!filtroPeriodo?.from) return 'Todo o Período';
@@ -67,7 +67,7 @@ const ContasReceberPrint: React.FC<ContasReceberPrintProps> = ({ data, activeTab
                 default: return {};
             }
         }
-        // Total de colunas no Recebimentos (8)
+        // Total de colunas no Recebimentos (9)
         if (activeTab === 'recebimentos') {
             switch (header) {
                 case 'ID Recebimento': return { width: '10%', fontSize: '8pt' };
@@ -77,8 +77,8 @@ const ContasReceberPrint: React.FC<ContasReceberPrintProps> = ({ data, activeTab
                 case 'Descrição': return { width: '20%' };
                 case 'Valor Recebido': return { width: '10%', textAlign: 'right' as const };
                 case 'Forma Pagamento': return { width: '10%' };
-                case 'Conta/Caixa': return { width: '18%' };
-                case 'Origem': return { width: '10%' };
+                case 'Conta/Caixa': return { width: '10%' };
+                case 'Origem': return { width: '8%' };
                 default: return {};
             }
         }
@@ -114,9 +114,12 @@ const ContasReceberPrint: React.FC<ContasReceberPrintProps> = ({ data, activeTab
     return (
         <div className="print-container">
             <div className="print-header">
-                <h1 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '5px' }}>RELATÓRIO DE CONTAS A RECEBER</h1>
-                <h2 style={{ fontSize: '12px', fontWeight: 'normal', marginBottom: '5px' }}>{TAB_TITLES[activeTab] || 'Relatório Personalizado'}</h2>
-                <p style={{ fontSize: '10px', color: '#555' }}>{getPeriodoDisplay()} | Gerado em: {format(new Date(), 'dd/MM/yyyy HH:mm', { locale: ptBR })}</p>
+                {logoUrl && <img src={logoUrl} alt={ownerName} className="print-logo" />}
+                <div className="print-header-content">
+                    <h1>RELATÓRIO DE CONTAS A RECEBER</h1>
+                    <h2 style={{ fontSize: '12px', fontWeight: 'normal', marginBottom: '5px' }}>{TAB_TITLES[activeTab] || 'Relatório Personalizado'}</h2>
+                    <p>{getPeriodoDisplay()} | Empresa: {ownerName} | Gerado em: {format(new Date(), 'dd/MM/yyyy HH:mm', { locale: ptBR })}</p>
+                </div>
             </div>
 
             <div className="print-section">

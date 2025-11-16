@@ -48,7 +48,33 @@ export function usePrint() {
             padding-bottom: 10px; 
             margin-bottom: 15px; 
             page-break-after: avoid;
+            display: flex; /* Adicionado para layout de logo/título */
+            align-items: center;
+            justify-content: space-between;
           }
+          
+          .print-header-content {
+              flex-grow: 1;
+              margin-left: 15px;
+          }
+          
+          .print-logo {
+              max-height: 50px;
+              max-width: 150px;
+              object-fit: contain;
+          }
+          
+          .print-header h1 {
+              font-size: 16px;
+              font-weight: bold;
+              margin-bottom: 5px;
+          }
+          .print-header p {
+              margin: 0;
+              font-size: 10px;
+              color: #555;
+          }
+          
           .print-section { 
             margin-bottom: 15px; 
             padding: 0; 

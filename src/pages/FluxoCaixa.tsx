@@ -6,9 +6,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import useSaldoContaCalculado from '@/hooks/use-saldo-conta-calculado';
 import FluxoCaixaDetalhe from '@/components/contabilidade/FluxoCaixaDetalhe';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
+import { useOwnerBranding } from '@/hooks/use-owner-branding'; // NOVO IMPORT
 
 const FluxoCaixa: React.FC = () => {
   const { usuario, perfil, role, carregando: carregandoSessao } = useSessao();
+  const { logoUrl, ownerName } = useOwnerBranding(); // USANDO HOOK DE BRANDING
   
   const getEmpresaId = () => {
     if (role === 'Admin') return usuario?.id || null;
@@ -50,6 +52,8 @@ const FluxoCaixa: React.FC = () => {
         empresaId={empresaId}
         contas={contas}
         totalSaldo={totalSaldo}
+        logoUrl={logoUrl} // PASSANDO LOGO
+        ownerName={ownerName} // PASSANDO NOME
       />
     </LayoutPrincipal>
   );
