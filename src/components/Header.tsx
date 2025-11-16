@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTheme } from '@/contexts/ThemeProvider';
 import { Button } from '@/components/ui/button';
-import { Sun, Moon, LogOut, Menu, User, Settings, Key, CalendarCheck, Package, DollarSign, MessageSquare, Loader2 } from 'lucide-react';
+import { Sun, Moon, LogOut, Menu, User, Settings, Key, CalendarCheck, Package, DollarSign, MessageSquare } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
@@ -39,6 +39,7 @@ const ThemeToggle = () => {
 const Header: React.FC = () => {
   const [sheetOpen, setSheetOpen] = useState(false);
   const { perfil, role, usuario } = useSessao();
+  const [tituloApp, setTituloApp] = useState('Fluxo de Caixa');
   const [planoDetalhes, setPlanoDetalhes] = useState<{ nome: string, preco: number } | null>(null);
   const [adminBranding, setAdminBranding] = useState<{ logoUrl: string | null, nome: string | null } | null>(null);
   const [loadingBranding, setLoadingBranding] = useState(true);
@@ -87,27 +88,49 @@ const Header: React.FC = () => {
 
 
   useEffect(() => {
-    const updatePlanoDetails = async () => {
+    const updateTitle = async () => {
       if (!perfil || !role) {
-        setPlanoDetalhes(null);
+        setTituloApp('Fluxo de Caixa');
         return;
       }
       
-      let currentPlanoId: string | null = null;
+      // CRÍTICO: Se estiver carregando o branding, espera.
+      if (loadingBranding && (isAdmin || isUserOfAdmin)) return;
 
-      if (isClient) {
+      let currentPlanoId: string | null = null;
+      let appName = 'Fluxo de Caixa';
+
+      if (isAdmin) {
+        const adminProfile = perfil as AdminProfile;
+        appName = adminProfile.nome;
+      } else if (isClient) {
+        appName = clienteProfile.nome;
         currentPlanoId = clienteProfile.plano_id || null; 
-      } else if (role === 'Usuario' && userProfile.cliente_id) {
-        // Funcionário de Cliente: Busca o plano do Cliente
-        const proprietarioId = userProfile.cliente_id;
-        const { data: clienteData } = await supabase
-            .from('tbl_clientes')
-            .select('plano_id')
-            .eq('id', proprietarioId)
-            .single();
-            
-        currentPlanoId = clienteData?.plano_id || null;
+      } else if (role === 'Usuario') {
+        // Se for funcionário do Admin, usa o nome do Admin (já carregado no branding)
+        if (isUserOfAdmin) {
+            appName = adminBranding?.nome ?? 'Admin';
+        } else if (userProfile.cliente_id) {
+            // Se for funcionário de Cliente, busca o nome do Cliente
+            const proprietarioId = userProfile.cliente_id;
+            const { data: clienteData } = await supabase
+                .from('tbl_clientes')
+                .select('nome, plano_id')
+                .eq('id', proprietarioId)
+                .single();
+                
+            if (clienteData) {
+                appName = clienteData.nome;
+                currentPlanoId = clienteData.plano_id || null;
+            } else {
+                appName = 'Usuário - Sem Empresa';
+            }
+        } else {
+            appName = 'Usuário - Sem Empresa';
+        }
       }
+      
+      setTituloApp(appName);
       
       // Buscar nome e preço do plano
       if (currentPlanoId) {
@@ -127,9 +150,8 @@ const Header: React.FC = () => {
       }
     };
     
-    updatePlanoDetails();
-  }, [perfil, role, isClient, clienteProfile, userProfile]);
-
+    updateTitle();
+  }, [perfil, role, isClient, isAdmin, isUserOfAdmin, clienteProfile, userProfile, adminBranding, loadingBranding]);
 
   const lidarComSair = async () => {
     await supabase.auth.signOut();
@@ -146,10 +168,6 @@ const Header: React.FC = () => {
   const dataFimFormatada = dataFimAcesso ? format(parseISO(dataFimAcesso), 'dd/MM/yyyy', { locale: ptBR }) : null;
   
   const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
-  
-  // Lógica para o Título Principal
-  const mainTitle = adminBranding?.nome || perfil?.nome || 'Fluxo de Caixa';
-  const logoUrl = adminBranding?.logoUrl;
 
   return (
     <header className={cn(
@@ -173,25 +191,9 @@ const Header: React.FC = () => {
           </SheetContent>
         </Sheet>
         
-        {/* Título Principal (Logo ou Nome) */}
-        <h1 
-            data-dyad-id="src\components\Header.tsx:197:8" 
-            data-dyad-name="h1" 
-            className="text-xl font-bold text-primary truncate max-w-[200px] sm:max-w-none" 
-            title={mainTitle}
-        >
-            {loadingBranding ? (
-                <Loader2 className="h-6 w-6 animate-spin text-primary" />
-            ) : logoUrl ? (
-                <img 
-                    src={logoUrl} 
-                    alt="Logo da Empresa" 
-                    className="object-contain max-h-8 w-auto" 
-                    style={{ maxWidth: '100%' }}
-                />
-            ) : (
-                mainTitle
-            )}
+        {/* Título Dinâmico */}
+        <h1 className="text-xl font-bold text-primary truncate max-w-[200px] sm:max-w-none" title={tituloApp}>
+            {tituloApp}
         </h1>
       </div>
       
