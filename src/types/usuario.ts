@@ -125,6 +125,10 @@ export interface AdminUsuarioProfile {
     avatar_url?: string | null;
     permissoes: Record<string, boolean>;
     
+    // Campos de Branding do Admin (NOVO)
+    logo_admin?: string | null;
+    nome_admin?: string | null;
+    
     // Campos de Folga
     dias_folga_fixos?: string[] | null;
     folga_domingo_obrigatoria?: boolean | null;
