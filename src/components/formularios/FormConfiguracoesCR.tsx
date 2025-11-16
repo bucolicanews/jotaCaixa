@@ -21,13 +21,13 @@ const TIPOS_REGISTRO_CONTABIL = [
   { key: 'desconto', label: 'Descontos Concedidos (Despesa)', tipo: 'Resultado' }, // Despesa (DRE)
 ];
 
-// Esquema dinâmico para garantir que todos os campos estejam presentes
+// Esquema dinâmico: a_receber, parcela e recebimento são obrigatórios (min(1))
 const formSchema = z.object({
-  a_receber: z.string().uuid('Conta inválida para Contas a Receber.').nullable(),
-  parcela: z.string().uuid('Conta inválida para Parcelas a Receber.').nullable(),
-  recebimento: z.string().uuid('Conta inválida para Recebimentos.').nullable(),
-  desconto: z.string().uuid('Conta inválida para Descontos.').nullable(),
-  historico_padrao_id: z.string().uuid('Histórico inválido.').nullable(),
+  a_receber: z.string().min(1, 'A conta Contas a Receber (Sintético) é obrigatória.'),
+  parcela: z.string().min(1, 'A conta Parcelas a Receber (Analítico) é obrigatória.'),
+  recebimento: z.string().min(1, 'A conta Recebimentos (Crédito) é obrigatória.'),
+  desconto: z.string().optional().or(z.literal('')),
+  historico_padrao_id: z.string().optional().or(z.literal('')),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -45,11 +45,11 @@ const FormConfiguracoesCR: React.FC = () => {
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      a_receber: null,
-      parcela: null,
-      recebimento: null,
-      desconto: null,
-      historico_padrao_id: null,
+      a_receber: '', // Alterado para string vazia
+      parcela: '', // Alterado para string vazia
+      recebimento: '', // Alterado para string vazia
+      desconto: '',
+      historico_padrao_id: '',
     },
   });
   
@@ -116,12 +116,13 @@ const FormConfiguracoesCR: React.FC = () => {
       showError('Erro ao carregar configurações de CR: ' + contasError.message);
     } else if (contasData) {
       const mappedData = contasData.reduce((acc, item) => {
-        acc[item.tipo_registro as keyof FormValues] = item.conta_contabil_id;
+        // Converte null para string vazia para o formulário
+        acc[item.tipo_registro as keyof FormValues] = item.conta_contabil_id || '';
         return acc;
       }, {} as Partial<FormValues>);
       
       // Adiciona o ID do histórico padrão
-      mappedData.historico_padrao_id = historicoData?.historico_id || null;
+      mappedData.historico_padrao_id = historicoData?.historico_id || '';
       
       form.reset(mappedData);
     }
@@ -145,6 +146,7 @@ const FormConfiguracoesCR: React.FC = () => {
     const dataToUpsertContabil = TIPOS_REGISTRO_CONTABIL.map(tipo => ({
         proprietario_id: adminId,
         tipo_registro: tipo.key,
+        // Converte string vazia para null antes de salvar no DB
         conta_contabil_id: values[tipo.key as keyof FormValues] || null, 
     }));
     
@@ -184,9 +186,17 @@ const FormConfiguracoesCR: React.FC = () => {
     return <div className="flex justify-center items-center h-20"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>;
   }
   
-  const getContasDisponiveis = (tipo: 'Patrimonial' | 'Resultado') => {
+  const getContasDisponiveis = (tipo: 'Patrimonial' | 'Resultado', isSintetico: boolean = false) => {
       return contasContabeis
-          .filter(c => c.Analitica === 'Sim' && (tipo === 'Patrimonial' ? c.is_conta_patrimonial : c.is_conta_resultado))
+          .filter(c => {
+              // Se for Sintético, permite Analítica 'Não'
+              const analiticaMatch = isSintetico ? c.Analitica === 'Não' : c.Analitica === 'Sim';
+              
+              // Filtra pelo booleano correto
+              const tipoMatch = tipo === 'Patrimonial' ? c.is_conta_patrimonial : c.is_conta_resultado;
+              
+              return analiticaMatch && tipoMatch;
+          })
           .map(c => ({
               id: c.id,
               display: `${c.Conta} - ${c.Descricao}`,
@@ -203,37 +213,42 @@ const FormConfiguracoesCR: React.FC = () => {
         <Separator />
         
         <div className="space-y-4">
-            {TIPOS_REGISTRO_CONTABIL.map(tipo => (
-                <FormField
-                    key={tipo.key}
-                    control={form.control}
-                    name={tipo.key as keyof FormValues}
-                    render={({ field }) => (
-                        <FormItem>
-                            <FormLabel>{tipo.label} ({tipo.tipo})</FormLabel>
-                            <Select 
-                                onValueChange={field.onChange} 
-                                value={field.value || undefined}
-                            >
-                                <FormControl>
-                                    <SelectTrigger>
-                                        <SelectValue placeholder={`Selecione a conta ${tipo.tipo}`} />
-                                    </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                    <SelectItem value={null as any}>Nenhum (Não Mapear)</SelectItem>
-                                    {getContasDisponiveis(tipo.tipo as 'Patrimonial' | 'Resultado').map(c => (
-                                        <SelectItem key={c.id} value={c.id}>
-                                            {c.display}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                            <FormMessage />
-                        </FormItem>
-                    )}
-                />
-            ))}
+            {TIPOS_REGISTRO_CONTABIL.map(tipo => {
+                // Determina se o campo é o Sintético de CR
+                const isSinteticoCR = tipo.key === 'a_receber';
+                
+                return (
+                    <FormField
+                        key={tipo.key}
+                        control={form.control}
+                        name={tipo.key as keyof FormValues}
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>{tipo.label} ({tipo.tipo})</FormLabel>
+                                <Select 
+                                    onValueChange={field.onChange} 
+                                    value={field.value || ''} // Usa string vazia para o Select
+                                >
+                                    <FormControl>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder={`Selecione a conta ${tipo.tipo}`} />
+                                        </SelectTrigger>
+                                    </FormControl>
+                                    <SelectContent>
+                                        <SelectItem value={''}>Nenhum (Não Mapear)</SelectItem>
+                                        {getContasDisponiveis(tipo.tipo as 'Patrimonial' | 'Resultado', isSinteticoCR).map(c => (
+                                            <SelectItem key={c.id} value={c.id}>
+                                                {c.display}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+                );
+            })}
         </div>
         
         <Separator />
@@ -247,7 +262,7 @@ const FormConfiguracoesCR: React.FC = () => {
                     <FormLabel>Histórico Padrão (Recebimento)</FormLabel>
                     <Select 
                         onValueChange={field.onChange} 
-                        value={field.value || undefined}
+                        value={field.value || ''}
                     >
                         <FormControl>
                             <SelectTrigger>
@@ -255,7 +270,7 @@ const FormConfiguracoesCR: React.FC = () => {
                             </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                            <SelectItem value={null as any}>Nenhum (Não Mapear)</SelectItem>
+                            <SelectItem value={''}>Nenhum (Não Mapear)</SelectItem>
                             {historicos.map(h => (
                                 <SelectItem key={h.id} value={h.id}>
                                     {h.codigo && `[${h.codigo}] `}{h.descricao}
