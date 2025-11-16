@@ -133,25 +133,28 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick, adminBranding, l
   // Determina a logo e o nome a serem exibidos
   const { finalLogoUrl, textTitle } = useMemo(() => {
       const clientLogoUrl = isClient ? clientProfile?.logo_url : null;
-      const adminLogoUrl = adminBranding?.logoUrl;
+      
+      // Se for funcionário do Admin, usa o branding do Admin (que vem do prop)
+      const adminLogoUrl = isUserOfAdmin ? (userProfile as AdminUsuarioProfile).logo_admin : adminBranding?.logoUrl;
+      const adminNome = isUserOfAdmin ? (userProfile as AdminUsuarioProfile).nome_admin : adminBranding?.nome;
       
       const finalLogoUrl = clientLogoUrl || adminLogoUrl;
       
-      const adminNome = adminBranding?.nome;
       const clientNome = clientProfile?.nome;
       
       let textTitle = 'Fluxo de Caixa';
       
-      if (isClient) {
+      if (isUserOfAdmin) {
+          // Se for funcionário do Admin, usa o nome do Admin
+          textTitle = adminNome || 'Admin';
+      } else if (isClient) {
           textTitle = clientNome || 'Minha Empresa';
       } else if (isAdmin) {
           textTitle = adminNome || perfil?.nome || 'Administrador';
-      } else if (isUserOfAdmin) {
-          textTitle = adminNome || 'Admin';
       }
       
       return { finalLogoUrl, textTitle };
-  }, [isClient, clientProfile, adminBranding, isAdmin, isUserOfAdmin, perfil]);
+  }, [isClient, clientProfile, adminBranding, isAdmin, isUserOfAdmin, perfil, userProfile]);
   
   // NOVO: Determina o título principal do menu
   const mainTitle = textTitle;
@@ -160,7 +163,7 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick, adminBranding, l
   const profileDescription = isAdmin 
     ? 'Administrador' 
     : (isUserOfAdmin 
-        ? `Funcionário de ${textTitle}`
+        ? `Funcionário de ${mainTitle}` // Usa o nome do Admin
         : clientProfile?.nome || 'Cliente');
 
 
@@ -223,13 +226,15 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick, adminBranding, l
             <div data-dyad-id="src\components\MenuLateral.tsx:217:12" data-dyad-name="h1" className="h-16 flex items-center"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
         ) : (
             <>
-                {finalLogoUrl && (
+                {finalLogoUrl ? (
                     <img 
                         src={finalLogoUrl} 
                         alt={textTitle} 
                         className="object-contain max-h-16 w-auto" 
                         style={{ maxWidth: '100%' }}
                     />
+                ) : (
+                    <Building2 className="w-10 h-10 text-primary" />
                 )}
                 <h1 data-dyad-id="src\components\MenuLateral.tsx:217:12" data-dyad-name="h1" className="text-xl font-bold text-foreground text-center">
                     {mainTitle}

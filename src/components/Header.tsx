@@ -149,9 +149,20 @@ const Header: React.FC = () => {
   
   // Lógica para o Título Principal
   const clientLogoUrl = isClient ? clienteProfile?.logo_url : null;
-  const finalLogoUrl = clientLogoUrl || adminBranding?.logoUrl;
   
-  const textTitle = isClient ? clienteProfile?.nome : (adminBranding?.nome || perfil?.nome || 'Fluxo de Caixa');
+  // NOVO: Se for funcionário do Admin, usa o branding do Admin
+  const finalLogoUrl = isUserOfAdmin ? adminBranding?.logoUrl : clientLogoUrl || adminBranding?.logoUrl;
+  
+  let textTitle = 'Fluxo de Caixa';
+  
+  if (isUserOfAdmin) {
+      // Se for funcionário do Admin, usa o nome do Admin
+      textTitle = adminBranding?.nome || 'Admin';
+  } else if (isClient) {
+      textTitle = clienteProfile?.nome || 'Minha Empresa';
+  } else if (isAdmin) {
+      textTitle = adminBranding?.nome || perfil?.nome || 'Administrador';
+  }
 
 
   return (
