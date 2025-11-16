@@ -57,9 +57,10 @@ type FormValues = z.infer<typeof formSchema>;
 interface FormPerfilProps {
   perfilInicial: AnyProfile; // Garantindo que não é null
   onSaveComplete: () => void;
+  isReadOnly?: boolean; // NOVO PROP
 }
 
-const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }) => {
+const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete, isReadOnly = false }) => {
   const { role, refetch } = useSessao();
   
   if (!perfilInicial) return null; 
@@ -117,6 +118,8 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
   });
 
   const handleSelectAll = (select: boolean) => {
+    if (isClient) return; // Bloqueia se for Cliente
+    if (isReadOnly) return; 
     const permissoes = PERMISSOES_DISPONIVEIS.filter((p: Permissao) => p.key !== 'ponto_eletronico' && p.key !== 'visualizar_proprio_ponto');
     permissoes.forEach((p: Permissao) => {
       form.setValue(`permissoes.${p.key}`, select, { shouldDirty: true });
@@ -133,12 +136,18 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
   }, [refetch]);
 
   const onSubmit = async (values: FormValues) => {
+    if (isReadOnly) {
+        showError('O perfil está em modo somente leitura.');
+        return;
+    }
+    
     setIsSubmitting(true);
     try {
       
       const dataToUpdate: any = { nome: values.nome };
       
-      if (values.senha) {
+      // 1. Senha: Bloqueado para Cliente, permitido para Admin
+      if (values.senha && !isClient) {
         const { error: authError } = await supabase.auth.updateUser({ password: values.senha });
         if (authError) throw authError;
       }
@@ -146,9 +155,8 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
       if (isClient) {
         // Edição de Cliente (Empresa)
         
-        // Permissões e limite de usuários
-        dataToUpdate.limite_usuarios = values.limite_usuarios;
-        dataToUpdate.permissoes = values.permissoes;
+        // Bloqueando campos sensíveis para auto-edição do Cliente
+        // Apenas campos de dados cadastrais e nome são permitidos.
         
         // Campos de Tags (Dados Cadastrais do Cliente)
         dataToUpdate.cpf = values.cpf || null;
@@ -218,13 +226,13 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
               {/* TAB 1: GERAL */}
               <TabsContent value="pessoal" className="mt-4 space-y-4 p-4">
                   <FormField control={form.control} name="nome" render={({ field }) => (
-                      <FormItem><FormLabel>Nome Completo</FormLabel><FormControl><Input placeholder="Nome completo" {...field} /></FormControl><FormMessage /></FormItem>
+                      <FormItem><FormLabel>Nome Completo</FormLabel><FormControl><Input placeholder="Nome completo" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
                   )} />
                   <FormField control={form.control} name="email" render={({ field }) => (
                       <FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" placeholder="email@exemplo.com" {...field} disabled /></FormControl><FormMessage /></FormItem>
                   )} />
                   <FormField control={form.control} name="senha" render={({ field }) => (
-                      <FormItem><FormLabel>Alterar Senha (Opcional)</FormLabel><FormControl><Input type="password" placeholder="••••••••" {...field} /></FormControl><FormMessage /></FormItem>
+                      <FormItem><FormLabel>Alterar Senha (Opcional)</FormLabel><FormControl><Input type="password" placeholder="••••••••" {...field} disabled={isReadOnly || isClient} /></FormControl><FormMessage /></FormItem>
                   )} />
                   
                   {/* Logo Upload (Para Admin e Cliente) */}
@@ -237,7 +245,7 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
                               tableName={isAdminProfile ? 'tbl_admins' : 'tbl_clientes'} // Passando a tabela correta
                               initialLogoUrl={(profileToEdit as AdminProfile)?.logo_url || (profileToEdit as ClienteProfile)?.logo_url}
                               onUploadComplete={handleLogoUploadComplete}
-                              isReadOnly={isSubmitting}
+                              isReadOnly={isSubmitting || isReadOnly || isClient} // Bloqueado para Cliente
                           />
                       </>
                   )}
@@ -247,22 +255,22 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
                           <Separator />
                           <h3 className="font-semibold text-lg">Configurações da Empresa</h3>
                           <FormField control={form.control} name="limite_usuarios" render={({ field }) => (
-                              <FormItem><FormLabel>Limite de Usuários</FormLabel><FormControl><Input type="number" placeholder="5" {...field} /></FormControl><FormMessage /></FormItem>
+                              <FormItem><FormLabel>Limite de Usuários</FormLabel><FormControl><Input type="number" placeholder="5" {...field} disabled={isReadOnly || isClient} /></FormControl><FormMessage /></FormItem>
                           )} />
                           
                           <div className="space-y-2 pt-4">
                               <div className="flex justify-between items-center mb-1">
                                   <FormLabel>Permissões de Acesso</FormLabel>
                                   <div className="space-x-2">
-                                      <Button type="button" variant="link" size="sm" onClick={() => handleSelectAll(true)} className="p-0 h-auto" disabled={isSubmitting}>Selecionar Todos</Button>
-                                      <Button type="button" variant="link" size="sm" onClick={() => handleSelectAll(false)} className="p-0 h-auto text-destructive" disabled={isSubmitting}>Desmarcar Todos</Button>
+                                      <Button type="button" variant="link" size="sm" onClick={() => handleSelectAll(true)} className="p-0 h-auto" disabled={isSubmitting || isReadOnly || isClient}>Selecionar Todos</Button>
+                                      <Button type="button" variant="link" size="sm" onClick={() => handleSelectAll(false)} className="p-0 h-auto text-destructive" disabled={isSubmitting || isReadOnly || isClient}>Desmarcar Todos</Button>
                                   </div>
                               </div>
                               <div className="grid grid-cols-2 gap-4 rounded-lg border p-4">
                                   {PERMISSOES_DISPONIVEIS.filter((p: Permissao) => p.key !== 'ponto_eletronico' && p.key !== 'visualizar_proprio_ponto').map((p: Permissao) => (
                                       <FormField key={p.key} control={form.control} name={`permissoes.${p.key}`} render={({ field }) => (
                                           <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                                              <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} disabled={isSubmitting} /></FormControl>
+                                              <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} disabled={isSubmitting || isReadOnly || isClient} /></FormControl>
                                               <FormLabel className="font-normal">{p.label}</FormLabel>
                                           </FormItem>
                                       )} />
@@ -284,10 +292,10 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
                   {isAdminProfile && (
                       <div className="space-y-4">
                           <FormField control={form.control} name="cpf" render={({ field }) => (
-                              <FormItem><FormLabel>CPF (Opcional)</FormLabel><FormControl><Input placeholder="000.000.000-00" {...field} /></FormControl><FormMessage /></FormItem>
+                              <FormItem><FormLabel>CPF (Opcional)</FormLabel><FormControl><Input placeholder="000.000.000-00" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
                           )} />
                           <FormField control={form.control} name="cnpj" render={({ field }) => (
-                              <FormItem><FormLabel>CNPJ (Opcional)</FormLabel><FormControl><Input placeholder="00.000.000/0000-00" {...field} /></FormControl><FormMessage /></FormItem>
+                              <FormItem><FormLabel>CNPJ (Opcional)</FormLabel><FormControl><Input placeholder="00.000.000/0000-00" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
                           )} />
                           <Separator />
                       </div>
@@ -297,13 +305,13 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
                   {isClient && (
                       <div className="space-y-4">
                           <FormField control={form.control} name="razao_social" render={({ field }) => (
-                              <FormItem><FormLabel>Razão Social (Opcional)</FormLabel><FormControl><Input placeholder="Razão Social" {...field} /></FormControl><FormMessage /></FormItem>
+                              <FormItem><FormLabel>Razão Social (Opcional)</FormLabel><FormControl><Input placeholder="Razão Social" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
                           )} />
                           <FormField control={form.control} name="nome_fantasia" render={({ field }) => (
-                              <FormItem><FormLabel>Nome Fantasia (Opcional)</FormLabel><FormControl><Input placeholder="Nome Fantasia" {...field} /></FormControl><FormMessage /></FormItem>
+                              <FormItem><FormLabel>Nome Fantasia (Opcional)</FormLabel><FormControl><Input placeholder="Nome Fantasia" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
                           )} />
                           <FormField control={form.control} name="documento" render={({ field }) => (
-                              <FormItem><FormLabel>Documento (CPF/CNPJ)</FormLabel><FormControl><Input placeholder="00.000.000/0000-00" {...field} /></FormControl><FormMessage /></FormItem>
+                              <FormItem><FormLabel>Documento (CPF/CNPJ)</FormLabel><FormControl><Input placeholder="00.000.000/0000-00" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
                           )} />
                           <Separator />
                       </div>
@@ -313,39 +321,39 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
                   <h3 className="font-semibold text-lg">Endereço e Contato</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <FormField control={form.control} name="telefone" render={({ field }) => (
-                          <FormItem><FormLabel>Telefone</FormLabel><FormControl><Input placeholder="(00) 90000-0000" {...field} /></FormControl><FormMessage /></FormItem>
+                          <FormItem><FormLabel>Telefone</FormLabel><FormControl><Input placeholder="(00) 90000-0000" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
                       )} />
                       <FormField control={form.control} name="cep" render={({ field }) => (
-                          <FormItem><FormLabel>CEP</FormLabel><FormControl><Input placeholder="00000-000" {...field} /></FormControl><FormMessage /></FormItem>
+                          <FormItem><FormLabel>CEP</FormLabel><FormControl><Input placeholder="00000-000" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
                       )} />
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <FormField control={form.control} name="endereco" render={({ field }) => (
-                          <FormItem><FormLabel>Logradouro/Rua</FormLabel><FormControl><Input placeholder="Rua Exemplo" {...field} /></FormControl><FormMessage /></FormItem>
+                          <FormItem><FormLabel>Logradouro/Rua</FormLabel><FormControl><Input placeholder="Rua Exemplo" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
                       )} />
                       <FormField control={form.control} name="numero" render={({ field }) => (
-                          <FormItem><FormLabel>Número</FormLabel><FormControl><Input placeholder="123" {...field} /></FormControl><FormMessage /></FormItem>
+                          <FormItem><FormLabel>Número</FormLabel><FormControl><Input placeholder="123" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
                       )} />
                       <FormField control={form.control} name="complemento" render={({ field }) => (
-                          <FormItem><FormLabel>Complemento</FormLabel><FormControl><Input placeholder="Apto 101" {...field} /></FormControl><FormMessage /></FormItem>
+                          <FormItem><FormLabel>Complemento</FormLabel><FormControl><Input placeholder="Apto 101" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
                       )} />
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <FormField control={form.control} name="bairro" render={({ field }) => (
-                          <FormItem><FormLabel>Bairro</FormLabel><FormControl><Input placeholder="Centro" {...field} /></FormControl><FormMessage /></FormItem>
+                          <FormItem><FormLabel>Bairro</FormLabel><FormControl><Input placeholder="Centro" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
                       )} />
                       <FormField control={form.control} name="cidade" render={({ field }) => (
-                          <FormItem><FormLabel>Cidade</FormLabel><FormControl><Input placeholder="São Paulo" {...field} /></FormControl><FormMessage /></FormItem>
+                          <FormItem><FormLabel>Cidade</FormLabel><FormControl><Input placeholder="São Paulo" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
                       )} />
                       <FormField control={form.control} name="estado" render={({ field }) => (
-                          <FormItem><FormLabel>Estado (UF)</FormLabel><FormControl><Input placeholder="SP" {...field} /></FormControl><FormMessage /></FormItem>
+                          <FormItem><FormLabel>Estado (UF)</FormLabel><FormControl><Input placeholder="SP" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
                       )} />
                   </div>
               </TabsContent>
               
           </Tabs>
 
-          <Button type="submit" className="w-full" disabled={isSubmitting}>
+          <Button type="submit" className="w-full" disabled={isSubmitting || isReadOnly}>
             {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Salvar Alterações
           </Button>
