@@ -31,11 +31,10 @@ interface DiaProcessado {
 }
 
 interface FolhaPontoPrintProps {
-  // empresaNome: string; // REMOVIDO
   funcionario: FuncionarioDetalhe;
   mes: Date;
-  logoUrl: string | null; // NOVO PROP
-  ownerName: string; // NOVO PROP
+  logoUrl: string | null;
+  ownerName: string;
 }
 
 const JORNADA_MENSAL_PADRAO = 220; 
@@ -53,11 +52,10 @@ const formatarHoras = (minutos: number): string => {
 const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
 const FolhaPontoPrint: React.FC<FolhaPontoPrintProps> = ({ 
-    // empresaNome, // REMOVIDO
     funcionario, 
     mes, 
-    logoUrl, // USANDO NOVO PROP
-    ownerName, // USANDO NOVO PROP
+    logoUrl, 
+    ownerName, 
 }) => {
     
     // --- Lógica de Cálculo (Replicada do DetalheFolhaPonto) ---
@@ -271,11 +269,11 @@ const FolhaPontoPrint: React.FC<FolhaPontoPrintProps> = ({
         <div className="print-container">
             <div className="print-header">
                 {logoUrl && <img src={logoUrl} alt={ownerName} className="print-logo" />}
-                <div className="print-header-content">
-                    <h1>FOLHA DE PONTO MENSAL</h1>
-                    <p>Empresa: {ownerName}</p>
-                    <p>Funcionário: {funcionario.nome}</p>
-                    <p>Mês de Referência: {format(mes, 'MMMM/yyyy', { locale: ptBR })}</p>
+                <div className="print-header-content" style={{ marginLeft: logoUrl ? '15px' : '0' }}>
+                    <h1 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '5px' }}>FOLHA DE PONTO MENSAL</h1>
+                    <p style={{ fontSize: '10px', color: '#555' }}>Empresa: {ownerName}</p>
+                    <p style={{ fontSize: '10px', color: '#555' }}>Funcionário: {funcionario.nome}</p>
+                    <p style={{ fontSize: '10px', color: '#555' }}>Mês de Referência: {format(mes, 'MMMM/yyyy', { locale: ptBR })}</p>
                 </div>
             </div>
 
