@@ -163,7 +163,7 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick, adminBranding, l
   const profileDescription = isAdmin 
     ? 'Administrador' 
     : (isUserOfAdmin 
-        ? `Funcionário de ${mainTitle}` // Usa o nome do Admin
+        ? 'Funcionário' // ALTERADO: Removido "de [Nome da Empresa]"
         : clientProfile?.nome || 'Cliente');
 
 
