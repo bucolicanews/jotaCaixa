@@ -137,10 +137,17 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick, adminBranding, l
   const shouldShowAdminBranding = isAdmin || isUserOfAdmin;
   
   // NOVO: Determina o título principal do menu
-  const mainTitle = shouldShowAdminBranding && adminNome ? adminNome : (perfil?.nome || 'Navegação');
+  // Se for Admin ou Funcionário do Admin, usa o nome do Admin Proprietário (ou o nome do perfil se o branding falhar)
+  const mainTitle = shouldShowAdminBranding 
+    ? (adminNome || perfil?.nome || 'Fluxo de Caixa') 
+    : (perfil?.nome || 'Navegação');
   
   // NOVO: Determina a descrição do perfil
-  const profileDescription = isAdmin ? 'Administrador' : (isUserOfAdmin ? `Funcionário de ${adminNome || 'Admin'}` : clientProfile?.nome || 'Cliente');
+  const profileDescription = isAdmin 
+    ? 'Administrador' 
+    : (isUserOfAdmin 
+        ? `Funcionário de ${adminNome || 'Admin'}` // CORRIGIDO: Usa adminNome aqui
+        : clientProfile?.nome || 'Cliente');
 
 
   const checkPermission = (item: ItemMenu) => {
