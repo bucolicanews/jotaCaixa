@@ -150,18 +150,17 @@ const Header: React.FC = () => {
   // Lógica para o Título Principal
   const clientLogoUrl = isClient ? clienteProfile?.logo_url : null;
   
-  // NOVO: Se for funcionário do Admin, usa o branding do Admin
+  // Se for funcionário do Admin, usa o branding do Admin
   const finalLogoUrl = isUserOfAdmin ? adminBranding?.logoUrl : clientLogoUrl || adminBranding?.logoUrl;
   
   let textTitle = 'Fluxo de Caixa';
   
-  if (isUserOfAdmin) {
-      // Se for funcionário do Admin, usa o nome do Admin
-      textTitle = adminBranding?.nome || 'Admin';
-  } else if (isClient) {
+  if (isClient) {
+      // Cliente: Nome da Empresa
       textTitle = clienteProfile?.nome || 'Minha Empresa';
-  } else if (isAdmin) {
-      textTitle = adminBranding?.nome || perfil?.nome || 'Administrador';
+  } else if (isAdmin || role === 'Usuario') {
+      // Admin ou Usuário: Nome do Usuário Logado
+      textTitle = perfil?.nome || 'Administrador';
   }
 
 
