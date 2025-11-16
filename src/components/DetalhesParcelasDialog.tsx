@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, BadgeDollarSign, DollarSign } from 'lucide-react';
+import { Loader2, BadgeDollarSign, DollarSign, Edit, Trash2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { ContaReceber } from '@/types/contas-receber';
-import { showError } from '@/utils/toast';
+import { showError, showSuccess } from '@/utils/toast';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import RegistrarPagamentoDialog from '@/components/contas-receber/RegistrarPagamentoDialog';
@@ -12,6 +12,8 @@ import { useSessao } from '@/hooks/use-sessao';
 import { cn } from '@/lib/utils';
 import { Card, CardContent } from './ui/card';
 import { Progress } from './ui/progress';
+import FormParcelaReceberDialog from './formularios/FormParcelaReceberDialog'; // NOVO IMPORT
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog'; // NOVO IMPORT
 
 // Interface ParcelaParaPagamento copiada de RegistrarPagamentoDialog.tsx
 interface ParcelaParaPagamento {
@@ -31,7 +33,7 @@ interface Parcela {
   valor_parcela: number;
   valor_pago: number;
   data_vencimento: string;
-  status: 'aberta' | 'parcial' | 'paga' | 'reprogramada' | 'cancelada';
+  status: 'aberta' | 'parcial' | 'paga' | 'reprogramada' | 'cancelada' | 'bloqueada';
 }
 
 interface DetalhesParcelasDialogProps {
@@ -47,13 +49,18 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
   const [loading, setLoading] = useState(true);
   const [pagamentoDialogOpen, setPagamentoDialogOpen] = useState(false);
   const [parcelaSelecionada, setParcelaSelecionada] = useState<ParcelaParaPagamento | null>(null);
+  
+  // Estados para edição
+  const [edicaoDialogOpen, setEdicaoDialogOpen] = useState(false);
+  const [parcelaParaEdicao, setParcelaParaEdicao] = useState<Parcela | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  // Determina a tabela correta com base na role
+  const tabelaParcelas = role === 'Admin' ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
 
   const fetchParcelas = useCallback(async () => {
     if (!conta) return;
     setLoading(true);
-    
-    // Determina a tabela correta com base na role
-    const tabelaParcelas = role === 'Admin' ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
     
     const { data, error } = await supabase
       .from(tabelaParcelas)
@@ -68,7 +75,7 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
       setParcelas(data as Parcela[]);
     }
     setLoading(false);
-  }, [conta, role]);
+  }, [conta, tabelaParcelas]);
 
   useEffect(() => {
     if (open) {
@@ -91,11 +98,62 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
     setParcelaSelecionada(mappedParcela);
     setPagamentoDialogOpen(true);
   };
+  
+  const handleOpenEdicao = (parcela: Parcela) => {
+      if (parcela.status === 'paga' || parcela.status === 'cancelada' || parcela.status === 'bloqueada') {
+          showError('Não é possível editar parcelas pagas, canceladas ou bloqueadas.');
+          return;
+      }
+      setParcelaParaEdicao(parcela);
+      setEdicaoDialogOpen(true);
+  };
 
   const handlePagamentoCompleto = () => {
     setPagamentoDialogOpen(false);
     fetchParcelas(); // Re-busca as parcelas deste dialog
     onDataChange(); // Avisa a página principal para re-buscar tudo
+  };
+  
+  const handleEdicaoCompleta = () => {
+      setEdicaoDialogOpen(false);
+      fetchParcelas();
+      onDataChange();
+  };
+  
+  const handleDeleteParcela = async (parcelaId: string) => {
+      setIsDeleting(true);
+      try {
+          // 1. Verificar se há recebimentos associados (apenas Admin)
+          if (role === 'Admin') {
+              const { count, error: countError } = await supabase
+                  .from('admin_recebimentos')
+                  .select('id', { count: 'exact', head: true })
+                  .eq('parcela_id', parcelaId);
+                  
+              if (countError) throw countError;
+              
+              if (count && count > 0) {
+                  showError('Não é possível excluir. Existem recebimentos registrados para esta parcela.');
+                  return;
+              }
+          }
+          
+          // 2. Deletar a parcela
+          const { error } = await supabase
+              .from(tabelaParcelas)
+              .delete()
+              .eq('id', parcelaId);
+              
+          if (error) throw error;
+          
+          showSuccess('Parcela excluída com sucesso.');
+          fetchParcelas();
+          onDataChange();
+      } catch (error: any) {
+          showError('Falha ao excluir parcela: ' + error.message);
+      } finally {
+          setIsDeleting(false);
+      }
   };
 
   const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -118,7 +176,7 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="w-full max-w-full sm:max-w-3xl max-h-[90vh] flex flex-col">
+        <DialogContent className="w-full max-w-full sm:max-w-4xl max-h-[90vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="truncate">Detalhes do Lançamento</DialogTitle>
             <DialogDescription className="truncate">
@@ -168,26 +226,63 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
                         <TableHead className="w-[100px]">Vencimento</TableHead>
                         <TableHead className="w-[100px]">Valor</TableHead>
                         <TableHead className="w-[100px]">Status</TableHead>
-                        <TableHead className="w-[120px] text-right">Ações</TableHead>
+                        <TableHead className="w-[180px] text-right">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {parcelas.map((p) => {
                         const isPaga = p.status === 'paga';
+                        const isCanceled = p.status === 'cancelada' || p.status === 'bloqueada';
+                        const canEditOrDelete = !isPaga && !isCanceled;
+                        
                         return (
-                            <TableRow key={p.id} className={cn(isPaga && 'bg-green-500/10')}>
+                            <TableRow key={p.id} className={cn(isPaga && 'bg-green-500/10', isCanceled && 'bg-red-500/10')}>
                                 <TableCell className="font-medium">{p.numero_parcela}</TableCell>
                                 <TableCell>{formatDate(p.data_vencimento)}</TableCell>
                                 <TableCell>{formatCurrency(p.valor_parcela)}</TableCell>
                                 <TableCell>
-                                    <Badge variant={isPaga ? 'success' : 'secondary'}>
+                                    <Badge variant={isPaga ? 'success' : (isCanceled ? 'destructive' : 'secondary')}>
                                         {getStatusDisplay(p.status)}
                                     </Badge>
                                 </TableCell>
                                 <TableCell className="text-right">
-                                    <Button variant="outline" size="sm" onClick={() => handleOpenPagamento(p)} disabled={isPaga || p.status === 'cancelada'}>
-                                        <BadgeDollarSign className="w-4 h-4 mr-2 hidden sm:inline" />Receber
-                                    </Button>
+                                    <div className="flex justify-end space-x-2">
+                                        {canEditOrDelete && (
+                                            <Button variant="ghost" size="icon" onClick={() => handleOpenEdicao(p)} title="Editar Parcela">
+                                                <Edit className="w-4 h-4" />
+                                            </Button>
+                                        )}
+                                        
+                                        {canEditOrDelete && (
+                                            <AlertDialog>
+                                                <AlertDialogTrigger asChild>
+                                                    <Button variant="ghost" size="icon" disabled={isDeleting} title="Excluir Parcela">
+                                                        <Trash2 className="w-4 h-4 text-red-500" />
+                                                    </Button>
+                                                </AlertDialogTrigger>
+                                                <AlertDialogContent>
+                                                    <AlertDialogHeader>
+                                                        <AlertDialogTitle>Excluir Parcela?</AlertDialogTitle>
+                                                        <AlertDialogDescription>
+                                                            Tem certeza que deseja excluir a parcela {p.numero_parcela}? Esta ação é irreversível e só é permitida se não houver recebimentos associados.
+                                                        </AlertDialogDescription>
+                                                    </AlertDialogHeader>
+                                                    <AlertDialogFooter>
+                                                        <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
+                                                        <AlertDialogAction onClick={() => handleDeleteParcela(p.id)} disabled={isDeleting}>
+                                                            {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Excluir'}
+                                                        </AlertDialogAction>
+                                                    </AlertDialogFooter>
+                                                </AlertDialogContent>
+                                            </AlertDialog>
+                                        )}
+                                        
+                                        {!isPaga && !isCanceled && (
+                                            <Button variant="outline" size="sm" onClick={() => handleOpenPagamento(p)}>
+                                                <BadgeDollarSign className="w-4 h-4 mr-2 hidden sm:inline" />Receber
+                                            </Button>
+                                        )}
+                                    </div>
                                 </TableCell>
                             </TableRow>
                         );
@@ -199,12 +294,25 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
           )}
         </DialogContent>
       </Dialog>
+      
+      {/* Diálogo de Pagamento */}
       <RegistrarPagamentoDialog
         parcela={parcelaSelecionada}
         open={pagamentoDialogOpen}
         onOpenChange={setPagamentoDialogOpen}
         onSaveComplete={handlePagamentoCompleto}
       />
+      
+      {/* Diálogo de Edição de Parcela */}
+      {parcelaParaEdicao && (
+          <FormParcelaReceberDialog
+              open={edicaoDialogOpen}
+              onOpenChange={setEdicaoDialogOpen}
+              parcelaInicial={parcelaParaEdicao}
+              onSaveComplete={handleEdicaoCompleta}
+              tabelaParcelas={tabelaParcelas}
+          />
+      )}
     </>
   );
 };
