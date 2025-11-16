@@ -130,7 +130,7 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick, adminBranding, l
   const isUserOfAdmin = role === 'Usuario' && 'admin_id' in userProfile && !!userProfile.admin_id;
   
   // Usa o branding correto
-  const branding = isAdmin ? { logoUrl: (perfil as AdminProfile)?.logo_url, nome: (perfil as AdminProfile)?.nome } : adminBranding;
+  const branding = isAdmin ? (perfil as AdminProfile)?.logo_url ? { logoUrl: (perfil as AdminProfile)?.logo_url, nome: (perfil as AdminProfile)?.nome } : adminBranding : adminBranding;
   const logoUrl = branding?.logoUrl;
   const adminNome = branding?.nome;
   
@@ -144,7 +144,7 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick, adminBranding, l
         return item.caminho === '/painel' || item.caminho === '/minha-assinatura';
     }
 
-    // Se estiver no fluxo de seleção de perfil, só permite Painel (que é o LayoutPrincipal)
+    // Se estiver no fluxo de seleção de perfil, só permite Painel (que mostra a mensagem de aprovação)
     if (isPreAuthFlow) {
         return item.caminho === '/painel';
     }
@@ -192,26 +192,27 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick, adminBranding, l
       <div className="p-4 border-b flex flex-col items-center justify-center space-y-2">
         {/* Lógica de exibição da Logo e Nome do Admin/Empresa */}
         {loadingBranding && shouldShowAdminBranding ? (
-            <div className="h-16 flex items-center"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
+            <div data-dyad-id="src\components\MenuLateral.tsx:217:12" data-dyad-name="h1" className="h-16 flex items-center"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
         ) : shouldShowAdminBranding && branding ? (
             <>
-                {logoUrl ? (
+                {logoUrl && (
                     <img 
                         src={logoUrl} 
                         alt="Logo da Empresa" 
-                        className="object-contain max-h-16 w-auto" 
+                        className="object-contain max-h-16 w-auto mb-2" 
                         style={{ maxWidth: '100%' }}
                     />
-                ) : (
-                    <h1 className="text-xl font-bold text-primary">
-                        {/* CORREÇÃO: Se não houver logo, usa o nome do Admin */}
-                        {adminNome || 'Admin'}
-                    </h1>
                 )}
-                <p className="text-sm text-muted-foreground text-center">{adminNome}</p>
+                <h1 data-dyad-id="src\components\MenuLateral.tsx:217:12" data-dyad-name="h1" className="text-xl font-bold text-foreground text-center">
+                    {adminNome || 'Admin'}
+                </h1>
+                {/* NOVO: Exibe a descrição abaixo do nome */}
+                <p className="text-sm text-muted-foreground text-center">
+                    {isAdmin ? 'Administrador' : (isUserOfAdmin ? `Funcionário de ${adminNome}` : clientProfile?.nome || 'Cliente')}
+                </p>
             </>
         ) : (
-            <h1 className="text-xl font-bold text-primary">Navegação</h1>
+            <h1 data-dyad-id="src\components\MenuLateral.tsx:217:12" data-dyad-name="h1" className="text-xl font-bold text-primary">Navegação</h1>
         )}
       </div>
       <nav className="flex-1 p-2 space-y-4 overflow-y-auto">
