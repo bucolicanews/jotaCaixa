@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTheme } from '@/contexts/ThemeProvider';
 import { Button } from '@/components/ui/button';
-import { Sun, Moon, LogOut, Menu, User, Settings, Key, CalendarCheck, Package, DollarSign, MessageSquare } from 'lucide-react';
+import { Sun, Moon, LogOut, Menu, User, Settings, Key, CalendarCheck, Package, DollarSign, MessageSquare, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
@@ -175,6 +175,8 @@ const Header: React.FC = () => {
         
         {/* Título Principal (Logo ou Nome) */}
         <h1 
+            data-dyad-id="src\components\Header.tsx:197:8" 
+            data-dyad-name="h1" 
             className="text-xl font-bold text-primary truncate max-w-[200px] sm:max-w-none" 
             title={mainTitle}
         >

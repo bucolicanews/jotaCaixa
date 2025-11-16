@@ -192,7 +192,7 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick, adminBranding, l
       <div className="p-4 border-b flex flex-col items-center justify-center space-y-2">
         {/* Lógica de exibição da Logo e Nome do Admin/Empresa */}
         {loadingBranding && shouldShowAdminBranding ? (
-            <div className="h-16 flex items-center"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
+            <div data-dyad-id="src\components\MenuLateral.tsx:217:12" data-dyad-name="h1" className="h-16 flex items-center"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
         ) : shouldShowAdminBranding && branding ? (
             <>
                 {logoUrl ? (
@@ -203,7 +203,7 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick, adminBranding, l
                         style={{ maxWidth: '100%' }}
                     />
                 ) : (
-                    <h1 className="text-xl font-bold text-primary">
+                    <h1 data-dyad-id="src\components\MenuLateral.tsx:217:12" data-dyad-name="h1" className="text-xl font-bold text-primary">
                         {/* CORREÇÃO: Se não houver logo, usa o nome do Admin */}
                         {adminNome || 'Admin'}
                     </h1>
@@ -214,7 +214,7 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick, adminBranding, l
                 </p>
             </>
         ) : (
-            <h1 className="text-xl font-bold text-primary">Navegação</h1>
+            <h1 data-dyad-id="src\components\MenuLateral.tsx:217:12" data-dyad-name="h1" className="text-xl font-bold text-primary">Navegação</h1>
         )}
       </div>
       <nav className="flex-1 p-2 space-y-4 overflow-y-auto">
