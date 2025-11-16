@@ -148,8 +148,11 @@ const Header: React.FC = () => {
   const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
   
   // Lógica para o Título Principal
-  const mainTitle = adminBranding?.nome || perfil?.nome || 'Fluxo de Caixa';
-  const logoUrl = adminBranding?.logoUrl;
+  const clientLogoUrl = isClient ? clienteProfile?.logo_url : null;
+  const finalLogoUrl = clientLogoUrl || adminBranding?.logoUrl;
+  
+  const textTitle = isClient ? clienteProfile?.nome : (adminBranding?.nome || perfil?.nome || 'Fluxo de Caixa');
+
 
   return (
     <header className={cn(
@@ -178,14 +181,21 @@ const Header: React.FC = () => {
             data-dyad-id="src\components\Header.tsx:197:8" 
             data-dyad-name="h1" 
             className="text-xl font-bold text-primary truncate max-w-[200px] sm:max-w-none" 
-            title={mainTitle}
+            title={textTitle}
         >
             {loadingBranding ? (
                 <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            ) : finalLogoUrl ? (
+                <img 
+                    src={finalLogoUrl} 
+                    alt={textTitle} 
+                    className="h-8 w-auto object-contain" 
+                    style={{ maxWidth: '100%' }}
+                />
             ) : (
                 // Exibe o nome do Admin Proprietário em texto-primary (amarelo/laranja)
                 <span className="text-primary">
-                    {mainTitle}
+                    {textTitle}
                 </span>
             )}
         </h1>

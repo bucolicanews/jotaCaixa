@@ -16,7 +16,8 @@ import { Separator } from '../ui/separator';
 import { useBulkTagManager } from '@/hooks/use-bulk-tag-manager';
 import { Checkbox } from '../ui/checkbox';
 import { useSessao } from '@/hooks/use-sessao';
-import LogoUpload from '../LogoUpload'; // NOVO IMPORT
+import LogoUpload from '../LogoUpload'; // IMPORT CORRIGIDO
+import FormDadosCadastrais from '../usuario-forms/FormDadosCadastrais'; // Importado para usar TaggedFormField
 
 const textOptional = z.string().optional().or(z.literal(''));
 
@@ -226,13 +227,15 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete }
                       <FormItem><FormLabel>Alterar Senha (Opcional)</FormLabel><FormControl><Input type="password" placeholder="••••••••" {...field} /></FormControl><FormMessage /></FormItem>
                   )} />
                   
-                  {isAdminProfile && (
+                  {/* Logo Upload (Para Admin e Cliente) */}
+                  {(isAdminProfile || isClient) && (
                       <>
                           <Separator />
                           <h3 className="font-semibold text-lg">Configurações de Branding</h3>
                           <LogoUpload 
-                              adminId={perfilInicial.id}
-                              initialLogoUrl={(perfilInicial as AdminProfile).logo_url}
+                              ownerId={perfilInicial.id}
+                              tableName={isAdminProfile ? 'tbl_admins' : 'tbl_clientes'} // Passando a tabela correta
+                              initialLogoUrl={(profileToEdit as AdminProfile)?.logo_url || (profileToEdit as ClienteProfile)?.logo_url}
                               onUploadComplete={handleLogoUploadComplete}
                               isReadOnly={isSubmitting}
                           />

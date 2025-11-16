@@ -1,7 +1,7 @@
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { LayoutDashboard, DollarSign, ArrowUpCircle, ArrowDownCircle, Banknote, FileText, Upload, Settings, BookOpen, Users, Building2, Clock, Contact, CalendarCheck, User, FileSignature, Tag, FileTextIcon, Package, History, FileDown, MessageSquare, Scale, Loader2 } from 'lucide-react';
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useSessao } from '@/hooks/use-sessao';
 import { ClienteProfile, UsuarioProfile, AdminUsuarioProfile, AdminProfile } from '@/types/usuario';
 import { isPast, parseISO } from 'date-fns';
@@ -127,26 +127,40 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick, adminBranding, l
   const isPreAuthFlow = localizacao.pathname === '/selecao-perfil';
   
   const isAdmin = role === 'Admin';
+  const isClient = role === 'Cliente';
   const isUserOfAdmin = role === 'Usuario' && 'admin_id' in userProfile && !!userProfile.admin_id;
   
-  // Usa o branding correto
-  const branding = isAdmin ? (perfil as AdminProfile)?.logo_url ? { logoUrl: (perfil as AdminProfile)?.logo_url, nome: (perfil as AdminProfile)?.nome } : adminBranding : adminBranding;
-  const logoUrl = branding?.logoUrl;
-  const adminNome = branding?.nome;
-  
-  const shouldShowAdminBranding = isAdmin || isUserOfAdmin;
+  // Determina a logo e o nome a serem exibidos
+  const { finalLogoUrl, textTitle } = useMemo(() => {
+      const clientLogoUrl = isClient ? clientProfile?.logo_url : null;
+      const adminLogoUrl = adminBranding?.logoUrl;
+      
+      const finalLogoUrl = clientLogoUrl || adminLogoUrl;
+      
+      const adminNome = adminBranding?.nome;
+      const clientNome = clientProfile?.nome;
+      
+      let textTitle = 'Fluxo de Caixa';
+      
+      if (isClient) {
+          textTitle = clientNome || 'Minha Empresa';
+      } else if (isAdmin) {
+          textTitle = adminNome || perfil?.nome || 'Administrador';
+      } else if (isUserOfAdmin) {
+          textTitle = adminNome || 'Admin';
+      }
+      
+      return { finalLogoUrl, textTitle };
+  }, [isClient, clientProfile, adminBranding, isAdmin, isUserOfAdmin, perfil]);
   
   // NOVO: Determina o título principal do menu
-  // Se for Admin ou Funcionário do Admin, usa o nome do Admin Proprietário (ou o nome do perfil se o branding falhar)
-  const mainTitle = shouldShowAdminBranding 
-    ? (adminNome || perfil?.nome || 'Fluxo de Caixa') 
-    : (perfil?.nome || 'Navegação');
+  const mainTitle = textTitle;
   
   // NOVO: Determina a descrição do perfil
   const profileDescription = isAdmin 
     ? 'Administrador' 
     : (isUserOfAdmin 
-        ? `Funcionário de ${adminNome || 'Admin'}` // CORRIGIDO: Usa adminNome aqui
+        ? `Funcionário de ${textTitle}`
         : clientProfile?.nome || 'Cliente');
 
 
@@ -205,14 +219,14 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick, adminBranding, l
     <div className="flex flex-col h-full bg-background text-foreground">
       <div className="p-4 border-b flex flex-col items-center justify-center space-y-2">
         {/* Lógica de exibição da Logo e Nome do Admin/Empresa */}
-        {loadingBranding && shouldShowAdminBranding ? (
+        {loadingBranding ? (
             <div data-dyad-id="src\components\MenuLateral.tsx:217:12" data-dyad-name="h1" className="h-16 flex items-center"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
         ) : (
             <>
-                {logoUrl && (
+                {finalLogoUrl && (
                     <img 
-                        src={logoUrl} 
-                        alt="Logo da Empresa" 
+                        src={finalLogoUrl} 
+                        alt={textTitle} 
                         className="object-contain max-h-16 w-auto" 
                         style={{ maxWidth: '100%' }}
                     />

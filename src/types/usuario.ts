@@ -57,6 +57,9 @@ export interface ClienteProfile {
   documento?: string | null;
   razao_social?: string | null;
   nome_fantasia?: string | null;
+  
+  // NOVO CAMPO
+  logo_url?: string | null;
 }
 
 export interface UsuarioProfile {

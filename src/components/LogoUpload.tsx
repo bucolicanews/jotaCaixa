@@ -9,7 +9,8 @@ import { cn } from '@/lib/utils';
 import { Separator } from '@/components/ui/separator';
 
 interface LogoUploadProps {
-  adminId: string;
+  ownerId: string;
+  tableName: 'tbl_admins' | 'tbl_clientes'; // NOVO: Tabela de destino
   initialLogoUrl: string | null | undefined;
   onUploadComplete: (url: string | null) => void;
   isReadOnly: boolean;
@@ -17,7 +18,7 @@ interface LogoUploadProps {
 
 const LOGO_BUCKET = 'logos-admin';
 
-const LogoUpload: React.FC<LogoUploadProps> = ({ adminId, initialLogoUrl, onUploadComplete, isReadOnly }) => {
+const LogoUpload: React.FC<LogoUploadProps> = ({ ownerId, tableName, initialLogoUrl, onUploadComplete, isReadOnly }) => {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [currentUrl, setCurrentUrl] = useState(initialLogoUrl || '');
@@ -29,11 +30,11 @@ const LogoUpload: React.FC<LogoUploadProps> = ({ adminId, initialLogoUrl, onUplo
       setManualUrl(initialLogoUrl || '');
   }, [initialLogoUrl]);
 
-  const updateAdminProfile = async (url: string | null) => {
+  const updateProfile = async (url: string | null) => {
       const { error: updateError } = await supabase
-          .from('tbl_admins')
+          .from(tableName)
           .update({ logo_url: url })
-          .eq('id', adminId);
+          .eq('id', ownerId);
           
       if (updateError) {
           console.error('Erro ao atualizar logo_url no DB:', updateError);
@@ -42,13 +43,13 @@ const LogoUpload: React.FC<LogoUploadProps> = ({ adminId, initialLogoUrl, onUplo
   };
 
   const handleFileUpload = async () => {
-    if (!file || !adminId) return;
+    if (!file || !ownerId) return;
     
     setLoading(true);
 
     try {
       const fileExt = file.name.split('.').pop();
-      const filePath = `${adminId}/logo.${fileExt}`; 
+      const filePath = `${ownerId}/logo.${fileExt}`; 
       
       // 1. Upload do arquivo (usando upsert para substituir o arquivo antigo)
       const { error: uploadError } = await supabase.storage
@@ -64,8 +65,8 @@ const LogoUpload: React.FC<LogoUploadProps> = ({ adminId, initialLogoUrl, onUplo
       const { data: publicUrlData } = supabase.storage.from(LOGO_BUCKET).getPublicUrl(filePath);
       const newUrl = publicUrlData.publicUrl;
       
-      // 3. Atualizar o perfil do Admin com a nova URL
-      await updateAdminProfile(newUrl);
+      // 3. Atualizar o perfil do Admin/Cliente com a nova URL
+      await updateProfile(newUrl);
 
       showSuccess('Logo atualizada com sucesso!');
       setCurrentUrl(newUrl);
@@ -82,12 +83,12 @@ const LogoUpload: React.FC<LogoUploadProps> = ({ adminId, initialLogoUrl, onUplo
   };
   
   const handleSaveManualUrl = async () => {
-      if (!adminId) return;
+      if (!ownerId) return;
       setLoading(true);
       
       try {
           const urlToSave = manualUrl.trim() || null;
-          await updateAdminProfile(urlToSave);
+          await updateProfile(urlToSave);
           
           showSuccess('URL da logo salva com sucesso!');
           setCurrentUrl(urlToSave);
@@ -100,7 +101,7 @@ const LogoUpload: React.FC<LogoUploadProps> = ({ adminId, initialLogoUrl, onUplo
   };
   
   const handleRemoveLogo = async () => {
-    if (!currentUrl || !adminId) return;
+    if (!currentUrl || !ownerId) return;
     
     if (!window.confirm('Tem certeza que deseja remover a logo?')) return;
     
@@ -108,11 +109,7 @@ const LogoUpload: React.FC<LogoUploadProps> = ({ adminId, initialLogoUrl, onUplo
     
     try {
         // 1. Remover a URL do perfil
-        await updateAdminProfile(null);
-        
-        // 2. Tentar deletar o arquivo do storage (opcional, mas boa prática)
-        // Nota: O Supabase Storage não permite deletar arquivos diretamente do cliente sem RLS específica,
-        // mas a atualização do perfil já resolve o problema de exibição.
+        await updateProfile(null);
         
         showSuccess('Logo removida com sucesso!');
         setCurrentUrl(null);
