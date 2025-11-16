@@ -208,7 +208,10 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick, adminBranding, l
                         {adminNome || 'Admin'}
                     </h1>
                 )}
-                <p className="text-sm text-muted-foreground text-center">{adminNome}</p>
+                {/* NOVO: Exibe o nome do Admin/Empresa abaixo da logo/título */}
+                <p className="text-sm text-muted-foreground text-center">
+                    {isAdmin ? 'Administrador' : (isUserOfAdmin ? `Funcionário de ${adminNome}` : clientProfile?.nome || 'Cliente')}
+                </p>
             </>
         ) : (
             <h1 className="text-xl font-bold text-primary">Navegação</h1>
