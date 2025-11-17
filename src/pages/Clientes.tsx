@@ -607,66 +607,39 @@ const ClientesPage = () => {
     }
   };
   
-  // NOVO HANDLER: Promover Cliente CR para Cliente do Sistema (Cria o perfil na tbl_clientes)
-  const handlePromoteCR = async (cliente: ClienteCRComStatus) => {
+  // NOVO HANDLER: Promover Cliente CR para Cliente do Sistema (Apenas atualiza o status)
+  const handlePromoteCRDirect = async (cliente: ClienteCRComStatus) => {
     if (!cliente.email) {
         showError('O cliente deve ter um email cadastrado para ser promovido.');
         return;
     }
     
-    // 1. VERIFICAÇÃO DE DUPLICIDADE NA TBL_CLIENTES
-    const existingSystemClient = empresasSistema.find(e => e.email === cliente.email);
-    if (existingSystemClient) {
-        showError(`O email ${cliente.email} já está em uso pela empresa ${existingSystemClient.nome} (ID: ${existingSystemClient.id.substring(0, 8)}...).`);
-        return;
-    }
-    
-    if (!window.confirm(`Tem certeza que deseja PROMOVER o cliente ${cliente.nome} para Cliente do Sistema? Isso criará um usuário de login e o marcará como pendente de aprovação.`)) return;
+    if (!window.confirm(`Tem certeza que deseja PROMOVER o cliente ${cliente.nome} para Cliente do Sistema? Isso exigirá que o usuário já exista no Auth ou que seja criado manualmente.`)) return;
     
     setCarregandoDados(true);
     
     try {
-        // 1. Chamar a Edge Function para criar o usuário no Auth e o perfil na tbl_clientes
-        const { data, error: invokeError } = await supabase.functions.invoke('promote-client-to-system', {
-            body: {
-                email: cliente.email,
-                nome: cliente.nome,
-                clienteId: cliente.id, // ID do cliente CR
-                proprietarioId: ownerId, // ID do Admin
-            },
+        // 1. Chamar a função RPC para promover o cliente CR para tbl_clientes
+        const { data, error: rpcError } = await supabase.rpc('promote_client_cr_to_system', {
+            p_client_id: cliente.id,
+            p_admin_id: ownerId,
         });
         
-        if (invokeError) throw invokeError;
-        if (data?.error) throw new Error(data.error);
+        if (rpcError) throw rpcError;
         
-        const newUserId = data.userId;
+        const result = data?.[0];
         
-        // 2. Enviar o link de redefinição de senha (convite)
-        const { data: resetData, error: resetError } = await supabase.auth.resetPasswordForEmail(cliente.email, {
-            redirectTo: `${BASE_URL}/atualizar-senha`, 
-        });
-        
-        if (resetError) throw resetError;
-        
-        const resetLink = (resetData as { action_link: string | null }).action_link || `${BASE_URL}/atualizar-senha`;
-        
-        showSuccess(`Cliente ${cliente.nome} promovido para Cliente do Sistema (ID: ${newUserId.substring(0, 8)}...). Convite de acesso enviado!`);
-        
-        // 3. Abrir o diálogo de ações para que o Admin possa copiar/enviar o link
-        const whatsappTemplate = `Olá ${cliente.nome}! Seu convite de acesso ao sistema está pronto. Clique no link abaixo para definir sua senha e acessar:\n\n${resetLink}`;
-        
-        if (window.confirm(`Link de Acesso Gerado para ${cliente.nome}. Deseja copiar o link para enviar manualmente?`)) {
-            navigator.clipboard.writeText(resetLink);
-            showSuccess('Link copiado para a área de transferência.');
+        if (result && !result.success) {
+            showError(result.message);
+        } else if (result && result.success) {
+            showSuccess(result.message);
+            buscarDados();
+        } else {
+            showError('Resposta inesperada do servidor.');
         }
         
-        // Abre o WhatsApp com o template
-        window.open(`https://wa.me/${cliente.telefone?.replace(/\D/g, '') || ''}?text=${encodeURIComponent(whatsappTemplate)}`, '_blank');
-        
-        buscarDados();
-        
     } catch (error: any) {
-        console.error('Erro ao promover cliente:', error);
+        console.error('Erro ao promover cliente diretamente:', error);
         showError('Falha ao promover cliente: ' + error.message);
     } finally {
         setCarregandoDados(false);
@@ -833,16 +806,31 @@ const ClientesPage = () => {
                                                     </Button>
                                                 )
                                             ) : (
-                                                <Button 
-                                                    variant="default" 
-                                                    size="sm" 
-                                                    onClick={() => handlePromoteCR(cliente)} // ALTERADO: Agora chama a promoção
-                                                    title="Promover Cliente para Cliente do Sistema"
-                                                    disabled={isActionDisabled}
-                                                    className="h-8 bg-orange-500 hover:bg-orange-600"
-                                                >
-                                                    <UsersIcon className="w-4 h-4 mr-1" /> Promover
-                                                </Button>
+                                                <>
+                                                    {/* NOVO BOTÃO: Promover para Sistema (Direto) */}
+                                                    <Button 
+                                                        variant="default" 
+                                                        size="sm" 
+                                                        onClick={() => handlePromoteCRDirect(cliente)}
+                                                        title="Promover Cliente para Cliente do Sistema (Sem Convite)"
+                                                        disabled={isActionDisabled}
+                                                        className="h-8 bg-blue-500 hover:bg-blue-600"
+                                                    >
+                                                        <UsersIcon className="w-4 h-4 mr-1" /> Promover
+                                                    </Button>
+                                                    
+                                                    {/* BOTÃO CONVITE (Cria Auth e envia link) */}
+                                                    <Button 
+                                                        variant="default" 
+                                                        size="sm" 
+                                                        onClick={() => handleSendInvite(cliente)}
+                                                        title="Enviar Convite de Acesso (Cria Auth e envia link)"
+                                                        disabled={isActionDisabled}
+                                                        className="h-8 bg-orange-500 hover:bg-orange-600"
+                                                    >
+                                                        <Mail className="w-4 h-4 mr-1" /> Convite
+                                                    </Button>
+                                                </>
                                             )
                                         )}
                                         
