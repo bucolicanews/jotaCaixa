@@ -4,7 +4,8 @@ import { LayoutDashboard, DollarSign, ArrowUpCircle, ArrowDownCircle, Banknote, 
 import React, { useMemo, useCallback, useState, useEffect } from 'react';
 import { useSessao } from '@/hooks/use-sessao';
 import { ClienteProfile, UsuarioProfile, AdminProfile, AdminUsuarioProfile } from '@/types/usuario';
-import { isPast, parseISO } from 'date-fns';
+import { isPast, parseISO, format } from 'date-fns'; // ADICIONADO format e parseISO
+import { ptBR } from 'date-fns/locale'; // ADICIONADO ptBR
 import { useTicketNotifications } from '@/hooks/use-ticket-notifications';
 import { supabase } from '@/integrations/supabase/client'; // Importando supabase
 
@@ -236,6 +237,7 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick, adminBranding, l
     else alert('Link de redefinição de senha enviado para seu email.');
   };
   
+  // CORREÇÃO: Acessando clientProfile de forma segura
   const dataFimAcesso = clientProfile?.data_fim_acesso;
   const dataFimFormatada = dataFimAcesso ? format(parseISO(dataFimAcesso), 'dd/MM/yyyy', { locale: ptBR }) : null;
   
