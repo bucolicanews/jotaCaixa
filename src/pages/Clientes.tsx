@@ -607,36 +607,46 @@ const ClientesPage = () => {
     }
   };
   
-  // NOVO HANDLER: Promover Cliente CR para Cliente do Sistema (Apenas atualiza o status)
+  // NOVO HANDLER: Promover Cliente CR para Cliente do Sistema (USA EDGE FUNCTION)
   const handlePromoteCRDirect = async (cliente: ClienteCRComStatus) => {
     if (!cliente.email) {
         showError('O cliente deve ter um email cadastrado para ser promovido.');
         return;
     }
     
-    if (!window.confirm(`Tem certeza que deseja PROMOVER o cliente ${cliente.nome} para Cliente do Sistema? Isso exigirá que o usuário já exista no Auth ou que seja criado manualmente.`)) return;
+    if (!window.confirm(`Tem certeza que deseja PROMOVER o cliente ${cliente.nome} para Cliente do Sistema? Isso criará um usuário no Auth e o marcará como pendente de aprovação.`)) return;
     
     setCarregandoDados(true);
     
     try {
-        // 1. Chamar a função RPC para promover o cliente CR para tbl_clientes
-        const { data, error: rpcError } = await supabase.rpc('promote_client_cr_to_system', {
-            p_client_id: cliente.id,
-            p_admin_id: ownerId,
+        // 1. Chamar a Edge Function para criar o usuário no Auth e promover
+        const { data, error: invokeError } = await supabase.functions.invoke('promote-client-direct', {
+            body: {
+                clienteCrId: cliente.id,
+                adminId: ownerId,
+            },
         });
         
-        if (rpcError) throw rpcError;
+        if (invokeError) throw invokeError;
+        if (data?.error) throw new Error(data.error);
         
-        const result = data?.[0];
+        showSuccess(`Cliente ${cliente.nome} promovido para Cliente do Sistema com sucesso!`);
         
-        if (result && !result.success) {
-            showError(result.message);
-        } else if (result && result.success) {
-            showSuccess(result.message);
-            buscarDados();
-        } else {
-            showError('Resposta inesperada do servidor.');
+        // 2. Enviar link de redefinição de senha (para que o Admin possa enviar o link)
+        const { data: resetData, error: resetError } = await supabase.auth.resetPasswordForEmail(cliente.email, {
+            redirectTo: `${BASE_URL}/atualizar-senha`, 
+        });
+        
+        if (resetError) console.error('Aviso: Falha ao enviar email de redefinição de senha:', resetError);
+        
+        const resetLink = (resetData as { action_link: string | null }).action_link || `${BASE_URL}/atualizar-senha`;
+        
+        if (window.confirm(`Link de Acesso Gerado para ${cliente.nome}. Deseja copiar o link para enviar manualmente?`)) {
+            navigator.clipboard.writeText(resetLink);
+            showSuccess('Link copiado para a área de transferência.');
         }
+        
+        buscarDados();
         
     } catch (error: any) {
         console.error('Erro ao promover cliente diretamente:', error);
@@ -812,7 +822,7 @@ const ClientesPage = () => {
                                                         variant="default" 
                                                         size="sm" 
                                                         onClick={() => handlePromoteCRDirect(cliente)}
-                                                        title="Promover Cliente para Cliente do Sistema (Sem Convite)"
+                                                        title="Promover Cliente para Cliente do Sistema (Cria Auth)"
                                                         disabled={isActionDisabled}
                                                         className="h-8 bg-blue-500 hover:bg-blue-600"
                                                     >
