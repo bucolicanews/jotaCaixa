@@ -172,24 +172,47 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
       }
       setLoadingClientes(true);
       
-      let fetchedClients: ClienteCRSimples[] = [];
-      const processedIds = new Set<string>();
-
       // 1. Buscar Clientes do Sistema (tbl_clientes) - APENAS SE FOR ADMIN
+      let systemClients: ClienteProfile[] = [];
       if (isAdmin) {
-          const { data: systemClients } = await supabase
+          const { data: systemClientsData } = await supabase
               .from('tbl_clientes')
-              .select('id, nome, documento, email, razao_social, nome_fantasia, telefone, telefone_fixo, cep, endereco, numero, complemento, bairro, cidade, estado')
+              .select('id, nome, documento, email, razao_social, nome_fantasia, telefone, telefone_fixo, cep, endereco, numero, complemento, bairro, cidade, estado, logo_url')
               .eq('aprovado', true)
               .order('nome');
-              
-          (systemClients || []).forEach(c => {
-              fetchedClients.push({ ...c, is_system_client: true });
-              processedIds.add(c.id);
-          });
+          systemClients = systemClientsData as ClienteProfile[] || [];
       }
       
-      // 2. Buscar Clientes de Contas a Receber (clientes) - Clientes CR puros
+      // 2. Sincronizar Clientes do Sistema para a tabela 'clientes' (faturamento)
+      const syncPromises = systemClients.map(c => {
+          const dataToUpsert = {
+              id: c.id,
+              proprietario_id: ownerId,
+              nome: c.nome,
+              documento: c.documento,
+              email: c.email,
+              razao_social: c.razao_social,
+              nome_fantasia: c.nome_fantasia,
+              telefone: c.telefone,
+              telefone_fixo: c.telefone_fixo,
+              cep: c.cep,
+              endereco: c.endereco,
+              numero: c.numero,
+              complemento: c.complemento,
+              bairro: c.bairro,
+              cidade: c.cidade,
+              estado: c.estado,
+              is_system_client: true, // Marca como cliente do sistema
+          };
+          // Usamos o service role para garantir que a sincronização ocorra sem problemas de RLS
+          // Mas como estamos no frontend, confiamos na RLS do Admin/Cliente para o upsert na tabela 'clientes'
+          return supabase.from('clientes').upsert(dataToUpsert, { onConflict: 'id' });
+      });
+      
+      // Executa a sincronização (ignora erros, pois o cliente CR puro será buscado a seguir)
+      await Promise.all(syncPromises);
+      
+      // 3. Buscar Clientes de Contas a Receber (clientes) - Agora inclui os sincronizados
       let queryCR = supabase
         .from('clientes')
         .select('id, nome, documento, email, is_system_client, razao_social, nome_fantasia, telefone, telefone_fixo, cep, endereco, numero, complemento, bairro, cidade, estado')
@@ -202,14 +225,12 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
           showError('Erro ao carregar clientes CR: ' + errorCR.message);
           setClientes([]);
       } else {
-          const filteredClients = (dataCR as ClienteCRSimples[])
-              .filter(c => c.id !== ownerId) // Exclui o próprio proprietário
-              .filter(c => !processedIds.has(c.id)); // Exclui duplicatas já adicionadas da tbl_clientes
+          const fetchedClients = (dataCR as ClienteCRSimples[])
+              .filter(c => c.id !== ownerId); // Exclui o próprio proprietário
               
-          fetchedClients.push(...filteredClients);
+          setClientes(fetchedClients);
       }
       
-      setClientes(fetchedClients);
       setLoadingClientes(false);
     };
     
