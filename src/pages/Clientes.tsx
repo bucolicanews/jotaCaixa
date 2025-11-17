@@ -139,10 +139,17 @@ const ClientesPage = () => {
     let systemClientsMap: Record<string, EmpresaSistema> = {};
     let systemClientsList: EmpresaSistema[] = [];
     
-    const { data: dataEmpresas, error: errorEmpresas } = await supabase
+    let queryEmpresas = supabase
         .from('tbl_clientes')
         .select('*, cliente_id_promovido') // Incluindo cliente_id_promovido
         .order('nome', { ascending: true });
+        
+    // FILTRO CRÍTICO: Excluir o Admin logado da lista de Clientes do Sistema
+    if (isAdmin && usuario?.id) {
+        queryEmpresas = queryEmpresas.neq('id', usuario.id);
+    }
+        
+    const { data: dataEmpresas, error: errorEmpresas } = await queryEmpresas;
         
     if (errorEmpresas) {
         showError('Erro ao carregar empresas do sistema: ' + errorEmpresas.message);
