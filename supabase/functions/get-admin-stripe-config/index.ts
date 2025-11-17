@@ -37,13 +37,12 @@ serve(async (req: Request) => {
       .select('id, stripe_publishable_key, stripe_secret_key, conta_sintetica_id, historico_padrao_id, conta_receber_id, conta_resultado_id')
       .eq('proprietario_id', adminId)
       .limit(1)
-      .maybeSingle();
+      .maybeSingle(); // <--- CORREÇÃO APLICADA AQUI
 
     if (fetchError) { 
         console.error('Edge Function Error fetching config:', fetchError);
-        // Se houver erro de DB, retornamos 200 com a mensagem de erro no corpo
         return new Response(JSON.stringify({ error: fetchError.message }), {
-            status: 200,
+            status: 500,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
     }
@@ -57,8 +56,6 @@ serve(async (req: Request) => {
   } catch (error) {
     console.error('💥 FATAL ERROR in get-admin-stripe-config:', error);
     const message = error instanceof Error ? error.message : 'Unknown error.';
-    
-    // Em caso de erro fatal (ex: problema de ambiente), retornamos 500
     return new Response(JSON.stringify({ error: message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
