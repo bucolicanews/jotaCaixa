@@ -109,19 +109,22 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick, adminBranding, l
   
   const { ticketsAbertos, ticketsEmProgresso, ticketsPausados, mensagensParaResponder, carregando: carregandoNotificacoes } = useTicketNotifications();
 
-  const isUnassignedUser = role === 'Usuario' && !(perfil as UsuarioProfile)?.cliente_id && !(perfil as AdminUsuarioProfile)?.admin_id;
-  const isPendingClient = role === 'Cliente' && !(perfil as ClienteProfile)?.aprovado;
+  // --- CORREÇÃO: Definições seguras de perfil ---
+  const clientProfile = role === 'Cliente' ? perfil as ClienteProfile : null;
+  const userProfile = role === 'Usuario' ? perfil as UsuarioProfile | AdminUsuarioProfile : null;
   
-  const userProfile = perfil as UsuarioProfile | AdminUsuarioProfile;
-  const clientProfile = perfil as ClienteProfile;
+  const isUnassignedUser = role === 'Usuario' && userProfile && !userProfile.cliente_id && !('admin_id' in userProfile && userProfile.admin_id);
+  const isPendingClient = role === 'Cliente' && clientProfile && !clientProfile.aprovado;
   
   const isAccessExpired = role === 'Cliente' && clientProfile?.data_fim_acesso && isPast(parseISO(clientProfile.data_fim_acesso));
+  // -----------------------------------------------
+  
   const isPreAuthFlow = localizacao.pathname === '/selecao-perfil';
   
   const isAdmin = role === 'Admin';
   const isClient = role === 'Cliente';
-  const isUserOfClient = role === 'Usuario' && 'cliente_id' in userProfile && !!userProfile.cliente_id;
-  const isUserOfAdmin = role === 'Usuario' && 'admin_id' in userProfile && !!userProfile.admin_id;
+  const isUserOfClient = role === 'Usuario' && userProfile && 'cliente_id' in userProfile && !!userProfile.cliente_id;
+  const isUserOfAdmin = role === 'Usuario' && userProfile && 'admin_id' in userProfile && !!userProfile.admin_id;
   
   // Determina o ID do Admin para buscar o branding
   const targetAdminId = isAdmin ? perfil?.id : (isUserOfAdmin ? (perfil as AdminUsuarioProfile).admin_id : null);
@@ -151,7 +154,7 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick, adminBranding, l
   }, [targetAdminId]);
   
   const fetchClientBranding = useCallback(async () => {
-      if (isUserOfClient && userProfile.cliente_id) {
+      if (isUserOfClient && userProfile?.cliente_id) {
           const { data, error } = await supabase
               .from('tbl_clientes')
               .select('nome, logo_url')
@@ -177,6 +180,8 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick, adminBranding, l
   }, [carregando, fetchAdminBranding, fetchClientBranding]);
 
 
+  const [planoDetalhes, setPlanoDetalhes] = useState<{ nome: string, preco: number } | null>(null);
+  
   useEffect(() => {
     const updatePlanoDetails = async () => {
       if (!perfil || !role) {
@@ -186,9 +191,9 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick, adminBranding, l
       
       let currentPlanoId: string | null = null;
 
-      if (isClient) {
-        currentPlanoId = clienteProfile.plano_id || null; 
-      } else if (role === 'Usuario' && userProfile.cliente_id) {
+      if (isClient && clientProfile) {
+        currentPlanoId = clientProfile.plano_id || null; 
+      } else if (role === 'Usuario' && userProfile?.cliente_id) {
         const proprietarioId = userProfile.cliente_id;
         const { data: clienteData } = await supabase
             .from('tbl_clientes')
@@ -217,7 +222,7 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick, adminBranding, l
     };
     
     updatePlanoDetails();
-  }, [perfil, role, isClient, clienteProfile, userProfile]);
+  }, [perfil, role, isClient, clientProfile, userProfile]);
 
 
   const lidarComSair = async () => {
@@ -231,7 +236,7 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick, adminBranding, l
     else alert('Link de redefinição de senha enviado para seu email.');
   };
   
-  const dataFimAcesso = clienteProfile?.data_fim_acesso;
+  const dataFimAcesso = clientProfile?.data_fim_acesso;
   const dataFimFormatada = dataFimAcesso ? format(parseISO(dataFimAcesso), 'dd/MM/yyyy', { locale: ptBR }) : null;
   
   const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -242,7 +247,7 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick, adminBranding, l
   if (isAdmin) {
       textTitle = adminBranding?.nome || perfil?.nome || 'Administrador';
   } else if (isClient) {
-      textTitle = clienteProfile?.nome || 'Minha Empresa';
+      textTitle = clientProfile?.nome || 'Minha Empresa';
   } else if (isUserOfClient) {
       textTitle = clientBranding?.nome || 'Empresa Cliente';
   } else if (isUserOfAdmin) {
@@ -250,6 +255,33 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick, adminBranding, l
   } else if (perfil?.nome) {
       textTitle = perfil.nome;
   }
+  
+  // Lógica para a descrição do perfil
+  let profileDescription = '';
+  if (isAdmin) {
+      profileDescription = 'Administrador do Sistema';
+  } else if (isClient) {
+      profileDescription = 'Cliente Principal';
+  } else if (isUserOfClient) {
+      profileDescription = `Funcionário de ${clientBranding?.nome || 'Cliente'}`;
+  } else if (isUserOfAdmin) {
+      profileDescription = `Funcionário de ${adminBranding?.nome || 'Admin'}`;
+  }
+  
+  // Lógica para a URL da Logo
+  let finalLogoUrl = null;
+  if (isAdmin) {
+      finalLogoUrl = (perfil as AdminProfile)?.logo_url || adminBranding?.logoUrl;
+  } else if (isClient) {
+      finalLogoUrl = (perfil as ClienteProfile)?.logo_url;
+  } else if (isUserOfClient) {
+      finalLogoUrl = clientBranding?.logoUrl;
+  } else if (isUserOfAdmin) {
+      finalLogoUrl = adminBranding?.logoUrl;
+  }
+  
+  // Lógica para exibir a seção de Suporte
+  const shouldShowSuporte = isAdmin || isClient || (role === 'Usuario' && !isUnassignedUser);
 
 
   const checkPermission = (item: ItemMenu) => {
@@ -267,7 +299,7 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick, adminBranding, l
         return true;
     }
 
-    if (role === 'Cliente') {
+    if (role === 'Cliente' && clientProfile) {
         if (isPendingClient) {
             return item.caminho === '/painel';
         }
@@ -277,7 +309,7 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick, adminBranding, l
         return clientProfile.permissoes?.[item.permissionKey] === true;
     }
 
-    if (role === 'Usuario') {
+    if (role === 'Usuario' && userProfile) {
         if (isUnassignedUser) {
             return item.caminho === '/painel' || item.caminho === '/cadastrar-empresa';
         }
@@ -312,7 +344,7 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick, adminBranding, l
                     <Building2 className="w-10 h-10 text-primary" />
                 )}
                 <h1 data-dyad-id="src\components\MenuLateral.tsx:217:12" data-dyad-name="h1" className="text-xl font-bold text-foreground text-center">
-                    {mainTitle}
+                    {textTitle}
                 </h1>
                 <p className="text-sm text-muted-foreground text-center">
                     {profileDescription}
