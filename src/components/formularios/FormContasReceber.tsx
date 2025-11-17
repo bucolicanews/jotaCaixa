@@ -192,7 +192,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
       // 2. Buscar Clientes de Contas a Receber (clientes) - Clientes CR puros
       let queryCR = supabase
         .from('clientes')
-        .select('id, nome, documento, email, is_system_client')
+        .select('id, nome, documento, email, is_system_client, razao_social, nome_fantasia, telefone, telefone_fixo, cep, endereco, numero, complemento, bairro, cidade, estado')
         .eq('proprietario_id', ownerId)
         .order('nome');
       
@@ -281,9 +281,14 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
           throw new Error('Cliente selecionado não encontrado na lista de clientes de faturamento. Certifique-se de que ele foi cadastrado em Clientes.');
       }
       
-      // Se o cliente for um cliente do sistema (tbl_clientes), sincroniza os dados para 'clientes'
+      // Se o cliente for um cliente do sistema (tbl_clientes) OU um cliente CR puro,
+      // fazemos o UPSERT na tabela 'clientes' para garantir que todos os campos de faturamento
+      // estejam atualizados e que o registro exista para a FK.
+      
+      // Se for um cliente do sistema, buscamos os dados completos para o upsert
+      let clientDataToUpsert: Partial<ClienteCRSimples> = {};
+      
       if (clienteSelecionado.is_system_client) {
-          // Busca os dados completos do cliente na tbl_clientes
           const { data: dbClient, error: dbError } = await supabase
               .from('tbl_clientes')
               .select('id, nome, documento, email, razao_social, nome_fantasia, telefone, telefone_fixo, cep, endereco, numero, complemento, bairro, cidade, estado')
@@ -294,31 +299,39 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
               throw new Error('Falha ao buscar dados completos do cliente do sistema.');
           }
           
-          // Executa o UPSERT na tabela 'clientes' (tabela de faturamento)
-          const { error: upsertError } = await supabase
-              .from('clientes')
-              .upsert({
-                  id: dbClient.id,
-                  proprietario_id: ownerId,
-                  nome: dbClient.nome,
-                  documento: dbClient.documento,
-                  email: dbClient.email,
-                  razao_social: dbClient.razao_social,
-                  nome_fantasia: dbClient.nome_fantasia,
-                  telefone: dbClient.telefone,
-                  telefone_fixo: dbClient.telefone_fixo,
-                  cep: dbClient.cep,
-                  endereco: dbClient.endereco,
-                  numero: dbClient.numero,
-                  complemento: dbClient.complemento,
-                  bairro: dbClient.bairro,
-                  cidade: dbClient.cidade,
-                  estado: dbClient.estado,
-                  is_system_client: true,
-              }, { onConflict: 'id' });
-              
-          if (upsertError) throw upsertError;
+          clientDataToUpsert = {
+              ...dbClient,
+              is_system_client: true,
+          };
+      } else {
+          // Se for um cliente CR puro, usamos os dados que já temos (que vieram da tabela 'clientes')
+          clientDataToUpsert = clienteSelecionado;
       }
+      
+      // Executa o UPSERT na tabela 'clientes' (tabela de faturamento)
+      const { error: upsertError } = await supabase
+          .from('clientes')
+          .upsert({
+              id: values.cliente_id,
+              proprietario_id: ownerId,
+              nome: clientDataToUpsert.nome,
+              documento: clientDataToUpsert.documento,
+              email: clientDataToUpsert.email,
+              razao_social: clientDataToUpsert.razao_social,
+              nome_fantasia: clientDataToUpsert.nome_fantasia,
+              telefone: clientDataToUpsert.telefone,
+              telefone_fixo: clientDataToUpsert.telefone_fixo,
+              cep: clientDataToUpsert.cep,
+              endereco: clientDataToUpsert.endereco,
+              numero: clientDataToUpsert.numero,
+              complemento: clientDataToUpsert.complemento,
+              bairro: clientDataToUpsert.bairro,
+              cidade: clientDataToUpsert.cidade,
+              estado: clientDataToUpsert.estado,
+              is_system_client: clientDataToUpsert.is_system_client || false,
+          }, { onConflict: 'id' });
+          
+      if (upsertError) throw upsertError;
       
       // 1. Calcular valores e parcelas
       let valorTotal: number;
