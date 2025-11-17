@@ -24,10 +24,21 @@ serve(async (req: Request) => {
       });
     }
 
+    const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+        console.error('FATAL: Missing Supabase environment variables.');
+        return new Response(JSON.stringify({ error: 'Missing Supabase environment variables.' }), {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+    }
+
     // Inicializar Supabase Client com SERVICE ROLE KEY (ignora RLS)
     const supabaseService = createClient(
-      (Deno.env.get('SUPABASE_URL') as any)!,
-      (Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') as any)!,
+      SUPABASE_URL,
+      SUPABASE_SERVICE_ROLE_KEY,
       { auth: { persistSession: false } }
     );
 
@@ -37,7 +48,7 @@ serve(async (req: Request) => {
       .select('id, stripe_publishable_key, stripe_secret_key, conta_sintetica_id, historico_padrao_id, conta_receber_id, conta_resultado_id')
       .eq('proprietario_id', adminId)
       .limit(1)
-      .maybeSingle(); // <--- CORREÇÃO APLICADA AQUI
+      .maybeSingle();
 
     if (fetchError) { 
         console.error('Edge Function Error fetching config:', fetchError);
