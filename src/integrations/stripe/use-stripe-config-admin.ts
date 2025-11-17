@@ -5,8 +5,10 @@ interface StripeConfigData {
   id: string | null;
   stripe_publishable_key: string;
   stripe_secret_key: string;
-  conta_sintetica_id: string | null;
+  conta_sintetica_id: string | null; // Conta Banco/Caixa (Ativo)
   historico_padrao_id: string | null;
+  conta_receber_id: string | null; // Conta Patrimonial (CR)
+  conta_resultado_id: string | null; // Conta Receita (DRE)
 }
 
 interface StripeConfigAdminHook {

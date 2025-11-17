@@ -13,12 +13,22 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { PlanoContas } from '@/types/plano-contas';
 import { Historico } from '@/types/historico';
 import { useStripeConfigAdmin } from '@/integrations/stripe/use-stripe-config-admin';
+import { useContabilConfig } from '@/hooks/use-contabil-config'; // Importando useContabilConfig
 
 const formSchema = z.object({
   stripe_publishable_key: z.string().min(1, 'A chave publicável é obrigatória.'),
   stripe_secret_key: z.string().min(1, 'A chave secreta é obrigatória.'),
-  // TORNANDO OBRIGATÓRIO: Deve ser um UUID válido (não nulo)
-  conta_sintetica_id: z.string().uuid('Selecione a Conta Contábil de Destino (Stripe/Banco).'),
+  
+  // 1. Conta Banco/Caixa (Sintética) - OBRIGATÓRIO
+  conta_sintetica_id: z.string().uuid('Selecione a Conta Banco/Caixa (Sintética).'),
+  
+  // 2. Conta Patrimonial (CR) - OBRIGATÓRIO
+  conta_receber_id: z.string().uuid('Selecione a Conta Patrimonial (Contas a Receber).'),
+  
+  // 3. Conta Receita (DRE) - OBRIGATÓRIO
+  conta_resultado_id: z.string().uuid('Selecione a Conta Receita (DRE).'),
+  
+  // 4. Histórico Padrão - OBRIGATÓRIO
   historico_padrao_id: z.string().uuid('Selecione um histórico padrão válido.'),
 });
 
@@ -26,15 +36,15 @@ type FormValues = z.infer<typeof formSchema>;
 
 const FormConfiguracoesStripe: React.FC = () => {
   const { role, usuario, carregando: carregandoSessao } = useSessao();
+  const { configMap } = useContabilConfig();
   const [contasContabeis, setContasContabeis] = useState<PlanoContas[]>([]);
   const [historicos, setHistoricos] = useState<Historico[]>([]);
   const [loadingContas, setLoadingContas] = useState(true);
-  const [hasLinkedSaldoConta, setHasLinkedSaldoConta] = useState(true); // NOVO ESTADO
+  const [hasLinkedSaldoConta, setHasLinkedSaldoConta] = useState(true);
   
   const isAdmin = role === 'Admin';
   const adminId = usuario?.id;
   
-  // Usando o novo hook para buscar a configuração completa (Admin-only)
   const { config: configInicial, loading: loadingData, error: configError, refetch: refetchConfig } = useStripeConfigAdmin(adminId || null);
   const [existingId, setExistingId] = useState<string | null>(null);
 
@@ -44,9 +54,10 @@ const FormConfiguracoesStripe: React.FC = () => {
     defaultValues: {
       stripe_publishable_key: '',
       stripe_secret_key: '',
-      // Usando undefined para que o Zod force a seleção se o valor for nulo
       conta_sintetica_id: undefined, 
       historico_padrao_id: undefined,
+      conta_receber_id: undefined, // NOVO DEFAULT
+      conta_resultado_id: undefined, // NOVO DEFAULT
     },
   });
   
@@ -59,9 +70,10 @@ const FormConfiguracoesStripe: React.FC = () => {
           form.reset({
               stripe_publishable_key: configInicial.stripe_publishable_key || '',
               stripe_secret_key: configInicial.stripe_secret_key || '',
-              // Se for null, usa undefined para acionar a validação Zod
               conta_sintetica_id: configInicial.conta_sintetica_id || undefined, 
               historico_padrao_id: configInicial.historico_padrao_id || undefined,
+              conta_receber_id: configInicial.conta_receber_id || undefined, // NOVO CAMPO
+              conta_resultado_id: configInicial.conta_resultado_id || undefined, // NOVO CAMPO
           });
       } else if (!loadingData && !configInicial) {
           setExistingId(null);
@@ -70,6 +82,8 @@ const FormConfiguracoesStripe: React.FC = () => {
               stripe_secret_key: '',
               conta_sintetica_id: undefined,
               historico_padrao_id: undefined,
+              conta_receber_id: undefined,
+              conta_resultado_id: undefined,
           });
       }
   }, [configInicial, loadingData, form]);
@@ -79,13 +93,13 @@ const FormConfiguracoesStripe: React.FC = () => {
     if (!adminId) return;
     setLoadingContas(true);
     
-    // Busca contas analíticas que são marcadas como Caixa/Banco ou Patrimonial
+    // Busca contas analíticas que são marcadas como Caixa/Banco, Patrimonial OU Resultado
     const { data, error } = await supabase
         .from('plano_contas')
-        .select('id, Conta, Descricao, Analitica, is_conta_caixa_banco, is_conta_patrimonial')
+        .select('id, Conta, Descricao, Analitica, is_conta_caixa_banco, is_conta_patrimonial, is_conta_resultado')
         .eq('proprietario_id', adminId)
         .eq('Analitica', 'Sim')
-        .or('is_conta_caixa_banco.eq.true,is_conta_patrimonial.eq.true')
+        .or('is_conta_caixa_banco.eq.true,is_conta_patrimonial.eq.true,is_conta_resultado.eq.true')
         .order('Conta');
         
     if (error) {
@@ -162,7 +176,7 @@ const FormConfiguracoesStripe: React.FC = () => {
     }
     
     if (!hasLinkedSaldoConta) {
-        showError('A Conta Contábil de Destino (Stripe/Banco) deve estar vinculada a uma Conta/Caixa em Bancos.');
+        showError('A Conta Banco/Caixa (Sintética) deve estar vinculada a uma Conta/Caixa em Bancos.');
         return;
     }
     
@@ -171,6 +185,8 @@ const FormConfiguracoesStripe: React.FC = () => {
       stripe_secret_key: values.stripe_secret_key,
       conta_sintetica_id: values.conta_sintetica_id,
       historico_padrao_id: values.historico_padrao_id,
+      conta_receber_id: values.conta_receber_id, // NOVO CAMPO
+      conta_resultado_id: values.conta_resultado_id, // NOVO CAMPO
       proprietario_id: adminId,
     };
 
@@ -210,6 +226,28 @@ const FormConfiguracoesStripe: React.FC = () => {
   if (configError) {
       return <p className="text-red-500">Erro ao carregar configurações: {configError}</p>;
   }
+  
+  // Funções auxiliares para filtrar contas
+  const getContasPorTipo = (tipo: 'Caixa/Banco' | 'Patrimonial' | 'Resultado', prefix?: string) => {
+      return contasContabeis
+          .filter(c => {
+              if (tipo === 'Caixa/Banco') return c.is_conta_caixa_banco;
+              if (tipo === 'Patrimonial') return c.is_conta_patrimonial;
+              if (tipo === 'Resultado') {
+                  const isReceita = c.Conta.startsWith(configMap.Receita || '4');
+                  return c.is_conta_resultado && isReceita;
+              }
+              return false;
+          })
+          .map(c => ({
+              id: c.id,
+              display: `${c.Conta} - ${c.Descricao}`,
+          }));
+  };
+  
+  const contasCaixaBanco = getContasPorTipo('Caixa/Banco');
+  const contasPatrimoniais = getContasPorTipo('Patrimonial');
+  const contasReceita = getContasPorTipo('Resultado');
 
   return (
     <Form {...form}>
@@ -241,33 +279,34 @@ const FormConfiguracoesStripe: React.FC = () => {
           )}
         />
         
+        {/* 1. Conta Banco/Caixa (Sintética) */}
         <FormField
           control={form.control}
           name="conta_sintetica_id"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Conta Contábil de Destino (Stripe/Banco)</FormLabel>
+              <FormLabel>Conta Banco/Caixa (Sintética)</FormLabel>
               <Select 
                 onValueChange={field.onChange} 
                 value={field.value}
               >
                 <FormControl>
-                  <SelectTrigger>
+                  <SelectTrigger className={!hasLinkedSaldoConta && field.value ? 'border-red-500' : ''}>
                     <SelectValue placeholder="Selecione a conta analítica de destino" />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                    {contasContabeis.map(c => (
+                    {contasCaixaBanco.map(c => (
                         <SelectItem key={c.id} value={c.id}>
-                            {c.Conta} - {c.Descricao}
+                            {c.display}
                         </SelectItem>
                     ))}
                 </SelectContent>
               </Select>
               <FormMessage />
-              {contasContabeis.length === 0 && (
+              {contasCaixaBanco.length === 0 && (
                   <p className="text-sm text-red-500">
-                      Nenhuma conta marcada como Caixa/Banco ou Patrimonial. Marque as contas em <a href="/plano-contas" className="underline">Plano de Contas</a>.
+                      Nenhuma conta marcada como Caixa/Banco. Marque as contas em <a href="/plano-contas" className="underline">Plano de Contas</a>.
                   </p>
               )}
               {!hasLinkedSaldoConta && contaSinteticaWatch && (
@@ -280,9 +319,75 @@ const FormConfiguracoesStripe: React.FC = () => {
           )}
         />
         
-        {/* REMOVIDO: conta_receber_id */}
+        {/* 2. Conta Patrimonial (CR) */}
+        <FormField
+          control={form.control}
+          name="conta_receber_id"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Conta Patrimonial (Contas a Receber)</FormLabel>
+              <Select 
+                onValueChange={field.onChange} 
+                value={field.value}
+              >
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione a conta patrimonial (Ativo)" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                    {contasPatrimoniais.map(c => (
+                        <SelectItem key={c.id} value={c.id}>
+                            {c.display}
+                        </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+              <FormMessage />
+              {contasPatrimoniais.length === 0 && (
+                  <p className="text-sm text-red-500">
+                      Nenhuma conta marcada como Patrimonial. Marque as contas em <a href="/plano-contas" className="underline">Plano de Contas</a>.
+                  </p>
+              )}
+            </FormItem>
+          )}
+        />
         
-        {/* NOVO CAMPO: Histórico Padrão */}
+        {/* 3. Conta Receita (DRE) */}
+        <FormField
+          control={form.control}
+          name="conta_resultado_id"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Conta Receita (DRE)</FormLabel>
+              <Select 
+                onValueChange={field.onChange} 
+                value={field.value}
+              >
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder={`Selecione a conta de Receita (${configMap.Receita}.x.x)`} />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                    {contasReceita.map(c => (
+                        <SelectItem key={c.id} value={c.id}>
+                            {c.display}
+                        </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+              <FormMessage />
+              {contasReceita.length === 0 && (
+                  <p className="text-sm text-red-500">
+                      Nenhuma conta de Receita ({configMap.Receita}.x.x) marcada como Resultado.
+                  </p>
+              )}
+            </FormItem>
+          )}
+        />
+        
+        {/* 4. Histórico Padrão */}
         <FormField
           control={form.control}
           name="historico_padrao_id"

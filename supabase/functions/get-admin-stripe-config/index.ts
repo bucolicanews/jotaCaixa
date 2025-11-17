@@ -31,10 +31,10 @@ serve(async (req: Request) => {
       { auth: { persistSession: false } }
     );
 
-    // Buscar a configuração do Stripe
+    // Buscar a configuração do Stripe, incluindo os novos campos
     const { data, error: fetchError } = await supabaseService
       .from('configuracoes_stripe')
-      .select('id, stripe_publishable_key, stripe_secret_key, conta_sintetica_id, historico_padrao_id')
+      .select('id, stripe_publishable_key, stripe_secret_key, conta_sintetica_id, historico_padrao_id, conta_receber_id, conta_resultado_id')
       .eq('proprietario_id', adminId)
       .limit(1)
       .single();
