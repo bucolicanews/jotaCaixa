@@ -23,11 +23,11 @@ const TIPOS_REGISTRO_CONTABIL = [
 
 // Esquema dinâmico: a_receber, parcela e recebimento são obrigatórios (min(1))
 const formSchema = z.object({
-  a_receber: z.string().min(1, 'A conta Contas a Receber (Sintético) é obrigatória.'),
-  parcela: z.string().min(1, 'A conta Parcelas a Receber (Analítico) é obrigatória.'),
-  recebimento: z.string().min(1, 'A conta Recebimentos (Crédito) é obrigatória.'),
-  desconto: z.string().optional().or(z.literal('')),
-  historico_padrao_id: z.string().optional().or(z.literal('')),
+  a_receber: z.string().min(1, 'A conta Contas a Receber (Sintético) é obrigatória.').nullable(),
+  parcela: z.string().min(1, 'A conta Parcelas a Receber (Analítico) é obrigatória.').nullable(),
+  recebimento: z.string().min(1, 'A conta Recebimentos (Crédito) é obrigatória.').nullable(),
+  desconto: z.string().nullable(),
+  historico_padrao_id: z.string().nullable(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -45,11 +45,11 @@ const FormConfiguracoesCR: React.FC = () => {
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      a_receber: '', // Alterado para string vazia
-      parcela: '', // Alterado para string vazia
-      recebimento: '', // Alterado para string vazia
-      desconto: '',
-      historico_padrao_id: '',
+      a_receber: null,
+      parcela: null,
+      recebimento: null,
+      desconto: null,
+      historico_padrao_id: null,
     },
   });
   
@@ -116,13 +116,13 @@ const FormConfiguracoesCR: React.FC = () => {
       showError('Erro ao carregar configurações de CR: ' + contasError.message);
     } else if (contasData) {
       const mappedData = contasData.reduce((acc, item) => {
-        // Converte null para string vazia para o formulário
-        acc[item.tipo_registro as keyof FormValues] = item.conta_contabil_id || '';
+        // Mapeia null para null (não string vazia)
+        acc[item.tipo_registro as keyof FormValues] = item.conta_contabil_id;
         return acc;
       }, {} as Partial<FormValues>);
       
       // Adiciona o ID do histórico padrão
-      mappedData.historico_padrao_id = historicoData?.historico_id || '';
+      mappedData.historico_padrao_id = historicoData?.historico_id || null;
       
       form.reset(mappedData);
     }
@@ -146,14 +146,14 @@ const FormConfiguracoesCR: React.FC = () => {
     const dataToUpsertContabil = TIPOS_REGISTRO_CONTABIL.map(tipo => ({
         proprietario_id: adminId,
         tipo_registro: tipo.key,
-        // Converte string vazia para null antes de salvar no DB
-        conta_contabil_id: values[tipo.key as keyof FormValues] || null, 
+        // Usa o valor diretamente (null ou string UUID)
+        conta_contabil_id: values[tipo.key as keyof FormValues], 
     }));
     
     const historicoPadraoPayload = {
         proprietario_id: adminId,
         tipo_registro: 'recebimento_padrao',
-        historico_id: values.historico_padrao_id || null,
+        historico_id: values.historico_padrao_id,
     };
 
     try {
@@ -227,7 +227,7 @@ const FormConfiguracoesCR: React.FC = () => {
                                 <FormLabel>{tipo.label} ({tipo.tipo})</FormLabel>
                                 <Select 
                                     onValueChange={field.onChange} 
-                                    value={field.value || ''} // Usa string vazia para o Select
+                                    value={field.value || "null"} // Usa "null" como string para a opção "Nenhum"
                                 >
                                     <FormControl>
                                         <SelectTrigger>
@@ -235,7 +235,8 @@ const FormConfiguracoesCR: React.FC = () => {
                                         </SelectTrigger>
                                     </FormControl>
                                     <SelectContent>
-                                        <SelectItem value={''}>Nenhum (Não Mapear)</SelectItem>
+                                        {/* CORREÇÃO: Usando "null" como string para a opção "Nenhum" */}
+                                        <SelectItem value="null">Nenhum (Não Mapear)</SelectItem>
                                         {getContasDisponiveis(tipo.tipo as 'Patrimonial' | 'Resultado', isSinteticoCR).map(c => (
                                             <SelectItem key={c.id} value={c.id}>
                                                 {c.display}
@@ -262,7 +263,7 @@ const FormConfiguracoesCR: React.FC = () => {
                     <FormLabel>Histórico Padrão (Recebimento)</FormLabel>
                     <Select 
                         onValueChange={field.onChange} 
-                        value={field.value || ''}
+                        value={field.value || "null"} // Usa "null" como string para a opção "Nenhum"
                     >
                         <FormControl>
                             <SelectTrigger>
@@ -270,7 +271,8 @@ const FormConfiguracoesCR: React.FC = () => {
                             </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                            <SelectItem value={''}>Nenhum (Não Mapear)</SelectItem>
+                            {/* CORREÇÃO: Usando "null" como string para a opção "Nenhum" */}
+                            <SelectItem value="null">Nenhum (Não Mapear)</SelectItem>
                             {historicos.map(h => (
                                 <SelectItem key={h.id} value={h.id}>
                                     {h.codigo && `[${h.codigo}] `}{h.descricao}
