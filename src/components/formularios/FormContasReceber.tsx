@@ -353,7 +353,17 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
                   .delete()
                   .eq('origem', 'lancamento_cr')
                   .eq('proprietario_id', ownerId)
-                  .or(`descricao.ilike.Lançamento Inicial CR: ${contaInicial?.descricao}%,descricao.ilike.Lançamento Inicial CR: ${values.descricao}%`);
+                  .ilike('descricao', `Lançamento Inicial CR: ${contaInicial?.descricao}%`);
+          }
+          
+          // CORREÇÃO CRÍTICA: Se for edição, deleta o lançamento anterior usando o ID da conta sintética
+          if (isEditing) {
+              const oldLaunchDescriptionPrefix = `Lançamento Inicial CR: ${contaInicial?.descricao} (CR ID: ${contaInicial?.id.substring(0, 8)})`;
+              await supabase.from('lancamentos')
+                  .delete()
+                  .eq('origem', 'lancamento_cr')
+                  .eq('proprietario_id', ownerId)
+                  .ilike('descricao', `${oldLaunchDescriptionPrefix}%`);
           }
           
           await supabase.from('lancamentos').insert(lancamentoPatrimonialPayload);
