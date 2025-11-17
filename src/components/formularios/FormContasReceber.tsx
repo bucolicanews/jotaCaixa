@@ -162,23 +162,20 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
       setLoadingClientes(true);
       
       let fetchedClients: ClienteCRSimples[] = [];
-      const processedIds = new Set<string>();
 
       // 1. Buscar Clientes do Sistema (tbl_clientes) - APENAS SE FOR ADMIN
       if (isAdmin) {
+          // Admin usa tbl_clientes como fonte principal para clientes do sistema
           const { data: systemClients } = await supabase
               .from('tbl_clientes')
-              .select('id, nome, documento, email')
+              .select('id, nome, documento, email, razao_social, nome_fantasia, telefone, telefone_fixo, cep, endereco, numero, complemento, bairro, cidade, estado')
               .eq('aprovado', true)
               .order('nome');
               
-          (systemClients as ClienteCRSimples[] || []).forEach(c => {
-              fetchedClients.push({ ...c, is_system_client: true });
-              processedIds.add(c.id);
-          });
+          fetchedClients.push(...(systemClients as ClienteCRSimples[] || []).map(c => ({ ...c, is_system_client: true })));
       }
       
-      // 2. Buscar Clientes de Contas a Receber (clientes)
+      // 2. Buscar Clientes de Contas a Receber (clientes) - Para clientes avulsos/contratos
       let queryCR = supabase
         .from('clientes')
         .select('id, nome, documento, email')
@@ -191,6 +188,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
           showError('Erro ao carregar clientes CR: ' + errorCR.message);
           setClientes([]);
       } else {
+          const processedIds = new Set(fetchedClients.map(c => c.id));
           const filteredClients = (dataCR as ClienteCRSimples[])
               .filter(c => c.id !== ownerId) // Exclui o próprio proprietário
               .filter(c => !processedIds.has(c.id)); // Exclui duplicatas já adicionadas da tbl_clientes
@@ -266,63 +264,47 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
       // 0. SINCRONIZAÇÃO CRÍTICA: Garante que o cliente selecionado exista na tabela 'clientes'
       const clienteSelecionado = clientes.find(c => c.id === values.cliente_id);
       
-      if (clienteSelecionado) {
-          // Se o cliente veio da tbl_clientes (is_system_client: true), fazemos o upsert na tabela 'clientes'
-          // para garantir que todos os campos de faturamento/contrato estejam atualizados.
-          if (clienteSelecionado.is_system_client) {
-              const { data: dbClient } = await supabase
-                  .from('tbl_clientes')
-                  .select('id, nome, documento, email, razao_social, nome_fantasia, telefone, telefone_fixo, cep, endereco, numero, complemento, bairro, cidade, estado')
-                  .eq('id', values.cliente_id)
-                  .single();
-                  
-              if (dbClient) {
-                  const { error: upsertError } = await supabase
-                      .from('clientes')
-                      .upsert({
-                          id: dbClient.id,
-                          proprietario_id: ownerId,
-                          nome: dbClient.nome,
-                          documento: dbClient.documento,
-                          email: dbClient.email,
-                          razao_social: dbClient.razao_social,
-                          nome_fantasia: dbClient.nome_fantasia,
-                          telefone: dbClient.telefone,
-                          telefone_fixo: dbClient.telefone_fixo,
-                          cep: dbClient.cep,
-                          endereco: dbClient.endereco,
-                          numero: dbClient.numero,
-                          complemento: dbClient.complemento,
-                          bairro: dbClient.bairro,
-                          cidade: dbClient.cidade,
-                          estado: dbClient.estado,
-                          is_system_client: true,
-                      }, { onConflict: 'id' });
-                      
-                  if (upsertError) throw upsertError;
-              }
-          }
-      } else {
-          // Se o cliente não foi encontrado na lista (o que não deveria acontecer se a busca estiver correta),
-          // tentamos buscar na tbl_clientes como fallback final para evitar o erro de FK.
-          const { data: dbClient } = await supabase
+      if (!clienteSelecionado) {
+          throw new Error('Cliente selecionado não encontrado na lista de clientes válidos.');
+      }
+      
+      // Se o cliente for um cliente do sistema (tbl_clientes), sincroniza os dados para 'clientes'
+      if (clienteSelecionado.is_system_client) {
+          // Busca os dados completos do cliente na tbl_clientes
+          const { data: dbClient, error: dbError } = await supabase
               .from('tbl_clientes')
-              .select('id, nome, documento, email')
+              .select('id, nome, documento, email, razao_social, nome_fantasia, telefone, telefone_fixo, cep, endereco, numero, complemento, bairro, cidade, estado')
               .eq('id', values.cliente_id)
               .single();
               
-          if (dbClient) {
-              await supabase.from('clientes').upsert({
+          if (dbError || !dbClient) {
+              throw new Error('Falha ao buscar dados completos do cliente do sistema.');
+          }
+          
+          // Executa o UPSERT na tabela 'clientes' (tabela de faturamento)
+          const { error: upsertError } = await supabase
+              .from('clientes')
+              .upsert({
                   id: dbClient.id,
                   proprietario_id: ownerId,
                   nome: dbClient.nome,
                   documento: dbClient.documento,
                   email: dbClient.email,
+                  razao_social: dbClient.razao_social,
+                  nome_fantasia: dbClient.nome_fantasia,
+                  telefone: dbClient.telefone,
+                  telefone_fixo: dbClient.telefone_fixo,
+                  cep: dbClient.cep,
+                  endereco: dbClient.endereco,
+                  numero: dbClient.numero,
+                  complemento: dbClient.complemento,
+                  bairro: dbClient.bairro,
+                  cidade: dbClient.cidade,
+                  estado: dbClient.estado,
                   is_system_client: true,
               }, { onConflict: 'id' });
-          } else {
-              throw new Error('Cliente selecionado não encontrado na base de dados de Clientes (CR) ou do Sistema.');
-          }
+              
+          if (upsertError) throw upsertError;
       }
       
       // 1. Calcular valores e parcelas
