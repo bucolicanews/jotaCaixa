@@ -225,7 +225,8 @@ const ClientesPage = () => {
           return acc;
       }, {} as Record<string, number>);
       
-      const processedEmails = new Set<string>();
+      // NOVO: Mapa para rastrear o registro mais relevante por email
+      const emailMap: Record<string, ClienteCRComStatus> = {};
       
       for (const cliente of fetchedData) {
           // FILTRAGEM PRINCIPAL: Se for Cliente, exclui o próprio ID da lista de clientes CR
@@ -234,7 +235,6 @@ const ClientesPage = () => {
           }
           
           const systemClient = systemClientsMap[cliente.id];
-          // CORREÇÃO: Usa o campo is_system_client do registro CR, se existir, ou verifica pelo mapa do sistema
           const isSystemClient = cliente.is_system_client || !!systemClient; 
           
           let systemStatus: ClienteCRComStatus['system_client_status'] = 'CR';
@@ -243,13 +243,10 @@ const ClientesPage = () => {
           if (isSystemClient && systemClient) {
               const dataFimAcesso = systemClient.data_fim_acesso ? parseISO(systemClient.data_fim_acesso) : null;
               
-              // Lógica de Bloqueio/Expiração (Ajustada para a nova regra)
               let isBlockedOrExpired = false;
               if (dataFimAcesso === null) {
-                  // Regra 1: Nulo = Vitalício (Ativo)
                   isBlockedOrExpired = false;
               } else if (isPast(dataFimAcesso)) {
-                  // Regra 3: Passada = Expirado
                   isBlockedOrExpired = true;
               }
               
@@ -283,25 +280,33 @@ const ClientesPage = () => {
               origem_cr: origemCR, // NOVO CAMPO
           };
           
-          // Desduplicação: Se o ID do cliente CR é o ID de um cliente do sistema, ele é o registro principal.
-          if (clienteComStatus.is_system_client) {
+          // LÓGICA DE DESDUPLICAÇÃO POR EMAIL
+          if (clienteComStatus.email) {
+              const emailKey = clienteComStatus.email.toLowerCase();
+              const existing = emailMap[emailKey];
+              
+              if (!existing || (clienteComStatus.is_system_client && existing.system_client_status !== 'Ativo')) {
+                  // Se não existe, ou se o novo é um cliente do sistema (e o existente não é Ativo), substitui.
+                  emailMap[emailKey] = clienteComStatus;
+              } else if (!existing.is_system_client && !clienteComStatus.is_system_client) {
+                  // Se ambos são CR, prioriza o que tem mais vínculos (contratos/documentos)
+                  const existingScore = existing.contratos_count + existing.documentos_societarios_count;
+                  const newScore = clienteComStatus.contratos_count + clienteComStatus.documentos_societarios_count;
+                  
+                  if (newScore > existingScore) {
+                      emailMap[emailKey] = clienteComStatus;
+                  }
+              }
+          } else {
+              // Se não tem email, adiciona diretamente (não pode ser desduplicado)
               clientesComStatus.push(clienteComStatus);
-              if (clienteComStatus.email) processedEmails.add(clienteComStatus.email);
-              continue;
           }
-          
-          // Se não é cliente do sistema, e tem email, verifica se o email já foi processado
-          if (clienteComStatus.email && processedEmails.has(clienteComStatus.email)) {
-              // Ignora duplicata de email (o registro do sistema já foi adicionado)
-              continue;
-          }
-          
-          // Se não é cliente do sistema, e o email não foi processado, adiciona (é um cliente CR puro)
-          clientesComStatus.push(clienteComStatus);
-          if (clienteComStatus.email) processedEmails.add(clienteComStatus.email);
       }
       
-      setClientesCR(clientesComStatus);
+      // Adiciona os clientes do mapa (desduplicados) e os clientes sem email (adicionados diretamente)
+      const finalClientesCR = Object.values(emailMap).concat(clientesComStatus.filter(c => !c.email));
+      
+      setClientesCR(finalClientesCR);
     }
 
     setCarregandoDados(false);
