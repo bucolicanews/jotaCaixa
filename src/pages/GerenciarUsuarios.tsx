@@ -57,15 +57,16 @@ const GerenciarUsuarios: React.FC = () => {
     
     let fetchedClientes: EmpresaFiltro[] = [];
     let fetchedUsers: UsuarioComEmpresa[] = [];
+    const ownerId = isAdmin ? usuario.id : (perfil as ClienteProfile)?.id;
 
     if (isAdmin) {
       // 1. Admin: Busca todos os clientes
-      const { data: clientesData, error: clientesError } = await supabase
+      const { data: clientesData, error: clientsError } = await supabase
         .from('tbl_clientes')
         .select('id, nome');
 
-      if (clientesError) {
-        showError('Erro ao carregar clientes para filtro: ' + clientesError.message);
+      if (clientsError) {
+        showError('Erro ao carregar clientes para filtro: ' + clientsError.message);
         setCarregandoDados(false);
         return;
       }
@@ -92,55 +93,67 @@ const GerenciarUsuarios: React.FC = () => {
       const adminUsers = (adminUsersData || []).map(u => ({ 
           ...u, 
           cliente_id: null, // Garante que cliente_id é null
-          admin_id: u.admin_id,
-          nome_empresa: 'Meus Usuários (Admin)' 
+          is_admin_user: true,
+          cliente_nome: 'Meus Usuários (Admin)' 
       })) as UsuarioComEmpresa[];
       
       fetchedUsers.push(...adminUsers);
 
       // ADMIN: Busca Usuários (Funcionários) dos Clientes
-      const clienteIds = fetchedClientes.filter(c => c.id !== usuario.id).map(c => c.id);
+      const clientIds = fetchedClientes.filter(c => c.id !== usuario.id).map(c => c.id);
       
-      if (clienteIds.length > 0) {
-          const { data: clienteUsersData, error: clienteUsersError } = await supabase
+      if (clientIds.length > 0) {
+          const { data: clientUsersData, error: clienteUsersError } = await supabase
             .from('tbl_usuarios')
-            .select('*')
-            .in('cliente_id', clienteIds) // Filtrando por cliente_id
+            .select('*, admin_id')
+            .in('cliente_id', clientIds) // Filtrando por cliente_id
             .order('nome', { ascending: true });
             
           if (clienteUsersError) console.error('Erro ao carregar usuários dos Clientes:', clienteUsersError);
           
-          const clienteUsers = (clienteUsersData || []).map(item => {
+          const clientUsers = (clientUsersData || []).map(item => {
             const nomeEmpresa = fetchedClientes.find(c => c.id === (item as UsuarioProfile).cliente_id)?.nome || 'N/A';
-            return { ...item, nome_empresa: nomeEmpresa } as UsuarioComEmpresa;
+            return { ...item, cliente_nome: nomeEmpresa, is_admin_user: false } as UsuarioComEmpresa;
           });
           
-          fetchedUsers.push(...clienteUsers);
+          fetchedUsers.push(...clientUsers);
       }
       
-      // FILTRA O PRÓPRIO ADMIN DA LISTA DE USUÁRIOS
-      const filteredUsers = fetchedUsers.filter(u => u.id !== usuario.id);
-      setUsuarios(filteredUsers);
-
-    } else if (isCliente) {
+    } else if (isCliente && ownerId) {
       // CLIENTE: Busca APENAS seus próprios Usuários (Funcionários)
       const { data: usuariosData, error: usuariosError } = await supabase
         .from('tbl_usuarios')
         .select('*')
-        .eq('cliente_id', usuario.id) // Filtrando por cliente_id
+        .eq('cliente_id', ownerId) // Filtrando por cliente_id
         .order('nome', { ascending: true });
 
       if (usuariosError) {
         showError('Erro ao carregar usuários: ' + usuariosError.message);
         setUsuarios([]);
-      } else {
-        const clientUsers = (usuariosData || []) as UsuarioComEmpresa[];
-        setUsuarios(clientUsers);
+        setCarregandoDados(false);
+        return;
       }
+      
+      fetchedUsers = (usuariosData || []).map(u => ({ ...u, cliente_nome: (perfil as ClienteProfile)?.nome || 'Minha Empresa' })) as UsuarioComEmpresa[];
     }
     
+    // NOVO PASSO: Buscar todos os IDs de Clientes (tbl_clientes) e Admin (tbl_admins) para exclusão
+    const [clientProfilesRes, adminProfilesRes] = await Promise.all([
+        supabase.from('tbl_clientes').select('id'),
+        supabase.from('tbl_admins').select('id'),
+    ]);
+    
+    const clientProfileIds = new Set((clientProfilesRes.data || []).map(c => c.id));
+    const adminProfileIds = new Set((adminProfilesRes.data || []).map(a => a.id));
+    
+    // 3. Filtrar: Excluir o Admin logado E qualquer perfil que seja Cliente ou Admin (para garantir que apenas subordinados fiquem)
+    const filteredUsers = fetchedUsers
+        .filter(u => u.id !== usuario.id) // Exclui o usuário logado
+        .filter(u => !clientProfileIds.has(u.id) && !adminProfileIds.has(u.id)); // Exclui qualquer um que seja Cliente ou Admin
+
+    setUsuarios(filteredUsers);
     setCarregandoDados(false);
-  }, [usuario, role, isAdmin, isCliente]);
+  }, [usuario, role, isAdmin, isCliente, perfil]);
 
   useEffect(() => {
     if (!carregando) {
