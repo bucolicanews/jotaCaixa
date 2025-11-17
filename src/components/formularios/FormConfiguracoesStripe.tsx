@@ -5,7 +5,7 @@ import * as z from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Loader2 } from 'lucide-react';
+import { Loader2, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { useSessao } from '@/hooks/use-sessao';
@@ -30,6 +30,7 @@ const FormConfiguracoesStripe: React.FC = () => {
   const [contasContabeis, setContasContabeis] = useState<PlanoContas[]>([]);
   const [historicos, setHistoricos] = useState<Historico[]>([]);
   const [loadingContas, setLoadingContas] = useState(true);
+  const [hasLinkedSaldoConta, setHasLinkedSaldoConta] = useState(true); // NOVO ESTADO
   
   const isAdmin = role === 'Admin';
   const adminId = usuario?.id;
@@ -51,6 +52,8 @@ const FormConfiguracoesStripe: React.FC = () => {
     },
   });
   
+  const contaSinteticaWatch = form.watch('conta_sintetica_id');
+
   // Efeito para carregar os valores iniciais do hook no formulário
   useEffect(() => {
       if (configInicial) {
@@ -113,6 +116,36 @@ const FormConfiguracoesStripe: React.FC = () => {
         setHistoricos(data as Historico[]);
     }
   }, [adminId]);
+  
+  // NOVO: Verifica se a conta sintética selecionada está vinculada a uma saldo_conta
+  const checkLinkedSaldoConta = useCallback(async (contaContabilId: string) => {
+      if (!adminId || !contaContabilId) {
+          setHasLinkedSaldoConta(false);
+          return;
+      }
+      
+      const { count, error } = await supabase
+          .from('saldo_contas')
+          .select('id', { count: 'exact', head: true })
+          .eq('proprietario_id', adminId)
+          .eq('conta_contabil_id', contaContabilId);
+          
+      if (error) {
+          console.error('Erro ao verificar saldo_conta vinculada:', error);
+          setHasLinkedSaldoConta(false);
+          return;
+      }
+      
+      setHasLinkedSaldoConta((count || 0) > 0);
+  }, [adminId]);
+  
+  useEffect(() => {
+      if (contaSinteticaWatch) {
+          checkLinkedSaldoConta(contaSinteticaWatch);
+      } else {
+          setHasLinkedSaldoConta(true); // Não verifica se não há conta selecionada
+      }
+  }, [contaSinteticaWatch, checkLinkedSaldoConta]);
 
   useEffect(() => {
     if (!carregandoSessao && isAdmin) {
@@ -129,6 +162,11 @@ const FormConfiguracoesStripe: React.FC = () => {
     
     if (!adminId) {
         showError('ID do administrador não encontrado.');
+        return;
+    }
+    
+    if (!hasLinkedSaldoConta) {
+        showError('A Conta Contábil de Destino (Stripe/Banco) deve estar vinculada a uma Conta/Caixa em Bancos.');
         return;
     }
     
@@ -237,6 +275,12 @@ const FormConfiguracoesStripe: React.FC = () => {
                       Nenhuma conta marcada como Caixa/Banco ou Patrimonial. Marque as contas em <a href="/plano-contas" className="underline">Plano de Contas</a>.
                   </p>
               )}
+              {!hasLinkedSaldoConta && contaSinteticaWatch && (
+                  <div className="flex items-center text-sm text-red-500 mt-2">
+                      <AlertTriangle className="w-4 h-4 mr-1" />
+                      Esta conta contábil precisa ser vinculada a uma Conta/Caixa em <a href="/bancos" className="underline">Bancos / Caixas</a>.
+                  </div>
+              )}
             </FormItem>
           )}
         />
@@ -302,7 +346,7 @@ const FormConfiguracoesStripe: React.FC = () => {
           )}
         />
         
-        <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
+        <Button type="submit" className="w-full" disabled={form.formState.isSubmitting || !hasLinkedSaldoConta}>
           {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Salvar Credenciais
         </Button>
