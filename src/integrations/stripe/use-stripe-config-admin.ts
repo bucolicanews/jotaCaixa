@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
+import { loadStripe, Stripe } from '@stripe/stripe-js';
 import { supabase } from '@/integrations/supabase/client';
+import { showError } from '@/utils/toast';
 
 interface StripeConfigData {
   id: string | null;
@@ -41,6 +43,10 @@ export function useStripeConfigAdmin(adminId: string | null): StripeConfigAdminH
     
     setLoading(true);
     setError(null);
+    
+    // --- Logging for Debugging ---
+    console.log("useStripeConfigAdmin: adminId enviado:", adminId);
+    // -----------------------------
     
     try {
       // Chamada para a Edge Function que usa a Service Role Key
