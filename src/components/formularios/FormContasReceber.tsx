@@ -165,7 +165,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
   }, [ownerId, _configMap.Ativo, _configMap.Passivo, _configMap['Patrimonio Liquido']]);
 
   useEffect(() => {
-    const fetchClientes = async () => {
+    const fetchClientsData = async () => {
       if (!ownerId) {
         setLoadingClientes(false);
         return;
@@ -213,7 +213,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
       setLoadingClientes(false);
     };
     
-    fetchClientes();
+    fetchClientsData();
     fetchHistoricos();
     fetchContasPatrimoniais();
     if (isAdmin) {
@@ -278,15 +278,11 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
       const clienteSelecionado = clientes.find(c => c.id === values.cliente_id);
       
       if (!clienteSelecionado) {
-          throw new Error('Cliente selecionado não encontrado na lista de clientes de faturamento. Certifique-se de que ele foi cadastrado em Clientes.');
+          throw new Error('Cliente selecionado não encontrado na lista de clientes de faturamento. Cadastre-o em Clientes.');
       }
       
-      // Se o cliente for um cliente do sistema (tbl_clientes) OU um cliente CR puro,
-      // fazemos o UPSERT na tabela 'clientes' para garantir que todos os campos de faturamento
-      // estejam atualizados e que o registro exista para a FK.
-      
-      // Se for um cliente do sistema, buscamos os dados completos para o upsert
-      let clientDataToUpsert: Partial<ClienteCRSimples> = {};
+      // Se o cliente for um cliente do sistema (is_system_client), buscamos os dados completos da tbl_clientes
+      let clientDataToUpsert: Partial<ClienteCRSimples> = clienteSelecionado;
       
       if (clienteSelecionado.is_system_client) {
           const { data: dbClient, error: dbError } = await supabase
@@ -296,16 +292,14 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
               .single();
               
           if (dbError || !dbClient) {
-              throw new Error('Falha ao buscar dados completos do cliente do sistema.');
+              // Se falhar ao buscar na tbl_clientes, tenta usar os dados da tabela 'clientes'
+              console.warn('Falha ao buscar dados completos do cliente do sistema na tbl_clientes. Usando dados da tabela clientes.');
+          } else {
+              clientDataToUpsert = {
+                  ...dbClient,
+                  is_system_client: true,
+              };
           }
-          
-          clientDataToUpsert = {
-              ...dbClient,
-              is_system_client: true,
-          };
-      } else {
-          // Se for um cliente CR puro, usamos os dados que já temos (que vieram da tabela 'clientes')
-          clientDataToUpsert = clienteSelecionado;
       }
       
       // Executa o UPSERT na tabela 'clientes' (tabela de faturamento)
@@ -331,7 +325,10 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
               is_system_client: clientDataToUpsert.is_system_client || false,
           }, { onConflict: 'id' });
           
-      if (upsertError) throw upsertError;
+      if (upsertError) {
+          console.error('ERRO CRÍTICO NO UPSERT DE CLIENTES:', upsertError);
+          throw new Error('Falha ao sincronizar cliente na tabela de faturamento: ' + upsertError.message);
+      }
       
       // 1. Calcular valores e parcelas
       let valorTotal: number;
