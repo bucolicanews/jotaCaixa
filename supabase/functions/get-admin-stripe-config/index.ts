@@ -17,6 +17,15 @@ serve(async (req: Request) => {
     const body = await req.json();
     const { adminId } = body;
 
+    const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    
+    // --- Logging for Debugging ---
+    console.log('📌 adminId recebido:', adminId);
+    console.log('📌 SUPABASE_URL existe?', !!SUPABASE_URL);
+    console.log('📌 SERVICE ROLE existe?', !!SUPABASE_SERVICE_ROLE_KEY);
+    // -----------------------------
+    
     if (!adminId) {
       return new Response(JSON.stringify({ error: 'Missing adminId' }), {
         status: 400,
@@ -24,30 +33,38 @@ serve(async (req: Request) => {
       });
     }
 
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+        console.error('FATAL: Missing Supabase environment variables.');
+        return new Response(JSON.stringify({ error: 'Missing Supabase environment variables.' }), {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+    }
+
     // Inicializar Supabase Client com SERVICE ROLE KEY (ignora RLS)
     const supabaseService = createClient(
-      (Deno.env.get('SUPABASE_URL') as any)!,
-      (Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') as any)!,
+      SUPABASE_URL,
+      SUPABASE_SERVICE_ROLE_KEY,
       { auth: { persistSession: false } }
     );
 
-    // Buscar a configuração do Stripe
+    // Removida a coluna 'conta_resultado_id' que não existe na tabela
     const { data, error: fetchError } = await supabaseService
       .from('configuracoes_stripe')
       .select('id, stripe_publishable_key, stripe_secret_key, conta_sintetica_id, conta_receber_id, historico_padrao_id')
       .eq('proprietario_id', adminId)
       .limit(1)
-      .single();
+      .maybeSingle();
 
-    if (fetchError && fetchError.code !== 'PGRST116') {
-        console.error('Edge Function Error:', fetchError);
+    if (fetchError) { 
+        console.error('Edge Function Error fetching config:', fetchError);
         return new Response(JSON.stringify({ error: fetchError.message }), {
             status: 500,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
     }
     
-    // Retorna os dados (ou null se não encontrado)
+    // Retorna os dados (data será null se não houver configuração)
     return new Response(JSON.stringify({ config: data }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
