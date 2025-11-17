@@ -12,7 +12,7 @@ import { useSessao } from '@/hooks/use-sessao';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { PlanoContas } from '@/types/plano-contas';
 import { Historico } from '@/types/historico';
-import { useStripeConfigAdmin } from '@/integrations/stripe/use-stripe-config-admin'; // NOVO HOOK
+import { useStripeConfigAdmin } from '@/integrations/stripe/use-stripe-config-admin';
 
 const formSchema = z.object({
   stripe_publishable_key: z.string().min(1, 'A chave publicável é obrigatória.'),
@@ -44,10 +44,10 @@ const FormConfiguracoesStripe: React.FC = () => {
     defaultValues: {
       stripe_publishable_key: '',
       stripe_secret_key: '',
-      // Usando string vazia como default para forçar a validação min(1)
-      conta_sintetica_id: '', 
-      conta_receber_id: '',
-      historico_padrao_id: '',
+      // Usando undefined para que o Zod force a seleção se o valor for nulo
+      conta_sintetica_id: undefined, 
+      conta_receber_id: undefined,
+      historico_padrao_id: undefined,
     },
   });
   
@@ -58,19 +58,19 @@ const FormConfiguracoesStripe: React.FC = () => {
           form.reset({
               stripe_publishable_key: configInicial.stripe_publishable_key || '',
               stripe_secret_key: configInicial.stripe_secret_key || '',
-              // Se for null, usa string vazia para falhar na validação min(1)
-              conta_sintetica_id: configInicial.conta_sintetica_id || '', 
-              conta_receber_id: configInicial.conta_receber_id || '',
-              historico_padrao_id: configInicial.historico_padrao_id || '',
+              // Se for null, usa undefined para acionar a validação Zod
+              conta_sintetica_id: configInicial.conta_sintetica_id || undefined, 
+              conta_receber_id: configInicial.conta_receber_id || undefined,
+              historico_padrao_id: configInicial.historico_padrao_id || undefined,
           });
       } else if (!loadingData && !configInicial) {
           setExistingId(null);
           form.reset({
               stripe_publishable_key: '',
               stripe_secret_key: '',
-              conta_sintetica_id: '',
-              conta_receber_id: '',
-              historico_padrao_id: '',
+              conta_sintetica_id: undefined,
+              conta_receber_id: undefined,
+              historico_padrao_id: undefined,
           });
       }
   }, [configInicial, loadingData, form]);
@@ -80,11 +80,13 @@ const FormConfiguracoesStripe: React.FC = () => {
     if (!adminId) return;
     setLoadingContas(true);
     
+    // Busca contas analíticas que são marcadas como Caixa/Banco ou Patrimonial
     const { data, error } = await supabase
         .from('plano_contas')
-        .select('id, Conta, Descricao, Analitica')
+        .select('id, Conta, Descricao, Analitica, is_conta_caixa_banco, is_conta_patrimonial')
         .eq('proprietario_id', adminId)
         .eq('Analitica', 'Sim')
+        .or('is_conta_caixa_banco.eq.true,is_conta_patrimonial.eq.true')
         .order('Conta');
         
     if (error) {
@@ -129,8 +131,6 @@ const FormConfiguracoesStripe: React.FC = () => {
         showError('ID do administrador não encontrado.');
         return;
     }
-    
-    // A validação Zod agora garante que os IDs não são nulos ou vazios.
     
     const dataToSave = {
       stripe_publishable_key: values.stripe_publishable_key,
@@ -216,7 +216,7 @@ const FormConfiguracoesStripe: React.FC = () => {
               <FormLabel>Conta Contábil de Destino (Stripe/Banco)</FormLabel>
               <Select 
                 onValueChange={field.onChange} 
-                value={field.value || undefined}
+                value={field.value}
               >
                 <FormControl>
                   <SelectTrigger>
@@ -232,6 +232,11 @@ const FormConfiguracoesStripe: React.FC = () => {
                 </SelectContent>
               </Select>
               <FormMessage />
+              {contasContabeis.length === 0 && (
+                  <p className="text-sm text-red-500">
+                      Nenhuma conta marcada como Caixa/Banco ou Patrimonial. Marque as contas em <a href="/plano-contas" className="underline">Plano de Contas</a>.
+                  </p>
+              )}
             </FormItem>
           )}
         />
@@ -244,7 +249,7 @@ const FormConfiguracoesStripe: React.FC = () => {
               <FormLabel>Conta Contábil Parcelas a Receber (Stripe)</FormLabel>
               <Select 
                 onValueChange={field.onChange} 
-                value={field.value || undefined}
+                value={field.value}
               >
                 <FormControl>
                   <SelectTrigger>
@@ -273,7 +278,7 @@ const FormConfiguracoesStripe: React.FC = () => {
               <FormLabel>Histórico Padrão para Lançamentos Stripe</FormLabel>
               <Select 
                 onValueChange={field.onChange} 
-                value={field.value || undefined}
+                value={field.value}
               >
                 <FormControl>
                   <SelectTrigger>
