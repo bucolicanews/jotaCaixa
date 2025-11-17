@@ -59,25 +59,12 @@ interface FormContasReceberProps {
   onSaveComplete: () => void;
 }
 
-// Tipo simplificado para a lista de clientes (agora pode vir de tbl_clientes ou clientes)
+// Tipo simplificado para a lista de clientes (agora busca de tbl_clientes)
 interface ClienteCRSimples {
   id: string;
   nome: string;
   documento?: string | null;
   email?: string | null;
-  is_system_client?: boolean; // Indica se veio da tbl_clientes
-  // Adicionando campos de perfil para sincronização
-  razao_social?: string | null;
-  nome_fantasia?: string | null;
-  telefone?: string | null;
-  telefone_fixo?: string | null;
-  cep?: string | null;
-  endereco?: string | null;
-  numero?: string | null;
-  complemento?: string | null;
-  bairro?: string | null;
-  cidade?: string | null;
-  estado?: string | null;
 }
 
 const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onSaveComplete }) => {
@@ -172,60 +159,27 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
       }
       setLoadingClientes(true);
       
-      // 1. Buscar Clientes do Sistema (tbl_clientes) - APENAS SE FOR ADMIN
-      let systemClients: ClienteProfile[] = [];
-      if (isAdmin) {
-          const { data: systemClientsData } = await supabase
-              .from('tbl_clientes')
-              .select('id, nome, documento, email, razao_social, nome_fantasia, telefone, telefone_fixo, cep, endereco, numero, complemento, bairro, cidade, estado, logo_url')
-              .eq('aprovado', true)
-              .order('nome');
-          systemClients = systemClientsData as ClienteProfile[] || [];
+      // 1. Buscar Clientes do Sistema (tbl_clientes) - ESTA É A NOVA FONTE DE VERDADE PARA FK
+      let queryClients = supabase
+          .from('tbl_clientes')
+          .select('id, nome, documento, email')
+          .eq('aprovado', true)
+          .order('nome');
+          
+      // Se for Cliente, filtra apenas os clientes que ele pode ver (seus próprios usuários)
+      if (!isAdmin) {
+          // Clientes só podem ver clientes que eles criaram (se houver lógica de criação)
+          // Ou, de forma mais simples, todos os clientes aprovados (se a RLS permitir)
+          // Como a RLS de tbl_clientes é complexa, vamos buscar todos os aprovados e confiar na RLS.
       }
       
-      // 2. Sincronizar Clientes do Sistema para a tabela 'clientes' (faturamento)
-      const syncPromises = systemClients.map(c => {
-          const dataToUpsert = {
-              id: c.id,
-              proprietario_id: ownerId,
-              nome: c.nome,
-              documento: c.documento,
-              email: c.email,
-              razao_social: c.razao_social,
-              nome_fantasia: c.nome_fantasia,
-              telefone: c.telefone,
-              telefone_fixo: c.telefone_fixo,
-              cep: c.cep,
-              endereco: c.endereco,
-              numero: c.numero,
-              complemento: c.complemento,
-              bairro: c.bairro,
-              cidade: c.cidade,
-              estado: c.estado,
-              is_system_client: true, // Marca como cliente do sistema
-          };
-          // Usamos o service role para garantir que a sincronização ocorra sem problemas de RLS
-          // Mas como estamos no frontend, confiamos na RLS do Admin/Cliente para o upsert na tabela 'clientes'
-          return supabase.from('clientes').upsert(dataToUpsert, { onConflict: 'id' });
-      });
+      const { data: dataClients, error: errorClients } = await queryClients;
       
-      // Executa a sincronização (ignora erros, pois o cliente CR puro será buscado a seguir)
-      await Promise.all(syncPromises);
-      
-      // 3. Buscar Clientes de Contas a Receber (clientes) - Agora inclui os sincronizados
-      let queryCR = supabase
-        .from('clientes')
-        .select('id, nome, documento, email, is_system_client, razao_social, nome_fantasia, telefone, telefone_fixo, cep, endereco, numero, complemento, bairro, cidade, estado')
-        .eq('proprietario_id', ownerId)
-        .order('nome');
-      
-      const { data: dataCR, error: errorCR } = await queryCR;
-      
-      if (errorCR) {
-          showError('Erro ao carregar clientes CR: ' + errorCR.message);
+      if (errorClients) {
+          showError('Erro ao carregar clientes: ' + errorClients.message);
           setClientes([]);
       } else {
-          const fetchedClients = (dataCR as ClienteCRSimples[])
+          const fetchedClients = (dataClients as ClienteCRSimples[])
               .filter(c => c.id !== ownerId); // Exclui o próprio proprietário
               
           setClientes(fetchedClients);
@@ -296,60 +250,8 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
     
     try {
       // 0. SINCRONIZAÇÃO CRÍTICA: Garante que o cliente selecionado exista na tabela 'clientes'
-      const clienteSelecionado = clientes.find(c => c.id === values.cliente_id);
-      
-      if (!clienteSelecionado) {
-          throw new Error('Cliente selecionado não encontrado na lista de clientes de faturamento. Cadastre-o em Clientes.');
-      }
-      
-      // Se o cliente for um cliente do sistema (is_system_client), buscamos os dados completos da tbl_clientes
-      let clientDataToUpsert: Partial<ClienteCRSimples> = clienteSelecionado;
-      
-      if (clienteSelecionado.is_system_client) {
-          const { data: dbClient, error: dbError } = await supabase
-              .from('tbl_clientes')
-              .select('id, nome, documento, email, razao_social, nome_fantasia, telefone, telefone_fixo, cep, endereco, numero, complemento, bairro, cidade, estado')
-              .eq('id', values.cliente_id)
-              .single();
-              
-          if (dbError || !dbClient) {
-              // Se falhar ao buscar na tbl_clientes, tenta usar os dados da tabela 'clientes'
-              console.warn('Falha ao buscar dados completos do cliente do sistema na tbl_clientes. Usando dados da tabela clientes.');
-          } else {
-              clientDataToUpsert = {
-                  ...dbClient,
-                  is_system_client: true,
-              };
-          }
-      }
-      
-      // Executa o UPSERT na tabela 'clientes' (tabela de faturamento)
-      const { error: upsertError } = await supabase
-          .from('clientes')
-          .upsert({
-              id: values.cliente_id,
-              proprietario_id: ownerId,
-              nome: clientDataToUpsert.nome,
-              documento: clientDataToUpsert.documento,
-              email: clientDataToUpsert.email,
-              razao_social: clientDataToUpsert.razao_social,
-              nome_fantasia: clientDataToUpsert.nome_fantasia,
-              telefone: clientDataToUpsert.telefone,
-              telefone_fixo: clientDataToUpsert.telefone_fixo,
-              cep: clientDataToUpsert.cep,
-              endereco: clientDataToUpsert.endereco,
-              numero: clientDataToUpsert.numero,
-              complemento: clientDataToUpsert.complemento,
-              bairro: clientDataToUpsert.bairro,
-              cidade: clientDataToUpsert.cidade,
-              estado: clientDataToUpsert.estado,
-              is_system_client: clientDataToUpsert.is_system_client || false,
-          }, { onConflict: 'id' });
-          
-      if (upsertError) {
-          console.error('ERRO CRÍTICO NO UPSERT DE CLIENTES:', upsertError);
-          throw new Error('Falha ao sincronizar cliente na tabela de faturamento: ' + upsertError.message);
-      }
+      // REMOVIDO: A lógica de sincronização de clientes CR para a tabela 'clientes'
+      // Agora, a FK aponta para tbl_clientes, então não precisamos mais do upsert aqui.
       
       // 1. Calcular valores e parcelas
       let valorTotal: number;
@@ -376,7 +278,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
       
       const contaReceberPayload = {
           [ownerKey]: ownerId,
-          cliente_id: values.cliente_id,
+          cliente_id: values.cliente_id, // ESTE ID AGORA DEVE EXISTIR EM tbl_clientes
           descricao: values.descricao,
           valor_total: valorTotal,
           data_emissao: format(new Date(), 'yyyy-MM-dd'),

@@ -484,9 +484,11 @@ const ClientesPage = () => {
   };
   
   const handleNewCR = () => {
+      // ALTERAÇÃO AQUI: Redireciona para o modal de Empresa Avulsa (que cria na tbl_clientes)
+      setDialogAvulsaAberto(true);
       setClienteSelecionado(null);
       setPerfilParaEditar(null);
-      setDialogAberto(true);
+      setDialogAberto(false);
   };
   
   // NOVO HANDLER: Enviar Convite de Acesso (Substitui PromoteToSystem)
@@ -1034,48 +1036,32 @@ const ClientesPage = () => {
                     </DropdownMenuItem>
                 </DropdownMenuContent>
             </DropdownMenu>
-            {/* Botão para Novo Cliente CR */}
-            <Dialog open={dialogAberto && !perfilParaEditar} onOpenChange={setDialogAberto}>
+            {/* Botão para Novo Cliente CR (Agora cria um cliente avulso na tbl_clientes) */}
+            <Dialog open={dialogAvulsaAberto} onOpenChange={setDialogAvulsaAberto}>
               <DialogTrigger asChild>
                 <Button onClick={handleNewCR} className="w-full sm:w-auto bg-orange-500 hover:bg-orange-600">
                   <PlusCircle className="w-4 h-4 mr-2" />
                   Cliente Direto
                 </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle>{clienteSelecionado ? 'Editar Cliente CR' : 'Novo Cliente CR'}</DialogTitle>
-                </DialogHeader>
-                <FormCliente 
-                  clienteInicial={clienteSelecionado}
-                  onSaveComplete={handleSaveComplete}
-                />
+              <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+                  <DialogHeader>
+                      <DialogTitle>Cadastrar Cliente Direto (Avulso)</DialogTitle>
+                      <p className="text-sm text-muted-foreground">
+                          Cria um perfil de cliente na base de usuários para ser usado em Contas a Receber e Contratos.
+                      </p>
+                  </DialogHeader>
+                  <FormEmpresaAvulsa onSaveComplete={handleSaveComplete} />
               </DialogContent>
             </Dialog>
             
-            {/* Botão para Nova Empresa Avulsa (Apenas Admin) */}
-            {isAdmin && (
-                <Dialog open={dialogAvulsaAberto} onOpenChange={setDialogAvulsaAberto}>
-                    <DialogTrigger asChild>
-                        <Button variant="secondary" onClick={() => setDialogAvulsaAberto(true)} className="w-full sm:w-auto">
-                            <Building2 className="w-4 h-4 mr-2" />
-                            Cliente Sistema
-                        </Button>
-                    </DialogTrigger>
-                    <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
-                        <DialogHeader>
-                            <DialogTitle>Cadastrar Empresa Avulsa</DialogTitle>
-                        </DialogHeader>
-                        <FormEmpresaAvulsa onSaveComplete={handleSaveComplete} />
-                    </DialogContent>
-                </Dialog>
-            )}
+            {/* Botão para Nova Empresa Avulsa (Apenas Admin) - REMOVIDO, AGORA É O NOVO CLIENTE CR */}
             
             {/* NOVO BOTÃO: Convidar Cliente (Apenas Admin) */}
             {isAdmin && (
                 <Dialog open={dialogConviteAberto} onOpenChange={setDialogConviteAberto}>
                     <DialogTrigger asChild>
-                        <Button variant="outline" onClick={() => setDialogConviteAberto(true)} className="w-full sm:w-auto">
+                        <Button variant="secondary" onClick={() => setDialogConviteAberto(true)} className="w-full sm:w-auto">
                             <Mail className="w-4 h-4 mr-2" />
                             Convidar Cliente
                         </Button>
@@ -1170,6 +1156,19 @@ const ClientesPage = () => {
         </Card>
       )}
       
+      {/* Dialog para editar Cliente CR (usa FormCliente) */}
+      <Dialog open={dialogAberto && !!clienteSelecionado} onOpenChange={setDialogAberto}>
+          <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Editar Cliente CR</DialogTitle>
+            </DialogHeader>
+            <FormCliente 
+              clienteInicial={clienteSelecionado}
+              onSaveComplete={handleSaveComplete}
+            />
+          </DialogContent>
+        </Dialog>
+        
       {/* Dialog para editar Empresa do Sistema (usa FormUsuario) */}
       <Dialog open={dialogAberto && !!perfilParaEditar} onOpenChange={setDialogAberto}>
           <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
