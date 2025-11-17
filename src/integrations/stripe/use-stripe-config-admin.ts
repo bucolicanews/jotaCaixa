@@ -44,6 +44,9 @@ export function useStripeConfigAdmin(adminId: string | null): StripeConfigAdminH
     setError(null);
     
     try {
+      // --- LOG PARA DEBUG ---
+      console.log('useStripeConfigAdmin: Sending adminId:', adminId);
+      
       // Chamada para a Edge Function que usa a Service Role Key
       const { data, error: invokeError } = await supabase.functions.invoke('get-admin-stripe-config', {
           body: { adminId },
