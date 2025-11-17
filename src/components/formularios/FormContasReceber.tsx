@@ -17,7 +17,7 @@ import { showError, showSuccess } from '@/utils/toast';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Separator } from '../ui/separator';
 import { useSessao } from '@/hooks/use-sessao';
-import { UsuarioProfile } from '@/types/usuario';
+import { UsuarioProfile, ClienteProfile } from '@/types/usuario';
 import { Historico } from '@/types/historico';
 import { PlanoContas } from '@/types/plano-contas';
 import { useContabilConfig } from '@/hooks/use-contabil-config';
@@ -66,24 +66,36 @@ interface ClienteCRSimples {
   documento?: string | null;
   email?: string | null;
   is_system_client?: boolean; // Indica se veio da tbl_clientes
+  // Adicionando campos de perfil para sincronização
+  razao_social?: string | null;
+  nome_fantasia?: string | null;
+  telefone?: string | null;
+  telefone_fixo?: string | null;
+  cep?: string | null;
+  endereco?: string | null;
+  numero?: string | null;
+  complemento?: string | null;
+  bairro?: string | null;
+  cidade?: string | null;
+  estado?: string | null;
 }
 
 const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onSaveComplete }) => {
   const { perfil, role, usuario } = useSessao();
-  const { configMap: _configMap } = useContabilConfig(); // Corrigido TS6133
+  const { configMap: _configMap } = useContabilConfig();
   const [clientes, setClientes] = useState<ClienteCRSimples[]>([]);
   const [loadingClientes, setLoadingClientes] = useState(true);
   const [mapeamentoContabil, setMapeamentoContabil] = useState<Record<string, string | null>>({});
   const [historicos, setHistoricos] = useState<Historico[]>([]);
-  const [contasPatrimoniais, setContasPatrimoniais] = useState<PlanoContas[]>([]); // RENOMEADO
-  const [loadingContasPatrimoniais, setLoadingContasPatrimoniais] = useState(true); // RENOMEADO
+  const [contasPatrimoniais, setContasPatrimoniais] = useState<PlanoContas[]>([]);
+  const [loadingContasPatrimoniais, setLoadingContasPatrimoniais] = useState(true);
   const [isCreatingHistorico, setIsCreatingHistorico] = useState(false);
   const isEditing = !!contaInicial;
 
   const getOwnerId = () => {
     if (role === 'Admin') return usuario?.id || null;
     if (role === 'Cliente') return (perfil as any)?.id;
-    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id; // FIX: proprietario_id -> cliente_id
+    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id;
     return null;
   };
   
@@ -134,13 +146,12 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
     const passivoCode = _configMap.Passivo || '2';
     const plCode = _configMap['Patrimonio Liquido'] || '3';
     
-    // Busca contas Patrimoniais (Ativo, Passivo, PL)
     const { data, error } = await supabase
         .from('plano_contas')
         .select('id, Conta, Descricao')
         .eq('proprietario_id', ownerId)
         .eq('Analitica', 'Sim')
-        .eq('is_conta_patrimonial', true) // FILTRO PRINCIPAL
+        .eq('is_conta_patrimonial', true)
         .or(`Conta.like.${ativoCode}.%,Conta.like.${passivoCode}.%,Conta.like.${plCode}.%`)
         .order('Conta');
         
@@ -162,23 +173,26 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
       setLoadingClientes(true);
       
       let fetchedClients: ClienteCRSimples[] = [];
+      const processedIds = new Set<string>();
 
       // 1. Buscar Clientes do Sistema (tbl_clientes) - APENAS SE FOR ADMIN
       if (isAdmin) {
-          // Admin usa tbl_clientes como fonte principal para clientes do sistema
           const { data: systemClients } = await supabase
               .from('tbl_clientes')
               .select('id, nome, documento, email, razao_social, nome_fantasia, telefone, telefone_fixo, cep, endereco, numero, complemento, bairro, cidade, estado')
               .eq('aprovado', true)
               .order('nome');
               
-          fetchedClients.push(...(systemClients as ClienteCRSimples[] || []).map(c => ({ ...c, is_system_client: true })));
+          (systemClients || []).forEach(c => {
+              fetchedClients.push({ ...c, is_system_client: true });
+              processedIds.add(c.id);
+          });
       }
       
-      // 2. Buscar Clientes de Contas a Receber (clientes) - Para clientes avulsos/contratos
+      // 2. Buscar Clientes de Contas a Receber (clientes) - Clientes CR puros
       let queryCR = supabase
         .from('clientes')
-        .select('id, nome, documento, email')
+        .select('id, nome, documento, email, is_system_client')
         .eq('proprietario_id', ownerId)
         .order('nome');
       
@@ -188,7 +202,6 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
           showError('Erro ao carregar clientes CR: ' + errorCR.message);
           setClientes([]);
       } else {
-          const processedIds = new Set(fetchedClients.map(c => c.id));
           const filteredClients = (dataCR as ClienteCRSimples[])
               .filter(c => c.id !== ownerId) // Exclui o próprio proprietário
               .filter(c => !processedIds.has(c.id)); // Exclui duplicatas já adicionadas da tbl_clientes
@@ -202,7 +215,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
     
     fetchClientes();
     fetchHistoricos();
-    fetchContasPatrimoniais(); // Chamando a nova função
+    fetchContasPatrimoniais();
     if (isAdmin) {
         fetchMapeamentoContabil();
     }
@@ -220,7 +233,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
       intervalo_dias: 30,
       historico_id: contaInicial?.historico_id || null,
       novo_historico: '',
-      conta_patrimonial_id: contaInicial?.id_conta_patrimonial || null, // RENOMEADO
+      conta_patrimonial_id: contaInicial?.id_conta_patrimonial || null,
     },
   });
 
@@ -265,7 +278,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
       const clienteSelecionado = clientes.find(c => c.id === values.cliente_id);
       
       if (!clienteSelecionado) {
-          throw new Error('Cliente selecionado não encontrado na lista de clientes válidos.');
+          throw new Error('Cliente selecionado não encontrado na lista de clientes de faturamento. Certifique-se de que ele foi cadastrado em Clientes.');
       }
       
       // Se o cliente for um cliente do sistema (tbl_clientes), sincroniza os dados para 'clientes'
