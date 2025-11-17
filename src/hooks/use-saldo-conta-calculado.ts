@@ -63,7 +63,7 @@ const useSaldoContaCalculado = (filtroTipoSaldo: 'todos' | 'Credito' | 'Debito' 
       const contaIds = fetchedContas.map(c => c.id);
       const contaContabilIds = fetchedContas.map(c => c.plano_contas?.id).filter((id): id is string => !!id);
       
-      if (contaIds.length === 0) {
+      if (contaIds.length === 0 && contaContabilIds.length === 0) {
           return { fetchedContas: [], lancamentosData: [] };
       }
 
@@ -71,7 +71,7 @@ const useSaldoContaCalculado = (filtroTipoSaldo: 'todos' | 'Credito' | 'Debito' 
       
       // Cláusula OR para buscar lançamentos:
       // A) Movimentações de Caixa/Banco (conta_bancaria_id IN contaIds)
-      // B) Movimentações Patrimoniais (conta_contabil_id IN contaContabilIds AND conta_bancaria_id IS NULL)
+      // B) Movimentações Patrimoniais (conta_contabil_id IN contaContabilIds)
       const orClauses = [
           `conta_bancaria_id.in.(${contaIds.join(',')})`,
           `conta_contabil_id.in.(${contaContabilIds.join(',')})`,
@@ -101,7 +101,7 @@ const useSaldoContaCalculado = (filtroTipoSaldo: 'todos' | 'Credito' | 'Debito' 
     try {
       const { fetchedContas, lancamentosData } = await fetchContasAndLancamentos(empresaId);
 
-      // 3. Calcular o saldo para cada conta
+      // 3. Inicializar o mapa de movimentos por SaldoConta ID
       const lancamentosPorConta = fetchedContas.reduce((acc, conta) => {
         acc[conta.id] = { entradas: 0, saidas: 0 };
         return acc;
@@ -116,11 +116,11 @@ const useSaldoContaCalculado = (filtroTipoSaldo: 'todos' | 'Credito' | 'Debito' 
       lancamentosData.forEach(l => {
         let targetSaldoId: string | null = null;
         
-        // A) Movimentação de Caixa/Banco (usa conta_bancaria_id)
+        // Prioridade 1: Movimentação de Caixa/Banco (usa conta_bancaria_id)
         if (l.conta_bancaria_id && lancamentosPorConta[l.conta_bancaria_id]) {
             targetSaldoId = l.conta_bancaria_id;
         } 
-        // B) Movimentação Patrimonial (usa conta_contabil_id)
+        // Prioridade 2: Movimentação Patrimonial (usa conta_contabil_id)
         else if (l.conta_contabil_id && contaContabilToSaldoIdMap[l.conta_contabil_id]) {
             targetSaldoId = contaContabilToSaldoIdMap[l.conta_contabil_id];
         }

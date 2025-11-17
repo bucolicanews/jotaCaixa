@@ -43,11 +43,28 @@ const DetalhesLancamentosDialog: React.FC<DetalhesLancamentosDialogProps> = ({ c
     if (!conta) return;
     setLoading(true);
     
-    const { data, error } = await supabase
+    // Determina se a conta é uma conta de caixa/banco ou uma conta patrimonial pura
+    const isCaixaBanco = conta.plano_contas?.is_conta_caixa_banco;
+    
+    let query = supabase
       .from('lancamentos')
-      .select('id, data_movimentacao, descricao, valor, tipo')
-      .eq('conta_bancaria_id', conta.id)
-      .order('data_movimentacao', { ascending: false });
+      .select('id, data_movimentacao, descricao, valor, tipo');
+      
+    // Se for Caixa/Banco, filtra por conta_bancaria_id
+    if (isCaixaBanco) {
+        query = query.eq('conta_bancaria_id', conta.id);
+    } 
+    // Se for Patrimonial Pura, filtra por conta_contabil_id
+    else if (conta.conta_contabil_id) {
+        query = query.eq('conta_contabil_id', conta.conta_contabil_id);
+    } else {
+        // Se não for nenhum dos dois, não há lançamentos diretos
+        setLancamentos([]);
+        setLoading(false);
+        return;
+    }
+    
+    const { data, error } = await query.order('data_movimentacao', { ascending: false });
 
     if (error) {
       showError('Erro ao carregar lançamentos: ' + error.message);
