@@ -125,7 +125,7 @@ const PlanoContasPage = () => {
         .select('mascara_codigo')
         .eq('proprietario_id', id)
         .limit(1)
-        .maybeSingle(); // USANDO maybeSingle()
+        .maybeSingle(); // Busca a máscara
         
     if (error) {
         console.error('Erro ao buscar máscara:', error);
@@ -268,7 +268,7 @@ const PlanoContasPage = () => {
       setPopoverOpen(true);
   };
   
-  const handleOpenNewConta = (nivel: 'acima' | 'abaixo' | 'mesmo') => {
+  const handleOpenNewConta = (nivel: 'acima' | 'mesmo') => {
       if (!contaClicada) return;
       
       const parts = contaClicada.Conta.split('.').filter(p => p.length > 0);
@@ -317,25 +317,7 @@ const PlanoContasPage = () => {
           return String(novoSegmentoNumerico).padStart(paddingLength, '0');
       };
       
-      if (nivel === 'abaixo') {
-          // Lógica mantida, mas o botão foi removido da UI
-          
-          const nivelSegmento = nivelAtual; // O novo segmento é o índice nivelAtual
-          
-          if (nivelSegmento >= maskParts.length) {
-              showError(`Não é possível criar um nível abaixo. A máscara só define até o nível ${maskParts.length}.`);
-              setPopoverOpen(false);
-              return;
-          }
-          
-          const paddingLength = maskParts[nivelSegmento].length; 
-          
-          const novoSegmento = calculateNextSegment(contaClicada.Conta, nivelSegmento, paddingLength);
-          
-          novoCodigo = contaClicada.Conta + '.' + novoSegmento;
-          novaAnalitica = 'Sim'; // Sugere analítica para o próximo nível
-          
-      } else if (nivel === 'acima' || nivel === 'mesmo') {
+      if (nivel === 'acima' || nivel === 'mesmo') {
           // Nível Acima (Mesmo Nível): Incrementa o último segmento do código do pai
           
           const nivelSegmento = nivelAtual - 1; // O segmento a ser incrementado é o último
@@ -429,7 +411,7 @@ const PlanoContasPage = () => {
               Nova Conta
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px]">
+          <DialogContent className="sm:max-w-[425px] max-h-[95vh] overflow-y-auto"> {/* APLICANDO MAX-H E OVERFLOW */}
             <DialogHeader>
               <DialogTitle>{(initialFormValues as PlanoContas)?.id ? 'Editar Conta' : 'Nova Conta'}</DialogTitle>
             </DialogHeader>
@@ -700,7 +682,7 @@ const PlanoContasPage = () => {
       
       {/* Diálogo de Criação/Edição (usando o FormPlanoContas) */}
       <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="sm:max-w-[425px] max-h-[95vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{(initialFormValues as PlanoContas)?.id ? 'Editar Conta' : 'Nova Conta'}</DialogTitle>
           </DialogHeader>
