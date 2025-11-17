@@ -298,7 +298,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
               const lancamentoDescontoPayload = {
                   proprietario_id: ownerId,
                   data_movimentacao: dataPagamentoISO,
-                  descricao: `Desconto Concedido: ${descricaoContaSintetica}`,
+                  descricao: `Desconto Concedido: ${descricaoContaSintetica} (CR ID: ${parcela.conta_receber_id.substring(0, 8)})`,
                   valor: saldoRestanteCalculado,
                   tipo: 'Saida' as const, // Saída na Despesa
                   conta_bancaria_id: null,
@@ -367,7 +367,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
       const lancamentoReceitaPayload = {
           proprietario_id: ownerId,
           data_movimentacao: dataPagamentoISO,
-          descricao: `Receita: ${descricaoContaSintetica}`,
+          descricao: `Receita: ${descricaoContaSintetica} (CR ID: ${parcela.conta_receber_id.substring(0, 8)})`, // NEW DESCRIPTION
           valor: valorRecebido,
           tipo: 'Entrada' as const, // Entrada na Receita (aumenta o saldo da conta 3.x.x)
           conta_bancaria_id: null, // Não é uma conta de saldo
@@ -382,7 +382,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
           const lancamentoPatrimonialPayload = {
               proprietario_id: ownerId,
               data_movimentacao: dataPagamentoISO,
-              descricao: `Estorno Patrimonial CR: ${descricaoContaSintetica}`,
+              descricao: `Estorno Patrimonial CR: ${descricaoContaSintetica} (CR ID: ${parcela.conta_receber_id.substring(0, 8)})`, // NEW DESCRIPTION
               valor: valorRecebido,
               tipo: 'Saida' as const, // Saída do Ativo (diminui o saldo da conta 1.x.x)
               conta_bancaria_id: null,

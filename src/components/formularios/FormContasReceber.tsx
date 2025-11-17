@@ -330,10 +330,14 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
       
       // 2. Lançamento Inicial na Conta Patrimonial (Débito/Entrada)
       if (values.conta_patrimonial_id) {
+          
+          // NOVO FORMATO DE DESCRIÇÃO: Inclui o ID da conta sintética para facilitar a busca/deleção
+          const launchDescription = `Lançamento Inicial CR: ${values.descricao} (CR ID: ${contaReceberId.substring(0, 8)})`;
+          
           const lancamentoPatrimonialPayload = {
               proprietario_id: ownerId,
               data_movimentacao: format(new Date(), 'yyyy-MM-dd') + 'T12:00:00Z', // Meio-dia UTC
-              descricao: `Lançamento Inicial CR: ${values.descricao}`,
+              descricao: launchDescription,
               valor: valorTotal,
               tipo: 'Entrada' as const, // Entrada no Ativo/Passivo/PL
               conta_bancaria_id: null,
@@ -344,11 +348,12 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
           
           // Se for edição, primeiro remove o lançamento antigo (se existir)
           if (isEditing) {
+              // Deleta o lançamento antigo usando o ID da conta sintética (se o formato antigo não funcionar)
               await supabase.from('lancamentos')
                   .delete()
                   .eq('origem', 'lancamento_cr')
                   .eq('proprietario_id', ownerId)
-                  .ilike('descricao', `Lançamento Inicial CR: ${contaInicial?.descricao}`);
+                  .or(`descricao.ilike.Lançamento Inicial CR: ${contaInicial?.descricao}%,descricao.ilike.Lançamento Inicial CR: ${values.descricao}%`);
           }
           
           await supabase.from('lancamentos').insert(lancamentoPatrimonialPayload);
