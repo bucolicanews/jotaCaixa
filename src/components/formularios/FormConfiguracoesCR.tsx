@@ -15,10 +15,10 @@ import { Historico } from '@/types/historico';
 
 // Tipos de registro que precisam de mapeamento contábil
 const TIPOS_REGISTRO_CONTABIL = [
-  { key: 'a_receber', label: 'Contas a Receber (Sintético)', tipo: 'Patrimonial' }, // Ativo
-  { key: 'parcela', label: 'Parcelas a Receber (Analítico)', tipo: 'Patrimonial' }, // Ativo
-  { key: 'recebimento', label: 'Recebimentos (Crédito)', tipo: 'Resultado' }, // Receita (DRE)
-  { key: 'desconto', label: 'Descontos Concedidos (Despesa)', tipo: 'Resultado' }, // Despesa (DRE)
+  { key: 'a_receber', label: 'Contas a Receber (Sintético)', tipo: 'Patrimonial', analitica: 'Não' }, // Sintética
+  { key: 'parcela', label: 'Parcelas a Receber (Analítico)', tipo: 'Patrimonial', analitica: 'Sim' }, // Analítica
+  { key: 'recebimento', label: 'Recebimentos (Crédito)', tipo: 'Resultado', analitica: 'Sim' }, // Receita (DRE)
+  { key: 'desconto', label: 'Descontos Concedidos (Despesa)', tipo: 'Resultado', analitica: 'Sim' }, // Despesa (DRE)
 ];
 
 // Esquema dinâmico: a_receber, parcela e recebimento são obrigatórios (min(1))
@@ -186,11 +186,10 @@ const FormConfiguracoesCR: React.FC = () => {
     return <div className="flex justify-center items-center h-20"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>;
   }
   
-  const getContasDisponiveis = (tipo: 'Patrimonial' | 'Resultado', isSintetico: boolean = false) => {
+  const getContasDisponiveis = (tipo: 'Patrimonial' | 'Resultado', requiredAnalitica: 'Sim' | 'Não') => {
       return contasContabeis
           .filter(c => {
-              // Se for Sintético, permite Analítica 'Não'
-              const analiticaMatch = isSintetico ? c.Analitica === 'Não' : c.Analitica === 'Sim';
+              const analiticaMatch = c.Analitica === requiredAnalitica;
               
               // Filtra pelo booleano correto
               const tipoMatch = tipo === 'Patrimonial' ? c.is_conta_patrimonial : c.is_conta_resultado;
@@ -215,7 +214,8 @@ const FormConfiguracoesCR: React.FC = () => {
         <div className="space-y-4">
             {TIPOS_REGISTRO_CONTABIL.map(tipo => {
                 // Determina se o campo é o Sintético de CR
-                const isSinteticoCR = tipo.key === 'a_receber';
+                const requiredAnalitica = tipo.analitica;
+                const contasDisponiveis = getContasDisponiveis(tipo.tipo as 'Patrimonial' | 'Resultado', requiredAnalitica as 'Sim' | 'Não');
                 
                 return (
                     <FormField
@@ -224,7 +224,7 @@ const FormConfiguracoesCR: React.FC = () => {
                         name={tipo.key as keyof FormValues}
                         render={({ field }) => (
                             <FormItem>
-                                <FormLabel>{tipo.label} ({tipo.tipo})</FormLabel>
+                                <FormLabel>{tipo.label} ({tipo.tipo} - {requiredAnalitica})</FormLabel>
                                 <Select 
                                     onValueChange={field.onChange} 
                                     value={field.value || "null"} // Usa "null" como string para a opção "Nenhum"
@@ -237,7 +237,7 @@ const FormConfiguracoesCR: React.FC = () => {
                                     <SelectContent>
                                         {/* CORREÇÃO: Usando "null" como string para a opção "Nenhum" */}
                                         <SelectItem value="null">Nenhum (Não Mapear)</SelectItem>
-                                        {getContasDisponiveis(tipo.tipo as 'Patrimonial' | 'Resultado', isSinteticoCR).map(c => (
+                                        {contasDisponiveis.map(c => (
                                             <SelectItem key={c.id} value={c.id}>
                                                 {c.display}
                                             </SelectItem>
@@ -245,6 +245,11 @@ const FormConfiguracoesCR: React.FC = () => {
                                     </SelectContent>
                                 </Select>
                                 <FormMessage />
+                                {contasDisponiveis.length === 0 && (
+                                    <p className="text-xs text-red-500">
+                                        Nenhuma conta {requiredAnalitica} marcada como {tipo.tipo} no Plano de Contas.
+                                    </p>
+                                )}
                             </FormItem>
                         )}
                     />
