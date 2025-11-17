@@ -281,8 +281,8 @@ const MapearTodasFKsDialog: React.FC<MapearTodasFKsDialogProps> = ({
     );
 
     return (
-        <Dialog open={open} onOpenChange={handleClose}>
-            <DialogContent className="sm:max-w-4xl max-h-[95vh] flex flex-col">
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="sm:max-w-[90vw] max-h-[95vh] flex flex-col">
                 <DialogHeader>
                     <DialogTitle className="flex items-center text-red-600">
                         <AlertTriangle className="w-6 h-6 mr-2" /> Mapeamento de Referências Contábeis

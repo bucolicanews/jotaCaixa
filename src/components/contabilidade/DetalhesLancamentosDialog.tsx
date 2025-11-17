@@ -139,7 +139,7 @@ const DetalhesLancamentosDialog: React.FC<DetalhesLancamentosDialogProps> = ({ c
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-4xl max-h-[90vh] flex flex-col">
+      <DialogContent className="sm:max-w-[90vw] max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Extrato da Conta: {conta?.nome}</DialogTitle>
           <DialogDescription>

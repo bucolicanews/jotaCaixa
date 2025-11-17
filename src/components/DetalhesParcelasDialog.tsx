@@ -176,7 +176,7 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="w-full max-w-full sm:max-w-4xl max-h-[90vh] flex flex-col">
+        <DialogContent className="w-full max-w-full sm:max-w-[90vw] max-h-[90vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="truncate">Detalhes do Lançamento</DialogTitle>
             <DialogDescription className="truncate">

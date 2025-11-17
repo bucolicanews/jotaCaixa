@@ -126,7 +126,6 @@ const ContratoAcoesDialog: React.FC<ContratoAcoesDialogProps> = ({ contrato, ope
         let printHtml = contrato.conteudo_renderizado;
         
         if (!isHtml) {
-            // Se for texto simples, envolve em <pre> para preservar a formatação na impressão
             printHtml = `<pre style="white-space: pre-wrap; font-family: inherit; margin: 0;">${printHtml}</pre>`;
         }
         
@@ -233,7 +232,7 @@ const ContratoAcoesDialog: React.FC<ContratoAcoesDialogProps> = ({ contrato, ope
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[90vw] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center">
             <FileText className="w-5 h-5 mr-2" /> Ações do Contrato
