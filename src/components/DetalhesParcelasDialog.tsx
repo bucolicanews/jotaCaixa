@@ -33,6 +33,7 @@ interface Parcela {
   valor_parcela: number;
   valor_pago: number;
   data_vencimento: string;
+  data_pagamento: string | null; // ADICIONADO
   status: 'aberta' | 'parcial' | 'paga' | 'reprogramada' | 'cancelada' | 'bloqueada';
 }
 
@@ -225,6 +226,8 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
                         <TableHead className="w-[50px]">Nº</TableHead>
                         <TableHead className="w-[100px]">Vencimento</TableHead>
                         <TableHead className="w-[100px]">Valor</TableHead>
+                        <TableHead className="w-[100px]">Vlr Pago</TableHead>
+                        <TableHead className="w-[100px]">Data Pagamento</TableHead> {/* NOVO CABEÇALHO */}
                         <TableHead className="w-[100px]">Status</TableHead>
                         <TableHead className="w-[180px] text-right">Ações</TableHead>
                     </TableRow>
@@ -240,6 +243,8 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
                                 <TableCell className="font-medium">{p.numero_parcela}</TableCell>
                                 <TableCell>{formatDate(p.data_vencimento)}</TableCell>
                                 <TableCell>{formatCurrency(p.valor_parcela)}</TableCell>
+                                <TableCell className={cn(isPaga && 'font-semibold text-green-600')}>{formatCurrency(p.valor_pago || 0)}</TableCell>
+                                <TableCell>{p.data_pagamento ? formatDate(p.data_pagamento) : '-'}</TableCell> {/* NOVO CAMPO */}
                                 <TableCell>
                                     <Badge variant={isPaga ? 'success' : (isCanceled ? 'destructive' : 'secondary')}>
                                         {getStatusDisplay(p.status)}
