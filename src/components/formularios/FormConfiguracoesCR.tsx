@@ -17,7 +17,8 @@ import { Historico } from '@/types/historico';
 const TIPOS_REGISTRO_CONTABIL = [
   { key: 'a_receber', label: 'Contas a Receber (Sintético)', tipo: 'Patrimonial', analitica: 'Não' }, // Sintética
   { key: 'parcela', label: 'Parcelas a Receber (Analítico)', tipo: 'Patrimonial', analitica: 'Sim' }, // Analítica
-  { key: 'recebimento', label: 'Recebimentos (Crédito)', tipo: 'Resultado', analitica: 'Sim' }, // Receita (DRE)
+  { key: 'recebimento', label: 'Recebimentos (Patrimonial)', tipo: 'Patrimonial', analitica: 'Sim' }, // Recebimento (Ativo/Passivo)
+  { key: 'recebimento_resultado', label: 'Recebimentos (Resultado DRE)', tipo: 'Resultado', analitica: 'Sim' }, // NOVO: Receita (DRE)
   { key: 'desconto', label: 'Descontos Concedidos (Despesa)', tipo: 'Resultado', analitica: 'Sim' }, // Despesa (DRE)
 ];
 
@@ -25,7 +26,8 @@ const TIPOS_REGISTRO_CONTABIL = [
 const formSchema = z.object({
   a_receber: z.string().min(1, 'A conta Contas a Receber (Sintético) é obrigatória.').nullable(),
   parcela: z.string().min(1, 'A conta Parcelas a Receber (Analítico) é obrigatória.').nullable(),
-  recebimento: z.string().min(1, 'A conta Recebimentos (Crédito) é obrigatória.').nullable(),
+  recebimento: z.string().min(1, 'A conta Recebimentos (Patrimonial) é obrigatória.').nullable(),
+  recebimento_resultado: z.string().min(1, 'A conta Recebimentos (Resultado DRE) é obrigatória.').nullable(), // NOVO CAMPO
   desconto: z.string().nullable(),
   historico_padrao_id: z.string().nullable(),
 });
@@ -48,6 +50,7 @@ const FormConfiguracoesCR: React.FC = () => {
       a_receber: null,
       parcela: null,
       recebimento: null,
+      recebimento_resultado: null, // NOVO DEFAULT
       desconto: null,
       historico_padrao_id: null,
     },
