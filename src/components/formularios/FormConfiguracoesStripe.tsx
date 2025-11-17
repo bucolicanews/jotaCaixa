@@ -17,9 +17,10 @@ import { useStripeConfigAdmin } from '@/integrations/stripe/use-stripe-config-ad
 const formSchema = z.object({
   stripe_publishable_key: z.string().min(1, 'A chave publicável é obrigatória.'),
   stripe_secret_key: z.string().min(1, 'A chave secreta é obrigatória.'),
-  conta_sintetica_id: z.string().uuid('Selecione uma conta contábil válida.').nullable(),
-  conta_receber_id: z.string().uuid('Selecione uma conta contábil válida.').nullable(),
-  historico_padrao_id: z.string().uuid('Selecione um histórico padrão válido.').nullable(),
+  // TORNANDO OBRIGATÓRIO: Deve ser um UUID válido (não nulo)
+  conta_sintetica_id: z.string().uuid('Selecione a Conta Contábil de Destino (Stripe/Banco).'),
+  conta_receber_id: z.string().uuid('Selecione a Conta Contábil Parcelas a Receber.'),
+  historico_padrao_id: z.string().uuid('Selecione um histórico padrão válido.'),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -43,9 +44,10 @@ const FormConfiguracoesStripe: React.FC = () => {
     defaultValues: {
       stripe_publishable_key: '',
       stripe_secret_key: '',
-      conta_sintetica_id: null,
-      conta_receber_id: null,
-      historico_padrao_id: null,
+      // Usando string vazia como default para forçar a validação min(1)
+      conta_sintetica_id: '', 
+      conta_receber_id: '',
+      historico_padrao_id: '',
     },
   });
   
@@ -56,18 +58,19 @@ const FormConfiguracoesStripe: React.FC = () => {
           form.reset({
               stripe_publishable_key: configInicial.stripe_publishable_key || '',
               stripe_secret_key: configInicial.stripe_secret_key || '',
-              conta_sintetica_id: configInicial.conta_sintetica_id || undefined, 
-              conta_receber_id: configInicial.conta_receber_id || undefined,
-              historico_padrao_id: configInicial.historico_padrao_id || undefined,
+              // Se for null, usa string vazia para falhar na validação min(1)
+              conta_sintetica_id: configInicial.conta_sintetica_id || '', 
+              conta_receber_id: configInicial.conta_receber_id || '',
+              historico_padrao_id: configInicial.historico_padrao_id || '',
           });
       } else if (!loadingData && !configInicial) {
           setExistingId(null);
           form.reset({
               stripe_publishable_key: '',
               stripe_secret_key: '',
-              conta_sintetica_id: undefined,
-              conta_receber_id: undefined,
-              historico_padrao_id: undefined,
+              conta_sintetica_id: '',
+              conta_receber_id: '',
+              historico_padrao_id: '',
           });
       }
   }, [configInicial, loadingData, form]);
@@ -127,20 +130,7 @@ const FormConfiguracoesStripe: React.FC = () => {
         return;
     }
     
-    if (!values.conta_sintetica_id) {
-        showError('Selecione a Conta Contábil de Destino (Stripe/Banco).');
-        return;
-    }
-    
-    if (!values.conta_receber_id) {
-        showError('Selecione a Conta Contábil Parcelas a Receber.');
-        return;
-    }
-    
-    if (!values.historico_padrao_id) {
-        showError('Selecione o Histórico Padrão para transações Stripe.');
-        return;
-    }
+    // A validação Zod agora garante que os IDs não são nulos ou vazios.
     
     const dataToSave = {
       stripe_publishable_key: values.stripe_publishable_key,
