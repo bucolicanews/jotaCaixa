@@ -85,6 +85,7 @@ const SECOES_MENU: MenuSection[] = [
             { nome: 'Minha Assinatura', caminho: '/minha-assinatura', icone: DollarSign, perfis: ['Cliente'] },
             { nome: 'Clientes', caminho: '/clientes', icone: Building2, perfis: ['Admin', 'Cliente'], permissionKey: 'contas_receber' }, // ITEM RESTAURADO
             { nome: 'Gerenciar Usuários', caminho: '/gerenciar-usuarios', icone: Users, perfis: ['Admin', 'Cliente'], permissionKey: 'cadastrar_usuarios' },
+            { nome: 'Plano de Contas', caminho: '/plano-contas', icone: BookOpen, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'plano_contas' }, // ITEM RESTAURADO
             { nome: 'Gerenciar Planos', caminho: '/planos', icone: Package, perfis: ['Admin'] }, 
             { nome: 'Relatórios', caminho: '/relatorios', icone: FileText, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'relatorios' },
             { nome: 'Importar Dados', caminho: '/importar', icone: Upload, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'importar' },
@@ -122,7 +123,33 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick, adminBranding, l
   const isUserOfClient = role === 'Usuario' && 'cliente_id' in userProfile && !!userProfile.cliente_id;
   const isUserOfAdmin = role === 'Usuario' && 'admin_id' in userProfile && !!userProfile.admin_id;
   
-  // Fetch Client Branding if User is a Client's employee
+  // Determina o ID do Admin para buscar o branding
+  const targetAdminId = isAdmin ? perfil?.id : (isUserOfAdmin ? (perfil as AdminUsuarioProfile).admin_id : null);
+
+  const fetchAdminBranding = useCallback(async () => {
+      if (!targetAdminId) {
+          setLoadingBranding(false);
+          setAdminBranding(null);
+          return;
+      }
+      
+      setLoadingBranding(true);
+      
+      const { data, error } = await supabase
+          .from('tbl_admins')
+          .select('nome, logo_url')
+          .eq('id', targetAdminId)
+          .single();
+          
+      if (error) {
+          console.error('Erro ao buscar branding do Admin:', error);
+          setAdminBranding(null);
+      } else {
+          setAdminBranding({ logoUrl: data.logo_url, nome: data.nome });
+      }
+      setLoadingBranding(false);
+  }, [targetAdminId]);
+  
   const fetchClientBranding = useCallback(async () => {
       if (isUserOfClient && userProfile.cliente_id) {
           const { data, error } = await supabase
@@ -141,52 +168,88 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick, adminBranding, l
           setClientBranding(null);
       }
   }, [isUserOfClient, userProfile]);
-  
+
   useEffect(() => {
       if (!carregando) {
+          fetchAdminBranding();
           fetchClientBranding();
       }
-  }, [carregando, fetchClientBranding]);
+  }, [carregando, fetchAdminBranding, fetchClientBranding]);
 
-  // Determina a logo e o nome a serem exibidos
-  const { finalLogoUrl, textTitle } = useMemo(() => {
-      let finalLogoUrl: string | null = null;
-      let textTitle = 'Fluxo de Caixa';
-      
-      if (isAdmin) {
-          finalLogoUrl = adminBranding?.logoUrl || null;
-          textTitle = adminBranding?.nome || perfil?.nome || 'Administrador';
-      } else if (isClient) {
-          finalLogoUrl = clientProfile?.logo_url || null;
-          textTitle = clientProfile?.nome || 'Minha Empresa';
-      } else if (isUserOfClient) {
-          finalLogoUrl = clientBranding?.logoUrl || null;
-          textTitle = clientBranding?.nome || 'Empresa Cliente';
-      } else if (isUserOfAdmin) {
-          finalLogoUrl = adminBranding?.logoUrl || null;
-          textTitle = adminBranding?.nome || 'Admin';
+
+  useEffect(() => {
+    const updatePlanoDetails = async () => {
+      if (!perfil || !role) {
+        setPlanoDetalhes(null);
+        return;
       }
       
-      const profileName = perfil?.nome || 'Usuário';
+      let currentPlanoId: string | null = null;
+
+      if (isClient) {
+        currentPlanoId = clienteProfile.plano_id || null; 
+      } else if (role === 'Usuario' && userProfile.cliente_id) {
+        const proprietarioId = userProfile.cliente_id;
+        const { data: clienteData } = await supabase
+            .from('tbl_clientes')
+            .select('plano_id')
+            .eq('id', proprietarioId)
+            .single();
+            
+        currentPlanoId = clienteData?.plano_id || null;
+      }
       
-      return { finalLogoUrl, textTitle: textTitle || profileName };
-  }, [isAdmin, isClient, isUserOfClient, isUserOfAdmin, clientProfile, adminBranding, perfil, clientBranding]);
+      if (currentPlanoId) {
+          const { data: planoData } = await supabase
+              .from('planos')
+              .select('nome, preco_mensal')
+              .eq('id', currentPlanoId)
+              .single();
+          
+          if (planoData) {
+              setPlanoDetalhes({ nome: planoData.nome, preco: planoData.preco_mensal });
+          } else {
+              setPlanoDetalhes(null);
+          }
+      } else {
+          setPlanoDetalhes(null);
+      }
+    };
+    
+    updatePlanoDetails();
+  }, [perfil, role, isClient, clienteProfile, userProfile]);
+
+
+  const lidarComSair = async () => {
+    await supabase.auth.signOut();
+  };
   
-  const mainTitle = textTitle;
+  const handlePasswordReset = async () => {
+    if (!perfil?.email) return;
+    const { error } = await supabase.auth.resetPasswordForEmail(perfil.email, { redirectTo: `${BASE_URL}/atualizar-senha` });
+    if (error) console.error('Falha ao enviar email de reset:', error);
+    else alert('Link de redefinição de senha enviado para seu email.');
+  };
   
-  const profileDescription = isAdmin 
-    ? 'Administrador' 
-    : (isUserOfClient 
-        ? 'Funcionário (Cliente)'
-        : (isUserOfAdmin ? 'Funcionário (Admin)' : 'Cliente'));
-        
-  const shouldShowSuporte = useMemo(() => {
-      if (role === 'Admin') return true;
-      if (carregandoNotificacoes) return true;
-      
-      const activeTickets = ticketsAbertos + ticketsEmProgresso + ticketsPausados;
-      return activeTickets > 0 || mensagensParaResponder > 0;
-  }, [role, carregandoNotificacoes, ticketsAbertos, ticketsEmProgresso, ticketsPausados, mensagensParaResponder]);
+  const dataFimAcesso = clienteProfile?.data_fim_acesso;
+  const dataFimFormatada = dataFimAcesso ? format(parseISO(dataFimAcesso), 'dd/MM/yyyy', { locale: ptBR }) : null;
+  
+  const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+  
+  // Lógica para o Título Principal
+  let textTitle = 'Fluxo de Caixa';
+  
+  if (isAdmin) {
+      textTitle = adminBranding?.nome || perfil?.nome || 'Administrador';
+  } else if (isClient) {
+      textTitle = clienteProfile?.nome || 'Minha Empresa';
+  } else if (isUserOfClient) {
+      textTitle = clientBranding?.nome || 'Empresa Cliente';
+  } else if (isUserOfAdmin) {
+      textTitle = adminBranding?.nome || 'Admin';
+  } else if (perfil?.nome) {
+      textTitle = perfil.nome;
+  }
 
 
   const checkPermission = (item: ItemMenu) => {
