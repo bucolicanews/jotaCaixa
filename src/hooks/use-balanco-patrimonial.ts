@@ -182,18 +182,36 @@ export function useBalancoPatrimonial(endDate: Date | undefined): BalancoData {
           const conta = planoContas.find(pc => pc.id === l.conta_contabil_id);
           const tipoPrincipal = conta ? getTipoDRE(conta.Conta, configMap) : 'Outros';
 
-          const isDevedora = tipoPrincipal === 'Ativo' || 
-                             (tipoPrincipal === 'Resultado' && (conta?.Conta.startsWith(custoCode) || conta?.Conta.startsWith(despesaCode)));
-
-          const isCredora = tipoPrincipal === 'Passivo' || 
-                            tipoPrincipal === 'Patrimonio Liquido' || 
-                            (tipoPrincipal === 'Resultado' && conta?.Conta.startsWith(receitaCode));
-
           let valor = 0;
-          if (isDevedora) {
-              valor = l.tipo === 'Entrada' ? l.valor : -l.valor;
-          } else if (isCredora) {
-              valor = l.tipo === 'Entrada' ? l.valor : -l.valor;
+          
+          if (tipoPrincipal === 'Ativo' || tipoPrincipal === 'Passivo' || tipoPrincipal === 'Patrimonio Liquido') {
+              // Contas Patrimoniais (Ativo/Passivo/PL)
+              // Ativo (1.x.x): Entrada = Débito (+), Saída = Crédito (-)
+              // Passivo/PL (2.x.x/3.x.x): Entrada = Crédito (+), Saída = Débito (-)
+              
+              const isAtivo = tipoPrincipal === 'Ativo';
+              
+              if (isAtivo) {
+                  valor = l.tipo === 'Entrada' ? l.valor : -l.valor;
+              } else {
+                  // Passivo/PL: Inverte o sinal do lançamento para refletir o saldo credor
+                  valor = l.tipo === 'Entrada' ? l.valor : -l.valor;
+              }
+              
+          } else if (tipoPrincipal === 'Resultado' && conta?.is_conta_resultado) {
+              // Contas de Resultado (4.x.x, 5.x.x, 6.x.x)
+              // Receita (4.x.x): Entrada = Crédito (+), Saída = Débito (-)
+              // Custo/Despesa (5.x.x/6.x.x): Entrada = Débito (+), Saída = Crédito (-)
+              
+              const isReceita = conta.Conta.startsWith(receitaCode);
+              
+              if (isReceita) {
+                  // Receita: Entrada (Crédito) = +, Saída (Débito) = -
+                  valor = l.tipo === 'Entrada' ? l.valor : -l.valor;
+              } else {
+                  // Custo/Despesa: Entrada (Débito) = +, Saída (Crédito) = -
+                  valor = l.tipo === 'Saida' ? -l.valor : l.valor; // Inverte o sinal para que o saldo seja positivo
+              }
           }
 
           acc[l.conta_contabil_id] = (acc[l.conta_contabil_id] || 0) + (valor || 0);
@@ -246,7 +264,7 @@ export function useBalancoPatrimonial(endDate: Date | undefined): BalancoData {
   }, [carregandoSessao, empresaId, fetchBalanco, loadingConfig]);
   
   // 8. Calcular totais
-  const getSaldoPorCodigoNivel1 = (codigo: string) => {
+  const getSaldoConsolidadoNivel1 = (codigo: string) => {
     const found = contasBalanco.find(c => c.Conta === codigo);
     return found ? (found.saldo_final || 0) : 0;
   };
@@ -259,15 +277,16 @@ export function useBalancoPatrimonial(endDate: Date | undefined): BalancoData {
   const despesaCode = configMap.Despesa || '6';
 
   // Totais de Nível 1 (usando o saldo consolidado)
-  const totalAtivo = getSaldoPorCodigoNivel1(ativoCode);
-  const totalPassivoBase = getSaldoPorCodigoNivel1(passivoCode);
-  const totalPatrimonioLiquido = getSaldoPorCodigoNivel1(plCode);
+  const totalAtivo = getSaldoConsolidadoNivel1(ativoCode);
+  const totalPassivoBase = getSaldoConsolidadoNivel1(passivoCode);
+  const totalPatrimonioLiquido = getSaldoConsolidadoNivel1(plCode);
     
   // Resultado: usar os saldos consolidados dos níveis de DRE (4,5,6)
-  const totalReceita = getSaldoPorCodigoNivel1(receitaCode);
-  const totalCusto = getSaldoPorCodigoNivel1(custoCode);
-  const totalDespesa = getSaldoPorCodigoNivel1(despesaCode);
+  const totalReceita = getSaldoConsolidadoNivel1(receitaCode);
+  const totalCusto = getSaldoConsolidadoNivel1(custoCode);
+  const totalDespesa = getSaldoConsolidadoNivel1(despesaCode);
       
+  // Resultado Líquido: Receita - Custo - Despesa
   const resultadoLiquido = totalReceita - totalCusto - totalDespesa;
   
   // Total do lado direito (Passivo + PL + Resultado Líquido)

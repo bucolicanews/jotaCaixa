@@ -180,16 +180,26 @@ export function useDRE(filtroPeriodo: DateRange | undefined): DREData {
       const movimentosMap = lancamentosData.reduce((acc, l) => {
         if (l.conta_contabil_id) {
           const conta = planoContas.find(pc => pc.id === l.conta_contabil_id);
-          const tipoDRE = conta ? getTipoDRE(conta.Conta, configMap) : 'Resultado'; // USANDO CONFIG MAP
+          
+          // CORREÇÃO CRÍTICA: Apenas contas marcadas como is_conta_resultado devem ter movimento na DRE
+          if (!conta || !conta.is_conta_resultado) {
+              return acc;
+          }
+          
+          const tipoDRE = getTipoDRE(conta.Conta, configMap); // USANDO CONFIG MAP
           
           let valor = 0;
           
           if (tipoDRE === 'Receita') {
               // Receita (Aumenta com Crédito/Saída): Queremos o valor positivo
+              // O lançamento de Receita é registrado como TIPO 'Entrada' (Débito) na conta de Ativo e TIPO 'Entrada' (Crédito) na conta de Receita.
+              // Para a DRE, queremos que o valor seja positivo se for Receita (Crédito)
               valor = l.tipo === 'Entrada' ? l.valor : -l.valor;
           } else if (tipoDRE === 'Custo' || tipoDRE === 'Despesa') {
               // Custo/Despesa (Aumenta com Débito/Entrada): Queremos o valor positivo
-              valor = l.tipo === 'Entrada' ? l.valor : -l.valor;
+              // O lançamento de Despesa é registrado como TIPO 'Saida' (Crédito) na conta de Ativo e TIPO 'Saida' (Débito) na conta de Despesa.
+              // Para a DRE, queremos que o valor seja positivo se for Despesa (Débito)
+              valor = l.tipo === 'Saida' ? l.valor : -l.valor;
           }
           
           acc[l.conta_contabil_id] = (acc[l.conta_contabil_id] || 0) + valor;
@@ -199,7 +209,7 @@ export function useDRE(filtroPeriodo: DateRange | undefined): DREData {
       
       // 4. Mapear e calcular saldos base (apenas analíticas)
       let contasCalculadas: ContaDRE[] = planoContas
-        .filter(pc => pc.Analitica === 'Sim')
+        .filter(pc => pc.Analitica === 'Sim' && pc.is_conta_resultado) // FILTRO ADICIONAL
         .map(pc => {
             const saldo_final = movimentosMap[pc.id] || 0;
             
@@ -248,7 +258,7 @@ export function useDRE(filtroPeriodo: DateRange | undefined): DREData {
   const getSomaPorTipo = (tipo: keyof ContabilConfigMap) => {
       const nivel1Code = configMap[tipo] || '0'; // Usa o código configurado
       
-      // Soma apenas as contas de nível 1 (ex: '3', '4', '5')
+      // Soma apenas as contas de nível 1 (ex: '4', '5', '6')
       return contasDRE
           .filter(c => c.Analitica === 'Não' && c.Conta === nivel1Code)
           .reduce((sum, c) => sum + c.saldo_final, 0);
