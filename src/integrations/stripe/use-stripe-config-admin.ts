@@ -6,7 +6,6 @@ interface StripeConfigData {
   stripe_publishable_key: string;
   stripe_secret_key: string;
   conta_sintetica_id: string | null;
-  conta_receber_id: string | null;
   historico_padrao_id: string | null;
 }
 

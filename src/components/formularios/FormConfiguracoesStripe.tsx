@@ -19,7 +19,6 @@ const formSchema = z.object({
   stripe_secret_key: z.string().min(1, 'A chave secreta é obrigatória.'),
   // TORNANDO OBRIGATÓRIO: Deve ser um UUID válido (não nulo)
   conta_sintetica_id: z.string().uuid('Selecione a Conta Contábil de Destino (Stripe/Banco).'),
-  conta_receber_id: z.string().uuid('Selecione a Conta Contábil Parcelas a Receber.'),
   historico_padrao_id: z.string().uuid('Selecione um histórico padrão válido.'),
 });
 
@@ -47,7 +46,6 @@ const FormConfiguracoesStripe: React.FC = () => {
       stripe_secret_key: '',
       // Usando undefined para que o Zod force a seleção se o valor for nulo
       conta_sintetica_id: undefined, 
-      conta_receber_id: undefined,
       historico_padrao_id: undefined,
     },
   });
@@ -63,7 +61,6 @@ const FormConfiguracoesStripe: React.FC = () => {
               stripe_secret_key: configInicial.stripe_secret_key || '',
               // Se for null, usa undefined para acionar a validação Zod
               conta_sintetica_id: configInicial.conta_sintetica_id || undefined, 
-              conta_receber_id: configInicial.conta_receber_id || undefined,
               historico_padrao_id: configInicial.historico_padrao_id || undefined,
           });
       } else if (!loadingData && !configInicial) {
@@ -72,7 +69,6 @@ const FormConfiguracoesStripe: React.FC = () => {
               stripe_publishable_key: '',
               stripe_secret_key: '',
               conta_sintetica_id: undefined,
-              conta_receber_id: undefined,
               historico_padrao_id: undefined,
           });
       }
@@ -174,7 +170,6 @@ const FormConfiguracoesStripe: React.FC = () => {
       stripe_publishable_key: values.stripe_publishable_key,
       stripe_secret_key: values.stripe_secret_key,
       conta_sintetica_id: values.conta_sintetica_id,
-      conta_receber_id: values.conta_receber_id,
       historico_padrao_id: values.historico_padrao_id,
       proprietario_id: adminId,
     };
@@ -285,33 +280,7 @@ const FormConfiguracoesStripe: React.FC = () => {
           )}
         />
         
-        <FormField
-          control={form.control}
-          name="conta_receber_id"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Conta Contábil Parcelas a Receber (Stripe)</FormLabel>
-              <Select 
-                onValueChange={field.onChange} 
-                value={field.value}
-              >
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione a conta analítica de parcelas" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                    {contasContabeis.map(c => (
-                        <SelectItem key={c.id} value={c.id}>
-                            {c.Conta} - {c.Descricao}
-                        </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+        {/* REMOVIDO: conta_receber_id */}
         
         {/* NOVO CAMPO: Histórico Padrão */}
         <FormField
