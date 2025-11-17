@@ -59,12 +59,13 @@ interface FormContasReceberProps {
   onSaveComplete: () => void;
 }
 
-// Tipo simplificado para a lista de clientes (apenas o necessário da tabela 'clientes')
+// Tipo simplificado para a lista de clientes (agora pode vir de tbl_clientes ou clientes)
 interface ClienteCRSimples {
   id: string;
   nome: string;
   documento?: string | null;
   email?: string | null;
+  is_system_client?: boolean; // Indica se veio da tbl_clientes
 }
 
 const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onSaveComplete }) => {
@@ -161,7 +162,9 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
       setLoadingClientes(true);
       
       let fetchedClients: ClienteCRSimples[] = [];
+      const processedIds = new Set<string>();
 
+      // 1. Buscar Clientes do Sistema (tbl_clientes) - APENAS SE FOR ADMIN
       if (isAdmin) {
           const { data: systemClients } = await supabase
               .from('tbl_clientes')
@@ -169,23 +172,30 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
               .eq('aprovado', true)
               .order('nome');
               
-          fetchedClients.push(...(systemClients as ClienteCRSimples[] || []));
+          (systemClients as ClienteCRSimples[] || []).forEach(c => {
+              fetchedClients.push({ ...c, is_system_client: true });
+              processedIds.add(c.id);
+          });
+      }
+      
+      // 2. Buscar Clientes de Contas a Receber (clientes)
+      let queryCR = supabase
+        .from('clientes')
+        .select('id, nome, documento, email')
+        .eq('proprietario_id', ownerId)
+        .order('nome');
+      
+      const { data: dataCR, error: errorCR } = await queryCR;
+      
+      if (errorCR) {
+          showError('Erro ao carregar clientes CR: ' + errorCR.message);
+          setClientes([]);
       } else {
-          let queryCR = supabase
-            .from('clientes')
-            .select('id, nome, documento, email')
-            .eq('proprietario_id', ownerId)
-            .order('nome');
-          
-          const { data: dataCR, error: errorCR } = await queryCR;
-          
-          if (errorCR) {
-              showError('Erro ao carregar clientes CR: ' + errorCR.message);
-              setClientes([]);
-          } else {
-              const filteredClients = (dataCR as ClienteCRSimples[]).filter(c => c.id !== ownerId);
-              fetchedClients.push(...filteredClients);
-          }
+          const filteredClients = (dataCR as ClienteCRSimples[])
+              .filter(c => c.id !== ownerId) // Exclui o próprio proprietário
+              .filter(c => !processedIds.has(c.id)); // Exclui duplicatas já adicionadas da tbl_clientes
+              
+          fetchedClients.push(...filteredClients);
       }
       
       setClientes(fetchedClients);
@@ -253,18 +263,65 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
     const contaParcela = isAdmin ? mapeamentoContabil['parcela'] : null;
     
     try {
-      // 0. GARANTIR QUE O CLIENTE EXISTA NA TABELA 'clientes' (para FK)
+      // 0. SINCRONIZAÇÃO CRÍTICA: Garante que o cliente selecionado exista na tabela 'clientes'
       const clienteSelecionado = clientes.find(c => c.id === values.cliente_id);
       
-      if (!clienteSelecionado) {
-          const { data: dbClient, error: dbError } = await supabase
-              .from('clientes')
-              .select('id')
+      if (clienteSelecionado) {
+          // Se o cliente veio da tbl_clientes (is_system_client: true), fazemos o upsert na tabela 'clientes'
+          // para garantir que todos os campos de faturamento/contrato estejam atualizados.
+          if (clienteSelecionado.is_system_client) {
+              const { data: dbClient } = await supabase
+                  .from('tbl_clientes')
+                  .select('id, nome, documento, email, razao_social, nome_fantasia, telefone, telefone_fixo, cep, endereco, numero, complemento, bairro, cidade, estado')
+                  .eq('id', values.cliente_id)
+                  .single();
+                  
+              if (dbClient) {
+                  const { error: upsertError } = await supabase
+                      .from('clientes')
+                      .upsert({
+                          id: dbClient.id,
+                          proprietario_id: ownerId,
+                          nome: dbClient.nome,
+                          documento: dbClient.documento,
+                          email: dbClient.email,
+                          razao_social: dbClient.razao_social,
+                          nome_fantasia: dbClient.nome_fantasia,
+                          telefone: dbClient.telefone,
+                          telefone_fixo: dbClient.telefone_fixo,
+                          cep: dbClient.cep,
+                          endereco: dbClient.endereco,
+                          numero: dbClient.numero,
+                          complemento: dbClient.complemento,
+                          bairro: dbClient.bairro,
+                          cidade: dbClient.cidade,
+                          estado: dbClient.estado,
+                          is_system_client: true,
+                      }, { onConflict: 'id' });
+                      
+                  if (upsertError) throw upsertError;
+              }
+          }
+      } else {
+          // Se o cliente não foi encontrado na lista (o que não deveria acontecer se a busca estiver correta),
+          // tentamos buscar na tbl_clientes como fallback final para evitar o erro de FK.
+          const { data: dbClient } = await supabase
+              .from('tbl_clientes')
+              .select('id, nome, documento, email')
               .eq('id', values.cliente_id)
               .single();
               
-          if (dbError || !dbClient) {
-              throw new Error('Cliente selecionado não encontrado na base de dados de Clientes (CR).');
+          if (dbClient) {
+              await supabase.from('clientes').upsert({
+                  id: dbClient.id,
+                  proprietario_id: ownerId,
+                  nome: dbClient.nome,
+                  documento: dbClient.documento,
+                  email: dbClient.email,
+                  is_system_client: true,
+              }, { onConflict: 'id' });
+          } else {
+              throw new Error('Cliente selecionado não encontrado na base de dados de Clientes (CR) ou do Sistema.');
           }
       }
       
@@ -349,15 +406,6 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
           // Se for edição, primeiro remove o lançamento antigo (se existir)
           if (isEditing) {
               // Deleta o lançamento antigo usando o ID da conta sintética (se o formato antigo não funcionar)
-              await supabase.from('lancamentos')
-                  .delete()
-                  .eq('origem', 'lancamento_cr')
-                  .eq('proprietario_id', ownerId)
-                  .ilike('descricao', `Lançamento Inicial CR: ${contaInicial?.descricao}%`);
-          }
-          
-          // CORREÇÃO CRÍTICA: Se for edição, deleta o lançamento anterior usando o ID da conta sintética
-          if (isEditing) {
               const oldLaunchDescriptionPrefix = `Lançamento Inicial CR: ${contaInicial?.descricao} (CR ID: ${contaInicial?.id.substring(0, 8)})`;
               await supabase.from('lancamentos')
                   .delete()
