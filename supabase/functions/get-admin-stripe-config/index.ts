@@ -31,23 +31,23 @@ serve(async (req: Request) => {
       { auth: { persistSession: false } }
     );
 
-    // Buscar a configuração do Stripe, incluindo os novos campos
+    // Usamos maybeSingle() para evitar que a função lance um erro se a linha não for encontrada (status 406)
     const { data, error: fetchError } = await supabaseService
       .from('configuracoes_stripe')
       .select('id, stripe_publishable_key, stripe_secret_key, conta_sintetica_id, historico_padrao_id, conta_receber_id, conta_resultado_id')
       .eq('proprietario_id', adminId)
       .limit(1)
-      .single();
+      .maybeSingle(); // <--- CORREÇÃO APLICADA AQUI
 
-    if (fetchError && fetchError.code !== 'PGRST116') {
-        console.error('Edge Function Error:', fetchError);
+    if (fetchError) { 
+        console.error('Edge Function Error fetching config:', fetchError);
         return new Response(JSON.stringify({ error: fetchError.message }), {
             status: 500,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
     }
     
-    // Retorna os dados (ou null se não encontrado)
+    // Retorna os dados (data será null se não houver configuração)
     return new Response(JSON.stringify({ config: data }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
