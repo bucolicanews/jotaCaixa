@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { PlanoContas } from '@/types/plano-contas';
 import { Historico } from '@/types/historico';
 import { useStripeConfigAdmin } from '@/integrations/stripe/use-stripe-config-admin';
+import { useContabilConfig } from '@/hooks/use-contabil-config'; // Importando useContabilConfig
 
 const formSchema = z.object({
   stripe_publishable_key: z.string().min(1, 'A chave publicável é obrigatória.'),
@@ -21,21 +22,23 @@ const formSchema = z.object({
   conta_sintetica_id: z.string().uuid('Selecione a Conta Contábil de Destino (Stripe/Banco).'),
   conta_receber_id: z.string().uuid('Selecione a Conta Contábil Parcelas a Receber.'),
   historico_padrao_id: z.string().uuid('Selecione um histórico padrão válido.'),
+  id_conta_resultado: z.string().uuid('Selecione a Conta Contábil de Receita (Resultado).'), // NOVO CAMPO
 });
 
 type FormValues = z.infer<typeof formSchema>;
 
 const FormConfiguracoesStripe: React.FC = () => {
   const { role, usuario, carregando: carregandoSessao } = useSessao();
+  const { configMap } = useContabilConfig(); // Usando configMap para filtrar Receita
   const [contasContabeis, setContasContabeis] = useState<PlanoContas[]>([]);
+  const [contasResultado, setContasResultado] = useState<PlanoContas[]>([]); // NOVO ESTADO
   const [historicos, setHistoricos] = useState<Historico[]>([]);
   const [loadingContas, setLoadingContas] = useState(true);
-  const [hasLinkedSaldoConta, setHasLinkedSaldoConta] = useState(true); // NOVO ESTADO
+  const [hasLinkedSaldoConta, setHasLinkedSaldoConta] = useState(true);
   
   const isAdmin = role === 'Admin';
   const adminId = usuario?.id;
   
-  // Usando o novo hook para buscar a configuração completa (Admin-only)
   const { config: configInicial, loading: loadingData, error: configError, refetch: refetchConfig } = useStripeConfigAdmin(adminId || null);
   const [existingId, setExistingId] = useState<string | null>(null);
 
@@ -45,10 +48,10 @@ const FormConfiguracoesStripe: React.FC = () => {
     defaultValues: {
       stripe_publishable_key: '',
       stripe_secret_key: '',
-      // Usando undefined para que o Zod force a seleção se o valor for nulo
       conta_sintetica_id: undefined, 
       conta_receber_id: undefined,
       historico_padrao_id: undefined,
+      id_conta_resultado: undefined, // NOVO DEFAULT
     },
   });
   
@@ -61,10 +64,10 @@ const FormConfiguracoesStripe: React.FC = () => {
           form.reset({
               stripe_publishable_key: configInicial.stripe_publishable_key || '',
               stripe_secret_key: configInicial.stripe_secret_key || '',
-              // Se for null, usa undefined para acionar a validação Zod
               conta_sintetica_id: configInicial.conta_sintetica_id || undefined, 
               conta_receber_id: configInicial.conta_receber_id || undefined,
               historico_padrao_id: configInicial.historico_padrao_id || undefined,
+              id_conta_resultado: (configInicial as any).id_conta_resultado || undefined, // NOVO CAMPO
           });
       } else if (!loadingData && !configInicial) {
           setExistingId(null);
@@ -74,6 +77,7 @@ const FormConfiguracoesStripe: React.FC = () => {
               conta_sintetica_id: undefined,
               conta_receber_id: undefined,
               historico_padrao_id: undefined,
+              id_conta_resultado: undefined,
           });
       }
   }, [configInicial, loadingData, form]);
@@ -100,6 +104,28 @@ const FormConfiguracoesStripe: React.FC = () => {
     }
     setLoadingContas(false);
   }, [adminId]);
+  
+  const fetchContasResultado = useCallback(async () => {
+    if (!adminId) return;
+    
+    const receitaCode = configMap.Receita || '4';
+    
+    const { data, error } = await supabase
+        .from('plano_contas')
+        .select('id, Conta, Descricao')
+        .eq('proprietario_id', adminId)
+        .eq('Analitica', 'Sim')
+        .eq('is_conta_resultado', true)
+        .like('Conta', `${receitaCode}.%`)
+        .order('Conta');
+        
+    if (error) {
+        showError('Erro ao carregar contas de receita: ' + error.message);
+        setContasResultado([]);
+    } else {
+        setContasResultado(data as PlanoContas[]);
+    }
+  }, [adminId, configMap.Receita]);
   
   const fetchHistoricos = useCallback(async () => {
     if (!adminId) return;
@@ -150,9 +176,10 @@ const FormConfiguracoesStripe: React.FC = () => {
   useEffect(() => {
     if (!carregandoSessao && isAdmin) {
       fetchContasContabeis();
+      fetchContasResultado(); // NOVO FETCH
       fetchHistoricos();
     }
-  }, [carregandoSessao, isAdmin, fetchContasContabeis, fetchHistoricos]);
+  }, [carregandoSessao, isAdmin, fetchContasContabeis, fetchContasResultado, fetchHistoricos]);
 
   const onSubmit = async (values: FormValues) => {
     if (!isAdmin) {
@@ -176,6 +203,7 @@ const FormConfiguracoesStripe: React.FC = () => {
       conta_sintetica_id: values.conta_sintetica_id,
       conta_receber_id: values.conta_receber_id,
       historico_padrao_id: values.historico_padrao_id,
+      id_conta_resultado: values.id_conta_resultado, // NOVO CAMPO
       proprietario_id: adminId,
     };
 
@@ -313,7 +341,45 @@ const FormConfiguracoesStripe: React.FC = () => {
           )}
         />
         
-        {/* NOVO CAMPO: Histórico Padrão */}
+        {/* NOVO CAMPO: Conta de Resultado (Receita) */}
+        <FormField
+          control={form.control}
+          name="id_conta_resultado"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Conta Contábil de Receita (Resultado DRE)</FormLabel>
+              <Select 
+                onValueChange={field.onChange} 
+                value={field.value}
+              >
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder={`Selecione a conta de Receita (${configMap.Receita}.x.x)`} />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                    {contasResultado.length === 0 ? (
+                        <SelectItem value="disabled" disabled>Nenhuma conta de Receita marcada.</SelectItem>
+                    ) : (
+                        contasResultado.map(c => (
+                            <SelectItem key={c.id} value={c.id}>
+                                {c.Conta} - {c.Descricao}
+                            </SelectItem>
+                        ))
+                    )}
+                </SelectContent>
+              </Select>
+              <FormMessage />
+              {contasResultado.length === 0 && (
+                  <p className="text-sm text-red-500">
+                      Nenhuma conta de Receita ({configMap.Receita}.x.x) marcada como "Conta de Resultado".
+                  </p>
+              )}
+            </FormItem>
+          )}
+        />
+        
+        {/* Histórico Padrão */}
         <FormField
           control={form.control}
           name="historico_padrao_id"

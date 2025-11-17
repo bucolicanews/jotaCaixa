@@ -48,10 +48,10 @@ serve(async (req: Request) => {
       { auth: { persistSession: false } }
     );
 
-    // Removida a coluna 'conta_resultado_id' que não existe na tabela
+    // Adicionando id_conta_resultado
     const { data, error: fetchError } = await supabaseService
       .from('configuracoes_stripe')
-      .select('id, stripe_publishable_key, stripe_secret_key, conta_sintetica_id, conta_receber_id, historico_padrao_id')
+      .select('id, stripe_publishable_key, stripe_secret_key, conta_sintetica_id, conta_receber_id, historico_padrao_id, id_conta_resultado')
       .eq('proprietario_id', adminId)
       .limit(1)
       .maybeSingle();

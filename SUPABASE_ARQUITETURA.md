@@ -42,7 +42,7 @@ BEGIN
     RAISE EXCEPTION 'Admin não encontrado para o cliente.';
   END IF;
   
-  -- NOVO: 3. Busca o mapeamento contábil e o histórico padrão do Admin
+  -- 3. Busca o mapeamento contábil e o histórico padrão do Admin
   SELECT conta_contabil_id INTO v_conta_contabil_a_receber FROM public.configuracao_contas_receber WHERE proprietario_id = v_admin_id AND tipo_registro = 'a_receber' LIMIT 1;
   SELECT conta_contabil_id INTO v_conta_contabil_parcela FROM public.configuracao_contas_receber WHERE proprietario_id = v_admin_id AND tipo_registro = 'parcela' LIMIT 1;
   SELECT conta_contabil_id INTO v_conta_contabil_recebimento FROM public.configuracao_contas_receber WHERE proprietario_id = v_admin_id AND tipo_registro = 'recebimento' LIMIT 1;
@@ -52,7 +52,7 @@ BEGIN
     RAISE EXCEPTION 'Mapeamento contábil de Contas a Receber (a_receber, parcela, recebimento, resultado) não configurado pelo Admin.';
   END IF;
 
-  -- NOVO: 4. Busca a conta sintética configurada no Stripe (global) E o histórico padrão
+  -- 4. Busca a conta sintética configurada no Stripe (global) E o histórico padrão
   SELECT conta_sintetica_id, historico_padrao_id INTO v_conta_sintetica_stripe_id, v_historico_padrao_id FROM public.configuracoes_stripe WHERE proprietario_id = v_admin_id LIMIT 1;
   IF v_conta_sintetica_stripe_id IS NULL THEN
     RAISE EXCEPTION 'Nenhuma conta sintética configurada para o Stripe. Configure em Configurações > Stripe.';
@@ -61,7 +61,7 @@ BEGIN
     RAISE EXCEPTION 'Nenhum histórico padrão configurado para o Stripe. Configure em Configurações > Stripe.';
   END IF;
 
-  -- NOVO: 5. Busca a saldo_conta do Admin que referencia a conta sintética configurada no Stripe
+  -- 5. Busca a saldo_conta do Admin que referencia a conta sintética configurada no Stripe
   SELECT id INTO v_conta_destino_id 
   FROM public.saldo_contas 
   WHERE proprietario_id = v_admin_id AND conta_contabil_id = v_conta_sintetica_stripe_id
@@ -157,7 +157,7 @@ BEGIN
   INSERT INTO public.lancamentos (proprietario_id, data_movimentacao, descricao, valor, tipo, conta_bancaria_id, conta_contabil_id, origem, conciliado, historico_id)
   VALUES (
     v_admin_id,
-    NOW() AT TIME ZONE 'America/SaoPaulo',
+    NOW() AT TIME ZONE 'America/Sao_Paulo',
     'Recebimento Renovação Assinatura - Cliente ' || v_cliente_nome,
     p_valor_pago,
     'Entrada',
@@ -170,7 +170,7 @@ BEGIN
   
   -- NOVO: 13.2 CRIA O LANÇAMENTO DE RECEITA (DRE) - CRÉDITO (Resultado)
   INSERT INTO public.lancamentos (proprietario_id, data_movimentacao, descricao, valor, tipo, conta_bancaria_id, conta_contabil_id, origem, conciliado, historico_id)
-  VALUES (v_admin_id, v_data_hoje, 'Receita Renovação Assinatura - Cliente ' || v_cliente_nome, p_valor_pago, 'Entrada', NULL, v_conta_resultado_recebimento, 'assinatura_stripe', true, v_historico_padrao_id);
+  VALUES (v_admin_id, v_data_hoje, 'Receita Renovação Assinatura - Plano ' || v_plano_nome, p_valor_pago, 'Entrada', NULL, v_conta_resultado_recebimento, 'assinatura_stripe', true, v_historico_padrao_id);
   
   -- NOVO: 13.3 CRIA O LANÇAMENTO INICIAL DE DÉBITO (CR) - DÉBITO (Ativo)
   -- Este lançamento deve ser o valor total do plano, pois o valor total da conta sintética foi atualizado no passo 10.

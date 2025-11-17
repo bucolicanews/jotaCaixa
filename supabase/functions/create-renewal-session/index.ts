@@ -40,7 +40,7 @@ serve(async (req: Request) => {
     // 3️⃣ Buscar a chave secreta Stripe do proprietário
     const { data: stripeConfig, error: configError } = await supabase
       .from('configuracoes_stripe')
-      .select('stripe_secret_key')
+      .select('stripe_secret_key, id_conta_resultado') // NOVO CAMPO
       .eq('proprietario_id', proprietarioId)
       .limit(1)
       .single();
@@ -100,7 +100,13 @@ serve(async (req: Request) => {
       ],
       success_url: `${baseUrl}minha-assinatura?renewal=success&session_id={CHECKOUT_SESSION_ID}&cp_id=${contaPagarId}`,
       cancel_url: `${baseUrl}minha-assinatura?renewal=canceled`,
-      metadata: { clienteId, planoId, contaPagarId, valorCobrado: valorCobrado.toString() },
+      metadata: { 
+          clienteId, 
+          planoId, 
+          contaPagarId, 
+          valorCobrado: valorCobrado.toString(),
+          idContaResultado: stripeConfig.id_conta_resultado || '', // NOVO METADADO
+      },
       customer_email: email,
     });
 

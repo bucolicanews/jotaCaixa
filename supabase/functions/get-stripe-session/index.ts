@@ -34,7 +34,7 @@ serve(async (req: Request) => {
     // Buscar a chave secreta Stripe do proprietário
     const { data: stripeConfig, error: configError } = await supabase
       .from('configuracoes_stripe')
-      .select('stripe_secret_key')
+      .select('stripe_secret_key, id_conta_resultado') // NOVO CAMPO
       .eq('proprietario_id', proprietarioId)
       .limit(1)
       .single();

@@ -59,7 +59,7 @@ const queryClient = new QueryClient();
 const PaymentSuccessHandler = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { usuario, refetch, carregando } = useSessao();
+  const { usuario, refetch, carregando, perfil } = useSessao();
   
   const paymentStatus = searchParams.get('payment');
   const sessionId = searchParams.get('session_id');
@@ -81,7 +81,7 @@ const PaymentSuccessHandler = () => {
         // 1. Buscar o plano atual do cliente (que foi definido no signUp/upsert inicial)
         const { data: clienteData, error: clienteError } = await supabase
             .from('tbl_clientes')
-            .select('plano_id')
+            .select('plano_id, admin_id')
             .eq('id', usuario.id)
             .single();
             
@@ -113,7 +113,7 @@ const PaymentSuccessHandler = () => {
         showError('O pagamento foi cancelado.');
         navigate('/vendas', { replace: true });
     }
-  }, [paymentStatus, sessionId, usuario, carregando, navigate, refetch]);
+  }, [paymentStatus, sessionId, usuario, carregando, navigate, refetch, perfil]);
 
   return null;
 };
@@ -142,8 +142,10 @@ const PaymentRenewalHandler = () => {
         sessionStorage.setItem(processedKey, 'true'); // Marca como processado
         
         // 1. Buscar dados da sessão do Stripe para obter o valor pago
+        const proprietarioId = (usuario as any)?.admin_id || usuario?.id;
+        
         const { data: sessionData, error: sessionError } = await supabase.functions.invoke('get-stripe-session', {
-            body: { sessionId, proprietarioId: (usuario as any)?.admin_id || usuario?.id }, // Passa o ID do Admin
+            body: { sessionId, proprietarioId }, // Passa o ID do Admin
         });
         
         if (sessionError || !sessionData?.metadata?.valorCobrado) {
