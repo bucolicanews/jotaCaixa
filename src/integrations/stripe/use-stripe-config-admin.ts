@@ -5,10 +5,9 @@ interface StripeConfigData {
   id: string | null;
   stripe_publishable_key: string;
   stripe_secret_key: string;
-  conta_sintetica_id: string | null; // Conta Banco/Caixa (Ativo)
+  conta_sintetica_id: string | null;
+  conta_receber_id: string | null;
   historico_padrao_id: string | null;
-  conta_receber_id: string | null; // Conta Patrimonial (CR)
-  conta_resultado_id: string | null; // Conta Receita (DRE)
 }
 
 interface StripeConfigAdminHook {
@@ -44,9 +43,6 @@ export function useStripeConfigAdmin(adminId: string | null): StripeConfigAdminH
     setError(null);
     
     try {
-      // --- LOG PARA DEBUG ---
-      console.log('useStripeConfigAdmin: Sending adminId:', adminId);
-      
       // Chamada para a Edge Function que usa a Service Role Key
       const { data, error: invokeError } = await supabase.functions.invoke('get-admin-stripe-config', {
           body: { adminId },

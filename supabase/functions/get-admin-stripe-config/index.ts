@@ -24,41 +24,30 @@ serve(async (req: Request) => {
       });
     }
 
-    const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
-    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    
-    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-        console.error('FATAL: Missing Supabase environment variables.');
-        return new Response(JSON.stringify({ error: 'Missing Supabase environment variables.' }), {
-            status: 500,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-    }
-
     // Inicializar Supabase Client com SERVICE ROLE KEY (ignora RLS)
     const supabaseService = createClient(
-      SUPABASE_URL,
-      SUPABASE_SERVICE_ROLE_KEY,
+      (Deno.env.get('SUPABASE_URL') as any)!,
+      (Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') as any)!,
       { auth: { persistSession: false } }
     );
 
-    // Usamos maybeSingle() para evitar que a função lance um erro se a linha não for encontrada (status 406)
+    // Buscar a configuração do Stripe
     const { data, error: fetchError } = await supabaseService
       .from('configuracoes_stripe')
-      .select('id, stripe_publishable_key, stripe_secret_key, conta_sintetica_id, historico_padrao_id, conta_receber_id, conta_resultado_id')
+      .select('id, stripe_publishable_key, stripe_secret_key, conta_sintetica_id, conta_receber_id, historico_padrao_id')
       .eq('proprietario_id', adminId)
       .limit(1)
-      .maybeSingle();
+      .single();
 
-    if (fetchError) { 
-        console.error('Edge Function Error fetching config:', fetchError);
+    if (fetchError && fetchError.code !== 'PGRST116') {
+        console.error('Edge Function Error:', fetchError);
         return new Response(JSON.stringify({ error: fetchError.message }), {
             status: 500,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
     }
     
-    // Retorna os dados (data será null se não houver configuração)
+    // Retorna os dados (ou null se não encontrado)
     return new Response(JSON.stringify({ config: data }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

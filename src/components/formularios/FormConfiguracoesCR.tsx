@@ -22,7 +22,7 @@ const TIPOS_REGISTRO_CONTABIL = [
   { key: 'desconto', label: 'Descontos Concedidos (Despesa)', tipo: 'Resultado', analitica: 'Sim' }, // Despesa (DRE)
 ];
 
-// Esquema dinâmico: a_receber, parcela, recebimento e recebimento_resultado são obrigatórios (min(1))
+// Esquema dinâmico: a_receber, parcela e recebimento são obrigatórios (min(1))
 const formSchema = z.object({
   a_receber: z.string().min(1, 'A conta Contas a Receber (Sintético) é obrigatória.').nullable(),
   parcela: z.string().min(1, 'A conta Parcelas a Receber (Analítico) é obrigatória.').nullable(),
@@ -229,7 +229,7 @@ const FormConfiguracoesCR: React.FC = () => {
                             <FormItem>
                                 <FormLabel>{tipo.label} ({tipo.tipo} - {requiredAnalitica})</FormLabel>
                                 <Select 
-                                    onValueChange={(value) => field.onChange(value === "null" ? null : value)} 
+                                    onValueChange={field.onChange} 
                                     value={field.value || "null"} // Usa "null" como string para a opção "Nenhum"
                                 >
                                     <FormControl>
@@ -270,7 +270,7 @@ const FormConfiguracoesCR: React.FC = () => {
                 <FormItem>
                     <FormLabel>Histórico Padrão (Recebimento)</FormLabel>
                     <Select 
-                        onValueChange={(value) => field.onChange(value === "null" ? null : value)} 
+                        onValueChange={field.onChange} 
                         value={field.value || "null"} // Usa "null" como string para a opção "Nenhum"
                     >
                         <FormControl>
