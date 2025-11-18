@@ -22,14 +22,18 @@ DECLARE
   v_recorrencia_id UUID; -- ID da conta sintética de recorrência
   v_parcela_paga_id UUID; -- ID da parcela que está sendo paga
   v_conta_destino_id UUID; -- NOVO: ID da conta de destino (Stripe/Banco)
-  v_conta_sintetica_stripe_id UUID; -- NOVO: ID da conta sintética configurada no Stripe
-  v_historico_padrao_id UUID; -- NOVO: ID do histórico padrão do Stripe
+  
+  -- Variáveis de Configuração Stripe
+  v_conta_sintetica_stripe_id UUID; -- conta_sintetica_id
+  v_historico_padrao_stripe_id UUID;       -- historico_padrao_id
+  v_conta_resultado_stripe_id UUID; -- NOVO: id_conta_resultado do Stripe
   
   -- NOVAS VARIÁVEIS PARA MAPEAR CONTAS CONTÁBEIS
   v_conta_contabil_a_receber UUID;
   v_conta_contabil_parcela UUID;
   v_conta_contabil_recebimento UUID;
   v_conta_resultado_recebimento UUID; -- NOVO: Conta de Resultado (Receita)
+  v_historico_padrao_recebimento UUID; -- NOVO: Histórico Padrão para Recebimentos
 BEGIN
   -- 1. Verifica permissão (Apenas Admin ou o próprio Cliente pode executar)
   IF auth.uid() IS NULL THEN
@@ -42,46 +46,44 @@ BEGIN
     RAISE EXCEPTION 'Admin não encontrado para o cliente.';
   END IF;
   
-  -- 3. Busca o mapeamento contábil e o histórico padrão do Admin
+  -- NOVO: 3. Busca o mapeamento contábil CR (Pode ser NULL, mas é usado nos lançamentos)
   SELECT conta_contabil_id INTO v_conta_contabil_a_receber FROM public.configuracao_contas_receber WHERE proprietario_id = v_admin_id AND tipo_registro = 'a_receber' LIMIT 1;
   SELECT conta_contabil_id INTO v_conta_contabil_parcela FROM public.configuracao_contas_receber WHERE proprietario_id = v_admin_id AND tipo_registro = 'parcela' LIMIT 1;
   SELECT conta_contabil_id INTO v_conta_contabil_recebimento FROM public.configuracao_contas_receber WHERE proprietario_id = v_admin_id AND tipo_registro = 'recebimento' LIMIT 1;
-  SELECT conta_contabil_id INTO v_conta_resultado_recebimento FROM public.configuracao_contas_receber WHERE proprietario_id = v_admin_id AND tipo_registro = 'recebimento_resultado' LIMIT 1; -- CORRIGIDO: Usando o tipo correto
+  SELECT conta_contabil_id INTO v_conta_resultado_recebimento FROM public.configuracao_contas_receber WHERE proprietario_id = v_admin_id AND tipo_registro = 'recebimento_resultado' LIMIT 1;
   
-  IF v_conta_contabil_a_receber IS NULL OR v_conta_contabil_parcela IS NULL OR v_conta_contabil_recebimento IS NULL OR v_conta_resultado_recebimento IS NULL THEN
-    RAISE EXCEPTION 'Mapeamento contábil de Contas a Receber (a_receber, parcela, recebimento, recebimento_resultado) não configurado pelo Admin.';
+  -- NOVO: Busca Histórico Padrão de Recebimento (da tabela correta)
+  SELECT historico_id INTO v_historico_padrao_recebimento FROM public.configuracao_historico_padrao WHERE proprietario_id = v_admin_id AND tipo_registro = 'recebimento_padrao' LIMIT 1;
+  
+  -- 4. Busca mapeamento Stripe (incluindo a conta de resultado)
+  SELECT conta_sintetica_id, historico_padrao_id, id_conta_resultado INTO v_conta_sintetica_stripe_id, v_historico_padrao_stripe_id, v_conta_resultado_stripe_id FROM public.configuracoes_stripe WHERE proprietario_id = v_admin_id LIMIT 1;
+  
+  -- 5. VALIDAÇÃO CRÍTICA: Apenas as configurações do Stripe são obrigatórias
+  IF v_conta_sintetica_stripe_id IS NULL OR v_historico_padrao_stripe_id IS NULL OR v_conta_resultado_stripe_id IS NULL THEN -- ADICIONADO v_conta_resultado_stripe_id
+    RAISE EXCEPTION 'Configurações Stripe incompletas. Verifique: Conta Sintética Stripe, Histórico Padrão Stripe e Conta de Resultado Stripe.';
   END IF;
 
-  -- 4. Busca a conta sintética configurada no Stripe (global) E o histórico padrão
-  SELECT conta_sintetica_id, historico_padrao_id INTO v_conta_sintetica_stripe_id, v_historico_padrao_id FROM public.configuracoes_stripe WHERE proprietario_id = v_admin_id LIMIT 1;
-  IF v_conta_sintetica_stripe_id IS NULL THEN
-    RAISE EXCEPTION 'Nenhuma conta sintética configurada para o Stripe. Configure em Configurações > Stripe.';
-  END IF;
-  IF v_historico_padrao_id IS NULL THEN
-    RAISE EXCEPTION 'Nenhum histórico padrão configurado para o Stripe. Configure em Configurações > Stripe.';
-  END IF;
-
-  -- 5. Busca a saldo_conta do Admin que referencia a conta sintética configurada no Stripe
+  -- 6. Busca a saldo_conta do Admin que referencia a conta sintética configurada no Stripe
   SELECT id INTO v_conta_destino_id 
   FROM public.saldo_contas 
   WHERE proprietario_id = v_admin_id AND conta_contabil_id = v_conta_sintetica_stripe_id
   LIMIT 1;
   
   IF v_conta_destino_id IS NULL THEN
-    RAISE EXCEPTION 'Nenhuma conta de saldo (Stripe/Banco) encontrada para o Admin vinculada à conta sintética configurada. Cadastre uma em Bancos/Caixas.';
+    RAISE EXCEPTION 'Nenhuma conta de saldo (Stripe/Banco) encontrada para o Admin vinculada à conta contábil configurada no Stripe. Cadastre uma em Bancos/Caixas.';
   END IF;
 
-  -- 6. Busca o preço, NOME e as PERMISSÕES do NOVO plano
+  -- 7. Busca o preço, NOME e as PERMISSÕES do NOVO plano
   SELECT preco_mensal, nome, permissoes INTO v_plano_preco, v_plano_nome, v_plano_permissoes FROM public.planos WHERE id = p_plano_id;
 
   IF v_plano_preco IS NULL THEN
     RAISE EXCEPTION 'Plano não encontrado ou sem preço definido.';
   END IF;
   
-  -- 7. Busca nome, email e data_fim_acesso atual do cliente
+  -- 8. Busca nome, email e data_fim_acesso atual do cliente
   SELECT nome, email, data_fim_acesso INTO v_cliente_nome, v_cliente_email, v_current_data_fim_acesso FROM public.tbl_clientes WHERE id = p_cliente_id;
 
-  -- 8. Determina a data base para o cálculo de renovação (30 dias)
+  -- 9. Determina a data base para o cálculo de renovação (30 dias)
   v_base_date := v_start_of_today;
   
   -- Calcula a data de vencimento da PRÓXIMA MENSALIDADE (30 dias a partir da data base)
@@ -91,7 +93,7 @@ BEGIN
   -- A nova data de fim de acesso é o final do dia ANTERIOR ao próximo vencimento.
   v_new_data_fim_acesso := (v_proximo_vencimento::TIMESTAMP WITH TIME ZONE - INTERVAL '1 millisecond') AT TIME ZONE 'America/Sao_Paulo';
 
-  -- 9. Atualiza o perfil do cliente com a nova data de acesso E PERMISSÕES
+  -- 10. Atualiza o perfil do cliente com a nova data de acesso E PERMISSÕES
   UPDATE public.tbl_clientes
   SET 
     plano_id = p_plano_id,
@@ -100,7 +102,7 @@ BEGIN
     aprovado = TRUE
   WHERE id = p_cliente_id;
 
-  -- 10. BUSCA A CONTA SINTÉTICA DE RECORRÊNCIA
+  -- 11. BUSCA A CONTA SINTÉTICA DE RECORRÊNCIA
   SELECT id INTO v_recorrencia_id
   FROM public.admin_contas_receber
   WHERE cliente_id = p_cliente_id AND origem = 'assinatura_recorrente'
@@ -119,7 +121,7 @@ BEGIN
     id_conta_patrimonial = v_conta_contabil_a_receber -- NOVO: Atualiza Conta Contábil
   WHERE id = v_recorrencia_id;
   
-  -- 11. MARCA A PARCELA CORRESPONDENTE AO PAGAMENTO COMO PAGA
+  -- 12. MARCA A PARCELA CORRESPONDENTE AO PAGAMENTO COMO PAGA
   UPDATE public.admin_parcelas_receber
   SET 
     status = 'paga',
@@ -129,7 +131,7 @@ BEGIN
   WHERE id = p_conta_pagar_id -- p_conta_pagar_id agora é o ID da parcela
   RETURNING id INTO v_parcela_paga_id;
 
-  -- 12. DELETA TODAS AS OUTRAS PARCELAS PENDENTES DE ASSINATURA ANTERIORES
+  -- 13. DELETA TODAS AS OUTRAS PARCELAS PENDENTES DE ASSINATURA ANTERIORES
   -- ESTA É A LÓGICA CRÍTICA: DELETA TODAS AS PARCELAS ABERTAS/PENDENTES (EXCETO A QUE ACABOU DE SER PAGA)
   DELETE FROM public.admin_parcelas_receber
   WHERE admin_id = v_admin_id
@@ -137,7 +139,7 @@ BEGIN
     AND status IN ('aberta', 'reprogramada', 'parcial')
     AND id != v_parcela_paga_id; -- Não altera a parcela que acabou de ser paga
 
-  -- 13. CRIA O REGISTRO DE RECEBIMENTO DO ADMIN (AGORA COM conta_id E id_conta_contabil)
+  -- 14. CRIA O REGISTRO DE RECEBIMENTO DO ADMIN (AGORA COM conta_id E id_conta_contabil)
   INSERT INTO public.admin_recebimentos (parcela_id, admin_id, cliente_id, valor_recebido, data_recebimento, tipo_recebimento, forma_pagamento, conta_id, id_conta_contabil, historico_id, id_conta_resultado)
   VALUES (
     v_parcela_paga_id,
@@ -149,63 +151,73 @@ BEGIN
     p_forma_pagamento, -- Usa a forma de pagamento fornecida
     v_conta_destino_id, -- ID da conta de destino (buscada via conta_sintetica_stripe_id)
     v_conta_contabil_recebimento, -- Conta Contábil do Recebimento (Patrimonial)
-    v_historico_padrao_id,
-    v_conta_resultado_recebimento -- NOVO: Conta de Resultado (Receita)
+    v_historico_padrao_stripe_id,
+    v_conta_resultado_stripe_id -- USANDO v_conta_resultado_stripe_id
   );
   
-  -- NOVO: 13.1 CRIA O LANÇAMENTO DE ENTRADA NA CONTA DE SALDO (Stripe) - DÉBITO (Ativo)
-  INSERT INTO public.lancamentos (proprietario_id, data_movimentacao, descricao, valor, tipo, conta_bancaria_id, conta_contabil_id, origem, conciliado, historico_id)
-  VALUES (
-    v_admin_id,
-    NOW() AT TIME ZONE 'America/Sao_Paulo',
-    'Recebimento Renovação Assinatura - Cliente ' || v_cliente_nome,
-    p_valor_pago,
-    'Entrada',
-    v_conta_destino_id, -- ID da saldo_contas (Stripe)
-    v_conta_sintetica_stripe_id, -- ID da conta_contabil (Stripe)
-    'assinatura_stripe',
-    true, -- Pagamentos via Stripe já vêm conciliados
-    v_historico_padrao_id -- NOVO: Histórico Padrão
-  );
+  -- NOVO: 14.1 CRIA O LANÇAMENTO DE ENTRADA NA CONTA DE SALDO (Stripe) - DÉBITO (Ativo)
+  IF v_conta_sintetica_stripe_id IS NOT NULL THEN
+    INSERT INTO public.lancamentos (proprietario_id, data_movimentacao, descricao, valor, tipo, conta_bancaria_id, conta_contabil_id, origem, conciliado, historico_id)
+    VALUES (
+      v_admin_id,
+      NOW() AT TIME ZONE 'America/SaoPaulo',
+      'Recebimento Renovação Assinatura - Cliente ' || v_cliente_nome || ' (CR ID: ' || v_recorrencia_id::TEXT || ')', -- NOVO: Inclui ID da CR
+      p_valor_pago,
+      'Entrada',
+      v_conta_destino_id, -- ID da saldo_contas (Stripe)
+      v_conta_sintetica_stripe_id, -- ID da conta_contabil (Stripe)
+      'assinatura_stripe',
+      true, -- Pagamentos via Stripe já vêm conciliados
+      v_historico_padrao_stripe_id -- NOVO: Histórico Padrão
+    );
+  END IF;
   
-  -- NOVO: 13.2 CRIA O LANÇAMENTO DE RECEITA (DRE) - CRÉDITO (Resultado)
-  INSERT INTO public.lancamentos (proprietario_id, data_movimentacao, descricao, valor, tipo, conta_bancaria_id, conta_contabil_id, origem, conciliado, historico_id)
-  VALUES (v_admin_id, v_data_hoje, 'Receita Renovação Assinatura - Plano ' || v_plano_nome, p_valor_pago, 'Saida', NULL, v_conta_resultado_recebimento, 'assinatura_stripe', true, v_historico_padrao_id); -- CORRIGIDO: TIPO 'Saida'
+  -- NOVO: 14.2 CRIA O LANÇAMENTO DE RECEITA (DRE) - CRÉDITO (Resultado)
+  -- CORREÇÃO CRÍTICA: Tipo deve ser 'Saida' para contas de Receita (Natureza Credora)
+  IF v_conta_resultado_stripe_id IS NOT NULL THEN
+    INSERT INTO public.lancamentos (proprietario_id, data_movimentacao, descricao, valor, tipo, conta_bancaria_id, conta_contabil_id, origem, conciliado, historico_id)
+    VALUES (v_admin_id, v_data_hoje, 'Receita Renovação Assinatura - Plano ' || v_plano_nome || ' (CR ID: ' || v_recorrencia_id::TEXT || ')', p_valor_pago, 'Saida', NULL, v_conta_resultado_stripe_id, 'assinatura_stripe', true, v_historico_padrao_stripe_id); -- NOVO: Inclui ID da CR
+  END IF;
   
-  -- NOVO: 13.3 CRIA O LANÇAMENTO INICIAL DE DÉBITO (CR) - DÉBITO (Ativo)
+  -- NOVO: 14.3 CRIA O LANÇAMENTO INICIAL DE DÉBITO (CR) - DÉBITO (Ativo)
   -- Este lançamento deve ser o valor total do plano, pois o valor total da conta sintética foi atualizado no passo 10.
-  INSERT INTO public.lancamentos (proprietario_id, data_movimentacao, descricao, valor, tipo, conta_bancaria_id, conta_contabil_id, origem, conciliado, historico_id)
-  VALUES (v_admin_id, v_data_hoje, 'Lançamento Inicial CR: Assinatura Recorrente (CR ID: ' || v_recorrencia_id::TEXT || ')', v_plano_preco, 'Entrada', NULL, v_conta_contabil_a_receber, 'assinatura_stripe', true, v_historico_padrao_id);
+  IF v_conta_contabil_a_receber IS NOT NULL THEN
+    INSERT INTO public.lancamentos (proprietario_id, data_movimentacao, descricao, valor, tipo, conta_bancaria_id, conta_contabil_id, origem, conciliado, historico_id)
+    VALUES (v_admin_id, v_data_hoje, 'Lançamento Inicial CR: Assinatura Recorrente (CR ID: ' || v_recorrencia_id::TEXT || ')', v_plano_preco, 'Entrada', NULL, v_conta_contabil_a_receber, 'assinatura_stripe', true, v_historico_padrao_stripe_id);
+  END IF;
   
-  -- NOVO: 13.4 CRIA O LANÇAMENTO DE ESTORNO PATRIMONIAL (CR) - CRÉDITO (Ativo)
-  INSERT INTO public.lancamentos (proprietario_id, data_movimentacao, descricao, valor, tipo, conta_bancaria_id, conta_contabil_id, origem, conciliado, historico_id)
-  VALUES (v_admin_id, v_data_hoje, 'Estorno Patrimonial CR - Renovação Assinatura', p_valor_pago, 'Saida', NULL, v_conta_contabil_a_receber, 'assinatura_stripe', true, v_historico_padrao_id);
+  -- NOVO: 14.4 CRIA O LANÇAMENTO DE ESTORNO PATRIMONIAL (CR) - CRÉDITO (Ativo)
+  IF v_conta_contabil_a_receber IS NOT NULL THEN
+    INSERT INTO public.lancamentos (proprietario_id, data_movimentacao, descricao, valor, tipo, conta_bancaria_id, conta_contabil_id, origem, conciliado, historico_id)
+    VALUES (v_admin_id, v_data_hoje, 'Estorno Patrimonial CR - Renovação Assinatura (CR ID: ' || v_recorrencia_id::TEXT || ')', p_valor_pago, 'Saida', NULL, v_conta_contabil_a_receber, 'assinatura_stripe', true, v_historico_padrao_stripe_id); -- NOVO: Inclui ID da CR
+  END IF;
   
-  -- 14. CRIA AS PRÓXIMAS DUAS PARCELAS PENDENTES (30 e 60 dias)
-  
-  -- Próxima Mensalidade (30 dias)
-  INSERT INTO public.admin_parcelas_receber (conta_receber_id, admin_id, numero_parcela, valor_parcela, data_vencimento, status, id_conta_contabil)
-  VALUES (
-    v_recorrencia_id,
-    v_admin_id,
-    (SELECT COALESCE(MAX(numero_parcela), 1) + 1 FROM public.admin_parcelas_receber WHERE conta_receber_id = v_recorrencia_id), -- Próximo número de parcela
-    v_plano_preco,
-    v_proximo_vencimento,
-    'aberta',
-    v_conta_contabil_parcela -- NOVO: Conta Contábil da Parcela
-  );
-  
-  -- Segunda Mensalidade (60 dias)
-  INSERT INTO public.admin_parcelas_receber (conta_receber_id, admin_id, numero_parcela, valor_parcela, data_vencimento, status, id_conta_contabil)
-  VALUES (
-    v_recorrencia_id,
-    v_admin_id,
-    (SELECT COALESCE(MAX(numero_parcela), 1) + 1 FROM public.admin_parcelas_receber WHERE conta_receber_id = v_recorrencia_id), -- Próximo número de parcela
-    v_plano_preco,
-    v_segundo_vencimento,
-    'aberta',
-    v_conta_contabil_parcela -- NOVO: Conta Contábil da Parcela
-  );
+  -- 15. CRIA AS PRÓXIMAS DUAS PARCELAS PENDENTES (30 e 60 dias)
+  IF v_conta_contabil_parcela IS NOT NULL THEN
+    -- Próxima Mensalidade (30 dias)
+    INSERT INTO public.admin_parcelas_receber (conta_receber_id, admin_id, numero_parcela, valor_parcela, data_vencimento, status, id_conta_contabil)
+    VALUES (
+      v_recorrencia_id,
+      v_admin_id,
+      (SELECT COALESCE(MAX(numero_parcela), 1) + 1 FROM public.admin_parcelas_receber WHERE conta_receber_id = v_recorrencia_id), -- Próximo número de parcela
+      v_plano_preco,
+      v_proximo_vencimento,
+      'aberta',
+      v_conta_contabil_parcela -- NOVO: Conta Contábil da Parcela
+    );
+    
+    -- Segunda Mensalidade (60 dias)
+    INSERT INTO public.admin_parcelas_receber (conta_receber_id, admin_id, numero_parcela, valor_parcela, data_vencimento, status, id_conta_contabil)
+    VALUES (
+      v_recorrencia_id,
+      v_admin_id,
+      (SELECT COALESCE(MAX(numero_parcela), 1) + 1 FROM public.admin_parcelas_receber WHERE conta_receber_id = v_recorrencia_id), -- Próximo número de parcela
+      v_plano_preco,
+      v_segundo_vencimento,
+      'aberta',
+      v_conta_contabil_parcela -- NOVO: Conta Contábil da Parcela
+    );
+  END IF;
 
 END;
 $function$;
