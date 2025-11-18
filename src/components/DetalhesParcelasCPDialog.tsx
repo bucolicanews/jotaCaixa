@@ -136,7 +136,7 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-4xl">
+        <DialogContent className="max-w-4xl max-h-[95vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Detalhes das Parcelas - {conta.fornecedor}</DialogTitle>
             <DialogDescription>
@@ -183,7 +183,7 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
                                           {isPaga ? (
                                               <AlertDialog>
                                                   <AlertDialogTrigger asChild>
-                                                      <Button variant="destructive" size="sm" disabled={isUndoing}>
+                                                      <Button variant="destructive" size="icon" disabled={isUndoing}>
                                                           {isUndoing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Undo2 className="w-4 h-4" />}
                                                       </Button>
                                                   </AlertDialogTrigger>

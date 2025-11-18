@@ -310,10 +310,10 @@ const ContasReceber = () => {
         
     let clienteId: string | null = (contaReceber?.cliente_id as string | null) || null; 
         
-    const mappedParcela = {
+    const mappedParcela: ParcelaParaPagamento = {
         id: parcela.id,
         conta_receber_id: parcela.conta_receber_id,
-        empresa_id: ownerId,
+        empresa_id: ownerId!,
         valor_parcela: parcela.valor_parcela,
         valor_pago: parcela.valor_pago,
         cliente_id: clienteId,
@@ -470,7 +470,7 @@ const ContasReceber = () => {
               Novo Lançamento
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="sm:max-w-2xl max-h-[95vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{contaSelecionada ? 'Editar Lançamento' : 'Novo Lançamento'}</DialogTitle>
             </DialogHeader>
