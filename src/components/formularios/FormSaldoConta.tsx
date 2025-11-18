@@ -14,9 +14,10 @@ import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 import { SaldoConta } from '@/types/saldo-conta';
 import { PlanoContas } from '@/types/plano-contas';
 
+// Removendo 'Receita' e 'Despesa' do enum
 const formSchema = z.object({
   nome: z.string().min(1, 'O nome é obrigatório.'),
-  tipo_saldo: z.enum(['Credito', 'Debito', 'Receita', 'Despesa'], {
+  tipo_saldo: z.enum(['Credito', 'Debito'], { // APENAS CRÉDITO E DÉBITO
     required_error: 'O tipo de saldo é obrigatório.',
   }),
   conta_contabil_id: z.string().uuid('Selecione uma conta contábil válida.').nullable(),
@@ -75,7 +76,7 @@ const FormSaldoConta: React.FC<FormSaldoContaProps> = ({ contaInicial, onSaveCom
     resolver: zodResolver(formSchema),
     defaultValues: {
       nome: contaInicial?.nome || '',
-      tipo_saldo: contaInicial?.tipo_saldo || 'Credito',
+      tipo_saldo: contaInicial?.tipo_saldo === 'Receita' || contaInicial?.tipo_saldo === 'Despesa' ? 'Debito' : contaInicial?.tipo_saldo || 'Credito', // Fallback para Debito/Credito
       conta_contabil_id: contaInicial?.conta_contabil_id || null,
       saldo_inicial: contaInicial?.saldo_inicial || 0,
     },
@@ -152,8 +153,7 @@ const FormSaldoConta: React.FC<FormSaldoContaProps> = ({ contaInicial, onSaveCom
                 <SelectContent>
                   <SelectItem value="Debito">Débito (Ativo)</SelectItem>
                   <SelectItem value="Credito">Crédito (Passivo)</SelectItem>
-                  <SelectItem value="Receita">Receita</SelectItem>
-                  <SelectItem value="Despesa">Despesa</SelectItem>
+                  {/* REMOVIDO: Receita e Despesa */}
                 </SelectContent>
               </Select>
               <FormMessage />

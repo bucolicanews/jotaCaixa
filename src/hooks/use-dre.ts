@@ -152,7 +152,11 @@ export function useDRE(filtroPeriodo: DateRange | undefined): DREData {
     const despesaCode = configMap.Despesa || '6';
     
     // Cria a cláusula OR dinâmica
-    const orClause = `Conta.like.${receitaCode}.%,Conta.like.${custoCode}.%,Conta.like.${despesaCode}.%`;
+    const orClause = [
+        `Conta.like.${receitaCode}.%`,
+        `Conta.like.${custoCode}.%`,
+        `Conta.like.${despesaCode}.%`,
+    ].join(',');
     
     try {
       // 1. Buscar Plano de Contas (apenas contas de resultado: Receita, Custo, Despesa)
@@ -191,15 +195,19 @@ export function useDRE(filtroPeriodo: DateRange | undefined): DREData {
           let valor = 0;
           
           if (tipoDRE === 'Receita') {
-              // Receita (Aumenta com Crédito/Saída): Queremos o valor positivo
+              // Receita (Natureza Credora): Entrada (Débito) = -, Saída (Crédito) = +
               // O lançamento de Receita é registrado como TIPO 'Entrada' (Débito) na conta de Ativo e TIPO 'Entrada' (Crédito) na conta de Receita.
               // Para a DRE, queremos que o valor seja positivo se for Receita (Crédito)
-              valor = l.tipo === 'Entrada' ? l.valor : -l.valor;
+              // Se o lançamento é Entrada (Débito), ele diminui o saldo credor (valor = -l.valor)
+              // Se o lançamento é Saída (Crédito), ele aumenta o saldo credor (valor = l.valor)
+              valor = l.tipo === 'Entrada' ? -l.valor : l.valor;
           } else if (tipoDRE === 'Custo' || tipoDRE === 'Despesa') {
-              // Custo/Despesa (Aumenta com Débito/Entrada): Queremos o valor positivo
+              // Custo/Despesa (Natureza Devedora): Entrada (Débito) = +, Saída (Crédito) = -
               // O lançamento de Despesa é registrado como TIPO 'Saida' (Crédito) na conta de Ativo e TIPO 'Saida' (Débito) na conta de Despesa.
               // Para a DRE, queremos que o valor seja positivo se for Despesa (Débito)
-              valor = l.tipo === 'Saida' ? l.valor : -l.valor;
+              // Se o lançamento é Entrada (Débito), ele aumenta o saldo devedor (valor = l.valor)
+              // Se o lançamento é Saída (Crédito), ele diminui o saldo devedor (valor = -l.valor)
+              valor = l.tipo === 'Entrada' ? l.valor : -l.valor;
           }
           
           acc[l.conta_contabil_id] = (acc[l.conta_contabil_id] || 0) + valor;

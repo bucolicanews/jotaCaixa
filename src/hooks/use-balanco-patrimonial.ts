@@ -186,31 +186,28 @@ export function useBalancoPatrimonial(endDate: Date | undefined): BalancoData {
           
           if (tipoPrincipal === 'Ativo' || tipoPrincipal === 'Passivo' || tipoPrincipal === 'Patrimonio Liquido') {
               // Contas Patrimoniais (Ativo/Passivo/PL)
-              // Ativo (1.x.x): Entrada = Débito (+), Saída = Crédito (-)
-              // Passivo/PL (2.x.x/3.x.x): Entrada = Crédito (+), Saída = Débito (-)
-              
               const isAtivo = tipoPrincipal === 'Ativo';
               
               if (isAtivo) {
+                  // Ativo (Natureza Devedora): Entrada (Débito) = +, Saída (Crédito) = -
                   valor = l.tipo === 'Entrada' ? l.valor : -l.valor;
               } else {
-                  // Passivo/PL: Inverte o sinal do lançamento para refletir o saldo credor
+                  // Passivo/PL (Natureza Credora): Entrada (Crédito) = +, Saída (Débito) = -
+                  // O lançamento na tabela é invertido para Passivo/PL (Entrada = Crédito, Saída = Débito)
                   valor = l.tipo === 'Entrada' ? l.valor : -l.valor;
               }
               
           } else if (tipoPrincipal === 'Resultado' && conta?.is_conta_resultado) {
               // Contas de Resultado (4.x.x, 5.x.x, 6.x.x)
-              // Receita (4.x.x): Entrada = Crédito (+), Saída = Débito (-)
-              // Custo/Despesa (5.x.x/6.x.x): Entrada = Débito (+), Saída = Crédito (-)
               
               const isReceita = conta.Conta.startsWith(receitaCode);
               
               if (isReceita) {
-                  // Receita: Entrada (Crédito) = +, Saída (Débito) = -
-                  valor = l.tipo === 'Entrada' ? l.valor : -l.valor;
+                  // Receita (Natureza Credora): Entrada (Débito) = -, Saída (Crédito) = +
+                  valor = l.tipo === 'Entrada' ? -l.valor : l.valor;
               } else {
-                  // Custo/Despesa: Entrada (Débito) = +, Saída (Crédito) = -
-                  valor = l.tipo === 'Saida' ? -l.valor : l.valor; // Inverte o sinal para que o saldo seja positivo
+                  // Custo/Despesa (Natureza Devedora): Entrada (Débito) = +, Saída (Crédito) = -
+                  valor = l.tipo === 'Entrada' ? l.valor : -l.valor;
               }
           }
 
