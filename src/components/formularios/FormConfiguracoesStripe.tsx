@@ -36,6 +36,9 @@ const FormConfiguracoesStripe: React.FC = () => {
   const [loadingContas, setLoadingContas] = useState(true);
   const [hasLinkedSaldoConta, setHasLinkedSaldoConta] = useState(true);
   
+  // NOVO ESTADO: Validação de flag is_conta_resultado
+  const [isResultadoFlagValid, setIsResultadoFlagValid] = useState(true);
+  
   const isAdmin = role === 'Admin';
   const adminId = usuario?.id;
   
@@ -56,6 +59,7 @@ const FormConfiguracoesStripe: React.FC = () => {
   });
   
   const contaSinteticaWatch = form.watch('conta_sintetica_id');
+  const contaResultadoWatch = form.watch('id_conta_resultado'); // NOVO WATCH
 
   // Efeito para carregar os valores iniciais do hook no formulário
   useEffect(() => {
@@ -112,10 +116,9 @@ const FormConfiguracoesStripe: React.FC = () => {
     
     const { data, error } = await supabase
         .from('plano_contas')
-        .select('id, Conta, Descricao')
+        .select('id, Conta, Descricao, is_conta_resultado') // Incluindo is_conta_resultado
         .eq('proprietario_id', adminId)
         .eq('Analitica', 'Sim')
-        .eq('is_conta_resultado', true)
         .like('Conta', `${receitaCode}.%`)
         .order('Conta');
         
@@ -165,13 +168,34 @@ const FormConfiguracoesStripe: React.FC = () => {
       setHasLinkedSaldoConta((count || 0) > 0);
   }, [adminId]);
   
+  // NOVO: Verifica se a conta de resultado selecionada tem a flag is_conta_resultado = true
+  const checkResultadoFlag = useCallback(() => {
+      if (!contaResultadoWatch) {
+          setIsResultadoFlagValid(true);
+          return;
+      }
+      
+      const conta = contasResultado.find(c => c.id === contaResultadoWatch);
+      
+      // Se a conta não for encontrada na lista de Receita (o que é estranho), ou se a flag for false
+      if (!conta || !conta.is_conta_resultado) {
+          setIsResultadoFlagValid(false);
+      } else {
+          setIsResultadoFlagValid(true);
+      }
+  }, [contaResultadoWatch, contasResultado]);
+  
   useEffect(() => {
       if (contaSinteticaWatch) {
           checkLinkedSaldoConta(contaSinteticaWatch);
       } else {
-          setHasLinkedSaldoConta(true); // Não verifica se não há conta selecionada
+          setHasLinkedSaldoConta(true);
       }
   }, [contaSinteticaWatch, checkLinkedSaldoConta]);
+  
+  useEffect(() => {
+      checkResultadoFlag();
+  }, [checkResultadoFlag]);
 
   useEffect(() => {
     if (!carregandoSessao && isAdmin) {
@@ -194,6 +218,11 @@ const FormConfiguracoesStripe: React.FC = () => {
     
     if (!hasLinkedSaldoConta) {
         showError('A Conta Contábil de Destino (Stripe/Banco) deve estar vinculada a uma Conta/Caixa em Bancos.');
+        return;
+    }
+    
+    if (!isResultadoFlagValid) {
+        showError('A Conta de Resultado selecionada não está marcada como "Conta de Resultado" no Plano de Contas.');
         return;
     }
     
@@ -353,7 +382,7 @@ const FormConfiguracoesStripe: React.FC = () => {
                 value={field.value}
               >
                 <FormControl>
-                  <SelectTrigger>
+                  <SelectTrigger className={cn(!isResultadoFlagValid && 'border-red-500')}>
                     <SelectValue placeholder={`Selecione a conta de Receita (${configMap.Receita}.x.x)`} />
                   </SelectTrigger>
                 </FormControl>
@@ -374,6 +403,12 @@ const FormConfiguracoesStripe: React.FC = () => {
                   <p className="text-sm text-red-500">
                       Nenhuma conta de Receita ({configMap.Receita}.x.x) marcada como "Conta de Resultado".
                   </p>
+              )}
+              {!isResultadoFlagValid && (
+                  <div className="flex items-center text-sm text-red-500 mt-2">
+                      <AlertTriangle className="w-4 h-4 mr-1" />
+                      A conta selecionada não está marcada como "Conta de Resultado" no Plano de Contas.
+                  </div>
               )}
             </FormItem>
           )}
@@ -412,7 +447,7 @@ const FormConfiguracoesStripe: React.FC = () => {
           )}
         />
         
-        <Button type="submit" className="w-full" disabled={form.formState.isSubmitting || !hasLinkedSaldoConta}>
+        <Button type="submit" className="w-full" disabled={form.formState.isSubmitting || !hasLinkedSaldoConta || !isResultadoFlagValid}>
           {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Salvar Credenciais
         </Button>
