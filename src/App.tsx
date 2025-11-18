@@ -51,7 +51,7 @@ import GerenciarBlocosSocietarios from "./pages/GerenciarBlocosSocietarios";
 import GerarDocumentoSocietario from "./pages/GerarDocumentoSocietario";
 import Suporte from "./pages/Suporte";
 import AdminSuporte from "./pages/AdminSuporte";
-import ContasPatrimoniais from "./pages/ContasPatrimoniais"; // NOVO IMPORT
+import ContasPatrimoniais from "./pages/ContasPatrimoniais";
 
 const queryClient = new QueryClient();
 
@@ -91,10 +91,24 @@ const PaymentSuccessHandler = () => {
             return;
         }
         
-        // 2. Chamar a função RPC para ativar a assinatura
+        // 2. Buscar o ID da Conta de Resultado do Stripe (configurada pelo Admin)
+        const proprietarioId = clienteData.admin_id || usuario.id;
+        const { data: stripeConfig, error: configError } = await supabase.functions.invoke('get-admin-stripe-config', {
+            body: { adminId: proprietarioId },
+        });
+        
+        const idContaResultado = stripeConfig?.config?.id_conta_resultado || null;
+        
+        if (configError || stripeConfig?.error) {
+            console.error('Falha ao buscar config Stripe para ativação:', configError || stripeConfig.error);
+            // Continua, mas com idContaResultado = null
+        }
+        
+        // 3. Chamar a função RPC para ativar a assinatura
         const { error: rpcError } = await supabase.rpc('activate_subscription', {
             p_cliente_id: usuario.id,
             p_plano_id: clienteData.plano_id,
+            p_id_conta_resultado: idContaResultado, // PASSANDO O ID DA CONTA DE RESULTADO
         });
 
         if (rpcError) {
@@ -141,7 +155,7 @@ const PaymentRenewalHandler = () => {
       const renewSubscription = async () => {
         sessionStorage.setItem(processedKey, 'true'); // Marca como processado
         
-        // 1. Buscar dados da sessão do Stripe para obter o valor pago
+        // 1. Buscar dados da sessão do Stripe para obter o valor pago E o idContaResultado
         const proprietarioId = (usuario as any)?.admin_id || usuario?.id;
         
         const { data: sessionData, error: sessionError } = await supabase.functions.invoke('get-stripe-session', {
@@ -155,6 +169,7 @@ const PaymentRenewalHandler = () => {
         }
         
         const valorPago = parseFloat(sessionData.metadata.valorCobrado);
+        const idContaResultado = sessionData.metadata.idContaResultado || null; // LENDO O NOVO METADADO
         
         // 2. Buscar o plano atual do cliente (que foi atualizado no CheckoutPlano)
         const { data: clienteData, error: clienteError } = await supabase
@@ -176,6 +191,8 @@ const PaymentRenewalHandler = () => {
             p_conta_pagar_id: parcelaId, // Passa o ID da PARCELA
             p_valor_pago: valorPago, // Usa o valor pago do Stripe
             p_forma_pagamento: 'Stripe',
+            // O RPC manual_subscription_renewal não precisa mais do idContaResultado, pois ele busca da configuracoes_stripe
+            // Mas vamos garantir que o RPC esteja usando o valor correto.
         });
 
         if (rpcError) {
@@ -234,7 +251,7 @@ const App = () => (
             <Route path="/contas-pagar" element={<ContasPagar />} />
             <Route path="/contas-receber" element={<ContasReceber />} />
             <Route path="/bancos" element={<Bancos />} />
-            <Route path="/contas-patrimoniais" element={<ContasPatrimoniais />} /> {/* NOVA ROTA */}
+            <Route path="/contas-patrimoniais" element={<ContasPatrimoniais />} />
             <Route path="/conciliacao" element={<Conciliacao />} />
             <Route path="/importar" element={<Importar />} />
             <Route path="/exportar" element={<Exportar />} />

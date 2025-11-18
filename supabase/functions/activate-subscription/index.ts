@@ -39,19 +39,20 @@ serve(async (req: Request) => {
       .limit(1)
       .single();
 
-    if (configError || !stripeConfig?.id_conta_resultado) {
-      console.error('❌ Stripe config error or missing id_conta_resultado:', configError);
-      // Não é um erro fatal, mas é um aviso importante
-      // Vamos passar o ID da conta de resultado para o RPC
+    if (configError && configError.code !== 'PGRST116') {
+      console.error('❌ Stripe config error:', configError);
     }
     
+    // Se a configuração não for encontrada ou o campo for nulo, idContaResultado será null
     const idContaResultado = stripeConfig?.id_conta_resultado || null;
+    
+    console.log(`LOG: id_conta_resultado encontrado para RPC: ${idContaResultado}`);
 
     // 2. Chamar a função RPC (passando o novo parâmetro)
     const { error: rpcError } = await supabaseService.rpc('activate_subscription', {
       p_cliente_id: clienteId,
       p_plano_id: planoId,
-      p_id_conta_resultado: idContaResultado, // NOVO PARÂMETRO
+      p_id_conta_resultado: idContaResultado, // Passa o ID (pode ser null)
     });
 
     if (rpcError) {

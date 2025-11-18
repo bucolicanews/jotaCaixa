@@ -37,10 +37,10 @@ serve(async (req: Request) => {
       { auth: { persistSession: false } }
     );
 
-    // 3️⃣ Buscar a chave secreta Stripe do proprietário
+    // 3️⃣ Buscar a chave secreta Stripe do proprietário E id_conta_resultado
     const { data: stripeConfig, error: configError } = await supabase
       .from('configuracoes_stripe')
-      .select('stripe_secret_key, id_conta_resultado') // NOVO CAMPO
+      .select('stripe_secret_key, id_conta_resultado') // BUSCANDO id_conta_resultado
       .eq('proprietario_id', proprietarioId)
       .limit(1)
       .single();
@@ -54,6 +54,7 @@ serve(async (req: Request) => {
     }
 
     const stripeSecretKey = stripeConfig.stripe_secret_key;
+    const idContaResultado = stripeConfig.id_conta_resultado || ''; // Pega o ID da conta de resultado
 
     // 4️⃣ Buscar detalhes do plano
     const { data: planoRes, error: planoError } = await supabase
@@ -105,7 +106,7 @@ serve(async (req: Request) => {
           planoId, 
           contaPagarId, 
           valorCobrado: valorCobrado.toString(),
-          idContaResultado: stripeConfig.id_conta_resultado || '', // NOVO METADADO
+          idContaResultado: idContaResultado, // PASSANDO O ID DA CONTA DE RESULTADO
       },
       customer_email: email,
     });
