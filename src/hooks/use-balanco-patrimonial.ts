@@ -163,5 +163,3 @@ export const useBalancoPatrimonial = (dataFim: Date | null): BalancoPatrimonialH
     refetch: fetchBalanco,
   };
 };
-
-export { useBalancoPatrimonial };
