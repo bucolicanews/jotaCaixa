@@ -46,10 +46,10 @@ BEGIN
   SELECT conta_contabil_id INTO v_conta_contabil_a_receber FROM public.configuracao_contas_receber WHERE proprietario_id = v_admin_id AND tipo_registro = 'a_receber' LIMIT 1;
   SELECT conta_contabil_id INTO v_conta_contabil_parcela FROM public.configuracao_contas_receber WHERE proprietario_id = v_admin_id AND tipo_registro = 'parcela' LIMIT 1;
   SELECT conta_contabil_id INTO v_conta_contabil_recebimento FROM public.configuracao_contas_receber WHERE proprietario_id = v_admin_id AND tipo_registro = 'recebimento' LIMIT 1;
-  SELECT conta_contabil_id INTO v_conta_resultado_recebimento FROM public.configuracao_contas_receber WHERE proprietario_id = v_admin_id AND tipo_registro = 'recebimento' LIMIT 1; -- NOVO: Conta de Resultado
+  SELECT conta_contabil_id INTO v_conta_resultado_recebimento FROM public.configuracao_contas_receber WHERE proprietario_id = v_admin_id AND tipo_registro = 'recebimento_resultado' LIMIT 1; -- CORRIGIDO: Usando o tipo correto
   
   IF v_conta_contabil_a_receber IS NULL OR v_conta_contabil_parcela IS NULL OR v_conta_contabil_recebimento IS NULL OR v_conta_resultado_recebimento IS NULL THEN
-    RAISE EXCEPTION 'Mapeamento contábil de Contas a Receber (a_receber, parcela, recebimento, resultado) não configurado pelo Admin.';
+    RAISE EXCEPTION 'Mapeamento contábil de Contas a Receber (a_receber, parcela, recebimento, recebimento_resultado) não configurado pelo Admin.';
   END IF;
 
   -- 4. Busca a conta sintética configurada no Stripe (global) E o histórico padrão
@@ -170,7 +170,7 @@ BEGIN
   
   -- NOVO: 13.2 CRIA O LANÇAMENTO DE RECEITA (DRE) - CRÉDITO (Resultado)
   INSERT INTO public.lancamentos (proprietario_id, data_movimentacao, descricao, valor, tipo, conta_bancaria_id, conta_contabil_id, origem, conciliado, historico_id)
-  VALUES (v_admin_id, v_data_hoje, 'Receita Renovação Assinatura - Plano ' || v_plano_nome, p_valor_pago, 'Entrada', NULL, v_conta_resultado_recebimento, 'assinatura_stripe', true, v_historico_padrao_id);
+  VALUES (v_admin_id, v_data_hoje, 'Receita Renovação Assinatura - Plano ' || v_plano_nome, p_valor_pago, 'Saida', NULL, v_conta_resultado_recebimento, 'assinatura_stripe', true, v_historico_padrao_id); -- CORRIGIDO: TIPO 'Saida'
   
   -- NOVO: 13.3 CRIA O LANÇAMENTO INICIAL DE DÉBITO (CR) - DÉBITO (Ativo)
   -- Este lançamento deve ser o valor total do plano, pois o valor total da conta sintética foi atualizado no passo 10.

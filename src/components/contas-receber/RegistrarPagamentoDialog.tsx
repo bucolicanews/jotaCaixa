@@ -161,7 +161,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
         .from('configuracao_contas_receber')
         .select('conta_contabil_id')
         .eq('proprietario_id', ownerId)
-        .eq('tipo_registro', 'recebimento')
+        .eq('tipo_registro', 'recebimento_resultado') // CORRIGIDO: Usando o tipo correto
         .limit(1)
         .single();
         
@@ -300,7 +300,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
                   data_movimentacao: dataPagamentoISO,
                   descricao: `Desconto Concedido: ${descricaoContaSintetica} (CR ID: ${parcela.conta_receber_id.substring(0, 8)})`,
                   valor: saldoRestanteCalculado,
-                  tipo: 'Saida' as const, // Saída na Despesa
+                  tipo: 'Entrada' as const, // Entrada na Despesa (Débito)
                   conta_bancaria_id: null,
                   conta_contabil_id: contaDesconto, // Conta de Desconto (Despesa)
                   historico_id: values.historico_id,
@@ -369,7 +369,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
           data_movimentacao: dataPagamentoISO,
           descricao: `Receita: ${descricaoContaSintetica} (CR ID: ${parcela.conta_receber_id.substring(0, 8)})`, // NEW DESCRIPTION
           valor: valorRecebido,
-          tipo: 'Entrada' as const, // Entrada na Receita (aumenta o saldo da conta 3.x.x)
+          tipo: 'Saida' as const, // <--- CORREÇÃO CRÍTICA: Saída (Crédito) na Receita
           conta_bancaria_id: null, // Não é uma conta de saldo
           conta_contabil_id: values.conta_resultado_id, // Conta de Receita (3.x.x)
           historico_id: values.historico_id,
@@ -509,7 +509,8 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
                                         <SelectItem value={null as any}>Nenhum</SelectItem>
                                         {historicos.map(h => (
                                             <SelectItem key={h.id} value={h.id}>
-                                                {h.codigo && `[${h.codigo}] `}{h.descricao}
+                                                {h.codigo && <span className="font-mono text-xs mr-2">[{h.codigo}]</span>}
+                                                {h.descricao}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
