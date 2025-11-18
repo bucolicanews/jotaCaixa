@@ -186,6 +186,7 @@ export function useDRE(filtroPeriodo: DateRange | undefined): DREData {
           
           if (tipoDRE === 'Receita') {
               // Receita (Natureza Credora): Entrada (Débito) = -, Saída (Crédito) = +
+              // O lançamento de Receita (Stripe) é tipo 'Saida' (Crédito)
               valor = l.tipo === 'Entrada' ? -l.valor : l.valor;
           } else if (tipoDRE === 'Custo' || tipoDRE === 'Despesa') {
               // Custo/Despesa (Natureza Devedora): Entrada (Débito) = +, Saída (Crédito) = -
@@ -214,7 +215,7 @@ export function useDRE(filtroPeriodo: DateRange | undefined): DREData {
         
       // 5. Adicionar contas sintéticas com saldo 0 para consolidação
       const sinteticas = planoContas
-        .filter(pc => pc.Analitica === 'Não')
+        .filter(pc => pc.Analitica === 'Não' && pc.is_conta_resultado) // Apenas sintéticas de resultado
         .map(pc => ({
             ...pc,
             saldo_final: 0,
