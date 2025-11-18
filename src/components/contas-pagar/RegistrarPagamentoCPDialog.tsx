@@ -67,7 +67,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
   
   const tabelaPagamentos = 'admin_pagamentos';
   const tabelaParcelas = 'admin_parcelas_pagar';
-  const tabelaContasPagar = 'admin_contas_pagar';
+  const tabelaContasPagar = 'admin_contas_pagar'; // Adicionado
   
   const adminId = usuario?.id;
 
@@ -303,7 +303,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
             data_movimentacao: dataPagamentoISO,
             descricao: `Despesa/Custo: ${descricaoContaSintetica}`,
             valor: pagamento.valor_pago,
-            tipo: 'Saida' as const, // Saída na Despesa (aumenta o saldo da conta 4.x.x/5.x.x)
+            tipo: 'Entrada' as const, // Entrada na Despesa (aumenta o saldo da conta 4.x.x/5.x.x)
             conta_bancaria_id: null,
             conta_contabil_id: values.conta_resultado_id, // Conta de Despesa/Custo (4.x.x/5.x.x)
             historico_id: values.historico_id,
@@ -319,7 +319,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
                 data_movimentacao: dataPagamentoISO,
                 descricao: `Estorno Patrimonial CP: ${descricaoContaSintetica}`,
                 valor: pagamento.valor_pago,
-                tipo: 'Entrada' as const, // Entrada no Passivo (diminui o saldo da conta 2.x.x)
+                tipo: 'Saida' as const, // Saída no Passivo (diminui o saldo da conta 2.x.x)
                 conta_bancaria_id: null,
                 conta_contabil_id: contaPatrimonial, // Conta Patrimonial (2.x.x)
                 historico_id: values.historico_id,
@@ -378,7 +378,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className="sm:max-w-2xl max-h-[95vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Registrar Pagamento</DialogTitle>
           <DialogDescription>Saldo devedor da parcela: {formatCurrency(saldoDevedor)}</DialogDescription>
