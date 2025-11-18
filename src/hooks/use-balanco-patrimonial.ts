@@ -5,13 +5,26 @@ import { useSessao } from './use-sessao';
 import { PlanoContas } from '@/types/plano-contas';
 import { Lancamento } from '@/types/lancamento';
 import { useContabilConfig } from './use-contabil-config';
+import { format } from 'date-fns';
 
 interface ContaBP extends PlanoContas {
-  saldo: number;
+  saldo_final: number;
+  tipo_principal: 'Ativo' | 'Passivo' | 'Patrimonio Liquido' | 'Resultado' | 'Outros';
   filhas: ContaBP[];
 }
 
-const useBalancoPatrimonial = (dataFim: Date | null) => {
+interface BalancoPatrimonialHook {
+  contas: ContaBP[];
+  totalAtivo: number;
+  totalPassivo: number;
+  totalPatrimonioLiquido: number;
+  resultadoLiquido: number;
+  totalPassivoPL: number;
+  carregando: boolean;
+  refetch: () => void;
+}
+
+export const useBalancoPatrimonial = (dataFim: Date | null): BalancoPatrimonialHook => {
   const { usuario } = useSessao();
   const { configMap } = useContabilConfig();
   const [balanco, setBalanco] = useState<ContaBP[]>([]);
@@ -19,7 +32,12 @@ const useBalancoPatrimonial = (dataFim: Date | null) => {
 
   const calcularSaldo = useCallback((lancamentos: Lancamento[], conta: PlanoContas) => {
     let saldo = 0;
-    const isDevedora = conta.Natureza === 'Devedora'; // Ativo
+    
+    // Determine if the account is Devedora (Ativo, Custo, Despesa) or Credora (Passivo, PL, Receita)
+    const contaPrefix = conta.Conta.split('.')[0];
+    
+    // Ativo (1) é Devedora. Passivo (2) e PL (3) são Credoras.
+    const isDevedora = contaPrefix === (configMap.Ativo || '1'); 
     
     for (const lancamento of lancamentos) {
         const valor = parseFloat(lancamento.valor);
@@ -41,45 +59,52 @@ const useBalancoPatrimonial = (dataFim: Date | null) => {
         }
     }
     return saldo;
-  }, []);
+  }, [configMap]);
 
-  // ... (Restante da lógica do hook, incluindo fetchBalanco e buildHierarchy)
-  // A lógica completa do hook deve ser mantida, apenas a função calcularSaldo foi ajustada.
-  
-  // Implementação simplificada para garantir que a função calcularSaldo seja usada:
   const calcularSaldosRecursivo = useCallback((contas: PlanoContas[], lancamentos: Lancamento[]): ContaBP[] => {
+    
     const mapContas = (contas: PlanoContas[]): ContaBP[] => {
         return contas.map(conta => {
             const lancamentosDaConta = lancamentos.filter(l => l.conta_contabil_id === conta.id);
             const saldo = calcularSaldo(lancamentosDaConta, conta);
             
-            const filhas = mapContas(conta.filhas || []);
-            const saldoFilhas = filhas.reduce((sum, f) => sum + f.saldo, 0);
+            // Determine the main type based on prefix
+            const prefix = conta.Conta.split('.')[0];
+            let tipo_principal: ContaBP['tipo_principal'] = 'Outros';
             
+            if (prefix === (configMap.Ativo || '1')) tipo_principal = 'Ativo';
+            else if (prefix === (configMap.Passivo || '2')) tipo_principal = 'Passivo';
+            else if (prefix === (configMap['Patrimonio Liquido'] || '3')) tipo_principal = 'Patrimonio Liquido';
+            else if (conta.is_conta_resultado) tipo_principal = 'Resultado';
+
             return {
                 ...conta,
-                saldo: conta.Analitica === 'Sim' ? saldo : saldoFilhas,
-                filhas: filhas,
+                saldo_final: saldo, 
+                tipo_principal: tipo_principal,
+                filhas: [], // Simplified
             } as ContaBP;
         });
     };
     
-    // Filtra apenas as contas de Balanço (1, 2, 3)
-    const contasBalanco = contas.filter(c => ['1', '2', '3'].includes(c.Conta.split('.')[0]));
+    // Filter only relevant accounts (Patrimonial and Result)
+    const contasRelevantes = contas.filter(c => 
+        c.is_conta_patrimonial || c.is_conta_resultado
+    );
     
-    return mapContas(contasBalanco);
-  }, [calcularSaldo]);
+    return mapContas(contasRelevantes);
+  }, [calcularSaldo, configMap]);
 
   const fetchBalanco = useCallback(async () => {
     if (!usuario?.id || !dataFim) return;
 
     setLoading(true);
     
-    // 1. Buscar todas as contas de balanço (1, 2, 3)
+    // 1. Buscar todas as contas relevantes (Patrimonial e Resultado)
     const { data: contasData, error: contasError } = await supabase
         .from('plano_contas')
-        .select('*, filhas:plano_contas(*)') // Simplificado
+        .select('*')
         .eq('proprietario_id', usuario.id)
+        .or('is_conta_patrimonial.eq.true,is_conta_resultado.eq.true')
         .order('Conta');
 
     if (contasError) {
@@ -93,7 +118,7 @@ const useBalancoPatrimonial = (dataFim: Date | null) => {
         .from('lancamentos')
         .select('*')
         .eq('proprietario_id', usuario.id)
-        .lte('data_movimentacao', dataFim.toISOString());
+        .lte('data_movimentacao', format(dataFim, 'yyyy-MM-dd') + 'T23:59:59Z');
 
     if (lancamentosError) {
         showError('Erro ao carregar lançamentos para Balanço: ' + lancamentosError.message);
@@ -112,11 +137,31 @@ const useBalancoPatrimonial = (dataFim: Date | null) => {
     fetchBalanco();
   }, [fetchBalanco]);
 
+  // Calculate totals
+  const totalAtivo = balanco.filter(c => c.tipo_principal === 'Ativo').reduce((sum, c) => sum + c.saldo_final, 0);
+  const totalPassivo = balanco.filter(c => c.tipo_principal === 'Passivo').reduce((sum, c) => sum + c.saldo_final, 0);
+  const totalPatrimonioLiquido = balanco.filter(c => c.tipo_principal === 'Patrimonio Liquido').reduce((sum, c) => sum + c.saldo_final, 0);
+  
+  // Calculate DRE result (Resultado Líquido)
+  const totalReceita = balanco.filter(c => c.tipo_principal === 'Resultado' && c.Conta.startsWith(configMap.Receita || '4')).reduce((sum, c) => sum + c.saldo_final, 0);
+  const totalCusto = balanco.filter(c => c.tipo_principal === 'Resultado' && c.Conta.startsWith(configMap.Custo || '5')).reduce((sum, c) => sum + c.saldo_final, 0);
+  const totalDespesa = balanco.filter(c => c.tipo_principal === 'Resultado' && c.Conta.startsWith(configMap.Despesa || '6')).reduce((sum, c) => sum + c.saldo_final, 0);
+  
+  const resultadoLiquido = totalReceita - totalCusto - totalDespesa;
+  
+  // Total Passivo + PL (incluindo o resultado líquido)
+  const totalPassivoPL = totalPassivo + totalPatrimonioLiquido + resultadoLiquido;
+
   return {
-    balanco,
-    loading,
+    contas: balanco,
+    totalAtivo,
+    totalPassivo,
+    totalPatrimonioLiquido,
+    resultadoLiquido,
+    totalPassivoPL,
+    carregando: loading,
     refetch: fetchBalanco,
   };
 };
 
-export default useBalancoPatrimonial;
+export { useBalancoPatrimonial };
