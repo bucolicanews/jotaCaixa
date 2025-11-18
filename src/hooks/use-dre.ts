@@ -41,8 +41,8 @@ const getTipoDRE = (conta: string, configMap: ContabilConfigMap): ContaDRE['tipo
  * Função de comparação para ordenar códigos contábeis hierarquicamente.
  */
 const compareContas = (a: ContaDRE, b: ContaDRE): number => {
-    const partsA = a.Conta.split('.map(Number);
-    const partsB = b.Conta.split('.map(Number);
+    const partsA = a.Conta.split('.').map(Number);
+    const partsB = b.Conta.split('.').map(Number);
 
     for (let i = 0; i < Math.max(partsA.length, partsB.length); i++) {
         const numA = partsA[i] || 0;
