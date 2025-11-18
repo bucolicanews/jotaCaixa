@@ -140,9 +140,6 @@ export function useDRE(filtroPeriodo: DateRange | undefined): DREData {
         `Conta.like.${despesaCode}.%`,
     ].join(',');
     
-    console.log(`[DRE LOG] Config Map: Receita=${receitaCode}, Custo=${custoCode}, Despesa=${despesaCode}`);
-    console.log(`[DRE LOG] Buscando contas com OR: ${orClause}`);
-    
     try {
       // 1. Buscar Plano de Contas (apenas contas de resultado: Receita, Custo, Despesa)
       const { data: planoContasData, error: pcError } = await supabase
@@ -155,8 +152,6 @@ export function useDRE(filtroPeriodo: DateRange | undefined): DREData {
       if (pcError) throw pcError;
       const planoContas = planoContasData as PlanoContas[];
       
-      console.log(`[DRE LOG] Contas do Plano de Contas encontradas (${planoContas.length}):`, planoContas.map(c => ({ Conta: c.Conta, is_resultado: c.is_conta_resultado })));
-      
       // 2. Buscar Lançamentos dentro do período
       const { data: lancamentosData, error: lError } = await supabase
         .from('lancamentos')
@@ -167,8 +162,6 @@ export function useDRE(filtroPeriodo: DateRange | undefined): DREData {
         
       if (lError) throw lError;
       
-      console.log(`[DRE LOG] Lançamentos encontrados no período (${lancamentosData.length}).`);
-      
       // 3. Calcular o saldo de cada conta contábil (apenas analíticas)
       const movimentosMap = lancamentosData.reduce((acc, l) => {
         if (l.conta_contabil_id) {
@@ -176,7 +169,6 @@ export function useDRE(filtroPeriodo: DateRange | undefined): DREData {
           
           // CORREÇÃO CRÍTICA: Apenas contas marcadas como is_conta_resultado devem ter movimento na DRE
           if (!conta || !conta.is_conta_resultado) {
-              console.log(`[DRE LOG] Ignorando lançamento para conta ${conta?.Conta || l.conta_contabil_id}: is_conta_resultado=false.`);
               return acc;
           }
           
@@ -186,14 +178,11 @@ export function useDRE(filtroPeriodo: DateRange | undefined): DREData {
           
           if (tipoDRE === 'Receita') {
               // Receita (Natureza Credora): Entrada (Débito) = -, Saída (Crédito) = +
-              // O lançamento de Receita (Stripe) é tipo 'Saida' (Crédito)
               valor = l.tipo === 'Entrada' ? -l.valor : l.valor;
           } else if (tipoDRE === 'Custo' || tipoDRE === 'Despesa') {
               // Custo/Despesa (Natureza Devedora): Entrada (Débito) = +, Saída (Crédito) = -
               valor = l.tipo === 'Entrada' ? l.valor : -l.valor;
           }
-          
-          console.log(`[DRE LOG] Movimento: Conta=${conta.Conta}, TipoLanc=${l.tipo}, TipoDRE=${tipoDRE}, Valor=${l.valor}, SaldoCalc=${valor}`);
           
           acc[l.conta_contabil_id] = (acc[l.conta_contabil_id] || 0) + valor;
         }
@@ -252,9 +241,18 @@ export function useDRE(filtroPeriodo: DateRange | undefined): DREData {
       const nivel1Code = configMap[tipo] || '0'; // Usa o código configurado
       
       // Soma apenas as contas de nível 1 (ex: '4', '5', '6')
-      return contasDRE
+      const total = contasDRE
           .filter(c => c.Analitica === 'Não' && c.Conta === nivel1Code)
           .reduce((sum, c) => sum + c.saldo_final, 0);
+          
+      // Se a conta de nível 1 não for sintética, tenta somar todas as analíticas que começam com o código
+      if (total === 0) {
+          return contasDRE
+              .filter(c => c.Analitica === 'Sim' && c.Conta.startsWith(nivel1Code))
+              .reduce((sum, c) => sum + c.saldo_final, 0);
+      }
+      
+      return total;
   };
   
   const totalReceita = getSomaPorTipo('Receita');
