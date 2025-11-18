@@ -39,11 +39,10 @@ const getTipoDRE = (conta: string, configMap: ContabilConfigMap): ContaDRE['tipo
 
 /**
  * Função de comparação para ordenar códigos contábeis hierarquicamente.
- * Ex: 4.2.2.01.0004 deve vir depois de 4.2.2.01.
  */
 const compareContas = (a: ContaDRE, b: ContaDRE): number => {
-    const partsA = a.Conta.split('.').map(Number);
-    const partsB = b.Conta.split('.').map(Number);
+    const partsA = a.Conta.split('.map(Number);
+    const partsB = b.Conta.split('.map(Number);
 
     for (let i = 0; i < Math.max(partsA.length, partsB.length); i++) {
         const numA = partsA[i] || 0;
@@ -58,61 +57,44 @@ const compareContas = (a: ContaDRE, b: ContaDRE): number => {
 
 /**
  * Consolida os saldos das contas analíticas para as contas sintéticas.
- * Regra: A conta sintética soma apenas o saldo das suas filhas DIRETAS.
  */
 const consolidateBalances = (contas: ContaDRE[]): ContaDRE[] => {
-    // 1. Cria um mapa de saldos iniciais (apenas analíticas)
-    const saldoAnaliticoMap: Record<string, number> = contas
-        .filter(c => c.Analitica === 'Sim')
-        .reduce((acc, c) => {
-            acc[c.Conta] = c.saldo_final;
-            return acc;
-        }, {} as Record<string, number>);
+    const consolidated: Record<string, number> = {};
+    const contaMap: Record<string, ContaDRE> = {};
 
-    // 2. Cria um mapa para armazenar os saldos consolidados (incluindo sintéticas)
-    const saldoConsolidadoMap: Record<string, number> = { ...saldoAnaliticoMap };
-
-    // 3. Ordena as contas sintéticas do mais específico para o mais geral (ordem decrescente)
-    const sinteticas = contas.filter(c => c.Analitica === 'Não').sort((a, b) => compareContas(b, a));
-
-    // 4. Consolida de baixo para cima (garantindo que o saldo do filho já esteja consolidado)
-    for (const contaSintetica of sinteticas) {
-        let totalConsolidado = 0;
-        
-        // Calcula o nível da conta sintética (número de pontos + 1)
-        const nivelPai = contaSintetica.Conta.split('.').filter(p => p.length > 0).length;
-        const nivelFilhoDireto = nivelPai + 1;
-        
-        // Itera sobre todas as contas para encontrar as filhas DIRETAS
-        for (const conta of contas) {
-            // 4.1. Verifica se é filha (começa com o prefixo do pai + '.')
-            if (conta.Conta.startsWith(contaSintetica.Conta + '.') && conta.Conta !== contaSintetica.Conta) {
-                
-                // 4.2. Verifica se é filha DIRETA (o nível é exatamente o próximo)
-                const nivelConta = conta.Conta.split('.').filter(p => p.length > 0).length;
-                
-                if (nivelConta === nivelFilhoDireto) {
-                    // Se for filha direta, soma o saldo consolidado dela (que já deve estar no mapa)
-                    const saldoFilho = saldoConsolidadoMap[conta.Conta];
-                    if (saldoFilho !== undefined) {
-                        totalConsolidado += saldoFilho;
-                    }
-                }
-            }
-        }
-        
-        // Armazena o saldo consolidado da sintética
-        saldoConsolidadoMap[contaSintetica.Conta] = totalConsolidado;
+    for (const c of contas) {
+        consolidated[c.Conta] = 0;
+        contaMap[c.Conta] = c;
     }
-    
-    // 5. Atualiza a lista de contas com os saldos consolidados
-    return contas.map(c => {
-        const saldo = saldoConsolidadoMap[c.Conta];
-        return {
-            ...c,
-            saldo_final: saldo !== undefined ? saldo : c.saldo_final,
-        };
-    });
+
+    const analiticas = contas.filter(c => c.Analitica === 'Sim');
+
+    for (const analitica of analiticas) {
+        let currentCode = analitica.Conta;
+        const saldoBase = analitica.saldo_final;
+        
+        // Propaga o saldo para a própria conta analítica
+        consolidated[currentCode] = (consolidated[currentCode] || 0) + saldoBase;
+
+        // Propaga o saldo para todos os ancestrais sintéticos
+        while (currentCode.includes('.')) {
+            const lastDot = currentCode.lastIndexOf('.');
+            const parentCode = currentCode.substring(0, lastDot);
+            
+            const parentConta = contaMap[parentCode];
+            
+            if (parentConta && parentConta.Analitica === 'Não') {
+                consolidated[parentCode] = (consolidated[parentCode] || 0) + saldoBase;
+            }
+            
+            currentCode = parentCode;
+        }
+    }
+
+    return contas.map(c => ({
+        ...c,
+        saldo_final: consolidated[c.Conta] ?? 0,
+    }));
 };
 
 
@@ -158,6 +140,9 @@ export function useDRE(filtroPeriodo: DateRange | undefined): DREData {
         `Conta.like.${despesaCode}.%`,
     ].join(',');
     
+    console.log(`[DRE LOG] Config Map: Receita=${receitaCode}, Custo=${custoCode}, Despesa=${despesaCode}`);
+    console.log(`[DRE LOG] Buscando contas com OR: ${orClause}`);
+    
     try {
       // 1. Buscar Plano de Contas (apenas contas de resultado: Receita, Custo, Despesa)
       const { data: planoContasData, error: pcError } = await supabase
@@ -170,6 +155,8 @@ export function useDRE(filtroPeriodo: DateRange | undefined): DREData {
       if (pcError) throw pcError;
       const planoContas = planoContasData as PlanoContas[];
       
+      console.log(`[DRE LOG] Contas do Plano de Contas encontradas (${planoContas.length}):`, planoContas.map(c => ({ Conta: c.Conta, is_resultado: c.is_conta_resultado })));
+      
       // 2. Buscar Lançamentos dentro do período
       const { data: lancamentosData, error: lError } = await supabase
         .from('lancamentos')
@@ -180,6 +167,8 @@ export function useDRE(filtroPeriodo: DateRange | undefined): DREData {
         
       if (lError) throw lError;
       
+      console.log(`[DRE LOG] Lançamentos encontrados no período (${lancamentosData.length}).`);
+      
       // 3. Calcular o saldo de cada conta contábil (apenas analíticas)
       const movimentosMap = lancamentosData.reduce((acc, l) => {
         if (l.conta_contabil_id) {
@@ -187,6 +176,7 @@ export function useDRE(filtroPeriodo: DateRange | undefined): DREData {
           
           // CORREÇÃO CRÍTICA: Apenas contas marcadas como is_conta_resultado devem ter movimento na DRE
           if (!conta || !conta.is_conta_resultado) {
+              console.log(`[DRE LOG] Ignorando lançamento para conta ${conta?.Conta || l.conta_contabil_id}: is_conta_resultado=false.`);
               return acc;
           }
           
@@ -196,19 +186,13 @@ export function useDRE(filtroPeriodo: DateRange | undefined): DREData {
           
           if (tipoDRE === 'Receita') {
               // Receita (Natureza Credora): Entrada (Débito) = -, Saída (Crédito) = +
-              // O lançamento de Receita é registrado como TIPO 'Entrada' (Débito) na conta de Ativo e TIPO 'Entrada' (Crédito) na conta de Receita.
-              // Para a DRE, queremos que o valor seja positivo se for Receita (Crédito)
-              // Se o lançamento é Entrada (Débito), ele diminui o saldo credor (valor = -l.valor)
-              // Se o lançamento é Saída (Crédito), ele aumenta o saldo credor (valor = l.valor)
               valor = l.tipo === 'Entrada' ? -l.valor : l.valor;
           } else if (tipoDRE === 'Custo' || tipoDRE === 'Despesa') {
               // Custo/Despesa (Natureza Devedora): Entrada (Débito) = +, Saída (Crédito) = -
-              // O lançamento de Despesa é registrado como TIPO 'Saida' (Crédito) na conta de Ativo e TIPO 'Saida' (Débito) na conta de Despesa.
-              // Para a DRE, queremos que o valor seja positivo se for Despesa (Débito)
-              // Se o lançamento é Entrada (Débito), ele aumenta o saldo devedor (valor = l.valor)
-              // Se o lançamento é Saída (Crédito), ele diminui o saldo devedor (valor = -l.valor)
               valor = l.tipo === 'Entrada' ? l.valor : -l.valor;
           }
+          
+          console.log(`[DRE LOG] Movimento: Conta=${conta.Conta}, TipoLanc=${l.tipo}, TipoDRE=${tipoDRE}, Valor=${l.valor}, SaldoCalc=${valor}`);
           
           acc[l.conta_contabil_id] = (acc[l.conta_contabil_id] || 0) + valor;
         }
