@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, ArrowUpCircle, ArrowDownCircle, Banknote, TrendingUp, Scale, Filter, Wallet, Landmark } from 'lucide-react';
+import { Loader2, ArrowUpCircle, ArrowDownCircle, Banknote, TrendingUp, Scale, Filter, Wallet, Landmark, Eye, EyeOff } from 'lucide-react';
 import { useSessao } from '@/hooks/use-sessao';
 import { supabase } from '@/integrations/supabase/client';
 import { showError } from '@/utils/toast';
@@ -46,6 +46,9 @@ const DashboardFinanceiro: React.FC = () => {
     const [loadingFluxo, setLoadingFluxo] = useState(true);
     const [totalAReceber30Dias, setTotalAReceber30Dias] = useState(0);
     const [totalAPagar30Dias, setTotalAPagar30Dias] = useState(0);
+    
+    // NOVO ESTADO: Visibilidade da Depuração
+    const [showDebug, setShowDebug] = useState(false);
     
     // NOVO ESTADO: Movimentações Realizadas (Entradas/Saídas)
     const [totalEntradasRealizadas, setTotalEntradasRealizadas] = useState(0);
@@ -508,30 +511,38 @@ const DashboardFinanceiro: React.FC = () => {
             {/* NOVO: Detalhes de Lançamentos do Mês (Depuração) */}
             {isAdmin && debugData.length > 0 && filtroContaId === 'todos' && (
                 <Card>
-                    <CardHeader><CardTitle className="text-xl text-yellow-600">Depuração: Lançamentos do Mês por Origem</CardTitle></CardHeader>
-                    <CardContent>
-                        <p className="text-sm text-muted-foreground mb-3">
-                            Estes são os valores exatos que compõem o "Recebido (Mês)" ({formatCurrency(totalEntradasRealizadas)}) e "Pago (Mês)" ({formatCurrency(totalSaidasRealizadas)}) na tabela `lancamentos`.
-                        </p>
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>Origem</TableHead>
-                                    <TableHead className="text-right">Entradas</TableHead>
-                                    <TableHead className="text-right">Saídas</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {debugData.map(d => (
-                                    <TableRow key={d.origem}>
-                                        <TableCell className="font-mono text-sm">{d.origem}</TableCell>
-                                        <TableCell className="text-right text-green-600">{formatCurrency(d.entradas)}</TableCell>
-                                        <TableCell className="text-right text-red-600">{formatCurrency(d.saidas)}</TableCell>
+                    <CardHeader className="flex flex-row items-center justify-between">
+                        <CardTitle className="text-xl text-yellow-600">Depuração: Lançamentos do Mês por Origem</CardTitle>
+                        <Button variant="ghost" size="sm" onClick={() => setShowDebug(prev => !prev)}>
+                            {showDebug ? <EyeOff className="w-4 h-4 mr-2" /> : <Eye className="w-4 h-4 mr-2" />}
+                            {showDebug ? 'Ocultar' : 'Mostrar'}
+                        </Button>
+                    </CardHeader>
+                    {showDebug && (
+                        <CardContent>
+                            <p className="text-sm text-muted-foreground mb-3">
+                                Estes são os valores exatos que compõem o "Recebido (Mês)" ({formatCurrency(totalEntradasRealizadas)}) e "Pago (Mês)" ({formatCurrency(totalSaidasRealizadas)}) na tabela `lancamentos`.
+                            </p>
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Origem</TableHead>
+                                        <TableHead className="text-right">Entradas</TableHead>
+                                        <TableHead className="text-right">Saídas</TableHead>
                                     </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
-                    </CardContent>
+                                </TableHeader>
+                                <TableBody>
+                                    {debugData.map(d => (
+                                        <TableRow key={d.origem}>
+                                            <TableCell className="font-mono text-sm">{d.origem}</TableCell>
+                                            <TableCell className="text-right text-green-600">{formatCurrency(d.entradas)}</TableCell>
+                                            <TableCell className="text-right text-red-600">{formatCurrency(d.saidas)}</TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </CardContent>
+                    )}
                 </Card>
             )}
 
