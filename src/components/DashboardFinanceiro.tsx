@@ -198,7 +198,7 @@ const DashboardFinanceiro: React.FC = () => {
             .eq(ownerKeyCR, ownerId)
             .gte('data_vencimento', start)
             .lte('data_vencimento', end)
-            .neq('status', 'cancelada');
+            .in('status', ['aberta', 'parcial', 'reprogramada']); // Apenas pendentes
 
         if (crError) { console.error('Erro ao buscar CR:', crError); }
         const totalReceber = (crData || []).reduce((sum, p) => sum + p.valor_parcela, 0);
@@ -209,7 +209,7 @@ const DashboardFinanceiro: React.FC = () => {
             .eq(ownerKeyCP, ownerId)
             .gte('data_vencimento', start)
             .lte('data_vencimento', end)
-            .neq('status', 'cancelada');
+            .in('status', ['aberta', 'parcial', 'reprogramada']); // Apenas pendentes
 
         if (cpError) { console.error('Erro ao buscar CP:', cpError); }
         const totalPagar = (cpData || []).reduce((sum, p) => sum + p.valor_parcela, 0);
