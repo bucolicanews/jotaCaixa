@@ -24,14 +24,19 @@ interface BalancoPatrimonialHook {
   refetch: () => void;
 }
 
+// NOVO TIPO AUXILIAR
+interface SaldoInicialMap {
+    [contaContabilId: string]: number;
+}
+
 export const useBalancoPatrimonial = (dataFim: Date | null): BalancoPatrimonialHook => {
   const { usuario } = useSessao();
   const { configMap } = useContabilConfig();
   const [balanco, setBalanco] = useState<ContaBP[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const calcularSaldo = useCallback((lancamentos: Lancamento[], conta: PlanoContas) => {
-    let saldo = 0;
+  const calcularSaldo = useCallback((lancamentos: Lancamento[], conta: PlanoContas, saldoInicial: number) => {
+    let saldo = saldoInicial; // INCLUINDO SALDO INICIAL
     
     // Determine if the account is Devedora (Ativo) or Credora (Passivo, PL, Receita, Custo, Despesa)
     const contaPrefix = conta.Conta.split('.')[0];
@@ -61,12 +66,13 @@ export const useBalancoPatrimonial = (dataFim: Date | null): BalancoPatrimonialH
     return saldo;
   }, [configMap]);
 
-  const calcularSaldosRecursivo = useCallback((contas: PlanoContas[], lancamentos: Lancamento[]): ContaBP[] => {
+  const calcularSaldosRecursivo = useCallback((contas: PlanoContas[], lancamentos: Lancamento[], saldosIniciais: SaldoInicialMap): ContaBP[] => {
     
     const mapContas = (contas: PlanoContas[]): ContaBP[] => {
         return contas.map(conta => {
             const lancamentosDaConta = lancamentos.filter(l => l.conta_contabil_id === conta.id);
-            const saldo = calcularSaldo(lancamentosDaConta, conta);
+            const saldoInicial = saldosIniciais[conta.id] || 0; // Obtém o saldo inicial
+            const saldo = calcularSaldo(lancamentosDaConta, conta, saldoInicial); // Passa o saldo inicial
             
             // Determine the main type based on prefix
             const prefix = conta.Conta.split('.')[0];
@@ -126,8 +132,27 @@ export const useBalancoPatrimonial = (dataFim: Date | null): BalancoPatrimonialH
         return;
     }
     
+    // 3. Buscar saldos iniciais de contas patrimoniais (da tabela saldo_contas)
+    const { data: saldosIniciaisData, error: saldosError } = await supabase
+        .from('saldo_contas')
+        .select('conta_contabil_id, saldo_inicial')
+        .eq('proprietario_id', usuario.id)
+        .not('conta_contabil_id', 'is', null);
+        
+    if (saldosError) {
+        console.error('Erro ao buscar saldos iniciais:', saldosError);
+    }
+    
+    const saldosIniciaisMap: SaldoInicialMap = (saldosIniciaisData || []).reduce((acc, s) => {
+        if (s.conta_contabil_id) {
+            // Se houver múltiplas entradas em saldo_contas para a mesma conta contábil, soma os saldos iniciais
+            acc[s.conta_contabil_id] = (acc[s.conta_contabil_id] || 0) + s.saldo_inicial;
+        }
+        return acc;
+    }, {} as SaldoInicialMap);
+    
     const contasPlanas = contasData as PlanoContas[];
-    const balancoCalculado = calcularSaldosRecursivo(contasPlanas, lancamentosData as Lancamento[]);
+    const balancoCalculado = calcularSaldosRecursivo(contasPlanas, lancamentosData as Lancamento[], saldosIniciaisMap);
     
     setBalanco(balancoCalculado);
     setLoading(false);
