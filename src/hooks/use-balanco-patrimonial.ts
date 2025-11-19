@@ -30,13 +30,13 @@ export const useBalancoPatrimonial = (dataFim: Date | null): BalancoPatrimonialH
   const [balanco, setBalanco] = useState<ContaBP[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const calcularSaldo = useCallback((lancamentos: Lancamento[], conta: PlanoContas, saldoInicial: number) => {
-    let saldo = saldoInicial;
+  const calcularSaldo = useCallback((lancamentos: Lancamento[], conta: PlanoContas) => {
+    let saldo = 0;
     
     // Determine if the account is Devedora (Ativo) or Credora (Passivo, PL, Receita, Custo, Despesa)
     const contaPrefix = conta.Conta.split('.')[0];
     
-    // Contas Devedoras (Ativo - 1)
+    // CORREÇÃO CRÍTICA: Ativo (1) é Devedora. Passivo (2), PL (3), Receita (4), Custo (5) e Despesa (6) são Credoras.
     const isDevedora = [configMap.Ativo].includes(contaPrefix); 
     
     for (const lancamento of lancamentos) {
@@ -61,14 +61,12 @@ export const useBalancoPatrimonial = (dataFim: Date | null): BalancoPatrimonialH
     return saldo;
   }, [configMap]);
 
-  const calcularSaldosRecursivo = useCallback((contas: PlanoContas[], lancamentos: Lancamento[], saldosIniciais: Record<string, number>): ContaBP[] => {
+  const calcularSaldosRecursivo = useCallback((contas: PlanoContas[], lancamentos: Lancamento[]): ContaBP[] => {
     
     const mapContas = (contas: PlanoContas[]): ContaBP[] => {
         return contas.map(conta => {
             const lancamentosDaConta = lancamentos.filter(l => l.conta_contabil_id === conta.id);
-            const saldoInicial = saldosIniciais[conta.id] || 0; // Busca o saldo inicial
-            
-            const saldo = calcularSaldo(lancamentosDaConta, conta, saldoInicial);
+            const saldo = calcularSaldo(lancamentosDaConta, conta);
             
             // Determine the main type based on prefix
             const prefix = conta.Conta.split('.')[0];
@@ -88,9 +86,9 @@ export const useBalancoPatrimonial = (dataFim: Date | null): BalancoPatrimonialH
         });
     };
     
-    // Filter only relevant accounts (Patrimonial, Result, AND Caixa/Banco)
+    // Filter only relevant accounts (Patrimonial and Result)
     const contasRelevantes = contas.filter(c => 
-        c.is_conta_patrimonial || c.is_conta_resultado || c.is_conta_caixa_banco
+        c.is_conta_patrimonial || c.is_conta_resultado
     );
     
     return mapContas(contasRelevantes);
@@ -101,12 +99,12 @@ export const useBalancoPatrimonial = (dataFim: Date | null): BalancoPatrimonialH
 
     setLoading(true);
     
-    // 1. Buscar todas as contas relevantes (Patrimonial, Resultado, OU Caixa/Banco)
+    // 1. Buscar todas as contas relevantes (Patrimonial e Resultado)
     const { data: contasData, error: contasError } = await supabase
         .from('plano_contas')
         .select('*')
         .eq('proprietario_id', usuario.id)
-        .or('is_conta_patrimonial.eq.true,is_conta_resultado.eq.true,is_conta_caixa_banco.eq.true')
+        .or('is_conta_patrimonial.eq.true,is_conta_resultado.eq.true')
         .order('Conta');
 
     if (contasError) {
@@ -128,25 +126,8 @@ export const useBalancoPatrimonial = (dataFim: Date | null): BalancoPatrimonialH
         return;
     }
     
-    // 3. Buscar saldos iniciais das contas de saldo (Caixa/Banco e Patrimoniais)
-    const { data: saldosData, error: saldosError } = await supabase
-        .from('saldo_contas')
-        .select('conta_contabil_id, saldo_inicial')
-        .eq('proprietario_id', usuario.id);
-        
-    if (saldosError) {
-        console.error('Erro ao buscar saldos iniciais:', saldosError);
-    }
-    
-    const saldosIniciaisMap = (saldosData || []).reduce((acc, s) => {
-        if (s.conta_contabil_id) {
-            acc[s.conta_contabil_id] = s.saldo_inicial;
-        }
-        return acc;
-    }, {} as Record<string, number>);
-    
     const contasPlanas = contasData as PlanoContas[];
-    const balancoCalculado = calcularSaldosRecursivo(contasPlanas, lancamentosData as Lancamento[], saldosIniciaisMap);
+    const balancoCalculado = calcularSaldosRecursivo(contasPlanas, lancamentosData as Lancamento[]);
     
     setBalanco(balancoCalculado);
     setLoading(false);

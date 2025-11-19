@@ -40,9 +40,6 @@ const formSchema = z.object({
   
   // CAMPO ALTERADO: Agora é a Conta Patrimonial (Ativo/Passivo/PL)
   conta_patrimonial_id: z.string().uuid('Selecione uma conta patrimonial válida.').nullable(),
-  
-  // NOVO CAMPO: Conta de Resultado (Receita)
-  conta_resultado_id: z.string().uuid('Selecione uma conta de resultado válida.').nullable(),
 
 }).superRefine((data, ctx) => {
   if (data.tipo_lancamento === 'unico' && !data.data_vencimento) {
@@ -78,9 +75,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
   const [mapeamentoContabil, setMapeamentoContabil] = useState<Record<string, string | null>>({});
   const [historicos, setHistoricos] = useState<Historico[]>([]);
   const [contasPatrimoniais, setContasPatrimoniais] = useState<PlanoContas[]>([]);
-  const [contasReceita, setContasReceita] = useState<PlanoContas[]>([]); // NOVO ESTADO
   const [loadingContasPatrimoniais, setLoadingContasPatrimoniais] = useState(true);
-  const [loadingContasReceita, setLoadingContasReceita] = useState(true); // NOVO ESTADO
   const [isCreatingHistorico, setIsCreatingHistorico] = useState(false);
   const isEditing = !!contaInicial;
 
@@ -155,30 +150,6 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
     }
     setLoadingContasPatrimoniais(false);
   }, [ownerId, _configMap.Ativo, _configMap.Passivo, _configMap['Patrimonio Liquido']]);
-  
-  const fetchContasReceita = useCallback(async () => {
-    if (!ownerId) return;
-    setLoadingContasReceita(true);
-    
-    const receitaCode = _configMap.Receita || '4';
-    
-    const { data, error } = await supabase
-        .from('plano_contas')
-        .select('id, Conta, Descricao')
-        .eq('proprietario_id', ownerId)
-        .eq('Analitica', 'Sim')
-        .eq('is_conta_resultado', true)
-        .like('Conta', `${receitaCode}.%`)
-        .order('Conta');
-        
-    if (error) {
-        showError('Erro ao carregar contas de receita: ' + error.message);
-        setContasReceita([]);
-    } else {
-        setContasReceita(data as PlanoContas[]);
-    }
-    setLoadingContasReceita(false);
-  }, [ownerId, _configMap.Receita]);
 
   useEffect(() => {
     const fetchClientsData = async () => {
@@ -195,6 +166,13 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
           .eq('aprovado', true)
           .order('nome');
           
+      // Se for Cliente, filtra apenas os clientes que ele pode ver (seus próprios usuários)
+      if (!isAdmin) {
+          // Clientes só podem ver clientes que eles criaram (se houver lógica de criação)
+          // Ou, de forma mais simples, todos os clientes aprovados (se a RLS permitir)
+          // Como a RLS de tbl_clientes é complexa, vamos buscar todos os aprovados e confiar na RLS.
+      }
+      
       const { data: dataClients, error: errorClients } = await queryClients;
       
       if (errorClients) {
@@ -213,11 +191,10 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
     fetchClientsData();
     fetchHistoricos();
     fetchContasPatrimoniais();
-    fetchContasReceita(); // NOVO FETCH
     if (isAdmin) {
         fetchMapeamentoContabil();
     }
-  }, [perfil, role, ownerId, isAdmin, fetchMapeamentoContabil, fetchHistoricos, fetchContasPatrimoniais, fetchContasReceita, _configMap]);
+  }, [perfil, role, ownerId, isAdmin, fetchMapeamentoContabil, fetchHistoricos, fetchContasPatrimoniais]);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -232,7 +209,6 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
       historico_id: contaInicial?.historico_id || null,
       novo_historico: '',
       conta_patrimonial_id: contaInicial?.id_conta_patrimonial || null,
-      conta_resultado_id: (contaInicial as any)?.conta_resultado_id || null, // NOVO DEFAULT
     },
   });
 
@@ -273,6 +249,10 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
     const contaParcela = isAdmin ? mapeamentoContabil['parcela'] : null;
     
     try {
+      // 0. SINCRONIZAÇÃO CRÍTICA: Garante que o cliente selecionado exista na tabela 'clientes'
+      // REMOVIDO: A lógica de sincronização de clientes CR para a tabela 'clientes'
+      // Agora, a FK aponta para tbl_clientes, então não precisamos mais do upsert aqui.
+      
       // 1. Calcular valores e parcelas
       let valorTotal: number;
       let parcelasParaInserir = [];
@@ -306,9 +286,9 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
           tipo_receita: tipoLancamento === 'unico' ? 'única' : 'recorrente',
           status: 'aberta',
           origem: 'manual',
+          // CAMPO ALTERADO: Agora é a Conta Patrimonial
           id_conta_patrimonial: values.conta_patrimonial_id, 
           historico_id: values.historico_id,
-          conta_resultado_id: values.conta_resultado_id, // NOVO CAMPO
       };
 
       if (isEditing) {
@@ -336,6 +316,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
       // 2. Lançamento Inicial na Conta Patrimonial (Débito/Entrada)
       if (values.conta_patrimonial_id) {
           
+          // NOVO FORMATO DE DESCRIÇÃO: Inclui o ID da conta sintética para facilitar a busca/deleção
           const launchDescription = `Lançamento Inicial CR: ${values.descricao} (CR ID: ${contaReceberId.substring(0, 8)})`;
           
           const lancamentoPatrimonialPayload = {
@@ -352,6 +333,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
           
           // Se for edição, primeiro remove o lançamento antigo (se existir)
           if (isEditing) {
+              // Deleta o lançamento antigo usando o ID da conta sintética (se o formato antigo não funcionar)
               const oldLaunchDescriptionPrefix = `Lançamento Inicial CR: ${contaInicial?.descricao} (CR ID: ${contaInicial?.id.substring(0, 8)})`;
               await supabase.from('lancamentos')
                   .delete()
@@ -362,36 +344,6 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
           
           await supabase.from('lancamentos').insert(lancamentoPatrimonialPayload);
       }
-      
-      // 3. Lançamento Inicial na Conta de Resultado (Receita) - CRÉDITO (Saída)
-      if (values.conta_resultado_id) {
-          const launchDescription = `Receita: ${values.descricao} (CR ID: ${contaReceberId.substring(0, 8)})`;
-          
-          const lancamentoReceitaPayload = {
-              proprietario_id: ownerId,
-              data_movimentacao: format(new Date(), 'yyyy-MM-dd') + 'T12:00:00Z', // Meio-dia UTC
-              descricao: launchDescription,
-              valor: valorTotal,
-              tipo: 'Saida' as const, // CRÉDITO na Receita (Natureza Credora)
-              conta_bancaria_id: null,
-              conta_contabil_id: values.conta_resultado_id,
-              origem: 'lancamento_cr',
-              historico_id: values.historico_id,
-          };
-          
-          // Se for edição, primeiro remove o lançamento antigo (se existir)
-          if (isEditing) {
-              const oldLaunchDescriptionPrefix = `Receita: ${contaInicial?.descricao} (CR ID: ${contaInicial?.id.substring(0, 8)})`;
-              await supabase.from('lancamentos')
-                  .delete()
-                  .eq('origem', 'lancamento_cr')
-                  .eq('proprietario_id', ownerId)
-                  .ilike('descricao', `${oldLaunchDescriptionPrefix}%`);
-          }
-          
-          await supabase.from('lancamentos').insert(lancamentoReceitaPayload);
-      }
-
 
       showSuccess(`Conta ${isEditing ? 'atualizada' : 'salva'} com sucesso!`);
       onSaveComplete();
@@ -457,42 +409,9 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
         />
         <Separator />
         
-        {/* NOVO CAMPO: Conta de Resultado (Receita) */}
-        <FormField
-            control={form.control}
-            name="conta_resultado_id"
-            render={({ field }) => (
-                <FormItem>
-                    <FormLabel>4. Conta de Resultado (Receita)</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value || undefined} disabled={loadingContasReceita}>
-                        <FormControl>
-                            <SelectTrigger>
-                                <SelectValue placeholder={loadingContasReceita ? "Carregando Contas..." : `Selecione a conta de Receita (${_configMap.Receita}.x.x)`} />
-                            </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                            <SelectItem value={null as any}>Nenhum (Não Mapear)</SelectItem>
-                            {contasReceita.map(c => (
-                                <SelectItem key={c.id} value={c.id}>
-                                    {c.Conta} - {c.Descricao}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                    <FormMessage />
-                    {contasReceita.length === 0 && !loadingContasReceita && (
-                        <p className="text-sm text-red-500">
-                            Nenhuma conta de Receita ({_configMap.Receita}.x.x) marcada como "Conta de Resultado".
-                        </p>
-                    )}
-                </FormItem>
-            )}
-        />
-        <Separator />
-        
         {/* Histórico */}
         <div className="space-y-2">
-            <FormLabel>5. Histórico (Opcional)</FormLabel>
+            <FormLabel>4. Histórico (Opcional)</FormLabel>
             <div className="flex space-x-2">
                 <FormField
                     control={form.control}
@@ -540,7 +459,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
         <Separator />
         
         <div className="space-y-4">
-          <FormLabel>6. Detalhes do Pagamento</FormLabel>
+          <FormLabel>5. Detalhes do Pagamento</FormLabel>
           <FormField control={form.control} name="tipo_lancamento" render={({ field }) => (
             <FormItem><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex space-x-4 pt-2"><FormItem className="flex items-center space-x-2 space-y-0"><FormControl><RadioGroupItem value="unico" /></FormControl><FormLabel className="font-normal">Único</FormLabel></FormItem><FormItem className="flex items-center space-x-2 space-y-0"><FormControl><RadioGroupItem value="repetir" /></FormControl><FormLabel className="font-normal">Repetir Valor</FormLabel></FormItem><FormItem className="flex items-center space-x-2 space-y-0"><FormControl><RadioGroupItem value="parcelar" /></FormControl><FormLabel className="font-normal">Parcelar Valor</FormLabel></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>
           )} />
