@@ -4,8 +4,8 @@ import { LayoutDashboard, DollarSign, ArrowUpCircle, ArrowDownCircle, Banknote, 
 import React, { useMemo, useCallback, useState, useEffect } from 'react';
 import { useSessao } from '@/hooks/use-sessao';
 import { ClienteProfile, UsuarioProfile, AdminProfile, AdminUsuarioProfile } from '@/types/usuario';
-import { isPast, parseISO, format } from 'date-fns'; // ADICIONADO format e parseISO
-import { ptBR } from 'date-fns/locale'; // ADICIONADO ptBR
+import { isPast, parseISO, format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import { useTicketNotifications } from '@/hooks/use-ticket-notifications';
 import { supabase } from '@/integrations/supabase/client'; // Importando supabase
 
@@ -106,9 +106,9 @@ interface MenuLateralProps {
 const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick, adminBranding, loadingBranding }) => {
   const localizacao = useLocation();
   const { role, perfil, carregando } = useSessao();
-  const [clientBranding, setClientBranding] = useState<{ logoUrl: string | null, nome: string | null } | null>(null);
   
-  const { ticketsAbertos, ticketsEmProgresso, ticketsPausados, mensagensParaResponder, carregando: carregandoNotificacoes } = useTicketNotifications();
+  // Usando useTicketNotifications para o badge
+  const { mensagensParaResponder, carregando: carregandoNotificacoes } = useTicketNotifications();
 
   // --- CORREÇÃO: Definições seguras de perfil ---
   const clientProfile = role === 'Cliente' ? perfil as ClienteProfile : null;
@@ -127,162 +127,44 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick, adminBranding, l
   const isUserOfClient = role === 'Usuario' && userProfile && 'cliente_id' in userProfile && !!userProfile.cliente_id;
   const isUserOfAdmin = role === 'Usuario' && userProfile && 'admin_id' in userProfile && !!userProfile.admin_id;
   
-  // Determina o ID do Admin para buscar o branding
-  const targetAdminId = isAdmin ? perfil?.id : (isUserOfAdmin ? (perfil as AdminUsuarioProfile).admin_id : null);
-
-  const fetchAdminBranding = useCallback(async () => {
-      if (!targetAdminId) {
-          setLoadingBranding(false);
-          setAdminBranding(null);
-          return;
-      }
-      
-      setLoadingBranding(true);
-      
-      const { data, error } = await supabase
-          .from('tbl_admins')
-          .select('nome, logo_url')
-          .eq('id', targetAdminId)
-          .single();
-          
-      if (error) {
-          console.error('Erro ao buscar branding do Admin:', error);
-          setAdminBranding(null);
-      } else {
-          setAdminBranding({ logoUrl: data.logo_url, nome: data.nome });
-      }
-      setLoadingBranding(false);
-  }, [targetAdminId]);
-  
-  const fetchClientBranding = useCallback(async () => {
-      if (isUserOfClient && userProfile?.cliente_id) {
-          const { data, error } = await supabase
-              .from('tbl_clientes')
-              .select('nome, logo_url')
-              .eq('id', userProfile.cliente_id)
-              .single();
-              
-          if (error) {
-              console.error('Erro ao buscar branding do Cliente:', error);
-              setClientBranding(null);
-          } else {
-              setClientBranding({ logoUrl: data.logo_url, nome: data.nome });
-          }
-      } else {
-          setClientBranding(null);
-      }
-  }, [isUserOfClient, userProfile]);
-
-  useEffect(() => {
-      if (!carregando) {
-          fetchAdminBranding();
-          fetchClientBranding();
-      }
-  }, [carregando, fetchAdminBranding, fetchClientBranding]);
-
-
-  const [planoDetalhes, setPlanoDetalhes] = useState<{ nome: string, preco: number } | null>(null);
-  
-  useEffect(() => {
-    const updatePlanoDetails = async () => {
-      if (!perfil || !role) {
-        setPlanoDetalhes(null);
-        return;
-      }
-      
-      let currentPlanoId: string | null = null;
-
-      if (isClient && clientProfile) {
-        currentPlanoId = clientProfile.plano_id || null; 
-      } else if (role === 'Usuario' && userProfile?.cliente_id) {
-        const proprietarioId = userProfile.cliente_id;
-        const { data: clienteData } = await supabase
-            .from('tbl_clientes')
-            .select('plano_id')
-            .eq('id', proprietarioId)
-            .single();
-            
-        currentPlanoId = clienteData?.plano_id || null;
-      }
-      
-      if (currentPlanoId) {
-          const { data: planoData } = await supabase
-              .from('planos')
-              .select('nome, preco_mensal')
-              .eq('id', currentPlanoId)
-              .single();
-          
-          if (planoData) {
-              setPlanoDetalhes({ nome: planoData.nome, preco: planoData.preco_mensal });
-          } else {
-              setPlanoDetalhes(null);
-          }
-      } else {
-          setPlanoDetalhes(null);
-      }
-    };
-    
-    updatePlanoDetails();
-  }, [perfil, role, isClient, clientProfile, userProfile]);
-
-
-  const lidarComSair = async () => {
-    await supabase.auth.signOut();
-  };
-  
-  const handlePasswordReset = async () => {
-    if (!perfil?.email) return;
-    const { error } = await supabase.auth.resetPasswordForEmail(perfil.email, { redirectTo: `${BASE_URL}/atualizar-senha` });
-    if (error) console.error('Falha ao enviar email de reset:', error);
-    else alert('Link de redefinição de senha enviado para seu email.');
-  };
-  
-  // CORREÇÃO: Acessando clientProfile de forma segura
-  const dataFimAcesso = clientProfile?.data_fim_acesso;
-  const dataFimFormatada = dataFimAcesso ? format(parseISO(dataFimAcesso), 'dd/MM/yyyy', { locale: ptBR }) : null;
-  
-  const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
-  
-  // Lógica para o Título Principal
+  // Lógica para a URL da Logo
+  let finalLogoUrl = null;
   let textTitle = 'Fluxo de Caixa';
+  let profileDescription = '';
+  
+  // NOTA: A lógica de branding foi movida para o Header.tsx e o useOwnerBranding.
+  // Aqui, usamos apenas os props passados e o perfil da sessão.
   
   if (isAdmin) {
+      finalLogoUrl = adminBranding?.logoUrl;
       textTitle = adminBranding?.nome || perfil?.nome || 'Administrador';
+      profileDescription = 'Administrador do Sistema';
   } else if (isClient) {
+      finalLogoUrl = clientProfile?.logo_url;
       textTitle = clientProfile?.nome || 'Minha Empresa';
+      profileDescription = 'Cliente Principal';
   } else if (isUserOfClient) {
-      textTitle = clientBranding?.nome || 'Empresa Cliente';
+      // Se for usuário de cliente, precisamos buscar o branding do cliente
+      const [clientBrandingLocal, setClientBrandingLocal] = useState<{ logoUrl: string | null, nome: string | null } | null>(null);
+      
+      useEffect(() => {
+          if (isUserOfClient && userProfile?.cliente_id) {
+              supabase.from('tbl_clientes').select('nome, logo_url').eq('id', userProfile.cliente_id).single()
+                  .then(({ data }) => setClientBrandingLocal({ logoUrl: data?.logo_url || null, nome: data?.nome || null }));
+          }
+      }, [isUserOfClient, userProfile]);
+      
+      finalLogoUrl = clientBrandingLocal?.logoUrl;
+      textTitle = clientBrandingLocal?.nome || 'Empresa Cliente';
+      profileDescription = `Funcionário de ${clientBrandingLocal?.nome || 'Cliente'}`;
   } else if (isUserOfAdmin) {
+      finalLogoUrl = adminBranding?.logoUrl;
       textTitle = adminBranding?.nome || 'Admin';
+      profileDescription = `Funcionário de ${adminBranding?.nome || 'Admin'}`;
   } else if (perfil?.nome) {
       textTitle = perfil.nome;
   }
   
-  // Lógica para a descrição do perfil
-  let profileDescription = '';
-  if (isAdmin) {
-      profileDescription = 'Administrador do Sistema';
-  } else if (isClient) {
-      profileDescription = 'Cliente Principal';
-  } else if (isUserOfClient) {
-      profileDescription = `Funcionário de ${clientBranding?.nome || 'Cliente'}`;
-  } else if (isUserOfAdmin) {
-      profileDescription = `Funcionário de ${adminBranding?.nome || 'Admin'}`;
-  }
-  
-  // Lógica para a URL da Logo
-  let finalLogoUrl = null;
-  if (isAdmin) {
-      finalLogoUrl = (perfil as AdminProfile)?.logo_url || adminBranding?.logoUrl;
-  } else if (isClient) {
-      finalLogoUrl = (perfil as ClienteProfile)?.logo_url;
-  } else if (isUserOfClient) {
-      finalLogoUrl = clientBranding?.logoUrl;
-  } else if (isUserOfAdmin) {
-      finalLogoUrl = adminBranding?.logoUrl;
-  }
-  
-  // Lógica para exibir a seção de Suporte
   const shouldShowSuporte = isAdmin || isClient || (role === 'Usuario' && !isUnassignedUser);
 
 
