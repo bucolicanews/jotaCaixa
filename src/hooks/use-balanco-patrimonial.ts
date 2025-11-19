@@ -36,21 +36,21 @@ export const useBalancoPatrimonial = (dataFim: Date | null): BalancoPatrimonialH
     // Determine if the account is Devedora (Ativo, Custo, Despesa) or Credora (Passivo, PL, Receita)
     const contaPrefix = conta.Conta.split('.')[0];
     
-    // Ativo (1) é Devedora. Passivo (2) e PL (3) são Credoras.
-    const isDevedora = contaPrefix === (configMap.Ativo || '1'); 
+    // Ativo (1), Custo (5) e Despesa (6) são Devedoras. Passivo (2), PL (3) e Receita (4) são Credoras.
+    const isDevedora = [configMap.Ativo, configMap.Custo, configMap.Despesa].includes(contaPrefix); 
     
     for (const lancamento of lancamentos) {
         const valor = parseFloat(lancamento.valor);
         
         if (isDevedora) {
-            // Contas Devedoras (Ativo): Entrada (Débito) aumenta (+), Saída (Crédito) diminui (-)
+            // Contas Devedoras (Ativo, Custo, Despesa): Entrada (Débito) aumenta (+), Saída (Crédito) diminui (-)
             if (lancamento.tipo === 'Entrada') {
                 saldo += valor;
             } else if (lancamento.tipo === 'Saida') {
                 saldo -= valor;
             }
         } else {
-            // Contas Credoras (Passivo, PL): Entrada (Débito) diminui (-), Saída (Crédito) aumenta (+)
+            // Contas Credoras (Passivo, PL, Receita): Entrada (Débito) diminui (-), Saída (Crédito) aumenta (+)
             if (lancamento.tipo === 'Entrada') {
                 saldo -= valor;
             } else if (lancamento.tipo === 'Saida') {
@@ -75,7 +75,7 @@ export const useBalancoPatrimonial = (dataFim: Date | null): BalancoPatrimonialH
             if (prefix === (configMap.Ativo || '1')) tipo_principal = 'Ativo';
             else if (prefix === (configMap.Passivo || '2')) tipo_principal = 'Passivo';
             else if (prefix === (configMap['Patrimonio Liquido'] || '3')) tipo_principal = 'Patrimonio Liquido';
-            else if (conta.is_conta_resultado) tipo_principal = 'Resultado';
+            else if (conta.is_conta_resultado) tipo_principal = 'Resultado'; // Contas 4, 5, 6
 
             return {
                 ...conta,
