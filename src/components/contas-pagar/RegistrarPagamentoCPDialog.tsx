@@ -48,7 +48,7 @@ type FormValues = z.infer<typeof formSchema>;
 interface RegistrarPagamentoCPDialogProps {
   parcela: ParcelaParaPagamento | null;
   open: boolean;
-  onOpenChange: (open: boolean) => void;
+  onOpenChange: (open: (open: boolean) => void) => void;
   onSaveComplete: () => void;
 }
 
@@ -298,12 +298,14 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
         if (lancamentoAtivoError) throw lancamentoAtivoError;
         
         // 3. Registrar o Lançamento na conta de Resultado (DRE) - DÉBITO (Despesa)
+        // CORREÇÃO CRÍTICA: Invertendo o tipo para 'Saida' (Crédito) para que o saldo seja positivo na DRE,
+        // conforme a nova lógica de natureza Credora para Despesa/Custo.
         const lancamentoDespesaPayload = {
             proprietario_id: adminId,
             data_movimentacao: dataPagamentoISO,
-            descricao: `Despesa/Custo: ${descricaoContaSintetica}`,
+            descricao: `Despesa/Custo: ${descricaoContaSintetica} (CP ID: ${parcela.conta_pagar_id.substring(0, 8)})`, // NOVO: Adicionando ID da CP
             valor: pagamento.valor_pago,
-            tipo: 'Entrada' as const, // Entrada na Despesa (aumenta o saldo da conta 4.x.x/5.x.x)
+            tipo: 'Saida' as const, // <--- CORREÇÃO AQUI: Saída (Crédito) aumenta o saldo da Despesa (Credora)
             conta_bancaria_id: null,
             conta_contabil_id: values.conta_resultado_id, // Conta de Despesa/Custo (4.x.x/5.x.x)
             historico_id: values.historico_id,
@@ -317,7 +319,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
             const lancamentoPatrimonialPayload = {
                 proprietario_id: adminId,
                 data_movimentacao: dataPagamentoISO,
-                descricao: `Estorno Patrimonial CP: ${descricaoContaSintetica}`,
+                descricao: `Estorno Patrimonial CP: ${descricaoContaSintetica} (CP ID: ${parcela.conta_pagar_id.substring(0, 8)})`, // NOVO: Adicionando ID da CP
                 valor: pagamento.valor_pago,
                 tipo: 'Saida' as const, // Saída no Passivo (diminui o saldo da conta 2.x.x)
                 conta_bancaria_id: null,

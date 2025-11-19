@@ -33,24 +33,24 @@ export const useBalancoPatrimonial = (dataFim: Date | null): BalancoPatrimonialH
   const calcularSaldo = useCallback((lancamentos: Lancamento[], conta: PlanoContas) => {
     let saldo = 0;
     
-    // Determine if the account is Devedora (Ativo, Custo, Despesa) or Credora (Passivo, PL, Receita)
+    // Determine if the account is Devedora (Ativo) or Credora (Passivo, PL, Receita, Custo, Despesa)
     const contaPrefix = conta.Conta.split('.')[0];
     
-    // Ativo (1), Custo (5) e Despesa (6) são Devedoras. Passivo (2), PL (3) e Receita (4) são Credoras.
-    const isDevedora = [configMap.Ativo, configMap.Custo, configMap.Despesa].includes(contaPrefix); 
+    // CORREÇÃO CRÍTICA: Ativo (1) é Devedora. Passivo (2), PL (3), Receita (4), Custo (5) e Despesa (6) são Credoras.
+    const isDevedora = [configMap.Ativo].includes(contaPrefix); 
     
     for (const lancamento of lancamentos) {
         const valor = parseFloat(lancamento.valor);
         
         if (isDevedora) {
-            // Contas Devedoras (Ativo, Custo, Despesa): Entrada (Débito) aumenta (+), Saída (Crédito) diminui (-)
+            // Contas Devedoras (Ativo): Entrada (Débito) aumenta (+), Saída (Crédito) diminui (-)
             if (lancamento.tipo === 'Entrada') {
                 saldo += valor;
             } else if (lancamento.tipo === 'Saida') {
                 saldo -= valor;
             }
         } else {
-            // Contas Credoras (Passivo, PL, Receita): Entrada (Débito) diminui (-), Saída (Crédito) aumenta (+)
+            // Contas Credoras (Passivo, PL, Resultado): Entrada (Débito) diminui (-), Saída (Crédito) aumenta (+)
             if (lancamento.tipo === 'Entrada') {
                 saldo -= valor;
             } else if (lancamento.tipo === 'Saida') {
@@ -149,7 +149,8 @@ export const useBalancoPatrimonial = (dataFim: Date | null): BalancoPatrimonialH
   
   const totalReceita = getSomaPorTipo(balanco, configMap.Receita || '4');
   
-  // CORREÇÃO CRÍTICA: Força o valor absoluto para Custo e Despesa antes de subtrair
+  // Custo e Despesa são Credoras no Balanço, mas para o cálculo do Resultado Líquido,
+  // precisamos do valor absoluto (positivo) para subtrair da Receita.
   const totalCusto = Math.abs(getSomaPorTipo(balanco, configMap.Custo || '5'));
   const totalDespesa = Math.abs(getSomaPorTipo(balanco, configMap.Despesa || '6'));
   
