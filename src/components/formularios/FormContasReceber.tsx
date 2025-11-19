@@ -228,7 +228,8 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
       historico_id: contaInicial?.historico_id || null,
       novo_historico: '',
       conta_patrimonial_id: contaInicial?.id_conta_patrimonial || null,
-      conta_receita_id: null,
+      // CORREÇÃO AQUI: Lendo id_conta_resultado da conta sintética
+      conta_receita_id: (contaInicial as any)?.id_conta_resultado || null, 
     },
   });
 
@@ -237,21 +238,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
   const novoHistoricoValue = form.watch('novo_historico');
   
   // Efeito para preencher as contas contábeis iniciais (se for edição)
-  useEffect(() => {
-      if (isEditing && isAdmin && contaInicial?.id) {
-          // Busca a conta de receita do lançamento original (se houver)
-          supabase.from('lancamentos')
-              .select('conta_contabil_id')
-              .eq('proprietario_id', ownerId)
-              .eq('origem', 'lancamento_cr')
-              .eq('tipo', 'Saida') // Receita é Saída (Crédito)
-              .limit(1)
-              .single()
-              .then(({ data }) => {
-                  form.setValue('conta_receita_id', data?.conta_contabil_id || null);
-              });
-      }
-  }, [isEditing, isAdmin, contaInicial?.id, ownerId, form]);
+  // REMOVIDO: O useEffect que buscava o valor do lancamentos, pois agora lemos de contaInicial.id_conta_resultado
   
   const handleCreateHistorico = async () => {
     if (!novoHistoricoValue || !ownerId) return;
