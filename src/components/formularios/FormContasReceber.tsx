@@ -38,6 +38,7 @@ const formSchema = z.object({
   historico_id: z.string().uuid('Selecione um histórico válido.').nullable(),
   novo_historico: z.string().optional(),
   
+  // CAMPOS REMOVIDOS DO FORMULÁRIO, MAS MANTIDOS NO ESQUEMA PARA VALIDAÇÃO DE DADOS INICIAIS
   conta_patrimonial_id: z.string().uuid('Selecione uma conta patrimonial válida.').nullable(),
   conta_receita_id: z.string().uuid('Selecione uma conta de receita válida.').nullable(),
 
@@ -235,12 +236,15 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
   const tipoLancamento = form.watch('tipo_lancamento');
   const novoHistoricoValue = form.watch('novo_historico');
   
+  // Efeito para preencher as contas contábeis iniciais (se for edição)
   useEffect(() => {
       if (isEditing && isAdmin && contaInicial?.id) {
-          supabase.from('configuracao_contas_receber')
+          // Busca a conta de receita do lançamento original (se houver)
+          supabase.from('lancamentos')
               .select('conta_contabil_id')
               .eq('proprietario_id', ownerId)
-              .eq('tipo_registro', 'recebimento_resultado')
+              .eq('origem', 'lancamento_cr')
+              .eq('tipo', 'Saida') // Receita é Saída (Crédito)
               .limit(1)
               .single()
               .then(({ data }) => {
@@ -288,7 +292,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
     }
     
     if (isAdmin && !contaReceitaResultado) {
-        showError('A conta contábil para Receita (Resultado DRE) é obrigatória. Verifique Configurações > Contas a Receber.');
+        showError('A conta contábil para Receita (Resultado DRE) é obrigatória. Selecione uma conta de Receita.');
         return;
     }
     

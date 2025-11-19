@@ -55,7 +55,7 @@ type FormValues = z.infer<typeof formSchema>;
 interface RegistrarPagamentoDialogProps {
   parcela: ParcelaParaPagamento | null;
   open: boolean;
-  onOpenChange: (open: boolean) => void;
+  onOpenChange: (open: (open: boolean) => void) => void;
   onSaveComplete: () => void;
 }
 
@@ -156,21 +156,22 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
         .limit(1)
         .single();
         
-    // 2. Buscar Conta de Resultado Padrão
-    const { data: resultadoData } = await supabase
-        .from('configuracao_contas_receber')
-        .select('conta_contabil_id')
-        .eq('proprietario_id', ownerId)
-        .eq('tipo_registro', 'recebimento_resultado') // CORRIGIDO: Usando o tipo correto
-        .limit(1)
-        .single();
-        
+    // 2. Buscar Conta de Resultado Padrão (REMOVIDO: Agora vem da conta sintética)
+    
     const defaultHistoricoId = historicoData?.historico_id || null;
-    const defaultResultadoId = resultadoData?.conta_contabil_id || null;
     
     form.setValue('historico_id', defaultHistoricoId);
-    form.setValue('conta_resultado_id', defaultResultadoId);
-  }, [isAdmin, ownerId, form]);
+    
+    // 3. Buscar Conta de Resultado do Lançamento Sintético (se existir)
+    const { data: contaSintetica } = await supabase
+        .from(tabelaContasReceber)
+        .select('id_conta_resultado')
+        .eq('id', parcela!.conta_receber_id)
+        .single();
+        
+    form.setValue('conta_resultado_id', contaSintetica?.id_conta_resultado || null);
+    
+  }, [isAdmin, ownerId, form, tabelaContasReceber, parcela]);
 
   useEffect(() => {
       if (open) {
@@ -210,6 +211,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
     const quitouComPagamentoAtual = novoValorPagoTotal >= parcela.valor_parcela;
     
     // Contas Contábeis Mapeadas (apenas Admin)
+    // REMOVIDO: Busca de contaRecebimento e contaResultado (agora vem da conta sintética)
     const contaRecebimento = isAdmin ? (await supabase.from('configuracao_contas_receber').select('conta_contabil_id').eq('proprietario_id', ownerId).eq('tipo_registro', 'recebimento').single()).data?.conta_contabil_id : null;
     const contaParcela = isAdmin ? (await supabase.from('configuracao_contas_receber').select('conta_contabil_id').eq('proprietario_id', ownerId).eq('tipo_registro', 'parcela').single()).data?.conta_contabil_id : null;
     const contaDesconto = isAdmin ? (await supabase.from('configuracao_contas_receber').select('conta_contabil_id').eq('proprietario_id', ownerId).eq('tipo_registro', 'desconto').single()).data?.conta_contabil_id : null;

@@ -17,17 +17,14 @@ import { Historico } from '@/types/historico';
 const TIPOS_REGISTRO_CONTABIL = [
   { key: 'a_receber', label: 'Contas a Receber (Sintético)', tipo: 'Patrimonial', analitica: 'Não' }, // Sintética
   { key: 'parcela', label: 'Parcelas a Receber (Analítico)', tipo: 'Patrimonial', analitica: 'Sim' }, // Analítica
-  { key: 'recebimento', label: 'Recebimentos (Patrimonial)', tipo: 'Patrimonial', analitica: 'Sim' }, // Recebimento (Ativo/Passivo)
-  { key: 'recebimento_resultado', label: 'Recebimentos (Resultado DRE)', tipo: 'Resultado', analitica: 'Sim' }, // NOVO: Receita (DRE)
+  // REMOVIDOS: recebimento, recebimento_resultado, desconto
   { key: 'desconto', label: 'Descontos Concedidos (Despesa)', tipo: 'Resultado', analitica: 'Sim' }, // Despesa (DRE)
 ];
 
-// Esquema dinâmico: a_receber, parcela e recebimento são obrigatórios (min(1))
+// Esquema dinâmico: a_receber e parcela são obrigatórios
 const formSchema = z.object({
   a_receber: z.string().min(1, 'A conta Contas a Receber (Sintético) é obrigatória.').nullable(),
   parcela: z.string().min(1, 'A conta Parcelas a Receber (Analítico) é obrigatória.').nullable(),
-  recebimento: z.string().min(1, 'A conta Recebimentos (Patrimonial) é obrigatória.').nullable(),
-  recebimento_resultado: z.string().min(1, 'A conta Recebimentos (Resultado DRE) é obrigatória.').nullable(), // NOVO CAMPO
   desconto: z.string().nullable(),
   historico_padrao_id: z.string().nullable(),
 });
@@ -49,8 +46,6 @@ const FormConfiguracoesCR: React.FC = () => {
     defaultValues: {
       a_receber: null,
       parcela: null,
-      recebimento: null,
-      recebimento_resultado: null, // NOVO DEFAULT
       desconto: null,
       historico_padrao_id: null,
     },
@@ -119,8 +114,10 @@ const FormConfiguracoesCR: React.FC = () => {
       showError('Erro ao carregar configurações de CR: ' + contasError.message);
     } else if (contasData) {
       const mappedData = contasData.reduce((acc, item) => {
-        // Mapeia null para null (não string vazia)
-        acc[item.tipo_registro as keyof FormValues] = item.conta_contabil_id;
+        // Mapeia apenas os campos que existem no novo esquema
+        if (['a_receber', 'parcela', 'desconto'].includes(item.tipo_registro)) {
+            acc[item.tipo_registro as keyof FormValues] = item.conta_contabil_id;
+        }
         return acc;
       }, {} as Partial<FormValues>);
       
@@ -146,12 +143,24 @@ const FormConfiguracoesCR: React.FC = () => {
       return;
     }
     
+    // Filtra apenas os campos que existem no TIPOS_REGISTRO_CONTABIL
     const dataToUpsertContabil = TIPOS_REGISTRO_CONTABIL.map(tipo => ({
         proprietario_id: adminId,
         tipo_registro: tipo.key,
         // Usa o valor diretamente (null ou string UUID)
         conta_contabil_id: values[tipo.key as keyof FormValues], 
     }));
+    
+    // Adiciona os campos removidos (recebimento e recebimento_resultado) com valor NULL
+    // para garantir que eles sejam limpos no banco de dados se existirem.
+    const fieldsToRemove = ['recebimento', 'recebimento_resultado'];
+    fieldsToRemove.forEach(key => {
+        dataToUpsertContabil.push({
+            proprietario_id: adminId,
+            tipo_registro: key,
+            conta_contabil_id: null,
+        });
+    });
     
     const historicoPadraoPayload = {
         proprietario_id: adminId,
@@ -248,7 +257,7 @@ const FormConfiguracoesCR: React.FC = () => {
                                     </SelectContent>
                                 </Select>
                                 <FormMessage />
-                                {contasDisponiveis.length === 0 && (
+                                {contasDisponiveis.length === 0 && !loadingContas && (
                                     <p className="text-xs text-red-500">
                                         Nenhuma conta {requiredAnalitica} marcada como {tipo.tipo} no Plano de Contas.
                                     </p>
