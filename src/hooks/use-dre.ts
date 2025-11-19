@@ -106,6 +106,10 @@ export const useDRE = (filtroPeriodo: { from: Date | undefined, to: Date | undef
 
     setLoading(true);
     
+    // CORREÇÃO: Usando o fuso horário local para definir o início e o fim do dia
+    const startOfDayLocal = format(dataInicio, 'yyyy-MM-dd') + 'T00:00:00-03:00'; // Assumindo UTC-3 (America/Sao_Paulo)
+    const endOfDayLocal = format(dataFim, 'yyyy-MM-dd') + 'T23:59:59-03:00'; // Assumindo UTC-3 (America/Sao_Paulo)
+    
     // 1. Buscar todas as contas de resultado (4, 5, 6)
     const { data: contasData, error: contasError } = await supabase
         .from('plano_contas')
@@ -125,8 +129,8 @@ export const useDRE = (filtroPeriodo: { from: Date | undefined, to: Date | undef
         .from('lancamentos')
         .select('*')
         .eq('proprietario_id', usuario.id)
-        .gte('data_movimentacao', format(dataInicio, 'yyyy-MM-dd') + 'T00:00:00Z')
-        .lte('data_movimentacao', format(dataFim, 'yyyy-MM-dd') + 'T23:59:59Z');
+        .gte('data_movimentacao', startOfDayLocal)
+        .lte('data_movimentacao', endOfDayLocal);
 
     if (lancamentosError) {
         showError('Erro ao carregar lançamentos para DRE: ' + lancamentosError.message);
@@ -147,10 +151,8 @@ export const useDRE = (filtroPeriodo: { from: Date | undefined, to: Date | undef
 
   // Funções de soma para o resumo da DRE
   const totalReceita = getSomaPorTipo(dre, configMap.Receita || '4');
-  
-  // NOVO: Força o valor absoluto para Custo e Despesa antes de subtrair
-  const totalCusto = Math.abs(getSomaPorTipo(dre, configMap.Custo || '5'));
-  const totalDespesa = Math.abs(getSomaPorTipo(dre, configMap.Despesa || '6'));
+  const totalCusto = getSomaPorTipo(dre, configMap.Custo || '5');
+  const totalDespesa = getSomaPorTipo(dre, configMap.Despesa || '6');
   
   const resultadoLiquido = totalReceita - totalCusto - totalDespesa;
 
