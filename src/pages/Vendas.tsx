@@ -48,8 +48,10 @@ const Vendas: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    buscarPlanos();
-  }, [buscarPlanos]);
+    if (!carregandoSessao) { // Adicionado a dependência de carregandoSessao
+      buscarPlanos();
+    }
+  }, [carregandoSessao, buscarPlanos]);
   
   const handleSelectPlan = (plano: Plano) => {
       setPlanoSelecionado(plano);
