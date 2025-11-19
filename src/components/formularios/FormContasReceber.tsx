@@ -272,7 +272,6 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
         showError('Falha ao criar histórico: ' + error.message);
         setIsCreatingHistorico(false);
     }
-    return;
   };
 
   const onSubmit = async (values: FormValues) => {
@@ -352,12 +351,11 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
       const { error: parcelError } = await supabase.from(tabelaParcelasReceber).insert(parcelasComId);
       if (parcelError) throw parcelError;
       
-      // CORREÇÃO CRÍTICA: Lançamento de Receita (DRE) e Lançamento Patrimonial (CR)
+      // 2. Lançamento 1: DÉBITO (Ativo) - Aumenta o direito a receber
       const dataMovimentacao = format(new Date(), 'yyyy-MM-dd') + 'T12:00:00Z';
       const launchDescription = values.descricao;
       const contaReceberIdShort = contaReceberId.substring(0, 8);
       
-      // 2. Lançamento 1: DÉBITO (Ativo) - Aumenta o direito a receber
       if (contaPatrimonial) {
           const lancamentoPatrimonialPayload = {
               proprietario_id: ownerId,
@@ -443,7 +441,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
         )} />
         <Separator />
         
-        {/* CAMPO ALTERADO: Conta Patrimonial (Ativo/Passivo/PL) */}
+        {/* CAMPO ALTERADO: Conta Patrimonial */}
         <FormField
             control={form.control}
             name="conta_patrimonial_id"
