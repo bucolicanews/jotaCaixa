@@ -129,15 +129,18 @@ const FormPlanoContas: React.FC<FormPlanoContasProps> = ({ proprietarioId, conta
         }
     }
     
+    // Lógica de segurança: Se não for analítica, as flags booleanas devem ser FALSE
+    const isAnalitica = values.Analitica === 'Sim';
+    
     const dataToSave = {
       proprietario_id: proprietarioId,
       Conta: values.Conta,
       codigo_reduzido: values.codigo_reduzido || null,
       Descricao: values.Descricao,
       Analitica: values.Analitica,
-      is_conta_caixa_banco: values.Analitica === 'Sim' ? values.is_conta_caixa_banco : false, // RENOMEADO
-      is_conta_patrimonial: values.Analitica === 'Sim' ? values.is_conta_patrimonial : false, // NOVO CAMPO
-      is_conta_resultado: values.Analitica === 'Sim' ? values.is_conta_resultado : false,
+      is_conta_caixa_banco: isAnalitica ? values.is_conta_caixa_banco : false, // Aplica filtro
+      is_conta_patrimonial: isAnalitica ? values.is_conta_patrimonial : false, // Aplica filtro
+      is_conta_resultado: isAnalitica ? values.is_conta_resultado : false, // Aplica filtro
     };
 
     let error = null;
