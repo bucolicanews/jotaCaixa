@@ -7,7 +7,7 @@ import { showError } from '@/utils/toast';
 import { formatCurrency } from '@/utils/formatters';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import useSaldoContaCalculado from '@/hooks/use-saldo-conta-calculado';
-import { startOfMonth, endOfMonth, format, addDays, startOfDay, endOfDay } from 'date-fns'; // IMPORTAÇÕES CORRIGIDAS
+import { startOfMonth, endOfMonth, format, addDays, startOfDay, endOfDay } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useNavigate } from 'react-router-dom';
@@ -40,6 +40,10 @@ const DashboardFinanceiro: React.FC = () => {
     const [loadingFluxo, setLoadingFluxo] = useState(true);
     const [totalAReceber30Dias, setTotalAReceber30Dias] = useState(0);
     const [totalAPagar30Dias, setTotalAPagar30Dias] = useState(0);
+    
+    // NOVOS ESTADOS PARA ATRASADOS
+    const [totalAPagarOverdue, setTotalAPagarOverdue] = useState(0);
+    const [totalAReceberOverdue, setTotalAReceberOverdue] = useState(0);
     
     // NOVO ESTADO: Filtro de Período (Padrão: Mês Atual)
     const [filtroPeriodo, setFiltroPeriodo] = useState<DateRange | undefined>({
@@ -227,6 +231,30 @@ const DashboardFinanceiro: React.FC = () => {
         const totalCP = (cp30 || []).reduce((sum, p) => sum + p.valor_parcela, 0);
         setTotalAPagar30Dias(totalCP);
         
+        // --- NOVO: Total A Pagar (Atrasado) ---
+        const { data: cpOverdue, error: cpOverdueError } = await supabase
+            .from(tabelaParcelasPagar)
+            .select('valor_parcela')
+            .eq(ownerKeyCP, ownerId)
+            .in('status', ['aberta', 'parcial', 'reprogramada'])
+            .lt('data_vencimento', today); // Vencimento ANTES de hoje
+            
+        if (cpOverdueError) console.error('Erro ao buscar CP Atrasado:', cpOverdueError);
+        const totalCPOverdue = (cpOverdue || []).reduce((sum, p) => sum + p.valor_parcela, 0);
+        setTotalAPagarOverdue(totalCPOverdue);
+        
+        // --- NOVO: Total A Receber (Atrasado) ---
+        const { data: crOverdue, error: crOverdueError } = await supabase
+            .from(tabelaParcelasReceber)
+            .select('valor_parcela')
+            .eq(ownerKeyCR, ownerId)
+            .in('status', ['aberta', 'parcial', 'reprogramada'])
+            .lt('data_vencimento', today); // Vencimento ANTES de hoje
+            
+        if (crOverdueError) console.error('Erro ao buscar CR Atrasado:', crOverdueError);
+        const totalCROverdue = (crOverdue || []).reduce((sum, p) => sum + p.valor_parcela, 0);
+        setTotalAReceberOverdue(totalCROverdue);
+        
     }, [ownerId, isAdmin]);
 
     useEffect(() => {
@@ -378,38 +406,44 @@ const DashboardFinanceiro: React.FC = () => {
                                 </div>
                             </CardContent>
                         </Card>
+                        
+                        {/* NOVO KPI: A Pagar (Atrasado) */}
                         <Card 
-                            className="border-l-4 border-blue-500 cursor-pointer hover:shadow-xl transition-shadow"
-                            onClick={() => navigate('/contas-receber')}
-                        >
-                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-sm font-medium flex items-center"><ArrowUpCircle className="w-4 h-4 mr-2" /> A Receber (30 dias)</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="text-2xl font-bold text-blue-600">
-                                    {formatCurrency(totalAReceber30Dias)}
-                                </div>
-                            </CardContent>
-                        </Card>
-                        <Card 
-                            className="border-l-4 border-red-500 cursor-pointer hover:shadow-xl transition-shadow"
+                            className={cn("border-l-4 cursor-pointer hover:shadow-xl transition-shadow", totalAPagarOverdue > 0 ? "border-red-500" : "border-gray-500")}
                             onClick={() => navigate('/contas-pagar')}
                         >
                             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-sm font-medium flex items-center"><ArrowDownCircle className="w-4 h-4 mr-2" /> A Pagar (30 dias)</CardTitle>
+                                <CardTitle className="text-sm font-medium flex items-center"><ArrowDownCircle className="w-4 h-4 mr-2" /> A Pagar (Atrasado)</CardTitle>
                             </CardHeader>
                             <CardContent>
-                                <div className="text-2xl font-bold text-red-600">
-                                    {formatCurrency(totalAPagar30Dias)}
+                                <div className={cn("text-2xl font-bold", totalAPagarOverdue > 0 ? "text-red-600" : "text-muted-foreground")}>
+                                    {formatCurrency(totalAPagarOverdue)}
                                 </div>
                             </CardContent>
                         </Card>
+                        
+                        {/* NOVO KPI: A Receber (Atrasado) */}
+                        <Card 
+                            className={cn("border-l-4 cursor-pointer hover:shadow-xl transition-shadow", totalAReceberOverdue > 0 ? "border-red-500" : "border-gray-500")}
+                            onClick={() => navigate('/contas-receber')}
+                        >
+                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                <CardTitle className="text-sm font-medium flex items-center"><ArrowUpCircle className="w-4 h-4 mr-2" /> A Receber (Atrasado)</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className={cn("text-2xl font-bold", totalAReceberOverdue > 0 ? "text-red-600" : "text-muted-foreground")}>
+                                    {formatCurrency(totalAReceberOverdue)}
+                                </div>
+                            </CardContent>
+                        </Card>
+                        
+                        {/* KPI: Resultado (Período) - Renomeado */}
                         <Card 
                             className={cn("border-l-4 cursor-pointer hover:shadow-xl transition-shadow", lucroPrejuizo >= 0 ? "border-green-500" : "border-red-500")}
                             onClick={() => navigate('/relatorios/dre')}
                         >
                             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-sm font-medium flex items-center"><TrendingUp className="w-4 h-4 mr-2" /> Resultado (Obrig.)</CardTitle>
+                                <CardTitle className="text-sm font-medium flex items-center"><TrendingUp className="w-4 h-4 mr-2" /> Resultado (Período)</CardTitle>
                             </CardHeader>
                             <CardContent>
                                 <div className={cn("text-2xl font-bold", lucroPrejuizo >= 0 ? "text-green-600" : "text-red-600")}>
@@ -508,7 +542,7 @@ const DashboardFinanceiro: React.FC = () => {
                     className="lg:col-span-1 cursor-pointer hover:shadow-xl transition-shadow"
                     onClick={() => navigate('/relatorios/dre')}
                 >
-                    <CardHeader><CardTitle className="text-xl flex items-center"><TrendingUp className="w-5 h-5 mr-2" /> Resultado (Obrig.)</CardTitle></CardHeader>
+                    <CardHeader><CardTitle className="text-xl flex items-center"><TrendingUp className="w-5 h-5 mr-2" /> Resultado (Período)</CardTitle></CardHeader>
                     <CardContent className="h-80 flex flex-col justify-center items-center">
                         <ResponsiveContainer width="100%" height={150}>
                             <BarChart data={lucroChartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
