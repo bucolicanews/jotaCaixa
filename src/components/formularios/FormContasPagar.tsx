@@ -194,9 +194,16 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
     
     // 1. Buscar a conta analítica de parcelas a pagar
     const contaParcelaPagar = isAdmin ? mapeamentoContabil['parcela_pagar'] : null;
+    // NOVO: Buscar a conta de Despesa/Custo (mapeada como 'pagamento')
+    const contaDespesa = isAdmin ? mapeamentoContabil['pagamento'] : null; 
     
     if (isAdmin && !contaParcelaPagar) {
         showError('A conta contábil para Parcelas a Pagar (Analítico) não está configurada. Verifique Configurações > Contas a Pagar.');
+        return;
+    }
+    // NOVO: Validação da conta de Despesa
+    if (isAdmin && !contaDespesa) {
+        showError('A conta contábil para Despesa/Custo (Pagamento) não está configurada. Verifique Configurações > Contas a Pagar.');
         return;
     }
     
@@ -258,23 +265,25 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
       const { error: parcelError } = await supabase.from(tabelaParcelasPagar).insert(parcelasComId);
       if (parcelError) throw parcelError;
       
-      // 4. Lançamento Inicial na Conta Patrimonial (Crédito/Entrada)
+      // 4. Lançamento Inicial na Conta Patrimonial (CRÉDITO - Aumenta Passivo)
+      const dataMovimentacao = format(new Date(), 'yyyy-MM-dd') + 'T12:00:00Z';
+      const launchDescription = values.descricao;
+      const contaPagarIdShort = contaPagarId.substring(0, 8);
+      
       if (values.conta_patrimonial_id) {
-          const launchDescription = `Lançamento Inicial CP: ${values.descricao} (CP ID: ${contaPagarId.substring(0, 8)})`;
-          
           const lancamentoPatrimonialPayload = {
               proprietario_id: adminId,
-              data_movimentacao: format(new Date(), 'yyyy-MM-dd') + 'T12:00:00Z', // Meio-dia UTC
-              descricao: launchDescription,
+              data_movimentacao: dataMovimentacao,
+              descricao: `Lançamento Inicial CP: ${launchDescription} (CP ID: ${contaPagarIdShort})`,
               valor: valorTotal,
-              tipo: 'Entrada' as const, // Entrada no Passivo/PL
+              tipo: 'Saida' as const, // CORREÇÃO CRÍTICA: Saída (Crédito) para aumentar o Passivo (Credor)
               conta_bancaria_id: null,
               conta_contabil_id: values.conta_patrimonial_id,
               origem: 'lancamento_cp',
               historico_id: values.historico_id,
           };
           
-          // Se for edição, primeiro remove o lançamento antigo (se existir)
+          // Limpeza de lançamentos antigos (se edição)
           if (isEditing) {
               const oldLaunchDescriptionPrefix = `Lançamento Inicial CP: ${contaInicial?.descricao} (CP ID: ${contaInicial?.id.substring(0, 8)})`;
               await supabase.from('lancamentos')
@@ -285,6 +294,33 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
           }
           
           await supabase.from('lancamentos').insert(lancamentoPatrimonialPayload);
+      }
+      
+      // 5. NOVO LANÇAMENTO: DÉBITO (Entrada) na Conta de Despesa/Custo (DRE)
+      if (isAdmin && contaDespesa) {
+          const lancamentoDespesaPayload = {
+              proprietario_id: adminId,
+              data_movimentacao: dataMovimentacao,
+              descricao: `Despesa/Custo: ${launchDescription} (CP ID: ${contaPagarIdShort})`,
+              valor: valorTotal,
+              tipo: 'Entrada' as const, // Entrada (Débito) para reconhecer a Despesa (Credora)
+              conta_bancaria_id: null,
+              conta_contabil_id: contaDespesa,
+              origem: 'lancamento_cp',
+              historico_id: values.historico_id,
+          };
+          
+          // Limpeza de lançamentos antigos (se edição)
+          if (isEditing) {
+              const oldLaunchDescriptionPrefix = `Despesa/Custo: ${contaInicial?.descricao} (CP ID: ${contaInicial?.id.substring(0, 8)})`;
+              await supabase.from('lancamentos')
+                  .delete()
+                  .eq('origem', 'lancamento_cp')
+                  .eq('proprietario_id', adminId)
+                  .ilike('descricao', `${oldLaunchDescriptionPrefix}%`);
+          }
+          
+          await supabase.from('lancamentos').insert(lancamentoDespesaPayload);
       }
 
       showSuccess(`Conta ${isEditing ? 'atualizada' : 'salva'} com sucesso!`);
@@ -312,7 +348,7 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
             name="conta_patrimonial_id"
             render={({ field }) => (
                 <FormItem>
-                    <FormLabel>3. Conta Patrimonial (Ativo/Passivo/PL)</FormLabel>
+                    <FormLabel>3. Conta Patrimonial (Passivo/Obrigação)</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value || undefined} disabled={loadingContasPatrimoniais}>
                         <FormControl>
                             <SelectTrigger>
