@@ -149,7 +149,7 @@ export const useBalancoPatrimonial = (dataFim: Date | null): BalancoPatrimonialH
   
   const totalReceita = getSomaPorTipo(balanco, configMap.Receita || '4');
   
-  // NOVO: Força o valor absoluto para Custo e Despesa antes de subtrair
+  // CORREÇÃO CRÍTICA: Força o valor absoluto para Custo e Despesa antes de subtrair
   const totalCusto = Math.abs(getSomaPorTipo(balanco, configMap.Custo || '5'));
   const totalDespesa = Math.abs(getSomaPorTipo(balanco, configMap.Despesa || '6'));
   
