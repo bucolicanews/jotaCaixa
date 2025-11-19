@@ -38,6 +38,10 @@ const DashboardFinanceiro: React.FC = () => {
     const [loadingFluxo, setLoadingFluxo] = useState(true);
     const [totalAReceber30Dias, setTotalAReceber30Dias] = useState(0);
     const [totalAPagar30Dias, setTotalAPagar30Dias] = useState(0);
+    
+    // NOVO ESTADO: Movimentações Realizadas (Entradas/Saídas)
+    const [totalEntradasRealizadas, setTotalEntradasRealizadas] = useState(0);
+    const [totalSaidasRealizadas, setTotalSaidasRealizadas] = useState(0);
 
     const isAdmin = role === 'Admin';
     
@@ -134,7 +138,25 @@ const DashboardFinanceiro: React.FC = () => {
         const ownerKeyCR = isAdmin ? 'admin_id' : 'empresa_id';
         const ownerKeyCP = isAdmin ? 'admin_id' : 'empresa_id';
         
-        // 1. Buscar Contas a Receber (Parcelas) no mês atual
+        // 1. Fetch Realized Movements (Entradas / Saídas - Current Month)
+        const { data: lancamentosData, error: lError } = await supabase
+            .from('lancamentos')
+            .select('valor, tipo')
+            .eq('proprietario_id', ownerId)
+            .gte('data_movimentacao', start)
+            .lte('data_movimentacao', end);
+            
+        if (lError) {
+            console.error('Erro ao buscar lançamentos mensais:', lError);
+        }
+        
+        const entradasRealizadas = (lancamentosData || []).filter(l => l.tipo === 'Entrada').reduce((sum, l) => sum + l.valor, 0);
+        const saidasRealizadas = (lancamentosData || []).filter(l => l.tipo === 'Saida').reduce((sum, l) => sum + l.valor, 0);
+        
+        setTotalEntradasRealizadas(entradasRealizadas);
+        setTotalSaidasRealizadas(saidasRealizadas);
+        
+        // 2. Fetch Future Obligations (A Receber / A Pagar - Current Month)
         const { data: crData, error: crError } = await supabase
             .from(tabelaParcelasReceber)
             .select('valor_parcela, status')
@@ -143,10 +165,9 @@ const DashboardFinanceiro: React.FC = () => {
             .lte('data_vencimento', end)
             .neq('status', 'cancelada');
 
-        if (crError) { console.error('Erro ao buscar CR:', crError); return; }
+        if (crError) { console.error('Erro ao buscar CR:', crError); }
         const totalReceber = (crData || []).reduce((sum, p) => sum + p.valor_parcela, 0);
         
-        // 2. Buscar Contas a Pagar (Parcelas) no mês atual
         const { data: cpData, error: cpError } = await supabase
             .from(tabelaParcelasPagar)
             .select('valor_parcela, status')
@@ -155,7 +176,7 @@ const DashboardFinanceiro: React.FC = () => {
             .lte('data_vencimento', end)
             .neq('status', 'cancelada');
 
-        if (cpError) { console.error('Erro ao buscar CP:', cpError); return; }
+        if (cpError) { console.error('Erro ao buscar CP:', cpError); }
         const totalPagar = (cpData || []).reduce((sum, p) => sum + p.valor_parcela, 0);
         
         setFluxoData({ receber: totalReceber, pagar: totalPagar, isGeral: true });
@@ -214,6 +235,7 @@ const DashboardFinanceiro: React.FC = () => {
 
     const loading = carregandoSessao || carregandoSaldos || loadingFluxo;
     const lucroPrejuizo = fluxoData.receber - fluxoData.pagar;
+    const resultadoRealizado = totalEntradasRealizadas - totalSaidasRealizadas; // NEW CALCULATION
 
     // Dados para o gráfico de Saldo por Conta
     const saldoData = contasFiltradas
@@ -250,7 +272,7 @@ const DashboardFinanceiro: React.FC = () => {
             {/* Indicadores Chave (KPIs) */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                 
-                {/* KPIs Dinâmicos */}
+                {/* KPIs Dinâmicos (Conta Específica) */}
                 {isContaFiltrada && contaMensalData ? (
                     <>
                         <Card 
@@ -307,6 +329,7 @@ const DashboardFinanceiro: React.FC = () => {
                         </Card>
                     </>
                 ) : (
+                    // KPIs Gerais (Todas as Contas)
                     <>
                         <Card 
                             className={cn("border-l-4 cursor-pointer hover:shadow-xl transition-shadow", totalSaldo >= 0 ? "border-green-500" : "border-red-500")}
@@ -352,7 +375,7 @@ const DashboardFinanceiro: React.FC = () => {
                             onClick={() => navigate('/relatorios/dre')}
                         >
                             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-sm font-medium flex items-center"><TrendingUp className="w-4 h-4 mr-2" /> Resultado Mensal</CardTitle>
+                                <CardTitle className="text-sm font-medium flex items-center"><TrendingUp className="w-4 h-4 mr-2" /> Resultado Mensal (Obrig.)</CardTitle>
                             </CardHeader>
                             <CardContent>
                                 <div className={cn("text-2xl font-bold", lucroPrejuizo >= 0 ? "text-green-600" : "text-red-600")}>
@@ -360,6 +383,50 @@ const DashboardFinanceiro: React.FC = () => {
                                 </div>
                             </CardContent>
                         </Card>
+                        
+                        {/* NOVO BLOCO DE KPIS REALIZADOS */}
+                        <div className="md:col-span-4 grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <Card 
+                                className="border-l-4 border-green-500 cursor-pointer hover:shadow-xl transition-shadow"
+                                onClick={() => navigate('/relatorios/fluxo-caixa')}
+                            >
+                                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                    <CardTitle className="text-sm font-medium flex items-center"><ArrowUpCircle className="w-4 h-4 mr-2" /> Recebido (Mês)</CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="text-2xl font-bold text-green-600">
+                                        {formatCurrency(totalEntradasRealizadas)}
+                                    </div>
+                                </CardContent>
+                            </Card>
+                            <Card 
+                                className="border-l-4 border-red-500 cursor-pointer hover:shadow-xl transition-shadow"
+                                onClick={() => navigate('/relatorios/fluxo-caixa')}
+                            >
+                                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                    <CardTitle className="text-sm font-medium flex items-center"><ArrowDownCircle className="w-4 h-4 mr-2" /> Pago (Mês)</CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="text-2xl font-bold text-red-600">
+                                        {formatCurrency(totalSaidasRealizadas)}
+                                    </div>
+                                </CardContent>
+                            </Card>
+                            <Card 
+                                className={cn("border-l-4 cursor-pointer hover:shadow-xl transition-shadow", resultadoRealizado >= 0 ? "border-blue-500" : "border-red-500")}
+                                onClick={() => navigate('/relatorios/fluxo-caixa')}
+                            >
+                                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                    <CardTitle className="text-sm font-medium flex items-center"><TrendingUp className="w-4 h-4 mr-2" /> Resultado Realizado (Mês)</CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <div className={cn("text-2xl font-bold", resultadoRealizado >= 0 ? "text-blue-600" : "text-red-600")}>
+                                        {formatCurrency(resultadoRealizado)}
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </div>
+                        {/* FIM NOVO BLOCO */}
                     </>
                 )}
             </div>
