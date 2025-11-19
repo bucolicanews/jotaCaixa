@@ -143,9 +143,15 @@ export const useBalancoPatrimonial = (dataFim: Date | null): BalancoPatrimonialH
   const totalPatrimonioLiquido = balanco.filter(c => c.tipo_principal === 'Patrimonio Liquido').reduce((sum, c) => sum + c.saldo_final, 0);
   
   // Calculate DRE result (Resultado Líquido)
-  const totalReceita = balanco.filter(c => c.tipo_principal === 'Resultado' && c.Conta.startsWith(configMap.Receita || '4')).reduce((sum, c) => sum + c.saldo_final, 0);
-  const totalCusto = balanco.filter(c => c.tipo_principal === 'Resultado' && c.Conta.startsWith(configMap.Custo || '5')).reduce((sum, c) => sum + c.saldo_final, 0);
-  const totalDespesa = balanco.filter(c => c.tipo_principal === 'Resultado' && c.Conta.startsWith(configMap.Despesa || '6')).reduce((sum, c) => sum + c.saldo_final, 0);
+  const getSomaPorTipo = (contas: ContaBP[], prefix: string) => {
+    return contas.filter(c => c.Conta.startsWith(prefix)).reduce((sum, c) => sum + c.saldo_final, 0);
+  };
+  
+  const totalReceita = getSomaPorTipo(balanco, configMap.Receita || '4');
+  
+  // NOVO: Força o valor absoluto para Custo e Despesa antes de subtrair
+  const totalCusto = Math.abs(getSomaPorTipo(balanco, configMap.Custo || '5'));
+  const totalDespesa = Math.abs(getSomaPorTipo(balanco, configMap.Despesa || '6'));
   
   const resultadoLiquido = totalReceita - totalCusto - totalDespesa;
   

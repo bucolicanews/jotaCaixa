@@ -147,8 +147,10 @@ export const useDRE = (filtroPeriodo: { from: Date | undefined, to: Date | undef
 
   // Funções de soma para o resumo da DRE
   const totalReceita = getSomaPorTipo(dre, configMap.Receita || '4');
-  const totalCusto = getSomaPorTipo(dre, configMap.Custo || '5');
-  const totalDespesa = getSomaPorTipo(dre, configMap.Despesa || '6');
+  
+  // NOVO: Força o valor absoluto para Custo e Despesa antes de subtrair
+  const totalCusto = Math.abs(getSomaPorTipo(dre, configMap.Custo || '5'));
+  const totalDespesa = Math.abs(getSomaPorTipo(dre, configMap.Despesa || '6'));
   
   const resultadoLiquido = totalReceita - totalCusto - totalDespesa;
 
