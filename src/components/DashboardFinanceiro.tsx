@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useNavigate } from 'react-router-dom';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'; // IMPORT CORRIGIDO
+import { Button } from '@/components/ui/button'; // IMPORT CORRIGIDO
 
 interface FluxoData {
     receber: number;
