@@ -41,12 +41,19 @@ const DashboardFinanceiro: React.FC = () => {
     const [totalAReceber30Dias, setTotalAReceber30Dias] = useState(0);
     const [totalAPagar30Dias, setTotalAPagar30Dias] = useState(0);
     
+    // NOVOS ESTADOS PARA ATRASADOS
+    const [totalAPagarOverdue, setTotalAPagarOverdue] = useState(0);
+    const [totalAReceberOverdue, setTotalAReceberOverdue] = useState(0);
+    
     // NOVO ESTADO: Filtro de Período (Padrão: Mês Atual)
     const [filtroPeriodo, setFiltroPeriodo] = useState<DateRange | undefined>({
         from: startOfMonth(new Date()),
         to: endOfMonth(new Date()),
     });
     
+    const [totalEntradasRealizadas, setTotalEntradasRealizadas] = useState(0);
+    const [totalSaidasRealizadas, setTotalSaidasRealizadas] = useState(0);
+
     const isAdmin = role === 'Admin';
     
     // Determina o ID do proprietário (Admin ID ou Cliente ID)
@@ -142,7 +149,25 @@ const DashboardFinanceiro: React.FC = () => {
         const ownerKeyCR = isAdmin ? 'admin_id' : 'empresa_id';
         const ownerKeyCP = isAdmin ? 'admin_id' : 'empresa_id';
         
-        // 1. Fetch Future Obligations (A Receber / A Pagar - Current Period)
+        // 1. Fetch Realized Movements (Entradas / Saídas - Current Period)
+        const { data: lancamentosData, error: lError } = await supabase
+            .from('lancamentos')
+            .select('valor, tipo')
+            .eq('proprietario_id', ownerId)
+            .gte('data_movimentacao', start)
+            .lte('data_movimentacao', end);
+            
+        if (lError) {
+            console.error('Erro ao buscar lançamentos realizados:', lError);
+        }
+        
+        const entradasRealizadas = (lancamentosData || []).filter(l => l.tipo === 'Entrada').reduce((sum, l) => sum + l.valor, 0);
+        const saidasRealizadas = (lancamentosData || []).filter(l => l.tipo === 'Saida').reduce((sum, l) => sum + l.valor, 0);
+        
+        setTotalEntradasRealizadas(entradasRealizadas);
+        setTotalSaidasRealizadas(saidasRealizadas);
+        
+        // 2. Fetch Future Obligations (A Receber / A Pagar - Current Period)
         const { data: crData, error: crError } = await supabase
             .from(tabelaParcelasReceber)
             .select('valor_parcela, status')
@@ -206,6 +231,30 @@ const DashboardFinanceiro: React.FC = () => {
         const totalCP = (cp30 || []).reduce((sum, p) => sum + p.valor_parcela, 0);
         setTotalAPagar30Dias(totalCP);
         
+        // --- NOVO: Total A Pagar (Atrasado) ---
+        const { data: cpOverdue, error: cpOverdueError } = await supabase
+            .from(tabelaParcelasPagar)
+            .select('valor_parcela')
+            .eq(ownerKeyCP, ownerId)
+            .in('status', ['aberta', 'parcial', 'reprogramada'])
+            .lt('data_vencimento', today); // Vencimento ANTES de hoje
+            
+        if (cpOverdueError) console.error('Erro ao buscar CP Atrasado:', cpOverdueError);
+        const totalCPOverdue = (cpOverdue || []).reduce((sum, p) => sum + p.valor_parcela, 0);
+        setTotalAPagarOverdue(totalCPOverdue);
+        
+        // --- NOVO: Total A Receber (Atrasado) ---
+        const { data: crOverdue, error: crOverdueError } = await supabase
+            .from(tabelaParcelasReceber)
+            .select('valor_parcela')
+            .eq(ownerKeyCR, ownerId)
+            .in('status', ['aberta', 'parcial', 'reprogramada'])
+            .lt('data_vencimento', today); // Vencimento ANTES de hoje
+            
+        if (crOverdueError) console.error('Erro ao buscar CR Atrasado:', crOverdueError);
+        const totalCROverdue = (crOverdue || []).reduce((sum, p) => sum + p.valor_parcela, 0);
+        setTotalAReceberOverdue(totalCROverdue);
+        
     }, [ownerId, isAdmin]);
 
     useEffect(() => {
@@ -221,6 +270,7 @@ const DashboardFinanceiro: React.FC = () => {
 
     const loading = carregandoSessao || carregandoSaldos || loadingFluxo;
     const lucroPrejuizo = fluxoData.receber - fluxoData.pagar;
+    const resultadoRealizado = totalEntradasRealizadas - totalSaidasRealizadas; // NEW CALCULATION
 
     // Dados para o gráfico de Saldo por Conta
     const saldoData = contasFiltradas
@@ -239,7 +289,7 @@ const DashboardFinanceiro: React.FC = () => {
     
     // Dados para o gráfico de Lucro/Prejuízo
     const lucroChartData = [
-        { name: 'Resultado (Obrig.)', valor: lucroPrejuizo, fill: lucroPrejuizo >= 0 ? COLORS[1] : COLORS[3] }
+        { name: 'Resultado Período', valor: lucroPrejuizo, fill: lucroPrejuizo >= 0 ? COLORS[1] : COLORS[3] }
     ];
 
     if (loading) {
@@ -356,45 +406,95 @@ const DashboardFinanceiro: React.FC = () => {
                                 </div>
                             </CardContent>
                         </Card>
+                        
+                        {/* NOVO KPI: A Pagar (Atrasado) */}
                         <Card 
-                            className="border-l-4 border-red-500 cursor-pointer hover:shadow-xl transition-shadow"
+                            className={cn("border-l-4 cursor-pointer hover:shadow-xl transition-shadow", totalAPagarOverdue > 0 ? "border-red-500" : "border-gray-500")}
                             onClick={() => navigate('/contas-pagar')}
                         >
                             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-sm font-medium flex items-center"><ArrowDownCircle className="w-4 h-4 mr-2" /> A Pagar (30 Dias)</CardTitle>
+                                <CardTitle className="text-sm font-medium flex items-center"><ArrowDownCircle className="w-4 h-4 mr-2" /> A Pagar (Atrasado)</CardTitle>
                             </CardHeader>
                             <CardContent>
-                                <div className="text-2xl font-bold text-red-600">
-                                    {formatCurrency(totalAPagar30Dias)}
+                                <div className={cn("text-2xl font-bold", totalAPagarOverdue > 0 ? "text-red-600" : "text-muted-foreground")}>
+                                    {formatCurrency(totalAPagarOverdue)}
                                 </div>
                             </CardContent>
                         </Card>
+                        
+                        {/* NOVO KPI: A Receber (Atrasado) */}
                         <Card 
-                            className="border-l-4 border-green-500 cursor-pointer hover:shadow-xl transition-shadow"
+                            className={cn("border-l-4 cursor-pointer hover:shadow-xl transition-shadow", totalAReceberOverdue > 0 ? "border-red-500" : "border-gray-500")}
                             onClick={() => navigate('/contas-receber')}
                         >
                             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-sm font-medium flex items-center"><ArrowUpCircle className="w-4 h-4 mr-2" /> A Receber (30 Dias)</CardTitle>
+                                <CardTitle className="text-sm font-medium flex items-center"><ArrowUpCircle className="w-4 h-4 mr-2" /> A Receber (Atrasado)</CardTitle>
                             </CardHeader>
                             <CardContent>
-                                <div className="text-2xl font-bold text-green-600">
-                                    {formatCurrency(totalAReceber30Dias)}
+                                <div className={cn("text-2xl font-bold", totalAReceberOverdue > 0 ? "text-red-600" : "text-muted-foreground")}>
+                                    {formatCurrency(totalAReceberOverdue)}
                                 </div>
                             </CardContent>
                         </Card>
+                        
+                        {/* KPI: Resultado (Período) - Renomeado */}
                         <Card 
-                            className={cn("border-l-4 cursor-pointer hover:shadow-xl transition-shadow", lucroPrejuizo >= 0 ? "border-blue-500" : "border-red-500")}
+                            className={cn("border-l-4 cursor-pointer hover:shadow-xl transition-shadow", lucroPrejuizo >= 0 ? "border-green-500" : "border-red-500")}
                             onClick={() => navigate('/relatorios/dre')}
                         >
                             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-sm font-medium flex items-center"><TrendingUp className="w-4 h-4 mr-2" /> Resultado (Obrig.)</CardTitle>
+                                <CardTitle className="text-sm font-medium flex items-center"><TrendingUp className="w-4 h-4 mr-2" /> Resultado (Período)</CardTitle>
                             </CardHeader>
                             <CardContent>
-                                <div className={cn("text-2xl font-bold", lucroPrejuizo >= 0 ? "text-blue-600" : "text-red-600")}>
+                                <div className={cn("text-2xl font-bold", lucroPrejuizo >= 0 ? "text-green-600" : "text-red-600")}>
                                     {formatCurrency(lucroPrejuizo)}
                                 </div>
                             </CardContent>
                         </Card>
+                        
+                        {/* NOVO BLOCO DE KPIS REALIZADOS */}
+                        <div className="md:col-span-4 grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <Card 
+                                className="border-l-4 border-green-500 cursor-pointer hover:shadow-xl transition-shadow"
+                                onClick={() => navigate('/relatorios/fluxo-caixa')}
+                            >
+                                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                    <CardTitle className="text-sm font-medium flex items-center"><ArrowUpCircle className="w-4 h-4 mr-2" /> Recebido (Período)</CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="text-2xl font-bold text-green-600">
+                                        {formatCurrency(totalEntradasRealizadas)}
+                                    </div>
+                                </CardContent>
+                            </Card>
+                            <Card 
+                                className="border-l-4 border-red-500 cursor-pointer hover:shadow-xl transition-shadow"
+                                onClick={() => navigate('/relatorios/fluxo-caixa')}
+                            >
+                                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                    <CardTitle className="text-sm font-medium flex items-center"><ArrowDownCircle className="w-4 h-4 mr-2" /> Pago (Período)</CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="text-2xl font-bold text-red-600">
+                                        {formatCurrency(totalSaidasRealizadas)}
+                                    </div>
+                                </CardContent>
+                            </Card>
+                            <Card 
+                                className={cn("border-l-4 cursor-pointer hover:shadow-xl transition-shadow", resultadoRealizado >= 0 ? "border-blue-500" : "border-red-500")}
+                                onClick={() => navigate('/relatorios/fluxo-caixa')}
+                            >
+                                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                    <CardTitle className="text-sm font-medium flex items-center"><TrendingUp className="w-4 h-4 mr-2" /> Resultado Realizado (Período)</CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <div className={cn("text-2xl font-bold", resultadoRealizado >= 0 ? "text-blue-600" : "text-red-600")}>
+                                        {formatCurrency(resultadoRealizado)}
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </div>
+                        {/* FIM NOVO BLOCO */}
                     </>
                 )}
             </div>
@@ -442,7 +542,7 @@ const DashboardFinanceiro: React.FC = () => {
                     className="lg:col-span-1 cursor-pointer hover:shadow-xl transition-shadow"
                     onClick={() => navigate('/relatorios/dre')}
                 >
-                    <CardHeader><CardTitle className="text-xl flex items-center"><TrendingUp className="w-5 h-5 mr-2" /> Resultado (Obrig.)</CardTitle></CardHeader>
+                    <CardHeader><CardTitle className="text-xl flex items-center"><TrendingUp className="w-5 h-5 mr-2" /> Resultado (Período)</CardTitle></CardHeader>
                     <CardContent className="h-80 flex flex-col justify-center items-center">
                         <ResponsiveContainer width="100%" height={150}>
                             <BarChart data={lucroChartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
