@@ -162,4 +162,3 @@ export const useDRE = (filtroPeriodo: { from: Date | undefined, to: Date | undef
     refetch: fetchDRE,
   };
 };
-
