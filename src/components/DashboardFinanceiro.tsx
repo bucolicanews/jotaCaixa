@@ -7,13 +7,13 @@ import { showError } from '@/utils/toast';
 import { formatCurrency } from '@/utils/formatters';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import useSaldoContaCalculado from '@/hooks/use-saldo-conta-calculado';
-import { startOfMonth, endOfMonth, format, addDays, startOfDay } from 'date-fns';
+import { startOfMonth, endOfMonth, format, addDays, startOfDay, endOfDay } from 'date-fns'; // IMPORTAÇÕES CORRIGIDAS
 import { cn } from '@/lib/utils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useNavigate } from 'react-router-dom';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
-import { DateRangePicker } from '@/components/DateRangePicker'; // NOVO IMPORT
-import { DateRange } from 'react-day-picker'; // NOVO IMPORT
+import { DateRangePicker } from '@/components/DateRangePicker';
+import { DateRange } from 'react-day-picker';
 
 interface FluxoData {
     receber: number;
