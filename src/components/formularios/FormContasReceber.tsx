@@ -284,12 +284,9 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
     
     const contaPatrimonial = values.conta_patrimonial_id;
     const contaReceitaResultado = isAdmin ? values.conta_receita_id : null;
-    const contaParcela = isAdmin ? mapeamentoContabil['parcela'] : null;
     
-    if (isAdmin && !contaParcela) {
-        showError('A conta contábil para Parcelas a Receber (Analítico) não está configurada. Verifique Configurações > Contas a Receber.');
-        return;
-    }
+    // A conta de parcela é lida da configuração, mas não é mais obrigatória para salvar
+    const contaParcela = isAdmin ? mapeamentoContabil['parcela'] : null;
     
     if (isAdmin && !contaReceitaResultado) {
         showError('A conta contábil para Receita (Resultado DRE) é obrigatória. Selecione uma conta de Receita.');
@@ -331,6 +328,8 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
           origem: 'manual',
           id_conta_patrimonial: contaPatrimonial, 
           historico_id: values.historico_id,
+          // NOVO CAMPO: Salva a conta de resultado na conta sintética
+          ...(isAdmin && { id_conta_resultado: contaReceitaResultado }),
       };
 
       if (isEditing) {
@@ -346,16 +345,18 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
         contaReceberId = data.id;
       }
 
+      // 3. Inserir Parcelas (com o id_conta_contabil da parcela)
       const parcelasComId = parcelasParaInserir.map(p => ({ 
           ...p, 
           conta_receber_id: contaReceberId, 
+          // Se contaParcela for null, id_conta_contabil será null
           ...(isAdmin ? { admin_id: ownerId, id_conta_contabil: contaParcela } : { empresa_id: ownerId })
       }));
       
       const { error: parcelError } = await supabase.from(tabelaParcelasReceber).insert(parcelasComId);
       if (parcelError) throw parcelError;
       
-      // 2. Lançamento 1: DÉBITO (Ativo) - Aumenta o direito a receber
+      // 4. Lançamento 1: DÉBITO (Ativo) - Aumenta o direito a receber
       const dataMovimentacao = format(new Date(), 'yyyy-MM-dd') + 'T12:00:00Z';
       const launchDescription = values.descricao;
       const contaReceberIdShort = contaReceberId.substring(0, 8);
@@ -386,7 +387,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
           await supabase.from('lancamentos').insert(lancamentoPatrimonialPayload);
       }
       
-      // 3. Lançamento 2: CRÉDITO (Resultado) - Aumenta a Receita (DRE)
+      // 5. Lançamento 2: CRÉDITO (Resultado) - Aumenta a Receita (DRE)
       if (isAdmin && contaReceitaResultado) {
           const lancamentoReceitaPayload = {
               proprietario_id: ownerId,
