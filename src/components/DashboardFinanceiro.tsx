@@ -26,6 +26,13 @@ interface ContaMensalData {
     saldoFinal: number;
 }
 
+// NOVO TIPO: Para depuração
+interface LancamentoDetalhe {
+    valor: number;
+    tipo: 'Entrada' | 'Saida';
+    origem: string;
+}
+
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
 
 const DashboardFinanceiro: React.FC = () => {
@@ -42,6 +49,7 @@ const DashboardFinanceiro: React.FC = () => {
     // NOVO ESTADO: Movimentações Realizadas (Entradas/Saídas)
     const [totalEntradasRealizadas, setTotalEntradasRealizadas] = useState(0);
     const [totalSaidasRealizadas, setTotalSaidasRealizadas] = useState(0);
+    const [lancamentosDetalhes, setLancamentosDetalhes] = useState<LancamentoDetalhe[]>([]); // NOVO ESTADO
 
     const isAdmin = role === 'Admin';
     
@@ -77,7 +85,7 @@ const DashboardFinanceiro: React.FC = () => {
         // 1. Buscar Lançamentos do Mês Atual
         const { data: lancamentosData, error: lError } = await supabase
             .from('lancamentos')
-            .select('valor, tipo')
+            .select('valor, tipo, origem')
             .eq('proprietario_id', ownerId)
             .eq('conta_bancaria_id', contaId)
             .gte('data_movimentacao', startOfMonthISO)
@@ -120,6 +128,9 @@ const DashboardFinanceiro: React.FC = () => {
         
         // Atualiza o fluxo de caixa para o gráfico (Entradas vs Saídas do mês)
         setFluxoData({ receber: entradas, pagar: saidas, isGeral: false });
+        setTotalEntradasRealizadas(entradas);
+        setTotalSaidasRealizadas(saidas);
+        setLancamentosDetalhes(lancamentosData as LancamentoDetalhe[]);
         setLoadingFluxo(false);
 
     }, [ownerId, contas]);
@@ -141,7 +152,7 @@ const DashboardFinanceiro: React.FC = () => {
         // 1. Fetch Realized Movements (Entradas / Saídas - Current Month)
         const { data: lancamentosData, error: lError } = await supabase
             .from('lancamentos')
-            .select('valor, tipo')
+            .select('valor, tipo, origem')
             .eq('proprietario_id', ownerId)
             .gte('data_movimentacao', start)
             .lte('data_movimentacao', end);
@@ -155,7 +166,8 @@ const DashboardFinanceiro: React.FC = () => {
         
         setTotalEntradasRealizadas(entradasRealizadas);
         setTotalSaidasRealizadas(saidasRealizadas);
-        
+        setLancamentosDetalhes(lancamentosData as LancamentoDetalhe[]); // SALVA DETALHES
+
         // 2. Fetch Future Obligations (A Receber / A Pagar - Current Month)
         const { data: crData, error: crError } = await supabase
             .from(tabelaParcelasReceber)
@@ -256,6 +268,29 @@ const DashboardFinanceiro: React.FC = () => {
     const lucroChartData = [
         { name: 'Resultado Mensal', valor: lucroPrejuizo, fill: lucroPrejuizo >= 0 ? COLORS[1] : COLORS[3] }
     ];
+    
+    // Dados para o gráfico de Depuração (Entradas/Saídas por Origem)
+    const debugData = useMemo(() => {
+        const totals: Record<string, { entradas: number, saidas: number }> = {};
+        
+        lancamentosDetalhes.forEach(l => {
+            const origem = l.origem || 'manual';
+            totals[origem] = totals[origem] || { entradas: 0, saidas: 0 };
+            
+            if (l.tipo === 'Entrada') {
+                totals[origem].entradas += l.valor;
+            } else if (l.tipo === 'Saida') {
+                totals[origem].saidas += l.valor;
+            }
+        });
+        
+        return Object.keys(totals).map(origem => ({
+            origem,
+            entradas: totals[origem].entradas,
+            saidas: totals[origem].saidas,
+        }));
+    }, [lancamentosDetalhes]);
+
 
     if (loading) {
         return (
@@ -394,7 +429,7 @@ const DashboardFinanceiro: React.FC = () => {
                                     <CardTitle className="text-sm font-medium flex items-center"><ArrowUpCircle className="w-4 h-4 mr-2" /> Recebido (Mês)</CardTitle>
                                 </CardHeader>
                                 <CardContent>
-                                    <div className="text-2xl font-bold text-green-600">
+                                    <div data-dyad-id="src\components\DashboardFinanceiro.tsx:397:36" data-dyad-name="div" class="text-2xl font-bold text-green-600">
                                         {formatCurrency(totalEntradasRealizadas)}
                                     </div>
                                 </CardContent>
@@ -407,7 +442,7 @@ const DashboardFinanceiro: React.FC = () => {
                                     <CardTitle className="text-sm font-medium flex items-center"><ArrowDownCircle className="w-4 h-4 mr-2" /> Pago (Mês)</CardTitle>
                                 </CardHeader>
                                 <CardContent>
-                                    <div className="text-2xl font-bold text-red-600">
+                                    <div data-dyad-id="src\components\DashboardFinanceiro.tsx:410:36" data-dyad-name="div" class="text-2xl font-bold text-red-600">
                                         {formatCurrency(totalSaidasRealizadas)}
                                     </div>
                                 </CardContent>
@@ -420,7 +455,7 @@ const DashboardFinanceiro: React.FC = () => {
                                     <CardTitle className="text-sm font-medium flex items-center"><TrendingUp className="w-4 h-4 mr-2" /> Resultado Realizado (Mês)</CardTitle>
                                 </CardHeader>
                                 <CardContent>
-                                    <div className={cn("text-2xl font-bold", resultadoRealizado >= 0 ? "text-blue-600" : "text-red-600")}>
+                                    <div data-dyad-id="src\components\DashboardFinanceiro.tsx:423:36" data-dyad-name="div" class="text-2xl font-bold">
                                         {formatCurrency(resultadoRealizado)}
                                     </div>
                                 </CardContent>
@@ -450,6 +485,36 @@ const DashboardFinanceiro: React.FC = () => {
                     </Select>
                 </CardContent>
             </Card>
+            
+            {/* NOVO: Detalhes de Lançamentos do Mês (Depuração) */}
+            {isAdmin && debugData.length > 0 && filtroContaId === 'todos' && (
+                <Card>
+                    <CardHeader><CardTitle className="text-xl text-yellow-600">Depuração: Lançamentos do Mês por Origem</CardTitle></CardHeader>
+                    <CardContent>
+                        <p className="text-sm text-muted-foreground mb-3">
+                            Estes são os valores exatos que compõem o "Recebido (Mês)" ({formatCurrency(totalEntradasRealizadas)}) e "Pago (Mês)" ({formatCurrency(totalSaidasRealizadas)}) na tabela `lancamentos`.
+                        </p>
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Origem</TableHead>
+                                    <TableHead className="text-right">Entradas</TableHead>
+                                    <TableHead className="text-right">Saídas</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {debugData.map(d => (
+                                    <TableRow key={d.origem}>
+                                        <TableCell className="font-mono text-sm">{d.origem}</TableCell>
+                                        <TableCell className="text-right text-green-600">{formatCurrency(d.entradas)}</TableCell>
+                                        <TableCell className="text-right text-red-600">{formatCurrency(d.saidas)}</TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </CardContent>
+                </Card>
+            )}
 
             {/* Gráficos */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
