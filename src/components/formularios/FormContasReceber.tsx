@@ -345,11 +345,9 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
         contaReceberId = data.id;
       }
 
-      // 3. Inserir Parcelas (com o id_conta_contabil da parcela)
       const parcelasComId = parcelasParaInserir.map(p => ({ 
           ...p, 
           conta_receber_id: contaReceberId, 
-          // Se contaParcela for null, id_conta_contabil será null
           ...(isAdmin ? { admin_id: ownerId, id_conta_contabil: contaParcela } : { empresa_id: ownerId })
       }));
       
