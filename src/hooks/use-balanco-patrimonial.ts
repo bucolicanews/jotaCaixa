@@ -92,9 +92,9 @@ export const useBalancoPatrimonial = (dataFim: Date | null): BalancoPatrimonialH
         });
     };
     
-    // Filter only relevant accounts (Patrimonial and Result)
+    // Filter only relevant accounts (Patrimonial, Result, and Caixa/Banco)
     const contasRelevantes = contas.filter(c => 
-        c.is_conta_patrimonial || c.is_conta_resultado
+        c.is_conta_patrimonial || c.is_conta_resultado || c.is_conta_caixa_banco
     );
     
     return mapContas(contasRelevantes);
@@ -105,12 +105,12 @@ export const useBalancoPatrimonial = (dataFim: Date | null): BalancoPatrimonialH
 
     setLoading(true);
     
-    // 1. Buscar todas as contas relevantes (Patrimonial e Resultado)
+    // 1. Buscar todas as contas relevantes (Patrimonial, Resultado E Caixa/Banco)
     const { data: contasData, error: contasError } = await supabase
         .from('plano_contas')
         .select('*')
         .eq('proprietario_id', usuario.id)
-        .or('is_conta_patrimonial.eq.true,is_conta_resultado.eq.true')
+        .or('is_conta_patrimonial.eq.true,is_conta_resultado.eq.true,is_conta_caixa_banco.eq.true')
         .order('Conta');
 
     if (contasError) {
