@@ -151,13 +151,26 @@ const DashboardFinanceiro: React.FC = () => {
         const ownerKeyCP = isAdmin ? 'admin_id' : 'empresa_id';
         
         // 1. Fetch Realized Movements (Entradas / Saídas - Current Month)
-        const { data: lancamentosData, error: lError } = await supabase
+        
+        // CRÍTICO: Filtra apenas lançamentos que têm conta_bancaria_id (movimentação de caixa/banco)
+        const contaIds = contas.map(c => c.id);
+        
+        let query = supabase
             .from('lancamentos')
             .select('valor, tipo, origem')
             .eq('proprietario_id', ownerId)
             .gte('data_movimentacao', start)
             .lte('data_movimentacao', end);
             
+        if (contaIds.length > 0) {
+            query = query.in('conta_bancaria_id', contaIds);
+        } else {
+            // Se não houver contas de saldo, garante que a query não retorne nada
+            query = query.eq('conta_bancaria_id', 'non-existent-id'); 
+        }
+        
+        const { data: lancamentosData, error: lError } = await query;
+        
         if (lError) {
             console.error('Erro ao buscar lançamentos mensais:', lError);
         }
@@ -194,7 +207,7 @@ const DashboardFinanceiro: React.FC = () => {
         
         setFluxoData({ receber: totalReceber, pagar: totalPagar, isGeral: true });
         setLoadingFluxo(false);
-    }, [ownerId, isAdmin]);
+    }, [ownerId, isAdmin, contas]); // ADD 'contas' dependency
     
     const fetchKPIs = useCallback(async () => {
         if (!ownerId) return;
