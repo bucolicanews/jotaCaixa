@@ -99,8 +99,10 @@ const DashboardFinanceiro: React.FC = () => {
             return;
         }
         
-        const entradas = (lancamentosData || []).filter(l => l.tipo === 'Entrada').reduce((sum, l) => sum + l.valor, 0);
-        const saidas = (lancamentosData || []).filter(l => l.tipo === 'Saida').reduce((sum, l) => sum + l.valor, 0);
+        const safeLancamentos = lancamentosData || [];
+        
+        const entradas = safeLancamentos.filter(l => l.tipo === 'Entrada').reduce((sum, l) => sum + l.valor, 0);
+        const saidas = safeLancamentos.filter(l => l.tipo === 'Saida').reduce((sum, l) => sum + l.valor, 0);
         
         // 2. Calcular Saldo Inicial (antes do mês atual)
         const { data: lancamentosAnteriores, error: laError } = await supabase
@@ -114,8 +116,10 @@ const DashboardFinanceiro: React.FC = () => {
             console.error('Erro ao buscar lançamentos anteriores:', laError);
         }
         
-        const entradasAnteriores = (lancamentosAnteriores || []).filter(l => l.tipo === 'Entrada').reduce((sum, l) => sum + l.valor, 0);
-        const saidasAnteriores = (lancamentosAnteriores || []).filter(l => l.tipo === 'Saida').reduce((sum, l) => sum + l.valor, 0);
+        const safeLancamentosAnteriores = lancamentosAnteriores || [];
+        
+        const entradasAnteriores = safeLancamentosAnteriores.filter(l => l.tipo === 'Entrada').reduce((sum, l) => sum + l.valor, 0);
+        const saidasAnteriores = safeLancamentosAnteriores.filter(l => l.tipo === 'Saida').reduce((sum, l) => sum + l.valor, 0);
         
         const saldoInicialCalculado = saldoInicialConta + entradasAnteriores - saidasAnteriores;
         const saldoFinal = saldoInicialCalculado + entradas - saidas;
@@ -131,7 +135,7 @@ const DashboardFinanceiro: React.FC = () => {
         setFluxoData({ receber: entradas, pagar: saidas, isGeral: false });
         setTotalEntradasRealizadas(entradas);
         setTotalSaidasRealizadas(saidas);
-        setLancamentosDetalhes(lancamentosData as LancamentoDetalhe[]);
+        setLancamentosDetalhes(safeLancamentos as LancamentoDetalhe[]);
         setLoadingFluxo(false);
 
     }, [ownerId, contas]);
@@ -155,32 +159,33 @@ const DashboardFinanceiro: React.FC = () => {
         // CRÍTICO: Filtra apenas lançamentos que têm conta_bancaria_id (movimentação de caixa/banco)
         const contaIds = contas.map(c => c.id);
         
-        let query = supabase
-            .from('lancamentos')
-            .select('valor, tipo, origem')
-            .eq('proprietario_id', ownerId)
-            .gte('data_movimentacao', start)
-            .lte('data_movimentacao', end);
-            
+        let lancamentosData: any[] | null = null;
+        
         if (contaIds.length > 0) {
-            query = query.in('conta_bancaria_id', contaIds);
-        } else {
-            // Se não houver contas de saldo, garante que a query não retorne nada
-            query = query.eq('conta_bancaria_id', 'non-existent-id'); 
+            let query = supabase
+                .from('lancamentos')
+                .select('valor, tipo, origem')
+                .eq('proprietario_id', ownerId)
+                .gte('data_movimentacao', start)
+                .lte('data_movimentacao', end)
+                .in('conta_bancaria_id', contaIds); // FILTRO CRÍTICO
+                
+            const { data, error: lError } = await query;
+            
+            if (lError) {
+                console.error('Erro ao buscar lançamentos mensais:', lError);
+            }
+            lancamentosData = data;
         }
         
-        const { data: lancamentosData, error: lError } = await query;
+        const safeLancamentos = lancamentosData || [];
         
-        if (lError) {
-            console.error('Erro ao buscar lançamentos mensais:', lError);
-        }
-        
-        const entradasRealizadas = (lancamentosData || []).filter(l => l.tipo === 'Entrada').reduce((sum, l) => sum + l.valor, 0);
-        const saidasRealizadas = (lancamentosData || []).filter(l => l.tipo === 'Saida').reduce((sum, l) => sum + l.valor, 0);
+        const entradasRealizadas = safeLancamentos.filter(l => l.tipo === 'Entrada').reduce((sum, l) => sum + l.valor, 0);
+        const saidasRealizadas = safeLancamentos.filter(l => l.tipo === 'Saida').reduce((sum, l) => sum + l.valor, 0);
         
         setTotalEntradasRealizadas(entradasRealizadas);
         setTotalSaidasRealizadas(saidasRealizadas);
-        setLancamentosDetalhes(lancamentosData as LancamentoDetalhe[]); // SALVA DETALHES
+        setLancamentosDetalhes(safeLancamentos as LancamentoDetalhe[]); // SALVA DETALHES
 
         // 2. Fetch Future Obligations (A Receber / A Pagar - Current Month)
         const { data: crData, error: crError } = await supabase
@@ -207,7 +212,7 @@ const DashboardFinanceiro: React.FC = () => {
         
         setFluxoData({ receber: totalReceber, pagar: totalPagar, isGeral: true });
         setLoadingFluxo(false);
-    }, [ownerId, isAdmin, contas]); // ADD 'contas' dependency
+    }, [ownerId, isAdmin, contas]);
     
     const fetchKPIs = useCallback(async () => {
         if (!ownerId) return;
