@@ -21,7 +21,7 @@ import { UsuarioProfile, ClienteProfile } from '@/types/usuario';
 import { Historico } from '@/types/historico';
 import { PlanoContas } from '@/types/plano-contas';
 import { useContabilConfig } from '@/hooks/use-contabil-config';
-import { ContaReceber } from '@/types/contas-receber'; // FIX: Importando ContaReceber
+import { ContaReceber } from '@/types/contas-receber';
 
 const formSchema = z.object({
   cliente_id: z.string({ required_error: 'Selecione um cliente.' }).uuid('Cliente inválido.'),
@@ -38,10 +38,7 @@ const formSchema = z.object({
   historico_id: z.string().uuid('Selecione um histórico válido.').nullable(),
   novo_historico: z.string().optional(),
   
-  // CAMPO ALTERADO: Agora é a Conta Patrimonial (Ativo/Passivo/PL)
   conta_patrimonial_id: z.string().uuid('Selecione uma conta patrimonial válida.').nullable(),
-  
-  // NOVO CAMPO: Conta de Receita (Resultado DRE)
   conta_receita_id: z.string().uuid('Selecione uma conta de receita válida.').nullable(),
 
 }).superRefine((data, ctx) => {
@@ -62,7 +59,6 @@ interface FormContasReceberProps {
   onSaveComplete: () => void;
 }
 
-// Tipo simplificado para a lista de clientes (agora busca de tbl_clientes)
 interface ClienteCRSimples {
   id: string;
   nome: string;
@@ -78,9 +74,9 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
   const [mapeamentoContabil, setMapeamentoContabil] = useState<Record<string, string | null>>({});
   const [historicos, setHistoricos] = useState<Historico[]>([]);
   const [contasPatrimoniais, setContasPatrimoniais] = useState<PlanoContas[]>([]);
-  const [contasReceita, setContasReceita] = useState<PlanoContas[]>([]); // NOVO ESTADO
+  const [contasReceita, setContasReceita] = useState<PlanoContas[]>([]);
   const [loadingContasPatrimoniais, setLoadingContasPatrimoniais] = useState(true);
-  const [loadingContasReceita, setLoadingContasReceita] = useState(true); // NOVO ESTADO
+  const [loadingContasReceita, setLoadingContasReceita] = useState(true);
   const [isCreatingHistorico, setIsCreatingHistorico] = useState(false);
   const isEditing = !!contaInicial;
 
@@ -188,7 +184,6 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
       }
       setLoadingClientes(true);
       
-      // 1. Buscar Clientes do Sistema (tbl_clientes) - ESTA É A NOVA FONTE DE VERDADE PARA FK
       let queryClients = supabase
           .from('tbl_clientes')
           .select('id, nome, documento, email')
@@ -202,7 +197,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
           setClientes([]);
       } else {
           const fetchedClients = (dataClients as ClienteCRSimples[])
-              .filter(c => c.id !== ownerId); // Exclui o próprio proprietário
+              .filter(c => c.id !== ownerId);
               
           setClientes(fetchedClients);
       }
@@ -213,7 +208,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
     fetchClientsData();
     fetchHistoricos();
     fetchContasPatrimoniais();
-    fetchContasReceita(); // NOVO FETCH
+    fetchContasReceita();
     if (isAdmin) {
         fetchMapeamentoContabil();
     }
@@ -232,7 +227,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
       historico_id: contaInicial?.historico_id || null,
       novo_historico: '',
       conta_patrimonial_id: contaInicial?.id_conta_patrimonial || null,
-      conta_receita_id: null, // NOVO DEFAULT
+      conta_receita_id: null,
     },
   });
 
@@ -240,10 +235,8 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
   const tipoLancamento = form.watch('tipo_lancamento');
   const novoHistoricoValue = form.watch('novo_historico');
   
-  // Efeito para carregar a conta de receita padrão (se for edição)
   useEffect(() => {
       if (isEditing && isAdmin && contaInicial?.id) {
-          // Busca a conta de resultado que foi usada no recebimento_resultado
           supabase.from('configuracao_contas_receber')
               .select('conta_contabil_id')
               .eq('proprietario_id', ownerId)
@@ -279,15 +272,16 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
         showError('Falha ao criar histórico: ' + error.message);
         setIsCreatingHistorico(false);
     }
+    return;
   };
 
   const onSubmit = async (values: FormValues) => {
     const ownerId = getOwnerId();
     if (!ownerId) { showError('ID da empresa/admin não pôde ser determinado.'); return; }
     
-    // Contas Contábeis Mapeadas (apenas Admin)
+    const contaPatrimonial = values.conta_patrimonial_id;
+    const contaReceitaResultado = isAdmin ? values.conta_receita_id : null;
     const contaParcela = isAdmin ? mapeamentoContabil['parcela'] : null;
-    const contaReceitaResultado = isAdmin ? values.conta_receita_id : null; // NOVO CAMPO
     
     if (isAdmin && !contaParcela) {
         showError('A conta contábil para Parcelas a Receber (Analítico) não está configurada. Verifique Configurações > Contas a Receber.');
@@ -320,12 +314,11 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
       let tabelaContasReceber = isAdmin ? 'admin_contas_receber' : 'contas_receber';
       let tabelaParcelasReceber = isAdmin ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
       
-      // Usando a chave diretamente no payload
       const ownerKey = isAdmin ? 'admin_id' : 'empresa_id';
       
       const contaReceberPayload = {
           [ownerKey]: ownerId,
-          cliente_id: values.cliente_id, // ESTE ID AGORA DEVE EXISTIR EM tbl_clientes
+          cliente_id: values.cliente_id,
           descricao: values.descricao,
           valor_total: valorTotal,
           data_emissao: format(new Date(), 'yyyy-MM-dd'),
@@ -333,7 +326,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
           tipo_receita: tipoLancamento === 'unico' ? 'única' : 'recorrente',
           status: 'aberta',
           origem: 'manual',
-          id_conta_patrimonial: values.conta_patrimonial_id, 
+          id_conta_patrimonial: contaPatrimonial, 
           historico_id: values.historico_id,
       };
 
@@ -359,23 +352,26 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
       const { error: parcelError } = await supabase.from(tabelaParcelasReceber).insert(parcelasComId);
       if (parcelError) throw parcelError;
       
-      // 2. Lançamento Inicial na Conta Patrimonial (Débito/Entrada)
-      if (values.conta_patrimonial_id) {
-          const launchDescription = `Lançamento Inicial CR: ${values.descricao} (CR ID: ${contaReceberId.substring(0, 8)})`;
-          
+      // CORREÇÃO CRÍTICA: Lançamento de Receita (DRE) e Lançamento Patrimonial (CR)
+      const dataMovimentacao = format(new Date(), 'yyyy-MM-dd') + 'T12:00:00Z';
+      const launchDescription = values.descricao;
+      const contaReceberIdShort = contaReceberId.substring(0, 8);
+      
+      // 2. Lançamento 1: DÉBITO (Ativo) - Aumenta o direito a receber
+      if (contaPatrimonial) {
           const lancamentoPatrimonialPayload = {
               proprietario_id: ownerId,
-              data_movimentacao: format(new Date(), 'yyyy-MM-dd') + 'T12:00:00Z', // Meio-dia UTC
-              descricao: launchDescription,
+              data_movimentacao: dataMovimentacao,
+              descricao: `Lançamento Inicial CR: ${launchDescription} (CR ID: ${contaReceberIdShort})`,
               valor: valorTotal,
-              tipo: 'Entrada' as const, // Entrada no Ativo/Passivo/PL
+              tipo: 'Entrada' as const, // Entrada no Ativo (Débito)
               conta_bancaria_id: null,
-              conta_contabil_id: values.conta_patrimonial_id,
+              conta_contabil_id: contaPatrimonial,
               origem: 'lancamento_cr',
               historico_id: values.historico_id,
           };
           
-          // Se for edição, primeiro remove o lançamento antigo (se existir)
+          // Limpeza de lançamentos antigos (se edição)
           if (isEditing) {
               const oldLaunchDescriptionPrefix = `Lançamento Inicial CR: ${contaInicial?.descricao} (CR ID: ${contaInicial?.id.substring(0, 8)})`;
               await supabase.from('lancamentos')
@@ -388,14 +384,12 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
           await supabase.from('lancamentos').insert(lancamentoPatrimonialPayload);
       }
       
-      // 3. Lançamento de Receita (DRE) - CRÉDITO (Saída)
+      // 3. Lançamento 2: CRÉDITO (Resultado) - Aumenta a Receita (DRE)
       if (isAdmin && contaReceitaResultado) {
-          const launchDescription = `Receita: ${values.descricao} (CR ID: ${contaReceberId.substring(0, 8)})`;
-          
           const lancamentoReceitaPayload = {
               proprietario_id: ownerId,
-              data_movimentacao: format(new Date(), 'yyyy-MM-dd') + 'T12:00:00Z', // Meio-dia UTC
-              descricao: launchDescription,
+              data_movimentacao: dataMovimentacao,
+              descricao: `Receita: ${launchDescription} (CR ID: ${contaReceberIdShort})`,
               valor: valorTotal,
               tipo: 'Saida' as const, // Saída (Crédito) na Receita
               conta_bancaria_id: null,
@@ -404,7 +398,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
               historico_id: values.historico_id,
           };
           
-          // Se for edição, primeiro remove o lançamento antigo (se existir)
+          // Limpeza de lançamentos antigos (se edição)
           if (isEditing) {
               const oldLaunchDescriptionPrefix = `Receita: ${contaInicial?.descricao} (CR ID: ${contaInicial?.id.substring(0, 8)})`;
               await supabase.from('lancamentos')
@@ -449,7 +443,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
         )} />
         <Separator />
         
-        {/* CAMPO ALTERADO: Conta Patrimonial */}
+        {/* CAMPO ALTERADO: Conta Patrimonial (Ativo/Passivo/PL) */}
         <FormField
             control={form.control}
             name="conta_patrimonial_id"
