@@ -40,7 +40,7 @@ interface ContaBalanco {
 const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ endDate, filtroSomenteComSaldo, logoUrl, ownerName }) => {
   const { perfil, role } = useSessao();
   const { configMap } = useContabilConfig(); // Obtendo o mapeamento
-  const { contas, totalAtivo, totalPassivo, totalPatrimonioLiquido, resultadoLiquido, totalPassivoPL, carregando } = useBalancoPatrimonial(endDate);
+  const { contas, totalAtivo, totalPassivo, totalPatrimonioLiquido, resultadoLiquido, totalPassivoPL, carregando, totalReceita, totalCusto, totalDespesa } = useBalancoPatrimonial(endDate);
   const { printContent } = usePrint();
   
   const empresaNome = ownerName; // USANDO O NOME PASSADO VIA PROP
