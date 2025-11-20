@@ -287,7 +287,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
             data_movimentacao: dataPagamentoISO,
             descricao: `Pagamento Parcela ${parcela.id} - ${parcela.fornecedor}`, 
             valor: pagamento.valor_pago,
-            tipo: 'Saida' as const, // Saída do Ativo
+            tipo: 'Saida' as const, // Saída do Ativo (Credit) - CORRECT
             conta_bancaria_id: pagamento.conta_id,
             conta_contabil_id: contaPagamento, // Conta de Ativo/Passivo (Pagamento)
             origem: 'pagamento_manual',
@@ -297,40 +297,33 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
         const { error: lancamentoAtivoError } = await supabase.from('lancamentos').insert(lancamentoAtivoPayload);
         if (lancamentoAtivoError) throw lancamentoAtivoError;
         
-        // 3. Registrar o Lançamento na conta de Resultado (DRE) - DÉBITO (Despesa)
-        // CORREÇÃO CRÍTICA: Invertendo o tipo para 'Saida' (Crédito) para que o saldo seja positivo na DRE,
-        // conforme a nova lógica de natureza Credora para Despesa/Custo.
-        const lancamentoDespesaPayload = {
-            proprietario_id: adminId,
-            data_movimentacao: dataPagamentoISO,
-            descricao: `Despesa/Custo: ${descricaoContaSintetica} (CP ID: ${parcela.conta_pagar_id.substring(0, 8)})`, // NOVO: Adicionando ID da CP
-            valor: pagamento.valor_pago,
-            tipo: 'Saida' as const, // <--- CORREÇÃO AQUI: Saída (Crédito) aumenta o saldo da Despesa (Credora)
-            conta_bancaria_id: null,
-            conta_contabil_id: values.conta_resultado_id, // Conta de Despesa/Custo (4.x.x/5.x.x)
-            historico_id: values.historico_id,
-        };
-        
-        const { error: lancamentoDespesaError } = await supabase.from('lancamentos').insert(lancamentoDespesaPayload);
-        if (lancamentoDespesaError) throw lancamentoDespesaError;
-        
-        // 4. Lançamento de Estorno da Conta Patrimonial (CP) - DÉBITO (Ativo)
-        if (contaPatrimonial) {
-            const lancamentoPatrimonialPayload = {
-                proprietario_id: adminId,
-                data_movimentacao: dataPagamentoISO,
-                descricao: `Estorno Patrimonial CP: ${descricaoContaSintetica} (CP ID: ${parcela.conta_pagar_id.substring(0, 8)})`, // NOVO: Adicionando ID da CP
-                valor: pagamento.valor_pago,
-                tipo: 'Saida' as const, // Saída no Passivo (diminui o saldo da conta 2.x.x)
-                conta_bancaria_id: null,
-                conta_contabil_id: contaPatrimonial, // Conta Patrimonial (2.x.x)
-                historico_id: values.historico_id,
-            };
-            await supabase.from('lancamentos').insert(lancamentoPatrimonialPayload);
-        } else {
-            console.warn('Aviso: Conta Patrimonial não mapeada na conta sintética. Balanço pode estar incompleto.');
-        }
+        // REMOVIDO: Lançamento Despesa/Custo (DRE) - ESTE ERA O ERRO DE DUPLA CONTAGEM
       }
+
+      // 3. Lançamento de Estorno da Conta Patrimonial (Passivo) - DÉBITO (Diminui Passivo)
+      if (contaPatrimonial) {
+          const lancamentoPatrimonialPayload = {
+              proprietario_id: adminId,
+              data_movimentacao: dataPagamentoISO,
+              descricao: `Estorno Patrimonial CP: ${descricaoContaSintetica} (CP ID: ${parcela.conta_pagar_id.substring(0, 8)})`,
+              valor: totalPago, // USANDO O VALOR TOTAL PAGO
+              tipo: 'Entrada' as const, // <--- CORREÇÃO CRÍTICA: Entrada (Débito) para diminuir o Passivo (Credor)
+              conta_bancaria_id: null,
+              conta_contabil_id: contaPatrimonial,
+              origem: 'pagamento_manual',
+              historico_id: values.historico_id,
+          };
+          await supabase.from('lancamentos').insert(lancamentoPatrimonialPayload);
+      } else {
+          console.warn('Aviso: Conta Patrimonial não mapeada na conta sintética. Balanço pode estar incompleto.');
+      }
+      
+      // 4. Registrar o Lançamento na conta de Resultado (DRE) - DÉBITO (Despesa)
+      // Este lançamento é o reconhecimento da despesa/custo (D: Despesa/Custo)
+      // O lançamento de Despesa/Custo já foi feito na criação da CP.
+      // O lançamento de DRE no pagamento é necessário apenas se o lançamento inicial não foi feito,
+      // mas como o fluxo agora garante o lançamento inicial, este aqui é redundante e incorreto.
+      // MANTENDO REMOVIDO.
 
       // 5. Atualizar a parcela para 'paga'
       await supabase.from(tabelaParcelas).update({

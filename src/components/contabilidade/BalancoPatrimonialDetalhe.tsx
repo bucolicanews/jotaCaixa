@@ -416,7 +416,7 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
                                 </TableCell>
                             </TableRow>
                         </TableBody>
-                    </Table>So many times I have to. 
+                    </Table>
                 </CardContent>
             </Card>
         </TabsContent>
