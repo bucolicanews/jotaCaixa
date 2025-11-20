@@ -359,7 +359,7 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
                                     
                                     {/* Linha do Resultado Líquido */}
                                     <TableRow className={cn("font-bold border-t-2", resultadoLiquido >= 0 ? "bg-green-500/30" : "bg-red-500/30")}>
-                                        <TableCell colSpan={2}>Resultado Líquido do Período</TableCell>
+                                        <TableCell colSpan={2} className="text-xl text-yellow-600">Resultado Líquido do Período</TableCell>
                                         <TableCell className={cn("text-right", resultadoLiquido >= 0 ? "text-green-700" : "text-red-700")}>
                                             {formatCurrency(resultadoLiquido)}
                                         </TableCell>
@@ -416,7 +416,7 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
                                 </TableCell>
                             </TableRow>
                         </TableBody>
-                    </Table>
+                    </Table>So many times I have to. 
                 </CardContent>
             </Card>
         </TabsContent>
