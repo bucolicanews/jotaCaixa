@@ -15,6 +15,7 @@ import { ptBR } from 'date-fns/locale';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Separator } from '../ui/separator';
 import { useSessao } from '@/hooks/use-sessao';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import useSaldoContaCalculado from '@/hooks/use-saldo-conta-calculado';
@@ -46,8 +47,8 @@ const formSchema = z.object({
   historico_id: z.string().uuid('Selecione um histórico válido.').nullable(),
   salvar_como_padrao: z.boolean().optional(),
   
-  // NOVO CAMPO: Conta de Resultado (Receita)
-  conta_resultado_id: z.string().uuid('Selecione a conta de resultado.').nullable(),
+  // NOVO CAMPO: Conta Patrimonial (Direito a Receber)
+  conta_patrimonial_id: z.string().uuid('Selecione a conta patrimonial.').nullable(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -66,8 +67,8 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
   
   const [historicos, setHistoricos] = useState<Historico[]>([]);
   const [loadingHistoricos, setLoadingHistoricos] = useState(true);
-  const [contasReceita, setContasReceita] = useState<PlanoContas[]>([]); // NOVO ESTADO
-  const [loadingContasReceita, setLoadingContasReceita] = useState(true); // NOVO ESTADO
+  const [contasPatrimoniais, setContasPatrimoniais] = useState<PlanoContas[]>([]); // NOVO ESTADO
+  const [loadingContasPatrimoniais, setLoadingContasPatrimoniais] = useState(true); // NOVO ESTADO
   
   // Determina as tabelas de destino
   const tabelaRecebimentos = isAdmin ? 'admin_recebimentos' : 'recebimentos';
@@ -95,7 +96,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
       intervalo_dias_novas_parcelas: 30,
       historico_id: null,
       salvar_como_padrao: false,
-      conta_resultado_id: null, // NOVO DEFAULT
+      conta_patrimonial_id: null, // NOVO DEFAULT
     },
   });
   
@@ -120,29 +121,31 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
     setLoadingHistoricos(false);
   }, [ownerId]);
   
-  const fetchContasReceita = useCallback(async () => {
+  const fetchContasPatrimoniais = useCallback(async () => {
     if (!ownerId) return;
-    setLoadingContasReceita(true);
+    setLoadingContasPatrimoniais(true);
     
-    const receitaCode = configMap.Receita || '4';
+    const ativoCode = configMap.Ativo || '1';
+    const passivoCode = configMap.Passivo || '2';
+    const plCode = configMap['Patrimonio Liquido'] || '3';
     
     const { data, error } = await supabase
         .from('plano_contas')
         .select('id, Conta, Descricao')
         .eq('proprietario_id', ownerId)
         .eq('Analitica', 'Sim')
-        .eq('is_conta_resultado', true)
-        .like('Conta', `${receitaCode}.%`)
+        .eq('is_conta_patrimonial', true)
+        .or(`Conta.like.${ativoCode}.%,Conta.like.${passivoCode}.%,Conta.like.${plCode}.%`)
         .order('Conta');
         
     if (error) {
-        showError('Erro ao carregar contas de receita: ' + error.message);
-        setContasReceita([]);
+        showError('Erro ao carregar contas patrimoniais: ' + error.message);
+        setContasPatrimoniais([]);
     } else {
-        setContasReceita(data as PlanoContas[]);
+        setContasPatrimoniais(data as PlanoContas[]);
     }
-    setLoadingContasReceita(false);
-  }, [ownerId, configMap.Receita]);
+    setLoadingContasPatrimoniais(false);
+  }, [ownerId, configMap.Ativo, configMap.Passivo, configMap['Patrimonio Liquido']]);
   
   const fetchConfigAndDefaults = useCallback(async () => {
     if (!isAdmin || !ownerId) return;
@@ -156,20 +159,17 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
         .limit(1)
         .single();
         
-    // 2. Buscar Conta de Resultado Padrão (REMOVIDO: Agora vem da conta sintética)
-    
     const defaultHistoricoId = historicoData?.historico_id || null;
-    
     form.setValue('historico_id', defaultHistoricoId);
     
-    // 3. Buscar Conta de Resultado do Lançamento Sintético (se existir)
+    // 2. Buscar Conta Patrimonial da Conta Sintética (Direito a Receber)
     const { data: contaSintetica } = await supabase
         .from(tabelaContasReceber)
-        .select('id_conta_resultado')
+        .select('id_conta_patrimonial')
         .eq('id', parcela!.conta_receber_id)
         .single();
         
-    form.setValue('conta_resultado_id', contaSintetica?.id_conta_resultado || null);
+    form.setValue('conta_patrimonial_id', contaSintetica?.id_conta_patrimonial || null);
     
   }, [isAdmin, ownerId, form, tabelaContasReceber, parcela]);
 
@@ -177,12 +177,12 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
       if (open) {
           refetchSaldos();
           fetchHistoricos();
-          fetchContasReceita();
+          fetchContasPatrimoniais();
           if (isAdmin) {
               fetchConfigAndDefaults();
           }
       }
-  }, [open, refetchSaldos, fetchHistoricos, fetchContasReceita, fetchConfigAndDefaults, isAdmin]);
+  }, [open, refetchSaldos, fetchHistoricos, fetchContasPatrimoniais, fetchConfigAndDefaults, isAdmin]);
 
   useEffect(() => {
     if (open && !loadingContas && contasDestino.length > 0) {
@@ -199,8 +199,8 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
   const saldoRestante = saldoDevedor - valorRecebido;
 
   const onSubmit = async (values: FormValues) => {
-    if (!parcela || !ownerId || !values.conta_id || !values.conta_resultado_id) {
-        showError('Dados incompletos. Selecione a conta de destino e a conta de resultado.');
+    if (!parcela || !ownerId || !values.conta_id || !values.conta_patrimonial_id) {
+        showError('Dados incompletos. Selecione a conta de destino e a conta patrimonial.');
         return;
     }
 
@@ -211,15 +211,14 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
     const quitouComPagamentoAtual = novoValorPagoTotal >= parcela.valor_parcela;
     
     // Contas Contábeis Mapeadas (apenas Admin)
-    // REMOVIDO: Busca de contaRecebimento e contaResultado (agora vem da conta sintética)
     const contaRecebimento = isAdmin ? (await supabase.from('configuracao_contas_receber').select('conta_contabil_id').eq('proprietario_id', ownerId).eq('tipo_registro', 'recebimento').single()).data?.conta_contabil_id : null;
     const contaParcela = isAdmin ? (await supabase.from('configuracao_contas_receber').select('conta_contabil_id').eq('proprietario_id', ownerId).eq('tipo_registro', 'parcela').single()).data?.conta_contabil_id : null;
     const contaDesconto = isAdmin ? (await supabase.from('configuracao_contas_receber').select('conta_contabil_id').eq('proprietario_id', ownerId).eq('tipo_registro', 'desconto').single()).data?.conta_contabil_id : null;
     
-    // 0. Buscar a Conta Patrimonial da Conta Sintética (para o lançamento de estorno)
+    // 0. Buscar a descrição da Conta Sintética
     const { data: contaSintetica, error: csError } = await supabase
         .from(tabelaContasReceber)
-        .select('id_conta_patrimonial, descricao') // RENOMEADO
+        .select('descricao, id_conta_resultado')
         .eq('id', parcela.conta_receber_id)
         .single();
         
@@ -227,9 +226,9 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
         showError('Erro ao buscar conta sintética para Balanço: ' + csError.message);
         return;
     }
-    const contaPatrimonial = contaSintetica?.id_conta_patrimonial;
     const descricaoContaSintetica = contaSintetica?.descricao || 'Recebimento';
-    
+    const contaReceitaResultado = contaSintetica?.id_conta_resultado; // Conta de Receita (DRE)
+
     // CORREÇÃO DE FUSO HORÁRIO
     const dataPagamento = values.data_pagamento;
     const dataNoonUTC = new Date(Date.UTC(dataPagamento.getFullYear(), dataPagamento.getMonth(), dataPagamento.getDate(), 12, 0, 0));
@@ -254,7 +253,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
             conta_id: values.conta_id,
             id_conta_contabil: contaRecebimento, // Conta de Ativo/Passivo (Recebimento)
             historico_id: values.historico_id,
-            id_conta_resultado: values.conta_resultado_id, // NOVO CAMPO
+            id_conta_resultado: contaReceitaResultado, // USANDO A CONTA DE RECEITA DA SINTÉTICA
         };
     } else {
         recebimentoBasePayload = { 
@@ -262,7 +261,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
             empresa_id: ownerId, 
             valor_recebido: valorRecebido,
             conta_id: values.conta_id,
-            id_conta_resultado: values.conta_resultado_id, // NOVO CAMPO
+            id_conta_resultado: contaReceitaResultado, // USANDO A CONTA DE RECEITA DA SINTÉTICA
         };
     }
 
@@ -305,6 +304,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
                   tipo: 'Entrada' as const, // Entrada na Despesa (Débito)
                   conta_bancaria_id: null,
                   conta_contabil_id: contaDesconto, // Conta de Desconto (Despesa)
+                  origem: 'recebimento_manual',
                   historico_id: values.historico_id,
               };
               await supabase.from('lancamentos').insert(lancamentoDescontoPayload);
@@ -361,26 +361,13 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
           conta_bancaria_id: values.conta_id,
           conta_contabil_id: contaRecebimento, // Conta de Ativo/Passivo (Recebimento)
           historico_id: values.historico_id,
+          origem: 'recebimento_manual',
       };
       
       await supabase.from('lancamentos').insert(lancamentoAtivoPayload);
       
-      // 4. Registrar o Lançamento na conta de Resultado (DRE) - CRÉDITO (Receita)
-      const lancamentoReceitaPayload = {
-          proprietario_id: ownerId,
-          data_movimentacao: dataPagamentoISO,
-          descricao: `Receita: ${descricaoContaSintetica} (CR ID: ${parcela.conta_receber_id.substring(0, 8)})`, // NEW DESCRIPTION
-          valor: valorRecebido,
-          tipo: 'Saida' as const, // <--- CORREÇÃO CRÍTICA: Saída (Crédito) na Receita
-          conta_bancaria_id: null, // Não é uma conta de saldo
-          conta_contabil_id: values.conta_resultado_id, // Conta de Receita (3.x.x)
-          historico_id: values.historico_id,
-      };
-      
-      await supabase.from('lancamentos').insert(lancamentoReceitaPayload);
-      
-      // 5. Lançamento de Estorno da Conta Patrimonial (CR) - CRÉDITO (Passivo)
-      if (contaPatrimonial) {
+      // 4. Lançamento de Estorno da Conta Patrimonial (Direito a Receber) - CRÉDITO (Passivo)
+      if (values.conta_patrimonial_id) {
           const lancamentoPatrimonialPayload = {
               proprietario_id: ownerId,
               data_movimentacao: dataPagamentoISO,
@@ -388,15 +375,16 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
               valor: valorRecebido,
               tipo: 'Saida' as const, // Saída do Ativo (diminui o saldo da conta 1.x.x)
               conta_bancaria_id: null,
-              conta_contabil_id: contaPatrimonial, // Conta Patrimonial (1.x.x)
+              conta_contabil_id: values.conta_patrimonial_id, // Conta Patrimonial (1.x.x)
               historico_id: values.historico_id,
+              origem: 'recebimento_manual',
           };
           await supabase.from('lancamentos').insert(lancamentoPatrimonialPayload);
       } else {
-          console.warn('Aviso: Conta Patrimonial não mapeada na conta sintética. Balanço pode estar incompleto.');
+          console.warn('Aviso: Conta Patrimonial (Direito a Receber) não mapeada. Balanço pode estar incompleto.');
       }
       
-      // 6. Salvar Histórico Padrão (se marcado)
+      // 5. Salvar Histórico Padrão (se marcado)
       if (isAdmin && values.salvar_como_padrao && values.historico_id) {
           await supabase.from('configuracao_historico_padrao').upsert({
               proprietario_id: ownerId,
@@ -439,15 +427,11 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
                                 </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                                {contasDestino.length === 0 ? (
-                                    <SelectItem value="disabled" disabled>Nenhuma conta de saldo disponível.</SelectItem>
-                                ) : (
-                                    contasDestino.map(c => (
-                                        <SelectItem key={c.id} value={c.id}>
-                                            {c.nome} ({c.tipo_saldo})
-                                        </SelectItem>
-                                    ))
-                                )}
+                                {contasDestino.map(c => (
+                                    <SelectItem key={c.id} value={c.id}>
+                                        {c.nome} ({c.tipo_saldo})
+                                    </SelectItem>
+                                ))}
                             </SelectContent>
                         </Select>
                         <FormMessage />
@@ -460,22 +444,22 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
                 )} />
             </div>
             
-            {/* NOVO CAMPO: Conta de Resultado (Receita) */}
+            {/* NOVO CAMPO: Conta Patrimonial (Direito a Receber) */}
             <FormField
                 control={form.control}
-                name="conta_resultado_id"
+                name="conta_patrimonial_id"
                 render={({ field }) => (
                     <FormItem>
-                        <FormLabel>Conta de Resultado (Receita)</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value || undefined} disabled={loadingContasReceita}>
+                        <FormLabel>Conta Patrimonial (Direito a Receber)</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value || undefined} disabled={loadingContasPatrimoniais}>
                             <FormControl>
                                 <SelectTrigger>
-                                    <SelectValue placeholder={loadingContasReceita ? "Carregando Contas..." : `Selecione a conta de Receita (${configMap.Receita}.x.x)`} />
+                                    <SelectValue placeholder={loadingContasPatrimoniais ? "Carregando Contas..." : `Selecione a conta de Ativo (${configMap.Ativo}.x.x)`} />
                                 </SelectTrigger>
                             </FormControl>
                             <SelectContent>
                                 <SelectItem value={null as any}>Nenhum (Não Mapear)</SelectItem>
-                                {contasReceita.map(c => (
+                                {contasPatrimoniais.map(c => (
                                     <SelectItem key={c.id} value={c.id}>
                                         {c.Conta} - {c.Descricao}
                                     </SelectItem>
@@ -483,9 +467,9 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
                             </SelectContent>
                         </Select>
                         <FormMessage />
-                        {contasReceita.length === 0 && !loadingContasReceita && (
+                        {contasPatrimoniais.length === 0 && !loadingContasPatrimoniais && (
                             <p className="text-sm text-red-500">
-                                Nenhuma conta de Receita ({configMap.Receita}.x.x) marcada como "Conta de Resultado".
+                                Nenhuma conta Patrimonial (Ativo) marcada no Plano de Contas.
                             </p>
                         )}
                     </FormItem>
