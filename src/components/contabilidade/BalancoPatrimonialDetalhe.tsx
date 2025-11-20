@@ -350,11 +350,26 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
                     </Card>
                     
                     <Card>
-                        <CardHeader><CardTitle className="text-xl text-blue-600">Patrimônio Líquido e Resultado</CardTitle></CardHeader>
+                        <CardHeader><CardTitle className="text-xl text-blue-600">Patrimônio Líquido e Resultado ({formatCurrency(totalPatrimonioLiquido + resultadoLiquido)})</CardTitle></CardHeader>
                         <CardContent>
                             <Table>
                                 <TableHeader><TableRow><TableHead className="w-[150px]">Conta</TableHead><TableHead>Descrição</TableHead><TableHead className="text-right w-[150px]">Saldo</TableHead></TableRow></TableHeader>
                                 <TableBody>{renderContas(getContasPL())}</TableBody>
+                                
+                                {/* NOVO DETALHAMENTO DO RESULTADO */}
+                                <TableRow className="bg-secondary/50 font-semibold">
+                                    <TableCell colSpan={2}>Resultado do Período (DRE)</TableCell>
+                                    <TableCell className="text-right"></TableCell>
+                                </TableRow>
+                                <TableRow className="text-sm">
+                                    <TableCell colSpan={2} className="pl-8">Receita</TableCell>
+                                    <TableCell className="text-right text-green-600">{formatCurrency(totalReceita)}</TableCell>
+                                </TableRow>
+                                <TableRow className="text-sm">
+                                    <TableCell colSpan={2} className="pl-8">Despesa/Custo</TableCell>
+                                    <TableCell className="text-right text-red-600">{formatCurrency(totalCusto + totalDespesa)}</TableCell>
+                                </TableRow>
+                                
                                 {/* Linha do Resultado Líquido */}
                                 <TableRow className={cn("font-bold border-t-2", resultadoLiquido >= 0 ? "bg-green-500/30" : "bg-red-500/30")}>
                                     <TableCell colSpan={2}>Resultado Líquido do Período</TableCell>
@@ -398,11 +413,26 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
         {/* NOVO ABA 4: PATRIMÔNIO LÍQUIDO */}
         <TabsContent value="pl" className="mt-4">
             <Card>
-                <CardHeader><CardTitle className="text-xl text-blue-600">Patrimônio Líquido ({formatCurrency(totalPatrimonioLiquido)})</CardTitle></CardHeader>
+                <CardHeader><CardTitle className="text-xl text-blue-600">Patrimônio Líquido e Resultado ({formatCurrency(totalPatrimonioLiquido + resultadoLiquido)})</CardTitle></CardHeader>
                 <CardContent>
                     <Table>
                         <TableHeader><TableRow><TableHead className="w-[150px]">Conta</TableHead><TableHead>Descrição</TableHead><TableHead className="text-right w-[150px]">Saldo</TableHead></TableRow></TableHeader>
                         <TableBody>{renderContas(getContasPL())}</TableBody>
+                        
+                        {/* NOVO DETALHAMENTO DO RESULTADO */}
+                        <TableRow className="bg-secondary/50 font-semibold">
+                            <TableCell colSpan={2}>Resultado do Período (DRE)</TableCell>
+                            <TableCell className="text-right"></TableCell>
+                        </TableRow>
+                        <TableRow className="text-sm">
+                            <TableCell colSpan={2} className="pl-8">Receita</TableCell>
+                            <TableCell className="text-right text-green-600">{formatCurrency(totalReceita)}</TableCell>
+                        </TableRow>
+                        <TableRow className="text-sm">
+                            <TableCell colSpan={2} className="pl-8">Despesa/Custo</TableCell>
+                            <TableCell className="text-right text-red-600">{formatCurrency(totalCusto + totalDespesa)}</TableCell>
+                        </TableRow>
+                        
                         {/* Linha do Resultado Líquido */}
                         <TableRow className={cn("font-bold border-t-2", resultadoLiquido >= 0 ? "bg-green-500/30" : "bg-red-500/30")}>
                             <TableCell colSpan={2}>Resultado Líquido do Período</TableCell>
