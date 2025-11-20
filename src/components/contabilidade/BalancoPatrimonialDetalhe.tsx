@@ -423,8 +423,9 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
                         
                         {/* NOVO DETALHAMENTO DO RESULTADO */}
                         <TableRow className="bg-secondary/50 font-semibold">
-                            <TableCell colSpan={2}>Resultado do Período (DRE)</TableCell>
-                            <TableCell className="text-right"></TableCell>
+                            <TableCell colSpan={3} className="text-lg text-primary font-bold">
+                                Resultado do Período (DRE)
+                            </TableCell>
                         </TableRow>
                         <TableRow className="text-sm">
                             <TableCell colSpan={2} className="pl-8">Receita</TableCell>
