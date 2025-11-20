@@ -296,8 +296,6 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
         
         const { error: lancamentoAtivoError } = await supabase.from('lancamentos').insert(lancamentoAtivoPayload);
         if (lancamentoAtivoError) throw lancamentoAtivoError;
-        
-        // REMOVIDO: Lançamento Despesa/Custo (DRE) - ESTE ERA O ERRO DE DUPLA CONTAGEM
       }
 
       // 3. Lançamento de Estorno da Conta Patrimonial (Passivo) - DÉBITO (Diminui Passivo)
@@ -318,14 +316,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
           console.warn('Aviso: Conta Patrimonial não mapeada na conta sintética. Balanço pode estar incompleto.');
       }
       
-      // 4. Registrar o Lançamento na conta de Resultado (DRE) - DÉBITO (Despesa)
-      // Este lançamento é o reconhecimento da despesa/custo (D: Despesa/Custo)
-      // O lançamento de Despesa/Custo já foi feito na criação da CP.
-      // O lançamento de DRE no pagamento é necessário apenas se o lançamento inicial não foi feito,
-      // mas como o fluxo agora garante o lançamento inicial, este aqui é redundante e incorreto.
-      // MANTENDO REMOVIDO.
-
-      // 5. Atualizar a parcela para 'paga'
+      // 4. Atualizar a parcela para 'paga'
       await supabase.from(tabelaParcelas).update({
         status: 'paga',
         valor_pago: (parcela.valor_pago || 0) + totalPago,
@@ -333,7 +324,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
         id_conta_contabil: contaParcelaPagar,
       }).eq('id', parcela.id);
       
-      // 6. Verificar se a conta sintética está quitada
+      // 5. Verificar se a conta sintética está quitada
       const { count: parcelasPendentesCount, error: countError } = await supabase
           .from(tabelaParcelas)
           .select('id', { count: 'exact', head: true })
@@ -353,7 +344,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
               }
           }
       
-      // 7. Salvar Histórico Padrão (se marcado)
+      // 6. Salvar Histórico Padrão (se marcado)
       if (isAdmin && values.salvar_como_padrao && values.historico_id) {
           await supabase.from('configuracao_historico_padrao').upsert({
               proprietario_id: adminId,
@@ -368,6 +359,149 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
       showError(`Falha ao registrar pagamento: ${error.message}`);
     }
   };
+  
+  // --- Lógica de Estorno (Undo Payment) ---
+  const handleUndoPayment = async (parcelaId: string) => {
+    if (!adminId) return;
+    setLoading(true);
+    
+    try {
+        // 1. Buscar a parcela para obter o ID da conta sintética
+        const { data: parcelaData, error: parcelaError } = await supabase
+            .from(tabelaParcelas)
+            .select('conta_pagar_id, id_conta_contabil')
+            .eq('id', parcelaId)
+            .single();
+            
+        if (parcelaError || !parcelaData) throw new Error('Parcela não encontrada.');
+        
+        const contaPagarId = parcelaData.conta_pagar_id;
+        const contaParcelaPagar = parcelaData.id_conta_contabil; // Conta analítica da parcela
+        
+        // 2. Buscar a conta sintética para obter a conta patrimonial e descrição
+        const { data: contaSintetica, error: csError } = await supabase
+            .from(tabelaContasPagar)
+            .select('id_conta_patrimonial, descricao, historico_id')
+            .eq('id', contaPagarId)
+            .single();
+            
+        if (csError || !contaSintetica) throw new Error('Conta sintética não encontrada.');
+        
+        const contaPatrimonial = contaSintetica.id_conta_patrimonial;
+        const descricaoContaSintetica = contaSintetica.descricao || 'Pagamento';
+        const historicoId = contaSintetica.historico_id;
+        
+        // 3. Buscar todos os pagamentos associados a esta parcela
+        const { data: pagamentos, error: fetchError } = await supabase
+            .from('admin_pagamentos')
+            .select('id, conta_id, valor_pago, id_conta_resultado')
+            .eq('parcela_id', parcelaId);
+            
+        if (fetchError) throw fetchError;
+        
+        if (!pagamentos || pagamentos.length === 0) {
+            showError('Nenhum pagamento encontrado para estornar.');
+            setLoading(false);
+            return;
+        }
+        
+        const totalEstornado = pagamentos.reduce((sum, p) => sum + p.valor_pago, 0);
+        const dataEstornoISO = new Date().toISOString();
+        
+        // 4. Gerar Lançamentos de Estorno (Reversão)
+        
+        // 4.1. Reverter a baixa do Passivo (Salários a Pagar) - CRÉDITO (Saída)
+        if (contaPatrimonial) {
+            const lancamentoEstornoPassivo = {
+                proprietario_id: adminId,
+                data_movimentacao: dataEstornoISO,
+                descricao: `Estorno Baixa Passivo CP: ${descricaoContaSintetica} (CP ID: ${contaPagarId.substring(0, 8)})`,
+                valor: totalEstornado,
+                tipo: 'Saida' as const, // Saída (Crédito) para restaurar o Passivo (Credor)
+                conta_bancaria_id: null,
+                conta_contabil_id: contaPatrimonial,
+                origem: 'estorno_pagamento_manual',
+                historico_id: historicoId,
+            };
+            await supabase.from('lancamentos').insert(lancamentoEstornoPassivo);
+        }
+        
+        // 4.2. Reverter a Saída do Ativo (Caixa/Strip) - DÉBITO (Entrada)
+        for (const pagamento of pagamentos) {
+            const lancamentoEstornoAtivo = {
+                proprietario_id: adminId,
+                data_movimentacao: dataEstornoISO,
+                descricao: `Estorno Pagamento Ativo CP: ${parcela.fornecedor} (Parcela ID: ${parcelaId.substring(0, 8)})`,
+                valor: pagamento.valor_pago,
+                tipo: 'Entrada' as const, // Entrada no Ativo (Débito) para restaurar o saldo
+                conta_bancaria_id: pagamento.conta_id,
+                conta_contabil_id: contaPagamento, // Conta de Ativo/Passivo (Pagamento)
+                origem: 'estorno_pagamento_manual',
+                historico_id: historicoId,
+            };
+            await supabase.from('lancamentos').insert(lancamentoEstornoAtivo);
+        }
+        
+        // 4.3. Reverter o Lançamento de Despesa/Custo (DRE) - CRÉDITO (Saída)
+        // O lançamento de Despesa/Custo foi feito na CRIAÇÃO da CP (D: Despesa/Custo).
+        // O estorno deve ser um Crédito (Saída) na Despesa/Custo.
+        const contaDespesaCriacao = mapeamentoContabil['pagamento']; // Usamos a conta de Despesa/Custo mapeada
+        
+        if (contaDespesaCriacao) {
+            const lancamentoEstornoDespesa = {
+                proprietario_id: adminId,
+                data_movimentacao: dataEstornoISO,
+                descricao: `Estorno Despesa/Custo CP: ${descricaoContaSintetica} (CP ID: ${contaPagarId.substring(0, 8)})`,
+                valor: totalEstornado,
+                tipo: 'Saida' as const, // Saída (Crédito) para diminuir a Despesa (Credora)
+                conta_bancaria_id: null,
+                conta_contabil_id: contaDespesaCriacao,
+                origem: 'estorno_pagamento_manual',
+                historico_id: historicoId,
+            };
+            await supabase.from('lancamentos').insert(lancamentoEstornoDespesa);
+        }
+        
+        // 5. Deletar Registros de Pagamento
+        const { error: deletePagamentosError } = await supabase
+            .from('admin_pagamentos')
+            .delete()
+            .eq('parcela_id', parcelaId);
+            
+        if (deletePagamentosError) throw deletePagamentosError;
+        
+        // 6. Resetar a Parcela
+        const { error: resetError } = await supabase
+            .from(tabelaParcelas)
+            .update({
+                status: 'aberta',
+                valor_pago: 0,
+                data_pagamento: null,
+                observacao: 'Estorno de pagamento realizado.',
+            })
+            .eq('id', parcelaId);
+            
+        if (resetError) throw resetError;
+        
+        // 7. Resetar o status da conta sintética para 'pendente'
+        const { error: updateContaError } = await supabase
+            .from(tabelaContasPagar)
+            .update({ status: 'pendente' })
+            .eq('id', contaPagarId);
+            
+        if (updateContaError) console.error('Erro ao atualizar conta sintética para pendente:', updateContaError);
+        
+        showSuccess('Pagamento estornado com sucesso! Saldos reajustados.');
+        onSaveComplete();
+        
+    } catch (error: any) {
+        console.error('Erro ao estornar pagamento:', error);
+        showError('Falha ao estornar pagamento: ' + error.message);
+    } finally {
+        setLoading(false);
+    }
+  };
+  // --- Fim Lógica de Estorno ---
 
   const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
