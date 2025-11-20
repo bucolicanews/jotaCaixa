@@ -74,10 +74,34 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
     setIsUndoing(true);
     
     try {
-        // 1. Buscar todos os pagamentos associados a esta parcela
+        // 1. Buscar a parcela para obter o ID da conta sintética
+        const { data: parcelaData, error: parcelaError } = await supabase
+            .from('admin_parcelas_pagar')
+            .select('conta_pagar_id, id_conta_contabil')
+            .eq('id', parcelaId)
+            .single();
+            
+        if (parcelaError || !parcelaData) throw new Error('Parcela não encontrada.');
+        
+        const contaPagarId = parcelaData.conta_pagar_id;
+        
+        // 2. Buscar a conta sintética para obter a conta patrimonial e descrição
+        const { data: contaSintetica, error: csError } = await supabase
+            .from('admin_contas_pagar')
+            .select('id_conta_patrimonial, descricao, historico_id')
+            .eq('id', contaPagarId)
+            .single();
+            
+        if (csError || !contaSintetica) throw new Error('Conta sintética não encontrada.');
+        
+        const contaPatrimonial = contaSintetica.id_conta_patrimonial;
+        const descricaoContaSintetica = contaSintetica.descricao || 'Pagamento';
+        const historicoId = contaSintetica.historico_id;
+        
+        // 3. Buscar todos os pagamentos associados a esta parcela
         const { data: pagamentos, error: fetchError } = await supabase
             .from('admin_pagamentos')
-            .select('id, conta_id, valor_pago')
+            .select('id, conta_id, valor_pago, id_conta_contabil') // id_conta_contabil é a conta de Ativo/Passivo (Pagamento)
             .eq('parcela_id', parcelaId);
             
         if (fetchError) throw fetchError;
@@ -88,20 +112,48 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
             return;
         }
         
-        // 2. Deletar Lançamentos (Saídas) usando a descrição que contém o ID da parcela
-        // A descrição é: "Pagamento Parcela [ID] - [Fornecedor]"
-        const expectedDescription = `Pagamento Parcela ${parcelaId}%`;
+        const totalEstornado = pagamentos.reduce((sum, p) => sum + p.valor_pago, 0);
+        const dataEstornoISO = new Date().toISOString();
         
-        const { error: deleteLancamentosError } = await supabase
-            .from('lancamentos')
-            .delete()
-            .ilike('descricao', expectedDescription) // Filtra pela descrição que contém o ID
-            .eq('tipo', 'Saida')
-            .eq('proprietario_id', usuario.id); 
-            
-        if (deleteLancamentosError) throw deleteLancamentosError;
+        // 4. Gerar Lançamentos de Estorno (Reversão do Pagamento)
         
-        // 3. Deletar Registros de Pagamento
+        // 4.1. Reverter a baixa do Passivo (Obrigação) - CRÉDITO (Saída)
+        // Lançamento original: D: Passivo (Entrada), C: Ativo (Saída)
+        // Lançamento de estorno: D: Ativo (Entrada), C: Passivo (Saída)
+        
+        // Lançamento 1: DÉBITO (Entrada) no Ativo (Caixa/Banco) - Restaura o saldo
+        for (const pagamento of pagamentos) {
+            const lancamentoEstornoAtivo = {
+                proprietario_id: usuario.id,
+                data_movimentacao: dataEstornoISO,
+                descricao: `Estorno Pagamento Ativo CP: ${conta.fornecedor} (Parcela ID: ${parcelaId.substring(0, 8)})`,
+                valor: pagamento.valor_pago,
+                tipo: 'Entrada' as const, // Entrada no Ativo (Débito)
+                conta_bancaria_id: pagamento.conta_id,
+                conta_contabil_id: pagamento.id_conta_contabil, // Conta de Ativo/Passivo (Pagamento)
+                origem: 'estorno_pagamento_manual',
+                historico_id: historicoId,
+            };
+            await supabase.from('lancamentos').insert(lancamentoEstornoAtivo);
+        }
+        
+        // Lançamento 2: CRÉDITO (Saída) no Passivo (Obrigação a Pagar) - Restaura a obrigação
+        if (contaPatrimonial) {
+            const lancamentoEstornoPassivo = {
+                proprietario_id: usuario.id,
+                data_movimentacao: dataEstornoISO,
+                descricao: `Estorno Baixa Passivo CP: ${descricaoContaSintetica} (CP ID: ${contaPagarId.substring(0, 8)})`,
+                valor: totalEstornado,
+                tipo: 'Saida' as const, // Saída (Crédito) para restaurar o Passivo (Credor)
+                conta_bancaria_id: null,
+                conta_contabil_id: contaPatrimonial,
+                origem: 'estorno_pagamento_manual',
+                historico_id: historicoId,
+            };
+            await supabase.from('lancamentos').insert(lancamentoEstornoPassivo);
+        }
+        
+        // 5. Deletar Registros de Pagamento
         const { error: deletePagamentosError } = await supabase
             .from('admin_pagamentos')
             .delete()
@@ -109,21 +161,29 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
             
         if (deletePagamentosError) throw deletePagamentosError;
         
-        // 4. Resetar a Parcela
+        // 6. Resetar a Parcela
         const { error: resetError } = await supabase
             .from('admin_parcelas_pagar')
             .update({
                 status: 'aberta',
                 valor_pago: 0,
-                data_pagamento: null, // Resetando a data de pagamento
+                data_pagamento: null,
                 observacao: 'Estorno de pagamento realizado.',
             })
             .eq('id', parcelaId);
             
         if (resetError) throw resetError;
         
-        showSuccess('Pagamento estornado com sucesso! Saldo da conta de origem reajustado.');
-        handlePagamentoComplete(); // Recarrega os dados
+        // 7. Resetar o status da conta sintética para 'pendente'
+        const { error: updateContaError } = await supabase
+            .from('admin_contas_pagar')
+            .update({ status: 'pendente' })
+            .eq('id', contaPagarId);
+            
+        if (updateContaError) console.error('Erro ao atualizar conta sintética para pendente:', updateContaError);
+        
+        showSuccess('Pagamento estornado com sucesso! Saldos reajustados.');
+        handlePagamentoComplete();
         
     } catch (error: any) {
         console.error('Erro ao estornar pagamento:', error);
@@ -132,6 +192,10 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
         setIsUndoing(false);
     }
   };
+
+  const totalValor = useMemo(() => parcelas.reduce((sum, p) => sum + p.valor_parcela, 0), [parcelas]);
+  const totalPago = useMemo(() => parcelas.reduce((sum, p) => sum + (p.valor_pago || 0), 0), [parcelas]);
+  const progressoPercentual = totalValor > 0 ? Math.round((totalPago / totalValor) * 100) : 0;
 
   return (
     <>
@@ -143,6 +207,33 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
               {conta.descricao} | Valor Total: {formatCurrency(conta.valor_total)}
             </DialogDescription>
           </DialogHeader>
+          
+          <Card className="mb-4">
+              <CardContent className="p-4 space-y-3">
+                  <div className="flex justify-between items-center">
+                      <div className="flex items-center space-x-2">
+                          <DollarSign className="w-5 h-5 text-primary" />
+                          <span className="font-semibold">Progresso de Pagamento</span>
+                      </div>
+                      <span className="text-lg font-bold text-primary">{progressoPercentual}%</span>
+                  </div>
+                  <Progress value={progressoPercentual} className="h-2" />
+                  <div className="grid grid-cols-3 gap-4 text-sm">
+                      <div>
+                          <p className="text-muted-foreground">Total</p>
+                          <p className="font-medium">{formatCurrency(totalValor)}</p>
+                      </div>
+                      <div>
+                          <p className="text-muted-foreground text-green-600">Pago</p>
+                          <p className="font-medium text-green-600">{formatCurrency(totalPago)}</p>
+                      </div>
+                      <div>
+                          <p className="text-muted-foreground text-red-600">Restante</p>
+                          <p className="font-medium text-red-600">{formatCurrency(totalValor - totalPago)}</p>
+                      </div>
+                  </div>
+              </CardContent>
+          </Card>
           
           <div className="overflow-x-auto">
               <Table>
@@ -191,7 +282,7 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
                                                       <AlertDialogHeader>
                                                           <AlertDialogTitle>Confirmar Estorno de Pagamento</AlertDialogTitle>
                                                           <AlertDialogDescription>
-                                                              Esta ação irá reverter o pagamento desta parcela, deletando os registros de pagamento e lançamentos de saída associados. O saldo da conta de origem será reajustado. Tem certeza?
+                                                              Esta ação irá reverter o pagamento desta parcela, deletando os registros de pagamento e lançamentos de estorno associados. O saldo da conta de origem e a obrigação no Passivo serão reajustados. Tem certeza?
                                                           </AlertDialogDescription>
                                                       </AlertDialogHeader>
                                                       <AlertDialogFooter>

@@ -190,7 +190,6 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
 
   useEffect(() => {
       if (open) {
-          setIsInitialized(false);
           refetchSaldos();
           fetchHistoricos();
           fetchContasPatrimoniais();
@@ -444,6 +443,8 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
         }
         
         // 4.3. Reverter o Lançamento de Despesa/Custo (DRE) - CRÉDITO (Saída)
+        // O lançamento de Despesa/Custo foi feito na CRIAÇÃO da CP (D: Despesa/Custo).
+        // O estorno deve ser um Crédito (Saída) na Despesa/Custo.
         const contaDespesaCriacao = mapeamentoContabil['pagamento']; // Conta de Despesa/Custo mapeada
         
         if (contaDespesaCriacao) {
