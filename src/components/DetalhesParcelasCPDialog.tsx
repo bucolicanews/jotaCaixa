@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,7 @@ import { Badge } from './ui/badge';
 import { DollarSign, Undo2, Loader2 } from 'lucide-react';
 import RegistrarPagamentoCPDialog from '@/components/contas-pagar/RegistrarPagamentoCPDialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
+import { Progress } from './ui/progress';
 
 interface DetalhesParcelasCPDialogProps {
   conta: AdminContaPagar;
@@ -116,10 +117,6 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
         const dataEstornoISO = new Date().toISOString();
         
         // 4. Gerar Lançamentos de Estorno (Reversão do Pagamento)
-        
-        // 4.1. Reverter a baixa do Passivo (Obrigação) - CRÉDITO (Saída)
-        // Lançamento original: D: Passivo (Entrada), C: Ativo (Saída)
-        // Lançamento de estorno: D: Ativo (Entrada), C: Passivo (Saída)
         
         // Lançamento 1: DÉBITO (Entrada) no Ativo (Caixa/Banco) - Restaura o saldo
         for (const pagamento of pagamentos) {
