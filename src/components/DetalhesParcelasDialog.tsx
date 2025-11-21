@@ -196,7 +196,7 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
                 data_movimentacao: dataEstornoISO,
                 descricao: `Estorno Recebimento CR: ${conta.descricao} (CR ID: ${contaReceberIdShort})`,
                 valor: totalEstornado,
-                tipo: 'Entrada' as const, // Entrada no Ativo (Débito) para restaurar o direito
+                tipo: 'Entrada' as const, // Entrada no Ativo (Débito) para restaurar o direito - CORRECT
                 conta_bancaria_id: null,
                 conta_contabil_id: conta.id_conta_patrimonial,
                 origem: 'estorno_recebimento_manual',
@@ -206,16 +206,34 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
         }
         
         // 2.2. Crédito (Caixa/Banco) - C: CAIXA/BANCO (DIMINUI O CAIXA)
-        const contaRecebimentoMapeada = parcela.id_conta_contabil; // Conta analítica da parcela
+        // Precisamos buscar o conta_contabil_id da conta de saldo (Caixa/Banco)
+        const contaIds = recebimentos.map(r => r.conta_id);
+        const { data: saldosData } = await supabase
+            .from('saldo_contas')
+            .select('id, conta_contabil_id')
+            .in('id', contaIds);
+            
+        const saldoContaMap = (saldosData || []).reduce((acc, s) => {
+            acc[s.id] = s.conta_contabil_id;
+            return acc;
+        }, {} as Record<string, string | null>);
+        
         for (const recebimento of recebimentos) {
+            const contaContabilCaixaBanco = saldoContaMap[recebimento.conta_id];
+            
+            if (!contaContabilCaixaBanco) {
+                console.warn(`Aviso: Conta de saldo ${recebimento.conta_id} sem vínculo contábil para estorno.`);
+                continue;
+            }
+            
             const lancamentoEstornoAtivo = {
                 proprietario_id: ownerId,
                 data_movimentacao: dataEstornoISO,
                 descricao: `Estorno Recebimento Ativo CR: ${conta.clientes?.nome || 'N/A'} (Parcela ID: ${parcela.id.substring(0, 8)})`,
                 valor: recebimento.valor_recebido,
-                tipo: 'Saida' as const, // Saída do Ativo (Crédito) para diminuir o saldo
+                tipo: 'Saida' as const, // Saída do Ativo (Crédito) para diminuir o saldo - CORRECT
                 conta_bancaria_id: recebimento.conta_id,
-                conta_contabil_id: contaRecebimentoMapeada, 
+                conta_contabil_id: contaContabilCaixaBanco, // <-- USANDO CONTA CONTÁBIL DO SALDO
                 origem: 'estorno_recebimento_manual',
                 historico_id: recebimento.historico_id,
             };

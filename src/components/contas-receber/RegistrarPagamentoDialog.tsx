@@ -351,23 +351,31 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
         }
       }
       
-      // 3. Registrar o Lançamento na conta de Saldo (Movimentação de Caixa/Banco) - DÉBITO (Ativo)
+      // 3. Buscar a conta de saldo (Caixa/Banco) para obter o conta_contabil_id
+      const contaDestinoDetalhe = contasDestino.find(c => c.id === values.conta_id);
+      const contaContabilCaixaBanco = contaDestinoDetalhe?.plano_contas?.id;
+      
+      if (!contaContabilCaixaBanco) {
+          throw new Error('Conta de destino não possui vínculo contábil.');
+      }
+      
+      // 4. Registrar o Lançamento na conta de Saldo (Movimentação de Caixa/Banco) - DÉBITO (Ativo)
       // D: CAIXA/BANCO (AUMENTA O CAIXA)
       const lancamentoAtivoPayload = {
           proprietario_id: ownerId,
           data_movimentacao: dataPagamentoISO,
           descricao: `Recebimento Parcela ${parcela.id} - ${values.forma_pagamento}`,
           valor: valorRecebido,
-          tipo: 'Entrada' as const, // Entrada no Ativo (Débito)
+          tipo: 'Entrada' as const, // Entrada no Ativo (Débito) - CORRECT
           conta_bancaria_id: values.conta_id,
-          conta_contabil_id: contaRecebimento, // Conta de Ativo/Passivo (Recebimento)
+          conta_contabil_id: contaContabilCaixaBanco, // <-- USANDO CONTA CONTÁBIL DO SALDO
           historico_id: values.historico_id,
           origem: 'recebimento_manual',
       };
       
       await supabase.from('lancamentos').insert(lancamentoAtivoPayload);
       
-      // 4. Lançamento de Estorno da Conta Patrimonial (Direito a Receber) - CRÉDITO (Passivo)
+      // 5. Lançamento de Estorno da Conta Patrimonial (Direito a Receber) - CRÉDITO (Passivo)
       // C: CLIENTES (DIMINUI O DIREITO A RECEBER)
       if (values.conta_patrimonial_id) {
           const lancamentoPatrimonialPayload = {
@@ -375,7 +383,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
               data_movimentacao: dataPagamentoISO,
               descricao: `Estorno Patrimonial CR: ${descricaoContaSintetica} (CR ID: ${parcela.conta_receber_id.substring(0, 8)})`,
               valor: valorRecebido,
-              tipo: 'Saida' as const, // Saída do Ativo (Crédito)
+              tipo: 'Saida' as const, // Saída do Ativo (Crédito) - CORRECT
               conta_bancaria_id: null,
               conta_contabil_id: values.conta_patrimonial_id, // Conta Patrimonial (1.x.x)
               historico_id: values.historico_id,
@@ -386,7 +394,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
           console.warn('Aviso: Conta Patrimonial (Direito a Receber) não mapeada. Balanço pode estar incompleto.');
       }
       
-      // 5. Salvar Histórico Padrão (se marcado)
+      // 6. Salvar Histórico Padrão (se marcado)
       if (isAdmin && values.salvar_como_padrao && values.historico_id) {
           await supabase.from('configuracao_historico_padrao').upsert({
               proprietario_id: ownerId,
@@ -555,3 +563,4 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
 };
 
 export default RegistrarPagamentoDialog;
+</dyad-file>
