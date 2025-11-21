@@ -563,4 +563,3 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
 };
 
 export default RegistrarPagamentoDialog;
-</dyad-file>
