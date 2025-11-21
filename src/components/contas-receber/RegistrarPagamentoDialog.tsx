@@ -21,8 +21,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import useSaldoContaCalculado from '@/hooks/use-saldo-conta-calculado';
 import { Historico } from '@/types/historico';
 import { Checkbox } from '../ui/checkbox';
-import { PlanoContas } from '@/types/plano-contas'; // Importando PlanoContas
-import { useContabilConfig } from '@/hooks/use-contabil-config'; // Importando useContabilConfig
+import { PlanoContas } from '@/types/plano-contas';
+import { useContabilConfig } from '@/hooks/use-contabil-config';
 
 interface ParcelaParaPagamento {
   id: string;
@@ -67,8 +67,8 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
   
   const [historicos, setHistoricos] = useState<Historico[]>([]);
   const [loadingHistoricos, setLoadingHistoricos] = useState(true);
-  const [contasPatrimoniais, setContasPatrimoniais] = useState<PlanoContas[]>([]); // NOVO ESTADO
-  const [loadingContasPatrimoniais, setLoadingContasPatrimoniais] = useState(true); // NOVO ESTADO
+  const [contasPatrimoniais, setContasPatrimoniais] = useState<PlanoContas[]>([]);
+  const [loadingContasPatrimoniais, setLoadingContasPatrimoniais] = useState(true);
   
   // Determina as tabelas de destino
   const tabelaRecebimentos = isAdmin ? 'admin_recebimentos' : 'recebimentos';
@@ -96,7 +96,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
       intervalo_dias_novas_parcelas: 30,
       historico_id: null,
       salvar_como_padrao: false,
-      conta_patrimonial_id: null, // NOVO DEFAULT
+      conta_patrimonial_id: null,
     },
   });
   
@@ -352,12 +352,13 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
       }
       
       // 3. Registrar o Lançamento na conta de Saldo (Movimentação de Caixa/Banco) - DÉBITO (Ativo)
+      // D: CAIXA/BANCO (AUMENTA O CAIXA)
       const lancamentoAtivoPayload = {
           proprietario_id: ownerId,
           data_movimentacao: dataPagamentoISO,
           descricao: `Recebimento Parcela ${parcela.id} - ${values.forma_pagamento}`,
           valor: valorRecebido,
-          tipo: 'Entrada' as const, // Entrada no Ativo
+          tipo: 'Entrada' as const, // Entrada no Ativo (Débito)
           conta_bancaria_id: values.conta_id,
           conta_contabil_id: contaRecebimento, // Conta de Ativo/Passivo (Recebimento)
           historico_id: values.historico_id,
@@ -367,13 +368,14 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
       await supabase.from('lancamentos').insert(lancamentoAtivoPayload);
       
       // 4. Lançamento de Estorno da Conta Patrimonial (Direito a Receber) - CRÉDITO (Passivo)
+      // C: CLIENTES (DIMINUI O DIREITO A RECEBER)
       if (values.conta_patrimonial_id) {
           const lancamentoPatrimonialPayload = {
               proprietario_id: ownerId,
               data_movimentacao: dataPagamentoISO,
-              descricao: `Estorno Patrimonial CR: ${descricaoContaSintetica} (CR ID: ${parcela.conta_receber_id.substring(0, 8)})`, // NEW DESCRIPTION
+              descricao: `Estorno Patrimonial CR: ${descricaoContaSintetica} (CR ID: ${parcela.conta_receber_id.substring(0, 8)})`,
               valor: valorRecebido,
-              tipo: 'Saida' as const, // Saída do Ativo (diminui o saldo da conta 1.x.x)
+              tipo: 'Saida' as const, // Saída do Ativo (Crédito)
               conta_bancaria_id: null,
               conta_contabil_id: values.conta_patrimonial_id, // Conta Patrimonial (1.x.x)
               historico_id: values.historico_id,

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, BadgeDollarSign, DollarSign, Edit, Trash2 } from 'lucide-react';
+import { Loader2, BadgeDollarSign, DollarSign, Edit, Trash2, Undo2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { ContaReceber } from '@/types/contas-receber';
 import { showError, showSuccess } from '@/utils/toast';
@@ -12,8 +12,8 @@ import { useSessao } from '@/hooks/use-sessao';
 import { cn } from '@/lib/utils';
 import { Card, CardContent } from './ui/card';
 import { Progress } from './ui/progress';
-import FormParcelaReceberDialog from './formularios/FormParcelaReceberDialog'; // NOVO IMPORT
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog'; // NOVO IMPORT
+import FormParcelaReceberDialog from './formularios/FormParcelaReceberDialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
 
 // Interface ParcelaParaPagamento copiada de RegistrarPagamentoDialog.tsx
 interface ParcelaParaPagamento {
@@ -35,6 +35,7 @@ interface Parcela {
   data_vencimento: string;
   data_pagamento: string | null; // ADICIONADO
   status: 'aberta' | 'parcial' | 'paga' | 'reprogramada' | 'cancelada' | 'bloqueada';
+  id_conta_contabil: string | null; // Adicionado para estorno
 }
 
 interface DetalhesParcelasDialogProps {
@@ -45,7 +46,7 @@ interface DetalhesParcelasDialogProps {
 }
 
 const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, open, onOpenChange, onDataChange }) => {
-  const { role } = useSessao();
+  const { role, usuario } = useSessao();
   const [parcelas, setParcelas] = useState<Parcela[]>([]);
   const [loading, setLoading] = useState(true);
   const [pagamentoDialogOpen, setPagamentoDialogOpen] = useState(false);
@@ -55,9 +56,12 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
   const [edicaoDialogOpen, setEdicaoDialogOpen] = useState(false);
   const [parcelaParaEdicao, setParcelaParaEdicao] = useState<Parcela | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isUndoing, setIsUndoing] = useState(false);
 
   // Determina a tabela correta com base na role
   const tabelaParcelas = role === 'Admin' ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
+  const tabelaRecebimentos = role === 'Admin' ? 'admin_recebimentos' : 'recebimentos';
+  const tabelaContasReceber = role === 'Admin' ? 'admin_contas_receber' : 'contas_receber';
 
   const fetchParcelas = useCallback(async () => {
     if (!conta) return;
@@ -156,6 +160,108 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
           setIsDeleting(false);
       }
   };
+  
+  const handleUndoPayment = async (parcela: Parcela) => {
+    if (!usuario?.id || !conta) return;
+    setIsUndoing(true);
+    
+    const ownerId = conta.empresa_id;
+    const contaReceberId = conta.id;
+    const contaReceberIdShort = contaReceberId.substring(0, 8);
+    
+    try {
+        // 1. Buscar o registro de recebimento associado
+        const { data: recebimentos, error: fetchError } = await supabase
+            .from(tabelaRecebimentos)
+            .select('id, conta_id, valor_recebido, historico_id')
+            .eq('parcela_id', parcela.id);
+            
+        if (fetchError) throw fetchError;
+        
+        if (!recebimentos || recebimentos.length === 0) {
+            showError('Nenhum recebimento encontrado para estornar.');
+            setIsUndoing(false);
+            return;
+        }
+        
+        const totalEstornado = recebimentos.reduce((sum, r) => sum + r.valor_recebido, 0);
+        const dataEstornoISO = new Date().toISOString();
+        
+        // 2. Gerar Lançamentos de Estorno (Reversão)
+        
+        // 2.1. Débito (Clientes/Direito a Receber) - D: CLIENTES (AUMENTA O DIREITO A RECEBER)
+        if (conta.id_conta_patrimonial) {
+            const lancamentoEstornoPatrimonial = {
+                proprietario_id: ownerId,
+                data_movimentacao: dataEstornoISO,
+                descricao: `Estorno Recebimento CR: ${conta.descricao} (CR ID: ${contaReceberIdShort})`,
+                valor: totalEstornado,
+                tipo: 'Entrada' as const, // Entrada no Ativo (Débito) para restaurar o direito
+                conta_bancaria_id: null,
+                conta_contabil_id: conta.id_conta_patrimonial,
+                origem: 'estorno_recebimento_manual',
+                historico_id: recebimentos[0].historico_id,
+            };
+            await supabase.from('lancamentos').insert(lancamentoEstornoPatrimonial);
+        }
+        
+        // 2.2. Crédito (Caixa/Banco) - C: CAIXA/BANCO (DIMINUI O CAIXA)
+        const contaRecebimentoMapeada = parcela.id_conta_contabil; // Conta analítica da parcela
+        for (const recebimento of recebimentos) {
+            const lancamentoEstornoAtivo = {
+                proprietario_id: ownerId,
+                data_movimentacao: dataEstornoISO,
+                descricao: `Estorno Recebimento Ativo CR: ${conta.clientes?.nome || 'N/A'} (Parcela ID: ${parcela.id.substring(0, 8)})`,
+                valor: recebimento.valor_recebido,
+                tipo: 'Saida' as const, // Saída do Ativo (Crédito) para diminuir o saldo
+                conta_bancaria_id: recebimento.conta_id,
+                conta_contabil_id: contaRecebimentoMapeada, 
+                origem: 'estorno_recebimento_manual',
+                historico_id: recebimento.historico_id,
+            };
+            await supabase.from('lancamentos').insert(lancamentoEstornoAtivo);
+        }
+        
+        // 3. Deletar Registros de Recebimento
+        const recebimentoIds = recebimentos.map(r => r.id);
+        const { error: deleteRecebimentosError } = await supabase
+            .from(tabelaRecebimentos)
+            .delete()
+            .in('id', recebimentoIds);
+            
+        if (deleteRecebimentosError) throw deleteRecebimentosError;
+        
+        // 4. Resetar a Parcela
+        const { error: resetError } = await supabase
+            .from(tabelaParcelas)
+            .update({
+                status: 'aberta',
+                valor_pago: 0,
+                data_pagamento: null,
+                observacao: 'Estorno de recebimento realizado.',
+            })
+            .eq('id', parcela.id);
+            
+        if (resetError) throw resetError;
+        
+        // 5. Resetar o status da conta sintética para 'aberta'
+        const { error: updateContaError } = await supabase
+            .from(tabelaContasReceber)
+            .update({ status: 'aberta' })
+            .eq('id', contaReceberId);
+            
+        if (updateContaError) console.error('Erro ao atualizar conta sintética para aberta:', updateContaError);
+        
+        showSuccess('Recebimento estornado com sucesso! Saldos reajustados.');
+        handlePagamentoCompleto();
+        
+    } catch (error: any) {
+        console.error('Erro ao estornar recebimento:', error);
+        showError('Falha ao estornar recebimento: ' + error.message);
+    } finally {
+        setIsUndoing(false);
+    }
+  };
 
   const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
   const formatDate = (dateString: string) => new Date(dateString + 'T00:00:00').toLocaleDateString('pt-BR');
@@ -227,7 +333,7 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
                         <TableHead className="w-[100px]">Vencimento</TableHead>
                         <TableHead className="w-[100px]">Valor</TableHead>
                         <TableHead className="w-[100px]">Vlr Pago</TableHead>
-                        <TableHead className="w-[100px]">Data Pagamento</TableHead> {/* NOVO CABEÇALHO */}
+                        <TableHead className="w-[100px]">Data Pagamento</TableHead>
                         <TableHead className="w-[100px]">Status</TableHead>
                         <TableHead className="w-[180px] text-right">Ações</TableHead>
                     </TableRow>
@@ -244,7 +350,7 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
                                 <TableCell>{formatDate(p.data_vencimento)}</TableCell>
                                 <TableCell>{formatCurrency(p.valor_parcela)}</TableCell>
                                 <TableCell className={cn(isPaga && 'font-semibold text-green-600')}>{formatCurrency(p.valor_pago || 0)}</TableCell>
-                                <TableCell>{p.data_pagamento ? formatDate(p.data_pagamento) : '-'}</TableCell> {/* NOVO CAMPO */}
+                                <TableCell>{p.data_pagamento ? formatDate(p.data_pagamento) : '-'}</TableCell>
                                 <TableCell>
                                     <Badge variant={isPaga ? 'success' : (isCanceled ? 'destructive' : 'secondary')}>
                                         {getStatusDisplay(p.status)}
@@ -282,10 +388,34 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
                                             </AlertDialog>
                                         )}
                                         
-                                        {!isPaga && !isCanceled && (
-                                            <Button variant="outline" size="sm" onClick={() => handleOpenPagamento(p)}>
-                                                <BadgeDollarSign className="w-4 h-4 mr-2 hidden sm:inline" />Receber
-                                            </Button>
+                                        {isPaga ? (
+                                            <AlertDialog>
+                                                <AlertDialogTrigger asChild>
+                                                    <Button variant="destructive" size="icon" disabled={isUndoing} title="Estornar Recebimento">
+                                                        {isUndoing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Undo2 className="w-4 h-4" />}
+                                                    </Button>
+                                                </AlertDialogTrigger>
+                                                <AlertDialogContent>
+                                                    <AlertDialogHeader>
+                                                        <AlertDialogTitle>Confirmar Estorno de Recebimento</AlertDialogTitle>
+                                                        <AlertDialogDescription>
+                                                            Esta ação irá reverter o recebimento desta parcela, deletando os registros de recebimento e lançamentos de estorno associados. O saldo da conta de destino e o direito a receber no Ativo serão reajustados. Tem certeza?
+                                                        </AlertDialogDescription>
+                                                    </AlertDialogHeader>
+                                                    <AlertDialogFooter>
+                                                        <AlertDialogCancel disabled={isUndoing}>Cancelar</AlertDialogCancel>
+                                                        <AlertDialogAction onClick={() => handleUndoPayment(p)} disabled={isUndoing}>
+                                                            {isUndoing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : 'Estornar Recebimento'}
+                                                        </AlertDialogAction>
+                                                    </AlertDialogFooter>
+                                                </AlertDialogContent>
+                                            </AlertDialog>
+                                        ) : (
+                                            !isCanceled && (
+                                                <Button variant="outline" size="sm" onClick={() => handleOpenPagamento(p)}>
+                                                    <BadgeDollarSign className="w-4 h-4 mr-2 hidden sm:inline" />Receber
+                                                </Button>
+                                            )
                                         )}
                                     </div>
                                 </TableCell>
