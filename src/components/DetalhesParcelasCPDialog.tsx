@@ -86,6 +86,7 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
         if (parcelaError || !parcelaData) throw new Error('Parcela não encontrada.');
         
         const contaPagarId = parcelaData.conta_pagar_id;
+        const contaParcelaPagar = parcelaData.id_conta_contabil; // Conta analítica da parcela
         
         // 2. Buscar a conta sintética para obter a conta patrimonial e descrição
         const { data: contaSintetica, error: csError } = await supabase
@@ -119,23 +120,7 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
         
         // 4. Gerar Lançamentos de Estorno (Reversão do Pagamento)
         
-        // Lançamento 1: DÉBITO (Entrada) no Ativo (Caixa/Banco) - Restaura o saldo
-        for (const pagamento of pagamentos) {
-            const lancamentoEstornoAtivo = {
-                proprietario_id: usuario.id,
-                data_movimentacao: dataEstornoISO,
-                descricao: `Estorno Pagamento Ativo CP: ${conta.fornecedor} (Parcela ID: ${parcelaId.substring(0, 8)})`,
-                valor: pagamento.valor_pago,
-                tipo: 'Entrada' as const, // Entrada no Ativo (Débito)
-                conta_bancaria_id: pagamento.conta_id,
-                conta_contabil_id: pagamento.id_conta_contabil, // Conta de Ativo/Passivo (Pagamento)
-                origem: 'estorno_pagamento_manual',
-                historico_id: historicoId,
-            };
-            await supabase.from('lancamentos').insert(lancamentoEstornoAtivo);
-        }
-        
-        // Lançamento 2: CRÉDITO (Saída) no Passivo (Obrigação a Pagar) - Restaura a obrigação
+        // 4.1. Reverter a baixa do Passivo (Obrigação) - CRÉDITO (Saída)
         if (contaPatrimonial) {
             const lancamentoEstornoPassivo = {
                 proprietario_id: usuario.id,
@@ -149,6 +134,50 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
                 historico_id: historicoId,
             };
             await supabase.from('lancamentos').insert(lancamentoEstornoPassivo);
+        }
+        
+        // 4.2. Reverter a Saída do Ativo (Caixa/Strip) - DÉBITO (Entrada)
+        // A conta de pagamento (id_conta_contabil) é a conta de Ativo/Passivo (Pagamento)
+        for (const pagamento of pagamentos) {
+            const lancamentoEstornoAtivo = {
+                proprietario_id: usuario.id,
+                data_movimentacao: dataEstornoISO,
+                descricao: `Estorno Pagamento Ativo CP: ${conta.fornecedor} (Parcela ID: ${parcelaId.substring(0, 8)})`,
+                valor: pagamento.valor_pago,
+                tipo: 'Entrada' as const, // Entrada no Ativo (Débito) para restaurar o saldo
+                conta_bancaria_id: pagamento.conta_id,
+                conta_contabil_id: pagamento.id_conta_contabil, 
+                origem: 'estorno_pagamento_manual',
+                historico_id: historicoId,
+            };
+            await supabase.from('lancamentos').insert(lancamentoEstornoAtivo);
+        }
+        
+        // 4.3. Reverter o Lançamento de Despesa/Custo (DRE) - CRÉDITO (Saída)
+        // O lançamento de Despesa/Custo foi feito na CRIAÇÃO da CP (D: Despesa/Custo).
+        // O estorno deve ser um Crédito (Saída) na Despesa/Custo.
+        // Buscamos a conta de Despesa/Custo da conta sintética (que foi mapeada na criação)
+        const { data: contaDespesaData } = await supabase
+            .from('admin_contas_pagar')
+            .select('id_conta_resultado') // id_conta_resultado é a conta de Despesa/Custo
+            .eq('id', contaPagarId)
+            .single();
+            
+        const contaDespesaCriacao = contaDespesaData?.id_conta_resultado;
+        
+        if (contaDespesaCriacao) {
+            const lancamentoEstornoDespesa = {
+                proprietario_id: usuario.id,
+                data_movimentacao: dataEstornoISO,
+                descricao: `Estorno Despesa/Custo CP: ${descricaoContaSintetica} (CP ID: ${contaPagarId.substring(0, 8)})`,
+                valor: totalEstornado,
+                tipo: 'Saida' as const, // Saída (Crédito) para diminuir a Despesa (Credora)
+                conta_bancaria_id: null,
+                conta_contabil_id: contaDespesaCriacao,
+                origem: 'estorno_pagamento_manual',
+                historico_id: historicoId,
+            };
+            await supabase.from('lancamentos').insert(lancamentoEstornoDespesa);
         }
         
         // 5. Deletar Registros de Pagamento
@@ -308,7 +337,7 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
           {pagamentoDialog.parcela && (
               <RegistrarPagamentoCPDialog
                   open={pagamentoDialog.open}
-                  onOpenChange={(open: boolean) => setPagamentoDialog({ open, parcela: null })}
+                  onOpenChange={setPagamentoDialog}
                   parcela={pagamentoDialog.parcela}
                   onSaveComplete={handlePagamentoComplete}
               />

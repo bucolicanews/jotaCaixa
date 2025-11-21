@@ -38,7 +38,7 @@ const formSchema = z.object({
   historico_id: z.string().uuid('Selecione um histórico válido.').nullable(),
   novo_historico: z.string().optional(),
   
-  // CAMPOS REMOVIDOS DO FORMULÁRIO, MAS MANTIDOS NO ESQUEMA PARA VALIDAÇÃO DE DADOS INICIAIS
+  // CAMPOS CONTÁBEIS
   conta_patrimonial_id: z.string().uuid('Selecione uma conta patrimonial válida.').nullable(),
   conta_receita_id: z.string().uuid('Selecione uma conta de receita válida.').nullable(),
 
@@ -69,7 +69,7 @@ interface ClienteCRSimples {
 
 const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onSaveComplete }) => {
   const { perfil, role, usuario } = useSessao();
-  const { configMap: _configMap } = useContabilConfig();
+  const { configMap } = useContabilConfig();
   const [clientes, setClientes] = useState<ClienteCRSimples[]>([]);
   const [loadingClientes, setLoadingClientes] = useState(true);
   const [mapeamentoContabil, setMapeamentoContabil] = useState<Record<string, string | null>>({});
@@ -131,9 +131,9 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
     if (!ownerId) return;
     setLoadingContasPatrimoniais(true);
     
-    const ativoCode = _configMap.Ativo || '1';
-    const passivoCode = _configMap.Passivo || '2';
-    const plCode = _configMap['Patrimonio Liquido'] || '3';
+    const ativoCode = configMap.Ativo || '1';
+    const passivoCode = configMap.Passivo || '2';
+    const plCode = configMap['Patrimonio Liquido'] || '3';
     
     const { data, error } = await supabase
         .from('plano_contas')
@@ -151,13 +151,13 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
         setContasPatrimoniais(data as PlanoContas[]);
     }
     setLoadingContasPatrimoniais(false);
-  }, [ownerId, _configMap.Ativo, _configMap.Passivo, _configMap['Patrimonio Liquido']]);
+  }, [ownerId, configMap.Ativo, configMap.Passivo, configMap['Patrimonio Liquido']]);
   
   const fetchContasReceita = useCallback(async () => {
     if (!ownerId) return;
     setLoadingContasReceita(true);
     
-    const receitaCode = _configMap.Receita || '4';
+    const receitaCode = configMap.Receita || '4';
     
     const { data, error } = await supabase
         .from('plano_contas')
@@ -175,7 +175,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
         setContasReceita(data as PlanoContas[]);
     }
     setLoadingContasReceita(false);
-  }, [ownerId, _configMap.Receita]);
+  }, [ownerId, configMap.Receita]);
 
   useEffect(() => {
     const fetchClientsData = async () => {
@@ -220,7 +220,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
     defaultValues: {
       cliente_id: contaInicial?.cliente_id || undefined,
       descricao: contaInicial?.descricao || '',
-      tipo_lancamento: 'unico',
+      tipo_lancamento: contaInicial?.tipo_receita === 'única' ? 'unico' : (contaInicial?.tipo_receita === 'recorrente' ? 'repetir' : 'unico'),
       valor: contaInicial?.valor_total || undefined,
       data_vencimento: contaInicial?.data_vencimento ? new Date(contaInicial.data_vencimento + 'T00:00:00') : undefined,
       numero_parcelas: 1,
@@ -236,9 +236,6 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
   const { isSubmitting } = form.formState;
   const tipoLancamento = form.watch('tipo_lancamento');
   const novoHistoricoValue = form.watch('novo_historico');
-  
-  // Efeito para preencher as contas contábeis iniciais (se for edição)
-  // REMOVIDO: O useEffect que buscava o valor do lancamentos, pois agora lemos de contaInicial.id_conta_resultado
   
   const handleCreateHistorico = async () => {
     if (!novoHistoricoValue || !ownerId) return;
@@ -464,7 +461,7 @@ return (
         name="conta_patrimonial_id"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>3. Conta Patrimonial (Ativo/Passivo/PL)</FormLabel>
+            <FormLabel>3. Conta Patrimonial (Ativo/Direito a Receber)</FormLabel>
 
             <Select
               value={field.value ? String(field.value) : "0"}
@@ -518,7 +515,7 @@ return (
               >
                 <FormControl>
                   <SelectTrigger>
-                    <SelectValue placeholder={loadingContasReceita ? "Carregando Contas..." : `Selecione a conta de Receita (${_configMap.Receita}.x.x)`} />
+                    <SelectValue placeholder={loadingContasReceita ? "Carregando Contas..." : `Selecione a conta de Receita (${configMap.Receita}.x.x)`} />
                   </SelectTrigger>
                 </FormControl>
 
@@ -537,7 +534,7 @@ return (
 
               {contasReceita.length === 0 && !loadingContasReceita && (
                 <p className="text-sm text-red-500">
-                  Nenhuma conta de Receita ({_configMap.Receita}.x.x) marcada como "Conta de Resultado".
+                  Nenhuma conta de Receita ({configMap.Receita}.x.x) marcada como "Conta de Resultado".
                 </p>
               )}
             </FormItem>
