@@ -160,7 +160,7 @@ BEGIN
     INSERT INTO public.lancamentos (proprietario_id, data_movimentacao, descricao, valor, tipo, conta_bancaria_id, conta_contabil_id, origem, conciliado, historico_id)
     VALUES (
       v_admin_id,
-      NOW() AT TIME ZONE 'America/SaoPaulo',
+      NOW() AT TIME ZONE 'America/Sao_Paulo',
       'Recebimento Renovação Assinatura - Cliente ' || v_cliente_nome || ' (CR ID: ' || v_recorrencia_id::TEXT || ')', -- NOVO: Inclui ID da CR
       p_valor_pago,
       'Entrada',
@@ -219,5 +219,116 @@ BEGIN
     );
   END IF;
 
+END;
+$function$;
+
+-- Função RPC para deletar contrato e reverter lançamentos contábeis
+CREATE OR REPLACE FUNCTION public.delete_contract_and_reverse_accounting(p_contrato_id uuid, p_proprietario_id uuid)
+ RETURNS TABLE(success boolean, message text)
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE
+  v_tabela_contas_receber TEXT;
+  v_tabela_parcelas TEXT;
+  v_conta_receber_id UUID;
+  v_parcelas_pagas_count INTEGER;
+  v_valor_total NUMERIC;
+  v_descricao TEXT;
+  v_conta_patrimonial_id UUID;
+  v_conta_resultado_id UUID;
+  v_historico_id UUID;
+  v_data_movimentacao TIMESTAMP WITH TIME ZONE := NOW() AT TIME ZONE 'America/Sao_Paulo';
+BEGIN
+  -- 1. Determinar as tabelas corretas (Admin vs Cliente)
+  IF EXISTS (SELECT 1 FROM public.tbl_admins WHERE id = p_proprietario_id) THEN
+    v_tabela_contas_receber := 'admin_contas_receber';
+    v_tabela_parcelas := 'admin_parcelas_receber';
+  ELSE
+    v_tabela_contas_receber := 'contas_receber';
+    v_tabela_parcelas := 'parcelas_contas_receber';
+  END IF;
+
+  -- 2. Buscar a conta sintética e verificar parcelas pagas
+  EXECUTE format('SELECT id, valor_total, descricao, id_conta_patrimonial, id_conta_resultado, historico_id FROM public.%I WHERE contrato_gerado_id = $1 LIMIT 1', v_tabela_contas_receber)
+  INTO v_conta_receber_id, v_valor_total, v_descricao, v_conta_patrimonial_id, v_conta_resultado_id, v_historico_id
+  USING p_contrato_id;
+
+  IF v_conta_receber_id IS NULL THEN
+    -- Se não houver conta a receber associada, apenas deleta o contrato
+    DELETE FROM public.contratos_gerados WHERE id = p_contrato_id;
+    RETURN QUERY SELECT TRUE, 'Contrato deletado. Nenhuma conta a receber associada encontrada.';
+    RETURN;
+  END IF;
+
+  -- Contar parcelas pagas
+  EXECUTE format('SELECT COUNT(*) FROM public.%I WHERE conta_receber_id = $1 AND status = ''paga''', v_tabela_parcelas)
+  INTO v_parcelas_pagas_count
+  USING v_conta_receber_id;
+
+  IF v_parcelas_pagas_count > 0 THEN
+    RETURN QUERY SELECT FALSE, 'Não é possível deletar o contrato. Existem ' || v_parcelas_pagas_count || ' parcelas quitadas.';
+    RETURN;
+  END IF;
+
+  -- 3. Reverter Lançamentos Contábeis (Apenas se for Admin e as contas estiverem mapeadas)
+  IF v_tabela_contas_receber = 'admin_contas_receber' AND v_conta_patrimonial_id IS NOT NULL AND v_conta_resultado_id IS NOT NULL THEN
+    
+    -- Lançamento de Estorno (D: Receita, C: Clientes a Receber)
+    
+    -- D: Conta de Resultado (Receita) - Tipo 'Entrada' (Débito)
+    -- Para diminuir a Receita (Credora), usamos Débito (Entrada)
+    INSERT INTO public.lancamentos (proprietario_id, data_movimentacao, descricao, valor, tipo, conta_contabil_id, origem, historico_id)
+    VALUES (
+      p_proprietario_id,
+      v_data_movimentacao,
+      'Estorno Receita Contrato: ' || v_descricao || ' (CR ID: ' || v_conta_receber_id::TEXT || ')',
+      v_valor_total,
+      'Entrada', -- Débito na conta de Receita (Natureza Credora)
+      v_conta_resultado_id,
+      'estorno_contrato',
+      v_historico_id
+    );
+
+    -- C: Conta Patrimonial (Clientes a Receber) - Tipo 'Saida' (Crédito)
+    -- Para diminuir o Ativo (Devedor), usamos Crédito (Saída)
+    INSERT INTO public.lancamentos (proprietario_id, data_movimentacao, descricao, valor, tipo, conta_contabil_id, origem, historico_id)
+    VALUES (
+      p_proprietario_id,
+      v_data_movimentacao,
+      'Estorno Ativo Contrato: ' || v_descricao || ' (CR ID: ' || v_conta_receber_id::TEXT || ')',
+      v_valor_total,
+      'Saida', -- Crédito na conta de Ativo (Natureza Devedora)
+      v_conta_patrimonial_id,
+      'estorno_contrato',
+      v_historico_id
+    );
+    
+    -- 3.1. Deletar lançamentos originais (para evitar duplicidade no histórico)
+    -- Usamos a descrição padronizada do PreencherContrato.tsx
+    
+    -- Lançamento Inicial CR (Débito no Ativo)
+    DELETE FROM public.lancamentos
+    WHERE proprietario_id = p_proprietario_id
+      AND origem = 'lancamento_cr'
+      AND descricao ILIKE ('Lançamento Inicial CR: Contrato: ' || v_descricao || ' (CR ID: ' || v_conta_receber_id::TEXT || ')%');
+
+    -- Lançamento Receita (Crédito na Receita)
+    DELETE FROM public.lancamentos
+    WHERE proprietario_id = p_proprietario_id
+      AND origem = 'lancamento_cr'
+      AND descricao ILIKE ('Receita: Contrato: ' || v_descricao || ' (CR ID: ' || v_conta_receber_id::TEXT || ')%');
+
+  END IF;
+
+  -- 4. Deletar a conta sintética (deleta parcelas em cascata)
+  EXECUTE format('DELETE FROM public.%I WHERE id = $1', v_tabela_contas_receber)
+  USING v_conta_receber_id;
+  
+  -- 5. Deletar o contrato gerado
+  DELETE FROM public.contratos_gerados WHERE id = p_contrato_id;
+
+  RETURN QUERY SELECT TRUE, 'Contrato e lançamentos associados deletados com sucesso.';
 END;
 $function$;
