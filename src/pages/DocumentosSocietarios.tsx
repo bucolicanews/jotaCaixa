@@ -15,7 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import ContratoPreviewDialog from '@/components/contratos/ContratoPreviewDialog';
 
 interface DocumentoComCliente extends DocumentoSocietarioGerado {
-    clientes: { nome: string } | null;
+    cliente_nome: string | null; // NOVO CAMPO
     modelos_societarios: { titulo: string, tipo_conteudo: 'html' | 'texto' } | null;
 }
 
@@ -28,6 +28,8 @@ const DocumentosSocietarios: React.FC = () => {
   const [previewContent, setPreviewContent] = useState('');
   const [previewTitle, setPreviewTitle] = useState('');
   const [isPreviewHtml, setIsPreviewHtml] = useState(true);
+  
+  const [clienteNomeMap, setClienteNomeMap] = useState<Record<string, string>>({}); // NOVO ESTADO
 
   const getOwnerId = () => {
     if (role === 'Admin' || role === 'Cliente') return (perfil as any)?.id;
@@ -47,10 +49,17 @@ const DocumentosSocietarios: React.FC = () => {
     let query = supabase
       .from('documentos_societarios_gerados')
       .select(`
-        *,
-        clientes ( nome ),
+        id,
+        modelo_id,
+        cliente_id,
+        proprietario_id,
+        status,
+        valores_tags_preenchidos,
+        conteudo_renderizado,
+        data_registro,
+        criado_em,
         modelos_societarios ( titulo, tipo_conteudo )
-      `)
+      `) // REMOVIDO clientes (nome)
       .eq('proprietario_id', ownerId)
       .order('data_registro', { ascending: false });
 
@@ -60,7 +69,30 @@ const DocumentosSocietarios: React.FC = () => {
       showError('Erro ao carregar documentos: ' + error.message);
       setDocumentos([]);
     } else {
-      setDocumentos(data as DocumentoComCliente[]);
+      const fetchedDocs = data as DocumentoComCliente[];
+      
+      // 1. Coletar IDs de clientes
+      const clienteIds = Array.from(new Set(fetchedDocs.map(d => d.cliente_id).filter((id): id is string => !!id)));
+      
+      // 2. Buscar nomes dos clientes (usando tbl_clientes, que é a fonte de dados para clientes do sistema)
+      const { data: clientesData } = await supabase
+          .from('tbl_clientes')
+          .select('id, nome')
+          .in('id', clienteIds);
+          
+      const nomeMap = (clientesData || []).reduce((acc, c) => {
+          acc[c.id] = c.nome;
+          return acc;
+      }, {} as Record<string, string>);
+      setClienteNomeMap(nomeMap);
+      
+      // 3. Mapear o nome do cliente no frontend
+      const documentosComNome = fetchedDocs.map(doc => ({
+          ...doc,
+          cliente_nome: doc.cliente_id ? nomeMap[doc.cliente_id] || 'N/A' : 'N/A',
+      }));
+      
+      setDocumentos(documentosComNome);
     }
     setCarregandoDocumentos(false);
   }, [ownerId]);
@@ -161,7 +193,7 @@ const DocumentosSocietarios: React.FC = () => {
                     <TableRow key={doc.id}>
                       <TableCell className="font-medium">{doc.valores_tags_preenchidos?.titulo || doc.modelos_societarios?.titulo || 'Documento Sem Título'}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">{doc.modelos_societarios?.titulo || 'N/A'}</TableCell>
-                      <TableCell className="text-sm">{doc.clientes?.nome || 'N/A'}</TableCell>
+                      <TableCell className="text-sm">{doc.cliente_nome}</TableCell>
                       <TableCell className="text-sm">{format(parseISO(doc.data_registro), 'dd/MM/yyyy')}</TableCell>
                       <TableCell>
                         <Badge variant={doc.status === 'finalizado' ? 'default' : 'secondary'}>
