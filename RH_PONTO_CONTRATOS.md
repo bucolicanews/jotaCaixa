@@ -21,7 +21,7 @@ Sistema para registro e gestão da jornada de trabalho.
 
 ## 2. Módulo de Contratos
 
-Sistema para criação e gestão de documentos dinâmicos.
+Criação, gestão e preenchimento de contratos dinâmicos.
 
 ### Tabelas Chave
 
@@ -40,3 +40,21 @@ Sistema para criação e gestão de documentos dinâmicos.
     *   Cria/Atualiza o registro em `contratos_gerados`.
     *   Cria a conta sintética (`admin_contas_receber` ou `contas_receber`) e as parcelas correspondentes.
 4.  **Assinatura:** O link gerado (`/contrato-link/:id`) redireciona para a página de assinatura (`/assinar-contrato/:id`), onde o cliente assina com nome e selfie, atualizando o status do contrato para `ativo`.
+
+## 3. Módulo de Documentos Societários
+
+Criação e gestão de documentos internos (Atas, Contratos Sociais, etc.).
+
+### Tabelas Chave
+
+| Tabela | Propósito | RLS |
+| :--- | :--- | :--- |
+| `blocos_societarios` | Blocos de conteúdo reutilizáveis. | Proprietário/Admin. |
+| `modelos_societarios` | Templates de documentos (HTML/Texto). | Proprietário/Admin. |
+| `documentos_societarios_gerados` | Documentos preenchidos e finalizados. | Proprietário/Admin. |
+
+### Fluxos de Gestão
+
+*   **Gerenciar Blocos (`/documentos-societarios/blocos`):** Permite a criação e edição de blocos de texto que podem ser inseridos nos modelos.
+*   **Gerenciar Modelos (`/documentos-societarios/modelos`):** Permite a criação e edição de templates de documentos, utilizando tags de perfil e blocos de conteúdo.
+*   **Geração de Documento (`/documentos-societarios/gerar/:modeloId`):** Fluxo para selecionar um cliente, preencher tags e editar o conteúdo principal, resultando em um registro em `documentos_societarios_gerados`.

@@ -12,3 +12,4 @@
 12 - EXPORTAR OK
 13- refatorar
 14- ARQUITETURA FINANCEIRA: Documentação completa da lógica contábil e RPCs em FINANCEIRO_ARQUITETURA.md.
+15- DOCUMENTOS SOCIETÁRIOS: Lógica, scripts, relações e componentes (Gerenciar Blocos, Gerenciar Modelos, Documentos Gerados) implementados.

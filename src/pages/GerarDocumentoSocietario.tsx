@@ -1,3 +1,4 @@
+// src/pages/GerarDocumentoSocietario.tsx
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -268,7 +269,7 @@ const GerarDocumentoSocietario: React.FC = () => {
 
   // --- FUNÇÃO PRINCIPAL DE BUSCA DE DADOS INICIAIS ---
   const buscarDados = useCallback(async () => {
-    if (!modeloId && !documentoId || !ownerIdLogado) {
+    if ((!modeloId && !documentoId) || !ownerIdLogado) {
         setCarregandoDados(false);
         return;
     }
@@ -349,9 +350,9 @@ const GerarDocumentoSocietario: React.FC = () => {
     // 4. Carregar dados dependentes (clientes e tags)
     await fetchDependentData(initialProprietarioDocumentoId || ownerIdLogado);
     
-    // 5. Resetar o formulário com os dados carregados
+    // 5. Resetar o formulário com os dados carregados (USANDO VARIÁVEIS LOCAIS)
     form.reset({
-        titulo_documento: (documentoId ? documentoInicial?.valores_tags_preenchidos?.titulo : currentModelo?.titulo) || '',
+        titulo_documento: (documentoId ? (initialValoresTags?.titulo || '') : (currentModelo?.titulo || '')) || '',
         cliente_id: initialClienteId,
         proprietario_documento_id: initialProprietarioDocumentoId || '',
         tipo_conteudo: currentModelo?.tipo_conteudo || 'html',
@@ -361,7 +362,8 @@ const GerarDocumentoSocietario: React.FC = () => {
     setEmpresaLogada(empresaLogadaMemo);
     setCarregandoDados(false);
     
-  }, [modeloId, documentoId, ownerIdLogado, navigate, isAdmin, isClient, empresaLogadaMemo, form, fetchDependentData, documentoInicial]);
+  // Removi `documentoInicial` das dependências para evitar loop
+  }, [modeloId, documentoId, ownerIdLogado, navigate, isAdmin, isClient, empresaLogadaMemo, form, fetchDependentData]);
   
   // Efeito para monitorar a mudança do proprietário do documento (para recarregar clientes e tags)
   useEffect(() => {
@@ -376,6 +378,7 @@ const GerarDocumentoSocietario: React.FC = () => {
           // Aplica as tags automáticas (mantendo as tags manuais)
           applyTagsToForm(getValues('valores_tags') || {}, clienteSelecionado, empresaLogada, modelo.conteudo_template);
       }
+  // mantive dependências essenciais apenas
   }, [clienteSelecionadoId, modelo, carregandoDados, clienteSelecionado, empresaLogada, applyTagsToForm, getValues]);
 
 
@@ -653,15 +656,6 @@ const GerarDocumentoSocietario: React.FC = () => {
               <Card className="lg:col-span-2">
                   <CardHeader className="flex flex-row items-center justify-between">
                       <CardTitle className="text-xl">Conteúdo do Documento</CardTitle>
-                      <Button 
-                          onClick={handlePreview} 
-                          variant="outline" 
-                          size="sm"
-                          disabled={!modelo || !clienteSelecionadoId}
-                      >
-                          <Eye className="mr-2 h-4 w-4" />
-                          Pré-visualizar
-                      </Button>
                   </CardHeader>
                   <CardContent className="space-y-4">
                       
