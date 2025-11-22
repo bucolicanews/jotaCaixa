@@ -230,7 +230,7 @@ const GerarDocumentoSocietario: React.FC = () => {
     
     // 1. Carregar Documento Inicial (se for edição)
     if (documentoId) {
-        const { data: docData, error: docLoadError } = await supabase
+        const { data: doc, error: docLoadError } = await supabase
             .from('documentos_societarios_gerados')
             .select('*')
             .eq('id', documentoId)
@@ -242,17 +242,18 @@ const GerarDocumentoSocietario: React.FC = () => {
             return;
         }
         
-        const doc = docData as DocumentoSocietarioGerado;
-        setDocumentoInicial(doc);
-        initialProprietarioDocumentoId = doc.proprietario_id;
-        initialClienteId = doc.cliente_id || '';
-        initialValoresTags = doc.valores_tags_preenchidos || {};
+        // CORREÇÃO: Usando a variável 'doc' que está no escopo
+        const documento = doc as DocumentoSocietarioGerado;
+        setDocumentoInicial(documento);
+        initialProprietarioDocumentoId = documento.proprietario_id;
+        initialClienteId = documento.cliente_id || '';
+        initialValoresTags = documento.valores_tags_preenchidos || {};
         
         // 1.1. Buscar Modelo associado
         const { data: modeloData } = await supabase
             .from('modelos_societarios')
             .select('*, tipo_conteudo')
-            .eq('id', doc.modelo_id)
+            .eq('id', documento.modelo_id)
             .single();
         currentModelo = modeloData as DocumentoSocietarioModelo;
         
@@ -296,7 +297,7 @@ const GerarDocumentoSocietario: React.FC = () => {
     
     // 4. Resetar o formulário com os dados carregados
     form.reset({
-        titulo_documento: (documentoId ? docData?.valores_tags_preenchidos?.titulo : currentModelo?.titulo) || '',
+        titulo_documento: (documentoId ? documentoInicial?.valores_tags_preenchidos?.titulo : currentModelo?.titulo) || '',
         cliente_id: initialClienteId,
         proprietario_documento_id: initialProprietarioDocumentoId || '',
         tipo_conteudo: currentModelo?.tipo_conteudo || 'html',
@@ -305,7 +306,7 @@ const GerarDocumentoSocietario: React.FC = () => {
     
     setEmpresaLogada(empresaLogadaMemo);
     setCarregandoDados(false);
-  }, [modeloId, documentoId, ownerIdLogado, navigate, role, perfil, usuario, isAdmin, isClient, empresaLogadaMemo, form]);
+  }, [modeloId, documentoId, ownerIdLogado, navigate, role, perfil, usuario, isAdmin, isClient, empresaLogadaMemo, form, documentoInicial]);
   
   // Efeito para monitorar a mudança do proprietário do documento
   useEffect(() => {
