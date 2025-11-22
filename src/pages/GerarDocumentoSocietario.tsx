@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, FileSignature, ChevronLeft, Save, Eye, Building2, PlusCircle } from 'lucide-react';
+import { Loader2, FileSignature, ChevronLeft, Save, Eye, Building2, PlusCircle, Tag } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { DocumentoSocietarioModelo, BlocoSocietario, DocumentoSocietarioGerado } from '@/types/documentos-societarios';
@@ -16,6 +16,7 @@ import { useSessao } from '@/hooks/use-sessao';
 import { TAGS_PADRAO } from '@/config/contrato-tags-padrao';
 import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
+import { cn } from '@/lib/utils';
 
 type TipoConteudo = 'html' | 'texto';
 
@@ -109,15 +110,18 @@ const GerarDocumentoSocietario: React.FC = () => {
   // FIX 39, 40, 41, 42, 43, 44, 45, 46, 47: Definindo estado local para clientesCR
   const [clientesCR, setClientesCR] = useState<ClienteCRCompleto[]>([]);
   
+  // NOVO: Referência para o Textarea
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  
   const isEditing = !!documentoId;
   const modeloId = modeloIdParam || documentoInicial?.modelo_id;
 
   const isAdmin = role === 'Admin';
-  const isCliente = role === 'Cliente';
+  const isClient = role === 'Cliente';
   
   const getOwnerIdLogado = () => {
     if (isAdmin) return usuario?.id || null;
-    if (isCliente) return (perfil as ClienteProfile)?.id;
+    if (isClient) return (perfil as ClienteProfile)?.id;
     if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id; // FIX: proprietario_id -> cliente_id
     return null;
   };
@@ -141,19 +145,19 @@ const GerarDocumentoSocietario: React.FC = () => {
         nome: profile.nome, 
         email: profile.email, 
         documento: isAdmin ? documentoAdmin : documentoCliente,
-        cpf: (profile as AdminProfile).cpf || (profile as ClienteProfile).cpf, 
+        cpf: (profile as AdminProfile).cpf || (profile as ClienteProfile)?.cpf, 
         cnpj: (profile as AdminProfile).cnpj, 
-        rg: profile.rg, 
-        telefone: profile.telefone,
-        cep: profile.cep, 
-        endereco: profile.endereco, 
-        numero: profile.numero, 
-        complemento: profile.complemento,
-        bairro: profile.bairro, 
-        cidade: profile.cidade, 
-        estado: profile.estado,
+        rg: (profile as AdminProfile).rg || (profile as ClienteProfile)?.rg, 
+        telefone: (profile as AdminProfile).telefone || (profile as ClienteProfile)?.telefone,
+        cep: (profile as AdminProfile).cep || (profile as ClienteProfile)?.cep, 
+        endereco: (profile as AdminProfile).endereco || (profile as ClienteProfile)?.endereco, 
+        numero: (profile as AdminProfile).numero || (profile as ClienteProfile)?.numero, 
+        complemento: (profile as AdminProfile).complemento || (profile as ClienteProfile)?.complemento,
+        bairro: (profile as AdminProfile).bairro || (profile as ClienteProfile)?.bairro, 
+        cidade: (profile as AdminProfile).cidade || (profile as ClienteProfile)?.cidade, 
+        estado: (profile as AdminProfile).estado || (profile as ClienteProfile)?.estado,
     };
-  }, [perfil, isAdmin, isCliente]);
+  }, [perfil, isAdmin, isClient]);
 
   // --- FUNÇÃO DE BUSCA DE CLIENTES E TAGS DEPENDENTE DO PROPRIETÁRIO ---
   const fetchDependentData = useCallback(async (targetEmpresaId: string) => {
@@ -170,12 +174,14 @@ const GerarDocumentoSocietario: React.FC = () => {
         setTagsCustomizadas(tagsData);
     }
     
-    // 2. Buscar Clientes (Contratados) - AGORA BUSCA APENAS NA TABELA 'clientes' (Clientes CR)
-    const { data: clientesCRData, error: errorCR } = await supabase
-        .from('clientes')
+    // 2. Buscar Clientes (Contratados) - AGORA BUSCA NA TABELA 'clientes' (Clientes CR)
+    let queryClients = supabase
+        .from('clientes') // CORREÇÃO: Usando a tabela 'clientes'
         .select('*') // Seleciona todos os campos para preenchimento de tags
         .eq('proprietario_id', targetEmpresaId)
         .order('nome');
+        
+    const { data: clientesCRData, error: errorCR } = await queryClients;
         
     if (errorCR) {
         showError('Erro ao carregar clientes CR: ' + errorCR.message);
@@ -244,7 +250,7 @@ const GerarDocumentoSocietario: React.FC = () => {
         // 1.1. Buscar Modelo associado
         const { data: modeloData } = await supabase
             .from('modelos_societarios')
-            .select('*')
+            .select('*, tipo_conteudo')
             .eq('id', doc.modelo_id)
             .single();
         currentModelo = modeloData as DocumentoSocietarioModelo;
@@ -253,7 +259,7 @@ const GerarDocumentoSocietario: React.FC = () => {
         // 2. Buscar Modelo (se for criação)
         const { data: modeloData, error: modeloError } = await supabase
             .from('modelos_societarios')
-            .select('*')
+            .select('*, tipo_conteudo')
             .eq('id', modeloId)
             .single();
             
@@ -304,10 +310,10 @@ const GerarDocumentoSocietario: React.FC = () => {
   useEffect(() => {
     if (!carregandoSessao && ownerIdLogado) {
       buscarDados();
-    } else if (!carregandoSessao && !isAdmin && !isCliente) {
+    } else if (!carregandoSessao && !isAdmin && !isClient) {
         navigate('/painel', { replace: true });
     }
-  }, [carregandoSessao, ownerIdLogado, buscarDados, navigate, isAdmin, isCliente]);
+  }, [carregandoSessao, ownerIdLogado, buscarDados, navigate, isAdmin, isClient]);
 
   // --- Lógica de Preenchimento de Tags ---
   const allAvailableTags = useMemo(() => {
@@ -315,18 +321,21 @@ const GerarDocumentoSocietario: React.FC = () => {
       const customTagsMap = tagsCustomizadas.reduce((acc, tag) => {
           acc[tag.nome_tag] = tag;
           return acc;
-      }, {} as Record<string, any>);
+      }, {} as Record<string, ContratoTag>);
       
-      const combined = [...TAGS_PADRAO, ...tagsCustomizadas];
+      // Filtra tags financeiras (não são usadas em documentos societários)
+      const tagsNaoFinanceiras = TAGS_PADRAO.filter(t => !t.origem_dado?.startsWith('contas_receber'));
+      
+      const combined = [...tagsNaoFinanceiras, ...tagsCustomizadas];
       
       // Remove duplicatas e ordena
       const uniqueTags = Array.from(new Set(combined.map(t => t.nome_tag)))
           .map(tagKey => {
               const customTag = customTagsMap[tagKey];
-              const defaultTag = TAGS_PADRAO.find(t => t.nome_tag === tagKey);
+              const defaultTag = tagsNaoFinanceiras.find(t => t.nome_tag === tagKey);
               return customTag || defaultTag;
           })
-          .filter((t): t is any => !!t)
+          .filter((t): t is ContratoTag => !!t)
           .sort((a, b) => a.nome_tag.localeCompare(b.nome_tag));
           
       return uniqueTags;
@@ -393,7 +402,11 @@ const GerarDocumentoSocietario: React.FC = () => {
   
   const handlePreview = () => {
       if (!modelo) return;
-      const conteudoRenderizado = renderizarConteudo(modelo.conteudo_template, valoresTags);
+      
+      // O conteúdo principal é o valor da tag {{CONTEUDO_PRINCIPAL}} ou o template original
+      const templateToRender = valoresTags['{{CONTEUDO_PRINCIPAL}}'] || modelo.conteudo_template;
+      
+      const conteudoRenderizado = renderizarConteudo(templateToRender, valoresTags);
       setConteudoPreview(conteudoRenderizado);
       setPreviewTitle(tituloDocumento || modelo.titulo);
       setPreviewOpen(true);
@@ -413,7 +426,8 @@ const GerarDocumentoSocietario: React.FC = () => {
         if (!clienteSelecionado) throw new Error('Cliente selecionado não encontrado.');
         
         // 1. Renderizar Conteúdo Final
-        const conteudoRenderizado = renderizarConteudo(modelo.conteudo_template, valoresTags);
+        const templateToRender = valoresTags['{{CONTEUDO_PRINCIPAL}}'] || modelo.conteudo_template;
+        const conteudoRenderizado = renderizarConteudo(templateToRender, valoresTags);
         
         // 2. Preparar dados do Documento Gerado
         const documentoPayload = {
@@ -453,12 +467,49 @@ const GerarDocumentoSocietario: React.FC = () => {
     }
   };
   
-  const handleInsertBloco = (bloco: ExtendedBlocoSocietario) => {
-      const currentContent = valoresTags['{{CONTEUDO_PRINCIPAL}}'] || modelo?.conteudo_template || '';
-      const newContent = currentContent + '\n\n' + bloco.conteudo;
-      handleTagChange('{{CONTEUDO_PRINCIPAL}}', newContent);
+  // --- FUNÇÕES DE DRAG AND DROP E INSERÇÃO DE BLOCOS ---
+  
+  const handleInsertText = (text: string) => {
+      const textarea = textareaRef.current;
+      if (!textarea) return;
+      
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const currentValue = valoresTags['{{CONTEUDO_PRINCIPAL}}'] || modelo?.conteudo_template || '';
+      
+      // Insere o texto na posição do cursor
+      const newValue = currentValue.substring(0, start) + text + currentValue.substring(end);
+      
+      handleTagChange('{{CONTEUDO_PRINCIPAL}}', newValue);
+      
+      // Força o foco e a posição do cursor após a atualização do valor
+      setTimeout(() => {
+          textarea.focus();
+          textarea.selectionStart = start + text.length;
+          textarea.selectionEnd = start + text.length;
+      }, 0);
+  };
+  
+  const handleInsertBloco = (bloco: BlocoSocietario) => {
+      handleInsertText(`\n\n${bloco.conteudo}\n\n`);
       showSuccess(`Bloco '${bloco.titulo}' inserido no conteúdo.`);
   };
+  
+  const handleDragOver = (e: React.DragEvent<HTMLTextAreaElement>) => {
+      e.preventDefault(); // Permite que o drop ocorra
+  };
+  
+  const handleDrop = (e: React.DragEvent<HTMLTextAreaElement>) => {
+      e.preventDefault();
+      const tag = e.dataTransfer.getData("text/plain");
+      
+      if (!tag) return;
+      
+      handleInsertText(tag);
+      showSuccess(`Tag ${tag} inserida.`);
+  };
+  
+  // --- FIM FUNÇÕES DE DRAG AND DROP E INSERÇÃO DE BLOCOS ---
 
   if (carregandoSessao || carregandoDados) {
     return (
@@ -534,8 +585,8 @@ const GerarDocumentoSocietario: React.FC = () => {
                     <div className="space-y-2">
                         <Label htmlFor="empresa-documento">Empresa Proprietária</Label>
                         <Select 
-                            value={proprietarioDocumentoId || ''} 
-                            onValueChange={setProprietarioDocumentoId}
+                            value={proprietarioContratoId || ''} 
+                            onValueChange={setProprietarioContratoId}
                         >
                             <SelectTrigger id="empresa-documento">
                                 <Building2 className="w-4 h-4 mr-2 text-muted-foreground" />
@@ -562,12 +613,12 @@ const GerarDocumentoSocietario: React.FC = () => {
                 
                 <div className="space-y-2">
                     <Label htmlFor="cliente">Cliente (Contratado)</Label>
-                    <Select value={clienteSelecionadoId} onValueChange={setClienteSelecionadoId} disabled={!proprietarioDocumentoId}>
+                    <Select value={clienteSelecionadoId} onValueChange={setClienteSelecionadoId} disabled={!proprietarioContratoId}>
                         <SelectTrigger id="cliente">
                             <SelectValue placeholder="Selecione o Cliente" />
                         </SelectTrigger>
                         <SelectContent>
-                            {clientesCR.map((c: ClienteCRCompleto) => (
+                            {clientesCR.map(c => (
                                 <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
                             ))}
                         </SelectContent>
@@ -631,37 +682,65 @@ const GerarDocumentoSocietario: React.FC = () => {
                     <Label htmlFor="conteudo-principal">Conteúdo Principal (Editável)</Label>
                     <Textarea
                         id="conteudo-principal"
+                        ref={textareaRef} // Adicionando a referência
                         value={valoresTags['{{CONTEUDO_PRINCIPAL}}'] || modelo.conteudo_template}
                         onChange={(e) => handleTagChange('{{CONTEUDO_PRINCIPAL}}', e.target.value)}
                         rows={15}
-                        className="font-mono text-sm"
+                        className={cn("font-mono text-sm", tipoConteudo === 'html' ? 'bg-yellow-50/50 dark:bg-yellow-900/10' : '')}
+                        onDragOver={handleDragOver} // Manipulador de Drag Over
+                        onDrop={handleDrop} // Manipulador de Drop
                     />
                 </div>
                 
                 <Separator />
                 
-                {/* Blocos de Conteúdo */}
-                <div className="space-y-2">
-                    <h3 className="font-semibold text-lg flex items-center">
-                        <PlusCircle className="w-4 h-4 mr-2" /> Inserir Blocos de Conteúdo
-                    </h3>
-                    <p className="text-sm text-muted-foreground">Clique para adicionar um bloco pré-definido ao conteúdo principal.</p>
-                    <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto p-2 border rounded-md">
-                        {blocos.length === 0 ? (
-                            <p className="text-muted-foreground text-sm col-span-2">Nenhum bloco disponível.</p>
-                        ) : (
-                            blocos.map(bloco => (
-                                <Button 
-                                    key={bloco.id} 
-                                    variant="outline" 
-                                    size="sm" 
-                                    onClick={() => handleInsertBloco(bloco as ExtendedBlocoSocietario)}
-                                    className="justify-start truncate"
+                {/* Tags e Blocos de Conteúdo */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Tags Arrastáveis */}
+                    <div className="space-y-2">
+                        <h3 className="font-semibold text-lg flex items-center">
+                            <Tag className="w-4 h-4 mr-2" /> Arrastar Tags
+                        </h3>
+                        <p className="text-sm text-muted-foreground">Arraste as tags para o campo de conteúdo acima.</p>
+                        <div className="space-y-2 max-h-40 overflow-y-auto p-2 border rounded-md">
+                            {allAvailableTags.map((tag: ContratoTag) => (
+                                <div 
+                                    key={tag.nome_tag} 
+                                    className="p-2 border rounded-md cursor-grab hover:bg-accent/50 transition-colors"
+                                    draggable
+                                    onDragStart={(e) => e.dataTransfer.setData("text/plain", tag.nome_tag)}
+                                    onClick={() => handleInsertText(tag.nome_tag)}
                                 >
-                                    {bloco.titulo}
-                                </Button>
-                            ))
-                        )}
+                                    <p className="font-mono text-xs font-semibold text-primary">{tag.nome_tag}</p>
+                                    <p className="text-xs text-muted-foreground">{tag.descricao}</p>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                    
+                    {/* Blocos de Conteúdo */}
+                    <div className="space-y-2">
+                        <h3 className="font-semibold text-lg flex items-center">
+                            <PlusCircle className="w-4 h-4 mr-2" /> Inserir Blocos
+                        </h3>
+                        <p className="text-sm text-muted-foreground">Clique para adicionar um bloco pré-definido.</p>
+                        <div className="grid grid-cols-1 gap-2 max-h-40 overflow-y-auto p-2 border rounded-md">
+                            {blocos.length === 0 ? (
+                                <p className="text-muted-foreground text-sm col-span-2">Nenhum bloco disponível.</p>
+                            ) : (
+                                blocos.map(bloco => (
+                                    <Button 
+                                        key={bloco.id} 
+                                        variant="outline" 
+                                        size="sm" 
+                                        onClick={() => handleInsertBloco(bloco)}
+                                        className="justify-start truncate"
+                                    >
+                                        {bloco.titulo}
+                                    </Button>
+                                ))
+                            )}
+                        </div>
                     </div>
                 </div>
                 
