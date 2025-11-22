@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -44,6 +44,9 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
   const [previewOpen, setPreviewOpen] = useState(false);
   const [conteudoPreview, setConteudoPreview] = useState('');
   const [previewTitle, setPreviewTitle] = useState('');
+  
+  // NOVO: Referência para o Textarea
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   
   const getOwnerId = () => {
     if (role === 'Admin') return usuario?.id || null;
@@ -140,6 +143,45 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
   const allTags = useMemo(() => {
       return [...TAGS_PADRAO, ...tagsCustomizadas].sort((a, b) => a.nome_tag.localeCompare(b.nome_tag));
   }, [tagsCustomizadas]);
+  
+  // --- FUNÇÕES DE DRAG AND DROP ---
+  
+  const handleDragStart = (e: React.DragEvent<HTMLDivElement>, tag: string) => {
+      e.dataTransfer.setData("text/plain", tag);
+  };
+  
+  const handleDragOver = (e: React.DragEvent<HTMLTextAreaElement>) => {
+      e.preventDefault(); // Permite que o drop ocorra
+  };
+  
+  const handleDrop = (e: React.DragEvent<HTMLTextAreaElement>) => {
+      e.preventDefault();
+      const tag = e.dataTransfer.getData("text/plain");
+      
+      if (!tag) return;
+      
+      const textarea = textareaRef.current;
+      if (!textarea) return;
+      
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const currentValue = form.getValues('conteudo_template');
+      
+      // Insere a tag na posição do cursor
+      const newValue = currentValue.substring(0, start) + tag + currentValue.substring(end);
+      
+      // Atualiza o valor do formulário
+      form.setValue('conteudo_template', newValue, { shouldDirty: true });
+      
+      // Move o cursor para o final da tag inserida
+      setTimeout(() => {
+          textarea.focus();
+          textarea.selectionStart = start + tag.length;
+          textarea.selectionEnd = start + tag.length;
+      }, 0);
+  };
+  
+  // --- FIM FUNÇÕES DE DRAG AND DROP ---
 
   return (
     <>
@@ -194,10 +236,13 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
                     </FormLabel>
                     <FormControl>
                       <Textarea 
+                        ref={textareaRef} // Adicionando a referência
                         placeholder="Insira o conteúdo do contrato aqui, usando as tags dinâmicas." 
                         {...field} 
                         rows={15}
                         className={cn("font-mono text-sm", form.watch('tipo_conteudo') === 'html' ? 'bg-yellow-50/50 dark:bg-yellow-900/10' : '')}
+                        onDragOver={handleDragOver} // Manipulador de Drag Over
+                        onDrop={handleDrop} // Manipulador de Drop
                       />
                     </FormControl>
                     <FormMessage />
@@ -212,12 +257,14 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
                     <CardTitle className="text-lg flex items-center"><Tag className="w-4 h-4 mr-2" /> Tags Disponíveis</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <p className="text-sm text-muted-foreground mb-3">Clique para copiar a tag.</p>
+                    <p className="text-sm text-muted-foreground mb-3">Clique para copiar ou arraste para o campo de conteúdo.</p>
                     <div className="space-y-2">
                         {allTags.map((tag: ContratoTag) => (
                             <div 
                                 key={tag.nome_tag} 
                                 className="p-2 border rounded-md cursor-pointer hover:bg-accent/50 transition-colors"
+                                draggable // Torna o elemento arrastável
+                                onDragStart={(e) => handleDragStart(e, tag.nome_tag)} // Inicia o drag
                                 onClick={() => {
                                     navigator.clipboard.writeText(tag.nome_tag);
                                     showSuccess(`Tag ${tag.nome_tag} copiada!`);
