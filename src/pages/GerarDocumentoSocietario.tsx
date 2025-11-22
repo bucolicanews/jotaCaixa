@@ -302,7 +302,7 @@ const GerarDocumentoSocietario: React.FC = () => {
     setValoresTags(initialValoresTags); // Define o estado de tags
     
     setCarregandoDados(false);
-  }, [modeloId, documentoId, ownerIdLogado, navigate, isAdmin, empresaLogadaMemo]);
+  }, [modeloId, documentoId, ownerIdLogado, navigate, isAdmin, isClient, empresaLogadaMemo]);
   
   // Efeito para monitorar a mudança do proprietário do documento
   useEffect(() => {
@@ -380,7 +380,11 @@ const GerarDocumentoSocietario: React.FC = () => {
             // 3. Caso contrário, usa o valor salvo anteriormente ou o valor digitado.
             // CRÍTICO: Se for a tag {{CONTEUDO_PRINCIPAL}}, mantemos o valor atual do estado
             if (tagKey === '{{CONTEUDO_PRINCIPAL}}') {
-                newTags[tagKey] = valoresTags[tagKey] || modelo?.conteudo_template || '';
+                // FIX: Se o valor existe no estado anterior (mesmo que seja vazio), use-o.
+                // Caso contrário, use o template do modelo como valor inicial.
+                newTags[tagKey] = (tagKey in valoresTags) 
+                    ? valoresTags[tagKey] 
+                    : (modelo?.conteudo_template || '');
             } else {
                 newTags[tagKey] = valoresTags[tagKey] || '';
             }
@@ -485,7 +489,8 @@ const GerarDocumentoSocietario: React.FC = () => {
       
       const start = textarea.selectionStart;
       const end = textarea.selectionEnd;
-      const currentValue = valoresTags['{{CONTEUDO_PRINCIPAL}}'] || modelo?.conteudo_template || '';
+      // CORREÇÃO: Usar o valor atual do estado, garantindo que seja uma string
+      const currentValue = valoresTags['{{CONTEUDO_PRINCIPAL}}'] || ''; 
       
       // Insere o texto na posição do cursor
       const newValue = currentValue.substring(0, start) + text + currentValue.substring(end);
@@ -516,7 +521,7 @@ const GerarDocumentoSocietario: React.FC = () => {
       if (!tag) return;
       
       handleInsertText(tag);
-      showSuccess(`Tag ${tag} inserida.`);
+      showSuccess(`Conteúdo inserido.`); // Mensagem mais genérica
   };
   
   // --- FIM FUNÇÕES DE DRAG AND DROP E INSERÇÃO DE BLOCOS ---
@@ -693,7 +698,7 @@ const GerarDocumentoSocietario: React.FC = () => {
                     <Textarea
                         id="conteudo-principal"
                         ref={textareaRef} // Adicionando a referência
-                        value={valoresTags['{{CONTEUDO_PRINCIPAL}}'] || modelo.conteudo_template}
+                        value={valoresTags['{{CONTEUDO_PRINCIPAL}}'] || ''}
                         onChange={(e) => handleTagChange('{{CONTEUDO_PRINCIPAL}}', e.target.value)}
                         rows={15}
                         className={cn("font-mono text-sm", tipoConteudo === 'html' ? 'bg-yellow-50/50 dark:bg-yellow-900/10' : '')}
@@ -716,9 +721,9 @@ const GerarDocumentoSocietario: React.FC = () => {
                             {allAvailableTags.map((tag: ContratoTag) => (
                                 <div 
                                     key={tag.nome_tag} 
-                                    className="p-2 border rounded-md cursor-grab hover:bg-accent/50 transition-colors"
+                                    className="p-2 border rounded-md cursor-pointer hover:bg-accent/50 transition-colors"
                                     draggable
-                                    onDragStart={(e) => e.dataTransfer.setData("text/plain", tag.nome_tag)}
+                                    onDragStart={(e) => e.dataTransfer.setData("text/plain", tag.nome_tag)} // Inicia o drag
                                     onClick={() => handleInsertText(tag.nome_tag)}
                                 >
                                     <p className="font-mono text-xs font-semibold text-primary">{tag.nome_tag}</p>
@@ -733,7 +738,7 @@ const GerarDocumentoSocietario: React.FC = () => {
                         <h3 className="font-semibold text-lg flex items-center">
                             <PlusCircle className="w-4 h-4 mr-2" /> Inserir Blocos
                         </h3>
-                        <p className="text-sm text-muted-foreground">Clique para adicionar um bloco pré-definido.</p>
+                        <p className="text-sm text-muted-foreground">Clique ou arraste para adicionar um bloco pré-definido.</p>
                         <div className="grid grid-cols-1 gap-2 max-h-40 overflow-y-auto p-2 border rounded-md">
                             {blocos.length === 0 ? (
                                 <p className="text-muted-foreground text-sm col-span-2">Nenhum bloco disponível.</p>
@@ -745,6 +750,8 @@ const GerarDocumentoSocietario: React.FC = () => {
                                         size="sm" 
                                         onClick={() => handleInsertBloco(bloco)}
                                         className="justify-start truncate"
+                                        draggable // Habilitando drag
+                                        onDragStart={(e) => e.dataTransfer.setData("text/plain", `\n\n${bloco.conteudo}\n\n`)} // Passa o conteúdo do bloco
                                     >
                                         {bloco.titulo}
                                     </Button>
