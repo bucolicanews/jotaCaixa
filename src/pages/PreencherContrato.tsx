@@ -177,18 +177,20 @@ const PreencherContrato: React.FC = () => {
     }
     
     // 2. Buscar Clientes (Contratados) - AGORA BUSCA NA TABELA 'clientes' (Clientes CR)
+    // Adicionando filtro para garantir que o cliente não seja o próprio proprietário
     const { data: clientesCRData, error: errorCR } = await supabase
         .from('clientes') // CORREÇÃO: Usando a tabela 'clientes'
         .select('id, proprietario_id, nome, razao_social, nome_fantasia, documento, email, telefone, telefone_fixo, cep, endereco, numero, complemento, bairro, cidade, estado, cpf, cnpj, rg, data_nascimento') // Seleciona todos os campos para preenchimento de tags
         .eq('proprietario_id', targetEmpresaId) // Filtra pelos clientes do Admin/Cliente
+        .neq('id', targetEmpresaId) // GARANTE QUE O PROPRIETÁRIO NÃO ESTEJA NA LISTA DE CLIENTES CONTRATADOS
         .order('nome');
         
     if (errorCR) {
-      // O erro de coluna inexistente deve ser resolvido pelo SQL executado no início
         showError('Erro ao carregar clientes CR: ' + errorCR.message);
         setClientesCR([]);
     } else {
-        const mappedClients = (clientesCRData as ClienteCRCompleto[]).filter(c => c.id !== targetEmpresaId); // Filtra o próprio proprietário
+        // A filtragem de ID duplicado já está no query, mas mantemos a tipagem
+        const mappedClients = clientesCRData as ClienteCRCompleto[]; 
         setClientesCR(mappedClients);
         
         // Se o cliente selecionado não estiver mais na lista, limpa a seleção
@@ -768,11 +770,11 @@ const PreencherContrato: React.FC = () => {
           </Button>
       </div>
       
-      {/* AJUSTE CRÍTICO AQUI: lg:grid-cols-[35%_65%] para dar mais espaço à prévia */}
-      <div className="grid grid-cols-1 lg:grid-cols-[35%_65%] gap-6">
+      {/* CORREÇÃO DE LAYOUT: Revertendo para colunas de largura igual ou empilhadas (100% na tela) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
         {/* Coluna 1: Dados e Financeiro */}
-        <Card className="lg:col-span-1 h-fit">
+        <Card className="h-fit">
             <CardHeader><CardTitle className="text-xl">Dados e Faturamento</CardTitle></CardHeader>
             <CardContent className="space-y-6">
                 
@@ -912,7 +914,7 @@ const PreencherContrato: React.FC = () => {
         </Card>
         
         {/* Coluna 2: Template e Ações */}
-        <Card className="lg:col-span-2">
+        <Card>
             <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle className="text-xl">Prévia do Template</CardTitle>
                 <div className="flex space-x-2">
