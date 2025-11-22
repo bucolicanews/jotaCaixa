@@ -13,12 +13,17 @@ import FormContratoModelo from '@/components/formularios/FormContratoModelo';
 import ImportarModeloContrato from '@/components/contratos/ImportarModeloContrato'; // CORRIGIDO: Importação padrão
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
+// Extensão local para ContratoModelo
+interface ExtendedContratoModelo extends ContratoModelo {
+    tipo_conteudo?: 'html' | 'texto';
+}
+
 const GerenciarModelos: React.FC = () => {
   const { role, perfil, usuario, carregando: carregandoSessao } = useSessao();
-  const [modelos, setModelos] = useState<ContratoModelo[]>([]);
+  const [modelos, setModelos] = useState<ExtendedContratoModelo[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [modeloSelecionado, setModeloSelecionado] = useState<ContratoModelo | null>(null);
+  const [modeloSelecionado, setModeloSelecionado] = useState<ExtendedContratoModelo | null>(null);
   const [activeTab, setActiveTab] = useState('meus_modelos');
 
   const isAdmin = role === 'Admin';
@@ -45,7 +50,7 @@ const GerenciarModelos: React.FC = () => {
     
     let query = supabase
       .from('contrato_modelos')
-      .select('*')
+      .select('*, tipo_conteudo') // BUSCANDO O NOVO CAMPO
       .order('titulo', { ascending: true });
       
     // Se for Cliente, busca apenas os seus modelos (RLS já garante isso)
@@ -60,7 +65,7 @@ const GerenciarModelos: React.FC = () => {
       showError('Erro ao carregar modelos: ' + error.message);
       setModelos([]);
     } else {
-      setModelos(data as ContratoModelo[]);
+      setModelos(data as ExtendedContratoModelo[]);
     }
     setCarregando(false);
   }, [ownerId, isAdmin, isCliente]);
@@ -77,7 +82,7 @@ const GerenciarModelos: React.FC = () => {
       buscarModelos();
   };
   
-  const handleEdit = (modelo: ContratoModelo) => {
+  const handleEdit = (modelo: ExtendedContratoModelo) => {
       setModeloSelecionado(modelo);
       setDialogOpen(true);
   };
@@ -125,7 +130,7 @@ const GerenciarModelos: React.FC = () => {
   const isSupervisao = isAdmin && activeTab === 'modelos_clientes';
 
   // Helper para renderizar a lista de modelos
-  const renderModelosList = (list: ContratoModelo[], isSupervisao: boolean) => (
+  const renderModelosList = (list: ExtendedContratoModelo[], isSupervisao: boolean) => (
       <div className="space-y-4">
           {list.map((modelo) => (
               <div key={modelo.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-secondary/50 transition-colors">

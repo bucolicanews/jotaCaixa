@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2, Tag, Save, Eye } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
@@ -16,7 +17,6 @@ import { Separator } from '@/components/ui/separator';
 import ContratoPreviewDialog from '../contratos/ContratoPreviewDialog';
 import { TAGS_PADRAO } from '@/config/contrato-tags-padrao';
 import { cn } from '@/lib/utils';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 // Extensão local para ContratoModelo
@@ -43,6 +43,7 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
   const [tagsCustomizadas, setTagsCustomizadas] = useState<ContratoTag[]>([]);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [conteudoPreview, setConteudoPreview] = useState('');
+  const [previewTitle, setPreviewTitle] = useState('');
   
   const getOwnerId = () => {
     if (role === 'Admin') return usuario?.id || null;
@@ -79,7 +80,7 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
     defaultValues: {
       titulo: modeloInicial?.titulo || '',
       conteudo_template: modeloInicial?.conteudo_template || '',
-      tipo_conteudo: modeloInicial?.tipo_conteudo || 'html',
+      tipo_conteudo: modeloInicial?.tipo_conteudo || 'html', // GARANTINDO DEFAULT 'html'
     },
   });
 
@@ -92,7 +93,7 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
     const dataToSave = {
       titulo: values.titulo,
       conteudo_template: values.conteudo_template,
-      tipo_conteudo: values.tipo_conteudo,
+      tipo_conteudo: values.tipo_conteudo, // INCLUINDO NO PAYLOAD
       empresa_id: ownerId, // Vincula ao Admin ou Cliente
     };
 
@@ -132,6 +133,7 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
       });
       
       setConteudoPreview(previewContent);
+      setPreviewTitle(form.getValues('titulo'));
       setPreviewOpen(true);
   };
   
@@ -167,11 +169,11 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
                     <Select onValueChange={field.onChange} defaultValue={field.value}>
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="Selecione o tipo de conteúdo" />
+                          <SelectValue placeholder="Selecione o formato" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="html">HTML (Permite formatação rica)</SelectItem>
+                        <SelectItem value="html">HTML</SelectItem>
                         <SelectItem value="texto">Texto Simples</SelectItem>
                       </SelectContent>
                     </Select>
