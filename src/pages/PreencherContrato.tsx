@@ -80,6 +80,9 @@ const PreencherContrato: React.FC = () => {
   const navigate = useNavigate();
   const { role, perfil, usuario, carregando: carregandoSessao } = useSessao();
   
+  const isAdmin = role === 'Admin';
+  const isClient = role === 'Cliente'; // DEFINIÇÃO CORRIGIDA
+  
   const [modelo, setModelo] = useState<ContratoModelo | null>(null);
   const [contratoInicial, setContratoInicial] = useState<ContratoGerado | null>(null);
   const [tagsCustomizadas, setTagsCustomizadas] = useState<ContratoTag[]>([]);
@@ -113,12 +116,10 @@ const PreencherContrato: React.FC = () => {
   // FIX TS2304: Declarando isEditing no escopo do componente
   const isEditing = !!contratoId;
 
-  const isAdmin = role === 'Admin';
-  const isCliente = role === 'Cliente';
   
   const getOwnerIdLogado = () => {
     if (isAdmin) return usuario?.id || null;
-    if (isCliente) return (perfil as ClienteProfile)?.id;
+    if (isClient) return (perfil as ClienteProfile)?.id;
     if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id; // FIX: proprietario_id -> cliente_id
     return null;
   };
