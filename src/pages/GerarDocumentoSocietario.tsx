@@ -87,6 +87,9 @@ const GerarDocumentoSocietario: React.FC = () => {
   const [empresasContrato, setEmpresasContrato] = useState<EmpresaContrato[]>([]);
   const [empresaLogada, setEmpresaLogada] = useState<any>(null);
   
+  // NOVO ESTADO DE CONTROLE DE LOOP
+  const [tagsAplicadas, setTagsAplicadas] = useState(false);
+  
   const isEditing = !!documentoId;
   const modeloId = modeloIdParam || documentoInicial?.modelo_id;
 
@@ -306,6 +309,9 @@ const GerarDocumentoSocietario: React.FC = () => {
     
     setEmpresaLogada(empresaLogadaMemo);
     setCarregandoDados(false);
+    
+    // Reseta o estado de controle de loop após a carga inicial
+    setTagsAplicadas(false);
   }, [modeloId, documentoId, ownerIdLogado, navigate, role, perfil, usuario, isAdmin, isClient, empresaLogadaMemo, form, documentoInicial]);
   
   // Efeito para monitorar a mudança do proprietário do documento
@@ -393,11 +399,15 @@ const GerarDocumentoSocietario: React.FC = () => {
 
   // NOVO useEffect para chamar updateTags apenas quando as dependências mudam
   useEffect(() => {
-    // Se o cliente selecionado mudar, ou se o modelo for carregado, atualiza as tags.
-    if (clienteSelecionado || modelo) {
+    // 1. Condição de Saída: Se o modelo não carregou, ou se as tags já foram aplicadas (para evitar loop)
+    if (!modelo || tagsAplicadas) return;
+
+    // 2. Condição de Execução: Se o cliente selecionado mudar (ou na carga inicial)
+    if (clienteSelecionado || !isEditing) {
         updateTags();
+        setTagsAplicadas(true); // Marca como aplicado
     }
-  }, [clienteSelecionado, modelo, updateTags]); // Removendo a dependência updateTags do array, pois ela é uma useCallback
+  }, [clienteSelecionado, modelo, tagsAplicadas, updateTags, isEditing]);
 
   const handleTagChange = (tag: string, value: string) => {
     const currentTags = getValues('valores_tags') || {};
