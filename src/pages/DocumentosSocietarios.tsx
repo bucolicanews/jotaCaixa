@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, FileText, Eye, Trash2, Building2 } from 'lucide-react';
+import { Loader2, FileText, Eye, Trash2, Building2, Edit } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
@@ -9,7 +9,7 @@ import { DocumentoSocietarioGerado } from '@/types/documentos-societarios';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { UsuarioProfile, ClienteProfile } from '@/types/usuario';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { format, parseISO } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import ContratoPreviewDialog from '@/components/contratos/ContratoPreviewDialog';
@@ -21,6 +21,7 @@ interface DocumentoComCliente extends DocumentoSocietarioGerado {
 
 const DocumentosSocietarios: React.FC = () => {
   const { role, perfil, carregando: carregandoSessao } = useSessao();
+  const navigate = useNavigate(); // Inicializando useNavigate
   const [documentos, setDocumentos] = useState<DocumentoComCliente[]>([]);
   const [carregandoDocumentos, setCarregandoDocumentos] = useState(true);
   
@@ -119,6 +120,16 @@ const DocumentosSocietarios: React.FC = () => {
     }
   };
   
+  // NOVO HANDLER: Edição
+  const handleEdit = (doc: DocumentoComCliente) => {
+      if (!doc.modelo_id) {
+          showError('Modelo base não encontrado para edição.');
+          return;
+      }
+      // Redireciona para a página de geração, passando o ID do documento para edição
+      navigate(`/documentos-societarios/gerar/${doc.modelo_id}?documentoId=${doc.id}`);
+  };
+  
   const handleView = (doc: DocumentoComCliente) => {
       setPreviewContent(doc.conteudo_renderizado || 'Conteúdo não renderizado.');
       setPreviewTitle(doc.valores_tags_preenchidos?.titulo || doc.modelos_societarios?.titulo || 'Documento');
@@ -202,6 +213,9 @@ const DocumentosSocietarios: React.FC = () => {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end space-x-2">
+                            <Button variant="ghost" size="icon" onClick={() => handleEdit(doc)} title="Editar Documento">
+                                <Edit className="w-4 h-4" />
+                            </Button>
                             <Button variant="outline" size="icon" onClick={() => handleView(doc)} title="Visualizar">
                                 <Eye className="w-4 h-4" />
                             </Button>
