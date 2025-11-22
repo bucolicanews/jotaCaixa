@@ -23,6 +23,9 @@ import { useSessao } from '@/hooks/use-sessao';
 type TipoLancamento = 'unico' | 'repetir' | 'parcelar';
 type TipoConteudo = 'html' | 'texto';
 
+// FIX 224, 234, 47: Define status type locally
+type DocumentoStatus = 'rascunho' | 'finalizado' | 'arquivado' | 'ativo';
+
 interface EmpresaLogada {
     nome: string;
     email: string;
@@ -98,6 +101,15 @@ const PreencherContrato: React.FC = () => {
   const [empresasContrato, setEmpresasContrato] = useState<EmpresaContrato[]>([]);
   const [empresaLogada, setEmpresaLogada] = useState<EmpresaLogada | null>(null);
   
+  // --- ESTADOS DE PAGAMENTO (MANTIDOS PARA CONTRATOS) ---
+  const [tipoLancamento, setTipoLancamento] = useState<TipoLancamento>('unico');
+  const [dataVencimentoUnico, setDataVencimentoUnico] = useState<Date | undefined>(undefined);
+  const [numeroParcelas, setNumeroParcelas] = useState<number>(1);
+  const [dataPrimeiroVencimento, setDataPrimeiroVencimento] = useState<Date | undefined>(undefined);
+  const [intervaloDias, setIntervaloDias] = useState<number>(30);
+  const [tipoConteudo, setTipoConteudo] = useState<TipoConteudo>('html'); 
+  // ------------------------------------------------------
+
   // FIX TS2304: Declarando isEditing no escopo do componente
   const isEditing = !!contratoId;
 
@@ -115,15 +127,6 @@ const PreencherContrato: React.FC = () => {
 
   const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
   const formatDate = (date: Date) => format(date, 'dd/MM/yyyy');
-
-  // --- ESTADOS DE PAGAMENTO (MANTIDOS PARA CONTRATOS) ---
-  const [tipoLancamento, setTipoLancamento] = useState<TipoLancamento>('unico');
-  const [dataVencimentoUnico, setDataVencimentoUnico] = useState<Date | undefined>(undefined);
-  const [numeroParcelas, setNumeroParcelas] = useState<number>(1);
-  const [dataPrimeiroVencimento, setDataPrimeiroVencimento] = useState<Date | undefined>(undefined);
-  const [intervaloDias, setIntervaloDias] = useState<number>(30);
-  const [tipoConteudo, setTipoConteudo] = useState<TipoConteudo>('html'); 
-  // ------------------------------------------------------
 
   // Cliente selecionado (para preenchimento de tags)
   const clienteSelecionado = useMemo(() => {
@@ -144,17 +147,17 @@ const PreencherContrato: React.FC = () => {
         documento: isAdmin ? documentoAdmin : documentoCliente,
         cpf: (profile as AdminProfile).cpf || (profile as ClienteProfile).cpf, 
         cnpj: (profile as AdminProfile).cnpj, 
-        rg: profile.rg, 
-        telefone: profile.telefone,
-        cep: profile.cep, 
-        endereco: profile.endereco, 
-        numero: profile.numero, 
-        complemento: profile.complemento,
-        bairro: profile.bairro, 
-        cidade: profile.cidade, 
-        estado: profile.estado,
+        rg: (profile as AdminProfile).rg || (profile as ClienteProfile)?.rg, 
+        telefone: (profile as AdminProfile).telefone || (profile as ClienteProfile)?.telefone,
+        cep: (profile as AdminProfile).cep || (profile as ClienteProfile)?.cep, 
+        endereco: (profile as AdminProfile).endereco || (profile as ClienteProfile)?.endereco, 
+        numero: (profile as AdminProfile).numero || (profile as ClienteProfile)?.numero, 
+        complemento: (profile as AdminProfile).complemento || (profile as ClienteProfile)?.complemento,
+        bairro: (profile as AdminProfile).bairro || (profile as ClienteProfile)?.bairro, 
+        cidade: (profile as AdminProfile).cidade || (profile as ClienteProfile)?.cidade, 
+        estado: (profile as AdminProfile).estado || (profile as ClienteProfile)?.estado,
     };
-  }, [perfil, isAdmin, isCliente]);
+  }, [perfil, isAdmin, isClient]);
 
 
   // --- FUNÇÃO DE BUSCA DE CLIENTES E TAGS DEPENDENTE DO PROPRIETÁRIO ---
@@ -174,9 +177,9 @@ const PreencherContrato: React.FC = () => {
     
     // 2. Buscar Clientes (Contratados) - AGORA BUSCA APENAS NA TABELA 'clientes' (Clientes CR)
     const { data: clientesCRData, error: errorCR } = await supabase
-        .from('clientes')
-        .select('*') // Seleciona todos os campos para preenchimento de tags
-        .eq('proprietario_id', targetEmpresaId)
+        .from('tbl_clientes') // CORREÇÃO: Usando tbl_clientes para garantir que o cliente exista no sistema
+        .select('id, nome, razao_social, nome_fantasia, documento, email, telefone, telefone_fixo, cep, endereco, numero, complemento, bairro, cidade, estado, cpf, cnpj, rg') // Seleciona todos os campos para preenchimento de tags
+        .eq('admin_id', targetEmpresaId) // Filtra pelos clientes do Admin
         .order('nome');
         
     if (errorCR) {
@@ -207,7 +210,7 @@ const PreencherContrato: React.FC = () => {
     // 1. Buscar Modelo
     const { data: modeloData, error: modeloError } = await supabase
         .from('contrato_modelos')
-        .select('*')
+        .select('*, tipo_conteudo')
         .eq('id', modeloId)
         .single();
         
@@ -354,7 +357,7 @@ const PreencherContrato: React.FC = () => {
     setProprietarioContratoId(initialProprietarioContratoId);
     
     setCarregandoDados(false);
-  }, [modeloId, ownerIdLogado, navigate, role, perfil, usuario, isAdmin, isCliente, contratoId, empresaLogadaMemo]);
+  }, [modeloId, ownerIdLogado, navigate, role, perfil, usuario, isAdmin, isClient, contratoId, empresaLogadaMemo]);
   
   // Efeito para monitorar a mudança do proprietário do contrato (proprietarioContratoId)
   useEffect(() => {
@@ -367,10 +370,10 @@ const PreencherContrato: React.FC = () => {
   useEffect(() => {
     if (!carregandoSessao && ownerIdLogado) {
       buscarDados();
-    } else if (!carregandoSessao && !isAdmin && !isCliente) {
+    } else if (!carregandoSessao && !isAdmin && !isClient) {
         navigate('/painel', { replace: true });
     }
-  }, [carregandoSessao, ownerIdLogado, buscarDados, navigate, isAdmin, isCliente]);
+  }, [carregandoSessao, ownerIdLogado, buscarDados, navigate, isAdmin, isClient]);
 
   // --- Lógica de Preenchimento de Tags ---
   const allAvailableTags = useMemo(() => {
@@ -502,12 +505,9 @@ const PreencherContrato: React.FC = () => {
     setIsSubmitting(true);
     
     try {
-        // 0. GARANTIR QUE O CLIENTE EXISTA NA TABELA 'clientes' (para FK)
+        // 0. GARANTIR QUE O CLIENTE EXISTA NA TABELA 'tbl_clientes' (para FK)
         const clienteSelecionado = clientesCR.find(c => c.id === clienteSelecionadoId);
         if (!clienteSelecionado) throw new Error('Cliente selecionado não encontrado.');
-        
-        // Não precisamos mais fazer upsert na tabela 'clientes' aqui, pois a lista
-        // já vem da tabela 'clientes' e a FK será validada.
         
         // 1. Renderizar Conteúdo Final
         const conteudoRenderizado = renderizarConteudo(modelo.conteudo_template, valoresTags);
@@ -579,21 +579,23 @@ const PreencherContrato: React.FC = () => {
             // Buscar mapeamento contábil (apenas se for Admin)
             let contaAReceberId: string | null = null;
             let contaParcelaId: string | null = null;
+            let contaReceitaResultado: string | null = null;
             
             if (isAdmin) {
-                const [crConfig, parcelaConfig] = await Promise.all([
+                const [crConfig, parcelaConfig, receitaConfig] = await Promise.all([
                     supabase.from('configuracao_contas_receber').select('conta_contabil_id').eq('proprietario_id', ownerIdLogado).eq('tipo_registro', 'a_receber').single(),
                     supabase.from('configuracao_contas_receber').select('conta_contabil_id').eq('proprietario_id', ownerIdLogado).eq('tipo_registro', 'parcela').single(),
+                    supabase.from('configuracao_contas_receber').select('conta_contabil_id').eq('proprietario_id', ownerIdLogado).eq('tipo_registro', 'recebimento_resultado').single(),
                 ]);
                 contaAReceberId = crConfig.data?.conta_contabil_id || null;
                 contaParcelaId = parcelaConfig.data?.conta_contabil_id || null;
+                contaReceitaResultado = receitaConfig.data?.conta_contabil_id || null;
             }
             
             // 3.1. Criar Conta Sintética
             const contaReceberPayload = {
                 [ownerKey]: proprietarioContratoId,
                 cliente_id: clienteSelecionadoId,
-                origem: 'contrato',
                 descricao: `Contrato: ${tituloDocumento}`,
                 valor_total: valorTotal,
                 data_emissao: format(new Date(), 'yyyy-MM-dd'),
@@ -602,6 +604,7 @@ const PreencherContrato: React.FC = () => {
                 tipo_receita: tipoLancamento === 'unico' ? 'única' : 'recorrente',
                 contrato_gerado_id: contratoGeradoId,
                 ...(isAdmin && { id_conta_patrimonial: contaAReceberId }),
+                ...(isAdmin && { id_conta_resultado: contaReceitaResultado }), // NOVO CAMPO
             };
             
             const { data: newConta, error: crError } = await supabase
@@ -633,11 +636,64 @@ const PreencherContrato: React.FC = () => {
                 });
             }
             
-            const { error: parcelasError } = await supabase
-                .from(tabelaParcelasReceber)
-                .insert(parcelasParaInserir);
-                
+            const { error: parcelasError } = await supabase.from(tabelaParcelasReceber).insert(parcelasParaInserir);
             if (parcelasError) throw parcelasError;
+            
+            // 4. Lançamento 1: DÉBITO (Ativo) - Aumenta o direito a receber
+            const dataMovimentacao = format(new Date(), 'yyyy-MM-dd') + 'T12:00:00Z';
+            const launchDescription = `Contrato: ${tituloDocumento}`;
+            const contaReceberIdShort = contratoGeradoId.substring(0, 8);
+            
+            if (contaAReceberId) {
+                const lancamentoPatrimonialPayload = {
+                    proprietario_id: ownerIdLogado,
+                    data_movimentacao: dataMovimentacao,
+                    descricao: `Lançamento Inicial CR: ${launchDescription} (CR ID: ${contaReceberIdShort})`,
+                    valor: valorTotal,
+                    tipo: 'Entrada' as const, // Entrada no Ativo (Débito)
+                    conta_bancaria_id: null,
+                    conta_contabil_id: contaAReceberId,
+                    origem: 'lancamento_cr',
+                };
+                
+                // Limpeza de lançamentos antigos (se edição)
+                if (isEditing) {
+                    const oldLaunchDescriptionPrefix = `Lançamento Inicial CR: ${contratoInicial?.valores_tags_preenchidos?.titulo || 'Contrato'} (CR ID: ${contratoInicial?.id.substring(0, 8)})`;
+                    await supabase.from('lancamentos')
+                        .delete()
+                        .eq('origem', 'lancamento_cr')
+                        .eq('proprietario_id', ownerIdLogado)
+                        .ilike('descricao', `${oldLaunchDescriptionPrefix}%`);
+                }
+                
+                await supabase.from('lancamentos').insert(lancamentoPatrimonialPayload);
+            }
+            
+            // 5. Lançamento 2: CRÉDITO (Resultado) - Aumenta a Receita (DRE)
+            if (isAdmin && contaReceitaResultado) {
+                const lancamentoReceitaPayload = {
+                    proprietario_id: ownerIdLogado,
+                    data_movimentacao: dataMovimentacao,
+                    descricao: `Receita: ${launchDescription} (CR ID: ${contaReceberIdShort})`,
+                    valor: valorTotal,
+                    tipo: 'Saida' as const, // Saída (Crédito) na Receita
+                    conta_bancaria_id: null,
+                    conta_contabil_id: contaReceitaResultado,
+                    origem: 'lancamento_cr',
+                };
+                
+                // Limpeza de lançamentos antigos (se edição)
+                if (isEditing) {
+                    const oldLaunchDescriptionPrefix = `Receita: ${contratoInicial?.valores_tags_preenchidos?.titulo || 'Contrato'} (CR ID: ${contratoInicial?.id.substring(0, 8)})`;
+                    await supabase.from('lancamentos')
+                        .delete()
+                        .eq('origem', 'lancamento_cr')
+                        .eq('proprietario_id', ownerIdLogado)
+                        .ilike('descricao', `${oldLaunchDescriptionPrefix}%`);
+                }
+                
+                await supabase.from('lancamentos').insert(lancamentoReceitaPayload);
+            }
         }
 
         showSuccess(`Contrato ${isEditing ? 'atualizado' : 'salvo'} como ${status} com sucesso!`);
@@ -718,7 +774,8 @@ const PreencherContrato: React.FC = () => {
           </Button>
       </div>
       
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* AJUSTE CRÍTICO AQUI: lg:grid-cols-[35%_65%] para dar mais espaço à prévia */}
+      <div className="grid grid-cols-1 lg:grid-cols-[35%_65%] gap-6">
         
         {/* Coluna 1: Dados e Financeiro */}
         <Card className="lg:col-span-1 h-fit">
