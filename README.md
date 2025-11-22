@@ -39,10 +39,19 @@ Criação, gestão e preenchimento de contratos dinâmicos.
 *   **Gerenciamento de Modelos (`/contratos/modelos`):** Criação e importação de templates de contrato (HTML ou Texto Simples).
 *   **Geração de Contrato (`/contratos/preencher/:modeloId`):** Fluxo para selecionar um cliente, preencher tags customizadas e dados financeiros (valor, parcelamento), renderizar o contrato e gerar as Contas a Receber correspondentes.
 
-### 4. Módulo de Bancos / Caixas (`/bancos`)
+### 4. Módulo de Documentos Societários (NOVO)
+
+Criação e gestão de documentos internos (Atas, Contratos Sociais, etc.) usando modelos e blocos de conteúdo reutilizáveis.
+
+*   **Gerenciar Blocos (`/documentos-societarios/blocos`):** Criação de blocos de texto reutilizáveis.
+*   **Gerenciar Modelos (`/documentos-societarios/modelos`):** Criação de templates de documentos com tags dinâmicas.
+*   **Documentos Gerados (`/documentos-societarios`):** Lista e gerencia documentos finalizados.
+
+### 5. Módulo de Bancos / Caixas (`/bancos`)
 
 *   **Cálculo de Saldo Dinâmico:** O saldo atual de cada conta (`saldo_contas`) é calculado em tempo real, somando o `saldo_inicial` com todas as `Entradas` e subtraindo todas as `Saídas` registradas na tabela `lancamentos`.
-*   **Integração com CR:** O registro de recebimentos em Contas a Receber agora gera automaticamente um lançamento de `Entrada` na conta de destino selecionada, garantindo a apuração correta do saldo.
+*   **Contas Patrimoniais (`/contas-patrimoniais`):** Novo módulo para gerenciar contas de Ativo/Passivo/PL que não são contas de caixa/banco, mas que recebem lançamentos contábeis.
+*   **Integração com CR/CP:** O registro de recebimentos/pagamentos gera automaticamente lançamentos de `Entrada`/`Saída` na conta de destino selecionada, garantindo a apuração correta do saldo.
 
 ---
 
@@ -52,52 +61,46 @@ Criação, gestão e preenchimento de contratos dinâmicos.
 
 Foram adicionadas políticas de RLS cruciais para garantir que os Clientes possam acessar seus próprios dados financeiros e de RH, mas não os dados de outros clientes ou os dados de faturamento do Admin.
 
-| Tabela | Política Adicionada | Propósito |
+### 2. Fluxo Contábil (Partidas Dobradas)
+
+Todas as movimentações financeiras (recebimentos, pagamentos, conciliação) geram registros na tabela `lancamentos` para permitir o cálculo de saldo e a geração de relatórios (DRE/Balanço).
+
+**Novas Regras Contábeis Implementadas:**
+
+*   **Contas a Receber (CR):** A criação de um CR gera **DÉBITO** no Ativo (Clientes a Receber) e **CRÉDITO** na Receita (Resultado).
+*   **Recebimento de CR:** O recebimento gera **DÉBITO** no Ativo (Caixa/Banco) e **CRÉDITO** no Ativo (Clientes a Receber - Estorno Patrimonial).
+*   **Contas a Pagar (CP):** A criação de um CP gera **DÉBITO** na Despesa/Custo (Resultado) e **CRÉDITO** no Passivo (Obrigação a Pagar).
+*   **Pagamento de CP:** O pagamento gera **DÉBITO** no Passivo (Obrigação a Pagar - Estorno Patrimonial) e **CRÉDITO** no Ativo (Caixa/Banco).
+
+### 3. Funções RPC e Edge Functions
+
+| Função | Propósito | Status |
 | :--- | :--- | :--- |
-| `public.contas_pagar` | `Empresas podem gerenciar suas contas a pagar` | Permite que Clientes (`empresa_id = auth.uid()`) e seus Usuários (`empresa_id = cliente_id`) vejam suas próprias contas a pagar. |
-| `public.admin_recebimentos` | `Clientes can view their own payments` | Permite que o Cliente logado veja os registros de recebimento do Admin onde ele é o pagador (`cliente_id = auth.uid()`). |
-| `public.tbl_admins` | `Allow read access for authenticated users` | Permite que qualquer usuário autenticado leia a tabela `tbl_admins` (necessário para o `SessionContext` determinar a role). |
-
-### 2. Integridade de Dados (Foreign Keys)
-
-Foram adicionadas chaves estrangeiras nas tabelas de faturamento do Admin para garantir a integridade dos dados:
-
-```sql
--- FKs para admin_contas_receber
-ALTER TABLE public.admin_contas_receber ADD CONSTRAINT fk_admin_id FOREIGN KEY (admin_id) REFERENCES public.tbl_admins(id) ON DELETE CASCADE;
-ALTER TABLE public.admin_contas_receber ADD CONSTRAINT fk_cliente_id_cr FOREIGN KEY (cliente_id) REFERENCES public.clientes(id) ON DELETE RESTRICT;
-
--- FKs para admin_recebimentos
-ALTER TABLE public.admin_recebimentos ADD CONSTRAINT fk_admin_id_recebimento FOREIGN KEY (admin_id) REFERENCES public.tbl_admins(id) ON DELETE CASCADE;
-ALTER TABLE public.admin_recebimentos ADD CONSTRAINT fk_cliente_id_pagador FOREIGN KEY (cliente_id) REFERENCES public.tbl_clientes(id) ON DELETE RESTRICT;
-```
-
-### 3. Função RPC `activate_subscription` (Faturamento)
-
-Esta função é o coração do fluxo de pagamento. Ela é chamada após o checkout bem-sucedido e executa a lógica de renovação de 30 dias e faturamento:
-
-1.  **Calcula a `v_new_data_fim_acesso`:** Define a nova data de expiração do acesso (30 dias a partir da data base, ajustada para o final do dia).
-2.  **Atualiza `tbl_clientes`:** Define o novo `plano_id`, `data_fim_acesso` e `permissoes`.
-3.  **Registra o Faturamento do Admin:** Cria um registro de Conta a Receber (`admin_contas_receber`) marcado como `recebida` (paga), com a `data_vencimento` refletindo o período de acesso contratado.
-4.  **Cria a Próxima Cobrança do Cliente:** Insere um registro `pendente` na tabela `contas_pagar` do cliente, com a `data_vencimento` sendo o dia seguinte à `data_fim_acesso`.
+| `activate_subscription` | Ativa a assinatura inicial e gera faturamento (CR). | OK |
+| `manual_subscription_renewal` | Processa a renovação paga e gera faturamento recorrente. | OK |
+| `delete_contract_and_reverse_accounting` | Deleta contrato e gera estorno contábil (D: Receita, C: Ativo). | OK |
+| `cancel_contract_installments` | Bloqueia contrato e cancela parcelas pendentes. | OK |
+| `reactivate_contract_installments` | Reativa contrato e reabre parcelas. | OK |
+| `create-user-admin` (Edge) | Cria usuários (Funcionários/Clientes) usando a Service Role Key. | OK |
+| `manage-plano-contas` (Edge) | Limpa e insere o novo Plano de Contas em massa. | OK |
+| `update-plano-contas-fks` (Edge) | Atualiza todas as referências de FKs após a importação do Plano de Contas. | OK |
 
 ---
 
 ## 💻 Implementação Frontend e Integrações
 
-### 1. `src/App.tsx` (Payment Success Handler)
+### 1. Fluxo de Faturamento e Pagamento
 
-O componente `PaymentSuccessHandler` intercepta os parâmetros de URL (`payment=success&session_id=...`) após o retorno do Stripe e chama o RPC `activate_subscription` para finalizar a transação e atualizar o perfil do usuário.
+*   **`PaymentSuccessHandler` / `PaymentRenewalHandler`:** Lidam com o retorno do Stripe, chamando as RPCs de ativação/renovação e garantindo que o `id_conta_resultado` (Receita) seja passado para o lançamento contábil correto.
+*   **`CheckoutPlano.tsx`:** Lógica de checkout unificada para adesão e renovação, garantindo que o `plano_id` e as `permissoes` sejam atualizados no perfil do cliente antes do pagamento.
 
-### 2. `src/hooks/use-sessao.ts` (Fluxo de Auth)
+### 2. Contabilidade e Relatórios
 
-A lógica de autenticação foi aprimorada para priorizar o evento `PASSWORD_RECOVERY`, garantindo que o usuário seja redirecionado para `/atualizar-senha` em vez de ser logado automaticamente no painel.
+*   **`useContabilConfig`:** Novo hook para buscar o mapeamento de códigos de nível 1 (Ativo=1, Receita=4, etc.) definido pelo Admin, garantindo que os relatórios (DRE/Balanço) e lançamentos usem a estrutura correta.
+*   **`useBalancoPatrimonial` / `useDRE`:** Hooks de cálculo que utilizam a tabela `lancamentos` e o `configMap` para gerar relatórios dinâmicos.
+*   **`ExportarLancamentos.tsx`:** Exporta lançamentos no formato de partidas dobradas (Débito/Crédito) para sistemas contábeis (ex: Calima), com validação de mapeamento de contas e históricos.
 
-### 3. Componentes Chave
+### 3. Formulários e Componentes
 
-*   **`src/components/CheckoutPlano.tsx`:** Gerencia a coleta de dados de adesão e a chamada para a Edge Function do Stripe.
-*   **`src/components/LayoutPrincipal.tsx`:** Implementa a lógica de bloqueio de acesso (`isAccessExpired` / `isAccessBlocked`) e exibe o `TrialBanner` e o `TrialButton` conforme o status do cliente.
-*   **`src/components/RegistrarPagamentoDialog.tsx`:** Garante que o registro de recebimento gere um lançamento de `Entrada` na conta de saldo selecionada (`lancamentos` table).
-*   **`src/hooks/use-saldo-conta-calculado.ts`:** Novo hook que calcula o saldo atual das contas de caixa/banco (`saldo_contas`) com base nos lançamentos (`lancamentos`).
-*   **`src/hooks/use-tag-manager.ts`:** Hook responsável por verificar e alternar a presença de tags de contrato na tabela `contrato_tags` com base nos campos do perfil do Cliente/Usuário.
-*   **`src/hooks/useConciliacao.ts`:** A lógica de prevenção de duplicidade de extratos bancários foi movida inteiramente para o frontend, permitindo a importação de múltiplas transações idênticas no mesmo dia, desde que não tenham sido salvas anteriormente na tabela `extratos`.
+*   **`FormContasReceber` / `FormContasPagar`:** Formulários atualizados para incluir a seleção de `conta_patrimonial_id` e `historico_id`, garantindo que cada lançamento sintético tenha o vínculo contábil necessário para o Balanço Patrimonial.
+*   **`DetalhesLancamentosDialog`:** Permite visualizar o extrato detalhado de qualquer conta de saldo ou conta patrimonial, com a opção de exclusão de lançamentos.
