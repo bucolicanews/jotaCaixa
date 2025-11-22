@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, FileSignature, ChevronLeft, Save, Eye, Building2, PlusCircle, Tag } from 'lucide-react';
+import { Loader2, FileSignature, ChevronLeft, Save, Eye, Building2, Tag } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
-import { DocumentoSocietarioModelo, BlocoSocietario, DocumentoSocietarioGerado } from '@/types/documentos-societarios';
+import { DocumentoSocietarioModelo, DocumentoSocietarioGerado } from '@/types/documentos-societarios';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,10 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import DocumentoPreviewDialog from '@/components/documentos-societarios/DocumentoPreviewDialog';
 import { useSessao } from '@/hooks/use-sessao';
 import { TAGS_PADRAO } from '@/config/contrato-tags-padrao';
-import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
-import { cn } from '@/lib/utils';
-import { sanitizeConteudo } from '@/utils/formatters';
 import { useForm, FormProvider } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -59,15 +56,12 @@ interface ClienteCRCompleto {
     data_nascimento?: string | null;
 }
 
-// Esquema de validação para o formulário
+// Esquema de validação simplificado
 const formSchema = z.object({
     titulo_documento: z.string().min(1, 'O título é obrigatório.'),
     cliente_id: z.string().uuid('Selecione um cliente válido.'),
     proprietario_documento_id: z.string().uuid('Selecione o proprietário.'),
     tipo_conteudo: z.enum(['html', 'texto']),
-    
-    // Campos dinâmicos (tags)
-    conteudo_principal: z.string().min(10, 'O conteúdo é muito curto.'),
     valores_tags: z.record(z.string()).optional(),
 });
 
@@ -82,7 +76,6 @@ const GerarDocumentoSocietario: React.FC = () => {
   
   const [modelo, setModelo] = useState<DocumentoSocietarioModelo | null>(null);
   const [documentoInicial, setDocumentoInicial] = useState<ExtendedDocumentoSocietarioGerado | null>(null);
-  const [blocos, setBlocos] = useState<BlocoSocietario[]>([]);
   const [tagsCustomizadas, setTagsCustomizadas] = useState<any[]>([]);
   
   const [clientesCR, setClientesCR] = useState<ClienteCRCompleto[]>([]);
@@ -93,9 +86,6 @@ const GerarDocumentoSocietario: React.FC = () => {
   const [conteudoPreview, setConteudoPreview] = useState('');
   const [previewTitle, setPreviewTitle] = useState('');
   
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  
-  // ESTADOS LOCAIS QUE SERÃO MIGRADOS PARA O RHF OU USADOS PARA CONTROLE
   const [empresasContrato, setEmpresasContrato] = useState<EmpresaContrato[]>([]);
   const [empresaLogada, setEmpresaLogada] = useState<any>(null);
   
@@ -121,7 +111,6 @@ const GerarDocumentoSocietario: React.FC = () => {
         cliente_id: '',
         proprietario_documento_id: '',
         tipo_conteudo: 'html',
-        conteudo_principal: '',
         valores_tags: {},
     },
   });
@@ -133,7 +122,6 @@ const GerarDocumentoSocietario: React.FC = () => {
   const tituloDocumento = watch('titulo_documento');
   const tipoConteudo = watch('tipo_conteudo');
   const valoresTags = watch('valores_tags') || {};
-  const conteudoPrincipal = watch('conteudo_principal');
 
   // Cliente selecionado (para preenchimento de tags)
   const clienteSelecionado = useMemo(() => {
@@ -202,19 +190,6 @@ const GerarDocumentoSocietario: React.FC = () => {
         }
     }
     
-    // 3. Buscar Blocos de Conteúdo
-    const { data: blocosData, error: blocosError } = await supabase
-        .from('blocos_societarios')
-        .select('*')
-        .or(`proprietario_id.eq.${targetEmpresaId},proprietario_id.is.null`)
-        .order('titulo');
-        
-    if (blocosError) {
-        console.error('Erro ao carregar blocos:', blocosError);
-    } else {
-        setBlocos(blocosData as BlocoSocietario[]);
-    }
-    
   }, [clienteSelecionadoId, setValue]);
 
 
@@ -276,12 +251,13 @@ const GerarDocumentoSocietario: React.FC = () => {
         currentModelo = modeloData as DocumentoSocietarioModelo;
         
         // NOVO: Inicializa o campo {{CONTEUDO_PRINCIPAL}} com o template do modelo
-        initialValoresTags['{{CONTEUDO_PRINCIPAL}}'] = sanitizeConteudo(modeloData.conteudo_template);
+        initialValoresTags['{{CONTEUDO_PRINCIPAL}}'] = currentModelo.conteudo_template;
     }
     
     setModelo(currentModelo);
     
     // 3. Configurar Empresas Contratantes (Apenas Admin)
+    let empresasContratoList: EmpresaContrato[] = [];
     if (isAdmin) {
         const { data: clientesData } = await supabase
             .from('tbl_clientes')
@@ -291,11 +267,11 @@ const GerarDocumentoSocietario: React.FC = () => {
             
         if (clientesData) {
             const adminOption: EmpresaContrato = { id: ownerIdLogado, nome: 'Meus Documentos (Admin)' };
-            const allClients = [adminOption, ...(clientesData as EmpresaContrato[])];
-            setEmpresasContrato(allClients);
-            if (!documentoId) initialProprietarioDocumentoId = allClients[0].id;
+            empresasContratoList = [adminOption, ...(clientesData as EmpresaContrato[])];
+            if (!documentoId) initialProprietarioDocumentoId = empresasContratoList[0].id;
         }
     }
+    setEmpresasContrato(empresasContratoList); // CORREÇÃO AQUI
     
     // 4. Resetar o formulário com os dados carregados
     form.reset({
@@ -303,7 +279,6 @@ const GerarDocumentoSocietario: React.FC = () => {
         cliente_id: initialClienteId,
         proprietario_documento_id: initialProprietarioDocumentoId || '',
         tipo_conteudo: currentModelo?.tipo_conteudo || 'html',
-        conteudo_principal: initialValoresTags['{{CONTEUDO_PRINCIPAL}}'] || '',
         valores_tags: initialValoresTags,
     });
     
@@ -412,7 +387,9 @@ const GerarDocumentoSocietario: React.FC = () => {
   const handlePreview = () => {
       if (!modelo) return;
       
-      const templateToRender = conteudoPrincipal || modelo.conteudo_template;
+      // O conteúdo principal é o valor da tag {{CONTEUDO_PRINCIPAL}} ou o template original
+      const templateToRender = valoresTags['{{CONTEUDO_PRINCIPAL}}'] || modelo.conteudo_template;
+      
       const conteudoRenderizado = renderizarConteudo(templateToRender, valoresTags);
       
       setConteudoPreview(conteudoRenderizado);
@@ -434,11 +411,11 @@ const GerarDocumentoSocietario: React.FC = () => {
         const clienteSelecionado = clientesCR.find((c: ClienteCRCompleto) => c.id === values.cliente_id);
         if (!clienteSelecionado) throw new Error('Cliente selecionado não encontrado.');
         
-        const templateToRender = values.conteudo_principal || modelo.conteudo_template;
-        const conteudoRenderizado = renderizarConteudo(templateToRender, values.valores_tags || {});
+        // O conteúdo renderizado é o template do modelo com as tags preenchidas
+        const conteudoRenderizado = renderizarConteudo(modelo.conteudo_template, values.valores_tags || {});
         
         // 1. Sanitiza o conteúdo principal antes de salvar
-        const sanitizedContudoPrincipal = sanitizeConteudo(values.conteudo_principal);
+        const sanitizedContudoPrincipal = values.valores_tags?.['{{CONTEUDO_PRINCIPAL}}'] || '';
         
         // 2. Prepara dados do Documento Gerado
         const documentoPayload = {
@@ -481,51 +458,7 @@ const GerarDocumentoSocietario: React.FC = () => {
     }
   };
   
-  // --- FUNÇÕES DE DRAG AND DROP E INSERÇÃO DE BLOCOS ---
-  
-  const handleInsertText = (text: string) => {
-      const textarea = textareaRef.current;
-      if (!textarea) return;
-      
-      const start = textarea.selectionStart;
-      const end = textarea.selectionEnd;
-      const currentValue = getValues('conteudo_principal') || ''; 
-      
-      const sanitizedText = sanitizeConteudo(text);
-      
-      const newValue = currentValue.substring(0, start) + sanitizedText + currentValue.substring(end);
-      
-      // 1. Atualiza o valor no RHF
-      setValue('conteudo_principal', newValue, { shouldDirty: true });
-      
-      // 2. Força o foco e a posição do cursor
-      setTimeout(() => {
-          textarea.focus();
-          textarea.selectionStart = start + sanitizedText.length;
-          textarea.selectionEnd = start + sanitizedText.length;
-      }, 0);
-  };
-  
-  const handleInsertBloco = (bloco: BlocoSocietario) => {
-      handleInsertText(`\n\n${bloco.conteudo}\n\n`);
-      showSuccess(`Bloco '${bloco.titulo}' inserido no conteúdo.`);
-  };
-  
-  const handleDragOver = (e: React.DragEvent<HTMLTextAreaElement>) => {
-      e.preventDefault();
-  };
-  
-  const handleDrop = (e: React.DragEvent<HTMLTextAreaElement>) => {
-      e.preventDefault();
-      const tag = e.dataTransfer.getData("text/plain");
-      
-      if (!tag) return;
-      
-      handleInsertText(tag);
-      showSuccess(`Conteúdo inserido.`);
-  };
-  
-  // --- FIM FUNÇÕES DE DRAG AND DROP E INSERÇÃO DE BLOCOS ---
+  // --- FUNÇÕES DE DRAG AND DROP E INSERÇÃO DE BLOCOS (REMOVIDAS) ---
 
   if (carregandoSessao || carregandoDados) {
     return (
@@ -691,10 +624,10 @@ const GerarDocumentoSocietario: React.FC = () => {
                   </CardContent>
               </Card>
               
-              {/* Coluna 2: Template e Blocos */}
+              {/* Coluna 2: Prévia do Conteúdo do Modelo */}
               <Card className="lg:col-span-2">
                   <CardHeader className="flex flex-row items-center justify-between">
-                      <CardTitle className="text-xl">Conteúdo do Documento</CardTitle>
+                      <CardTitle className="text-xl">Prévia do Conteúdo do Modelo</CardTitle>
                       <Button 
                           onClick={() => handleSalvarDocumento('rascunho')} 
                           variant="secondary" 
@@ -707,79 +640,29 @@ const GerarDocumentoSocietario: React.FC = () => {
                   </CardHeader>
                   <CardContent className="space-y-4">
                       
-                      {/* Campo de Conteúdo Principal (Editável) */}
+                      {/* Exibe o template do modelo (não editável) */}
                       <div className="space-y-2">
-                          <Label htmlFor="conteudo-principal">Conteúdo Principal (Editável)</Label>
-                          <FormField control={form.control} name="conteudo_principal" render={({ field }) => (
-                              <FormItem>
-                                  <FormControl>
-                                      <Textarea
-                                          id="conteudo-principal"
-                                          ref={textareaRef}
-                                          rows={15}
-                                          className={cn("font-mono text-sm", tipoConteudo === 'html' ? 'bg-yellow-50/50 dark:bg-yellow-900/10' : '')}
-                                          onDragOver={handleDragOver}
-                                          onDrop={handleDrop}
-                                          {...field}
-                                          value={field.value || ''}
-                                      />
-                                  </FormControl>
-                                  <FormMessage />
-                              </FormItem>
-                          )} />
+                          <Label>Template Base</Label>
+                          <div className="border rounded-md p-4 bg-secondary/50 max-h-[400px] overflow-y-auto font-mono text-sm">
+                              {modelo?.conteudo_template ? (
+                                  <pre style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{modelo.conteudo_template}</pre>
+                              ) : (
+                                  <p className="text-muted-foreground">Modelo não carregado.</p>
+                              )}
+                          </div>
                       </div>
                       
                       <Separator />
                       
-                      {/* Tags e Blocos de Conteúdo */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {/* Tags Arrastáveis */}
-                          <div className="space-y-2">
-                              <h3 className="font-semibold text-lg flex items-center">
-                                  <Tag className="w-4 h-4 mr-2" /> Arrastar Tags
-                              </h3>
-                              <p className="text-sm text-muted-foreground">Arraste as tags para o campo de conteúdo acima.</p>
-                              <div className="space-y-2 max-h-40 overflow-y-auto p-2 border rounded-md">
-                                  {allAvailableTags.map((tag: ContratoTag) => (
-                                      <div 
-                                          key={tag.nome_tag} 
-                                          className="p-2 border rounded-md cursor-pointer hover:bg-accent/50 transition-colors"
-                                          draggable
-                                          onDragStart={(e) => e.dataTransfer.setData("text/plain", tag.nome_tag)}
-                                          onClick={() => handleInsertText(tag.nome_tag)}
-                                      >
-                                          <p className="font-mono text-xs font-semibold text-primary">{tag.nome_tag}</p>
-                                          <p className="text-xs text-muted-foreground">{tag.descricao}</p>
-                                      </div>
-                                  ))}
-                              </div>
-                          </div>
-                          
-                          {/* Blocos de Conteúdo */}
-                          <div className="space-y-2">
-                              <h3 className="font-semibold text-lg flex items-center">
-                                  <PlusCircle className="w-4 h-4 mr-2" /> Inserir Blocos
-                              </h3>
-                              <p className="text-sm text-muted-foreground">Clique ou arraste para adicionar um bloco pré-definido.</p>
-                              <div className="grid grid-cols-1 gap-2 max-h-40 overflow-y-auto p-2 border rounded-md">
-                                  {blocos.length === 0 ? (
-                                      <p className="text-muted-foreground text-sm col-span-2">Nenhum bloco disponível.</p>
-                                  ) : (
-                                      blocos.map(bloco => (
-                                          <Button 
-                                              key={bloco.id} 
-                                              variant="outline" 
-                                              size="sm" 
-                                              onClick={() => handleInsertBloco(bloco)}
-                                              className="justify-start truncate"
-                                              draggable
-                                              onDragStart={(e) => e.dataTransfer.setData("text/plain", `\n\n${bloco.conteudo}\n\n`)}
-                                          >
-                                              {bloco.titulo}
-                                          </Button>
-                                      ))
-                                  )}
-                              </div>
+                      {/* Prévia Renderizada */}
+                      <div className="space-y-2">
+                          <Label>Prévia Renderizada</Label>
+                          <div className="border rounded-md p-4 bg-background shadow-inner max-h-[400px] overflow-y-auto">
+                              {modelo?.conteudo_template ? (
+                                  <div dangerouslySetInnerHTML={{ __html: renderizarConteudo(modelo.conteudo_template, valoresTags) }} />
+                              ) : (
+                                  <p className="text-muted-foreground">Selecione um modelo e um cliente para ver a prévia.</p>
+                              )}
                           </div>
                       </div>
                       
