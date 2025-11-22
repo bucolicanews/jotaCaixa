@@ -170,10 +170,11 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
       // Insere a tag na posição do cursor
       const newValue = currentValue.substring(0, start) + tag + currentValue.substring(end);
       
-      // ATUALIZAÇÃO CRÍTICA: Usar form.setValue para garantir que o react-hook-form registre a mudança
+      // 1. ATUALIZAÇÃO CRÍTICA: Usar form.setValue para garantir que o react-hook-form registre a mudança
       form.setValue('conteudo_template', newValue, { shouldDirty: true });
       
-      // Move o cursor para o final da tag inserida
+      // 2. CORREÇÃO: Força o foco e a posição do cursor após a atualização do valor
+      // O setTimeout é necessário para dar tempo ao React/RHF de processar o setValue
       setTimeout(() => {
           textarea.focus();
           textarea.selectionStart = start + tag.length;
