@@ -399,15 +399,22 @@ const GerarDocumentoSocietario: React.FC = () => {
 
   // NOVO useEffect para chamar updateTags apenas quando as dependências mudam
   useEffect(() => {
-    // 1. Condição de Saída: Se o modelo não carregou, ou se as tags já foram aplicadas (para evitar loop)
-    if (!modelo || tagsAplicadas) return;
+    // Se o modelo não carregou, não faz nada.
+    if (!modelo) return;
 
-    // 2. Condição de Execução: Se o cliente selecionado mudar (ou na carga inicial)
-    if (clienteSelecionado || !isEditing) {
+    // Se o cliente selecionado mudar, ou se o modelo for carregado (e não for edição), aplica as tags.
+    // O uso de clienteSelecionadoId (string) é mais estável que clienteSelecionado (objeto memoizado).
+    if (clienteSelecionadoId || !isEditing) {
+        // Se o cliente mudar, resetamos o estado de tags aplicadas para forçar a atualização
+        if (tagsAplicadas) {
+            setTagsAplicadas(false);
+        }
+        
+        // Chamamos a função de atualização
         updateTags();
-        setTagsAplicadas(true); // Marca como aplicado
+        setTagsAplicadas(true);
     }
-  }, [clienteSelecionado, modelo, tagsAplicadas, updateTags, isEditing]);
+  }, [clienteSelecionadoId, modelo, isEditing, updateTags]); // Removendo tagsAplicadas do array de dependências
 
   const handleTagChange = (tag: string, value: string) => {
     const currentTags = getValues('valores_tags') || {};
