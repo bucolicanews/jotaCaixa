@@ -179,11 +179,12 @@ const PreencherContrato: React.FC = () => {
     // 2. Buscar Clientes (Contratados) - AGORA BUSCA NA TABELA 'clientes' (Clientes CR)
     const { data: clientesCRData, error: errorCR } = await supabase
         .from('clientes') // CORREÇÃO: Usando a tabela 'clientes'
-        .select('id, proprietario_id, nome, razao_social, nome_fantasia, documento, email, telefone, telefone_fixo, cep, endereco, numero, complemento, bairro, cidade, estado, cpf, cnpj, rg') // Seleciona todos os campos para preenchimento de tags
+        .select('id, proprietario_id, nome, razao_social, nome_fantasia, documento, email, telefone, telefone_fixo, cep, endereco, numero, complemento, bairro, cidade, estado, cpf, cnpj, rg, data_nascimento') // Seleciona todos os campos para preenchimento de tags
         .eq('proprietario_id', targetEmpresaId) // Filtra pelos clientes do Admin/Cliente
         .order('nome');
         
     if (errorCR) {
+      // O erro de coluna inexistente deve ser resolvido pelo SQL executado no início
         showError('Erro ao carregar clientes CR: ' + errorCR.message);
         setClientesCR([]);
     } else {
@@ -275,31 +276,23 @@ const PreencherContrato: React.FC = () => {
         const tabelaParcelas = isContractOwnerAdmin ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
         
         // Busca a conta sintética para obter o ID da conta a receber
-        const { data: contaReceberData, error: contaReceberError } = await supabase
+        const { data: contaReceberData } = await supabase
             .from(tabelaContasReceber)
             .select('id')
             .eq('contrato_gerado_id', contrato.id)
             .limit(1)
             .single();
             
-        if (contaReceberError && contaReceberError.code !== 'PGRST116') {
-            console.error(`Erro ao buscar conta sintética na tabela ${tabelaContasReceber}:`, contaReceberError);
-        }
-            
         const contaReceberId = contaReceberData?.id;
 
         if (contaReceberId) {
-            const { data: primeiraParcela, error: parcelaError } = await supabase
+            const { data: primeiraParcela } = await supabase
                 .from(tabelaParcelas)
                 .select('valor_parcela, data_vencimento')
                 .eq('conta_receber_id', contaReceberId)
                 .order('numero_parcela', { ascending: true })
                 .limit(1)
                 .single();
-                
-            if (parcelaError && parcelaError.code !== 'PGRST116') {
-                console.error(`Erro ao buscar primeira parcela na tabela ${tabelaParcelas}:`, parcelaError);
-            }
                 
             if (primeiraParcela) {
                 if (numParcelas === 1) {
