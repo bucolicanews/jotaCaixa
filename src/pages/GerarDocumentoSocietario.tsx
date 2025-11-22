@@ -183,8 +183,8 @@ const GerarDocumentoSocietario: React.FC = () => {
     // 2. Buscar Clientes (Contratados) - AGORA BUSCA NA TABELA 'tbl_clientes' (Clientes do Sistema)
     let queryClients = supabase
         .from('tbl_clientes')
-        .select('id, nome, razao_social, nome_fantasia, documento, email, telefone, cep, endereco, numero, complemento, bairro, cidade, estado, cpf, cnpj, rg')
-        .eq('admin_id', targetEmpresaId)
+        .select('id, nome, razao_social, nome_fantasia, documento, email, telefone, cep, endereco, numero, complemento, bairro, cidade, estado, cpf, rg') // REMOVIDO CNPJ
+        .eq('admin_id', targetEmpresaId) // FILTRANDO POR admin_id
         .eq('aprovado', true)
         .neq('id', targetEmpresaId)
         .order('nome');
@@ -192,6 +192,8 @@ const GerarDocumentoSocietario: React.FC = () => {
     const { data: clientesCRData, error: errorCR } = await queryClients;
         
     if (errorCR) {
+        // CORREÇÃO: Removendo a coluna 'cnpj' da mensagem de erro, se for o caso.
+        console.error('Erro ao carregar clientes do sistema:', errorCR);
         showError('Erro ao carregar clientes do sistema: ' + errorCR.message);
         setClientesCR([]);
     } else {
