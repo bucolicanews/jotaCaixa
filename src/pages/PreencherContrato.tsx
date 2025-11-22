@@ -146,7 +146,7 @@ const PreencherContrato: React.FC = () => {
         nome: profile.nome, 
         email: profile.email, 
         documento: isAdmin ? documentoAdmin : documentoCliente,
-        cpf: (profile as AdminProfile).cpf || (profile as ClienteProfile).cpf, 
+        cpf: (profile as AdminProfile).cpf || (profile as ClienteProfile)?.cpf, 
         cnpj: (profile as AdminProfile).cnpj, 
         rg: (profile as AdminProfile).rg || (profile as ClienteProfile)?.rg, 
         telefone: (profile as AdminProfile).telefone || (profile as ClienteProfile)?.telefone,
@@ -781,7 +781,7 @@ const PreencherContrato: React.FC = () => {
       {/* CORREÇÃO DE LAYOUT: Usando grid-cols-1 lg:grid-cols-[1fr_2fr] para restaurar a proporção original */}
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_2fr] gap-6">
         
-        {/* Coluna 1: Dados e Financeiro */}
+        {/* Coluna 1: Dados e Faturamento */}
         <Card className="h-fit">
             <CardHeader><CardTitle className="text-xl">Dados e Faturamento</CardTitle></CardHeader>
             <CardContent className="space-y-6">
@@ -832,26 +832,31 @@ const PreencherContrato: React.FC = () => {
                 
                 <div className="space-y-4 pt-4 border-t">
                     <h3 className="font-semibold text-lg">Detalhes Financeiros</h3>
-                    <div className="space-y-2">
-                        <Label htmlFor="valor-total">Valor Total do Contrato (R$)</Label>
-                        <Input 
-                            id="valor-total"
-                            type="number"
-                            step="0.01"
-                            value={valorTotal}
-                            onChange={(e) => setValorTotal(parseFloat(e.target.value) || 0)}
-                            placeholder="0.00"
-                        />
-                    </div>
                     
-                    <div className="space-y-2">
-                        <Label>Tipo de Lançamento</Label>
-                        <RadioGroup value={tipoLancamento} onValueChange={(v: TipoLancamento) => setTipoLancamento(v)} className="flex space-x-4">
-                            <div className="flex items-center space-x-2"><RadioGroupItem value="unico" id="unico" /><Label htmlFor="unico">Único</Label></div>
-                            <div className="flex items-center space-x-2"><RadioGroupItem value="parcelar" id="parcelar" /><Label htmlFor="parcelar">Parcelar</Label></div>
-                            <div className="flex items-center space-x-2"><RadioGroupItem value="repetir" id="repetir" /><Label htmlFor="repetir">Repetir</Label></div>
-                        </RadioGroup>
+                    {/* INÍCIO DA CORREÇÃO: Usando grid-cols-1 md:grid-cols-2 */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="valor-total">Valor Total do Contrato (R$)</Label>
+                            <Input 
+                                id="valor-total"
+                                type="number"
+                                step="0.01"
+                                value={valorTotal}
+                                onChange={(e) => setValorTotal(parseFloat(e.target.value) || 0)}
+                                placeholder="0.00"
+                            />
+                        </div>
+                        
+                        <div className="space-y-2">
+                            <Label>Tipo de Lançamento</Label>
+                            <RadioGroup value={tipoLancamento} onValueChange={(v: TipoLancamento) => setTipoLancamento(v)} className="flex space-x-4 pt-2">
+                                <div className="flex items-center space-x-2"><RadioGroupItem value="unico" id="unico" /><Label htmlFor="unico">Único</Label></div>
+                                <div className="flex items-center space-x-2"><RadioGroupItem value="parcelar" id="parcelar" /><Label htmlFor="parcelar">Parcelar</Label></div>
+                                <div className="flex items-center space-x-2"><RadioGroupItem value="repetir" id="repetir" /><Label htmlFor="repetir">Repetir</Label></div>
+                            </RadioGroup>
+                        </div>
                     </div>
+                    {/* FIM DA CORREÇÃO */}
                     
                     {tipoLancamento === 'unico' && (
                         <div className="space-y-2">
