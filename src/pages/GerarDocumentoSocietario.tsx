@@ -168,6 +168,11 @@ const GerarDocumentoSocietario: React.FC = () => {
         const tagsNaoFinanceiras = TAGS_PADRAO.filter(t => !t.origem_dado?.startsWith('contas_receber'));
         
         // Combina tags padrão e customizadas
+        const customTagsMap = tagsData.reduce((acc, tag) => {
+            acc[tag.nome_tag] = tag;
+            return acc;
+        }, {} as Record<string, any>);
+        
         const allTags = [...tagsNaoFinanceiras, ...tagsData]
             .filter((t, index, self) => index === self.findIndex((t2) => t2.nome_tag === t.nome_tag))
             .sort((a, b) => a.nome_tag.localeCompare(b.nome_tag));
@@ -298,7 +303,7 @@ const GerarDocumentoSocietario: React.FC = () => {
     
     setEmpresaLogada(empresaLogadaMemo);
     setCarregandoDados(false);
-  }, [modeloId, documentoId, ownerIdLogado, navigate, isAdmin, isClient, empresaLogadaMemo, form]);
+  }, [modeloId, documentoId, ownerIdLogado, navigate, role, perfil, usuario, isAdmin, isClient, empresaLogadaMemo, form]);
   
   // Efeito para monitorar a mudança do proprietário do documento
   useEffect(() => {
@@ -321,7 +326,7 @@ const GerarDocumentoSocietario: React.FC = () => {
       const customTagsMap = tagsCustomizadas.reduce((acc, tag) => {
           acc[tag.nome_tag] = tag;
           return acc;
-      }, {} as Record<string, ContratoTag>);
+      }, {} as Record<string, any>);
       
       const tagsNaoFinanceiras = TAGS_PADRAO.filter(t => !t.origem_dado?.startsWith('contas_receber'));
       
@@ -333,7 +338,7 @@ const GerarDocumentoSocietario: React.FC = () => {
               const defaultTag = tagsNaoFinanceiras.find(t => t.nome_tag === tagKey);
               return customTag || defaultTag;
           })
-          .filter((t): t is ContratoTag => !!t)
+          .filter((t): t is any => !!t) // Mantendo o tipo any para simplificar
           .sort((a, b) => a.nome_tag.localeCompare(b.nome_tag));
           
       return uniqueTags;
@@ -489,7 +494,7 @@ const GerarDocumentoSocietario: React.FC = () => {
       
       // Inclui tags que não têm valor preenchido
       return !valoresTags[tag.nome_tag];
-  });
+  }).map(tag => tag.nome_tag); // Mapeia para retornar apenas a string do nome da tag
 
   if (carregandoSessao || carregandoDados) {
     return (
