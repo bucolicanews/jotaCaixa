@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, FormProvider } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from '@/components/ui/button';
@@ -184,6 +184,7 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
       form.setValue('conteudo_template', newValue, { shouldDirty: true });
       
       // 2. Força o foco e a posição do cursor
+      // O setTimeout é necessário para dar tempo ao React/RHF de processar o setValue
       setTimeout(() => {
           textarea.focus();
           textarea.selectionStart = start + sanitizedText.length;
@@ -211,7 +212,7 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
       if (!tag) return;
       
       handleInsertText(tag);
-      showSuccess(`Conteúdo inserido.`);
+      // Não precisa de showSuccess aqui, pois o handleInsertText já faz o trabalho
   };
   
   // --- FIM FUNÇÕES DE INSERÇÃO DE TEXTO ---
@@ -320,7 +321,7 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
                     
                     <Separator className="my-4" />
                     
-                    <h4 className="font-semibold flex items-center mb-2"><PlusCircle className="w-4 h-4 mr-2" /> Blocos de Conteúdo</h4>
+                    <h4 className="font-semibold flex items-center"><PlusCircle className="w-4 h-4 mr-2" /> Blocos de Conteúdo</h4>
                     <p className="text-sm text-muted-foreground mb-3">Clique ou arraste para inserir o bloco.</p>
                     <div className="grid grid-cols-1 gap-2 max-h-40 overflow-y-auto p-2 border rounded-md">
                         {blocos.length === 0 ? (
