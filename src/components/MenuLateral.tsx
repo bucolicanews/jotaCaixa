@@ -41,7 +41,7 @@ const SECOES_MENU: MenuSection[] = [
             { nome: 'Acompanhar Ponto', caminho: '/folha-ponto', icone: CalendarCheck, perfis: ['Admin', 'Cliente'], permissionKey: 'folha_ponto' },
         ]
     },
-    // NOVO: SEÇÃO FINANCEIRO
+    // NOVO: SEÇÃO FINANCEIRO (Apenas Fluxo de Caixa, CP, CR)
     {
         titulo: 'Financeiro',
         perfis: ['Admin', 'Cliente', 'Usuario'],
