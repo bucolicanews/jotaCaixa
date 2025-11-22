@@ -223,6 +223,7 @@ const GerarDocumentoSocietario: React.FC = () => {
     
     let initialProprietarioDocumentoId = ownerIdLogado;
     let currentModelo: DocumentoSocietarioModelo | null = null;
+    let initialValoresTags: Record<string, string> = {};
     
     // 1. Carregar Documento Inicial (se for edição)
     if (documentoId) {
@@ -243,7 +244,7 @@ const GerarDocumentoSocietario: React.FC = () => {
         initialProprietarioDocumentoId = doc.proprietario_id;
         
         setClienteSelecionadoId(doc.cliente_id || '');
-        setValoresTags(doc.valores_tags_preenchidos || {});
+        initialValoresTags = doc.valores_tags_preenchidos || {};
         setTituloDocumento(doc.titulo);
         setTipoConteudo(doc.valores_tags_preenchidos?.tipo_conteudo || 'html');
         
@@ -271,6 +272,9 @@ const GerarDocumentoSocietario: React.FC = () => {
         currentModelo = modeloData as DocumentoSocietarioModelo;
         setTituloDocumento(modeloData.titulo);
         setTipoConteudo(modeloData.tipo_conteudo || 'html');
+        
+        // NOVO: Inicializa o campo {{CONTEUDO_PRINCIPAL}} com o template do modelo
+        initialValoresTags['{{CONTEUDO_PRINCIPAL}}'] = modeloData.conteudo_template;
     }
     
     setModelo(currentModelo);
@@ -295,6 +299,7 @@ const GerarDocumentoSocietario: React.FC = () => {
     }
     
     setProprietarioDocumentoId(initialProprietarioDocumentoId);
+    setValoresTags(initialValoresTags); // Define o estado de tags
     
     setCarregandoDados(false);
   }, [modeloId, documentoId, ownerIdLogado, navigate, isAdmin, empresaLogadaMemo]);
@@ -373,12 +378,17 @@ const GerarDocumentoSocietario: React.FC = () => {
             newTags[tagKey] = tagValue;
         } else {
             // 3. Caso contrário, usa o valor salvo anteriormente ou o valor digitado.
-            newTags[tagKey] = valoresTags[tagKey] || '';
+            // CRÍTICO: Se for a tag {{CONTEUDO_PRINCIPAL}}, mantemos o valor atual do estado
+            if (tagKey === '{{CONTEUDO_PRINCIPAL}}') {
+                newTags[tagKey] = valoresTags[tagKey] || modelo?.conteudo_template || '';
+            } else {
+                newTags[tagKey] = valoresTags[tagKey] || '';
+            }
         }
     });
     
     setValoresTags(newTags);
-  }, [clienteSelecionado, empresaLogada, valoresTags, allAvailableTags]);
+  }, [clienteSelecionado, empresaLogada, valoresTags, allAvailableTags, modelo?.conteudo_template]);
 
   useEffect(() => {
     updateTags();
