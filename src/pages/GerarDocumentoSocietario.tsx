@@ -585,8 +585,8 @@ const GerarDocumentoSocietario: React.FC = () => {
                     <div className="space-y-2">
                         <Label htmlFor="empresa-documento">Empresa Proprietária</Label>
                         <Select 
-                            value={proprietarioContratoId || ''} 
-                            onValueChange={setProprietarioContratoId}
+                            value={proprietarioDocumentoId || ''} 
+                            onValueChange={setProprietarioDocumentoId}
                         >
                             <SelectTrigger id="empresa-documento">
                                 <Building2 className="w-4 h-4 mr-2 text-muted-foreground" />
@@ -613,7 +613,7 @@ const GerarDocumentoSocietario: React.FC = () => {
                 
                 <div className="space-y-2">
                     <Label htmlFor="cliente">Cliente (Contratado)</Label>
-                    <Select value={clienteSelecionadoId} onValueChange={setClienteSelecionadoId} disabled={!proprietarioContratoId}>
+                    <Select value={clienteSelecionadoId} onValueChange={setClienteSelecionadoId} disabled={!proprietarioDocumentoId}>
                         <SelectTrigger id="cliente">
                             <SelectValue placeholder="Selecione o Cliente" />
                         </SelectTrigger>
