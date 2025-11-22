@@ -176,11 +176,11 @@ const PreencherContrato: React.FC = () => {
         setTagsCustomizadas(tagsData as ContratoTag[]);
     }
     
-    // 2. Buscar Clientes (Contratados) - AGORA BUSCA APENAS NA TABELA 'clientes' (Clientes CR)
+    // 2. Buscar Clientes (Contratados) - AGORA BUSCA NA TABELA 'clientes' (Clientes CR)
     const { data: clientesCRData, error: errorCR } = await supabase
-        .from('tbl_clientes') // CORREÇÃO: Usando tbl_clientes para garantir que o cliente exista no sistema
-        .select('id, nome, razao_social, nome_fantasia, documento, email, telefone, telefone_fixo, cep, endereco, numero, complemento, bairro, cidade, estado, cpf, cnpj, rg') // Seleciona todos os campos para preenchimento de tags
-        .eq('admin_id', targetEmpresaId) // Filtra pelos clientes do Admin
+        .from('clientes') // CORREÇÃO: Usando a tabela 'clientes'
+        .select('id, proprietario_id, nome, razao_social, nome_fantasia, documento, email, telefone, telefone_fixo, cep, endereco, numero, complemento, bairro, cidade, estado, cpf, cnpj, rg') // Seleciona todos os campos para preenchimento de tags
+        .eq('proprietario_id', targetEmpresaId) // Filtra pelos clientes do Admin/Cliente
         .order('nome');
         
     if (errorCR) {
