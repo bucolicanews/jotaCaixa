@@ -23,6 +23,7 @@ export interface AdminContaPagar {
   origem: 'manual' | 'contrato' | 'assinatura_recorrente';
   id_conta_patrimonial: string | null; // RENOMEADO: id_conta_contabil -> id_conta_patrimonial
   historico_id?: string | null; // ADICIONADO
+  id_conta_resultado?: string | null; // NOVO CAMPO
 }
 
 export interface AdminParcelaPagar {

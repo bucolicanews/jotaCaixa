@@ -88,10 +88,10 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
         const contaPagarId = parcelaData.conta_pagar_id;
         const contaParcelaPagar = parcelaData.id_conta_contabil; // Conta analítica da parcela
         
-        // 2. Buscar a conta sintética para obter a conta patrimonial e descrição
+        // 2. Buscar a conta sintética para obter a conta patrimonial, descrição e DRE
         const { data: contaSintetica, error: csError } = await supabase
             .from('admin_contas_pagar')
-            .select('id_conta_patrimonial, descricao, historico_id')
+            .select('id_conta_patrimonial, descricao, historico_id, id_conta_resultado') // <-- AGORA INCLUI id_conta_resultado
             .eq('id', contaPagarId)
             .single();
             
@@ -100,6 +100,7 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
         const contaPatrimonial = contaSintetica.id_conta_patrimonial;
         const descricaoContaSintetica = contaSintetica.descricao || 'Pagamento';
         const historicoId = contaSintetica.historico_id;
+        const contaDespesaCriacao = contaSintetica.id_conta_resultado; // <-- DRE account
         
         // 3. Buscar todos os pagamentos associados a esta parcela
         const { data: pagamentos, error: fetchError } = await supabase
@@ -139,6 +140,20 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
         // 4.2. Reverter a Saída do Ativo (Caixa/Strip) - DÉBITO (Entrada)
         // A conta de pagamento (id_conta_contabil) é a conta de Ativo/Passivo (Pagamento)
         for (const pagamento of pagamentos) {
+            // Buscar a conta de saldo (Caixa/Banco) para obter o conta_contabil_id
+            const { data: saldoContaData } = await supabase
+                .from('saldo_contas')
+                .select('conta_contabil_id')
+                .eq('id', pagamento.conta_id)
+                .single();
+                
+            const contaContabilCaixaBanco = saldoContaData?.conta_contabil_id;
+            
+            if (!contaContabilCaixaBanco) {
+                console.warn(`Aviso: Conta de saldo ${pagamento.conta_id} sem vínculo contábil para estorno.`);
+                continue;
+            }
+            
             const lancamentoEstornoAtivo = {
                 proprietario_id: usuario.id,
                 data_movimentacao: dataEstornoISO,
@@ -146,7 +161,7 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
                 valor: pagamento.valor_pago,
                 tipo: 'Entrada' as const, // Entrada no Ativo (Débito) para restaurar o saldo
                 conta_bancaria_id: pagamento.conta_id,
-                conta_contabil_id: pagamento.id_conta_contabil, 
+                conta_contabil_id: contaContabilCaixaBanco, // <-- USANDO CONTA CONTÁBIL DO SALDO
                 origem: 'estorno_pagamento_manual',
                 historico_id: historicoId,
             };
@@ -154,17 +169,6 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
         }
         
         // 4.3. Reverter o Lançamento de Despesa/Custo (DRE) - CRÉDITO (Saída)
-        // O lançamento de Despesa/Custo foi feito na CRIAÇÃO da CP (D: Despesa/Custo).
-        // O estorno deve ser um Crédito (Saída) na Despesa/Custo.
-        // Buscamos a conta de Despesa/Custo da conta sintética (que foi mapeada na criação)
-        const { data: contaDespesaData } = await supabase
-            .from('admin_contas_pagar')
-            .select('id_conta_resultado') // id_conta_resultado é a conta de Despesa/Custo
-            .eq('id', contaPagarId)
-            .single();
-            
-        const contaDespesaCriacao = contaDespesaData?.id_conta_resultado;
-        
         if (contaDespesaCriacao) {
             const lancamentoEstornoDespesa = {
                 proprietario_id: usuario.id,
@@ -181,10 +185,11 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
         }
         
         // 5. Deletar Registros de Pagamento
+        const pagamentoIds = pagamentos.map(r => r.id);
         const { error: deletePagamentosError } = await supabase
             .from('admin_pagamentos')
             .delete()
-            .eq('parcela_id', parcelaId);
+            .in('id', pagamentoIds);
             
         if (deletePagamentosError) throw deletePagamentosError;
         

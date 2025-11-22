@@ -60,7 +60,7 @@ interface FormContasPagarProps {
 
 const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveComplete }) => {
   const { usuario, role } = useSessao();
-  const { configMap: _configMap } = useContabilConfig(); // Corrigido TS6133
+  const { configMap } = useContabilConfig();
   const [mapeamentoContabil, setMapeamentoContabil] = useState<Record<string, string | null>>({});
   const [historicos, setHistoricos] = useState<Historico[]>([]);
   const [contasPatrimoniais, setContasPatrimoniais] = useState<PlanoContas[]>([]); // RENOMEADO
@@ -111,9 +111,9 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
     if (!adminId) return;
     setLoadingContasPatrimoniais(true);
     
-    const ativoCode = _configMap.Ativo || '1';
-    const passivoCode = _configMap.Passivo || '2';
-    const plCode = _configMap['Patrimonio Liquido'] || '3';
+    const ativoCode = configMap.Ativo || '1';
+    const passivoCode = configMap.Passivo || '2';
+    const plCode = configMap['Patrimonio Liquido'] || '3';
     
     // Busca contas Patrimoniais (Ativo, Passivo, PL)
     const { data, error } = await supabase
@@ -132,7 +132,7 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
         setContasPatrimoniais(data as PlanoContas[]);
     }
     setLoadingContasPatrimoniais(false);
-  }, [adminId, _configMap.Ativo, _configMap.Passivo, _configMap['Patrimonio Liquido']]);
+  }, [adminId, configMap.Ativo, configMap.Passivo, configMap['Patrimonio Liquido']]);
 
   useEffect(() => {
     if (isAdmin) {
@@ -239,6 +239,8 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
           // CAMPO ALTERADO: Agora é a Conta Patrimonial
           id_conta_patrimonial: values.conta_patrimonial_id,
           historico_id: values.historico_id,
+          // NOVO CAMPO: Salva a conta de Despesa/Custo (DRE)
+          ...(isAdmin && { id_conta_resultado: contaDespesa }), 
       };
 
       if (isEditing && contaInicial) {
@@ -276,7 +278,7 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
               data_movimentacao: dataMovimentacao,
               descricao: `Lançamento Inicial CP: ${launchDescription} (CP ID: ${contaPagarIdShort})`,
               valor: valorTotal,
-              tipo: 'Saida' as const, // CORREÇÃO CRÍTICA: Saída (Crédito) para aumentar o Passivo (Credor)
+              tipo: 'Saida' as const, // CRÉDITO (Aumenta Passivo Credor)
               conta_bancaria_id: null,
               conta_contabil_id: values.conta_patrimonial_id,
               origem: 'lancamento_cp',

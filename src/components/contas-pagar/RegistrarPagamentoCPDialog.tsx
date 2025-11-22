@@ -245,7 +245,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
     // 0. Buscar a Conta Patrimonial da Conta Sintética (para o lançamento de estorno)
     const { data: contaSintetica, error: csError } = await supabase
         .from(tabelaContasPagar)
-        .select('id_conta_patrimonial, descricao, id_conta_resultado') // NOVO: id_conta_resultado
+        .select('id_conta_patrimonial, descricao, id_conta_resultado') // <-- AGORA INCLUI id_conta_resultado
         .eq('id', parcela.conta_pagar_id)
         .single();
         
@@ -282,6 +282,16 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
         if (pagamentoError) throw pagamentoError;
         
         // 2. Registrar o Lançamento na conta de Saldo (Movimentação de Caixa/Banco) - CRÉDITO (Ativo)
+        // D: ??? / C: Ativo (contaPagamento)
+        
+        // Buscar a conta de saldo (Caixa/Banco) para obter o conta_contabil_id
+        const contaDestinoDetalhe = contasOrigem.find(c => c.id === pagamento.conta_id);
+        const contaContabilCaixaBanco = contaDestinoDetalhe?.plano_contas?.id;
+        
+        if (!contaContabilCaixaBanco) {
+            throw new Error('Conta de origem não possui vínculo contábil.');
+        }
+        
         const lancamentoAtivoPayload = {
             proprietario_id: adminId,
             data_movimentacao: dataPagamentoISO,
@@ -289,7 +299,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
             valor: pagamento.valor_pago,
             tipo: 'Saida' as const, // Saída do Ativo (Credit) - CORRECT
             conta_bancaria_id: pagamento.conta_id,
-            conta_contabil_id: contaPagamento, // Conta de Ativo/Passivo (Pagamento)
+            conta_contabil_id: contaContabilCaixaBanco, // <-- USANDO CONTA CONTÁBIL DO SALDO
             origem: 'pagamento_manual',
             historico_id: values.historico_id,
         };
@@ -299,6 +309,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
       }
 
       // 3. Lançamento de Estorno da Conta Patrimonial (Passivo) - DÉBITO (Diminui Passivo)
+      // D: Passivo (values.conta_patrimonial_id) / C: ???
       if (values.conta_patrimonial_id) {
           const lancamentoPatrimonialPayload = {
               proprietario_id: adminId,
