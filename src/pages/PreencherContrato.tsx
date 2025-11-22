@@ -179,7 +179,7 @@ const PreencherContrato: React.FC = () => {
     // 2. Buscar Clientes (Contratados) - AGORA BUSCA NA TABELA 'tbl_clientes' (Clientes do Sistema)
     let queryClients = supabase
         .from('tbl_clientes') // ALTERADO: Usando a tabela 'tbl_clientes'
-        .select('id, nome, razao_social, nome_fantasia, documento, email, telefone, cep, endereco, numero, complemento, bairro, cidade, estado, cpf, cnpj, rg') // Seleciona campos relevantes
+        .select('id, nome, razao_social, nome_fantasia, documento, email, telefone, cep, endereco, numero, complemento, bairro, cidade, estado') // Seleciona campos relevantes (REMOVIDO: cpf, cnpj, rg)
         .eq('admin_id', targetEmpresaId) // Filtra pelos clientes do Admin/Cliente
         .eq('aprovado', true) // Filtra apenas clientes aprovados
         .neq('id', targetEmpresaId) // GARANTE QUE O PROPRIETÁRIO NÃO ESTEJA NA LISTA DE CLIENTES CONTRATADOS
