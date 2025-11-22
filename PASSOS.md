@@ -11,3 +11,4 @@
 11 - IMPORTAR OK
 12 - EXPORTAR OK
 13- refatorar
+14- ARQUITETURA FINANCEIRA: Documentação completa da lógica contábil e RPCs em FINANCEIRO_ARQUITETURA.md.
