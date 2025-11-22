@@ -178,12 +178,15 @@ const PreencherContrato: React.FC = () => {
     
     // 2. Buscar Clientes (Contratados) - AGORA BUSCA NA TABELA 'clientes' (Clientes CR)
     // Adicionando filtro para garantir que o cliente não seja o próprio proprietário
-    const { data: clientesCRData, error: errorCR } = await supabase
+    let queryClients = supabase
         .from('clientes') // CORREÇÃO: Usando a tabela 'clientes'
         .select('id, proprietario_id, nome, razao_social, nome_fantasia, documento, email, telefone, telefone_fixo, cep, endereco, numero, complemento, bairro, cidade, estado, cpf, cnpj, rg, data_nascimento') // Seleciona todos os campos para preenchimento de tags
         .eq('proprietario_id', targetEmpresaId) // Filtra pelos clientes do Admin/Cliente
         .neq('id', targetEmpresaId) // GARANTE QUE O PROPRIETÁRIO NÃO ESTEJA NA LISTA DE CLIENTES CONTRATADOS
+        .eq('is_system_client', true) // NOVO FILTRO: Apenas clientes promovidos
         .order('nome');
+        
+    const { data: clientesCRData, error: errorCR } = await queryClients;
         
     if (errorCR) {
         showError('Erro ao carregar clientes CR: ' + errorCR.message);
