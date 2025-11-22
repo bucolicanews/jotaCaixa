@@ -124,8 +124,8 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
       proprietario_id: ownerId,
       titulo: values.titulo,
       conteudo_template: sanitizeConteudo(values.conteudo_template),
-      tipo_documento: values.tipo_documento || null,
       tipo_conteudo: values.tipo_conteudo,
+      tipo_documento: values.tipo_documento || null,
     };
 
     let error = null;
@@ -196,6 +196,10 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
       showSuccess(`Bloco '${bloco.titulo}' inserido no conteúdo.`);
   };
   
+  const handleDragStart = (e: React.DragEvent<HTMLDivElement>, tag: string) => {
+      e.dataTransfer.setData("text/plain", tag);
+  };
+  
   const handleDragOver = (e: React.DragEvent<HTMLTextAreaElement>) => {
       e.preventDefault(); // Permite que o drop ocorra
   };
@@ -250,7 +254,9 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
                     <FormLabel>Formato do Conteúdo</FormLabel>
                     <Select onValueChange={field.onChange} defaultValue={field.value}>
                       <FormControl>
-                        <SelectTrigger><SelectValue placeholder="Selecione o formato" /></SelectTrigger>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione o formato" />
+                        </SelectTrigger>
                       </FormControl>
                       <SelectContent>
                         <SelectItem value="html">HTML</SelectItem>
@@ -303,7 +309,7 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
                                 key={tag.nome_tag} 
                                 className="p-2 border rounded-md cursor-pointer hover:bg-accent/50 transition-colors"
                                 draggable
-                                onDragStart={(e) => e.dataTransfer.setData("text/plain", tag.nome_tag)}
+                                onDragStart={(e) => handleDragStart(e, tag.nome_tag)}
                                 onClick={() => handleInsertText(tag.nome_tag)}
                             >
                                 <p className="font-mono text-xs font-semibold text-primary">{tag.nome_tag}</p>
