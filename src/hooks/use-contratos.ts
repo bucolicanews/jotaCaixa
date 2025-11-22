@@ -51,11 +51,11 @@ export function useContratos(): ContratosHook {
     const [ordenacao, setOrdenacao] = useState<Ordenacao>('criado_em_desc');
 
     const isAdmin = role === 'Admin';
-    const isCliente = role === 'Cliente';
+    const isClient = role === 'Cliente';
 
     const getEmpresaId = () => {
         if (isAdmin) return usuario?.id || null;
-        if (isCliente) return (perfil as ClienteProfile)?.id;
+        if (isClient) return (perfil as ClienteProfile)?.id;
         if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id; // FIX: proprietario_id -> cliente_id
         return null;
     };
@@ -143,41 +143,32 @@ export function useContratos(): ContratosHook {
     // --- Mutação de Contratos ---
 
     const handleDeleteContract = useCallback(async (contrato: ContratoGerado) => {
-        if (!window.confirm('Tem certeza que deseja excluir este contrato? Isso também excluirá as contas a receber geradas. Esta ação é irreversível.')) return;
+        if (!window.confirm('Tem certeza que deseja excluir este contrato? Isso tentará reverter os lançamentos contábeis e excluir as contas a receber associadas.')) return;
 
         setCarregando(true);
         
         try {
-            const isContractOwnerAdmin = isAdmin && contrato.proprietario_id === empresaId;
-            const tabelaContasReceber = isContractOwnerAdmin ? 'admin_contas_receber' : 'contas_receber';
-            
-            const { data: contaReceber, error: fetchError } = await supabase
-                .from(tabelaContasReceber)
-                .select('id')
-                .eq('contrato_gerado_id', contrato.id)
-                .limit(1)
-                .single();
-                
-            if (fetchError && fetchError.code !== 'PGRST116') {
-                throw new Error('Erro ao buscar conta a receber associada: ' + fetchError.message);
+            if (!contrato.proprietario_id) {
+                throw new Error('ID do proprietário do contrato não encontrado.');
             }
             
-            if (contaReceber) {
-                const { error: deleteCR } = await supabase
-                    .from(tabelaContasReceber)
-                    .delete()
-                    .eq('id', contaReceber.id);
-                if (deleteCR) throw deleteCR;
-            }
+            // Chamada para a nova RPC que verifica parcelas pagas, reverte lançamentos e deleta
+            const { data, error: rpcError } = await supabase.rpc('delete_contract_and_reverse_accounting', {
+                p_contrato_id: contrato.id,
+                p_proprietario_id: contrato.proprietario_id,
+            });
             
-            const { error: deleteContrato } = await supabase
-                .from('contratos_gerados')
-                .delete()
-                .eq('id', contrato.id);
-                
-            if (deleteContrato) throw deleteContrato;
+            if (rpcError) throw rpcError;
+            
+            const result = data?.[0];
+            
+            if (result && !result.success) {
+                // Se a RPC retornou FALSE (ex: parcelas pagas)
+                showError(result.message);
+            } else {
+                showSuccess(result?.message || 'Contrato deletado com sucesso.');
+            }
 
-            showSuccess('Contrato e contas a receber associadas excluídos com sucesso.');
             refetch();
         } catch (error: any) {
             console.error('Erro ao deletar contrato:', error);
@@ -185,7 +176,7 @@ export function useContratos(): ContratosHook {
         } finally {
             setCarregando(false);
         }
-    }, [isAdmin, empresaId, refetch]);
+    }, [refetch]);
 
     const handleBlockContract = useCallback(async (contrato: ContratoGerado) => {
         if (!window.confirm(`Tem certeza que deseja BLOQUEAR o contrato ${contrato.id}? Esta ação irá marcar o contrato como 'bloqueado' e BLOQUEAR todas as parcelas pendentes associadas.`)) return;
