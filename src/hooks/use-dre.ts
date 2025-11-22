@@ -37,14 +37,11 @@ export const useDRE = (filtroPeriodo: { from: Date | undefined, to: Date | undef
     
     const contaPrefix = conta.Conta.split('.')[0];
     
-    // CORREÇÃO CRÍTICA: Invertendo a lógica para Despesa/Custo.
-    // Se for Receita (4), é Credora (aumenta com Saída).
-    // Se for Custo (5) ou Despesa (6), vamos tratá-las como Credoras (aumentam com Saída)
-    // para que o valor apareça positivo na DRE, assumindo que o lançamento é 'Saida'.
+    // Contas Credoras (Receita, Custo, Despesa)
     const isCredora = [configMap.Receita, configMap.Custo, configMap.Despesa].includes(contaPrefix); 
     
     for (const lancamento of lancamentos) {
-        const valor = parseFloat(lancamento.valor);
+        const valor = Math.abs(parseFloat(lancamento.valor)); // GARANTINDO VALOR POSITIVO
         
         if (isCredora) {
             // Contas Credoras (Receita, Custo, Despesa): Entrada (Débito) diminui (-), Saída (Crédito) aumenta (+)

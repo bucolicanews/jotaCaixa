@@ -41,11 +41,11 @@ export const useBalancoPatrimonial = (dataFim: Date | null): BalancoPatrimonialH
     // Determine if the account is Devedora (Ativo) or Credora (Passivo, PL, Receita, Custo, Despesa)
     const contaPrefix = conta.Conta.split('.')[0];
     
-    // CORREÇÃO CRÍTICA: Ativo (1) é Devedora. Passivo (2), PL (3), Receita (4), Custo (5) e Despesa (6) são Credoras.
+    // Contas Devedoras: Ativo (1)
     const isDevedora = [configMap.Ativo].includes(contaPrefix); 
     
     for (const lancamento of lancamentos) {
-        const valor = parseFloat(lancamento.valor);
+        const valor = Math.abs(parseFloat(lancamento.valor)); // GARANTINDO VALOR POSITIVO
         
         if (isDevedora) {
             // Contas Devedoras (Ativo): Entrada (Débito) aumenta (+), Saída (Crédito) diminui (-)
