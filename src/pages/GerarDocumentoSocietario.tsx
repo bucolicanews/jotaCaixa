@@ -87,9 +87,6 @@ const GerarDocumentoSocietario: React.FC = () => {
   const [empresasContrato, setEmpresasContrato] = useState<EmpresaContrato[]>([]);
   const [empresaLogada, setEmpresaLogada] = useState<any>(null);
   
-  // NOVO ESTADO DE CONTROLE DE LOOP
-  const [tagsAplicadas, setTagsAplicadas] = useState(false);
-  
   const isEditing = !!documentoId;
   const modeloId = modeloIdParam || documentoInicial?.modelo_id;
 
@@ -155,6 +152,76 @@ const GerarDocumentoSocietario: React.FC = () => {
     };
   }, [perfil, isAdmin, isClient]);
 
+  // --- Lógica de Preenchimento de Tags (Refatorada para ser chamada apenas na inicialização) ---
+  const allAvailableTags = useMemo(() => {
+      const tagsNaoFinanceiras = TAGS_PADRAO.filter(t => !t.origem_dado?.startsWith('contas_receber'));
+      
+      const customTagsMap = tagsCustomizadas.reduce((acc, tag) => {
+          acc[tag.nome_tag] = tag;
+          return acc;
+      }, {} as Record<string, any>);
+      
+      const combined = [...tagsNaoFinanceiras, ...tagsCustomizadas];
+      
+      const uniqueTags = Array.from(new Set(combined.map(t => t.nome_tag)))
+          .map(tagKey => {
+              const customTag = customTagsMap[tagKey];
+              const defaultTag = tagsNaoFinanceiras.find(t => t.nome_tag === tagKey);
+              return customTag || defaultTag;
+          })
+          .filter((t): t is any => !!t)
+          .sort((a, b) => a.nome_tag.localeCompare(b.nome_tag));
+          
+      return uniqueTags;
+  }, [tagsCustomizadas]);
+
+  const applyTagsToForm = useCallback((
+      currentTags: Record<string, string>, 
+      cliente: ClienteCRCompleto | undefined, 
+      empresa: any, 
+      modeloTemplate: string
+  ) => {
+      const newTags: Record<string, string> = {};
+      
+      allAvailableTags.forEach(tag => {
+          const tagKey = tag.nome_tag;
+          let tagValue: string | null = null;
+          
+          if (tag.origem_dado) {
+              const [sourceTable, sourceField] = tag.origem_dado.split('.');
+              
+              // Mapeamento de dados da Empresa Logada (Contratante)
+              if ((sourceTable === 'tbl_clientes' || sourceTable === 'tbl_admins') && empresa) {
+                  const empresaData = empresa as any;
+                  if (empresaData && empresaData[sourceField]) {
+                      tagValue = String(empresaData[sourceField]);
+                  }
+              } 
+              
+              // Mapeamento de dados do Cliente Selecionado (Contratado)
+              else if (sourceTable === 'clientes' && cliente) {
+                  const clienteData = cliente as any;
+                  if (clienteData && clienteData[sourceField]) {
+                      tagValue = String(clienteData[sourceField]);
+                  }
+              } 
+          }
+          
+          if (tagValue !== null && tagValue !== undefined && tagValue !== 'N/A') {
+              newTags[tagKey] = tagValue;
+          } else {
+              // Mantém o valor digitado anteriormente (se existir)
+              newTags[tagKey] = currentTags[tagKey] || '';
+          }
+      });
+      
+      // Garante que o CONTEUDO_PRINCIPAL seja mantido ou inicializado
+      newTags['{{CONTEUDO_PRINCIPAL}}'] = currentTags['{{CONTEUDO_PRINCIPAL}}'] || modeloTemplate || '';
+      
+      // Atualiza o campo de tags no RHF
+      setValue('valores_tags', newTags, { shouldDirty: true });
+  }, [allAvailableTags, setValue]);
+  
   // --- FUNÇÃO DE BUSCA DE CLIENTES E TAGS DEPENDENTE DO PROPRIETÁRIO ---
   const fetchDependentData = useCallback(async (targetEmpresaId: string) => {
     if (!targetEmpresaId) return;
@@ -167,39 +234,25 @@ const GerarDocumentoSocietario: React.FC = () => {
         .order('nome_tag', { ascending: true });
         
     if (tagsData) {
-        // Filtra tags financeiras (não são usadas em documentos societários)
         const tagsNaoFinanceiras = TAGS_PADRAO.filter(t => !t.origem_dado?.startsWith('contas_receber'));
-        
-        // Combina tags padrão e customizadas
-        const customTagsMap = tagsData.reduce((acc, tag) => {
-            acc[tag.nome_tag] = tag;
-            return acc;
-        }, {} as Record<string, any>);
-        
         const allTags = [...tagsNaoFinanceiras, ...tagsData]
             .filter((t, index, self) => index === self.findIndex((t2) => t2.nome_tag === t.nome_tag))
             .sort((a, b) => a.nome_tag.localeCompare(b.nome_tag));
-            
         setTagsCustomizadas(allTags);
     }
     
-    // 2. Buscar Clientes (Contratados) - AGORA BUSCA NA TABELA 'tbl_clientes' (Clientes do Sistema)
+    // 2. Buscar Clientes (Contratados)
     let queryClients = supabase
         .from('tbl_clientes')
-        .select('id, nome, razao_social, nome_fantasia, documento, email, telefone, cep, endereco, numero, complemento, bairro, cidade, estado, cpf, rg') // REMOVIDO CNPJ
-        .eq('admin_id', targetEmpresaId) // FILTRANDO POR admin_id
+        .select('id, nome, razao_social, nome_fantasia, documento, email, telefone, cep, endereco, numero, complemento, bairro, cidade, estado, cpf, rg')
+        .eq('admin_id', targetEmpresaId)
         .eq('aprovado', true)
         .neq('id', targetEmpresaId)
         .order('nome');
         
-    const { data: clientesCRData, error: errorCR } = await queryClients;
+    const { data: clientesCRData } = await queryClients;
         
-    if (errorCR) {
-        // CORREÇÃO: Removendo a coluna 'cnpj' da mensagem de erro, se for o caso.
-        console.error('Erro ao carregar clientes do sistema:', errorCR);
-        showError('Erro ao carregar clientes do sistema: ' + errorCR.message);
-        setClientesCR([]);
-    } else {
+    if (clientesCRData) {
         const mappedClients = (clientesCRData as any[]).map(c => ({
             ...c,
             proprietario_id: targetEmpresaId,
@@ -208,13 +261,9 @@ const GerarDocumentoSocietario: React.FC = () => {
         })) as ClienteCRCompleto[];
         
         setClientesCR(mappedClients);
-        
-        if (clienteSelecionadoId && !mappedClients.some((c: ClienteCRCompleto) => c.id === clienteSelecionadoId)) {
-            setValue('cliente_id', '');
-        }
     }
     
-  }, [clienteSelecionadoId, setValue]);
+  }, []);
 
 
   // --- FUNÇÃO PRINCIPAL DE BUSCA DE DADOS INICIAIS ---
@@ -235,7 +284,7 @@ const GerarDocumentoSocietario: React.FC = () => {
     if (documentoId) {
         const { data: doc, error: docLoadError } = await supabase
             .from('documentos_societarios_gerados')
-            .select('*')
+            .select('*, modelos_societarios(tipo_conteudo)')
             .eq('id', documentoId)
             .single();
             
@@ -245,14 +294,13 @@ const GerarDocumentoSocietario: React.FC = () => {
             return;
         }
         
-        // CORREÇÃO: Usando a variável 'doc' que está no escopo
-        const documento = doc as DocumentoSocietarioGerado;
+        const documento = doc as DocumentoSocietarioGerado & { modelos_societarios: { tipo_conteudo: TipoConteudo } | null };
         setDocumentoInicial(documento);
         initialProprietarioDocumentoId = documento.proprietario_id;
         initialClienteId = documento.cliente_id || '';
         initialValoresTags = documento.valores_tags_preenchidos || {};
         
-        // 1.1. Buscar Modelo associado
+        // 1.1. Buscar Modelo associado (apenas para ter o objeto completo)
         const { data: modeloData } = await supabase
             .from('modelos_societarios')
             .select('*, tipo_conteudo')
@@ -298,7 +346,10 @@ const GerarDocumentoSocietario: React.FC = () => {
     }
     setEmpresasContrato(empresasContratoList);
     
-    // 4. Resetar o formulário com os dados carregados
+    // 4. Carregar dados dependentes (clientes e tags)
+    await fetchDependentData(initialProprietarioDocumentoId || ownerIdLogado);
+    
+    // 5. Resetar o formulário com os dados carregados
     form.reset({
         titulo_documento: (documentoId ? documentoInicial?.valores_tags_preenchidos?.titulo : currentModelo?.titulo) || '',
         cliente_id: initialClienteId,
@@ -310,16 +361,22 @@ const GerarDocumentoSocietario: React.FC = () => {
     setEmpresaLogada(empresaLogadaMemo);
     setCarregandoDados(false);
     
-    // Reseta o estado de controle de loop após a carga inicial
-    setTagsAplicadas(false);
-  }, [modeloId, documentoId, ownerIdLogado, navigate, role, perfil, usuario, isAdmin, isClient, empresaLogadaMemo, form, documentoInicial]);
+  }, [modeloId, documentoId, ownerIdLogado, navigate, isAdmin, isClient, empresaLogadaMemo, form, fetchDependentData, documentoInicial]);
   
-  // Efeito para monitorar a mudança do proprietário do documento
+  // Efeito para monitorar a mudança do proprietário do documento (para recarregar clientes e tags)
   useEffect(() => {
       if (proprietarioDocumentoId) {
           fetchDependentData(proprietarioDocumentoId);
       }
   }, [proprietarioDocumentoId, fetchDependentData]);
+  
+  // Efeito para aplicar tags automáticas quando o cliente selecionado muda
+  useEffect(() => {
+      if (clienteSelecionadoId && modelo && !carregandoDados) {
+          // Aplica as tags automáticas (mantendo as tags manuais)
+          applyTagsToForm(getValues('valores_tags') || {}, clienteSelecionado, empresaLogada, modelo.conteudo_template);
+      }
+  }, [clienteSelecionadoId, modelo, carregandoDados, clienteSelecionado, empresaLogada, applyTagsToForm, getValues]);
 
 
   useEffect(() => {
@@ -329,92 +386,6 @@ const GerarDocumentoSocietario: React.FC = () => {
         navigate('/painel', { replace: true });
     }
   }, [carregandoSessao, ownerIdLogado, buscarDados, navigate, isAdmin, isClient]);
-
-  // --- Lógica de Preenchimento de Tags ---
-  const allAvailableTags = useMemo(() => {
-      const customTagsMap = tagsCustomizadas.reduce((acc, tag) => {
-          acc[tag.nome_tag] = tag;
-          return acc;
-      }, {} as Record<string, any>);
-      
-      const tagsNaoFinanceiras = TAGS_PADRAO.filter(t => !t.origem_dado?.startsWith('contas_receber'));
-      
-      const combined = [...tagsNaoFinanceiras, ...tagsCustomizadas];
-      
-      const uniqueTags = Array.from(new Set(combined.map(t => t.nome_tag)))
-          .map(tagKey => {
-              const customTag = customTagsMap[tagKey];
-              const defaultTag = tagsNaoFinanceiras.find(t => t.nome_tag === tagKey);
-              return customTag || defaultTag;
-          })
-          .filter((t): t is any => !!t) // Mantendo o tipo any para simplificar
-          .sort((a, b) => a.nome_tag.localeCompare(b.nome_tag));
-          
-      return uniqueTags;
-  }, [tagsCustomizadas]);
-
-  // CORREÇÃO CRÍTICA: Esta função agora é chamada apenas quando as dependências mudam
-  const updateTags = useCallback(() => {
-    const newTags: Record<string, string> = {};
-    const currentTags = getValues('valores_tags') || {};
-    
-    allAvailableTags.forEach(tag => {
-        const tagKey = tag.nome_tag;
-        let tagValue: string | null = null;
-        
-        if (tag.origem_dado) {
-            const [sourceTable, sourceField] = tag.origem_dado.split('.');
-            
-            // Mapeamento de dados da Empresa Logada (Contratante)
-            if ((sourceTable === 'tbl_clientes' || sourceTable === 'tbl_admins') && empresaLogadaMemo) {
-                const empresaData = empresaLogadaMemo as any;
-                if (empresaData && empresaData[sourceField]) {
-                    tagValue = String(empresaData[sourceField]);
-                }
-            } 
-            
-            // Mapeamento de dados do Cliente Selecionado (Contratado)
-            else if (sourceTable === 'clientes' && clienteSelecionado) {
-                const clienteData = clienteSelecionado as any;
-                if (clienteData && clienteData[sourceField]) {
-                    tagValue = String(clienteData[sourceField]);
-                }
-            } 
-        }
-        
-        if (tagValue !== null && tagValue !== undefined && tagValue !== 'N/A') {
-            newTags[tagKey] = tagValue;
-        } else {
-            // Mantém o valor digitado anteriormente
-            newTags[tagKey] = currentTags[tagKey] || '';
-        }
-    });
-    
-    // Garante que o CONTEUDO_PRINCIPAL seja mantido
-    newTags['{{CONTEUDO_PRINCIPAL}}'] = currentTags['{{CONTEUDO_PRINCIPAL}}'] || modelo?.conteudo_template || '';
-    
-    // Atualiza o campo de tags no RHF
-    setValue('valores_tags', newTags, { shouldDirty: true });
-  }, [clienteSelecionado, empresaLogadaMemo, allAvailableTags, getValues, setValue, modelo?.conteudo_template]);
-
-  // NOVO useEffect para chamar updateTags apenas quando as dependências mudam
-  useEffect(() => {
-    // Se o modelo não carregou, não faz nada.
-    if (!modelo) return;
-
-    // Se o cliente selecionado mudar, ou se o modelo for carregado (e não for edição), aplica as tags.
-    // O uso de clienteSelecionadoId (string) é mais estável que clienteSelecionado (objeto memoizado).
-    if (clienteSelecionadoId || !isEditing) {
-        // Se o cliente mudar, resetamos o estado de tags aplicadas para forçar a atualização
-        if (tagsAplicadas) {
-            setTagsAplicadas(false);
-        }
-        
-        // Chamamos a função de atualização
-        updateTags();
-        setTagsAplicadas(true);
-    }
-  }, [clienteSelecionadoId, modelo, isEditing, updateTags]); // Removendo tagsAplicadas do array de dependências
 
   const handleTagChange = (tag: string, value: string) => {
     const currentTags = getValues('valores_tags') || {};
