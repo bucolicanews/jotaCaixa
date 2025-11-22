@@ -114,8 +114,8 @@ const GerarDocumentoSocietario: React.FC = () => {
     resolver: zodResolver(formSchema),
     defaultValues: {
         titulo_documento: '',
-        cliente_id: '',
-        proprietario_documento_id: ownerIdLogado || '',
+        cliente_id: '', // Inicializa como string vazia
+        proprietario_documento_id: '', // Inicializa como string vazia
         tipo_conteudo: 'html',
         conteudo_principal: '',
         valores_tags: {},
@@ -297,7 +297,7 @@ const GerarDocumentoSocietario: React.FC = () => {
     form.reset({
         titulo_documento: (documentoId ? docData?.valores_tags_preenchidos?.titulo : currentModelo?.titulo) || '',
         cliente_id: initialClienteId,
-        proprietario_documento_id: initialProprietarioDocumentoId,
+        proprietario_documento_id: initialProprietarioDocumentoId || '', // Garante string vazia
         tipo_conteudo: currentModelo?.tipo_conteudo || 'html',
         conteudo_principal: initialValoresTags['{{CONTEUDO_PRINCIPAL}}'] || '',
         valores_tags: initialValoresTags,
