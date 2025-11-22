@@ -12,6 +12,7 @@ import { showError, showSuccess } from '@/utils/toast';
 import { BlocoSocietario } from '@/types/documentos-societarios';
 import { useSessao } from '@/hooks/use-sessao';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
+import { sanitizeConteudo } from '@/utils/formatters'; // IMPORTADO
 
 const formSchema = z.object({
   titulo: z.string().min(1, 'O título é obrigatório.'),
@@ -43,7 +44,7 @@ const FormBlocoSocietario: React.FC<FormBlocoSocietarioProps> = ({ blocoInicial,
     resolver: zodResolver(formSchema),
     defaultValues: {
       titulo: blocoInicial?.titulo || '',
-      conteudo: blocoInicial?.conteudo || '',
+      conteudo: blocoInicial?.conteudo ? sanitizeConteudo(blocoInicial.conteudo) : '', // APLICA SANITIZE
       tipo_bloco: blocoInicial?.tipo_bloco || 'Geral',
     },
   });
@@ -57,7 +58,7 @@ const FormBlocoSocietario: React.FC<FormBlocoSocietarioProps> = ({ blocoInicial,
     const dataToSave = {
       proprietario_id: ownerId,
       titulo: values.titulo,
-      conteudo: values.conteudo,
+      conteudo: sanitizeConteudo(values.conteudo), // APLICA SANITIZE NO SALVAMENTO
       tipo_bloco: values.tipo_bloco || null,
     };
 

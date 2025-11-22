@@ -18,6 +18,7 @@ import ContratoPreviewDialog from '../contratos/ContratoPreviewDialog';
 import { TAGS_PADRAO } from '@/config/contrato-tags-padrao';
 import { cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { sanitizeConteudo } from '@/utils/formatters'; // IMPORTADO
 
 // Extensão local para ContratoModelo
 interface ExtendedContratoModelo extends ContratoModelo {
@@ -82,7 +83,7 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
     resolver: zodResolver(formSchema),
     defaultValues: {
       titulo: modeloInicial?.titulo || '',
-      conteudo_template: modeloInicial?.conteudo_template || '',
+      conteudo_template: modeloInicial?.conteudo_template ? sanitizeConteudo(modeloInicial.conteudo_template) : '', // APLICA SANITIZE
       tipo_conteudo: modeloInicial?.tipo_conteudo || 'html', // GARANTINDO DEFAULT 'html'
     },
   });
@@ -95,7 +96,7 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
     
     const dataToSave = {
       titulo: values.titulo,
-      conteudo_template: values.conteudo_template,
+      conteudo_template: sanitizeConteudo(values.conteudo_template), // APLICA SANITIZE NO SALVAMENTO
       tipo_conteudo: values.tipo_conteudo, // INCLUINDO NO PAYLOAD
       empresa_id: ownerId, // Vincula ao Admin ou Cliente
     };

@@ -17,6 +17,7 @@ import { TAGS_PADRAO } from '@/config/contrato-tags-padrao';
 import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
+import { sanitizeConteudo } from '@/utils/formatters'; // IMPORTADO
 
 type TipoConteudo = 'html' | 'texto';
 
@@ -274,7 +275,7 @@ const GerarDocumentoSocietario: React.FC = () => {
         setTipoConteudo(modeloData.tipo_conteudo || 'html');
         
         // NOVO: Inicializa o campo {{CONTEUDO_PRINCIPAL}} com o template do modelo
-        initialValoresTags['{{CONTEUDO_PRINCIPAL}}'] = modeloData.conteudo_template;
+        initialValoresTags['{{CONTEUDO_PRINCIPAL}}'] = sanitizeConteudo(modeloData.conteudo_template); // APLICA SANITIZE
     }
     
     setModelo(currentModelo);
@@ -493,7 +494,7 @@ const GerarDocumentoSocietario: React.FC = () => {
       const currentValue = valoresTags['{{CONTEUDO_PRINCIPAL}}'] || ''; 
       
       // Insere o texto na posição do cursor
-      const newValue = currentValue.substring(0, start) + text + currentValue.substring(end);
+      const newValue = currentValue.substring(0, start) + sanitizeConteudo(text) + currentValue.substring(end); // APLICA SANITIZE
       
       handleTagChange('{{CONTEUDO_PRINCIPAL}}', newValue);
       

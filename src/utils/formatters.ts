@@ -49,3 +49,22 @@ export const normalizeString = (str: string | null | undefined): string => {
     // 2. Converte para minúsculas, remove espaços extras e caracteres não alfanuméricos (exceto espaços)
     return normalized.toLowerCase().trim().replace(/[^a-z0-9\s]/g, '');
 };
+
+/**
+ * Sanitiza conteúdo de texto para ser seguro dentro de um Textarea controlado por React,
+ * escapando strings que podem ser interpretadas como fechamento de tags JSX (ex: </dyad-file>).
+ */
+export function sanitizeConteudo(conteudo: string | null | undefined): string {
+    if (!conteudo) return "";
+
+    return conteudo
+        // 1. Escapa fechamentos de tags (</tag>) para evitar quebra de JSX
+        .replace(/<\/([a-zA-Z0-9\-_:]+)>/g, '<\\/$1>')
+        
+        // 2. Remove atributos de desenvolvimento (data-dyad-id)
+        .replace(/data-dyad-[a-zA-Z0-9_-]+="[^"]*"/g, '')
+        
+        // 3. Remove tags Dyad (se houver)
+        .replace(/<dyad-[^>]+>/g, '')
+        .replace(/<\/dyad-[^>]+>/g, '');
+}
