@@ -313,7 +313,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
           id_conta_patrimonial: contaPatrimonial, 
           historico_id: values.historico_id,
           // NOVO CAMPO: Salva a conta de resultado na conta sintética
-          ...(isAdmin && { id_conta_resultado: contaReceitaResultado }),
+          ...(isAdmin && { id_conta_resultado: contaReceitaResultado }), 
       };
 
       if (isEditing) {
@@ -321,6 +321,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
         if (error) throw error;
         contaReceberId = data.id;
         
+        // Deletar parcelas antigas
         const { error: deleteError } = await supabase.from(tabelaParcelasReceber).delete().eq('conta_receber_id', contaReceberId);
         if (deleteError) throw deleteError;
       } else {
@@ -385,12 +386,12 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
           
           // Limpeza de lançamentos antigos (se edição)
           if (isEditing) {
-              const oldLaunchDescriptionPrefix = `Receita: ${contaInicial?.descricao} (CR ID: ${contaInicial?.id.substring(0, 8)})`;
+              const oldReceitaDescriptionPrefix = `Receita: ${contaInicial?.descricao} (CR ID: ${contaInicial?.id.substring(0, 8)})`;
               await supabase.from('lancamentos')
                   .delete()
                   .eq('origem', 'lancamento_cr')
                   .eq('proprietario_id', ownerId)
-                  .ilike('descricao', `${oldLaunchDescriptionPrefix}%`);
+                  .ilike('descricao', `${oldReceitaDescriptionPrefix}%`);
           }
           
           await supabase.from('lancamentos').insert(lancamentoReceitaPayload);

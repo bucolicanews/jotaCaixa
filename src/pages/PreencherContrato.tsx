@@ -560,14 +560,14 @@ const PreencherContrato: React.FC = () => {
                 
             if (contaReceberData) {
                 // 1. Deletar Lançamentos associados (Patrimonial e Receita)
-                const oldLaunchDescriptionPrefix = `Lançamento Inicial CR: ${contratoInicial?.valores_tags_preenchidos?.titulo || 'Contrato'} (CR ID: ${contratoInicial?.id.substring(0, 8)})`;
+                const oldLaunchDescriptionPrefix = `Lançamento Inicial CR: ${contratoInicial?.valores_tags_preenchidos?.titulo || 'Contrato'} (CR ID: ${contaReceberData.id.substring(0, 8)})`;
                 const oldReceitaDescriptionPrefix = `Receita: ${contratoInicial?.valores_tags_preenchidos?.titulo || 'Contrato'} (CR ID: ${contratoInicial?.id.substring(0, 8)})`;
                 
                 await supabase.from('lancamentos')
                     .delete()
                     .eq('origem', 'lancamento_cr')
                     .eq('proprietario_id', ownerIdLogado)
-                    .or(`descricao.ilike.${oldLaunchDescriptionPrefix}%,descricao.ilike.${oldReceitaDescriptionPrefix}%`);
+                    .or(`descricao.ilike.${oldLaunchDescriptionPrefix}%`, `descricao.ilike.${oldReceitaDescriptionPrefix}%`);
                 
                 // 2. Deletar a conta sintética (cascades to parcels)
                 await supabase.from(tabelaContasReceber).delete().eq('id', contaReceberData.id);
@@ -666,19 +666,29 @@ const PreencherContrato: React.FC = () => {
             // 4. Lançamento 1: DÉBITO (Ativo) - Aumenta o direito a receber
             const dataMovimentacao = format(new Date(), 'yyyy-MM-dd') + 'T12:00:00Z';
             const launchDescription = `Contrato: ${tituloDocumento}`;
-            const contaReceberIdShort = contratoGeradoId.substring(0, 8);
+            const contaReceberIdShort = newContaReceberId.substring(0, 8); // USANDO O ID DA CONTA RECEBER
             
             if (isAdmin && contaAReceberId) {
                 const lancamentoPatrimonialPayload = {
                     proprietario_id: ownerIdLogado,
                     data_movimentacao: dataMovimentacao,
-                    descricao: `Lançamento Inicial CR: ${launchDescription} (CR ID: ${contaReceberIdShort})`,
+                    descricao: `Lançamento Inicial CR: ${launchDescription} (CR ID: ${contaReceberIdShort})`, // CORRIGIDO
                     valor: valorTotal,
                     tipo: 'Entrada' as const, // Entrada no Ativo (Débito)
                     conta_bancaria_id: null,
                     conta_contabil_id: contaAReceberId,
                     origem: 'lancamento_cr',
                 };
+                
+                // Limpeza de lançamentos antigos (se edição)
+                if (isEditing) {
+                    const oldLaunchDescriptionPrefix = `Lançamento Inicial CR: ${contratoInicial?.valores_tags_preenchidos?.titulo || 'Contrato'} (CR ID: ${contratoInicial?.id.substring(0, 8)})`;
+                    await supabase.from('lancamentos')
+                        .delete()
+                        .eq('origem', 'lancamento_cr')
+                        .eq('proprietario_id', ownerIdLogado)
+                        .ilike('descricao', `${oldLaunchDescriptionPrefix}%`);
+                }
                 
                 await supabase.from('lancamentos').insert(lancamentoPatrimonialPayload);
             }
@@ -688,13 +698,23 @@ const PreencherContrato: React.FC = () => {
                 const lancamentoReceitaPayload = {
                     proprietario_id: ownerIdLogado,
                     data_movimentacao: dataMovimentacao,
-                    descricao: `Receita: ${launchDescription} (CR ID: ${contaReceberIdShort})`,
+                    descricao: `Receita: ${launchDescription} (CR ID: ${contaReceberIdShort})`, // CORRIGIDO
                     valor: valorTotal,
                     tipo: 'Saida' as const, // Saída (Crédito) na Receita
                     conta_bancaria_id: null,
                     conta_contabil_id: contaReceitaResultado,
                     origem: 'lancamento_cr',
                 };
+                
+                // Limpeza de lançamentos antigos (se edição)
+                if (isEditing) {
+                    const oldReceitaDescriptionPrefix = `Receita: ${contratoInicial?.valores_tags_preenchidos?.titulo || 'Contrato'} (CR ID: ${contratoInicial?.id.substring(0, 8)})`;
+                    await supabase.from('lancamentos')
+                        .delete()
+                        .eq('origem', 'lancamento_cr')
+                        .eq('proprietario_id', ownerIdLogado)
+                        .ilike('descricao', `${oldReceitaDescriptionPrefix}%`);
+                }
                 
                 await supabase.from('lancamentos').insert(lancamentoReceitaPayload);
             }
