@@ -41,15 +41,27 @@ const SECOES_MENU: MenuSection[] = [
             { nome: 'Acompanhar Ponto', caminho: '/folha-ponto', icone: CalendarCheck, perfis: ['Admin', 'Cliente'], permissionKey: 'folha_ponto' },
         ]
     },
+    // NOVO: SEÇÃO FINANCEIRO
     {
         titulo: 'Financeiro',
         perfis: ['Admin', 'Cliente', 'Usuario'],
         itens: [
-            // Admin agora tem acesso a estes módulos para gerenciar seus próprios lançamentos
+            { nome: 'Fluxo de Caixa', caminho: '/relatorios/fluxo-caixa', icone: TrendingUp, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'bancos' },
             { nome: 'Contas a Pagar', caminho: '/contas-pagar', icone: ArrowDownCircle, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'contas_pagar' },
             { nome: 'Contas a Receber', caminho: '/contas-receber', icone: ArrowUpCircle, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'contas_receber' },
-            { nome: 'Contas e Saldos', caminho: '/bancos', icone: Banknote, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'bancos' },
+        ]
+    },
+    // NOVO: SEÇÃO CONTABILIDADE
+    {
+        titulo: 'Contabilidade',
+        perfis: ['Admin', 'Cliente', 'Usuario'],
+        itens: [
+            { nome: 'Saldo Caixa/Banco', caminho: '/bancos', icone: Banknote, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'bancos' },
             { nome: 'Contas Patrimoniais', caminho: '/contas-patrimoniais', icone: Scale, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'bancos' },
+            { nome: 'Balanço Patrimonial', caminho: '/relatorios/balanco', icone: Scale, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'relatorios' },
+            { nome: 'DRE', caminho: '/relatorios/dre', icone: TrendingUp, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'relatorios' },
+            { nome: 'Plano de Contas', caminho: '/plano-contas', icone: BookOpen, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'plano_contas' },
+            { nome: 'Gerenciar Históricos', caminho: '/historicos', icone: History, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'configuracoes' },
             { nome: 'Conciliação', caminho: '/conciliacao', icone: DollarSign, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'conciliacao' },
         ]
     },
@@ -86,12 +98,10 @@ const SECOES_MENU: MenuSection[] = [
             { nome: 'Minha Assinatura', caminho: '/minha-assinatura', icone: DollarSign, perfis: ['Cliente'] },
             { nome: 'Clientes', caminho: '/clientes', icone: Building2, perfis: ['Admin', 'Cliente'], permissionKey: 'contas_receber' }, // ITEM RESTAURADO
             { nome: 'Gerenciar Usuários', caminho: '/gerenciar-usuarios', icone: Users, perfis: ['Admin', 'Cliente'], permissionKey: 'cadastrar_usuarios' },
-            { nome: 'Plano de Contas', caminho: '/plano-contas', icone: BookOpen, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'plano_contas' }, // ITEM RESTAURADO
             { nome: 'Gerenciar Planos', caminho: '/planos', icone: Package, perfis: ['Admin'] }, 
             { nome: 'Relatórios', caminho: '/relatorios', icone: FileText, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'relatorios' },
             { nome: 'Importar Dados', caminho: '/importar', icone: Upload, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'importar' },
             { nome: 'Exportar Dados', caminho: '/exportar', icone: FileDown, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'relatorios' },
-            { nome: 'Gerenciar Históricos', caminho: '/historicos', icone: History, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'configuracoes' },
             { nome: 'Configurações', caminho: '/configuracoes', icone: Settings, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'configuracoes' },
         ]
     }
