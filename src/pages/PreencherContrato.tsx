@@ -778,8 +778,8 @@ const PreencherContrato: React.FC = () => {
           </Button>
       </div>
       
-      {/* CORREÇÃO DE LAYOUT: Usando grid-cols-1 lg:grid-cols-[1fr_2fr] para restaurar a proporção original */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_2fr] gap-6">
+      {/* CORREÇÃO DE LARGURA: Removendo a limitação de largura do container principal */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_2fr] gap-6 w-full">
         
         {/* Coluna 1: Dados e Faturamento */}
         <Card className="h-fit">
@@ -831,9 +831,9 @@ const PreencherContrato: React.FC = () => {
                 </div>
                 
                 <div className="space-y-4 pt-4 border-t">
-                    <h3 className="font-semibold text-lg">Detalhes Financeiros</h3>
+                    <h3 data-dyad-id="src\pages\PreencherContrato.tsx:834:20" data-dyad-name="h3" class="font-semibold text-lg">Detalhes Financeiros</h3>
                     
-                    {/* INÍCIO DA CORREÇÃO: Usando grid-cols-1 md:grid-cols-2 */}
+                    {/* CORREÇÃO: Usando grid-cols-1 md:grid-cols-2 */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label htmlFor="valor-total">Valor Total do Contrato (R$)</Label>
