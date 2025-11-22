@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, Plus, FileText, Trash2, Edit, Tag, ArrowRight, Building2 } from 'lucide-react';
+import { Loader2, Plus, FileText, Trash2, Edit, Tag, ArrowRight, Building2, ChevronLeft } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
@@ -9,7 +9,7 @@ import { DocumentoSocietarioModelo } from '@/types/documentos-societarios';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import FormDocumentoSocietarioModelo from '@/components/documentos-societarios/FormDocumentoSocietarioModelo';
+import FormDocumentoSocietarioModelo from '@/components/formularios/FormDocumentoSocietarioModelo';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Link } from 'react-router-dom';
 
@@ -28,7 +28,7 @@ const GerenciarModelosSocietarios: React.FC = () => {
   const getOwnerId = () => {
     if (isAdmin) return usuario?.id || null;
     if (isCliente) return (perfil as ClienteProfile)?.id;
-    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id; // FIX: proprietario_id -> cliente_id
+    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id;
     return null;
   };
   
@@ -45,7 +45,7 @@ const GerenciarModelosSocietarios: React.FC = () => {
     
     let query = supabase
       .from('modelos_societarios')
-      .select('*')
+      .select('*, tipo_conteudo')
       .order('titulo', { ascending: true });
       
     // Se for Cliente, busca apenas os seus modelos (ownerId) e modelos globais (proprietario_id is null)
@@ -140,8 +140,8 @@ const GerenciarModelosSocietarios: React.FC = () => {
                       </div>
                       <div className="flex space-x-2 ml-4">
                           <Link to={`/documentos-societarios/gerar/${modelo.id}`}>
-                              <Button variant="secondary" size="icon" title="Usar Modelo">
-                                  <ArrowRight className="w-4 h-4" />
+                              <Button variant="secondary" size="sm" title="Usar Modelo">
+                                  <ArrowRight className="w-4 h-4 mr-2" /> Gerar
                               </Button>
                           </Link>
                           <Button variant="outline" size="icon" onClick={() => handleEdit(modelo)} disabled={!canEditOrDelete} title={canEditOrDelete ? "Editar Modelo" : "Apenas visualização"}>
@@ -178,83 +178,83 @@ const GerenciarModelosSocietarios: React.FC = () => {
 
   return (
     <LayoutPrincipal>
-      <div className="flex flex-col items-center sm:flex-row sm:justify-between sm:items-start mb-6 gap-4">
-        <h1 className="text-2xl md:text-3xl font-bold flex items-center text-center sm:text-left">
+      <div className="flex items-center mb-6">
+        <Link to="/documentos-societarios">
+            <Button 
+                variant="link" 
+                type="button"
+                className="text-muted-foreground hover:text-primary flex items-center mr-4 p-0 h-auto"
+            >
+                <ChevronLeft className="w-5 h-5" />
+                Voltar para Documentos
+            </Button>
+        </Link>
+        <h1 className="text-2xl md:text-3xl font-bold flex items-center">
           <FileText className="w-6 h-6 mr-2" /> Gerenciar Modelos Societários
         </h1>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={handleNewModel} className="w-full sm:w-auto mx-auto sm:mx-0">
-              <Plus className="w-4 h-4 mr-2 sm:mr-0" /> 
-              <span className="hidden sm:inline">Novo Modelo</span>
-              <span className="sm:hidden">Novo</span>
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="w-full sm:max-w-7xl max-h-[95vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>{modeloSelecionado ? 'Editar Modelo' : 'Criar Novo Modelo'}</DialogTitle>
-            </DialogHeader>
-            <FormDocumentoSocietarioModelo
-              modeloInicial={modeloSelecionado}
-              onSaveComplete={handleSaveComplete}
-            />
-          </DialogContent>
-        </Dialog>
       </div>
       
-      <div className="grid grid-cols-1 gap-6 mb-6">
-          <Link to="/documentos-societarios/blocos">
-              <Card className="hover:shadow-lg transition-shadow cursor-pointer">
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <CardTitle className="text-lg font-semibold flex items-center">
-                          <Tag className="w-4 h-4 mr-2" /> Gerenciar Blocos de Conteúdo
-                      </CardTitle>
-                      <ArrowRight className="w-5 h-5 text-primary" />
-                  </CardHeader>
-                  <CardContent>
-                      <p className="text-sm text-muted-foreground">Crie e edite blocos de texto reutilizáveis para montar seus documentos.</p>
-                  </CardContent>
-              </Card>
-          </Link>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+          <Card className="md:col-span-2">
+              <CardHeader className="flex flex-row items-center justify-between">
+                  <CardTitle className="text-xl">Modelos Cadastrados ({modelosParaExibir.length})</CardTitle>
+                  <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+                      <DialogTrigger asChild>
+                          <Button onClick={handleNewModel} size="sm">
+                              <Plus className="w-4 h-4 mr-2" /> Novo Modelo
+                          </Button>
+                      </DialogTrigger>
+                      <DialogContent className="w-full sm:max-w-4xl max-h-[95vh] overflow-y-auto">
+                          <DialogHeader>
+                              <DialogTitle>{modeloSelecionado ? 'Editar Modelo' : 'Criar Novo Modelo'}</DialogTitle>
+                          </DialogHeader>
+                          <FormDocumentoSocietarioModelo
+                              modeloInicial={modeloSelecionado}
+                              onSaveComplete={handleSaveComplete}
+                          />
+                      </DialogContent>
+                  </Dialog>
+              </CardHeader>
+              <CardContent>
+                  {carregando ? (
+                      <div className="flex justify-center items-center h-32">
+                          <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                      </div>
+                  ) : modelosParaExibir.length === 0 ? (
+                      <p className="text-center text-muted-foreground py-8">Nenhum modelo de documento societário encontrado.</p>
+                  ) : (
+                      renderModelosList(modelosParaExibir, isSupervisao)
+                  )}
+              </CardContent>
+          </Card>
+          
+          <Card className="md:col-span-1 h-fit">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-lg font-semibold flex items-center">
+                      <Tag className="w-4 h-4 mr-2" /> Blocos de Conteúdo
+                  </CardTitle>
+                  <Link to="/documentos-societarios/blocos">
+                      <Button variant="link" size="sm">Gerenciar &rarr;</Button>
+                  </Link>
+              </CardHeader>
+              <CardContent>
+                  <p className="text-sm text-muted-foreground">Crie e edite blocos de texto reutilizáveis para montar seus documentos.</p>
+              </CardContent>
+          </Card>
       </div>
 
-      <Tabs value={isAdmin ? activeTab : 'meus_modelos'} onValueChange={setActiveTab} className="w-full">
-        {isAdmin && (
-            <TabsList className="grid w-full grid-cols-2 mb-4">
-                <TabsTrigger value="meus_modelos">Meus Modelos ({modelosFiltrados.meusModelos.length})</TabsTrigger>
-                <TabsTrigger value="modelos_clientes">Modelos dos Clientes ({modelosFiltrados.modelosClientes.length})</TabsTrigger>
-            </TabsList>
-        )}
-        
-        {isAdmin && activeTab === 'modelos_clientes' && (
-            <div className="p-4 bg-yellow-100 dark:bg-yellow-900/20 border border-yellow-500 rounded-md mt-4 mb-4">
-                <p className="text-sm text-yellow-700 dark:text-yellow-300 font-semibold flex items-center">
-                    <Building2 className="w-4 h-4 mr-2" /> Modo Supervisão: Modelos de clientes são apenas para visualização.
-                </p>
-            </div>
-        )}
-
-        <TabsContent value={isAdmin ? activeTab : 'meus_modelos'} className="mt-0">
-            <Card>
-                <CardHeader>
-                    <CardTitle className="text-xl">
-                        Modelos Cadastrados ({modelosParaExibir.length})
-                    </CardTitle>
-                </CardHeader>
-                <CardContent>
-                    {carregando ? (
-                        <div className="flex justify-center items-center h-32">
-                            <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                        </div>
-                    ) : modelosParaExibir.length === 0 ? (
-                        <p className="text-center text-muted-foreground py-8">Nenhum modelo de documento societário encontrado.</p>
-                    ) : (
-                        renderModelosList(modelosParaExibir, isSupervisao)
-                    )}
-                </CardContent>
-            </Card>
-        </TabsContent>
-      </Tabs>
+      {isAdmin && (
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+              <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="meus_modelos">Meus Modelos ({modelosFiltrados.meusModelos.length})</TabsTrigger>
+                  <TabsTrigger value="modelos_clientes">Modelos dos Clientes ({modelosFiltrados.modelosClientes.length})</TabsTrigger>
+              </TabsList>
+              
+              <TabsContent value={activeTab} className="mt-4">
+                  {/* Conteúdo já renderizado acima, esta seção é apenas para o layout de tabs */}
+              </TabsContent>
+          </Tabs>
+      )}
     </LayoutPrincipal>
   );
 };

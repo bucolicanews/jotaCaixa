@@ -13,11 +13,7 @@ import FormBlocoSocietario from '@/components/documentos-societarios/FormBlocoSo
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Link } from 'react-router-dom';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-
-// Extensão local para BlocoSocietario
-interface ExtendedBlocoSocietario extends BlocoSocietario {
-    conteudo_template: string;
-}
+import BlocoSocietarioCard from '@/components/modelos-societarios/BlocoSocietarioCard'; // Importando o Card
 
 const GerenciarBlocosSocietarios: React.FC = () => {
   const { role, perfil, usuario, carregando: carregandoSessao } = useSessao();
@@ -34,7 +30,7 @@ const GerenciarBlocosSocietarios: React.FC = () => {
   const getOwnerId = () => {
     if (isAdmin) return usuario?.id || null;
     if (isCliente) return (perfil as ClienteProfile)?.id;
-    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id; // FIX: proprietario_id -> cliente_id
+    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id;
     return null;
   };
   
@@ -132,51 +128,21 @@ const GerenciarBlocosSocietarios: React.FC = () => {
 
   // Helper para renderizar a lista de blocos
   const renderBlocosList = (list: BlocoSocietario[], isSupervisao: boolean) => (
-      <div className="overflow-x-auto">
-          <Table>
-              <TableHeader>
-                  <TableRow>
-                      <TableHead>Título</TableHead>
-                      <TableHead className="hidden md:table-cell">Conteúdo (Início)</TableHead>
-                      {isSupervisao && <TableHead>Proprietário ID</TableHead>}
-                      <TableHead className="w-[100px] text-right">Ações</TableHead>
-                  </TableRow>
-              </TableHeader>
-              <TableBody>
-                  {list.length === 0 ? (
-                      <TableRow>
-                          <TableCell colSpan={isSupervisao ? 4 : 3} className="text-center py-4 text-muted-foreground">
-                              Nenhum bloco encontrado.
-                          </TableCell>
-                      </TableRow>
-                  ) : (
-                      list.map((bloco: BlocoSocietario) => {
-                          // Apenas o proprietário ou Admin (no modo não supervisão) pode editar/deletar
-                          const canEditOrDelete = bloco.proprietario_id === ownerId || isAdmin && !isSupervisao;
-                          
-                          return (
-                              <TableRow key={bloco.id}>
-                                  <TableCell className="font-medium">{bloco.titulo}</TableCell>
-                                  <TableCell className="hidden md:table-cell text-sm text-muted-foreground truncate max-w-xs">
-                                      {(bloco as ExtendedBlocoSocietario).conteudo.substring(0, 100)}...
-                                  </TableCell>
-                                  {isSupervisao && <TableCell className="text-sm text-muted-foreground">{bloco.proprietario_id}</TableCell>}
-                                  <TableCell className="text-right">
-                                      <div className="flex justify-end space-x-2">
-                                          <Button variant="ghost" size="icon" onClick={() => handleEdit(bloco)} disabled={!canEditOrDelete} title={canEditOrDelete ? "Editar Bloco" : "Apenas visualização"}>
-                                              <Edit className="w-4 h-4" />
-                                          </Button>
-                                          <Button variant="ghost" size="icon" onClick={() => handleDelete(bloco.id)} disabled={!canEditOrDelete} title={canEditOrDelete ? "Excluir Bloco" : "Apenas visualização"}>
-                                              <Trash2 className="w-4 h-4 text-red-500" />
-                                          </Button>
-                                      </div>
-                                  </TableCell>
-                              </TableRow>
-                          );
-                      })
-                  )}
-              </TableBody>
-          </Table>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {list.map((bloco: BlocoSocietario) => {
+              // Apenas o proprietário ou Admin (no modo não supervisão) pode editar/deletar
+              const canEditOrDelete = bloco.proprietario_id === ownerId || isAdmin && !isSupervisao;
+              
+              return (
+                  <BlocoSocietarioCard 
+                      key={bloco.id} 
+                      bloco={bloco} 
+                      onEdit={() => handleEdit(bloco)}
+                      onDelete={() => handleDelete(bloco.id)}
+                      canManage={canEditOrDelete}
+                  />
+              );
+          })}
       </div>
   );
 

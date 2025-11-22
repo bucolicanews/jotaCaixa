@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, FileSignature, ChevronLeft, Save, Eye, Building2, Tag } from 'lucide-react';
+import { Loader2, FileSignature, ChevronLeft, Save, Eye, Building2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { DocumentoSocietarioModelo, DocumentoSocietarioGerado } from '@/types/documentos-societarios';
@@ -19,14 +19,10 @@ import { useForm, FormProvider } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/components/ui/form';
+import { Textarea } from '@/components/ui/textarea'; // Adicionado Textarea
 
 type TipoConteudo = 'html' | 'texto';
 type DocumentoStatus = 'rascunho' | 'finalizado' | 'arquivado' | 'ativo';
-
-interface ExtendedDocumentoSocietarioGerado extends DocumentoSocietarioGerado {
-    titulo: string;
-    status: DocumentoStatus;
-}
 
 interface EmpresaContrato {
     id: string;
@@ -75,7 +71,7 @@ const GerarDocumentoSocietario: React.FC = () => {
   const { role, perfil, usuario, carregando: carregandoSessao } = useSessao();
   
   const [modelo, setModelo] = useState<DocumentoSocietarioModelo | null>(null);
-  const [documentoInicial, setDocumentoInicial] = useState<ExtendedDocumentoSocietarioGerado | null>(null);
+  const [documentoInicial, setDocumentoInicial] = useState<DocumentoSocietarioGerado | null>(null);
   const [tagsCustomizadas, setTagsCustomizadas] = useState<any[]>([]);
   
   const [clientesCR, setClientesCR] = useState<ClienteCRCompleto[]>([]);
@@ -166,23 +162,39 @@ const GerarDocumentoSocietario: React.FC = () => {
         .order('nome_tag', { ascending: true });
         
     if (tagsData) {
-        setTagsCustomizadas(tagsData);
+        // Filtra tags financeiras (não são usadas em documentos societários)
+        const tagsNaoFinanceiras = TAGS_PADRAO.filter(t => !t.origem_dado?.startsWith('contas_receber'));
+        
+        // Combina tags padrão e customizadas
+        const allTags = [...tagsNaoFinanceiras, ...tagsData]
+            .filter((t, index, self) => index === self.findIndex((t2) => t2.nome_tag === t.nome_tag))
+            .sort((a, b) => a.nome_tag.localeCompare(b.nome_tag));
+            
+        setTagsCustomizadas(allTags);
     }
     
-    // 2. Buscar Clientes (Contratados) - AGORA BUSCA NA TABELA 'clientes' (Clientes CR)
+    // 2. Buscar Clientes (Contratados) - AGORA BUSCA NA TABELA 'tbl_clientes' (Clientes do Sistema)
     let queryClients = supabase
-        .from('clientes')
-        .select('*')
-        .eq('proprietario_id', targetEmpresaId)
+        .from('tbl_clientes')
+        .select('id, nome, razao_social, nome_fantasia, documento, email, telefone, cep, endereco, numero, complemento, bairro, cidade, estado, cpf, cnpj, rg')
+        .eq('admin_id', targetEmpresaId)
+        .eq('aprovado', true)
+        .neq('id', targetEmpresaId)
         .order('nome');
         
     const { data: clientesCRData, error: errorCR } = await queryClients;
         
     if (errorCR) {
-        showError('Erro ao carregar clientes CR: ' + errorCR.message);
+        showError('Erro ao carregar clientes do sistema: ' + errorCR.message);
         setClientesCR([]);
     } else {
-        const mappedClients = (clientesCRData as ClienteCRCompleto[]).filter((c: ClienteCRCompleto) => c.id !== targetEmpresaId);
+        const mappedClients = (clientesCRData as any[]).map(c => ({
+            ...c,
+            proprietario_id: targetEmpresaId,
+            telefone_fixo: null,
+            data_nascimento: null,
+        })) as ClienteCRCompleto[];
+        
         setClientesCR(mappedClients);
         
         if (clienteSelecionadoId && !mappedClients.some((c: ClienteCRCompleto) => c.id === clienteSelecionadoId)) {
@@ -221,7 +233,7 @@ const GerarDocumentoSocietario: React.FC = () => {
             return;
         }
         
-        const doc = docData as ExtendedDocumentoSocietarioGerado;
+        const doc = docData as DocumentoSocietarioGerado;
         setDocumentoInicial(doc);
         initialProprietarioDocumentoId = doc.proprietario_id;
         initialClienteId = doc.cliente_id || '';
@@ -271,7 +283,7 @@ const GerarDocumentoSocietario: React.FC = () => {
             if (!documentoId) initialProprietarioDocumentoId = empresasContratoList[0].id;
         }
     }
-    setEmpresasContrato(empresasContratoList); // CORREÇÃO AQUI
+    setEmpresasContrato(empresasContratoList);
     
     // 4. Resetar o formulário com os dados carregados
     form.reset({
@@ -360,9 +372,12 @@ const GerarDocumentoSocietario: React.FC = () => {
         }
     });
     
+    // Garante que o CONTEUDO_PRINCIPAL seja mantido
+    newTags['{{CONTEUDO_PRINCIPAL}}'] = currentTags['{{CONTEUDO_PRINCIPAL}}'] || modelo?.conteudo_template || '';
+    
     // Atualiza o campo de tags no RHF
     setValue('valores_tags', newTags, { shouldDirty: true });
-  }, [clienteSelecionado, empresaLogadaMemo, allAvailableTags, getValues, setValue]);
+  }, [clienteSelecionado, empresaLogadaMemo, allAvailableTags, getValues, setValue, modelo?.conteudo_template]);
 
   useEffect(() => {
     updateTags();
@@ -376,6 +391,7 @@ const GerarDocumentoSocietario: React.FC = () => {
   const renderizarConteudo = (template: string, tags: Record<string, string>): string => {
     let conteudoRenderizado = template;
     
+    // 1. Substituição de Tags de Dados (Primeira Passagem)
     Object.keys(tags).forEach(tagKey => {
         const regex = new RegExp(tagKey, 'g');
         conteudoRenderizado = conteudoRenderizado.replace(regex, tags[tagKey]);
@@ -408,29 +424,28 @@ const GerarDocumentoSocietario: React.FC = () => {
     setIsSubmitting(true);
     
     try {
-        const clienteSelecionado = clientesCR.find((c: ClienteCRCompleto) => c.id === values.cliente_id);
+        // 0. GARANTIR QUE O CLIENTE EXISTA NA TABELA 'tbl_clientes' (para FK)
+        const clienteSelecionado = clientesCR.find(c => c.id === values.cliente_id);
         if (!clienteSelecionado) throw new Error('Cliente selecionado não encontrado.');
         
-        // O conteúdo renderizado é o template do modelo com as tags preenchidas
+        // 1. Renderizar Conteúdo Final
         const conteudoRenderizado = renderizarConteudo(modelo.conteudo_template, values.valores_tags || {});
         
-        // 1. Sanitiza o conteúdo principal antes de salvar
-        const sanitizedContudoPrincipal = values.valores_tags?.['{{CONTEUDO_PRINCIPAL}}'] || '';
-        
-        // 2. Prepara dados do Documento Gerado
+        // 2. Preparar dados do Documento Gerado
         const documentoPayload = {
             modelo_id: modelo.id,
             cliente_id: values.cliente_id,
             proprietario_id: values.proprietario_documento_id,
             status: status,
-            titulo: values.titulo_documento,
+            // O título é salvo nos valores_tags e no campo titulo_documento
             valores_tags_preenchidos: { 
                 ...values.valores_tags, 
                 titulo: values.titulo_documento, 
                 tipo_conteudo: values.tipo_conteudo,
-                '{{CONTEUDO_PRINCIPAL}}': sanitizedContudoPrincipal, // Salva o conteúdo principal sanitizado
+                '{{CONTEUDO_PRINCIPAL}}': sanitizeConteudo(values.valores_tags?.['{{CONTEUDO_PRINCIPAL}}'] || ''), // Salva o conteúdo principal sanitizado
             },
             conteudo_renderizado: conteudoRenderizado,
+            data_registro: format(new Date(), 'yyyy-MM-dd'),
         };
         
         if (isEditing && documentoInicial) {
@@ -458,7 +473,20 @@ const GerarDocumentoSocietario: React.FC = () => {
     }
   };
   
-  // --- FUNÇÕES DE DRAG AND DROP E INSERÇÃO DE BLOCOS (REMOVIDAS) ---
+  // Filtra tags que já foram preenchidas automaticamente (para não pedir valor manual)
+  const tagsParaPreenchimentoManual = allAvailableTags.filter(tag => {
+      // Exclui tags de sistema (EMPRESA_*) que foram preenchidas
+      if (tag.nome_tag.startsWith('{{EMPRESA_') && valoresTags[tag.nome_tag]) return false;
+      
+      // Exclui tags de cliente (CLIENTE_*) que foram preenchidas
+      if (tag.nome_tag.startsWith('{{CLIENTE_') && valoresTags[tag.nome_tag]) return false;
+      
+      // Exclui a tag de conteúdo principal
+      if (tag.nome_tag === '{{CONTEUDO_PRINCIPAL}}') return false;
+      
+      // Inclui tags que não têm valor preenchido
+      return !valoresTags[tag.nome_tag];
+  });
 
   if (carregandoSessao || carregandoDados) {
     return (
@@ -474,18 +502,11 @@ const GerarDocumentoSocietario: React.FC = () => {
       return <LayoutPrincipal><Card><CardHeader><CardTitle>Erro</CardTitle></CardHeader><CardContent><p>Modelo de documento não encontrado.</p></CardContent></Card></LayoutPrincipal>;
   }
   
-  // Filtra tags que já foram preenchidas automaticamente (para não pedir valor manual)
-  const tagsParaPreenchimentoManual = allAvailableTags.filter(tag => {
-      if (tag.nome_tag === '{{CONTEUDO_PRINCIPAL}}') return false;
-      if (tag.nome_tag.startsWith('{{EMPRESA_') && valoresTags[tag.nome_tag]) return false;
-      if (tag.nome_tag.startsWith('{{CLIENTE_') && valoresTags[tag.nome_tag]) return false;
-      
-      return !valoresTags[tag.nome_tag];
-  }).map(t => t.nome_tag);
+  const templateContent = valoresTags['{{CONTEUDO_PRINCIPAL}}'] || modelo.conteudo_template;
 
   return (
     <LayoutPrincipal>
-       <div className="flex items-center mb-6">
+       <div className="flex items-center mb-6 w-full">
         <Button 
             onClick={() => navigate('/documentos-societarios')} 
             variant="link" 
@@ -511,7 +532,7 @@ const GerarDocumentoSocietario: React.FC = () => {
               Pré-visualizar Documento
           </Button>
           <Button 
-              onClick={() => handleSalvarDocumento('ativo')} 
+              onClick={() => handleSalvarDocumento('finalizado')} 
               className="flex-1 h-12"
               disabled={isSubmitting || !clienteSelecionadoId}
           >
@@ -522,7 +543,7 @@ const GerarDocumentoSocietario: React.FC = () => {
       
       <FormProvider {...form}>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit((values) => handleSalvarDocumento('ativo'))} className="space-y-6">
+          <form onSubmit={form.handleSubmit((values) => handleSalvarDocumento('finalizado'))} className="space-y-6">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               
               {/* Coluna 1: Dados e Tags */}
@@ -624,10 +645,10 @@ const GerarDocumentoSocietario: React.FC = () => {
                   </CardContent>
               </Card>
               
-              {/* Coluna 2: Prévia do Conteúdo do Modelo */}
+              {/* Coluna 2: Conteúdo Principal (Editável) e Prévia */}
               <Card className="lg:col-span-2">
                   <CardHeader className="flex flex-row items-center justify-between">
-                      <CardTitle className="text-xl">Prévia do Conteúdo do Modelo</CardTitle>
+                      <CardTitle className="text-xl">Conteúdo do Documento</CardTitle>
                       <Button 
                           onClick={() => handleSalvarDocumento('rascunho')} 
                           variant="secondary" 
@@ -640,17 +661,25 @@ const GerarDocumentoSocietario: React.FC = () => {
                   </CardHeader>
                   <CardContent className="space-y-4">
                       
-                      {/* Exibe o template do modelo (não editável) */}
-                      <div className="space-y-2">
-                          <Label>Template Base</Label>
-                          <div className="border rounded-md p-4 bg-secondary/50 max-h-[400px] overflow-y-auto font-mono text-sm">
-                              {modelo?.conteudo_template ? (
-                                  <pre style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{modelo.conteudo_template}</pre>
-                              ) : (
-                                  <p className="text-muted-foreground">Modelo não carregado.</p>
-                              )}
-                          </div>
-                      </div>
+                      {/* Campo de Edição do Conteúdo Principal */}
+                      <FormField
+                          control={form.control}
+                          name={`valores_tags.{{CONTEUDO_PRINCIPAL}}`}
+                          render={({ field }) => (
+                              <FormItem>
+                                  <FormLabel>Conteúdo Principal (Editável)</Formabel>
+                                  <FormControl>
+                                      <Textarea 
+                                          placeholder="Edite o conteúdo principal do documento aqui..." 
+                                          {...field} 
+                                          rows={15}
+                                          className="font-mono text-sm"
+                                      />
+                                  </FormControl>
+                                  <FormMessage />
+                              </FormItem>
+                          )}
+                      />
                       
                       <Separator />
                       
@@ -658,8 +687,8 @@ const GerarDocumentoSocietario: React.FC = () => {
                       <div className="space-y-2">
                           <Label>Prévia Renderizada</Label>
                           <div className="border rounded-md p-4 bg-background shadow-inner max-h-[400px] overflow-y-auto">
-                              {modelo?.conteudo_template ? (
-                                  <div dangerouslySetInnerHTML={{ __html: renderizarConteudo(modelo.conteudo_template, valoresTags) }} />
+                              {templateContent ? (
+                                  <div dangerouslySetInnerHTML={{ __html: renderizarConteudo(templateContent, valoresTags) }} />
                               ) : (
                                   <p className="text-muted-foreground">Selecione um modelo e um cliente para ver a prévia.</p>
                               )}

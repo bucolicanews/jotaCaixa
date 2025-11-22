@@ -1,68 +1,58 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, FileText, PlusCircle, Edit, Trash2, Eye } from 'lucide-react';
+import { Loader2, FileText, Eye, Trash2, Building2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
 import { DocumentoSocietarioGerado } from '@/types/documentos-societarios';
-import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { format } from 'date-fns';
+import { UsuarioProfile, ClienteProfile } from '@/types/usuario';
 import { Link } from 'react-router-dom';
+import { format, parseISO } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
+import ContratoPreviewDialog from '@/components/contratos/ContratoPreviewDialog';
 
-// Extensão local para DocumentoSocietarioGerado
-type DocumentoStatus = 'rascunho' | 'finalizado' | 'arquivado' | 'ativo';
-
-interface ExtendedDocumentoSocietarioGerado extends DocumentoSocietarioGerado {
-    titulo: string;
-    modelo_titulo: string;
-    status: DocumentoStatus;
+interface DocumentoComCliente extends DocumentoSocietarioGerado {
+    clientes: { nome: string } | null;
+    modelos_societarios: { titulo: string, tipo_conteudo: 'html' | 'texto' } | null;
 }
 
-type DocumentoComCliente = ExtendedDocumentoSocietarioGerado & { clientes: { nome: string } | null };
-
 const DocumentosSocietarios: React.FC = () => {
-  const { role, perfil, usuario, carregando: carregandoSessao } = useSessao();
+  const { role, perfil, carregando: carregandoSessao } = useSessao();
   const [documentos, setDocumentos] = useState<DocumentoComCliente[]>([]);
-  const [carregando, setCarregando] = useState(true);
-
-  const isAdmin = role === 'Admin';
-  const isCliente = role === 'Cliente';
+  const [carregandoDocumentos, setCarregandoDocumentos] = useState(true);
   
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewContent, setPreviewContent] = useState('');
+  const [previewTitle, setPreviewTitle] = useState('');
+  const [isPreviewHtml, setIsPreviewHtml] = useState(true);
+
   const getOwnerId = () => {
-    if (isAdmin) return usuario?.id || null;
-    if (isCliente) return (perfil as ClienteProfile)?.id;
-    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id; // FIX: proprietario_id -> cliente_id
+    if (role === 'Admin' || role === 'Cliente') return (perfil as any)?.id;
+    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id;
     return null;
   };
   
   const ownerId = getOwnerId();
 
   const buscarDocumentos = useCallback(async () => {
-    if (!ownerId && !isAdmin) {
-        setDocumentos([]);
-        setCarregando(false);
+    if (!ownerId) {
+        setCarregandoDocumentos(false);
         return;
     }
-    
-    setCarregando(true);
+    setCarregandoDocumentos(true);
     
     let query = supabase
       .from('documentos_societarios_gerados')
       .select(`
-        *, 
-        clientes:cliente_id ( nome ),
-        modelos_societarios ( titulo )
+        *,
+        clientes ( nome ),
+        modelos_societarios ( titulo, tipo_conteudo )
       `)
-      .order('criado_em', { ascending: false });
-      
-    // Se for Cliente/Usuário, filtra apenas pelos seus documentos
-    if (!isAdmin && ownerId) {
-        query = query.eq('proprietario_id', ownerId);
-    }
+      .eq('proprietario_id', ownerId)
+      .order('data_registro', { ascending: false });
 
     const { data, error } = await query;
 
@@ -70,42 +60,43 @@ const DocumentosSocietarios: React.FC = () => {
       showError('Erro ao carregar documentos: ' + error.message);
       setDocumentos([]);
     } else {
-      const mappedData = (data as any[]).map(d => ({
-          ...d,
-          titulo: d.valores_tags_preenchidos?.titulo || 'Documento Sem Título',
-          modelo_titulo: d.modelos_societarios?.titulo || 'Modelo Excluído',
-      })) as DocumentoComCliente[];
-      
-      setDocumentos(mappedData);
+      setDocumentos(data as DocumentoComCliente[]);
     }
-    setCarregando(false);
-  }, [ownerId, isAdmin]);
+    setCarregandoDocumentos(false);
+  }, [ownerId]);
 
   useEffect(() => {
-    if (!carregandoSessao && (isAdmin || ownerId)) {
+    if (!carregandoSessao && ownerId) {
       buscarDocumentos();
     }
-  }, [carregandoSessao, isAdmin, ownerId, buscarDocumentos]);
+  }, [carregandoSessao, ownerId, buscarDocumentos]);
   
-  const handleDelete = async (documentoId: string) => {
-      if (!window.confirm('Tem certeza que deseja excluir este documento societário? Esta ação é irreversível.')) {
-          return;
-      }
-      
-      const { error } = await supabase
-          .from('documentos_societarios_gerados')
-          .delete()
-          .eq('id', documentoId);
-          
-      if (error) {
-          showError('Falha ao excluir documento: ' + error.message);
-      } else {
-          showSuccess('Documento excluído com sucesso!');
-          buscarDocumentos();
-      }
+  const handleDelete = async (id: string) => {
+    if (!window.confirm('Tem certeza que deseja excluir este documento gerado?')) return;
+
+    const { error } = await supabase
+      .from('documentos_societarios_gerados')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      showError('Erro ao excluir documento: ' + error.message);
+    } else {
+      showSuccess('Documento excluído com sucesso.');
+      buscarDocumentos();
+    }
+  };
+  
+  const handleView = (doc: DocumentoComCliente) => {
+      setPreviewContent(doc.conteudo_renderizado || 'Conteúdo não renderizado.');
+      setPreviewTitle(doc.valores_tags_preenchidos?.titulo || doc.modelos_societarios?.titulo || 'Documento');
+      // Determina se é HTML ou Texto Simples
+      const isHtml = doc.valores_tags_preenchidos?.tipo_conteudo === 'html' || doc.modelos_societarios?.tipo_conteudo === 'html';
+      setIsPreviewHtml(isHtml);
+      setPreviewOpen(true);
   };
 
-  if (carregandoSessao || carregando) {
+  if (carregandoSessao || carregandoDocumentos) {
     return (
       <LayoutPrincipal>
         <div className="flex justify-center items-center h-64">
@@ -115,78 +106,75 @@ const DocumentosSocietarios: React.FC = () => {
     );
   }
   
-  if (!ownerId && !isAdmin) {
-      return (
-          <LayoutPrincipal>
-              <Card><CardContent className="p-6">Você não tem permissão para visualizar documentos societários.</CardContent></Card>
-          </LayoutPrincipal>
-      );
+  if (!ownerId) {
+    return <LayoutPrincipal><Card><CardHeader><CardTitle>Acesso Negado</CardTitle></CardHeader><CardContent><p>Você não tem permissão para gerenciar documentos.</p></CardContent></Card></LayoutPrincipal>;
   }
 
   return (
     <LayoutPrincipal>
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
         <h1 className="text-2xl md:text-3xl font-bold flex items-center">
-          <FileText className="w-6 h-6 mr-2" /> Documentos Societários Gerados
+          <FileText className="w-6 h-6 mr-2" /> Documentos Societários
         </h1>
-        <Link to="/documentos-societarios/modelos">
-            <Button className="w-full sm:w-auto">
-                <PlusCircle className="w-4 h-4 mr-2" />
-                Novo Documento
-            </Button>
-        </Link>
+        <div className="flex space-x-2 w-full sm:w-auto">
+            <Link to="/documentos-societarios/modelos">
+                <Button variant="secondary" className="w-full sm:w-auto">
+                    <Building2 className="w-4 h-4 mr-2" />
+                    Gerenciar Modelos
+                </Button>
+            </Link>
+            <Link to="/documentos-societarios/blocos">
+                <Button variant="secondary" className="w-full sm:w-auto">
+                    <FileText className="w-4 h-4 mr-2" />
+                    Gerenciar Blocos
+                </Button>
+            </Link>
+        </div>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-xl">Documentos ({documentos.length})</CardTitle>
+          <CardTitle className="text-xl">Documentos Gerados ({documentos.length})</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Título</TableHead>
-                  <TableHead>Cliente</TableHead>
-                  <TableHead className="hidden md:table-cell">Modelo Base</TableHead>
-                  <TableHead className="w-[120px]">Status</TableHead>
-                  <TableHead className="w-[120px]">Criado em</TableHead>
-                  <TableHead className="w-[100px] text-right">Ações</TableHead>
+                  <TableHead className="w-[250px]">Título</TableHead>
+                  <TableHead className="w-[150px]">Modelo Base</TableHead>
+                  <TableHead className="w-[150px]">Cliente</TableHead>
+                  <TableHead className="w-[100px]">Data Registro</TableHead>
+                  <TableHead className="w-[100px]">Status</TableHead>
+                  <TableHead className="w-[150px] text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {documentos.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center py-4 text-muted-foreground">
-                      Nenhum documento societário gerado.
+                      Nenhum documento gerado.
                     </TableCell>
                   </TableRow>
                 ) : (
                   documentos.map((doc) => (
                     <TableRow key={doc.id}>
-                      <TableCell className="font-medium">{doc.titulo}</TableCell>
-                      <TableCell>{doc.clientes?.nome || 'N/A'}</TableCell>
-                      <TableCell className="hidden md:table-cell text-sm text-muted-foreground">{doc.modelo_titulo}</TableCell>
+                      <TableCell className="font-medium">{doc.valores_tags_preenchidos?.titulo || doc.modelos_societarios?.titulo || 'Documento Sem Título'}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{doc.modelos_societarios?.titulo || 'N/A'}</TableCell>
+                      <TableCell className="text-sm">{doc.clientes?.nome || 'N/A'}</TableCell>
+                      <TableCell className="text-sm">{format(parseISO(doc.data_registro), 'dd/MM/yyyy')}</TableCell>
                       <TableCell>
-                          <Badge variant={doc.status === 'ativo' ? 'default' : 'secondary'}>
-                              {doc.status}
-                          </Badge>
+                        <Badge variant={doc.status === 'finalizado' ? 'default' : 'secondary'}>
+                            {doc.status}
+                        </Badge>
                       </TableCell>
-                      <TableCell>{format(new Date(doc.criado_em), 'dd/MM/yyyy')}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end space-x-2">
-                            <Link to={`/documentos-societarios/visualizar/${doc.id}`}>
-                                <Button variant="ghost" size="icon" title="Visualizar">
-                                    <Eye className="w-4 h-4" />
-                                </Button>
-                            </Link>
-                            <Link to={`/documentos-societarios/gerar/${doc.modelo_id}?documentoId=${doc.id}`}>
-                                <Button variant="ghost" size="icon" title="Editar">
-                                    <Edit className="w-4 h-4" />
-                                </Button>
-                            </Link>
-                            <Button variant="ghost" size="icon" onClick={() => handleDelete(doc.id)} title="Excluir">
-                                <Trash2 className="w-4 h-4" />
+                            <Button variant="outline" size="icon" onClick={() => handleView(doc)} title="Visualizar">
+                                <Eye className="w-4 h-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" onClick={() => handleDelete(doc.id)}>
+                                <Trash2 className="w-4 h-4 text-red-500" />
                             </Button>
                         </div>
                       </TableCell>
@@ -198,6 +186,14 @@ const DocumentosSocietarios: React.FC = () => {
           </div>
         </CardContent>
       </Card>
+      
+      <ContratoPreviewDialog
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+        conteudoHtml={previewContent}
+        titulo={previewTitle}
+        isHtml={isPreviewHtml} 
+      />
     </LayoutPrincipal>
   );
 };
