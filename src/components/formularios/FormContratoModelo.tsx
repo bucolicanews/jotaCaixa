@@ -170,7 +170,7 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
       // Insere a tag na posição do cursor
       const newValue = currentValue.substring(0, start) + tag + currentValue.substring(end);
       
-      // Atualiza o valor do formulário
+      // ATUALIZAÇÃO CRÍTICA: Usar form.setValue para garantir que o react-hook-form registre a mudança
       form.setValue('conteudo_template', newValue, { shouldDirty: true });
       
       // Move o cursor para o final da tag inserida
