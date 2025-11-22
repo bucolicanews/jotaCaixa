@@ -347,6 +347,7 @@ const GerarDocumentoSocietario: React.FC = () => {
       return uniqueTags;
   }, [tagsCustomizadas]);
 
+  // CORREÇÃO CRÍTICA: Esta função agora é chamada apenas quando as dependências mudam
   const updateTags = useCallback(() => {
     const newTags: Record<string, string> = {};
     const currentTags = getValues('valores_tags') || {};
@@ -390,9 +391,13 @@ const GerarDocumentoSocietario: React.FC = () => {
     setValue('valores_tags', newTags, { shouldDirty: true });
   }, [clienteSelecionado, empresaLogadaMemo, allAvailableTags, getValues, setValue, modelo?.conteudo_template]);
 
+  // NOVO useEffect para chamar updateTags apenas quando as dependências mudam
   useEffect(() => {
-    updateTags();
-  }, [updateTags, clienteSelecionadoId]); // Roda quando o cliente muda
+    // Esta dependência é estável (clienteSelecionado é um objeto memoizado)
+    if (clienteSelecionado) {
+        updateTags();
+    }
+  }, [clienteSelecionado, updateTags]);
 
   const handleTagChange = (tag: string, value: string) => {
     const currentTags = getValues('valores_tags') || {};
