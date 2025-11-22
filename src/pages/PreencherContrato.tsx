@@ -743,7 +743,7 @@ const PreencherContrato: React.FC = () => {
 
   return (
     <LayoutPrincipal>
-       <div className="flex items-center mb-6">
+       <div className="flex items-center mb-6 w-full">
         <Button 
             onClick={() => { window.location.href = '/contratos';  }} 
             variant="link" 
@@ -779,10 +779,10 @@ const PreencherContrato: React.FC = () => {
       </div>
       
       {/* CORREÇÃO DE LARGURA: Removendo a limitação de largura do container principal */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_2fr] gap-6 w-full">
+      <div className="w-full">
         
         {/* Coluna 1: Dados e Faturamento */}
-        <Card className="h-fit">
+        <Card className="h-fit w-full">
             <CardHeader><CardTitle className="text-xl">Dados e Faturamento</CardTitle></CardHeader>
             <CardContent className="space-y-6">
                 

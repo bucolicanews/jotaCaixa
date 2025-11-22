@@ -114,7 +114,7 @@ const LayoutPrincipal: React.FC<LayoutPrincipalProps> = ({ children }) => {
       <TrialBanner />
       
       {/* Conteúdo Principal (Rolável) */}
-      <main className={cn("flex-1 p-4 md:p-8 w-full overflow-x-hidden")}>
+      <main className={cn("flex-1 p-4 md:p-8 w-full")}> {/* REMOVIDO overflow-x-hidden */}
         {children}
       </main>
       
