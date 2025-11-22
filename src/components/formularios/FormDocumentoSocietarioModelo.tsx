@@ -48,7 +48,8 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
   const [conteudoPreview, setConteudoPreview] = useState('');
   const [previewTitle, setPreviewTitle] = useState('');
   
-  const textareaRef = useRef<HTMLTextAreaElement>(null); // Referência para o Textarea
+  // Removendo textareaRef, usaremos ID para acesso direto
+  // const textareaRef = useRef<HTMLTextAreaElement>(null); 
 
   const getOwnerId = () => {
     if (role === 'Admin') return usuario?.id || null;
@@ -168,29 +169,28 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
   
   // --- FUNÇÕES DE INSERÇÃO DE TEXTO (Tags e Blocos) ---
   
-  const handleInsertText = (text: string) => {
-      const textarea = textareaRef.current;
+  const handleInsertText = useCallback((insertText: string) => {
+      const current = form.getValues("conteudo_template") || "";
+
+      // Posição do cursor do textarea
+      const textarea = document.getElementById("conteudo-template-textarea") as HTMLTextAreaElement;
       if (!textarea) return;
-      
+
       const start = textarea.selectionStart;
       const end = textarea.selectionEnd;
-      const currentValue = form.getValues('conteudo_template');
-      
-      const sanitizedText = sanitizeConteudo(text);
-      
-      const newValue = currentValue.substring(0, start) + sanitizedText + currentValue.substring(end);
-      
-      // 1. Atualiza o valor no RHF
-      form.setValue('conteudo_template', newValue, { shouldDirty: true });
-      
-      // 2. Força o foco e a posição do cursor
-      // O setTimeout é necessário para dar tempo ao React/RHF de processar o setValue
+
+      const newValue =
+          current.substring(0, start) + insertText + current.substring(end);
+
+      // 1. Atualiza o valor no RHF (CRÍTICO)
+      form.setValue("conteudo_template", newValue, { shouldDirty: true, shouldValidate: true });
+
+      // 2. Reposiciona o cursor após a inserção
       setTimeout(() => {
+          textarea.selectionStart = textarea.selectionEnd = start + insertText.length;
           textarea.focus();
-          textarea.selectionStart = start + sanitizedText.length;
-          textarea.selectionEnd = start + sanitizedText.length;
       }, 0);
-  };
+  }, [form]);
   
   const handleInsertBloco = (bloco: BlocoSocietario) => {
       handleInsertText(`\n\n${bloco.conteudo}\n\n`);
@@ -207,12 +207,11 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
   
   const handleDrop = (e: React.DragEvent<HTMLTextAreaElement>) => {
       e.preventDefault();
-      const tag = e.dataTransfer.getData("text/plain");
-      
-      if (!tag) return;
-      
-      handleInsertText(tag);
-      // Não precisa de showSuccess aqui, pois o handleInsertText já faz o trabalho
+      const text = e.dataTransfer.getData("text/plain");
+
+      if (text) {
+          handleInsertText(text);
+      }
   };
   
   // --- FIM FUNÇÕES DE INSERÇÃO DE TEXTO ---
@@ -281,13 +280,15 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
                     </FormLabel>
                     <FormControl>
                       <Textarea 
-                        ref={textareaRef}
+                        id="conteudo-template-textarea" // ID CRÍTICO PARA O CURSOR
                         placeholder="Insira o conteúdo do documento aqui, usando as tags dinâmicas." 
                         {...field} 
                         rows={15}
                         className={cn("font-mono text-sm", form.watch('tipo_conteudo') === 'html' ? 'bg-yellow-50/50 dark:bg-yellow-900/10' : '')}
                         onDragOver={handleDragOver}
                         onDrop={handleDrop}
+                        // O onChange é mantido para permitir a digitação normal
+                        onChange={(e) => field.onChange(e.target.value)}
                       />
                     </FormControl>
                     <FormMessage />
