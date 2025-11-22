@@ -17,10 +17,13 @@ import { TAGS_PADRAO } from '@/config/contrato-tags-padrao';
 import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
+import { sanitizeConteudo } from '@/utils/formatters';
+import { useForm, FormProvider, useFormContext } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
+import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/components/ui/form';
 
 type TipoConteudo = 'html' | 'texto';
-
-// FIX 224, 234, 47: Define status type locally
 type DocumentoStatus = 'rascunho' | 'finalizado' | 'arquivado' | 'ativo';
 
 interface ExtendedDocumentoSocietarioGerado extends DocumentoSocietarioGerado {
@@ -28,34 +31,11 @@ interface ExtendedDocumentoSocietarioGerado extends DocumentoSocietarioGerado {
     status: DocumentoStatus;
 }
 
-interface ExtendedBlocoSocietario extends BlocoSocietario {
-    conteudo_template: string;
-}
-
-interface EmpresaLogada {
-    nome: string;
-    email: string;
-    documento?: string | null;
-    endereco_completo?: string | null;
-    cpf?: string | null;
-    cnpj?: string | null;
-    rg?: string | null;
-    telefone?: string | null;
-    cep?: string | null;
-    endereco?: string | null;
-    numero?: string | null;
-    complemento?: string | null;
-    bairro?: string | null;
-    cidade?: string | null;
-    estado?: string | null;
-}
-
 interface EmpresaContrato {
     id: string;
     nome: string;
 }
 
-// Cliente CR com todos os campos de tag
 interface ClienteCRCompleto {
     id: string;
     proprietario_id?: string | null;
@@ -79,6 +59,20 @@ interface ClienteCRCompleto {
     data_nascimento?: string | null;
 }
 
+// Esquema de validação para o formulário
+const formSchema = z.object({
+    titulo_documento: z.string().min(1, 'O título é obrigatório.'),
+    cliente_id: z.string().uuid('Selecione um cliente válido.'),
+    proprietario_documento_id: z.string().uuid('Selecione o proprietário.'),
+    tipo_conteudo: z.enum(['html', 'texto']),
+    
+    // Campos dinâmicos (tags)
+    conteudo_principal: z.string().min(10, 'O conteúdo é muito curto.'),
+    valores_tags: z.record(z.string()).optional(),
+});
+
+type FormValues = z.infer<typeof formSchema>;
+
 const GerarDocumentoSocietario: React.FC = () => {
   const { modeloId: modeloIdParam } = useParams<{ modeloId: string }>();
   const [searchParams] = useSearchParams();
@@ -91,7 +85,7 @@ const GerarDocumentoSocietario: React.FC = () => {
   const [blocos, setBlocos] = useState<BlocoSocietario[]>([]);
   const [tagsCustomizadas, setTagsCustomizadas] = useState<any[]>([]);
   
-  const [valoresTags, setValoresTags] = useState<Record<string, string>>({});
+  const [clientesCR, setClientesCR] = useState<ClienteCRCompleto[]>([]);
   const [carregandoDados, setCarregandoDados] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
@@ -99,18 +93,6 @@ const GerarDocumentoSocietario: React.FC = () => {
   const [conteudoPreview, setConteudoPreview] = useState('');
   const [previewTitle, setPreviewTitle] = useState('');
   
-  const [clienteSelecionadoId, setClienteSelecionadoId] = useState<string>('');
-  const [tituloDocumento, setTituloDocumento] = useState('');
-  
-  const [proprietarioDocumentoId, setProprietarioDocumentoId] = useState<string | null>(null); 
-  const [empresasContrato, setEmpresasContrato] = useState<EmpresaContrato[]>([]);
-  const [empresaLogada, setEmpresaLogada] = useState<EmpresaLogada | null>(null);
-  const [tipoConteudo, setTipoConteudo] = useState<TipoConteudo>('html'); 
-  
-  // FIX 39, 40, 41, 42, 43, 44, 45, 46, 47: Definindo estado local para clientesCR
-  const [clientesCR, setClientesCR] = useState<ClienteCRCompleto[]>([]);
-  
-  // NOVO: Referência para o Textarea
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   
   const isEditing = !!documentoId;
@@ -122,11 +104,32 @@ const GerarDocumentoSocietario: React.FC = () => {
   const getOwnerIdLogado = () => {
     if (isAdmin) return usuario?.id || null;
     if (isClient) return (perfil as ClienteProfile)?.id;
-    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id; // FIX: proprietario_id -> cliente_id
+    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id;
     return null;
   };
   
   const ownerIdLogado = getOwnerIdLogado();
+  
+  const form = useForm<FormValues>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+        titulo_documento: '',
+        cliente_id: '',
+        proprietario_documento_id: ownerIdLogado || '',
+        tipo_conteudo: 'html',
+        conteudo_principal: '',
+        valores_tags: {},
+    },
+  });
+  
+  const { watch, setValue, getValues } = form;
+  
+  const clienteSelecionadoId = watch('cliente_id');
+  const proprietarioDocumentoId = watch('proprietario_documento_id');
+  const tituloDocumento = watch('titulo_documento');
+  const tipoConteudo = watch('tipo_conteudo');
+  const valoresTags = watch('valores_tags') || {};
+  const conteudoPrincipal = watch('conteudo_principal');
 
   // Cliente selecionado (para preenchimento de tags)
   const clienteSelecionado = useMemo(() => {
@@ -176,8 +179,8 @@ const GerarDocumentoSocietario: React.FC = () => {
     
     // 2. Buscar Clientes (Contratados) - AGORA BUSCA NA TABELA 'clientes' (Clientes CR)
     let queryClients = supabase
-        .from('clientes') // CORREÇÃO: Usando a tabela 'clientes'
-        .select('*') // Seleciona todos os campos para preenchimento de tags
+        .from('clientes')
+        .select('*')
         .eq('proprietario_id', targetEmpresaId)
         .order('nome');
         
@@ -187,12 +190,11 @@ const GerarDocumentoSocietario: React.FC = () => {
         showError('Erro ao carregar clientes CR: ' + errorCR.message);
         setClientesCR([]);
     } else {
-        const mappedClients = (clientesCRData as ClienteCRCompleto[]).filter((c: ClienteCRCompleto) => c.id !== targetEmpresaId); // Filtra o próprio proprietário
+        const mappedClients = (clientesCRData as ClienteCRCompleto[]).filter((c: ClienteCRCompleto) => c.id !== targetEmpresaId);
         setClientesCR(mappedClients);
         
-        // Se o cliente selecionado não estiver mais na lista, limpa a seleção
         if (clienteSelecionadoId && !mappedClients.some((c: ClienteCRCompleto) => c.id === clienteSelecionadoId)) {
-            setClienteSelecionadoId('');
+            setValue('cliente_id', '');
         }
     }
     
@@ -209,7 +211,7 @@ const GerarDocumentoSocietario: React.FC = () => {
         setBlocos(blocosData as BlocoSocietario[]);
     }
     
-  }, [clienteSelecionadoId]);
+  }, [clienteSelecionadoId, setValue]);
 
 
   // --- FUNÇÃO PRINCIPAL DE BUSCA DE DADOS INICIAIS ---
@@ -224,6 +226,7 @@ const GerarDocumentoSocietario: React.FC = () => {
     let initialProprietarioDocumentoId = ownerIdLogado;
     let currentModelo: DocumentoSocietarioModelo | null = null;
     let initialValoresTags: Record<string, string> = {};
+    let initialClienteId = '';
     
     // 1. Carregar Documento Inicial (se for edição)
     if (documentoId) {
@@ -242,11 +245,8 @@ const GerarDocumentoSocietario: React.FC = () => {
         const doc = docData as ExtendedDocumentoSocietarioGerado;
         setDocumentoInicial(doc);
         initialProprietarioDocumentoId = doc.proprietario_id;
-        
-        setClienteSelecionadoId(doc.cliente_id || '');
+        initialClienteId = doc.cliente_id || '';
         initialValoresTags = doc.valores_tags_preenchidos || {};
-        setTituloDocumento(doc.titulo);
-        setTipoConteudo(doc.valores_tags_preenchidos?.tipo_conteudo || 'html');
         
         // 1.1. Buscar Modelo associado
         const { data: modeloData } = await supabase
@@ -270,19 +270,14 @@ const GerarDocumentoSocietario: React.FC = () => {
             return;
         }
         currentModelo = modeloData as DocumentoSocietarioModelo;
-        setTituloDocumento(modeloData.titulo);
-        setTipoConteudo(modeloData.tipo_conteudo || 'html');
         
         // NOVO: Inicializa o campo {{CONTEUDO_PRINCIPAL}} com o template do modelo
-        initialValoresTags['{{CONTEUDO_PRINCIPAL}}'] = modeloData.conteudo_template;
+        initialValoresTags['{{CONTEUDO_PRINCIPAL}}'] = sanitizeConteudo(modeloData.conteudo_template);
     }
     
     setModelo(currentModelo);
     
-    // 3. Configurar Empresa Logada (Contratante)
-    setEmpresaLogada(empresaLogadaMemo);
-    
-    // 4. Configurar Empresas Contratantes (Apenas Admin)
+    // 3. Configurar Empresas Contratantes (Apenas Admin)
     if (isAdmin) {
         const { data: clientesData } = await supabase
             .from('tbl_clientes')
@@ -298,11 +293,18 @@ const GerarDocumentoSocietario: React.FC = () => {
         }
     }
     
-    setProprietarioDocumentoId(initialProprietarioDocumentoId);
-    setValoresTags(initialValoresTags); // Define o estado de tags
+    // 4. Resetar o formulário com os dados carregados
+    form.reset({
+        titulo_documento: (documentoId ? docData?.valores_tags_preenchidos?.titulo : currentModelo?.titulo) || '',
+        cliente_id: initialClienteId,
+        proprietario_documento_id: initialProprietarioDocumentoId,
+        tipo_conteudo: currentModelo?.tipo_conteudo || 'html',
+        conteudo_principal: initialValoresTags['{{CONTEUDO_PRINCIPAL}}'] || '',
+        valores_tags: initialValoresTags,
+    });
     
     setCarregandoDados(false);
-  }, [modeloId, documentoId, ownerIdLogado, navigate, isAdmin, isClient, empresaLogadaMemo]);
+  }, [modeloId, documentoId, ownerIdLogado, navigate, isAdmin, isClient, empresaLogadaMemo, form]);
   
   // Efeito para monitorar a mudança do proprietário do documento
   useEffect(() => {
@@ -322,18 +324,15 @@ const GerarDocumentoSocietario: React.FC = () => {
 
   // --- Lógica de Preenchimento de Tags ---
   const allAvailableTags = useMemo(() => {
-      // Combina tags padrão (sistema + financeiras) com as tags customizadas do usuário
       const customTagsMap = tagsCustomizadas.reduce((acc, tag) => {
           acc[tag.nome_tag] = tag;
           return acc;
       }, {} as Record<string, ContratoTag>);
       
-      // Filtra tags financeiras (não são usadas em documentos societários)
       const tagsNaoFinanceiras = TAGS_PADRAO.filter(t => !t.origem_dado?.startsWith('contas_receber'));
       
       const combined = [...tagsNaoFinanceiras, ...tagsCustomizadas];
       
-      // Remove duplicatas e ordena
       const uniqueTags = Array.from(new Set(combined.map(t => t.nome_tag)))
           .map(tagKey => {
               const customTag = customTagsMap[tagKey];
@@ -348,6 +347,7 @@ const GerarDocumentoSocietario: React.FC = () => {
 
   const updateTags = useCallback(() => {
     const newTags: Record<string, string> = {};
+    const currentTags = getValues('valores_tags') || {};
     
     allAvailableTags.forEach(tag => {
         const tagKey = tag.nome_tag;
@@ -357,8 +357,8 @@ const GerarDocumentoSocietario: React.FC = () => {
             const [sourceTable, sourceField] = tag.origem_dado.split('.');
             
             // Mapeamento de dados da Empresa Logada (Contratante)
-            if ((sourceTable === 'tbl_clientes' || sourceTable === 'tbl_admins') && empresaLogada) {
-                const empresaData = empresaLogada as any;
+            if ((sourceTable === 'tbl_clientes' || sourceTable === 'tbl_admins') && empresaLogadaMemo) {
+                const empresaData = empresaLogadaMemo as any;
                 if (empresaData && empresaData[sourceField]) {
                     tagValue = String(empresaData[sourceField]);
                 }
@@ -373,39 +373,30 @@ const GerarDocumentoSocietario: React.FC = () => {
             } 
         }
         
-        // 2. Se o valor foi preenchido automaticamente, usa-o.
         if (tagValue !== null && tagValue !== undefined && tagValue !== 'N/A') {
             newTags[tagKey] = tagValue;
         } else {
-            // 3. Caso contrário, usa o valor salvo anteriormente ou o valor digitado.
-            // CRÍTICO: Se for a tag {{CONTEUDO_PRINCIPAL}}, mantemos o valor atual do estado
-            if (tagKey === '{{CONTEUDO_PRINCIPAL}}') {
-                // FIX: Se o valor existe no estado anterior (mesmo que seja vazio), use-o.
-                // Caso contrário, use o template do modelo como valor inicial.
-                newTags[tagKey] = (tagKey in valoresTags) 
-                    ? valoresTags[tagKey] 
-                    : (modelo?.conteudo_template || '');
-            } else {
-                newTags[tagKey] = valoresTags[tagKey] || '';
-            }
+            // Mantém o valor digitado anteriormente
+            newTags[tagKey] = currentTags[tagKey] || '';
         }
     });
     
-    setValoresTags(newTags);
-  }, [clienteSelecionado, empresaLogada, valoresTags, allAvailableTags, modelo?.conteudo_template]);
+    // Atualiza o campo de tags no RHF
+    setValue('valores_tags', newTags, { shouldDirty: true });
+  }, [clienteSelecionado, empresaLogadaMemo, allAvailableTags, getValues, setValue]);
 
   useEffect(() => {
     updateTags();
-  }, [updateTags]);
+  }, [updateTags, clienteSelecionadoId]); // Roda quando o cliente muda
 
   const handleTagChange = (tag: string, value: string) => {
-    setValoresTags(prev => ({ ...prev, [tag]: value }));
+    const currentTags = getValues('valores_tags') || {};
+    setValue('valores_tags', { ...currentTags, [tag]: value }, { shouldDirty: true });
   };
   
   const renderizarConteudo = (template: string, tags: Record<string, string>): string => {
     let conteudoRenderizado = template;
     
-    // 1. Substituição de Tags de Dados (Primeira Passagem)
     Object.keys(tags).forEach(tagKey => {
         const regex = new RegExp(tagKey, 'g');
         conteudoRenderizado = conteudoRenderizado.replace(regex, tags[tagKey]);
@@ -417,17 +408,18 @@ const GerarDocumentoSocietario: React.FC = () => {
   const handlePreview = () => {
       if (!modelo) return;
       
-      // O conteúdo principal é o valor da tag {{CONTEUDO_PRINCIPAL}} ou o template original
-      const templateToRender = valoresTags['{{CONTEUDO_PRINCIPAL}}'] || modelo.conteudo_template;
-      
+      const templateToRender = conteudoPrincipal || modelo.conteudo_template;
       const conteudoRenderizado = renderizarConteudo(templateToRender, valoresTags);
+      
       setConteudoPreview(conteudoRenderizado);
       setPreviewTitle(tituloDocumento || modelo.titulo);
       setPreviewOpen(true);
   };
 
   const handleSalvarDocumento = async (status: DocumentoStatus) => {
-    if (!modelo || !clienteSelecionadoId || !ownerIdLogado || !tituloDocumento || !proprietarioDocumentoId) {
+    const values = getValues();
+    
+    if (!modelo || !values.cliente_id || !ownerIdLogado || !values.titulo_documento || !values.proprietario_documento_id) {
         showError('Preencha Título, Cliente e Proprietário.');
         return;
     }
@@ -435,27 +427,32 @@ const GerarDocumentoSocietario: React.FC = () => {
     setIsSubmitting(true);
     
     try {
-        // 0. GARANTIR QUE O CLIENTE EXISTA NA TABELA 'clientes' (para FK)
-        const clienteSelecionado = clientesCR.find((c: ClienteCRCompleto) => c.id === clienteSelecionadoId);
+        const clienteSelecionado = clientesCR.find((c: ClienteCRCompleto) => c.id === values.cliente_id);
         if (!clienteSelecionado) throw new Error('Cliente selecionado não encontrado.');
         
-        // 1. Renderizar Conteúdo Final
-        const templateToRender = valoresTags['{{CONTEUDO_PRINCIPAL}}'] || modelo.conteudo_template;
-        const conteudoRenderizado = renderizarConteudo(templateToRender, valoresTags);
+        const templateToRender = values.conteudo_principal || modelo.conteudo_template;
+        const conteudoRenderizado = renderizarConteudo(templateToRender, values.valores_tags || {});
         
-        // 2. Preparar dados do Documento Gerado
+        // 1. Sanitiza o conteúdo principal antes de salvar
+        const sanitizedContudoPrincipal = sanitizeConteudo(values.conteudo_principal);
+        
+        // 2. Prepara dados do Documento Gerado
         const documentoPayload = {
             modelo_id: modelo.id,
-            cliente_id: clienteSelecionadoId,
-            proprietario_id: proprietarioDocumentoId,
+            cliente_id: values.cliente_id,
+            proprietario_id: values.proprietario_documento_id,
             status: status,
-            titulo: tituloDocumento,
-            valores_tags_preenchidos: { ...valoresTags, titulo: tituloDocumento, tipo_conteudo: tipoConteudo },
+            titulo: values.titulo_documento,
+            valores_tags_preenchidos: { 
+                ...values.valores_tags, 
+                titulo: values.titulo_documento, 
+                tipo_conteudo: values.tipo_conteudo,
+                '{{CONTEUDO_PRINCIPAL}}': sanitizedContudoPrincipal, // Salva o conteúdo principal sanitizado
+            },
             conteudo_renderizado: conteudoRenderizado,
         };
         
         if (isEditing && documentoInicial) {
-            // Atualizar Documento Existente
             const { error } = await supabase
                 .from('documentos_societarios_gerados')
                 .update(documentoPayload)
@@ -463,7 +460,6 @@ const GerarDocumentoSocietario: React.FC = () => {
             if (error) throw error;
             
         } else {
-            // Inserir Novo Documento
             const { error } = await supabase
                 .from('documentos_societarios_gerados')
                 .insert(documentoPayload);
@@ -489,19 +485,18 @@ const GerarDocumentoSocietario: React.FC = () => {
       
       const start = textarea.selectionStart;
       const end = textarea.selectionEnd;
-      // CORREÇÃO: Usar o valor atual do estado, garantindo que seja uma string
-      const currentValue = valoresTags['{{CONTEUDO_PRINCIPAL}}'] || ''; 
+      const currentValue = getValues('conteudo_principal') || ''; 
       
-      // Insere o texto na posição do cursor
-      const newValue = currentValue.substring(0, start) + text + currentValue.substring(end);
+      const sanitizedText = sanitizeConteudo(text); // Sanitiza o texto a ser inserido
       
-      handleTagChange('{{CONTEUDO_PRINCIPAL}}', newValue);
+      const newValue = currentValue.substring(0, start) + sanitizedText + currentValue.substring(end);
       
-      // Força o foco e a posição do cursor após a atualização do valor
+      setValue('conteudo_principal', newValue, { shouldDirty: true });
+      
       setTimeout(() => {
           textarea.focus();
-          textarea.selectionStart = start + text.length;
-          textarea.selectionEnd = start + text.length;
+          textarea.selectionStart = start + sanitizedText.length;
+          textarea.selectionEnd = start + sanitizedText.length;
       }, 0);
   };
   
@@ -511,7 +506,7 @@ const GerarDocumentoSocietario: React.FC = () => {
   };
   
   const handleDragOver = (e: React.DragEvent<HTMLTextAreaElement>) => {
-      e.preventDefault(); // Permite que o drop ocorra
+      e.preventDefault();
   };
   
   const handleDrop = (e: React.DragEvent<HTMLTextAreaElement>) => {
@@ -521,7 +516,7 @@ const GerarDocumentoSocietario: React.FC = () => {
       if (!tag) return;
       
       handleInsertText(tag);
-      showSuccess(`Conteúdo inserido.`); // Mensagem mais genérica
+      showSuccess(`Conteúdo inserido.`);
   };
   
   // --- FIM FUNÇÕES DE DRAG AND DROP E INSERÇÃO DE BLOCOS ---
@@ -542,13 +537,10 @@ const GerarDocumentoSocietario: React.FC = () => {
   
   // Filtra tags que já foram preenchidas automaticamente (para não pedir valor manual)
   const tagsParaPreenchimentoManual = allAvailableTags.filter(tag => {
-      // Exclui tags de sistema (EMPRESA_*) que foram preenchidas
+      if (tag.nome_tag === '{{CONTEUDO_PRINCIPAL}}') return false;
       if (tag.nome_tag.startsWith('{{EMPRESA_') && valoresTags[tag.nome_tag]) return false;
-      
-      // Exclui tags de cliente (CLIENTE_*) que foram preenchidas
       if (tag.nome_tag.startsWith('{{CLIENTE_') && valoresTags[tag.nome_tag]) return false;
       
-      // Inclui tags que não têm valor preenchido
       return !valoresTags[tag.nome_tag];
   }).map(t => t.nome_tag);
 
@@ -589,182 +581,214 @@ const GerarDocumentoSocietario: React.FC = () => {
           </Button>
       </div>
       
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* Coluna 1: Dados e Tags */}
-        <Card className="lg:col-span-1 h-fit">
-            <CardHeader><CardTitle className="text-xl">Dados e Tags</CardTitle></CardHeader>
-            <CardContent className="space-y-6">
-                
-                {isAdmin && (
-                    <div className="space-y-2">
-                        <Label htmlFor="empresa-documento">Empresa Proprietária</Label>
-                        <Select 
-                            value={proprietarioDocumentoId || ''} 
-                            onValueChange={setProprietarioDocumentoId}
-                        >
-                            <SelectTrigger id="empresa-documento">
-                                <Building2 className="w-4 h-4 mr-2 text-muted-foreground" />
-                                <SelectValue placeholder="Selecione a Empresa" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {empresasContrato.map((e: EmpresaContrato) => (
-                                    <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                )}
-                
-                <div className="space-y-2">
-                    <Label htmlFor="titulo-documento">Título do Documento</Label>
-                    <Input 
-                        id="titulo-documento"
-                        value={tituloDocumento}
-                        onChange={(e) => setTituloDocumento(e.target.value)}
-                        placeholder={modelo.titulo}
-                    />
-                </div>
-                
-                <div className="space-y-2">
-                    <Label htmlFor="cliente">Cliente (Contratado)</Label>
-                    <Select value={clienteSelecionadoId} onValueChange={setClienteSelecionadoId} disabled={!proprietarioDocumentoId}>
-                        <SelectTrigger id="cliente">
-                            <SelectValue placeholder="Selecione o Cliente" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {clientesCR.map(c => (
-                                <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                </div>
-                
-                <Separator />
-                
-                <div className="space-y-4">
-                    <h3 className="font-semibold text-lg">Tags Manuais</h3>
-                    <p className="text-sm text-muted-foreground">Preencha as tags que não foram preenchidas automaticamente.</p>
-                    
-                    {tagsParaPreenchimentoManual.length === 0 ? (
-                        <p className="text-muted-foreground text-sm">Nenhuma tag manual pendente.</p>
-                    ) : (
-                        tagsParaPreenchimentoManual.map(tagKey => (
-                            <div key={tagKey} className="space-y-1">
-                                <Label htmlFor={tagKey} className="font-semibold">{tagKey}</Label>
-                                <Input 
-                                    id={tagKey}
-                                    value={valoresTags[tagKey] || ''}
-                                    onChange={(e) => handleTagChange(tagKey, e.target.value)}
-                                    placeholder={`Insira o valor para ${tagKey}`}
-                                />
-                            </div>
-                        ))
-                    )}
-                </div>
-            </CardContent>
-        </Card>
-        
-        {/* Coluna 2: Template e Blocos */}
-        <Card className="lg:col-span-2">
-            <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle className="text-xl">Conteúdo do Documento</CardTitle>
-                <div className="flex space-x-2">
-                    <Button 
-                        onClick={handlePreview} 
-                        variant="outline" 
-                        size="sm"
-                        disabled={!modelo || !clienteSelecionadoId}
-                    >
-                        <Eye className="mr-2 h-4 w-4" />
-                        Pré-visualizar
-                    </Button>
-                    <Button 
-                        onClick={() => handleSalvarDocumento('rascunho')} 
-                        variant="secondary" 
-                        size="sm"
-                        disabled={isSubmitting || !clienteSelecionadoId}
-                    >
-                        <Save className="mr-2 h-4 w-4" />
-                        Salvar Rascunho
-                    </Button>
-                </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-                
-                {/* Campo de Conteúdo Principal (Editável) */}
-                <div className="space-y-2">
-                    <Label htmlFor="conteudo-principal">Conteúdo Principal (Editável)</Label>
-                    <Textarea
-                        id="conteudo-principal"
-                        ref={textareaRef} // Adicionando a referência
-                        value={valoresTags['{{CONTEUDO_PRINCIPAL}}'] || ''}
-                        onChange={(e) => handleTagChange('{{CONTEUDO_PRINCIPAL}}', e.target.value)}
-                        rows={15}
-                        className={cn("font-mono text-sm", tipoConteudo === 'html' ? 'bg-yellow-50/50 dark:bg-yellow-900/10' : '')}
-                        onDragOver={handleDragOver} // Manipulador de Drag Over
-                        onDrop={handleDrop} // Manipulador de Drop
-                    />
-                </div>
-                
-                <Separator />
-                
-                {/* Tags e Blocos de Conteúdo */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Tags Arrastáveis */}
-                    <div className="space-y-2">
-                        <h3 className="font-semibold text-lg flex items-center">
-                            <Tag className="w-4 h-4 mr-2" /> Arrastar Tags
-                        </h3>
-                        <p className="text-sm text-muted-foreground">Arraste as tags para o campo de conteúdo acima.</p>
-                        <div className="space-y-2 max-h-40 overflow-y-auto p-2 border rounded-md">
-                            {allAvailableTags.map((tag: ContratoTag) => (
-                                <div 
-                                    key={tag.nome_tag} 
-                                    className="p-2 border rounded-md cursor-pointer hover:bg-accent/50 transition-colors"
-                                    draggable
-                                    onDragStart={(e) => e.dataTransfer.setData("text/plain", tag.nome_tag)} // Inicia o drag
-                                    onClick={() => handleInsertText(tag.nome_tag)}
-                                >
-                                    <p className="font-mono text-xs font-semibold text-primary">{tag.nome_tag}</p>
-                                    <p className="text-xs text-muted-foreground">{tag.descricao}</p>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                    
-                    {/* Blocos de Conteúdo */}
-                    <div className="space-y-2">
-                        <h3 className="font-semibold text-lg flex items-center">
-                            <PlusCircle className="w-4 h-4 mr-2" /> Inserir Blocos
-                        </h3>
-                        <p className="text-sm text-muted-foreground">Clique ou arraste para adicionar um bloco pré-definido.</p>
-                        <div className="grid grid-cols-1 gap-2 max-h-40 overflow-y-auto p-2 border rounded-md">
-                            {blocos.length === 0 ? (
-                                <p className="text-muted-foreground text-sm col-span-2">Nenhum bloco disponível.</p>
-                            ) : (
-                                blocos.map(bloco => (
-                                    <Button 
-                                        key={bloco.id} 
-                                        variant="outline" 
-                                        size="sm" 
-                                        onClick={() => handleInsertBloco(bloco)}
-                                        className="justify-start truncate"
-                                        draggable // Habilitando drag
-                                        onDragStart={(e) => e.dataTransfer.setData("text/plain", `\n\n${bloco.conteudo}\n\n`)} // Passa o conteúdo do bloco
-                                    >
-                                        {bloco.titulo}
-                                    </Button>
-                                ))
-                            )}
-                        </div>
-                    </div>
-                </div>
-                
-            </CardContent>
-        </Card>
-        
-      </div>
+      <FormProvider {...form}>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit((values) => handleSalvarDocumento('ativo'))} className="space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              
+              {/* Coluna 1: Dados e Tags */}
+              <Card className="lg:col-span-1 h-fit">
+                  <CardHeader><CardTitle className="text-xl">Dados e Tags</CardTitle></CardHeader>
+                  <CardContent className="space-y-6">
+                      
+                      {isAdmin && (
+                          <FormField control={form.control} name="proprietario_documento_id" render={({ field }) => (
+                              <FormItem className="space-y-2">
+                                  <FormLabel htmlFor="empresa-documento">Empresa Proprietária</FormLabel>
+                                  <Select 
+                                      value={field.value || ''} 
+                                      onValueChange={field.onChange}
+                                  >
+                                      <FormControl>
+                                          <SelectTrigger id="empresa-documento">
+                                              <Building2 className="w-4 h-4 mr-2 text-muted-foreground" />
+                                              <SelectValue placeholder="Selecione a Empresa" />
+                                          </SelectTrigger>
+                                      </FormControl>
+                                      <SelectContent>
+                                          {empresasContrato.map((e: EmpresaContrato) => (
+                                              <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>
+                                          ))}
+                                      </SelectContent>
+                                  </Select>
+                                  <FormMessage />
+                              </FormItem>
+                          )} />
+                      )}
+                      
+                      <FormField control={form.control} name="titulo_documento" render={({ field }) => (
+                          <FormItem className="space-y-2">
+                              <FormLabel htmlFor="titulo-documento">Título do Documento</FormLabel>
+                              <FormControl>
+                                  <Input 
+                                      id="titulo-documento"
+                                      placeholder={modelo.titulo}
+                                      {...field}
+                                  />
+                              </FormControl>
+                              <FormMessage />
+                          </FormItem>
+                      )} />
+                      
+                      <FormField control={form.control} name="cliente_id" render={({ field }) => (
+                          <FormItem className="space-y-2">
+                              <FormLabel htmlFor="cliente">Cliente (Contratado)</FormLabel>
+                              <Select value={field.value} onValueChange={field.onChange} disabled={!proprietarioDocumentoId}>
+                                  <FormControl>
+                                      <SelectTrigger id="cliente">
+                                          <SelectValue placeholder="Selecione o Cliente" />
+                                      </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                      {clientesCR.map(c => (
+                                          <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
+                                      ))}
+                                  </SelectContent>
+                              </Select>
+                              <FormMessage />
+                          </FormItem>
+                      )} />
+                      
+                      <Separator />
+                      
+                      <div className="space-y-4">
+                          <h3 className="font-semibold text-lg">Tags Manuais</h3>
+                          <p className="text-sm text-muted-foreground">Preencha as tags que não foram preenchidas automaticamente.</p>
+                          
+                          {tagsParaPreenchimentoManual.length === 0 ? (
+                              <p className="text-muted-foreground text-sm">Nenhuma tag manual pendente.</p>
+                          ) : (
+                              tagsParaPreenchimentoManual.map(tagKey => (
+                                  <FormField
+                                      key={tagKey}
+                                      control={form.control}
+                                      name={`valores_tags.${tagKey}`}
+                                      render={({ field }) => (
+                                          <FormItem className="space-y-1">
+                                              <FormLabel htmlFor={tagKey} className="font-semibold">{tagKey}</FormLabel>
+                                              <FormControl>
+                                                  <Input 
+                                                      id={tagKey}
+                                                      placeholder={`Insira o valor para ${tagKey}`}
+                                                      {...field}
+                                                      value={field.value || ''}
+                                                      onChange={(e) => handleTagChange(tagKey, e.target.value)} // Usa o handler local
+                                                  />
+                                              </FormControl>
+                                              <FormMessage />
+                                          </FormItem>
+                                      )}
+                                  />
+                              ))
+                          )}
+                      </div>
+                  </CardContent>
+              </Card>
+              
+              {/* Coluna 2: Template e Blocos */}
+              <Card className="lg:col-span-2">
+                  <CardHeader className="flex flex-row items-center justify-between">
+                      <CardTitle className="text-xl">Conteúdo do Documento</CardTitle>
+                      <Button 
+                          onClick={() => handleSalvarDocumento('rascunho')} 
+                          variant="secondary" 
+                          size="sm"
+                          disabled={isSubmitting || !clienteSelecionadoId}
+                      >
+                          <Save className="mr-2 h-4 w-4" />
+                          Salvar Rascunho
+                      </Button>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                      
+                      {/* Campo de Conteúdo Principal (Editável) */}
+                      <div className="space-y-2">
+                          <Label htmlFor="conteudo-principal">Conteúdo Principal (Editável)</Label>
+                          <FormField control={form.control} name="conteudo_principal" render={({ field }) => (
+                              <FormItem>
+                                  <FormControl>
+                                      <Textarea
+                                          id="conteudo-principal"
+                                          ref={textareaRef}
+                                          rows={15}
+                                          className={cn("font-mono text-sm", tipoConteudo === 'html' ? 'bg-yellow-50/50 dark:bg-yellow-900/10' : '')}
+                                          onDragOver={handleDragOver}
+                                          onDrop={handleDrop}
+                                          {...field}
+                                          value={field.value || ''}
+                                      />
+                                  </FormControl>
+                                  <FormMessage />
+                              </FormItem>
+                          )} />
+                      </div>
+                      
+                      <Separator />
+                      
+                      {/* Tags e Blocos de Conteúdo */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {/* Tags Arrastáveis */}
+                          <div className="space-y-2">
+                              <h3 className="font-semibold text-lg flex items-center">
+                                  <Tag className="w-4 h-4 mr-2" /> Arrastar Tags
+                              </h3>
+                              <p className="text-sm text-muted-foreground">Arraste as tags para o campo de conteúdo acima.</p>
+                              <div className="space-y-2 max-h-40 overflow-y-auto p-2 border rounded-md">
+                                  {allAvailableTags.map((tag: ContratoTag) => (
+                                      <div 
+                                          key={tag.nome_tag} 
+                                          className="p-2 border rounded-md cursor-pointer hover:bg-accent/50 transition-colors"
+                                          draggable
+                                          onDragStart={(e) => e.dataTransfer.setData("text/plain", tag.nome_tag)}
+                                          onClick={() => handleInsertText(tag.nome_tag)}
+                                      >
+                                          <p className="font-mono text-xs font-semibold text-primary">{tag.nome_tag}</p>
+                                          <p className="text-xs text-muted-foreground">{tag.descricao}</p>
+                                      </div>
+                                  ))}
+                              </div>
+                          </div>
+                          
+                          {/* Blocos de Conteúdo */}
+                          <div className="space-y-2">
+                              <h3 className="font-semibold text-lg flex items-center">
+                                  <PlusCircle className="w-4 h-4 mr-2" /> Inserir Blocos
+                              </h3>
+                              <p className="text-sm text-muted-foreground">Clique ou arraste para adicionar um bloco pré-definido.</p>
+                              <div className="grid grid-cols-1 gap-2 max-h-40 overflow-y-auto p-2 border rounded-md">
+                                  {blocos.length === 0 ? (
+                                      <p className="text-muted-foreground text-sm col-span-2">Nenhum bloco disponível.</p>
+                                  ) : (
+                                      blocos.map(bloco => (
+                                          <Button 
+                                              key={bloco.id} 
+                                              variant="outline" 
+                                              size="sm" 
+                                              onClick={() => handleInsertBloco(bloco)}
+                                              className="justify-start truncate"
+                                              draggable
+                                              onDragStart={(e) => e.dataTransfer.setData("text/plain", `\n\n${bloco.conteudo}\n\n`)}
+                                          >
+                                              {bloco.titulo}
+                                          </Button>
+                                      ))
+                                  )}
+                              </div>
+                          </div>
+                      </div>
+                      
+                  </CardContent>
+              </Card>
+              
+            </div>
+            
+            <Button type="submit" className="w-full" disabled={isSubmitting || !clienteSelecionadoId}>
+                {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                {isEditing ? 'Salvar Alterações' : 'Gerar Documento'}
+            </Button>
+          </form>
+        </Form>
+      </FormProvider>
       
       <DocumentoPreviewDialog
         open={previewOpen}

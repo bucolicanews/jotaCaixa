@@ -7,6 +7,7 @@ import { showSuccess, showError } from '@/utils/toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Label } from '@/components/ui/label';
 import { useSessao } from '@/hooks/use-sessao';
+import { sanitizeConteudo } from '@/utils/formatters'; // IMPORTADO
 
 interface ImportarModeloContratoProps {
   empresaId: string | null;
@@ -57,7 +58,8 @@ const ImportarModeloContrato: React.FC<ImportarModeloContratoProps> = ({ empresa
       const reader = new FileReader();
       reader.onload = async (e) => {
         try {
-            const conteudo = e.target?.result as string;
+            const rawConteudo = e.target?.result as string;
+            const conteudo = sanitizeConteudo(rawConteudo); // APLICA SANITIZE AQUI
 
             if (!conteudo || conteudo.length < 50) {
               showError('O conteúdo do arquivo é muito curto ou vazio.');
