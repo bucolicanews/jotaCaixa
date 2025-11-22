@@ -778,8 +778,8 @@ const PreencherContrato: React.FC = () => {
           </Button>
       </div>
       
-      {/* CORREÇÃO DE LAYOUT: Revertendo para colunas de largura igual ou empilhadas (100% na tela) */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* CORREÇÃO DE LAYOUT: Usando grid-cols-1 lg:grid-cols-[1fr_2fr] para restaurar a proporção original */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_2fr] gap-6">
         
         {/* Coluna 1: Dados e Financeiro */}
         <Card className="h-fit">
