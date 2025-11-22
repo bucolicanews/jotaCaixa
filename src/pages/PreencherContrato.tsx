@@ -559,6 +559,17 @@ const PreencherContrato: React.FC = () => {
                 .single();
                 
             if (contaReceberData) {
+                // 1. Deletar Lançamentos associados (Patrimonial e Receita)
+                const oldLaunchDescriptionPrefix = `Lançamento Inicial CR: ${contratoInicial?.valores_tags_preenchidos?.titulo || 'Contrato'} (CR ID: ${contratoInicial?.id.substring(0, 8)})`;
+                const oldReceitaDescriptionPrefix = `Receita: ${contratoInicial?.valores_tags_preenchidos?.titulo || 'Contrato'} (CR ID: ${contratoInicial?.id.substring(0, 8)})`;
+                
+                await supabase.from('lancamentos')
+                    .delete()
+                    .eq('origem', 'lancamento_cr')
+                    .eq('proprietario_id', ownerIdLogado)
+                    .or(`descricao.ilike.${oldLaunchDescriptionPrefix}%,descricao.ilike.${oldReceitaDescriptionPrefix}%`);
+                
+                // 2. Deletar a conta sintética (cascades to parcels)
                 await supabase.from(tabelaContasReceber).delete().eq('id', contaReceberData.id);
             }
             
@@ -586,14 +597,23 @@ const PreencherContrato: React.FC = () => {
             let contaReceitaResultado: string | null = null;
             
             if (isAdmin) {
-                const [crConfig, parcelaConfig, receitaConfig] = await Promise.all([
+                const [crConfig, parcelaConfig, receitaConfig, contratoConfig] = await Promise.all([
                     supabase.from('configuracao_contas_receber').select('conta_contabil_id').eq('proprietario_id', ownerIdLogado).eq('tipo_registro', 'a_receber').single(),
                     supabase.from('configuracao_contas_receber').select('conta_contabil_id').eq('proprietario_id', ownerIdLogado).eq('tipo_registro', 'parcela').single(),
                     supabase.from('configuracao_contas_receber').select('conta_contabil_id').eq('proprietario_id', ownerIdLogado).eq('tipo_registro', 'recebimento_resultado').single(),
+                    // NOVO: Busca as contas configuradas no módulo de Contratos
+                    supabase.from('configuracao_contratos').select('id_conta_clientes_receber, id_conta_receita_contrato').eq('proprietario_id', ownerIdLogado).single(),
                 ]);
-                contaAReceberId = crConfig.data?.conta_contabil_id || null;
+                
+                // Prioriza as contas configuradas no módulo de Contratos
+                contaAReceberId = contratoConfig.data?.id_conta_clientes_receber || crConfig.data?.conta_contabil_id || null;
+                contaReceitaResultado = contratoConfig.data?.id_conta_receita_contrato || receitaConfig.data?.conta_contabil_id || null;
+                
                 contaParcelaId = parcelaConfig.data?.conta_contabil_id || null;
-                contaReceitaResultado = receitaConfig.data?.conta_contabil_id || null;
+                
+                if (!contaAReceberId || !contaReceitaResultado) {
+                    throw new Error('As contas contábeis de Clientes a Receber (Ativo) e Receita (Resultado) não estão configuradas no módulo de Contratos.');
+                }
             }
             
             // 3.1. Criar Conta Sintética
@@ -648,7 +668,7 @@ const PreencherContrato: React.FC = () => {
             const launchDescription = `Contrato: ${tituloDocumento}`;
             const contaReceberIdShort = contratoGeradoId.substring(0, 8);
             
-            if (contaAReceberId) {
+            if (isAdmin && contaAReceberId) {
                 const lancamentoPatrimonialPayload = {
                     proprietario_id: ownerIdLogado,
                     data_movimentacao: dataMovimentacao,
@@ -659,16 +679,6 @@ const PreencherContrato: React.FC = () => {
                     conta_contabil_id: contaAReceberId,
                     origem: 'lancamento_cr',
                 };
-                
-                // Limpeza de lançamentos antigos (se edição)
-                if (isEditing) {
-                    const oldLaunchDescriptionPrefix = `Lançamento Inicial CR: ${contratoInicial?.valores_tags_preenchidos?.titulo || 'Contrato'} (CR ID: ${contratoInicial?.id.substring(0, 8)})`;
-                    await supabase.from('lancamentos')
-                        .delete()
-                        .eq('origem', 'lancamento_cr')
-                        .eq('proprietario_id', ownerIdLogado)
-                        .ilike('descricao', `${oldLaunchDescriptionPrefix}%`);
-                }
                 
                 await supabase.from('lancamentos').insert(lancamentoPatrimonialPayload);
             }
@@ -685,16 +695,6 @@ const PreencherContrato: React.FC = () => {
                     conta_contabil_id: contaReceitaResultado,
                     origem: 'lancamento_cr',
                 };
-                
-                // Limpeza de lançamentos antigos (se edição)
-                if (isEditing) {
-                    const oldLaunchDescriptionPrefix = `Receita: ${contratoInicial?.valores_tags_preenchidos?.titulo || 'Contrato'} (CR ID: ${contratoInicial?.id.substring(0, 8)})`;
-                    await supabase.from('lancamentos')
-                        .delete()
-                        .eq('origem', 'lancamento_cr')
-                        .eq('proprietario_id', ownerIdLogado)
-                        .ilike('descricao', `${oldLaunchDescriptionPrefix}%`);
-                }
                 
                 await supabase.from('lancamentos').insert(lancamentoReceitaPayload);
             }
