@@ -18,7 +18,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { sanitizeConteudo } from '@/utils/formatters';
-import { useForm, FormProvider, useFormContext } from 'react-hook-form';
+import { useForm, FormProvider } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/components/ui/form';
@@ -95,6 +95,10 @@ const GerarDocumentoSocietario: React.FC = () => {
   
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   
+  // ESTADOS LOCAIS QUE SERÃO MIGRADOS PARA O RHF OU USADOS PARA CONTROLE
+  const [empresasContrato, setEmpresasContrato] = useState<EmpresaContrato[]>([]); // ESTADO CORRIGIDO
+  const [empresaLogada, setEmpresaLogada] = useState<any>(null); // Usando 'any' para simplificar o perfil logado
+  
   const isEditing = !!documentoId;
   const modeloId = modeloIdParam || documentoInicial?.modelo_id;
 
@@ -114,7 +118,7 @@ const GerarDocumentoSocietario: React.FC = () => {
     resolver: zodResolver(formSchema),
     defaultValues: {
         titulo_documento: '',
-        cliente_id: '', // Inicializa como string vazia
+        cliente_id: '',
         proprietario_documento_id: '', // Inicializa como string vazia
         tipo_conteudo: 'html',
         conteudo_principal: '',
@@ -288,7 +292,7 @@ const GerarDocumentoSocietario: React.FC = () => {
         if (clientesData) {
             const adminOption: EmpresaContrato = { id: ownerIdLogado, nome: 'Meus Documentos (Admin)' };
             const allClients = [adminOption, ...(clientesData as EmpresaContrato[])];
-            setEmpresasContrato(allClients);
+            setEmpresasContrato(allClients); // CORREÇÃO AQUI
             if (!documentoId) initialProprietarioDocumentoId = allClients[0].id;
         }
     }
@@ -297,7 +301,7 @@ const GerarDocumentoSocietario: React.FC = () => {
     form.reset({
         titulo_documento: (documentoId ? docData?.valores_tags_preenchidos?.titulo : currentModelo?.titulo) || '',
         cliente_id: initialClienteId,
-        proprietario_documento_id: initialProprietarioDocumentoId || '', // Garante string vazia
+        proprietario_documento_id: initialProprietarioDocumentoId || '',
         tipo_conteudo: currentModelo?.tipo_conteudo || 'html',
         conteudo_principal: initialValoresTags['{{CONTEUDO_PRINCIPAL}}'] || '',
         valores_tags: initialValoresTags,
@@ -756,23 +760,19 @@ const GerarDocumentoSocietario: React.FC = () => {
                               </h3>
                               <p className="text-sm text-muted-foreground">Clique ou arraste para adicionar um bloco pré-definido.</p>
                               <div className="grid grid-cols-1 gap-2 max-h-40 overflow-y-auto p-2 border rounded-md">
-                                  {blocos.length === 0 ? (
-                                      <p className="text-muted-foreground text-sm col-span-2">Nenhum bloco disponível.</p>
-                                  ) : (
-                                      blocos.map(bloco => (
-                                          <Button 
-                                              key={bloco.id} 
-                                              variant="outline" 
-                                              size="sm" 
-                                              onClick={() => handleInsertBloco(bloco)}
-                                              className="justify-start truncate"
-                                              draggable
-                                              onDragStart={(e) => e.dataTransfer.setData("text/plain", `\n\n${bloco.conteudo}\n\n`)}
-                                          >
-                                              {bloco.titulo}
-                                          </Button>
-                                      ))
-                                  )}
+                                  {blocos.map(bloco => (
+                                      <Button 
+                                          key={bloco.id} 
+                                          variant="outline" 
+                                          size="sm" 
+                                          onClick={() => handleInsertBloco(bloco)}
+                                          className="justify-start truncate"
+                                          draggable
+                                          onDragStart={(e) => e.dataTransfer.setData("text/plain", `\n\n${bloco.conteudo}\n\n`)}
+                                      >
+                                          {bloco.titulo}
+                                      </Button>
+                                  ))}
                               </div>
                           </div>
                       </div>
