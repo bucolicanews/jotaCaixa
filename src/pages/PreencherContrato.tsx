@@ -176,24 +176,29 @@ const PreencherContrato: React.FC = () => {
         setTagsCustomizadas(tagsData as ContratoTag[]);
     }
     
-    // 2. Buscar Clientes (Contratados) - AGORA BUSCA NA TABELA 'clientes' (Clientes CR)
-    // Adicionando filtro para garantir que o cliente não seja o próprio proprietário
+    // 2. Buscar Clientes (Contratados) - AGORA BUSCA NA TABELA 'tbl_clientes' (Clientes do Sistema)
     let queryClients = supabase
-        .from('clientes') // CORREÇÃO: Usando a tabela 'clientes'
-        .select('id, proprietario_id, nome, razao_social, nome_fantasia, documento, email, telefone, telefone_fixo, cep, endereco, numero, complemento, bairro, cidade, estado, cpf, cnpj, rg, data_nascimento') // Seleciona todos os campos para preenchimento de tags
-        .eq('proprietario_id', targetEmpresaId) // Filtra pelos clientes do Admin/Cliente
+        .from('tbl_clientes') // ALTERADO: Usando a tabela 'tbl_clientes'
+        .select('id, nome, razao_social, nome_fantasia, documento, email, telefone, cep, endereco, numero, complemento, bairro, cidade, estado, cpf, cnpj, rg') // Seleciona campos relevantes
+        .eq('admin_id', targetEmpresaId) // Filtra pelos clientes do Admin/Cliente
+        .eq('aprovado', true) // Filtra apenas clientes aprovados
         .neq('id', targetEmpresaId) // GARANTE QUE O PROPRIETÁRIO NÃO ESTEJA NA LISTA DE CLIENTES CONTRATADOS
-        .eq('is_system_client', true) // NOVO FILTRO: Apenas clientes promovidos
         .order('nome');
         
     const { data: clientesCRData, error: errorCR } = await queryClients;
         
     if (errorCR) {
-        showError('Erro ao carregar clientes CR: ' + errorCR.message);
+        showError('Erro ao carregar clientes do sistema: ' + errorCR.message);
         setClientesCR([]);
     } else {
-        // A filtragem de ID duplicado já está no query, mas mantemos a tipagem
-        const mappedClients = clientesCRData as ClienteCRCompleto[]; 
+        // Mapeia os dados para o formato ClienteCRCompleto (que é mais genérico)
+        const mappedClients = (clientesCRData as any[]).map(c => ({
+            ...c,
+            proprietario_id: targetEmpresaId, // Adiciona o proprietário para consistência
+            telefone_fixo: null, // Não existe em tbl_clientes
+            data_nascimento: null, // Não existe em tbl_clientes
+        })) as ClienteCRCompleto[];
+        
         setClientesCR(mappedClients);
         
         // Se o cliente selecionado não estiver mais na lista, limpa a seleção
