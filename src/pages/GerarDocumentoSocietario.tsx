@@ -393,11 +393,11 @@ const GerarDocumentoSocietario: React.FC = () => {
 
   // NOVO useEffect para chamar updateTags apenas quando as dependências mudam
   useEffect(() => {
-    // Esta dependência é estável (clienteSelecionado é um objeto memoizado)
-    if (clienteSelecionado) {
+    // Se o cliente selecionado mudar, ou se o modelo for carregado, atualiza as tags.
+    if (clienteSelecionado || modelo) {
         updateTags();
     }
-  }, [clienteSelecionado, updateTags]);
+  }, [clienteSelecionado, modelo, updateTags]); // Removendo a dependência updateTags do array, pois ela é uma useCallback
 
   const handleTagChange = (tag: string, value: string) => {
     const currentTags = getValues('valores_tags') || {};
