@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useTheme } from '@/contexts/ThemeProvider';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Sun, Moon, LogOut, Menu, User, Settings, Key, CalendarCheck, Package, DollarSign, MessageSquare, Loader2, Building2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
@@ -9,12 +9,12 @@ import MenuLateral from './MenuLateral';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useSessao } from '@/hooks/use-sessao';
 import UserAvatar from './UserAvatar';
-import { Link } from 'react-router-dom';
 import { UsuarioProfile, ClienteProfile, AdminProfile, AdminUsuarioProfile } from '@/types/usuario';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { BASE_URL } from '@/config/app-config';
 import { useTicketNotifications } from '@/hooks/use-ticket-notifications';
+import { useOwnerBranding } from '@/hooks/use-owner-branding'; // Importando useOwnerBranding
 
 const ThemeToggle = () => {
   const { theme, setTheme } = useTheme();
@@ -39,10 +39,8 @@ const ThemeToggle = () => {
 const Header: React.FC = () => {
   const [sheetOpen, setSheetOpen] = useState(false);
   const { perfil, role, usuario, carregando } = useSessao();
+  const { ownerName, logoUrl, loading: loadingBranding } = useOwnerBranding(); // Usando useOwnerBranding
   const [planoDetalhes, setPlanoDetalhes] = useState<{ nome: string, preco: number } | null>(null);
-  const [adminBranding, setAdminBranding] = useState<{ logoUrl: string | null, nome: string | null } | null>(null);
-  const [loadingBranding, setLoadingBranding] = useState(true);
-  const [clientBranding, setClientBranding] = useState<{ logoUrl: string | null, nome: string | null } | null>(null);
   
   const { mensagensParaResponder, carregando: carregandoNotificacoes } = useTicketNotifications();
 
@@ -53,60 +51,6 @@ const Header: React.FC = () => {
   
   const isUserOfClient = role === 'Usuario' && 'cliente_id' in userProfile && !!userProfile.cliente_id;
   const isUserOfAdmin = role === 'Usuario' && 'admin_id' in userProfile && !!userProfile.admin_id;
-  
-  // Determina o ID do Admin para buscar o branding
-  const targetAdminId = isAdmin ? perfil?.id : (isUserOfAdmin ? (perfil as AdminUsuarioProfile).admin_id : null);
-
-  const fetchAdminBranding = useCallback(async () => {
-      if (!targetAdminId) {
-          setLoadingBranding(false);
-          setAdminBranding(null);
-          return;
-      }
-      
-      setLoadingBranding(true);
-      
-      const { data, error } = await supabase
-          .from('tbl_admins')
-          .select('nome, logo_url')
-          .eq('id', targetAdminId)
-          .single();
-          
-      if (error) {
-          console.error('Erro ao buscar branding do Admin:', error);
-          setAdminBranding(null);
-      } else {
-          setAdminBranding({ logoUrl: data.logo_url, nome: data.nome });
-      }
-      setLoadingBranding(false);
-  }, [targetAdminId]);
-  
-  const fetchClientBranding = useCallback(async () => {
-      if (isUserOfClient && userProfile.cliente_id) {
-          const { data, error } = await supabase
-              .from('tbl_clientes')
-              .select('nome, logo_url')
-              .eq('id', userProfile.cliente_id)
-              .single();
-              
-          if (error) {
-              console.error('Erro ao buscar branding do Cliente:', error);
-              setClientBranding(null);
-          } else {
-              setClientBranding({ logoUrl: data.logo_url, nome: data.nome });
-          }
-      } else {
-          setClientBranding(null);
-      }
-  }, [isUserOfClient, userProfile]);
-
-  useEffect(() => {
-      if (!carregando) {
-          fetchAdminBranding();
-          fetchClientBranding();
-      }
-  }, [carregando, fetchAdminBranding, fetchClientBranding]);
-
 
   useEffect(() => {
     const updatePlanoDetails = async () => {
@@ -167,20 +111,11 @@ const Header: React.FC = () => {
   
   const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
   
-  // Lógica para o Título Principal
-  let textTitle = 'Fluxo de Caixa';
+  // Lógica para o Título Principal (usando ownerName do hook)
+  let textTitle = ownerName || 'Fluxo de Caixa';
   
-  if (isAdmin) {
-      textTitle = adminBranding?.nome || perfil?.nome || 'Administrador';
-  } else if (isClient) {
-      textTitle = clienteProfile?.nome || 'Minha Empresa';
-  } else if (isUserOfClient) {
-      textTitle = clientBranding?.nome || 'Empresa Cliente';
-  } else if (isUserOfAdmin) {
-      textTitle = adminBranding?.nome || 'Admin';
-  } else if (perfil?.nome) {
-      textTitle = perfil.nome;
-  }
+  // Prepara o objeto de branding para o MenuLateral
+  const menuBranding = { logoUrl, nome: ownerName };
 
 
   return (
@@ -199,7 +134,7 @@ const Header: React.FC = () => {
           <SheetContent side="left" className="p-0 w-64">
             <MenuLateral 
                 onLinkClick={() => setSheetOpen(false)} 
-                adminBranding={adminBranding}
+                adminBranding={menuBranding} // Passando o branding correto
                 loadingBranding={loadingBranding}
             />
           </SheetContent>

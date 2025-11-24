@@ -139,39 +139,18 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick, adminBranding, l
   const isUserOfClient = role === 'Usuario' && userProfile && 'cliente_id' in userProfile && !!userProfile.cliente_id;
   const isUserOfAdmin = role === 'Usuario' && userProfile && 'admin_id' in userProfile && !!userProfile.admin_id;
   
-  // Lógica para a URL da Logo
-  let finalLogoUrl = null;
-  let textTitle = 'Fluxo de Caixa';
+  // Lógica para a URL da Logo e Título (usando adminBranding que agora vem do useOwnerBranding)
+  let finalLogoUrl = adminBranding?.logoUrl;
+  let textTitle = adminBranding?.nome || 'Fluxo de Caixa';
   let profileDescription = '';
   
-  // NOTA: A lógica de branding foi movida para o Header.tsx e o useOwnerBranding.
-  // Aqui, usamos apenas os props passados e o perfil da sessão.
-  
   if (isAdmin) {
-      finalLogoUrl = adminBranding?.logoUrl;
-      textTitle = adminBranding?.nome || perfil?.nome || 'Administrador';
       profileDescription = 'Administrador do Sistema';
   } else if (isClient) {
-      finalLogoUrl = clientProfile?.logo_url;
-      textTitle = clientProfile?.nome || 'Minha Empresa';
       profileDescription = 'Cliente Principal';
   } else if (isUserOfClient) {
-      // Se for usuário de cliente, precisamos buscar o branding do cliente
-      const [clientBrandingLocal, setClientBrandingLocal] = useState<{ logoUrl: string | null, nome: string | null } | null>(null);
-      
-      useEffect(() => {
-          if (isUserOfClient && userProfile?.cliente_id) {
-              supabase.from('tbl_clientes').select('nome, logo_url').eq('id', userProfile.cliente_id).single()
-                  .then(({ data }) => setClientBrandingLocal({ logoUrl: data?.logo_url || null, nome: data?.nome || null }));
-          }
-      }, [isUserOfClient, userProfile]);
-      
-      finalLogoUrl = clientBrandingLocal?.logoUrl;
-      textTitle = clientBrandingLocal?.nome || 'Empresa Cliente';
-      profileDescription = `Funcionário de ${clientBrandingLocal?.nome || 'Cliente'}`;
+      profileDescription = `Funcionário de ${adminBranding?.nome || 'Cliente'}`;
   } else if (isUserOfAdmin) {
-      finalLogoUrl = adminBranding?.logoUrl;
-      textTitle = adminBranding?.nome || 'Admin';
       profileDescription = `Funcionário de ${adminBranding?.nome || 'Admin'}`;
   } else if (perfil?.nome) {
       textTitle = perfil.nome;

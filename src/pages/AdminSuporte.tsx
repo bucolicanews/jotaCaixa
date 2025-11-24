@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import { useDebounce } from '@/hooks/use-debounce';
 import { useTicketNotifications } from '@/hooks/use-ticket-notifications'; // Importando o hook
+import { UsuarioProfile, AdminUsuarioProfile } from '@/types/usuario'; // Importando tipos de usuário
 
 interface Ticket {
   id: string;
@@ -34,7 +35,7 @@ interface EmpresaFiltro {
 }
 
 const AdminSuporte: React.FC = () => {
-  const { role, carregando: carregandoSessao, usuario } = useSessao(); // Adicionado usuario
+  const { role, carregando: carregandoSessao, usuario, perfil } = useSessao(); // Adicionado perfil
   const { ticketsAbertos, ticketsEmProgresso, ticketsPausados, ticketsFechados, mensagensParaResponder, carregando: carregandoNotificacoes, refetch: refetchNotifications } = useTicketNotifications(); // Usando o hook
   
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -49,6 +50,8 @@ const AdminSuporte: React.FC = () => {
   const filtroTextoDebounced = useDebounce(filtroTexto, 500);
 
   const isAdmin = role === 'Admin';
+  const isUsuarioComPermissao = role === 'Usuario' && (perfil as UsuarioProfile | AdminUsuarioProfile)?.permissoes?.gestao_suporte === true;
+  const canAccessPage = isAdmin || isUsuarioComPermissao;
 
   const fetchEmpresasFiltro = useCallback(async () => {
     if (!isAdmin) return;
@@ -68,11 +71,19 @@ const AdminSuporte: React.FC = () => {
   }, [isAdmin]);
 
   const fetchTickets = useCallback(async () => {
-    if (!isAdmin || !usuario?.id) { // Adicionado usuario?.id
+    if (!canAccessPage || !usuario?.id) { 
         setCarregandoTickets(false);
         return;
     }
     setCarregandoTickets(true);
+    
+    // O Admin (ou Usuário com permissão) sempre gerencia tickets onde ele é o destinatário (empresa_id)
+    const targetEmpresaId = isAdmin ? usuario.id : (perfil as AdminUsuarioProfile)?.admin_id;
+    
+    if (!targetEmpresaId) {
+        setCarregandoTickets(false);
+        return;
+    }
     
     let query = supabase
       .from('tickets')
@@ -88,6 +99,7 @@ const AdminSuporte: React.FC = () => {
         mensagens_ticket_count:mensagens_ticket(count),
         ultima_mensagem:mensagens_ticket(remetente_id,destinatario_id,criado_em,ticket_id)
       `)
+      .eq('empresa_id', targetEmpresaId) // Filtra pelo ID do Admin (destinatário)
       .order('atualizado_em', { ascending: false });
       
     // APLICAÇÃO CORRETA DE ORDER E LIMIT NA RELAÇÃO ANINHADA
@@ -95,12 +107,13 @@ const AdminSuporte: React.FC = () => {
         .order('criado_em', { foreignTable: 'ultima_mensagem', ascending: false })
         .limit(1, { foreignTable: 'ultima_mensagem' });
       
+    
     if (filtroStatus !== 'todos') {
         query = query.eq('status', filtroStatus);
     }
     
     if (filtroEmpresaId !== 'todos') {
-        // Admin filtra por tickets onde o proprietario_id (o cliente) é o ID do filtro
+        // Filtra por tickets criados por um cliente específico
         query = query.eq('proprietario_id', filtroEmpresaId);
     }
 
@@ -153,14 +166,16 @@ const AdminSuporte: React.FC = () => {
       setTickets(mappedData);
     }
     setCarregandoTickets(false);
-  }, [isAdmin, filtroStatus, filtroEmpresaId, filtroTextoDebounced, usuario?.id]);
+  }, [canAccessPage, filtroStatus, filtroEmpresaId, filtroTextoDebounced, usuario?.id, isAdmin, perfil]);
 
   useEffect(() => {
     if (!carregandoSessao && isAdmin) {
       fetchEmpresasFiltro();
-      fetchTickets();
     }
-  }, [carregandoSessao, isAdmin, fetchEmpresasFiltro, fetchTickets]);
+    if (!carregandoSessao && canAccessPage) {
+        fetchTickets();
+    }
+  }, [carregandoSessao, isAdmin, canAccessPage, fetchEmpresasFiltro, fetchTickets]);
   
   const handleOpenTicket = (ticket: Ticket) => {
       setTicketSelecionado(ticket);
@@ -179,7 +194,6 @@ const AdminSuporte: React.FC = () => {
       
       try {
           // Admin pode deletar qualquer ticket, mas a RLS deve ser configurada para permitir isso.
-          // A RLS atual permite que o Admin gerencie todos os tickets.
           const { error } = await supabase
               .from('tickets')
               .delete()
@@ -206,8 +220,8 @@ const AdminSuporte: React.FC = () => {
     );
   }
   
-  if (!isAdmin) {
-    return <LayoutPrincipal><Card><CardHeader><CardTitle>Acesso Negado</CardTitle></CardHeader><CardContent><p>Apenas administradores podem acessar esta página.</p></CardContent></Card></LayoutPrincipal>;
+  if (!canAccessPage) {
+    return <LayoutPrincipal><Card><CardHeader><CardTitle>Acesso Negado</CardTitle></CardHeader><CardContent><p>Você não tem permissão para acessar a gestão de suporte.</p></CardContent></Card></LayoutPrincipal>;
   }
   
   if (ticketSelecionado) {
@@ -302,18 +316,20 @@ const AdminSuporte: React.FC = () => {
                     <SelectItem value="fechado">Fechado</SelectItem>
                 </SelectContent>
             </Select>
-            <Select value={filtroEmpresaId} onValueChange={setFiltroEmpresaId}>
-                <SelectTrigger className="w-full md:w-[250px]">
-                    <Building2 className="w-4 h-4 mr-2" />
-                    <SelectValue placeholder="Filtrar por Empresa" />
-                </SelectTrigger>
-                <SelectContent>
-                    <SelectItem value="todos">Todas as Empresas</SelectItem>
-                    {empresasFiltro.map(e => (
-                        <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>
-                    ))}
-                </SelectContent>
-            </Select>
+            {isAdmin && (
+                <Select value={filtroEmpresaId} onValueChange={setFiltroEmpresaId}>
+                    <SelectTrigger className="w-full md:w-[250px]">
+                        <Building2 className="w-4 h-4 mr-2" />
+                        <SelectValue placeholder="Filtrar por Empresa" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="todos">Todas as Empresas</SelectItem>
+                        {empresasFiltro.map(e => (
+                            <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            )}
         </CardContent>
       </Card>
 
@@ -328,7 +344,7 @@ const AdminSuporte: React.FC = () => {
                 onClick={handleOpenTicket} 
                 onDelete={handleDeleteTicket} // PASSANDO O HANDLER DE DELETE
                 isAdminView={true}
-                isOwner={true} // Admin é o 'dono' para fins de gerenciamento/exclusão
+                isOwner={ticket.proprietario_id === usuario?.id} // Admin é o 'dono' para fins de gerenciamento/exclusão
             />
           ))
         )}
