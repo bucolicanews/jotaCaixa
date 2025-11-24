@@ -192,14 +192,13 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete, 
   
   // NOVO HANDLER: Sincroniza a URL da Logo com o campo de assinatura
   const handleLogoUploadComplete = useCallback(async (url: string | null) => {
-      // Atualiza o campo de URL da assinatura com a nova URL da logo
-      form.setValue('assinatura_proprietario_url', url || '');
-      // Não precisa de refetch aqui, pois o save final fará isso.
+      // CRÍTICO: Atualiza o campo do RHF para que o valor seja incluído no payload
+      form.setValue('assinatura_proprietario_url', url || '', { shouldDirty: true });
   }, [form]);
   
   // NOVO HANDLER: Sincroniza a URL da Logo com o campo de assinatura (usado pelo checkbox)
   const handleSyncUrl = useCallback((url: string | null) => {
-      form.setValue('assinatura_proprietario_url', url || '');
+      form.setValue('assinatura_proprietario_url', url || '', { shouldDirty: true });
   }, [form]);
 
   const onSubmit = async (values: FormValues) => {

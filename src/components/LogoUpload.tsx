@@ -75,7 +75,7 @@ const LogoUpload: React.FC<LogoUploadProps> = ({ ownerId, tableName, initialLogo
       
       showSuccess('Logo enviada! Salve o formulário para confirmar.');
       setCurrentUrl(newUrl);
-      setManualUrl(newUrl);
+      setManualUrl(newUrl); // CORREÇÃO: Atualiza o manualUrl
       setFile(null);
       onUploadComplete(newUrl); // Notifica o pai
       setUseAsSignature(true); // Marca para usar como assinatura após upload
@@ -147,7 +147,7 @@ const LogoUpload: React.FC<LogoUploadProps> = ({ ownerId, tableName, initialLogo
                       <Input 
                           type="url" 
                           placeholder="https://sua-logo.com/logo.png" 
-                          value={manualUrl}
+                          value={manualUrl || ''}
                           onChange={(e) => setManualUrl(e.target.value)}
                           className="flex-1"
                           disabled={loading}
