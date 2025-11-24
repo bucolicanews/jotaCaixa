@@ -350,6 +350,22 @@ export const TAGS_SISTEMA: ContratoTag[] = [
     origem_dado: 'tbl_usuarios.data_fim_contrato',
     criado_em: new Date().toISOString(),
   },
+  
+  // --- Tags de Assinatura (NOVAS) ---
+  {
+    id: 'sys-assinatura-cliente',
+    nome_tag: '{{ASSINATURA_CLIENTE}}',
+    descricao: 'Local para assinatura do Cliente/Contratado.',
+    origem_dado: null,
+    criado_em: new Date().toISOString(),
+  },
+  {
+    id: 'sys-assinatura-empresa',
+    nome_tag: '{{ASSINATURA_EMPRESA}}',
+    descricao: 'Local para assinatura da Empresa/Contratante.',
+    origem_dado: null,
+    criado_em: new Date().toISOString(),
+  },
 ];
 
 /**

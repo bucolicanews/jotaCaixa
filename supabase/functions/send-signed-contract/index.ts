@@ -40,6 +40,7 @@ serve(async (req: Request) => {
 
     if (fetchError || !contrato) {
       console.error('Fetch Contract Error:', fetchError);
+      // Retorna 404 se não encontrar
       return new Response(JSON.stringify({ error: 'Contrato não encontrado ou não finalizado.' }), {
         status: 404,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -51,20 +52,20 @@ serve(async (req: Request) => {
     const titulo = contrato.valores_tags_preenchidos?.titulo || 'Contrato Assinado';
     const dataAssinatura = contrato.updated_at ? new Date(contrato.updated_at) : new Date();
 
-    // 2. Adicionar a seção de assinaturas ao conteúdo
+    // 2. Adicionar a seção de assinaturas ao conteúdo (para o corpo do email)
     const assinaturasHtml = `
         <div style="margin-top: 50px; padding-top: 20px; border-top: 1px solid #ccc; page-break-before: avoid;">
             <h3 style="font-size: 16px; font-weight: bold; margin-bottom: 20px;">Assinaturas</h3>
             <div style="display: flex; justify-content: space-around; text-align: center;">
                 <div style="width: 45%;">
-                    ${contrato.assinatura_proprietario_url ? `<img src="${contrato.assinatura_proprietario_url}" style="max-height: 50px; margin-bottom: 5px;" />` : ''}
+                    ${contrato.assinatura_proprietario_url ? `<img src="${contrato.assinatura_proprietario_url}" style="max-height: 50px; margin-bottom: 5px;" />` : '_________________________'}
                     <div style="border-top: 1px solid #000; padding-top: 5px; font-size: 12px;">
                         ${contrato.assinatura_proprietario_nome || 'Empresa Contratante'}
                     </div>
                     <p style="font-size: 10px; margin-top: 5px;">Contratante (Empresa)</p>
                 </div>
                 <div style="width: 45%;">
-                    ${contrato.assinatura_selfie_url ? `<img src="${contrato.assinatura_selfie_url}" style="max-height: 50px; margin-bottom: 5px;" />` : ''}
+                    ${contrato.assinatura_selfie_url ? `<img src="${contrato.assinatura_selfie_url}" style="max-height: 50px; margin-bottom: 5px;" />` : '_________________________'}
                     <div style="border-top: 1px solid #000; padding-top: 5px; font-size: 12px;">
                         ${contrato.assinatura_nome || 'Cliente Contratado'}
                     </div>
@@ -77,19 +78,46 @@ serve(async (req: Request) => {
         </div>
     `;
 
+    // 3. Substituir as tags de assinatura no conteúdo renderizado
+    let finalContent = emailContent;
+    
+    const empresaSignature = `
+        <div style="text-align: center; margin-top: 20px;">
+            ${contrato.assinatura_proprietario_url ? `<img src="${contrato.assinatura_proprietario_url}" style="max-height: 50px; margin-bottom: 5px;" />` : '_________________________'}
+            <div style="border-top: 1px solid #000; padding-top: 5px; font-size: 12px;">
+                ${contrato.assinatura_proprietario_nome || 'Empresa Contratante'}
+            </div>
+            <p style="font-size: 10px; margin-top: 5px;">Contratante (Empresa)</p>
+        </div>
+    `;
+    
+    const clienteSignature = `
+        <div style="text-align: center; margin-top: 20px;">
+            ${contrato.assinatura_selfie_url ? `<img src="${contrato.assinatura_selfie_url}" style="max-height: 50px; margin-bottom: 5px;" />` : '_________________________'}
+            <div style="border-top: 1px solid #000; padding-top: 5px; font-size: 12px;">
+                ${contrato.assinatura_nome || 'Cliente Contratado'}
+            </div>
+            <p style="font-size: 10px; margin-top: 5px;">Contratado (Cliente)</p>
+        </div>
+    `;
+    
+    finalContent = finalContent.replace(/\{\{ASSINATURA_EMPRESA\}\}/g, empresaSignature);
+    finalContent = finalContent.replace(/\{\{ASSINATURA_CLIENTE\}\}/g, clienteSignature);
+
+    // 4. Injetar o rodapé de assinaturas (se for HTML)
     if (isHtml) {
-        // Tenta injetar antes do </body>
-        const bodyEndIndex = emailContent.toLowerCase().lastIndexOf('</body>');
+        const bodyEndIndex = finalContent.toLowerCase().lastIndexOf('</body>');
         if (bodyEndIndex !== -1) {
-            emailContent = emailContent.substring(0, bodyEndIndex) + assinaturasHtml + emailContent.substring(bodyEndIndex);
+            finalContent = finalContent.substring(0, bodyEndIndex) + assinaturasHtml + finalContent.substring(bodyEndIndex);
         } else {
-            emailContent += assinaturasHtml;
+            finalContent += assinaturasHtml;
         }
     } else {
-        emailContent += `\n\n--- Assinaturas ---\nContratante: ${contrato.assinatura_proprietario_nome || 'Empresa'}\nContratado: ${contrato.assinatura_nome || 'Cliente'}\nData: ${dataAssinatura.toLocaleDateString('pt-BR')}`;
+        // Se for texto simples, adiciona o rodapé de assinatura
+        finalContent += `\n\n--- Assinaturas ---\nContratante: ${contrato.assinatura_proprietario_nome || 'Empresa'}\nContratado: ${contrato.assinatura_nome || 'Cliente'}\nData: ${dataAssinatura.toLocaleDateString('pt-BR')}`;
     }
 
-    // 3. Enviar o email (Simulação)
+    // 5. Enviar o email (Simulação)
     
     console.log(`\n--- SIMULAÇÃO DE ENVIO DE EMAIL ---`);
     console.log(`PARA: ${clienteEmail}`);
@@ -97,7 +125,7 @@ serve(async (req: Request) => {
     console.log(`CONTEÚDO (HTML/TEXTO): [Contrato Completo com Assinaturas Anexado/Embutido]`);
     console.log(`----------------------------------\n`);
 
-    // Simulação de envio bem-sucedido
+    // Retorna 200 com sucesso
     return new Response(JSON.stringify({ success: true, message: 'Email simulated successfully.' }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -106,6 +134,7 @@ serve(async (req: Request) => {
   } catch (error) {
     console.error('💥 FATAL ERROR in send-signed-contract:', error);
     const message = error instanceof Error ? error.message : 'Unknown error.';
+    // Retorna 500 em caso de erro fatal
     return new Response(JSON.stringify({ error: message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

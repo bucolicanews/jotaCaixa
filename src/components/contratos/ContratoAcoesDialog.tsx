@@ -161,20 +161,20 @@ const ContratoAcoesDialog: React.FC<ContratoAcoesDialogProps> = ({ contrato, ope
     const isHtml = contrato.valores_tags_preenchidos?.tipo_conteudo === 'html';
     let printHtml = contrato.conteudo_renderizado;
     
-    // Adiciona a seção de assinaturas ao final do HTML para impressão
+    // --- Lógica de Injeção de Assinaturas ---
     const assinaturasHtml = `
         <div style="margin-top: 50px; padding-top: 20px; border-top: 1px solid #ccc; page-break-before: avoid;">
             <h3 style="font-size: 16px; font-weight: bold; margin-bottom: 20px;">Assinaturas</h3>
             <div style="display: flex; justify-content: space-around; text-align: center;">
                 <div style="width: 45%;">
-                    ${contrato.assinatura_proprietario_url ? `<img src="${contrato.assinatura_proprietario_url}" style="max-height: 50px; margin-bottom: 5px;" />` : ''}
+                    ${contrato.assinatura_proprietario_url ? `<img src="${contrato.assinatura_proprietario_url}" style="max-height: 50px; margin-bottom: 5px;" />` : '_________________________'}
                     <div style="border-top: 1px solid #000; padding-top: 5px; font-size: 12px;">
                         ${contrato.assinatura_proprietario_nome || 'Empresa Contratante'}
                     </div>
                     <p style="font-size: 10px; margin-top: 5px;">Contratante (Empresa)</p>
                 </div>
                 <div style="width: 45%;">
-                    ${contrato.assinatura_selfie_url ? `<img src="${contrato.assinatura_selfie_url}" style="max-height: 50px; margin-bottom: 5px;" />` : ''}
+                    ${contrato.assinatura_selfie_url ? `<img src="${contrato.assinatura_selfie_url}" style="max-height: 50px; margin-bottom: 5px;" />` : '_________________________'}
                     <div style="border-top: 1px solid #000; padding-top: 5px; font-size: 12px;">
                         ${contrato.assinatura_nome || 'Cliente Contratado'}
                     </div>
@@ -187,18 +187,60 @@ const ContratoAcoesDialog: React.FC<ContratoAcoesDialogProps> = ({ contrato, ope
         </div>
     `;
     
-    if (isHtml) {
-        const bodyEndIndex = printHtml.toLowerCase().lastIndexOf('</body>');
-        if (bodyEndIndex !== -1) {
-            printHtml = printHtml.substring(0, bodyEndIndex) + assinaturasHtml + printHtml.substring(bodyEndIndex);
-        } else {
-            printHtml += assinaturasHtml;
-        }
-    } else {
-        printHtml += `\n\n--- Assinaturas ---\nContratante: ${contrato.assinatura_proprietario_nome || 'Empresa'}\nContratado: ${contrato.assinatura_nome || 'Cliente'}\nData: ${isAssinado ? format(new Date(contrato.updated_at), 'dd/MM/yyyy HH:mm') : 'Pendente'}`;
+    // 1. Substituir as tags de assinatura no conteúdo renderizado
+    let finalContent = printHtml;
+    
+    const empresaSignature = `
+        <div style="text-align: center; margin-top: 20px;">
+            ${contrato.assinatura_proprietario_url ? `<img src="${contrato.assinatura_proprietario_url}" style="max-height: 50px; margin-bottom: 5px;" />` : '_________________________'}
+            <div style="border-top: 1px solid #000; padding-top: 5px; font-size: 12px;">
+                ${contrato.assinatura_proprietario_nome || 'Empresa Contratante'}
+            </div>
+            <p style="font-size: 10px; margin-top: 5px;">Contratante (Empresa)</p>
+        </div>
+    `;
+    
+    let clienteSignature = `
+        <div style="text-align: center; margin-top: 20px;">
+            ${contrato.assinatura_selfie_url ? `<img src="${contrato.assinatura_selfie_url}" style="max-height: 50px; margin-bottom: 5px;" />` : '_________________________'}
+            <div style="border-top: 1px solid #000; padding-top: 5px; font-size: 12px;">
+                ${contrato.assinatura_nome || 'Cliente Contratado'}
+            </div>
+            <p style="font-size: 10px; margin-top: 5px;">Contratado (Cliente)</p>
+        </div>
+    `;
+    
+    // Se não estiver assinado, usa placeholders
+    if (!isAssinado) {
+        clienteSignature = `
+            <div style="text-align: center; margin-top: 20px;">
+                <div style="border-top: 1px solid #000; padding-top: 5px; font-size: 12px;">
+                    Cliente Contratado
+                </div>
+                <p style="font-size: 10px; margin-top: 5px;">Pendente de Assinatura</p>
+            </div>
+        `;
     }
     
-    printContent(printHtml, `Contrato Assinatura - ${contrato.id}`);
+    // Substituição das tags de assinatura
+    finalContent = finalContent.replace(/\{\{ASSINATURA_EMPRESA\}\}/g, empresaSignature);
+    finalContent = finalContent.replace(/\{\{ASSINATURA_CLIENTE\}\}/g, clienteSignature);
+    
+    // 2. Se for HTML, injeta a seção de rodapé (data de assinatura)
+    if (isHtml) {
+        const bodyEndIndex = finalContent.toLowerCase().lastIndexOf('</body>');
+        if (bodyEndIndex !== -1) {
+            finalContent = finalContent.substring(0, bodyEndIndex) + assinaturasHtml + finalContent.substring(bodyEndIndex);
+        } else {
+            finalContent += assinaturasHtml;
+        }
+    } else {
+        // Se for texto simples, adiciona o rodapé de assinatura
+        finalContent += `\n\n--- Assinaturas ---\nContratante: ${contrato.assinatura_proprietario_nome || 'Empresa'}\nContratado: ${contrato.assinatura_nome || 'Cliente'}\nData: ${isAssinado ? format(new Date(contrato.updated_at), 'dd/MM/yyyy HH:mm') : 'Pendente'}`;
+    }
+    // --- Fim Lógica de Injeção de Assinaturas ---
+    
+    printContent(finalContent, `Contrato Assinatura - ${contrato.id}`);
   };
   
   const handleBlockContract = async () => {

@@ -198,19 +198,61 @@ const AssinarContrato: React.FC = () => {
         </div>
     `;
     
-    if (isHtml) {
-        // Tenta injetar antes do </body>
-        const bodyEndIndex = printHtml.toLowerCase().lastIndexOf('</body>');
-        if (bodyEndIndex !== -1) {
-            printHtml = printHtml.substring(0, bodyEndIndex) + assinaturasHtml + printHtml.substring(bodyEndIndex);
-        } else {
-            printHtml += assinaturasHtml;
-        }
-    } else {
-        printHtml += `\n\n--- Assinaturas ---\nContratante: ${contrato.assinatura_proprietario_nome || 'Empresa'}\nContratado: ${contrato.assinatura_nome || 'Cliente'}\nData: ${isAssinado ? format(new Date(contrato.updated_at), 'dd/MM/yyyy HH:mm') : 'Pendente'}`;
+    // 1. Substituir as tags de assinatura no conteúdo renderizado
+    let finalContent = printHtml;
+    
+    // Substitui a tag da empresa pela assinatura da empresa
+    const empresaSignature = `
+        <div style="text-align: center; margin-top: 20px;">
+            ${contrato.assinatura_proprietario_url ? `<img src="${contrato.assinatura_proprietario_url}" style="max-height: 50px; margin-bottom: 5px;" />` : ''}
+            <div style="border-top: 1px solid #000; padding-top: 5px; font-size: 12px;">
+                ${contrato.assinatura_proprietario_nome || 'Empresa Contratante'}
+            </div>
+            <p style="font-size: 10px; margin-top: 5px;">Contratante (Empresa)</p>
+        </div>
+    `;
+    
+    // Substitui a tag do cliente pela assinatura do cliente (se assinado)
+    let clienteSignature = `
+        <div style="text-align: center; margin-top: 20px;">
+            ${contrato.assinatura_selfie_url ? `<img src="${contrato.assinatura_selfie_url}" style="max-height: 50px; margin-bottom: 5px;" />` : '_________________________'}
+            <div style="border-top: 1px solid #000; padding-top: 5px; font-size: 12px;">
+                ${contrato.assinatura_nome || 'Cliente Contratado'}
+            </div>
+            <p style="font-size: 10px; margin-top: 5px;">Contratado (Cliente)</p>
+        </div>
+    `;
+    
+    // Se não estiver assinado, usa placeholders
+    if (!isAssinado) {
+        clienteSignature = `
+            <div style="text-align: center; margin-top: 20px;">
+                <div style="border-top: 1px solid #000; padding-top: 5px; font-size: 12px;">
+                    Cliente Contratado
+                </div>
+                <p style="font-size: 10px; margin-top: 5px;">Pendente de Assinatura</p>
+            </div>
+        `;
     }
     
-    printContent(printHtml, `Contrato Assinatura - ${contrato.id}`);
+    // Substituição das tags de assinatura
+    finalContent = finalContent.replace(/\{\{ASSINATURA_EMPRESA\}\}/g, empresaSignature);
+    finalContent = finalContent.replace(/\{\{ASSINATURA_CLIENTE\}\}/g, clienteSignature);
+    
+    // 2. Se for HTML, injeta a seção de rodapé (data de assinatura)
+    if (isHtml) {
+        const bodyEndIndex = finalContent.toLowerCase().lastIndexOf('</body>');
+        if (bodyEndIndex !== -1) {
+            finalContent = finalContent.substring(0, bodyEndIndex) + assinaturasHtml + finalContent.substring(bodyEndIndex);
+        } else {
+            finalContent += assinaturasHtml;
+        }
+    } else {
+        // Se for texto simples, adiciona o rodapé de assinatura
+        finalContent += `\n\n--- Assinaturas ---\nContratante: ${contrato.assinatura_proprietario_nome || 'Empresa'}\nContratado: ${contrato.assinatura_nome || 'Cliente'}\nData: ${isAssinado ? format(new Date(contrato.updated_at), 'dd/MM/yyyy HH:mm') : 'Pendente'}`;
+    }
+    
+    printContent(finalContent, `Contrato Assinatura - ${contrato.id}`);
   };
 
   if (loading) {
