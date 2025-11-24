@@ -214,10 +214,17 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
   // Monitora a mudança do CEP para buscar o endereço
   useEffect(() => {
     const cleanCep = cepValue?.replace(/\D/g, '');
+    
     if (cleanCep && cleanCep.length === 8) {
       handleCepLookup(cleanCep);
+    } else if (cleanCep && cleanCep.length > 0 && cleanCep.length < 8) {
+      // Limpa os campos de endereço se o CEP estiver incompleto
+      setValue('endereco', '');
+      setValue('bairro', '');
+      setValue('cidade', '');
+      setValue('estado', '');
     }
-  }, [cepValue, handleCepLookup]);
+  }, [cepValue, handleCepLookup, setValue]);
 
 
   useEffect(() => {
