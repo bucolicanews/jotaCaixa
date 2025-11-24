@@ -27,27 +27,39 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     let perfil: AnyProfile = null;
     let role: UserRole = null;
+    
+    // Função auxiliar para buscar e ignorar erros 406 (RLS)
+    const fetchProfile = async (table: string) => {
+        const { data, error } = await supabase.from(table).select('*').eq('id', user.id).maybeSingle();
+        
+        if (error && error.code !== 'PGRST116') {
+            // PGRST116 é "No rows found", que é esperado. Outros erros (como 406) são logados, mas ignorados.
+            console.warn(`[SessionContext] RLS/Fetch Error on ${table}:`, error);
+            return null;
+        }
+        return data;
+    };
 
     // 1. Buscar Admin
-    const { data: adminData } = await supabase.from('tbl_admins').select('*').eq('id', user.id).single();
+    const adminData = await fetchProfile('tbl_admins');
     if (adminData) {
       perfil = adminData;
       role = 'Admin';
     } else {
       // 2. Buscar Cliente
-      const { data: clienteData } = await supabase.from('tbl_clientes').select('*').eq('id', user.id).single();
+      const clienteData = await fetchProfile('tbl_clientes');
       if (clienteData) {
         perfil = clienteData;
         role = 'Cliente';
       } else {
         // 3. Buscar Usuário (Funcionário do Cliente)
-        const { data: usuarioData } = await supabase.from('tbl_usuarios').select('*').eq('id', user.id).single();
+        const usuarioData = await fetchProfile('tbl_usuarios');
         if (usuarioData) {
           perfil = usuarioData;
           role = 'Usuario';
         } else {
-          // 4. Buscar Usuário (Funcionário do Admin) - NOVO
-          const { data: adminUsuarioData } = await supabase.from('admin_usuarios').select('*, admin_id, logo_admin, nome_admin').eq('id', user.id).single();
+          // 4. Buscar Usuário (Funcionário do Admin)
+          const adminUsuarioData = await fetchProfile('admin_usuarios');
           if (adminUsuarioData) {
             // Mapeia para o tipo AdminUsuarioProfile
             perfil = { ...adminUsuarioData, cliente_id: null } as AdminUsuarioProfile;
