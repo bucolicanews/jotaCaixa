@@ -92,6 +92,7 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete, 
   
   // Lógica para determinar a URL inicial (incluindo cache-buster se existir)
   const initialLogoUrl = useMemo(() => {
+      // Prioriza assinatura_proprietario_url, depois logo_url
       const url = (profileToEdit as ClienteProfile)?.assinatura_proprietario_url || (profileToEdit as AdminProfile)?.assinatura_proprietario_url || (profileToEdit as AdminProfile)?.logo_url || (profileToEdit as ClienteProfile)?.logo_url || '';
       return url;
   }, [profileToEdit]);
@@ -198,12 +199,12 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete, 
   // NOVO HANDLER: Sincroniza a URL da Logo com o campo de assinatura
   const handleLogoUploadComplete = useCallback(async (url: string | null) => {
       // CRÍTICO: Atualiza o campo do RHF para que o valor seja incluído no payload
-      form.setValue('assinatura_proprietario_url', url || '', { shouldDirty: true });
+      form.setValue('assinatura_proprietario_url', url || null, { shouldDirty: true });
   }, [form]);
   
   // NOVO HANDLER: Sincroniza a URL da Logo com o campo de assinatura (usado pelo checkbox)
   const handleSyncUrl = useCallback((url: string | null) => {
-      form.setValue('assinatura_proprietario_url', url || '', { shouldDirty: true });
+      form.setValue('assinatura_proprietario_url', url || null, { shouldDirty: true });
   }, [form]);
 
   const onSubmit = async (values: FormValues) => {

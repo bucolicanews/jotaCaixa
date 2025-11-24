@@ -22,27 +22,32 @@ interface LogoUploadProps {
 
 const LOGO_BUCKET = 'logos-admin';
 
+// Função auxiliar para limpar o cache-buster
+const cleanUrl = (url: string | null | undefined): string => {
+    if (!url) return '';
+    return url.split('?')[0];
+};
+
 const LogoUpload: React.FC<LogoUploadProps> = ({ ownerId, tableName, initialLogoUrl, onUploadComplete, isReadOnly, onSyncUrl }) => {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
+  // currentUrl: URL completa (com cache-buster) usada para exibição e salvamento
   const [currentUrl, setCurrentUrl] = useState(initialLogoUrl || '');
-  const [manualUrl, setManualUrl] = useState(initialLogoUrl || '');
+  // manualUrl: URL limpa (sem cache-buster) usada para o input de texto
+  const [manualUrl, setManualUrl] = useState(cleanUrl(initialLogoUrl));
   const [useAsSignature, setUseAsSignature] = useState(!!initialLogoUrl);
 
   // Sincroniza o estado interno com a prop inicial
   useEffect(() => {
-      // Remove o cache-buster da URL inicial para comparação
-      const cleanUrl = initialLogoUrl?.split('?')[0] || '';
-      
       setCurrentUrl(initialLogoUrl || '');
-      setManualUrl(cleanUrl); // Usa a URL limpa para edição manual
+      setManualUrl(cleanUrl(initialLogoUrl));
       setUseAsSignature(!!initialLogoUrl); 
   }, [initialLogoUrl]);
   
   // Efeito para sincronizar a URL com o campo de assinatura no formulário pai
   useEffect(() => {
-      // Se estiver marcado para usar como assinatura, envia a URL atual.
-      // Se não estiver marcado, envia NULL (para limpar o campo de assinatura no formulário pai).
+      // Se estiver marcado para usar como assinatura, envia a URL atual (com cache-buster).
+      // Se não estiver marcado, envia NULL.
       if (useAsSignature) {
           onSyncUrl(currentUrl);
       } else if (!useAsSignature && currentUrl) {
@@ -80,7 +85,7 @@ const LogoUpload: React.FC<LogoUploadProps> = ({ ownerId, tableName, initialLogo
       
       showSuccess('Logo enviada! Salve o formulário para confirmar.');
       setCurrentUrl(newUrl);
-      setManualUrl(newUrl.split('?')[0]); // Atualiza o manualUrl com a URL limpa
+      setManualUrl(cleanUrl(newUrl)); // Atualiza o manualUrl com a URL limpa
       setFile(null);
       onUploadComplete(newUrl); // Notifica o pai
       setUseAsSignature(true); // Marca para usar como assinatura após upload
@@ -137,7 +142,7 @@ const LogoUpload: React.FC<LogoUploadProps> = ({ ownerId, tableName, initialLogo
       {currentUrl && (
         <div className="flex items-center space-x-4 p-2 bg-secondary rounded-md">
           {/* Remove o cache-buster para exibição, mas mantém na URL real */}
-          <img src={currentUrl.split('?')[0]} alt="Logo Atual" className="w-16 h-16 object-contain border rounded-md" />
+          <img src={cleanUrl(currentUrl)} alt="Logo Atual" className="w-16 h-16 object-contain border rounded-md" />
           <p className="text-sm text-green-600 flex-1">Logo carregada.</p>
           {!isReadOnly && (
               <Button variant="destructive" size="sm" onClick={handleRemoveLogo} disabled={loading}>
@@ -161,7 +166,7 @@ const LogoUpload: React.FC<LogoUploadProps> = ({ ownerId, tableName, initialLogo
                           className="flex-1"
                           disabled={loading}
                       />
-                      <Button onClick={handleSaveManualUrl} disabled={loading || manualUrl === currentUrl.split('?')[0]}>
+                      <Button onClick={handleSaveManualUrl} disabled={loading || cleanUrl(manualUrl) === cleanUrl(currentUrl)}>
                           {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Salvar URL'}
                       </Button>
                   </div>
