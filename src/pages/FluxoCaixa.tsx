@@ -41,7 +41,6 @@ const FluxoCaixa: React.FC = () => {
         </div>
       </LayoutPrincipal>
     );
-  );
   }
   
   if (!empresaId) {
