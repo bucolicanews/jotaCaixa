@@ -19,6 +19,13 @@ import { cn } from '@/lib/utils';
 import { TAGS_PADRAO } from '@/config/contrato-tags-padrao';
 import ContratoPreviewDialog from '@/components/contratos/ContratoPreviewDialog';
 import { useSessao } from '@/hooks/use-sessao';
+import { Separator } from '@/components/ui/separator';
+import { useForm, FormProvider } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod'; // IMPORT CORRIGIDO
+import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/components/ui/form';
+import { Textarea } from '@/components/ui/textarea';
+import { sanitizeConteudo } from '@/utils/formatters';
 
 type TipoLancamento = 'unico' | 'repetir' | 'parcelar';
 type TipoConteudo = 'html' | 'texto';
@@ -527,7 +534,7 @@ const PreencherContrato: React.FC = () => {
     
     try {
         // 0. GARANTIR QUE O CLIENTE EXISTA NA TABELA 'tbl_clientes' (para FK)
-        const clienteSelecionado = clientesCR.find(c => c.id === values.cliente_id);
+        const clienteSelecionado = clientesCR.find(c => c.id === clienteSelecionadoId);
         if (!clienteSelecionado) throw new Error('Cliente selecionado não encontrado.');
         
         // 1. Renderizar Conteúdo Final
@@ -714,7 +721,7 @@ const PreencherContrato: React.FC = () => {
                         .delete()
                         .eq('origem', 'lancamento_cr')
                         .eq('proprietario_id', ownerIdLogado)
-                        .ilike('descricao', `${oldLaunchDescriptionPrefix}%`);
+                        .or(`descricao.ilike.${oldLaunchDescriptionPrefix}%`, `descricao.ilike.${oldReceitaDescriptionPrefix}%`);
                 }
                 
                 await supabase.from('lancamentos').insert(lancamentoPatrimonialPayload);
