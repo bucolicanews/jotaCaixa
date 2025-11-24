@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Copy, ExternalLink, FileText, Eye, Printer, Mail, MessageSquare, Loader2, Lock, Unlock, CheckCircle2 } from 'lucide-react';
+import { Copy, ExternalLink, FileText, Eye, Printer, Mail, MessageSquare, Loader2, Lock, Unlock, CheckCircle2, Building2 } from 'lucide-react';
 import { ContratoGerado } from '@/types/contratos';
 import { showSuccess, showError } from '@/utils/toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';

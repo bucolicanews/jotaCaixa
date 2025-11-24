@@ -43,6 +43,8 @@ interface EmpresaLogada {
     cidade?: string | null;
     estado?: string | null;
     logo_url?: string | null; // ADICIONADO
+    assinatura_proprietario_nome?: string | null; // ADICIONADO
+    assinatura_proprietario_url?: string | null; // ADICIONADO
 }
 
 interface EmpresaContrato {
@@ -73,6 +75,17 @@ interface ClienteCRCompleto {
     rg?: string | null;
     data_nascimento?: string | null;
 }
+
+// Esquema de validação simplificado
+const formSchema = z.object({
+    titulo_documento: z.string().min(1, 'O título é obrigatório.'),
+    cliente_id: z.string().uuid('Selecione um cliente válido.'),
+    proprietario_documento_id: z.string().uuid('Selecione o proprietário.'),
+    tipo_conteudo: z.enum(['html', 'texto']),
+    valores_tags: z.record(z.string()).optional(),
+});
+
+type FormValues = z.infer<typeof formSchema>;
 
 const PreencherContrato: React.FC = () => {
   const { modeloId } = useParams<{ modeloId: string }>();
@@ -159,6 +172,8 @@ const PreencherContrato: React.FC = () => {
         cidade: (profile as AdminProfile).cidade || (profile as ClienteProfile)?.cidade, 
         estado: (profile as AdminProfile).estado || (profile as ClienteProfile)?.estado,
         logo_url: (profile as AdminProfile).logo_url || (profile as ClienteProfile)?.logo_url, // ADICIONADO
+        assinatura_proprietario_nome: profile.assinatura_proprietario_nome, // ADICIONADO
+        assinatura_proprietario_url: profile.assinatura_proprietario_url, // ADICIONADO
     };
   }, [perfil, isAdmin, isClient]);
 
@@ -214,28 +229,12 @@ const PreencherContrato: React.FC = () => {
 
   // --- FUNÇÃO PRINCIPAL DE BUSCA DE DADOS INICIAIS ---
   const buscarDados = useCallback(async () => {
-    if (!modeloId || !ownerIdLogado) {
+    if ((!modeloId && !contratoId) || !ownerIdLogado) {
         setCarregandoDados(false);
         return;
     }
     
     setCarregandoDados(true);
-    
-    // 1. Buscar Modelo
-    const { data: modeloData, error: modeloError } = await supabase
-        .from('contrato_modelos')
-        .select('*, tipo_conteudo')
-        .eq('id', modeloId)
-        .single();
-        
-    if (modeloError) {
-        showError('Modelo não encontrado ou acesso negado.');
-        navigate('/contratos', { replace: true });
-        return;
-    }
-    setModelo(modeloData as ContratoModelo);
-    setTituloDocumento(modeloData.titulo);
-    setTipoConteudo(modeloData.tipo_conteudo as TipoConteudo); // Define o tipo de conteúdo do modelo
     
     // 2. Configurar Empresa Logada (Contratante)
     setEmpresaLogada(empresaLogadaMemo);
@@ -243,17 +242,17 @@ const PreencherContrato: React.FC = () => {
     // 3. Configurar Empresas Contratantes (Apenas Admin)
     let initialProprietarioContratoId = ownerIdLogado;
     if (isAdmin) {
-        const { data: clientesData, error: clientesError } = await supabase
+        const { data: clientsData, error: clientsError } = await supabase
             .from('tbl_clientes')
             .select('id, nome')
             .eq('aprovado', true)
             .order('nome');
             
-        if (clientesError) {
-            showError('Erro ao carregar clientes do sistema: ' + clientesError.message);
+        if (clientsError) {
+            showError('Erro ao carregar clientes do sistema: ' + clientsError.message);
         } else {
             const adminOption: EmpresaContrato = { id: ownerIdLogado, nome: 'Meus Contratos (Admin)' };
-            const allClients = [adminOption, ...(clientesData as EmpresaContrato[])];
+            const allClients = [adminOption, ...(clientsData as EmpresaContrato[])];
             setEmpresasContrato(allClients);
             initialProprietarioContratoId = allClients[0].id;
         }
@@ -355,11 +354,24 @@ const PreencherContrato: React.FC = () => {
             }
         }
         
-    } else {
-        // Novo Contrato
-        const isHtmlContent = modeloData?.conteudo_template?.trim().startsWith('<') ?? true;
-        setTipoConteudo(isHtmlContent ? 'html' : 'texto');
-        setValorTotal(0);
+    }
+    
+    // 5. Buscar Modelo (se for criação)
+    if (modeloId) {
+        const { data: modeloData, error: modeloError } = await supabase
+            .from('contrato_modelos')
+            .select('*, tipo_conteudo')
+            .eq('id', modeloId)
+            .single();
+            
+        if (modeloError) {
+            showError('Modelo não encontrado ou acesso negado.');
+            navigate('/contratos', { replace: true });
+            return;
+        }
+        setModelo(modeloData as ContratoModelo);
+        setTituloDocumento(modeloData.titulo);
+        setTipoConteudo(modeloData.tipo_conteudo as TipoConteudo);
     }
     
     setProprietarioContratoId(initialProprietarioContratoId);
@@ -515,7 +527,7 @@ const PreencherContrato: React.FC = () => {
     
     try {
         // 0. GARANTIR QUE O CLIENTE EXISTA NA TABELA 'tbl_clientes' (para FK)
-        const clienteSelecionado = clientesCR.find(c => c.id === clienteSelecionadoId);
+        const clienteSelecionado = clientesCR.find(c => c.id === values.cliente_id);
         if (!clienteSelecionado) throw new Error('Cliente selecionado não encontrado.');
         
         // 1. Renderizar Conteúdo Final
@@ -527,8 +539,8 @@ const PreencherContrato: React.FC = () => {
             : format(dataPrimeiroVencimento!, 'yyyy-MM-dd');
             
         // --- NOVO: Assinatura do Proprietário (Empresa) ---
-        const proprietarioNome = empresaLogada?.nome || 'Empresa Contratante';
-        const proprietarioUrl = empresaLogada?.logo_url || null;
+        const proprietarioNome = empresaLogada?.assinatura_proprietario_nome || empresaLogada?.nome || 'Empresa Contratante';
+        const proprietarioUrl = empresaLogada?.assinatura_proprietario_url || empresaLogada?.logo_url || null;
         // --------------------------------------------------
             
         const contratoPayload = {
@@ -571,7 +583,8 @@ const PreencherContrato: React.FC = () => {
                 .eq('contrato_gerado_id', contratoInicial.id)
                 .limit(1)
                 .single();
-                
+            
+            // ... (Restante da lógica de exclusão de lançamentos e contas a receber)
             if (contaReceberData) {
                 // 1. Deletar Lançamentos associados (Patrimonial e Receita)
                 const oldLaunchDescriptionPrefix = `Lançamento Inicial CR: ${contratoInicial?.valores_tags_preenchidos?.titulo || 'Contrato'} (CR ID: ${contaReceberData.id.substring(0, 8)})`;
@@ -633,7 +646,7 @@ const PreencherContrato: React.FC = () => {
             // 3.1. Criar Conta Sintética
             const contaReceberPayload = {
                 [ownerKey]: proprietarioContratoId,
-                cliente_id: clienteSelecionadoId,
+                cliente_id: clienteSelecionadoId, // Referencia tbl_clientes(id)
                 descricao: `Contrato: ${tituloDocumento}`,
                 valor_total: valorTotal,
                 data_emissao: format(new Date(), 'yyyy-MM-dd'),
