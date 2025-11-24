@@ -40,6 +40,10 @@ export interface EmpresaSistema extends ClienteProfile {
     email: string;
     data_fim_acesso?: string | null;
     plano_id?: string | null;
+    // Adicionando campos de documento para evitar o erro
+    cnpj?: string | null;
+    cpf?: string | null;
+    documento?: string | null;
 }
 
 // NOVO TIPO
@@ -141,7 +145,7 @@ const ClientesPage = () => {
     
     let queryEmpresas = supabase
         .from('tbl_clientes')
-        .select('*, cliente_id_promovido') // Incluindo cliente_id_promovido
+        .select('*, cliente_id_promovido, cnpj, cpf, documento') // INCLUINDO CNPJ, CPF, DOCUMENTO
         .order('nome', { ascending: true });
         
     // FILTRO CRÍTICO: Excluir o Admin logado da lista de Clientes do Sistema
@@ -245,15 +249,22 @@ const ClientesPage = () => {
               
               let isBlockedOrExpired = false;
               if (dataFimAcesso === null) {
+                  // Regra 1: Nulo = Vitalício (Ativo)
                   isBlockedOrExpired = false;
               } else if (isPast(dataFimAcesso)) {
+                  // Regra 3: Passada = Expirado
                   isBlockedOrExpired = true;
               }
+              
+              const isAvulso = systemClient.tipo_cliente?.endsWith('_Avulso') ?? false;
               
               if (!systemClient.aprovado) {
                   systemStatus = 'Pendente';
               } else if (isBlockedOrExpired) {
                   systemStatus = 'Expirado';
+                  origemCR = 'Promovido';
+              } else if (isAvulso) {
+                  systemStatus = 'Avulso';
                   origemCR = 'Promovido';
               } else {
                   systemStatus = 'Ativo';
@@ -368,19 +379,26 @@ const ClientesPage = () => {
     if (!window.confirm(`Tem certeza que deseja deletar a empresa ${nome} do sistema? Isso irá desativar o login e remover o perfil.`)) return;
 
     try {
-      // 1. Deleta o perfil do cliente na tbl_clientes
-      const { error: profileError } = await supabase
-        .from('tbl_clientes')
-        .delete()
-        .eq('id', id);
-
-      if (profileError) throw profileError;
+      // 1. Chamar a função RPC para verificar vínculos e despromover
+      const { data, error: rpcError } = await supabase.rpc('demote_system_client', {
+          p_client_id: id,
+      });
       
-      // 2. Deleta o usuário do auth.users (Admin tem permissão para isso)
-      // Nota: Em um ambiente real, isso requer service_role, mas aqui simulamos a exclusão do perfil.
+      if (rpcError) throw rpcError;
       
-      showSuccess(`Empresa ${nome} deletada com sucesso.`);
-      buscarDados();
+      // O RPC retorna uma tabela com { success: boolean, message: text }
+      const result = data?.[0];
+      
+      if (result && !result.success) {
+          // Se a despromoção falhou devido a vínculos
+          showError(result.message);
+      } else if (result && result.success) {
+          showSuccess(result.message);
+          buscarDados();
+      } else {
+          showError('Resposta inesperada do servidor.');
+      }
+      
     } catch (error: any) {
       showError('Falha ao deletar empresa: ' + error.message);
     }
