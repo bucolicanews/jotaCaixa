@@ -144,17 +144,17 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick, adminBranding, l
   let textTitle = adminBranding?.nome || 'Fluxo de Caixa';
   let profileDescription = '';
   
-  // CORREÇÃO AQUI: Se for Usuário, o título principal deve ser o nome da empresa (ownerName)
+  // LÓGICA DE DESCRIÇÃO AJUSTADA
   if (isAdmin) {
       profileDescription = 'Administrador do Sistema';
   } else if (isClient) {
       profileDescription = 'Cliente Principal';
   } else if (isUserOfClient || isUserOfAdmin) {
-      // Se for funcionário, o título é o nome da empresa (ownerName) e a descrição é o nome do funcionário
-      textTitle = adminBranding?.nome || 'Empresa Cliente';
+      // Se for funcionário, a descrição é o nome do funcionário
       profileDescription = `Funcionário: ${perfil?.nome || 'N/A'}`;
   } else if (perfil?.nome) {
-      textTitle = perfil.nome;
+      // Fallback para perfis não mapeados
+      profileDescription = perfil.nome;
   }
   
   const shouldShowSuporte = isAdmin || isClient || (role === 'Usuario' && !isUnassignedUser);
