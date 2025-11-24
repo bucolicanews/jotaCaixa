@@ -12,8 +12,10 @@ import { Cliente } from '@/types/cliente';
 import { useSessao } from '@/hooks/use-sessao';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import FormDadosCadastrais from '../usuario-forms/FormDadosCadastrais';
 import { useBulkTagManager } from '@/hooks/use-bulk-tag-manager';
+import FormIdentificacao from '../cliente-forms/FormIdentificacao';
+import FormContato from '../cliente-forms/FormContato';
+import FormEndereco from '../cliente-forms/FormEndereco';
 
 const textOptional = z.string().optional().or(z.literal(''));
 
@@ -46,7 +48,7 @@ interface FormClienteProps {
 const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplete }) => {
   const isEditing = !!clienteInicial;
   const { perfil, role, usuario } = useSessao();
-  const [activeTab, setActiveTab] = useState('geral');
+  const [activeTab, setActiveTab] = useState('identificacao'); // ALTERADO: Aba inicial para 'identificacao'
   
   const resourceId = clienteInicial?.id;
   const { refetchStatus, refreshKey } = useBulkTagManager(resourceId);
@@ -54,7 +56,7 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
   const getProprietarioId = (): string | null => {
     if (role === 'Admin') return usuario?.id || null;
     if (role === 'Cliente') return (perfil as ClienteProfile)?.id;
-    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id; // FIX: proprietario_id -> cliente_id
+    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id;
     return null;
   };
   
@@ -203,117 +205,39 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="geral">Geral</TabsTrigger>
-                <TabsTrigger value="cadastrais">Dados Cadastrais (Tags)</TabsTrigger>
+            <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="identificacao">Identificação</TabsTrigger>
+                <TabsTrigger value="contato">Contato</TabsTrigger>
+                <TabsTrigger value="endereco">Endereço</TabsTrigger>
             </TabsList>
             
-            <TabsContent value="geral" className="mt-4 space-y-4 p-4">
-                <FormField
-                    control={form.control}
-                    name="nome"
-                    render={({ field }) => (
-                        <FormItem>
-                            <FormLabel>Nome/Apelido</FormLabel>
-                            <FormControl>
-                                <Input placeholder="Ex: João da Silva" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                        </FormItem>
-                    )}
-                />
-                <FormField
-                    control={form.control}
-                    name="razao_social"
-                    render={({ field }) => (
-                        <FormItem>
-                            <FormLabel>Razão Social (Opcional)</FormLabel>
-                            <FormControl>
-                                <Input placeholder="Ex: João da Silva LTDA" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                        </FormItem>
-                    )}
-                />
-                <FormField
-                    control={form.control}
-                    name="nome_fantasia"
-                    render={({ field }) => (
-                        <FormItem>
-                            <FormLabel>Nome Fantasia (Opcional)</FormLabel>
-                            <FormControl>
-                                <Input placeholder="Ex: JS Serviços" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                        </FormItem>
-                    )}
-                />
-                <FormField
-                    control={form.control}
-                    name="documento"
-                    render={({ field }) => (
-                        <FormItem>
-                            <FormLabel>CPF/CNPJ (Opcional)</FormLabel>
-                            <FormControl>
-                                <Input placeholder="000.000.000-00 ou 00.000.000/0000-00" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                        </FormItem>
-                    )}
-                />
-                <FormField
-                    control={form.control}
-                    name="email"
-                    render={({ field }) => (
-                        <FormItem>
-                            <FormLabel>Email (Opcional)</FormLabel>
-                            <FormControl>
-                                <Input type="email" placeholder="email@exemplo.com" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                        </FormItem>
-                    )}
-                />
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormField
-                        control={form.control}
-                        name="telefone"
-                        render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Telefone (Celular)</FormLabel>
-                                <FormControl>
-                                    <Input placeholder="(00) 90000-0000" {...field} />
-                            </FormControl>
-                                <FormMessage />
-                            </FormItem>
-                        )}
-                    />
-                    <FormField
-                        control={form.control}
-                        name="telefone_fixo"
-                        render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Telefone (Fixo - Opcional)</FormLabel>
-                                <FormControl>
-                                    <Input placeholder="(00) 0000-0000" {...field} />
-                                </FormControl>
-                                <FormMessage />
-                            </FormItem>
-                        )}
-                    />
-                </div>
-            </TabsContent>
-            
-            <TabsContent value="cadastrais" className="mt-4 space-y-6 p-4">
-                <FormDadosCadastrais
+            <TabsContent value="identificacao" className="mt-4 space-y-4 p-4">
+                <FormIdentificacao
                     control={form.control as unknown as Control<any>}
+                    clienteId={resourceId}
                     isSubmitting={form.formState.isSubmitting}
-                    resourceId={resourceId}
                     tagRefreshKey={refreshKey}
                     onTagToggle={handleTagToggle}
-                    isReadOnly={false} // Cliente CR é sempre editável pelo gestor
-                    isClientScope={true} // Passa o escopo de Cliente
-                    isAddressLoading={isAddressLoading} // Passa o estado de carregamento
+                />
+            </TabsContent>
+            
+            <TabsContent value="contato" className="mt-4 space-y-4 p-4">
+                <FormContato
+                    control={form.control as unknown as Control<any>}
+                    clienteId={resourceId}
+                    isSubmitting={form.formState.isSubmitting}
+                    tagRefreshKey={refreshKey}
+                    onTagToggle={handleTagToggle}
+                />
+            </TabsContent>
+            
+            <TabsContent value="endereco" className="mt-4 space-y-4 p-4">
+                <FormEndereco
+                    control={form.control as unknown as Control<any>}
+                    clienteId={resourceId}
+                    isSubmitting={form.formState.isSubmitting}
+                    tagRefreshKey={refreshKey}
+                    onTagToggle={handleTagToggle}
                 />
             </TabsContent>
           </Tabs>

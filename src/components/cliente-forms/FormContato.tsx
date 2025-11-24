@@ -1,7 +1,7 @@
 import React from 'react';
 import { Control } from 'react-hook-form';
 import { Separator } from '@/components/ui/separator';
-import { TaggedFormField } from './TaggedFormField'; // Importando o componente TaggedFormField
+import { TaggedFormField } from '../usuario-forms/TaggedFormField'; // Importando o componente TaggedFormField
 
 interface FormContatoProps {
   control: Control<any>;
@@ -22,10 +22,11 @@ const FormContato: React.FC<FormContatoProps> = ({ control, clienteId, isSubmitt
           fieldName="email" 
           label="Email" 
           placeholder="contato@cliente.com" 
-          clienteId={clienteId} 
+          resourceId={clienteId} 
           disabled={isSubmitting}
           tagRefreshKey={tagRefreshKey}
           onTagToggle={onTagToggle}
+          isClientScope={true} // Escopo de Cliente
       />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <TaggedFormField 
@@ -33,20 +34,22 @@ const FormContato: React.FC<FormContatoProps> = ({ control, clienteId, isSubmitt
               fieldName="telefone" 
               label="Telefone (Celular/Principal)" 
               placeholder="(00) 90000-0000" 
-              clienteId={clienteId} 
+              resourceId={clienteId} 
               disabled={isSubmitting}
               tagRefreshKey={tagRefreshKey}
               onTagToggle={onTagToggle}
+              isClientScope={true}
           />
           <TaggedFormField 
               control={control} 
               fieldName="telefone_fixo" 
               label="Telefone Fixo" 
               placeholder="(00) 3000-0000" 
-              clienteId={clienteId} 
+              resourceId={clienteId} 
               disabled={isSubmitting}
               tagRefreshKey={tagRefreshKey}
               onTagToggle={onTagToggle}
+              isClientScope={true}
           />
       </div>
     </div>

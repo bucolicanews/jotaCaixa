@@ -31,7 +31,7 @@ const formSchema = z.object({
   limite_usuarios: z.coerce.number().int().min(1, 'O limite deve ser pelo menos 1.').optional(),
   permissoes: z.record(z.boolean()).optional(),
   
-  // NOVOS CAMPOS DE ASSINATURA DO PROPRIETÁRIO
+  // NOVOS CAMPOS DE ASSINATURA
   assinatura_proprietario_nome: textOptional,
   assinatura_proprietario_url: textOptional,
   
@@ -192,11 +192,17 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete, 
       refetchStatus();
   }, [refetchStatus]);
   
+  // NOVO HANDLER: Sincroniza a URL da Logo com o campo de assinatura
   const handleLogoUploadComplete = useCallback(async (url: string | null) => {
       // Atualiza o campo de URL da assinatura com a nova URL da logo
       form.setValue('assinatura_proprietario_url', url || '');
       await refetch();
   }, [refetch, form]);
+  
+  // NOVO HANDLER: Sincroniza a URL da Logo com o campo de assinatura (usado pelo checkbox)
+  const handleSyncUrl = useCallback((url: string | null) => {
+      form.setValue('assinatura_proprietario_url', url || '');
+  }, [form]);
 
   const onSubmit = async (values: FormValues) => {
     if (isReadOnly) {
@@ -324,6 +330,7 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete, 
                               tableName={isAdminProfile ? 'tbl_admins' : 'tbl_clientes'}
                               initialLogoUrl={form.watch('assinatura_proprietario_url')}
                               onUploadComplete={handleLogoUploadComplete}
+                              onSyncUrl={handleSyncUrl} // NOVO PROP
                               isReadOnly={isSubmitting || isReadOnly}
                           />
                       </>

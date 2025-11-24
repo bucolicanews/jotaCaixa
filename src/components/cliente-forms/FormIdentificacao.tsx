@@ -1,6 +1,6 @@
 import React from 'react';
 import { Control } from 'react-hook-form';
-import { TaggedFormField } from './TaggedFormField'; // Importando o componente TaggedFormField
+import { TaggedFormField } from '../usuario-forms/TaggedFormField'; // Importando o componente TaggedFormField
 
 interface FormIdentificacaoProps {
   control: Control<any>;
@@ -20,41 +20,45 @@ const FormIdentificacao: React.FC<FormIdentificacaoProps> = ({ control, clienteI
           fieldName="nome" 
           label="Nome Principal / Nome Pessoal" 
           placeholder="Nome Principal ou Nome Completo" 
-          clienteId={clienteId} 
+          resourceId={clienteId} 
           disabled={isSubmitting}
           isOptional={false}
           tagRefreshKey={tagRefreshKey}
           onTagToggle={onTagToggle}
+          isClientScope={true} // Escopo de Cliente
       />
       <TaggedFormField 
           control={control} 
           fieldName="nome_fantasia" 
           label="Nome Fantasia (Opcional)" 
           placeholder="Nome Fantasia da Empresa" 
-          clienteId={clienteId} 
+          resourceId={clienteId} 
           disabled={isSubmitting}
           tagRefreshKey={tagRefreshKey}
           onTagToggle={onTagToggle}
+          isClientScope={true}
       />
       <TaggedFormField 
           control={control} 
           fieldName="razao_social" 
           label="Razão Social (Opcional)" 
           placeholder="Razão Social da Empresa" 
-          clienteId={clienteId} 
+          resourceId={clienteId} 
           disabled={isSubmitting}
           tagRefreshKey={tagRefreshKey}
           onTagToggle={onTagToggle}
+          isClientScope={true}
       />
       <TaggedFormField 
           control={control} 
           fieldName="documento" 
           label="Documento (CPF/CNPJ)" 
           placeholder="00.000.000/0000-00" 
-          clienteId={clienteId} 
+          resourceId={clienteId} 
           disabled={isSubmitting}
           tagRefreshKey={tagRefreshKey}
           onTagToggle={onTagToggle}
+          isClientScope={true}
       />
     </div>
   );

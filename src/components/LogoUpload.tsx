@@ -7,6 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { cn } from '@/lib/utils';
 import { Separator } from '@/components/ui/separator';
+import { Checkbox } from './ui/checkbox'; // Importando Checkbox
 
 interface LogoUploadProps {
   ownerId: string;
@@ -14,21 +15,36 @@ interface LogoUploadProps {
   initialLogoUrl: string | null | undefined;
   onUploadComplete: (url: string | null) => void;
   isReadOnly: boolean;
+  
+  // NOVO PROP: Callback para sincronizar a URL com o campo de assinatura
+  onSyncUrl: (url: string | null) => void;
 }
 
 const LOGO_BUCKET = 'logos-admin';
 
-const LogoUpload: React.FC<LogoUploadProps> = ({ ownerId, tableName, initialLogoUrl, onUploadComplete, isReadOnly }) => {
+const LogoUpload: React.FC<LogoUploadProps> = ({ ownerId, tableName, initialLogoUrl, onUploadComplete, isReadOnly, onSyncUrl }) => {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [currentUrl, setCurrentUrl] = useState(initialLogoUrl || '');
   const [manualUrl, setManualUrl] = useState(initialLogoUrl || '');
+  const [useAsSignature, setUseAsSignature] = useState(false); // NOVO ESTADO
 
   // Sincroniza o estado interno com a prop inicial
   useEffect(() => {
       setCurrentUrl(initialLogoUrl || '');
       setManualUrl(initialLogoUrl || '');
+      // Se a URL inicial existe, assume que ela está sendo usada como assinatura
+      setUseAsSignature(!!initialLogoUrl); 
   }, [initialLogoUrl]);
+  
+  // Efeito para sincronizar a URL com o campo de assinatura no formulário pai
+  useEffect(() => {
+      if (useAsSignature) {
+          onSyncUrl(currentUrl);
+      } else if (!currentUrl) {
+          onSyncUrl(null);
+      }
+  }, [useAsSignature, currentUrl, onSyncUrl]);
 
   const updateProfile = async (url: string | null) => {
       const { error: updateError } = await supabase
@@ -73,6 +89,7 @@ const LogoUpload: React.FC<LogoUploadProps> = ({ ownerId, tableName, initialLogo
       setManualUrl(newUrl);
       setFile(null);
       onUploadComplete(newUrl);
+      setUseAsSignature(true); // Marca para usar como assinatura após upload
 
     } catch (error: any) {
       console.error('Erro de upload:', error);
@@ -93,6 +110,7 @@ const LogoUpload: React.FC<LogoUploadProps> = ({ ownerId, tableName, initialLogo
           showSuccess('URL da logo salva com sucesso!');
           setCurrentUrl(urlToSave);
           onUploadComplete(urlToSave);
+          setUseAsSignature(!!urlToSave); // Marca para usar como assinatura se houver URL
       } catch (error: any) {
           showError('Falha ao salvar URL: ' + error.message);
       } finally {
@@ -116,6 +134,7 @@ const LogoUpload: React.FC<LogoUploadProps> = ({ ownerId, tableName, initialLogo
         setManualUrl('');
         setFile(null);
         onUploadComplete(null);
+        setUseAsSignature(false); // Desmarca o uso como assinatura
         
     } catch (error: any) {
         showError('Falha ao remover logo: ' + error.message);
@@ -179,6 +198,19 @@ const LogoUpload: React.FC<LogoUploadProps> = ({ ownerId, tableName, initialLogo
               </div>
           </>
       )}
+      
+      {/* NOVO CHECKBOX: Usar como Assinatura */}
+      <div className="flex items-center space-x-2 pt-2 border-t">
+          <Checkbox 
+              id="use-as-signature"
+              checked={useAsSignature}
+              onCheckedChange={(checked) => setUseAsSignature(!!checked)}
+              disabled={isReadOnly || loading || !currentUrl}
+          />
+          <Label htmlFor="use-as-signature" className="text-sm font-medium">
+              Usar esta imagem como URL de Assinatura do Proprietário
+          </Label>
+      </div>
     </div>
   );
 };

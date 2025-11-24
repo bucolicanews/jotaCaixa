@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect } from 'react';
 import { Control, useFormContext } from 'react-hook-form';
 import { Separator } from '@/components/ui/separator';
-import { TaggedFormField } from './TaggedFormField'; // Importando o componente TaggedFormField
+import { TaggedFormField } from '../usuario-forms/TaggedFormField'; // Importando o componente TaggedFormField
 import { showError } from '@/utils/toast';
 
 interface FormEnderecoProps {
@@ -78,30 +78,36 @@ const FormEndereco: React.FC<FormEnderecoProps> = ({ control, clienteId, isSubmi
               fieldName="cep" 
               label="CEP" 
               placeholder="00000-000" 
-              clienteId={clienteId} 
+              resourceId={clienteId} 
               disabled={isSubmitting}
               tagRefreshKey={tagRefreshKey}
               onTagToggle={onTagToggle}
+              isClientScope={true} // Escopo de Cliente
+              isAddressLoading={isAddressLoading}
           />
           <TaggedFormField 
               control={control} 
               fieldName="cidade" 
               label="Cidade" 
               placeholder="São Paulo" 
-              clienteId={clienteId} 
+              resourceId={clienteId} 
               disabled={isSubmitting || isAddressLoading}
               tagRefreshKey={tagRefreshKey}
               onTagToggle={onTagToggle}
+              isClientScope={true}
+              isAddressLoading={isAddressLoading}
           />
           <TaggedFormField 
               control={control} 
               fieldName="estado" 
               label="Estado (UF)" 
               placeholder="SP" 
-              clienteId={clienteId} 
+              resourceId={clienteId} 
               disabled={isSubmitting || isAddressLoading}
               tagRefreshKey={tagRefreshKey}
               onTagToggle={onTagToggle}
+              isClientScope={true}
+              isAddressLoading={isAddressLoading}
           />
       </div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -110,30 +116,36 @@ const FormEndereco: React.FC<FormEnderecoProps> = ({ control, clienteId, isSubmi
               fieldName="endereco" 
               label="Logradouro/Rua" 
               placeholder="Rua Exemplo" 
-              clienteId={clienteId} 
+              resourceId={clienteId} 
               disabled={isSubmitting || isAddressLoading}
               tagRefreshKey={tagRefreshKey}
               onTagToggle={onTagToggle}
+              isClientScope={true}
+              isAddressLoading={isAddressLoading}
           />
           <TaggedFormField 
               control={control} 
               fieldName="numero" 
               label="Número" 
               placeholder="123" 
-              clienteId={clienteId} 
+              resourceId={clienteId} 
               disabled={isSubmitting}
               tagRefreshKey={tagRefreshKey}
               onTagToggle={onTagToggle}
+              isClientScope={true}
+              isAddressLoading={isAddressLoading}
           />
           <TaggedFormField 
               control={control} 
               fieldName="complemento" 
               label="Complemento" 
               placeholder="Apto 101" 
-              clienteId={clienteId} 
+              resourceId={clienteId} 
               disabled={isSubmitting}
               tagRefreshKey={tagRefreshKey}
               onTagToggle={onTagToggle}
+              isClientScope={true}
+              isAddressLoading={isAddressLoading}
           />
       </div>
       <TaggedFormField 
@@ -141,10 +153,12 @@ const FormEndereco: React.FC<FormEnderecoProps> = ({ control, clienteId, isSubmi
           fieldName="bairro" 
           label="Bairro" 
           placeholder="Centro" 
-          clienteId={clienteId} 
+          resourceId={clienteId} 
           disabled={isSubmitting || isAddressLoading}
           tagRefreshKey={tagRefreshKey}
           onTagToggle={onTagToggle}
+          isClientScope={true}
+          isAddressLoading={isAddressLoading}
       />
     </div>
   );
