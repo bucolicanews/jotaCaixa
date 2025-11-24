@@ -17,8 +17,8 @@ serve(async (req: Request) => {
     const body = await req.json();
     const { email, password, user_metadata } = body;
 
-    if (!email || !password || !user_metadata) {
-      return new Response(JSON.stringify({ error: 'Missing required fields (email, password, user_metadata)' }), {
+    if (!email || !password || !user_metadata || !user_metadata.role || !user_metadata.nome) {
+      return new Response(JSON.stringify({ error: 'Missing required fields (email, password, user_metadata.role, or user_metadata.nome)' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
