@@ -87,8 +87,9 @@ const SECOES_MENU: MenuSection[] = [
         titulo: 'Suporte', // NOVA SEÇÃO
         perfis: ['Admin', 'Cliente', 'Usuario'],
         itens: [
-            { nome: 'Meus Tickets', caminho: '/suporte', icone: MessageSquare, perfis: ['Cliente', 'Usuario'] },
-            // ALTERADO: Agora acessível por Admin E Usuário com permissão 'gestao_suporte'
+            // Visível apenas para Cliente
+            { nome: 'Meus Tickets', caminho: '/suporte', icone: MessageSquare, perfis: ['Cliente'] },
+            // Visível para Admin e Usuário (com permissão)
             { nome: 'Gestão de Tickets', caminho: '/admin/suporte', icone: MessageSquare, perfis: ['Admin', 'Usuario'], permissionKey: 'gestao_suporte' },
         ]
     },
