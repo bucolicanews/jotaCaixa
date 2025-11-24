@@ -79,6 +79,7 @@ const FormGeral: React.FC<FormGeralProps> = ({
                 <FormControl>
                   <Checkbox checked={field.value} onCheckedChange={field.onChange} disabled={isSubmitting || isReadOnly} />
                 </FormControl>
+                {/* CORREÇÃO: Removendo a classe text-destructive da label */}
                 <FormLabel className="font-normal">{p.label}</FormLabel>
               </FormItem>
             )} />
