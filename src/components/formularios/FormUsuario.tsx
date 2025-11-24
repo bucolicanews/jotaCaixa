@@ -235,8 +235,10 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
 
     const defaultPermissoes = permissoesVisiveis.reduce((acc: Record<string, boolean>, p: Permissao) => {
         if (profileToEdit && 'permissoes' in profileToEdit && (profileToEdit as any).permissoes) {
+            // Se for edição, usa as permissões existentes
             acc[p.key] = (profileToEdit as any).permissoes[p.key] !== false;
         } else {
+            // SE FOR CRIAÇÃO DE NOVO USUÁRIO: Apenas Ponto Eletrônico e Visualizar Próprio Ponto são true
             acc[p.key] = p.key === 'ponto_eletronico' || p.key === 'visualizar_proprio_ponto';
         }
         return acc;
@@ -312,6 +314,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
       refetchStatus();
   }, [refetchStatus]);
   
+  // NOVO HANDLER: Sincroniza a URL da Logo com o campo de assinatura
   const handleLogoUploadComplete = useCallback(async (url: string | null) => {
       // Atualiza o campo de URL da assinatura com a nova URL da logo
       form.setValue('assinatura_proprietario_url', url || '');
@@ -320,6 +323,11 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
           await supabase.from('tbl_clientes').update({ logo_url: url || null }).eq('id', clientProfile!.id);
       }
   }, [form, isEditingClientProfile, clientProfile]);
+  
+  // NOVO HANDLER: Sincroniza a URL da Logo com o campo de assinatura (usado pelo checkbox)
+  const handleSyncUrl = useCallback((url: string | null) => {
+      form.setValue('assinatura_proprietario_url', url || '');
+  }, [form]);
   
   const isContractEditable = criadorRole === 'Admin' || criadorRole === 'Cliente';
 
@@ -553,7 +561,9 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
   if (isEditingClientProfile) {
       const clientTabs = [
           { value: 'pessoal', label: 'Geral', component: FormGeral },
-          { value: 'cadastrais', label: 'Dados Cadastrais', component: FormDadosCadastrais },
+          { value: 'identificacao', label: 'Identificação', component: FormIdentificacao },
+          { value: 'contato', label: 'Contato', component: FormContato },
+          { value: 'endereco', label: 'Endereço', component: FormEndereco },
       ];
       
       return (
@@ -563,7 +573,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                     <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
                         <TabsList className="flex flex-wrap justify-start w-full h-auto p-1">
                             {clientTabs.map(tab => (
-                                <TabsTrigger key={tab.value} value={tab.value} className="flex-1 md:flex-none md:w-1/2">{tab.label}</TabsTrigger>
+                                <TabsTrigger key={tab.value} value={tab.value} className="flex-1 md:flex-none md:w-1/4">{tab.label}</TabsTrigger>
                             ))}
                         </TabsList>
                         
@@ -595,6 +605,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                                 tableName={'tbl_clientes'}
                                 initialLogoUrl={form.watch('assinatura_proprietario_url')}
                                 onUploadComplete={handleLogoUploadComplete}
+                                onSyncUrl={handleSyncUrl} // NOVO PROP
                                 isReadOnly={isSubmitting || isReadOnly}
                             />
                             
@@ -625,13 +636,8 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                             </div>
                         </TabsContent>
                         
-                        {/* TAB 2: DADOS CADASTRAIS (CLIENTE PROFILE) */}
-                        <TabsContent value="cadastrais" className="mt-4 space-y-6 p-4">
-                            <div className="flex justify-between items-center">
-                                <h3 className="font-semibold text-lg flex items-center"><Tag className="w-5 h-5 mr-2" /> Tags de Contrato</h3>
-                            </div>
-                            <p className="text-sm text-muted-foreground mb-4">Estes campos são usados para preencher tags dinâmicas em contratos.</p>
-                            
+                        {/* TAB 2: IDENTIFICAÇÃO (CLIENTE PROFILE) */}
+                        <TabsContent value="identificacao" className="mt-4 space-y-6 p-4">
                             <FormIdentificacao
                                 control={form.control as unknown as Control<any>}
                                 clienteId={clientProfile?.id}
@@ -639,7 +645,10 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                                 tagRefreshKey={refreshKey}
                                 onTagToggle={handleTagToggle}
                             />
-                            
+                        </TabsContent>
+                        
+                        {/* TAB 3: CONTATO (CLIENTE PROFILE) */}
+                        <TabsContent value="contato" className="mt-4 space-y-6 p-4">
                             <FormContato
                                 control={form.control as unknown as Control<any>}
                                 clienteId={clientProfile?.id}
@@ -647,7 +656,10 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                                 tagRefreshKey={refreshKey}
                                 onTagToggle={handleTagToggle}
                             />
-                            
+                        </TabsContent>
+                        
+                        {/* TAB 4: ENDEREÇO (CLIENTE PROFILE) */}
+                        <TabsContent value="endereco" className="mt-4 space-y-6 p-4">
                             <FormEndereco
                                 control={form.control as unknown as Control<any>}
                                 clienteId={clientProfile?.id}
