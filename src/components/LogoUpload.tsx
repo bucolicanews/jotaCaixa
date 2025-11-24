@@ -39,10 +39,8 @@ const LogoUpload: React.FC<LogoUploadProps> = ({ ownerId, tableName, initialLogo
 
   // Sincroniza o estado interno com a prop inicial
   useEffect(() => {
-      const cleanedInitialUrl = cleanUrl(initialLogoUrl);
-      
       setCurrentUrl(initialLogoUrl || '');
-      setManualUrl(cleanedInitialUrl);
+      setManualUrl(cleanUrl(initialLogoUrl));
       setUseAsSignature(!!initialLogoUrl); 
   }, [initialLogoUrl]);
   
@@ -110,9 +108,8 @@ const LogoUpload: React.FC<LogoUploadProps> = ({ ownerId, tableName, initialLogo
           // Adiciona cache-buster se for uma URL válida
           const finalUrl = urlToSave ? `${urlToSave}?t=${Date.now()}` : null;
           
-          // Atualiza o estado interno e notifica o pai
+          // Apenas atualiza o estado local e notifica o pai
           setCurrentUrl(finalUrl);
-          setManualUrl(cleanUrl(finalUrl)); // Garante que o input reflita a URL limpa
           onUploadComplete(finalUrl);
           setUseAsSignature(!!finalUrl);
           

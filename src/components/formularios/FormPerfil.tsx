@@ -114,8 +114,8 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete, 
       cpf: (profileToEdit as AdminProfile)?.cpf || (profileToEdit as ClienteProfile)?.cpf || '',
       cnpj: (profileToEdit as AdminProfile)?.cnpj || '',
       rg: (profileToEdit as AdminProfile)?.rg || (profileToEdit as ClienteProfile)?.rg || '',
-      nome_mae: (profileToEdit as AdminProfile)?.nome_mae || (profileToEdit as ClienteProfile)?.nome_mae || '',
-      nome_pai: (profileToEdit as AdminProfile)?.nome_pai || (profileToEdit as ClienteProfile)?.nome_pai || '',
+      nome_mae: (profileToEdit as AdminProfile)?.nome_mae || '',
+      nome_pai: (profileToEdit as AdminProfile)?.nome_pai || '',
       telefone: (profileToEdit as AdminProfile)?.telefone || (profileToEdit as ClienteProfile)?.telefone || '',
       cep: (profileToEdit as AdminProfile)?.cep || (profileToEdit as ClienteProfile)?.cep || '',
       endereco: (profileToEdit as AdminProfile)?.endereco || (profileToEdit as ClienteProfile)?.endereco || '',
@@ -198,15 +198,9 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete, 
   
   // NOVO HANDLER: Sincroniza a URL da Logo com o campo de assinatura
   const handleLogoUploadComplete = useCallback(async (url: string | null) => {
-      // 1. CRÍTICO: Atualiza o campo do RHF para que o valor seja incluído no payload
+      // CRÍTICO: Atualiza o campo do RHF para que o valor seja incluído no payload
       form.setValue('assinatura_proprietario_url', url || null, { shouldDirty: true });
-      
-      // 2. Se for Cliente, atualiza o logo_url na tbl_clientes imediatamente
-      if (isClient) {
-          const { error } = await supabase.from('tbl_clientes').update({ logo_url: url || null }).eq('id', perfilInicial.id);
-          if (error) console.error('Falha ao atualizar logo_url na tbl_clientes:', error);
-      }
-  }, [form, isClient, perfilInicial.id]);
+  }, [form]);
   
   // NOVO HANDLER: Sincroniza a URL da Logo com o campo de assinatura (usado pelo checkbox)
   const handleSyncUrl = useCallback((url: string | null) => {
@@ -258,10 +252,6 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete, 
         
         // CRÍTICO: Sincroniza a URL da logo com o campo de assinatura
         dataToUpdate.logo_url = values.assinatura_proprietario_url || null;
-        
-        // Permissões e Limite (Apenas Cliente)
-        dataToUpdate.limite_usuarios = values.limite_usuarios;
-        dataToUpdate.permissoes = values.permissoes;
         
         const { error } = await supabase.from('tbl_clientes').update(dataToUpdate).eq('id', perfilInicial.id);
         if (error) throw error;
@@ -339,39 +329,39 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete, 
                               tableName={isAdminProfile ? 'tbl_admins' : 'tbl_clientes'}
                               initialLogoUrl={initialLogoUrl}
                               onUploadComplete={handleLogoUploadComplete}
-                              onSyncUrl={handleSyncUrl}
+                              onSyncUrl={handleSyncUrl} // NOVO PROP
                               isReadOnly={isSubmitting || isReadOnly}
                           />
+                      </>
+                  )}
+                  
+                  {isClient && (
+                      <>
+                          <Separator />
+                          <h3 className="font-semibold text-lg">Configurações da Empresa</h3>
+                          <FormField control={form.control} name="limite_usuarios" render={({ field }) => (
+                              <FormItem><FormLabel>Limite de Usuários</FormLabel><FormControl><Input type="number" placeholder="5" {...field} disabled={isReadOnly || isClient} /></FormControl><FormMessage /></FormItem>
+                          )} />
                           
-                          {isClient && (
-                              <>
-                                  <Separator />
-                                  <h3 className="font-semibold text-lg">Configurações da Empresa</h3>
-                                  <FormField control={form.control} name="limite_usuarios" render={({ field }) => (
-                                      <FormItem><FormLabel>Limite de Usuários</FormLabel><FormControl><Input type="number" placeholder="5" {...field} disabled={isReadOnly || isClient} /></FormControl><FormMessage /></FormItem>
-                                  )} />
-                                  
-                                  <div className="space-y-2 pt-4">
-                                      <div className="flex justify-between items-center mb-1">
-                                          <FormLabel>Permissões de Acesso</FormLabel>
-                                          <div className="space-x-2">
-                                              <Button type="button" variant="link" size="sm" onClick={() => handleSelectAll(true)} className="p-0 h-auto" disabled={isSubmitting || isReadOnly || isClient}>Selecionar Todos</Button>
-                                              <Button type="button" variant="link" size="sm" onClick={() => handleSelectAll(false)} className="p-0 h-auto text-destructive" disabled={isSubmitting || isReadOnly || isClient}>Desmarcar Todos</Button>
-                                          </div>
-                                      </div>
-                                      <div className="grid grid-cols-2 gap-4 rounded-lg border p-4">
-                                          {PERMISSOES_DISPONIVEIS.filter((p: Permissao) => p.key !== 'ponto_eletronico' && p.key !== 'visualizar_proprio_ponto').map((p: Permissao) => (
-                                              <FormField key={p.key} control={form.control} name={`permissoes.${p.key}`} render={({ field }) => (
-                                                  <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                                                      <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} disabled={isSubmitting || isReadOnly || isClient} /></FormControl>
-                                                      <FormLabel className="font-normal">{p.label}</FormLabel>
-                                                  </FormItem>
-                                              ))} />
-                                          ))}
-                                      </div>
+                          <div className="space-y-2 pt-4">
+                              <div className="flex justify-between items-center mb-1">
+                                  <FormLabel>Permissões de Acesso</FormLabel>
+                                  <div className="space-x-2">
+                                      <Button type="button" variant="link" size="sm" onClick={() => handleSelectAll(true)} className="p-0 h-auto" disabled={isSubmitting || isReadOnly || isClient}>Selecionar Todos</Button>
+                                      <Button type="button" variant="link" size="sm" onClick={() => handleSelectAll(false)} className="p-0 h-auto text-destructive" disabled={isSubmitting || isReadOnly || isClient}>Desmarcar Todos</Button>
                                   </div>
-                              </>
-                          )}
+                              </div>
+                              <div className="grid grid-cols-2 gap-4 rounded-lg border p-4">
+                                  {PERMISSOES_DISPONIVEIS.filter((p: Permissao) => p.key !== 'ponto_eletronico' && p.key !== 'visualizar_proprio_ponto').map((p: Permissao) => (
+                                      <FormField key={p.key} control={form.control} name={`permissoes.${p.key}`} render={({ field }) => (
+                                          <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                                              <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} disabled={isSubmitting || isReadOnly || isClient} /></FormControl>
+                                              <FormLabel className="font-normal">{p.label}</FormLabel>
+                                          </FormItem>
+                                      )} />
+                                  ))}
+                              </div>
+                          </div>
                       </>
                   )}
               </TabsContent>

@@ -67,7 +67,7 @@ const formSchema = z.object({
   
   // NOVOS CAMPOS DE ASSINATURA (Apenas para Cliente Profile)
   assinatura_proprietario_nome: textOptional,
-  assinatura_proprietario_url: textOptional, // ÚNICO CAMPO DE URL
+  assinatura_proprietario_url: textOptional,
   
   // Dados Contratuais (Apenas para UsuarioProfile)
   data_inicio_contrato: z.date().optional().nullable(),
@@ -317,19 +317,17 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
   
   // NOVO HANDLER: Sincroniza a URL da Logo com o campo de assinatura
   const handleLogoUploadComplete = useCallback(async (url: string | null) => {
-      // 1. Atualiza o campo de URL da assinatura com a nova URL da logo
-      form.setValue('assinatura_proprietario_url', url || null, { shouldDirty: true });
-      
-      // 2. Se for Cliente Profile, atualiza o logo_url na tabela tbl_clientes imediatamente
-      if (isEditingClientProfile && clientProfile) {
-          const { error } = await supabase.from('tbl_clientes').update({ logo_url: url || null }).eq('id', clientProfile.id);
-          if (error) console.error('Falha ao atualizar logo_url na tbl_clientes:', error);
+      // Atualiza o campo de URL da assinatura com a nova URL da logo
+      form.setValue('assinatura_proprietario_url', url || '');
+      // Se for Cliente Profile, atualiza o logo_url também
+      if (isEditingClientProfile) {
+          await supabase.from('tbl_clientes').update({ logo_url: url || null }).eq('id', clientProfile!.id);
       }
   }, [form, isEditingClientProfile, clientProfile]);
   
   // NOVO HANDLER: Sincroniza a URL da Logo com o campo de assinatura (usado pelo checkbox)
   const handleSyncUrl = useCallback((url: string | null) => {
-      form.setValue('assinatura_proprietario_url', url || null, { shouldDirty: true });
+      form.setValue('assinatura_proprietario_url', url || '');
   }, [form]);
   
   const isContractEditable = criadorRole === 'Admin' || criadorRole === 'Cliente';
@@ -426,7 +424,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                 // Assinatura e Branding
                 assinatura_proprietario_nome: values.assinatura_proprietario_nome || null,
                 assinatura_proprietario_url: values.assinatura_proprietario_url || null,
-                logo_url: values.assinatura_proprietario_url || null, // Sincroniza logo_url
+                logo_url: values.assinatura_proprietario_url || null,
             };
             
             const { error } = await supabase.from('tbl_clientes').upsert({ ...dataToUpdate, id: userId }, { onConflict: 'id' });
@@ -543,10 +541,10 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
   // Se for Cliente Profile, remove as abas de RH
   if (isEditingClientProfile) {
       const clientTabs = [
-          { value: 'pessoal', label: 'Geral' },
-          { value: 'identificacao', label: 'Identificação' },
-          { value: 'contato', label: 'Contato' },
-          { value: 'endereco', label: 'Endereço' },
+          { value: 'pessoal', label: 'Geral', component: FormGeral },
+          { value: 'identificacao', label: 'Identificação', component: FormIdentificacao },
+          { value: 'contato', label: 'Contato', component: FormContato },
+          { value: 'endereco', label: 'Endereço', component: FormEndereco },
       ];
       
       return (
@@ -579,12 +577,16 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                                 <FormItem><FormLabel>Nome da Empresa/Pessoa para Assinatura</FormLabel><FormControl><Input placeholder="Ex: Minha Empresa LTDA" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
                             )} />
                             
+                            <FormField control={form.control} name="assinatura_proprietario_url" render={({ field }) => (
+                                <FormItem><FormLabel>URL da Imagem de Assinatura (Logo)</FormLabel><FormControl><Input placeholder="URL da imagem de assinatura" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
+                            )} />
+                            
                             <LogoUpload 
                                 ownerId={clientProfile!.id}
                                 tableName={'tbl_clientes'}
                                 initialLogoUrl={form.watch('assinatura_proprietario_url')}
                                 onUploadComplete={handleLogoUploadComplete}
-                                onSyncUrl={handleSyncUrl}
+                                onSyncUrl={handleSyncUrl} // NOVO PROP
                                 isReadOnly={isSubmitting || isReadOnly}
                             />
                             
@@ -609,7 +611,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                                                 <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} disabled={isSubmitting || isReadOnly || isEditingClientProfile} /></FormControl>
                                                 <FormLabel className="font-normal">{p.label}</FormLabel>
                                             </FormItem>
-                                        ))} />
+                                        )} />
                                     ))}
                                 </div>
                             </div>
@@ -731,7 +733,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                     onTagToggle={handleTagToggle}
                     isReadOnly={isChildFormReadOnly('cadastrais')}
                     isClientScope={false} // Escopo de Usuário
-                    isAddressLoading={isAddressLoading}
+                    isAddressLoading={isAddressLoading} // Passa o estado de carregamento
                 />
             </TabsContent>
             
