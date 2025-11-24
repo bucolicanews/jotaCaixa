@@ -18,7 +18,8 @@ import { PlanoContas } from '@/types/plano-contas';
 import { useContabilConfig } from '@/hooks/use-contabil-config';
 import { Label } from '@/components/ui/label';
 import { DialogDescription } from '@/components/ui/dialog';
-import { formatCurrency } from '@/utils/formatters'; // IMPORT CORRIGIDO
+import { formatCurrency } from '@/utils/formatters';
+import { format } from 'date-fns'; // IMPORT ADICIONADO
 
 const formSchema = z.object({
   tipo_movimentacao: z.enum(['Entrada', 'Saida'], { required_error: 'Selecione o tipo de movimentação.' }),
@@ -43,7 +44,7 @@ const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveC
   const [historicos, setHistoricos] = useState<Historico[]>([]);
   const [contasResultado, setContasResultado] = useState<PlanoContas[]>([]);
   const [loadingContasResultado, setLoadingContasResultado] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false); // ESTADO ADICIONADO
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   const ownerId = usuario?.id;
 
