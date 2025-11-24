@@ -43,6 +43,7 @@ const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveC
   const [historicos, setHistoricos] = useState<Historico[]>([]);
   const [contasResultado, setContasResultado] = useState<PlanoContas[]>([]);
   const [loadingContasResultado, setLoadingContasResultado] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false); // ESTADO ADICIONADO
   
   const ownerId = usuario?.id;
 
@@ -324,8 +325,8 @@ const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveC
             </FormItem>
         )} />
 
-        <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
-          {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+        <Button type="submit" className="w-full" disabled={isSubmitting}>
+          {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Registrar Movimentação
         </Button>
       </form>
