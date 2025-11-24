@@ -120,7 +120,7 @@ const ContratoAcoesDialog: React.FC<ContratoAcoesDialogProps> = ({ contrato, ope
           setIsSendingEmail(false);
       }
   };
-  
+
   const handleSendEmail = () => {
       if (!linkAssinatura) return;
       
@@ -158,8 +158,10 @@ const ContratoAcoesDialog: React.FC<ContratoAcoesDialogProps> = ({ contrato, ope
         return;
     }
     
+    // CORREÇÃO CRÍTICA: Inicializa finalContent com o conteúdo renderizado
+    let finalContent = contrato.conteudo_renderizado;
+    
     const isHtml = contrato.valores_tags_preenchidos?.tipo_conteudo === 'html';
-    let printHtml = contrato.conteudo_renderizado;
     const isAssinado = contrato.status === 'ativo' || contrato.status === 'concluido';
     
     // Dados do Cliente
