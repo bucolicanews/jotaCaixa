@@ -126,6 +126,7 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete, 
   });
   
   const cepValue = form.watch('cep');
+  const isAddressLoading = form.watch('endereco') === 'Buscando...'; // NOVO ESTADO DE CARREGAMENTO
   
   const fetchAddressByCep = useCallback(async (cep: string) => {
     const cleanCep = cep.replace(/\D/g, '');
@@ -410,7 +411,7 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete, 
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <FormField control={form.control} name="endereco" render={({ field }) => (
-                          <FormItem><FormLabel>Logradouro/Rua</FormLabel><FormControl><Input placeholder="Rua Exemplo" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
+                          <FormItem><FormLabel>Logradouro/Rua</FormLabel><FormControl><Input placeholder="Rua Exemplo" {...field} disabled={isReadOnly || isAddressLoading} /></FormControl><FormMessage /></FormItem>
                       )} />
                       <FormField control={form.control} name="numero" render={({ field }) => (
                           <FormItem><FormLabel>Número</FormLabel><FormControl><Input placeholder="123" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
@@ -421,13 +422,13 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete, 
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <FormField control={form.control} name="bairro" render={({ field }) => (
-                          <FormItem><FormLabel>Bairro</FormLabel><FormControl><Input placeholder="Centro" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
+                          <FormItem><FormLabel>Bairro</FormLabel><FormControl><Input placeholder="Centro" {...field} disabled={isReadOnly || isAddressLoading} /></FormControl><FormMessage /></FormItem>
                       )} />
                       <FormField control={form.control} name="cidade" render={({ field }) => (
-                          <FormItem><FormLabel>Cidade</FormLabel><FormControl><Input placeholder="São Paulo" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
+                          <FormItem><FormLabel>Cidade</FormLabel><FormControl><Input placeholder="São Paulo" {...field} disabled={isReadOnly || isAddressLoading} /></FormControl><FormMessage /></FormItem>
                       )} />
                       <FormField control={form.control} name="estado" render={({ field }) => (
-                          <FormItem><FormLabel>Estado (UF)</FormLabel><FormControl><Input placeholder="SP" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
+                          <FormItem><FormLabel>Estado (UF)</FormLabel><FormControl><Input placeholder="PA" {...field} disabled={isReadOnly || isAddressLoading} /></FormControl><FormMessage /></FormItem>
                       )} />
                   </div>
               </TabsContent>

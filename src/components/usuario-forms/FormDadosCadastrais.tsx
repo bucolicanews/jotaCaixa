@@ -191,7 +191,7 @@ const FormDadosCadastrais: React.FC<FormDadosCadastraisProps> = ({ isSubmitting,
                 <UserTaggedFormField 
                     fieldName="estado" 
                     label="Estado (UF)" 
-                    placeholder="SP" 
+                    placeholder="PA" 
                     resourceId={resourceId} 
                     disabled={isSubmitting || isAddressLoading || isReadOnly} // Bloqueado se isReadOnly
                     tagRefreshKey={tagRefreshKey}
