@@ -337,7 +337,7 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete, 
                           <Separator />
                           <h3 className="font-semibold text-lg">Configurações da Empresa</h3>
                           <FormField control={form.control} name="limite_usuarios" render={({ field }) => (
-                              <FormItem><FormLabel>Limite de Usuários</Formulação><FormControl><Input type="number" placeholder="5" {...field} disabled={isReadOnly || isClient} /></FormControl><FormMessage /></FormItem>
+                              <FormItem><FormLabel>Limite de Usuários</FormLabel><FormControl><Input type="number" placeholder="5" {...field} disabled={isReadOnly || isClient} /></FormControl><FormMessage /></FormItem>
                           )} />
                           
                           <div className="space-y-2 pt-4">
