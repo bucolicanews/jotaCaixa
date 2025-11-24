@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { useForm, Control, useFormContext } from 'react-hook-form';
+import { useForm, Control, FormProvider } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from '@/components/ui/button';
@@ -84,6 +84,7 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
   
   const { watch, setValue } = form;
   const cepValue = watch('cep');
+  const isAddressLoading = watch('endereco') === 'Buscando...';
   
   const handleCepLookup = useCallback(async (cep: string) => {
     const cleanCep = cep.replace(/\D/g, '');
