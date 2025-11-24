@@ -1,7 +1,6 @@
-import React, { useCallback, useEffect } from 'react';
+import React, { useCallback } from 'react';
 import { Control, useFormContext } from 'react-hook-form';
 import { Separator } from '@/components/ui/separator';
-import { showError } from '@/utils/toast';
 import { useBulkTagManager } from '@/hooks/use-bulk-tag-manager';
 import { TaggedFormField } from './TaggedFormField'; // Importando o componente TaggedFormField
 
@@ -14,64 +13,13 @@ interface TaggedFormFieldProps {
     isOptional?: boolean;
     tagRefreshKey: number;
     onTagToggle: () => void;
-    isReadOnly: boolean; // FIX: Garantido que isReadOnly está na interface
+    isReadOnly: boolean;
+    isClientScope: boolean; // NOVO PROP
+    isAddressLoading: boolean; // NOVO PROP
 }
 
 // Componente wrapper para campos de Usuário (Funcionário)
 const UserTaggedFormField: React.FC<TaggedFormFieldProps> = (props) => {
-    const { watch, setValue } = useFormContext();
-    const fieldValue = watch(props.fieldName);
-    
-    const handleCepLookup = useCallback(async (cep: string) => {
-        const cleanCep = cep.replace(/\D/g, '');
-
-        if (cleanCep.length !== 8) return;
-        
-        // Bloqueia a edição dos campos enquanto busca
-        setValue('endereco', 'Buscando...');
-        setValue('bairro', 'Buscando...');
-        setValue('cidade', 'Buscando...');
-        setValue('estado', 'Buscando...');
-        
-        try {
-            const response = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
-            const data = await response.json();
-
-            if (data.erro) {
-                showError('CEP não encontrado.');
-                setValue('endereco', '');
-                setValue('bairro', '');
-                setValue('cidade', '');
-                setValue('estado', '');
-                return;
-            }
-
-            // Preenche os campos
-            setValue('endereco', data.logradouro || '');
-            setValue('bairro', data.bairro || '');
-            setValue('cidade', data.localidade || '');
-            setValue('estado', data.uf || '');
-            
-        } catch (error) {
-            console.error('Erro ao consultar ViaCEP:', error);
-            showError('Falha ao consultar o CEP.');
-            setValue('endereco', '');
-            setValue('bairro', '');
-            setValue('cidade', '');
-            setValue('estado', '');
-        }
-    }, [setValue]);
-    
-    useEffect(() => {
-        if (props.fieldName === 'cep') {
-            const cleanCep = fieldValue?.replace(/\D/g, '');
-            if (cleanCep && cleanCep.length === 8) {
-                handleCepLookup(cleanCep);
-            }
-        }
-    }, [props.fieldName, fieldValue, handleCepLookup]);
-
-
     return (
         <TaggedFormField 
             {...props} 
@@ -88,11 +36,12 @@ interface FormDadosCadastraisProps {
     resourceId: string | undefined;
     tagRefreshKey: number;
     onTagToggle: () => void;
-    isReadOnly: boolean; // FIX: NOVO PROP
+    isReadOnly: boolean;
+    isClientScope?: boolean; // Adicionado para compatibilidade
+    isAddressLoading: boolean; // NOVO PROP
 }
 
-const FormDadosCadastrais: React.FC<FormDadosCadastraisProps> = ({ isSubmitting, resourceId, tagRefreshKey, onTagToggle, isReadOnly }) => {
-    const { watch } = useFormContext();
+const FormDadosCadastrais: React.FC<FormDadosCadastraisProps> = ({ isSubmitting, resourceId, tagRefreshKey, onTagToggle, isReadOnly, isAddressLoading }) => {
     const { refetchStatus } = useBulkTagManager(resourceId);
     
     const handleTagToggle = useCallback(() => {
@@ -100,8 +49,7 @@ const FormDadosCadastrais: React.FC<FormDadosCadastraisProps> = ({ isSubmitting,
         onTagToggle();
     }, [refetchStatus, onTagToggle]);
     
-    const isAddressLoading = watch('endereco') === 'Buscando...';
-    
+    // O isAddressLoading agora vem do componente pai
 
     return (
         <div className="space-y-6">
@@ -116,20 +64,24 @@ const FormDadosCadastrais: React.FC<FormDadosCadastraisProps> = ({ isSubmitting,
                     label="CPF" 
                     placeholder="000.000.000-00" 
                     resourceId={resourceId} 
-                    disabled={isSubmitting || isReadOnly} // Bloqueado se isReadOnly
+                    disabled={isSubmitting || isReadOnly}
                     tagRefreshKey={tagRefreshKey}
                     onTagToggle={handleTagToggle}
                     isReadOnly={isReadOnly}
+                    isClientScope={false}
+                    isAddressLoading={isAddressLoading}
                 />
                 <UserTaggedFormField 
                     fieldName="rg" 
                     label="RG" 
                     placeholder="00.000.000-0" 
                     resourceId={resourceId} 
-                    disabled={isSubmitting || isReadOnly} // Bloqueado se isReadOnly
+                    disabled={isSubmitting || isReadOnly}
                     tagRefreshKey={tagRefreshKey}
                     onTagToggle={handleTagToggle}
                     isReadOnly={isReadOnly}
+                    isClientScope={false}
+                    isAddressLoading={isAddressLoading}
                 />
             </div>
 
@@ -138,31 +90,37 @@ const FormDadosCadastrais: React.FC<FormDadosCadastraisProps> = ({ isSubmitting,
                 label="Nome da Mãe" 
                 placeholder="Nome completo da mãe" 
                 resourceId={resourceId} 
-                disabled={isSubmitting || isReadOnly} // Bloqueado se isReadOnly
+                disabled={isSubmitting || isReadOnly}
                 isOptional={false}
                 tagRefreshKey={tagRefreshKey}
                 onTagToggle={handleTagToggle}
                 isReadOnly={isReadOnly}
+                isClientScope={false}
+                isAddressLoading={isAddressLoading}
             />
             <UserTaggedFormField 
                 fieldName="nome_pai" 
                 label="Nome do Pai" 
                 placeholder="Nome completo do pai" 
                 resourceId={resourceId} 
-                disabled={isSubmitting || isReadOnly} // Bloqueado se isReadOnly
+                disabled={isSubmitting || isReadOnly}
                 tagRefreshKey={tagRefreshKey}
                 onTagToggle={handleTagToggle}
                 isReadOnly={isReadOnly}
+                isClientScope={false}
+                isAddressLoading={isAddressLoading}
             />
             <UserTaggedFormField 
                 fieldName="telefone" 
                 label="Telefone de Contato" 
                 placeholder="(00) 90000-0000" 
                 resourceId={resourceId} 
-                disabled={isSubmitting || isReadOnly} // Bloqueado se isReadOnly
+                disabled={isSubmitting || isReadOnly}
                 tagRefreshKey={tagRefreshKey}
                 onTagToggle={handleTagToggle}
                 isReadOnly={isReadOnly}
+                isClientScope={false}
+                isAddressLoading={isAddressLoading}
             />
 
             <Separator />
@@ -173,30 +131,36 @@ const FormDadosCadastrais: React.FC<FormDadosCadastraisProps> = ({ isSubmitting,
                     label="CEP" 
                     placeholder="00000-000" 
                     resourceId={resourceId} 
-                    disabled={isSubmitting || isReadOnly} // Bloqueado se isReadOnly
+                    disabled={isSubmitting || isReadOnly}
                     tagRefreshKey={tagRefreshKey}
                     onTagToggle={handleTagToggle}
                     isReadOnly={isReadOnly}
+                    isClientScope={false}
+                    isAddressLoading={isAddressLoading}
                 />
                 <UserTaggedFormField 
                     fieldName="cidade" 
                     label="Cidade" 
                     placeholder="São Paulo" 
                     resourceId={resourceId} 
-                    disabled={isSubmitting || isAddressLoading || isReadOnly} // Bloqueado se isReadOnly
+                    disabled={isSubmitting || isAddressLoading || isReadOnly} // Desabilitado se estiver buscando
                     tagRefreshKey={tagRefreshKey}
                     onTagToggle={handleTagToggle}
                     isReadOnly={isReadOnly}
+                    isClientScope={false}
+                    isAddressLoading={isAddressLoading}
                 />
                 <UserTaggedFormField 
                     fieldName="estado" 
                     label="Estado (UF)" 
                     placeholder="PA" 
                     resourceId={resourceId} 
-                    disabled={isSubmitting || isAddressLoading || isReadOnly} // Bloqueado se isReadOnly
+                    disabled={isSubmitting || isAddressLoading || isReadOnly} // Desabilitado se estiver buscando
                     tagRefreshKey={tagRefreshKey}
                     onTagToggle={handleTagToggle}
                     isReadOnly={isReadOnly}
+                    isClientScope={false}
+                    isAddressLoading={isAddressLoading}
                 />
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -205,30 +169,36 @@ const FormDadosCadastrais: React.FC<FormDadosCadastraisProps> = ({ isSubmitting,
                     label="Logradouro/Rua" 
                     placeholder="Rua Exemplo" 
                     resourceId={resourceId} 
-                    disabled={isSubmitting || isAddressLoading || isReadOnly} // Bloqueado se isReadOnly
+                    disabled={isSubmitting || isAddressLoading || isReadOnly} // Desabilitado se estiver buscando
                     tagRefreshKey={tagRefreshKey}
                     onTagToggle={handleTagToggle}
                     isReadOnly={isReadOnly}
+                    isClientScope={false}
+                    isAddressLoading={isAddressLoading}
                 />
                 <UserTaggedFormField 
                     fieldName="numero" 
                     label="Número" 
                     placeholder="123" 
                     resourceId={resourceId} 
-                    disabled={isSubmitting || isReadOnly} // Bloqueado se isReadOnly
+                    disabled={isSubmitting || isReadOnly}
                     tagRefreshKey={tagRefreshKey}
                     onTagToggle={handleTagToggle}
                     isReadOnly={isReadOnly}
+                    isClientScope={false}
+                    isAddressLoading={isAddressLoading}
                 />
                 <UserTaggedFormField 
                     fieldName="complemento" 
                     label="Complemento" 
                     placeholder="Apto 101" 
                     resourceId={resourceId} 
-                    disabled={isSubmitting || isReadOnly} // Bloqueado se isReadOnly
+                    disabled={isSubmitting || isReadOnly}
                     tagRefreshKey={tagRefreshKey}
                     onTagToggle={handleTagToggle}
                     isReadOnly={isReadOnly}
+                    isClientScope={false}
+                    isAddressLoading={isAddressLoading}
                 />
             </div>
             <UserTaggedFormField 
@@ -236,10 +206,12 @@ const FormDadosCadastrais: React.FC<FormDadosCadastraisProps> = ({ isSubmitting,
                 label="Bairro" 
                 placeholder="Centro" 
                 resourceId={resourceId} 
-                disabled={isSubmitting || isAddressLoading || isReadOnly} // Bloqueado se isReadOnly
+                disabled={isSubmitting || isAddressLoading || isReadOnly} // Desabilitado se estiver buscando
                 tagRefreshKey={tagRefreshKey}
                 onTagToggle={handleTagToggle}
                 isReadOnly={isReadOnly}
+                isClientScope={false}
+                isAddressLoading={isAddressLoading}
             />
         </div>
     );

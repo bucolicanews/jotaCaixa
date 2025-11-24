@@ -164,6 +164,61 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
         permissoes: {},
     },
   });
+  
+  const { watch, setValue } = form;
+  const cepValue = watch('cep');
+  const isAddressLoading = watch('endereco') === 'Buscando...';
+  
+  const handleCepLookup = useCallback(async (cep: string) => {
+    const cleanCep = cep.replace(/\D/g, '');
+
+    if (cleanCep.length !== 8) {
+      return;
+    }
+    
+    // Bloqueia a edição dos campos enquanto busca
+    setValue('endereco', 'Buscando...');
+    setValue('bairro', 'Buscando...');
+    setValue('cidade', 'Buscando...');
+    setValue('estado', 'Buscando...');
+    
+    try {
+      const response = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
+      const data = await response.json();
+
+      if (data.erro) {
+        showError('CEP não encontrado.');
+        setValue('endereco', '');
+        setValue('bairro', '');
+        setValue('cidade', '');
+        setValue('estado', '');
+        return;
+      }
+
+      // Preenche os campos
+      setValue('endereco', data.logradouro || '');
+      setValue('bairro', data.bairro || '');
+      setValue('cidade', data.localidade || '');
+      setValue('estado', data.uf || '');
+      
+    } catch (error) {
+      console.error('Erro ao consultar ViaCEP:', error);
+      showError('Falha ao consultar o CEP.');
+      setValue('endereco', '');
+      setValue('bairro', '');
+      setValue('cidade', '');
+      setValue('estado', '');
+    }
+  }, [setValue]);
+  
+  // Monitora a mudança do CEP para buscar o endereço
+  useEffect(() => {
+    const cleanCep = cepValue?.replace(/\D/g, '');
+    if (cleanCep && cleanCep.length === 8) {
+      handleCepLookup(cleanCep);
+    }
+  }, [cepValue, handleCepLookup]);
+
 
   useEffect(() => {
     if (!profileToEdit) return;
@@ -600,7 +655,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <FormField control={form.control} name="endereco" render={({ field }) => (
-                                    <FormItem><FormLabel>Logradouro/Rua</FormLabel><FormControl><Input placeholder="Rua Exemplo" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
+                                    <FormItem><FormLabel>Logradouro/Rua</FormLabel><FormControl><Input placeholder="Rua Exemplo" {...field} disabled={isReadOnly || isAddressLoading} /></FormControl><FormMessage /></FormItem>
                                 )} />
                                 <FormField control={form.control} name="numero" render={({ field }) => (
                                     <FormItem><FormLabel>Número</FormLabel><FormControl><Input placeholder="123" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
@@ -611,13 +666,13 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <FormField control={form.control} name="bairro" render={({ field }) => (
-                                    <FormItem><FormLabel>Bairro</FormLabel><FormControl><Input placeholder="Centro" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
+                                    <FormItem><FormLabel>Bairro</FormLabel><FormControl><Input placeholder="Centro" {...field} disabled={isReadOnly || isAddressLoading} /></FormControl><FormMessage /></FormItem>
                                 )} />
                                 <FormField control={form.control} name="cidade" render={({ field }) => (
-                                    <FormItem><FormLabel>Cidade</FormLabel><FormControl><Input placeholder="São Paulo" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
+                                    <FormItem><FormLabel>Cidade</FormLabel><FormControl><Input placeholder="São Paulo" {...field} disabled={isReadOnly || isAddressLoading} /></FormControl><FormMessage /></FormItem>
                                 )} />
                                 <FormField control={form.control} name="estado" render={({ field }) => (
-                                    <FormItem><FormLabel>Estado (UF)</FormLabel><FormControl><Input placeholder="SP" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
+                                    <FormItem><FormLabel>Estado (UF)</FormLabel><FormControl><Input placeholder="PA" {...field} disabled={isReadOnly || isAddressLoading} /></FormControl><FormMessage /></FormItem>
                                 )} />
                             </div>
                         </TabsContent>
@@ -704,6 +759,8 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                     tagRefreshKey={refreshKey}
                     onTagToggle={handleTagToggle}
                     isReadOnly={isChildFormReadOnly('cadastrais')}
+                    isClientScope={false} // Escopo de Usuário
+                    isAddressLoading={isAddressLoading} // Passa o estado de carregamento
                 />
             </TabsContent>
             

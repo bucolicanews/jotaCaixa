@@ -1,5 +1,5 @@
-import React, { useState, useCallback } from 'react';
-import { useForm, Control } from 'react-hook-form';
+import React, { useState, useCallback, useEffect } from 'react';
+import { useForm, Control, useFormContext } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from '@/components/ui/button';
@@ -82,6 +82,59 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
     },
   });
   
+  const { watch, setValue } = form;
+  const cepValue = watch('cep');
+  
+  const handleCepLookup = useCallback(async (cep: string) => {
+    const cleanCep = cep.replace(/\D/g, '');
+
+    if (cleanCep.length !== 8) {
+      return;
+    }
+    
+    // Bloqueia a edição dos campos enquanto busca
+    setValue('endereco', 'Buscando...');
+    setValue('bairro', 'Buscando...');
+    setValue('cidade', 'Buscando...');
+    setValue('estado', 'Buscando...');
+    
+    try {
+      const response = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
+      const data = await response.json();
+
+      if (data.erro) {
+        showError('CEP não encontrado.');
+        setValue('endereco', '');
+        setValue('bairro', '');
+        setValue('cidade', '');
+        setValue('estado', '');
+        return;
+      }
+
+      // Preenche os campos
+      setValue('endereco', data.logradouro || '');
+      setValue('bairro', data.bairro || '');
+      setValue('cidade', data.localidade || '');
+      setValue('estado', data.uf || '');
+      
+    } catch (error) {
+      console.error('Erro ao consultar ViaCEP:', error);
+      showError('Falha ao consultar o CEP.');
+      setValue('endereco', '');
+      setValue('bairro', '');
+      setValue('cidade', '');
+      setValue('estado', '');
+    }
+  }, [setValue]);
+  
+  // Monitora a mudança do CEP para buscar o endereço
+  useEffect(() => {
+    const cleanCep = cepValue?.replace(/\D/g, '');
+    if (cleanCep && cleanCep.length === 8) {
+      handleCepLookup(cleanCep);
+    }
+  }, [cepValue, handleCepLookup]);
+  
   const handleTagToggle = useCallback(() => {
       refetchStatus();
   }, [refetchStatus]);
@@ -138,9 +191,10 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
   };
 
   return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+    <FormProvider {...form}>
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="geral">Geral</TabsTrigger>
                 <TabsTrigger value="cadastrais">Dados Cadastrais (Tags)</TabsTrigger>
@@ -250,16 +304,19 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
                     tagRefreshKey={refreshKey}
                     onTagToggle={handleTagToggle}
                     isReadOnly={false} // Cliente CR é sempre editável pelo gestor
+                    isClientScope={true} // Passa o escopo de Cliente
+                    isAddressLoading={isAddressLoading} // Passa o estado de carregamento
                 />
             </TabsContent>
-        </Tabs>
+          </Tabs>
 
-        <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
-          {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          Salvar Cliente
-        </Button>
-      </form>
-    </Form>
+          <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
+            {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Salvar Cliente
+          </Button>
+        </form>
+      </Form>
+    </FormProvider>
   );
 };
 

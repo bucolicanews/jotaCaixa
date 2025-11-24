@@ -27,13 +27,17 @@ interface TaggedFormFieldProps {
     onTagToggle: () => void;
     isClientScope?: boolean;
     isReadOnly?: boolean; // NOVO PROP
+    isAddressLoading?: boolean; // NOVO PROP
 }
 
-const TaggedFormField: React.FC<TaggedFormFieldProps> = ({ control, fieldName, label, placeholder, resourceId, disabled, isOptional = true, tagRefreshKey, onTagToggle, isClientScope = false, isReadOnly = false }) => {
+const TaggedFormField: React.FC<TaggedFormFieldProps> = ({ control, fieldName, label, placeholder, resourceId, disabled, isOptional = true, tagRefreshKey, onTagToggle, isClientScope = false, isReadOnly = false, isAddressLoading = false }) => {
     
     const fieldMap = isClientScope 
         ? CAMPOS_CLIENTE_MAPA.find(m => m.field === fieldName)
         : CAMPOS_USUARIO_MAPA.find(m => m.field === fieldName);
+    
+    // Determina se o campo deve ser desabilitado (além do disabled padrão)
+    const finalDisabled = disabled || isReadOnly || isAddressLoading;
     
     // Se o campo não estiver mapeado para uma tag, renderiza o input normal
     if (!fieldMap || !resourceId) {
@@ -41,7 +45,7 @@ const TaggedFormField: React.FC<TaggedFormFieldProps> = ({ control, fieldName, l
             <FormField control={control} name={fieldName} render={({ field }) => (
                 <FormItem>
                     <FormLabel>{label} {isOptional && <span className="text-muted-foreground">(Opcional)</span>}</FormLabel>
-                    <FormControl><Input placeholder={placeholder} {...field} value={(field.value as string) || ''} disabled={disabled || isReadOnly} /></FormControl>
+                    <FormControl><Input placeholder={placeholder} {...field} value={(field.value as string) || ''} disabled={finalDisabled} /></FormControl>
                     <FormMessage />
                 </FormItem>
             )} />
@@ -74,7 +78,7 @@ const TaggedFormField: React.FC<TaggedFormFieldProps> = ({ control, fieldName, l
                         </Label>
                     </div>
                 </div>
-                <FormControl><Input placeholder={placeholder} {...field} value={(field.value as string) || ''} disabled={disabled || isReadOnly} /></FormControl>
+                <FormControl><Input placeholder={placeholder} {...field} value={(field.value as string) || ''} disabled={finalDisabled} /></FormControl>
                 <FormMessage />
             </FormItem>
         )} />
