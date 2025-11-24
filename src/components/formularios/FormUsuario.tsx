@@ -609,7 +609,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                                                 <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} disabled={isSubmitting || isReadOnly || isEditingClientProfile} /></FormControl>
                                                 <FormLabel className="font-normal">{p.label}</FormLabel>
                                             </FormItem>
-                                        )} />
+                                        ))} />
                                     ))}
                                 </div>
                             </div>
