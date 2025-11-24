@@ -59,14 +59,16 @@ export function useOwnerBranding(): OwnerBranding {
         
       if (error && error.code !== 'PGRST116') {
         console.error(`Error fetching branding for ${tableName}:`, error);
+        // Fallback para o nome do perfil logado se a busca falhar
         setBranding({ ownerName: perfil.nome || 'N/A', logoUrl: null });
       } else if (data) {
-        // Prioriza o nome da tabela (nome da empresa/admin) sobre o nome do perfil logado
+        // Usa o nome da empresa/admin (data.nome) como título principal
         setBranding({ ownerName: data.nome || perfil.nome || 'N/A', logoUrl: data.logo_url });
       } else {
         setBranding({ ownerName: perfil.nome || 'N/A', logoUrl: null });
       }
     } else {
+      // Se não for Admin/Cliente e não estiver vinculado, usa o nome do perfil logado
       setBranding({ ownerName: perfil.nome || 'N/A', logoUrl: null });
     }
     
