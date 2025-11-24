@@ -8,7 +8,7 @@ import FluxoCaixaDetalhe from '@/components/contabilidade/FluxoCaixaDetalhe';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 import { useOwnerBranding } from '@/hooks/use-owner-branding';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from '@/components/ui/dialog';
 import FormMovimentacaoDireta from '@/components/formularios/FormMovimentacaoDireta';
 
 const FluxoCaixa: React.FC = () => {
@@ -41,6 +41,7 @@ const FluxoCaixa: React.FC = () => {
         </div>
       </LayoutPrincipal>
     );
+  );
   }
   
   if (!empresaId) {
@@ -68,6 +69,9 @@ const FluxoCaixa: React.FC = () => {
           <DialogContent className="sm:max-w-[425px] max-h-[95vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Registrar Movimentação Direta</DialogTitle>
+              <DialogDescription>
+                Registre entradas (reforço) ou saídas (sangria) de caixa/banco com partida dobrada.
+              </DialogDescription>
             </DialogHeader>
             <FormMovimentacaoDireta onSaveComplete={handleSaveComplete} />
           </DialogContent>

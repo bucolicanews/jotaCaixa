@@ -16,6 +16,8 @@ import { Separator } from '../ui/separator';
 import { Historico } from '@/types/historico';
 import { PlanoContas } from '@/types/plano-contas';
 import { useContabilConfig } from '@/hooks/use-contabil-config';
+import { Label } from '@/components/ui/label'; // IMPORT CORRIGIDO
+import { DialogDescription } from '@/components/ui/dialog'; // IMPORT CORRIGIDO
 
 const formSchema = z.object({
   tipo_movimentacao: z.enum(['Entrada', 'Saida'], { required_error: 'Selecione o tipo de movimentação.' }),
@@ -214,6 +216,10 @@ const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveC
   };
 
   return (
+    <>
+    <DialogDescription className="sr-only">
+        Formulário para registrar entradas ou saídas diretas de caixa/banco.
+    </DialogDescription>
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
         
@@ -323,6 +329,7 @@ const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveC
         </Button>
       </form>
     </Form>
+    </>
   );
 };
 
