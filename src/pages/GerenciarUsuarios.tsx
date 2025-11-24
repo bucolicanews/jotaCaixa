@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import FormUsuario from '@/components/formularios/FormUsuario';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
-import { AnyProfile, UsuarioProfile, UserRole, AdminUsuarioProfile } from '@/types/usuario';
+import { AnyProfile, UsuarioProfile, UserRole, AdminUsuarioProfile, ClienteProfile } from '@/types/usuario';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -61,7 +61,7 @@ const GerenciarUsuarios: React.FC = () => {
 
     if (isAdmin) {
       // 1. Admin: Busca todos os clientes
-      const { data: clientesData, error: clientsError } = await supabase
+      const { data: clientsData, error: clientsError } = await supabase
         .from('tbl_clientes')
         .select('id, nome');
 
@@ -113,6 +113,7 @@ const GerenciarUsuarios: React.FC = () => {
           if (clienteUsersError) console.error('Erro ao carregar usuários dos Clientes:', clienteUsersError);
           
           const clientUsers = (clientUsersData || []).map(item => {
+            // CORREÇÃO: Usa fetchedClientes (que está no escopo)
             const nomeEmpresa = fetchedClientes.find(c => c.id === (item as UsuarioProfile).cliente_id)?.nome || 'N/A';
             return { ...item, cliente_nome: nomeEmpresa, is_admin_user: false } as UsuarioComEmpresa;
           });
