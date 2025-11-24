@@ -1,28 +1,37 @@
-import React from 'react';
+import React, { useState } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { useSessao } from '@/hooks/use-sessao';
-import { Loader2, TrendingUp } from 'lucide-react';
+import { Loader2, TrendingUp, PlusCircle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import useSaldoContaCalculado from '@/hooks/use-saldo-conta-calculado';
 import FluxoCaixaDetalhe from '@/components/contabilidade/FluxoCaixaDetalhe';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
-import { useOwnerBranding } from '@/hooks/use-owner-branding'; // NOVO IMPORT
+import { useOwnerBranding } from '@/hooks/use-owner-branding';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import FormMovimentacaoDireta from '@/components/formularios/FormMovimentacaoDireta';
 
 const FluxoCaixa: React.FC = () => {
   const { usuario, perfil, role, carregando: carregandoSessao } = useSessao();
-  const { logoUrl, ownerName } = useOwnerBranding(); // USANDO HOOK DE BRANDING
+  const { logoUrl, ownerName } = useOwnerBranding();
+  const [dialogAberto, setDialogAberto] = useState(false);
   
   const getEmpresaId = () => {
     if (role === 'Admin') return usuario?.id || null;
     if (role === 'Cliente') return (perfil as ClienteProfile)?.id || null;
-    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id || null; // FIX: proprietario_id -> cliente_id
+    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id || null;
     return null;
   };
   
   const empresaId = getEmpresaId();
   
   // Usamos o hook de saldo calculado para obter todas as contas e o saldo total
-  const { contas, totalSaldo, carregando: carregandoSaldos } = useSaldoContaCalculado('todos', 'todos', '', 'bancos');
+  const { contas, totalSaldo, carregando: carregandoSaldos, refetch: refetchSaldos } = useSaldoContaCalculado('todos', 'todos', '', 'bancos');
+
+  const handleSaveComplete = () => {
+    setDialogAberto(false);
+    refetchSaldos(); // Recarrega os saldos e o detalhe do fluxo de caixa
+  };
 
   if (carregandoSessao || carregandoSaldos) {
     return (
@@ -44,16 +53,33 @@ const FluxoCaixa: React.FC = () => {
 
   return (
     <LayoutPrincipal>
-      <h1 className="text-2xl md:text-3xl font-bold mb-6 flex items-center">
-        <TrendingUp className="w-6 h-6 mr-2" /> Relatório de Fluxo de Caixa
-      </h1>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+        <h1 className="text-2xl md:text-3xl font-bold flex items-center">
+          <TrendingUp className="w-6 h-6 mr-2" /> Relatório de Fluxo de Caixa
+        </h1>
+        
+        <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
+          <DialogTrigger asChild>
+            <Button className="w-full sm:w-auto">
+              <PlusCircle className="w-4 h-4 mr-2" />
+              Nova Movimentação
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[425px] max-h-[95vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Registrar Movimentação Direta</DialogTitle>
+            </DialogHeader>
+            <FormMovimentacaoDireta onSaveComplete={handleSaveComplete} />
+          </DialogContent>
+        </Dialog>
+      </div>
       
       <FluxoCaixaDetalhe 
         empresaId={empresaId}
         contas={contas}
         totalSaldo={totalSaldo}
-        logoUrl={logoUrl} // PASSANDO LOGO
-        ownerName={ownerName} // PASSANDO NOME
+        logoUrl={logoUrl}
+        ownerName={ownerName}
       />
     </LayoutPrincipal>
   );
