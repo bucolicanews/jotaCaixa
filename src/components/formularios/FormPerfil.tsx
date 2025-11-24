@@ -383,7 +383,7 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete, 
                       </div>
                   )}
                   
-                  {/* Campos de Identificação (Razão Social, Nome Fantasia, Documento) */}
+                  {/* Campos específicos de Cliente */}
                   {isClient && (
                       <div className="space-y-4">
                           <FormField control={form.control} name="razao_social" render={({ field }) => (

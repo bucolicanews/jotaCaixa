@@ -68,7 +68,7 @@ const formSchema = z.object({
   // NOVOS CAMPOS DE ASSINATURA (Apenas para Cliente Profile)
   assinatura_proprietario_nome: textOptional,
   assinatura_proprietario_url: textOptional,
-
+  
   // Dados Contratuais (Apenas para UsuarioProfile)
   data_inicio_contrato: z.date().optional().nullable(),
   data_fim_contrato: z.date().optional().nullable(),
