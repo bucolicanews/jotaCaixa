@@ -22,6 +22,10 @@ export interface AdminProfile {
   cidade?: string | null;
   estado?: string | null;
   criado_em?: string;
+  
+  // NOVOS CAMPOS DE ASSINATURA DO PROPRIETÁRIO
+  assinatura_proprietario_nome?: string | null;
+  assinatura_proprietario_url?: string | null;
 }
 
 export interface ClienteProfile {
@@ -60,6 +64,10 @@ export interface ClienteProfile {
   
   // NOVO CAMPO
   logo_url?: string | null;
+  
+  // NOVOS CAMPOS DE ASSINATURA DO PROPRIETÁRIO
+  assinatura_proprietario_nome?: string | null;
+  assinatura_proprietario_url?: string | null;
 }
 
 export interface UsuarioProfile {

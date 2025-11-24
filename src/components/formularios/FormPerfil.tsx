@@ -3,7 +3,7 @@ import { useForm, FormProvider } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from '@/components/ui/button';
-import { Loader2, Tag } from 'lucide-react';
+import { Loader2, Tag, FileSignature } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { AnyProfile, ClienteProfile, AdminProfile } from '@/types/usuario';
@@ -16,8 +16,8 @@ import { Separator } from '../ui/separator';
 import { useBulkTagManager } from '@/hooks/use-bulk-tag-manager';
 import { Checkbox } from '../ui/checkbox';
 import { useSessao } from '@/hooks/use-sessao';
-import LogoUpload from '../LogoUpload'; // IMPORT CORRIGIDO
-import FormDadosCadastrais from '../usuario-forms/FormDadosCadastrais'; // Importado para usar TaggedFormField
+import LogoUpload from '../LogoUpload';
+import FormDadosCadastrais from '../usuario-forms/FormDadosCadastrais';
 
 const textOptional = z.string().optional().or(z.literal(''));
 
@@ -30,6 +30,10 @@ const formSchema = z.object({
   // Campos de Cliente/Admin
   limite_usuarios: z.coerce.number().int().min(1, 'O limite deve ser pelo menos 1.').optional(),
   permissoes: z.record(z.boolean()).optional(),
+  
+  // NOVOS CAMPOS DE ASSINATURA DO PROPRIETÁRIO
+  assinatura_proprietario_nome: textOptional,
+  assinatura_proprietario_url: textOptional,
   
   // Dados Cadastrais (Comum a Cliente e Admin)
   cpf: textOptional,
@@ -95,6 +99,10 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete, 
       limite_usuarios: isClient ? (profileToEdit as ClienteProfile).limite_usuarios : 5,
       permissoes: defaultPermissoes,
       
+      // NOVOS CAMPOS DE ASSINATURA
+      assinatura_proprietario_nome: (profileToEdit as ContratoGerado)?.assinatura_proprietario_nome || profileToEdit?.nome || '',
+      assinatura_proprietario_url: (profileToEdit as ContratoGerado)?.assinatura_proprietario_url || (profileToEdit as AdminProfile)?.logo_url || (profileToEdit as ClienteProfile)?.logo_url || '',
+      
       // Dados Cadastrais
       cpf: (profileToEdit as AdminProfile)?.cpf || (profileToEdit as ClienteProfile)?.cpf || '',
       cnpj: (profileToEdit as AdminProfile)?.cnpj || '',
@@ -131,9 +139,10 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete, 
   }, [refetchStatus]);
   
   const handleLogoUploadComplete = useCallback(async (url: string | null) => {
-      // Força o refetch da sessão para atualizar o Header
+      // Atualiza o campo de URL da assinatura com a nova URL da logo
+      form.setValue('assinatura_proprietario_url', url || '');
       await refetch();
-  }, [refetch]);
+  }, [refetch, form]);
 
   const onSubmit = async (values: FormValues) => {
     if (isReadOnly) {
@@ -144,7 +153,11 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete, 
     setIsSubmitting(true);
     try {
       
-      const dataToUpdate: any = { nome: values.nome };
+      const dataToUpdate: any = { 
+          nome: values.nome,
+          assinatura_proprietario_nome: values.assinatura_proprietario_nome || null,
+          assinatura_proprietario_url: values.assinatura_proprietario_url || null,
+      };
       
       // 1. Senha: Bloqueado para Cliente, permitido para Admin
       if (values.senha && !isClient) {
@@ -154,9 +167,6 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete, 
 
       if (isClient) {
         // Edição de Cliente (Empresa)
-        
-        // Bloqueando campos sensíveis para auto-edição do Cliente
-        // Apenas campos de dados cadastrais e nome são permitidos.
         
         // Campos de Tags (Dados Cadastrais do Cliente)
         dataToUpdate.cpf = values.cpf || null;
@@ -177,6 +187,9 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete, 
         dataToUpdate.nome_fantasia = values.nome_fantasia || null;
         dataToUpdate.documento = values.documento || null;
         
+        // Adiciona a URL da logo (que é a mesma da assinatura)
+        dataToUpdate.logo_url = values.assinatura_proprietario_url || null;
+        
         const { error } = await supabase.from('tbl_clientes').update(dataToUpdate).eq('id', perfilInicial.id);
         if (error) throw error;
         
@@ -196,6 +209,9 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete, 
         dataToUpdate.bairro = values.bairro || null;
         dataToUpdate.cidade = values.cidade || null;
         dataToUpdate.estado = values.estado || null;
+        
+        // Adiciona a URL da logo (que é a mesma da assinatura)
+        dataToUpdate.logo_url = values.assinatura_proprietario_url || null;
         
         const { error } = await supabase.from('tbl_admins').update(dataToUpdate).eq('id', perfilInicial.id);
         if (error) throw error;
@@ -235,17 +251,26 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete, 
                       <FormItem><FormLabel>Alterar Senha (Opcional)</FormLabel><FormControl><Input type="password" placeholder="••••••••" {...field} disabled={isReadOnly || isClient} /></FormControl><FormMessage /></FormItem>
                   )} />
                   
-                  {/* Logo Upload (Para Admin e Cliente) */}
+                  {/* Configurações de Branding e Assinatura */}
                   {(isAdminProfile || isClient) && (
                       <>
                           <Separator />
-                          <h3 className="font-semibold text-lg">Configurações de Branding</h3>
+                          <h3 className="font-semibold text-lg flex items-center"><FileSignature className="w-4 h-4 mr-2" /> Assinatura e Branding</h3>
+                          
+                          <FormField control={form.control} name="assinatura_proprietario_nome" render={({ field }) => (
+                              <FormItem><FormLabel>Nome da Empresa/Pessoa para Assinatura</FormLabel><FormControl><Input placeholder="Ex: Minha Empresa LTDA" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
+                          )} />
+                          
+                          <FormField control={form.control} name="assinatura_proprietario_url" render={({ field }) => (
+                              <FormItem><FormLabel>URL da Imagem de Assinatura (Logo)</FormLabel><FormControl><Input placeholder="URL da imagem de assinatura" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
+                          )} />
+                          
                           <LogoUpload 
                               ownerId={perfilInicial.id}
-                              tableName={isAdminProfile ? 'tbl_admins' : 'tbl_clientes'} // Passando a tabela correta
-                              initialLogoUrl={(profileToEdit as AdminProfile)?.logo_url || (profileToEdit as ClienteProfile)?.logo_url}
+                              tableName={isAdminProfile ? 'tbl_admins' : 'tbl_clientes'}
+                              initialLogoUrl={form.watch('assinatura_proprietario_url')}
                               onUploadComplete={handleLogoUploadComplete}
-                              isReadOnly={isSubmitting || isReadOnly || isClient} // Bloqueado para Cliente
+                              isReadOnly={isSubmitting || isReadOnly}
                           />
                       </>
                   )}
@@ -296,6 +321,9 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete, 
                           )} />
                           <FormField control={form.control} name="cnpj" render={({ field }) => (
                               <FormItem><FormLabel>CNPJ (Opcional)</FormLabel><FormControl><Input placeholder="00.000.000/0000-00" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
+                          )} />
+                          <FormField control={form.control} name="rg" render={({ field }) => (
+                              <FormItem><FormLabel>RG (Opcional)</FormLabel><FormControl><Input placeholder="00.000.000-0" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
                           )} />
                           <Separator />
                       </div>
