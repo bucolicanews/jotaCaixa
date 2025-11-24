@@ -71,7 +71,7 @@ const GerenciarUsuarios: React.FC = () => {
         return;
       }
       
-      fetchedClientes = clientesData as EmpresaFiltro[];
+      fetchedClientes = clientsData as EmpresaFiltro[];
       
       // Adiciona o próprio Admin como um "proprietário"
       if (usuario.id) {
@@ -103,6 +103,7 @@ const GerenciarUsuarios: React.FC = () => {
       const clientIds = fetchedClientes.filter(c => c.id !== usuario.id).map(c => c.id);
       
       if (clientIds.length > 0) {
+          // CORREÇÃO CRÍTICA: Usar o filtro 'in' apenas se houver IDs válidos
           const { data: clientUsersData, error: clienteUsersError } = await supabase
             .from('tbl_usuarios')
             .select('*, admin_id')
@@ -120,7 +121,7 @@ const GerenciarUsuarios: React.FC = () => {
       }
       
     } else if (isCliente && ownerId) {
-      // CLIENTE: Busca APENAS seus próprios Usuários (Funcionários)
+      // CLIENTE: Busca apenas seus próprios Usuários (Funcionários)
       const { data: usuariosData, error: usuariosError } = await supabase
         .from('tbl_usuarios')
         .select('*')
@@ -153,7 +154,7 @@ const GerenciarUsuarios: React.FC = () => {
 
     setUsuarios(filteredUsers);
     setCarregandoDados(false);
-  }, [usuario, role, isAdmin, isCliente, perfil]);
+  }, [usuario, role, isAdmin, isCliente, perfil, filtroEmpresaId]); // Adicionado filtroEmpresaId para re-fetch
 
   useEffect(() => {
     if (!carregando) {
@@ -273,7 +274,7 @@ const GerenciarUsuarios: React.FC = () => {
                                 <TableCell className="font-medium">{nome}</TableCell>
                                 <TableCell>{userProfile.email}</TableCell>
                                 {isAdmin && currentTab === 'funcionarios_clientes' && (
-                                    <TableCell className="text-sm text-muted-foreground">{userProfile.nome_empresa || 'N/A'}</TableCell>
+                                    <TableCell className="text-sm text-muted-foreground">{userProfile.cliente_nome || 'N/A'}</TableCell>
                                 )}
                                 <TableCell>
                                     {userProfile.data_inicio_contrato 

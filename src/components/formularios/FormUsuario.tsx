@@ -22,6 +22,7 @@ import FormDocumentos from '../usuario-forms/FormDocumentos';
 import FormDadosContratuais from '../usuario-forms/FormDadosContratuais';
 import FormFerias from '@/components/usuario-forms/FormFerias';
 import LogoUpload from '../LogoUpload'; // Importado para Cliente Profile
+import { Checkbox } from '../ui/checkbox'; // IMPORT CORRIGIDO
 
 const textOptional = z.string().optional().or(z.literal(''));
 const urlSchema = z.string().url('URL inválida.').optional().or(z.literal(''));
