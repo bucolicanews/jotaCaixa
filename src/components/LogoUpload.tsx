@@ -6,7 +6,7 @@ import { Loader2, Upload, Image, Trash2, Link as LinkIcon } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { cn } from '@/lib/utils';
-import { Separator } from '@/components/ui/separator';
+import { Separator } from './ui/separator';
 import { Checkbox } from './ui/checkbox';
 
 interface LogoUploadProps {
@@ -31,8 +31,11 @@ const LogoUpload: React.FC<LogoUploadProps> = ({ ownerId, tableName, initialLogo
 
   // Sincroniza o estado interno com a prop inicial
   useEffect(() => {
+      // Remove o cache-buster da URL inicial para comparação
+      const cleanUrl = initialLogoUrl?.split('?')[0] || '';
+      
       setCurrentUrl(initialLogoUrl || '');
-      setManualUrl(initialLogoUrl || '');
+      setManualUrl(cleanUrl); // Usa a URL limpa para edição manual
       setUseAsSignature(!!initialLogoUrl); 
   }, [initialLogoUrl]);
   
@@ -48,8 +51,6 @@ const LogoUpload: React.FC<LogoUploadProps> = ({ ownerId, tableName, initialLogo
       }
   }, [useAsSignature, currentUrl, onSyncUrl]);
 
-  // REMOVIDO: updateProfile (a atualização do DB será feita no FormPerfil)
-
   const handleFileUpload = async () => {
     if (!file || !ownerId) return;
     
@@ -57,6 +58,7 @@ const LogoUpload: React.FC<LogoUploadProps> = ({ ownerId, tableName, initialLogo
 
     try {
       const fileExt = file.name.split('.').pop();
+      // Usamos um nome fixo para que o upsert funcione, mas mantemos a extensão
       const filePath = `${ownerId}/logo.${fileExt}`; 
       
       // 1. Upload do arquivo (usando upsert para substituir o arquivo antigo)
@@ -71,11 +73,14 @@ const LogoUpload: React.FC<LogoUploadProps> = ({ ownerId, tableName, initialLogo
 
       // 2. Obter URL pública
       const { data: publicUrlData } = supabase.storage.from(LOGO_BUCKET).getPublicUrl(filePath);
-      const newUrl = publicUrlData.publicUrl;
+      let newUrl = publicUrlData.publicUrl;
+      
+      // Adiciona cache-buster para garantir que a nova imagem seja carregada
+      newUrl = `${newUrl}?t=${Date.now()}`; 
       
       showSuccess('Logo enviada! Salve o formulário para confirmar.');
       setCurrentUrl(newUrl);
-      setManualUrl(newUrl); // CORREÇÃO: Atualiza o manualUrl
+      setManualUrl(newUrl.split('?')[0]); // Atualiza o manualUrl com a URL limpa
       setFile(null);
       onUploadComplete(newUrl); // Notifica o pai
       setUseAsSignature(true); // Marca para usar como assinatura após upload
@@ -95,10 +100,13 @@ const LogoUpload: React.FC<LogoUploadProps> = ({ ownerId, tableName, initialLogo
       try {
           const urlToSave = manualUrl.trim() || null;
           
+          // Adiciona cache-buster se for uma URL válida
+          const finalUrl = urlToSave ? `${urlToSave}?t=${Date.now()}` : null;
+          
           // Apenas atualiza o estado local e notifica o pai
-          setCurrentUrl(urlToSave);
-          onUploadComplete(urlToSave);
-          setUseAsSignature(!!urlToSave);
+          setCurrentUrl(finalUrl);
+          onUploadComplete(finalUrl);
+          setUseAsSignature(!!finalUrl);
           
           showSuccess('URL da logo atualizada localmente. Salve o formulário para confirmar.');
       } catch (error: any) {
@@ -128,7 +136,8 @@ const LogoUpload: React.FC<LogoUploadProps> = ({ ownerId, tableName, initialLogo
       
       {currentUrl && (
         <div className="flex items-center space-x-4 p-2 bg-secondary rounded-md">
-          <img src={currentUrl} alt="Logo Atual" className="w-16 h-16 object-contain border rounded-md" />
+          {/* Remove o cache-buster para exibição, mas mantém na URL real */}
+          <img src={currentUrl.split('?')[0]} alt="Logo Atual" className="w-16 h-16 object-contain border rounded-md" />
           <p className="text-sm text-green-600 flex-1">Logo carregada.</p>
           {!isReadOnly && (
               <Button variant="destructive" size="sm" onClick={handleRemoveLogo} disabled={loading}>
@@ -152,7 +161,7 @@ const LogoUpload: React.FC<LogoUploadProps> = ({ ownerId, tableName, initialLogo
                           className="flex-1"
                           disabled={loading}
                       />
-                      <Button onClick={handleSaveManualUrl} disabled={loading || manualUrl === currentUrl}>
+                      <Button onClick={handleSaveManualUrl} disabled={loading || manualUrl === currentUrl.split('?')[0]}>
                           {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Salvar URL'}
                       </Button>
                   </div>

@@ -89,6 +89,12 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete, 
         return acc;
       }, {} as Record<string, boolean>);
   }, [profileToEdit]);
+  
+  // Lógica para determinar a URL inicial (incluindo cache-buster se existir)
+  const initialLogoUrl = useMemo(() => {
+      const url = (profileToEdit as ClienteProfile)?.assinatura_proprietario_url || (profileToEdit as AdminProfile)?.assinatura_proprietario_url || (profileToEdit as AdminProfile)?.logo_url || (profileToEdit as ClienteProfile)?.logo_url || '';
+      return url;
+  }, [profileToEdit]);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -101,8 +107,7 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete, 
       
       // NOVOS CAMPOS DE ASSINATURA
       assinatura_proprietario_nome: (profileToEdit as ClienteProfile)?.assinatura_proprietario_nome || (profileToEdit as AdminProfile)?.assinatura_proprietario_nome || profileToEdit?.nome || '',
-      // Prioriza assinatura_proprietario_url, mas usa logo_url como fallback inicial
-      assinatura_proprietario_url: (profileToEdit as ClienteProfile)?.assinatura_proprietario_url || (profileToEdit as AdminProfile)?.assinatura_proprietario_url || (profileToEdit as AdminProfile)?.logo_url || (profileToEdit as ClienteProfile)?.logo_url || '',
+      assinatura_proprietario_url: initialLogoUrl, // USANDO A URL INICIAL COMPLETA
       
       // Dados Cadastrais
       cpf: (profileToEdit as AdminProfile)?.cpf || (profileToEdit as ClienteProfile)?.cpf || '',
@@ -318,12 +323,10 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete, 
                               <FormItem><FormLabel>Nome da Empresa/Pessoa para Assinatura</FormLabel><FormControl><Input placeholder="Ex: Minha Empresa LTDA" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
                           )} />
                           
-                          {/* CAMPO DE URL REMOVIDO E SUBSTITUÍDO PELO LOGO UPLOAD */}
-                          
                           <LogoUpload 
                               ownerId={perfilInicial.id}
                               tableName={isAdminProfile ? 'tbl_admins' : 'tbl_clientes'}
-                              initialLogoUrl={form.watch('assinatura_proprietario_url')}
+                              initialLogoUrl={initialLogoUrl}
                               onUploadComplete={handleLogoUploadComplete}
                               onSyncUrl={handleSyncUrl} // NOVO PROP
                               isReadOnly={isSubmitting || isReadOnly}
