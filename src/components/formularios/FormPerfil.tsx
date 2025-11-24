@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { useForm, FormProvider } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -124,6 +124,59 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete, 
       documento: (profileToEdit as ClienteProfile)?.documento || '',
     },
   });
+  
+  const cepValue = form.watch('cep');
+  
+  const fetchAddressByCep = useCallback(async (cep: string) => {
+    const cleanCep = cep.replace(/\D/g, '');
+
+    if (cleanCep.length !== 8) {
+      return;
+    }
+    
+    // Bloqueia a edição dos campos enquanto busca
+    form.setValue('endereco', 'Buscando...');
+    form.setValue('bairro', 'Buscando...');
+    form.setValue('cidade', 'Buscando...');
+    form.setValue('estado', 'Buscando...');
+    
+    try {
+      const response = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
+      const data = await response.json();
+
+      if (data.erro) {
+        showError('CEP não encontrado.');
+        form.setValue('endereco', '');
+        form.setValue('bairro', '');
+        form.setValue('cidade', '');
+        form.setValue('estado', '');
+        return;
+      }
+
+      // Preenche os campos
+      form.setValue('endereco', data.logradouro || '');
+      form.setValue('bairro', data.bairro || '');
+      form.setValue('cidade', data.localidade || '');
+      form.setValue('estado', data.uf || '');
+      
+    } catch (error) {
+      console.error('Erro ao consultar ViaCEP:', error);
+      showError('Falha ao consultar o CEP.');
+      form.setValue('endereco', '');
+      form.setValue('bairro', '');
+      form.setValue('cidade', '');
+      form.setValue('estado', '');
+    }
+  }, [form]);
+  
+  // Monitora a mudança do CEP para buscar o endereço
+  useEffect(() => {
+    const cleanCep = cepValue?.replace(/\D/g, '');
+    if (cleanCep && cleanCep.length === 8) {
+      fetchAddressByCep(cleanCep);
+    }
+  }, [cepValue, fetchAddressByCep]);
+
 
   const handleSelectAll = (select: boolean) => {
     if (isClient) return; // Bloqueia se for Cliente

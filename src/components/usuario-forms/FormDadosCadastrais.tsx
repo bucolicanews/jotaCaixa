@@ -27,10 +27,11 @@ const UserTaggedFormField: React.FC<TaggedFormFieldProps> = (props) => {
 
         if (cleanCep.length !== 8) return;
         
-        props.fieldName !== 'cep' && setValue('endereco', 'Buscando...');
-        props.fieldName !== 'cep' && setValue('bairro', 'Buscando...');
-        props.fieldName !== 'cep' && setValue('cidade', 'Buscando...');
-        props.fieldName !== 'cep' && setValue('estado', 'Buscando...');
+        // Bloqueia a edição dos campos enquanto busca
+        setValue('endereco', 'Buscando...');
+        setValue('bairro', 'Buscando...');
+        setValue('cidade', 'Buscando...');
+        setValue('estado', 'Buscando...');
         
         try {
             const response = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
@@ -45,6 +46,7 @@ const UserTaggedFormField: React.FC<TaggedFormFieldProps> = (props) => {
                 return;
             }
 
+            // Preenche os campos
             setValue('endereco', data.logradouro || '');
             setValue('bairro', data.bairro || '');
             setValue('cidade', data.localidade || '');
@@ -58,7 +60,7 @@ const UserTaggedFormField: React.FC<TaggedFormFieldProps> = (props) => {
             setValue('cidade', '');
             setValue('estado', '');
         }
-    }, [setValue, props.fieldName]);
+    }, [setValue]);
     
     useEffect(() => {
         if (props.fieldName === 'cep') {
