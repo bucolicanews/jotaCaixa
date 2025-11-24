@@ -1,15 +1,17 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { ContratoGerado } from '@/types/contratos';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Loader2, FileSignature, CheckCircle2, Printer, Camera } from 'lucide-react';
+import { Loader2, FileSignature, CheckCircle2, Printer, Camera, Mail, Building2 } from 'lucide-react';
 import { usePrint } from '@/hooks/use-print';
 import CameraCapture from '@/components/CameraCapture';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { format } from 'date-fns';
+import { cn } from '@/lib/utils';
 
 const AssinarContrato: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -20,7 +22,7 @@ const AssinarContrato: React.FC = () => {
   const [isSigning, setIsSigning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-  // Campos de Assinatura
+  // Campos de Assinatura do Cliente
   const [nomeCompleto, setNomeCompleto] = useState('');
   const [selfieFile, setSelfieFile] = useState<File | null>(null); 
 
@@ -33,6 +35,7 @@ const AssinarContrato: React.FC = () => {
     
     setLoading(true);
     
+    // Busca todos os campos, incluindo os novos de assinatura do proprietário
     const { data, error: fetchError } = await supabase
       .from('contratos_gerados')
       .select('*')
@@ -66,7 +69,7 @@ const AssinarContrato: React.FC = () => {
   const uploadSelfie = async (file: File): Promise<string> => {
     const fileExt = file.name.split('.').pop();
     // CORREÇÃO: Adiciona 'public/' no início do caminho para satisfazer a política de RLS
-    const fileName = `public/${contrato!.id}/assinatura-${Date.now()}.${fileExt}`;
+    const fileName = `public/${contrato!.id}/assinatura-cliente-${Date.now()}.${fileExt}`;
     const filePath = fileName;
 
     const { error } = await supabase.storage
@@ -83,6 +86,23 @@ const AssinarContrato: React.FC = () => {
 
     const { data: publicUrlData } = supabase.storage.from('contrato_self').getPublicUrl(filePath);
     return publicUrlData.publicUrl;
+  };
+  
+  // NOVO: Função para enviar o contrato assinado por email (usando Edge Function)
+  const sendSignedContractEmail = async (contratoId: string, clienteEmail: string) => {
+      try {
+          const { data, error } = await supabase.functions.invoke('send-signed-contract', {
+              body: { contratoId, clienteEmail },
+          });
+          
+          if (error) throw error;
+          if (data?.error) throw new Error(data.error);
+          
+          showSuccess('Cópia do contrato assinado enviada para o seu email!');
+      } catch (error: any) {
+          console.error('Erro ao enviar email:', error);
+          showError('Falha ao enviar cópia do contrato por email: ' + error.message);
+      }
   };
 
   const handleAssinar = async () => {
@@ -118,14 +138,23 @@ const AssinarContrato: React.FC = () => {
       if (updateError) throw updateError;
       
       // 3. Atualizar o estado local
-      setContrato(prev => prev ? { 
-          ...prev, 
-          status: 'ativo', 
+      const updatedContrato = { 
+          ...contrato, 
+          status: 'ativo' as const, 
           documento_assinado_url: 'Assinado Eletronicamente',
           assinatura_nome: nomeCompleto,
           assinatura_selfie_url: selfieUrl,
-      } : null);
+      };
+      setContrato(updatedContrato);
       showSuccess('Contrato assinado com sucesso!');
+      
+      // 4. Enviar cópia para o cliente (se o email estiver disponível nas tags)
+      const clienteEmail = contrato.valores_tags_preenchidos?.['{{CLIENTE_EMAIL}}'];
+      if (clienteEmail) {
+          await sendSignedContractEmail(contrato.id, clienteEmail);
+      } else {
+          showError('Email do cliente não encontrado nas tags para envio de cópia.');
+      }
 
     } catch (error: any) {
       showError('Falha ao assinar contrato: ' + error.message);
@@ -140,12 +169,45 @@ const AssinarContrato: React.FC = () => {
         return;
     }
     
-    // Corrigido: usando 'valores_tags_preenchidos'
     const isHtml = contrato.valores_tags_preenchidos?.tipo_conteudo === 'html';
     let printHtml = contrato.conteudo_renderizado;
     
-    if (!isHtml) {
-        printHtml = `<pre style="white-space: pre-wrap; font-family: inherit; margin: 0;">${printHtml}</pre>`;
+    // Adiciona a seção de assinaturas ao final do HTML para impressão
+    const assinaturasHtml = `
+        <div style="margin-top: 50px; padding-top: 20px; border-top: 1px solid #ccc; page-break-before: avoid;">
+            <h3 style="font-size: 16px; font-weight: bold; margin-bottom: 20px;">Assinaturas</h3>
+            <div style="display: flex; justify-content: space-around; text-align: center;">
+                <div style="width: 45%;">
+                    ${contrato.assinatura_proprietario_url ? `<img src="${contrato.assinatura_proprietario_url}" style="max-height: 50px; margin-bottom: 5px;" />` : ''}
+                    <div style="border-top: 1px solid #000; padding-top: 5px; font-size: 12px;">
+                        ${contrato.assinatura_proprietario_nome || 'Empresa Contratante'}
+                    </div>
+                    <p style="font-size: 10px; margin-top: 5px;">Contratante (Empresa)</p>
+                </div>
+                <div style="width: 45%;">
+                    ${contrato.assinatura_selfie_url ? `<img src="${contrato.assinatura_selfie_url}" style="max-height: 50px; margin-bottom: 5px;" />` : ''}
+                    <div style="border-top: 1px solid #000; padding-top: 5px; font-size: 12px;">
+                        ${contrato.assinatura_nome || 'Cliente Contratado'}
+                    </div>
+                    <p style="font-size: 10px; margin-top: 5px;">Contratado (Cliente)</p>
+                </div>
+            </div>
+            <p style="font-size: 10px; text-align: center; margin-top: 20px;">
+                Documento assinado eletronicamente em ${isAssinado ? format(new Date(contrato.updated_at), 'dd/MM/yyyy HH:mm') : 'Pendente'}.
+            </p>
+        </div>
+    `;
+    
+    if (isHtml) {
+        // Tenta injetar antes do </body>
+        const bodyEndIndex = printHtml.toLowerCase().lastIndexOf('</body>');
+        if (bodyEndIndex !== -1) {
+            printHtml = printHtml.substring(0, bodyEndIndex) + assinaturasHtml + printHtml.substring(bodyEndIndex);
+        } else {
+            printHtml += assinaturasHtml;
+        }
+    } else {
+        printHtml += `\n\n--- Assinaturas ---\nContratante: ${contrato.assinatura_proprietario_nome || 'Empresa'}\nContratado: ${contrato.assinatura_nome || 'Cliente'}\nData: ${isAssinado ? format(new Date(contrato.updated_at), 'dd/MM/yyyy HH:mm') : 'Pendente'}`;
     }
     
     printContent(printHtml, `Contrato Assinatura - ${contrato.id}`);
@@ -173,7 +235,6 @@ const AssinarContrato: React.FC = () => {
   }
   
   const isAssinado = contrato.status === 'ativo' || contrato.status === 'concluido';
-  // Corrigido: usando 'valores_tags_preenchidos'
   const isHtml = contrato.valores_tags_preenchidos?.tipo_conteudo === 'html';
   
   const contentToDisplay = contrato.conteudo_renderizado ? (
@@ -187,10 +248,13 @@ const AssinarContrato: React.FC = () => {
   );
 
   const isReadyToSign = nomeCompleto.trim().length > 0 && !!selfieFile;
+  
+  // Dados da Assinatura do Proprietário
+  const proprietarioNome = contrato.assinatura_proprietario_nome || 'Empresa Contratante';
+  const proprietarioUrl = contrato.assinatura_proprietario_url;
 
   return (
     <div className="min-h-screen flex flex-col items-center bg-background p-4 md:p-8">
-      {/* Removendo max-w-4xl para usar a largura total em mobile */}
       <Card className="w-full max-w-full md:max-w-4xl"> 
         <CardHeader>
           <CardTitle className="text-2xl md:text-3xl flex items-center">
@@ -202,15 +266,31 @@ const AssinarContrato: React.FC = () => {
         </CardHeader>
         <CardContent className="space-y-6">
           
-          {/* Conteúdo do Contrato (Aumentando a altura máxima para leitura) */}
+          {/* Conteúdo do Contrato */}
           <div className="border rounded-md p-4 md:p-6 bg-card shadow-inner max-h-[70vh] overflow-y-auto">
             {contentToDisplay}
           </div>
           
           {/* Seção de Assinatura */}
           <div className="pt-4 border-t space-y-4">
-              <h3 className="text-xl font-semibold flex items-center"><FileSignature className="w-5 h-5 mr-2" /> Assinatura Eletrônica</h3>
+              <h3 className="text-xl font-semibold flex items-center"><FileSignature className="w-5 h-5 mr-2" /> Assinaturas</h3>
               
+              {/* Assinatura do Proprietário (Empresa) */}
+              <div className="p-4 bg-secondary rounded-md space-y-2">
+                  <div className="flex items-center space-x-3">
+                      {proprietarioUrl ? (
+                          <img src={proprietarioUrl} alt="Logo" className="w-10 h-10 object-contain" />
+                      ) : (
+                          <Building2 className="w-8 h-8 text-primary" />
+                      )}
+                      <div>
+                          <p className="font-semibold">{proprietarioNome}</p>
+                          <p className="text-sm text-muted-foreground">Contratante (Assinatura Automática)</p>
+                      </div>
+                  </div>
+              </div>
+              
+              {/* Assinatura do Cliente (Contratado) */}
               {isAssinado ? (
                   <div className="p-4 bg-green-100 dark:bg-green-900/20 rounded-md space-y-2">
                       <p className="font-semibold text-green-700 dark:text-green-300 flex items-center">
@@ -221,12 +301,15 @@ const AssinarContrato: React.FC = () => {
                               <Camera className="w-4 h-4 mr-1" /> Visualizar Selfie de Assinatura
                           </a>
                       )}
+                      <Button variant="link" size="sm" onClick={() => sendSignedContractEmail(contrato.id, contrato.valores_tags_preenchidos?.['{{CLIENTE_EMAIL}}'])} className="h-auto p-0 text-blue-600 hover:text-blue-700 flex items-center">
+                          <Mail className="w-4 h-4 mr-1" /> Reenviar Cópia Assinada
+                      </Button>
                   </div>
               ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="space-y-4 md:col-span-1">
                           <div className="space-y-2">
-                              <Label htmlFor="nome-completo">Nome Completo (Assinante)</Label>
+                              <Label htmlFor="nome-completo">Seu Nome Completo (Assinante)</Label>
                               <Input 
                                   id="nome-completo"
                                   value={nomeCompleto}
@@ -249,7 +332,7 @@ const AssinarContrato: React.FC = () => {
                           <Button 
                               onClick={handleAssinar} 
                               disabled={isSigning || !isReadyToSign}
-                              className="w-full h-12 bg-primary hover:bg-primary/90"
+                              className="w-full h-12 text-lg bg-green-600 hover:bg-green-700"
                           >
                               {isSigning ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileSignature className="mr-2 h-4 w-4" />}
                               Assinar Contrato Eletronicamente

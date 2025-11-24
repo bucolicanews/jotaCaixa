@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Copy, ExternalLink, FileText, Eye, Printer, Mail, MessageSquare, Loader2, Lock, Unlock } from 'lucide-react';
+import { Copy, ExternalLink, FileText, Eye, Printer, Mail, MessageSquare, Loader2, Lock, Unlock, CheckCircle2 } from 'lucide-react';
 import { ContratoGerado } from '@/types/contratos';
 import { showSuccess, showError } from '@/utils/toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
@@ -11,6 +11,7 @@ import { usePrint } from '@/hooks/use-print';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '../ui/alert-dialog';
+import { format } from 'date-fns';
 
 interface ContratoAcoesDialogProps {
   contrato: ContratoGerado | null;
@@ -36,11 +37,13 @@ const ContratoAcoesDialog: React.FC<ContratoAcoesDialogProps> = ({ contrato, ope
   const [config, setConfig] = useState<ContratoConfig>(DEFAULT_CONFIG);
   const [loadingConfig, setLoadingConfig] = useState(true);
   const [isBlocking, setIsBlocking] = useState(false);
+  const [isSendingEmail, setIsSendingEmail] = useState(false); // NOVO ESTADO
   const { printContent } = usePrint();
   
   const ownerId = contrato?.proprietario_id; // O proprietário do contrato é quem define a configuração
   const isMyContract = ownerId === usuario?.id || (role === 'Cliente' && ownerId === (usuario as any)?.cliente_id);
   const isCanceledOrBlocked = contrato?.status === 'cancelado' || contrato?.status === 'bloqueado';
+  const isAssinado = contrato?.status === 'ativo' || contrato?.status === 'concluido'; // NOVO
 
   const fetchConfig = useCallback(async () => {
     if (!ownerId) {
@@ -89,6 +92,35 @@ const ContratoAcoesDialog: React.FC<ContratoAcoesDialogProps> = ({ contrato, ope
     }
   };
   
+  // NOVO HANDLER: Enviar Contrato Assinado (Edge Function)
+  const handleSendSignedContractEmail = async () => {
+      if (!contrato || !isAssinado) return;
+      
+      const clienteEmail = contrato.valores_tags_preenchidos?.['{{CLIENTE_EMAIL}}'];
+      if (!clienteEmail) {
+          showError('Email do cliente não encontrado nas tags.');
+          return;
+      }
+      
+      setIsSendingEmail(true);
+      
+      try {
+          const { data, error } = await supabase.functions.invoke('send-signed-contract', {
+              body: { contratoId: contrato.id, clienteEmail },
+          });
+          
+          if (error) throw error;
+          if (data?.error) throw new Error(data.error);
+          
+          showSuccess('Cópia do contrato assinado enviada para o cliente!');
+      } catch (error: any) {
+          console.error('Erro ao enviar email:', error);
+          showError('Falha ao enviar cópia do contrato por email: ' + error.message);
+      } finally {
+          setIsSendingEmail(false);
+      }
+  };
+  
   const handleSendEmail = () => {
       if (!linkAssinatura) return;
       
@@ -96,7 +128,7 @@ const ContratoAcoesDialog: React.FC<ContratoAcoesDialogProps> = ({ contrato, ope
       const subject = encodeURIComponent(`Contrato para Assinatura: ${contrato?.valores_tags_preenchidos?.titulo || 'Documento'}`);
       const body = encodeURIComponent(template);
       
-      // Tenta usar o email do cliente, se disponível nos metadados
+      // Tenta usar o email do cliente, se disponível nas tags
       const recipient = contrato?.valores_tags_preenchidos?.['{{CLIENTE_EMAIL}}'] || '';
       
       window.open(`mailto:${recipient}?subject=${subject}&body=${body}`, '_blank');
@@ -121,16 +153,52 @@ const ContratoAcoesDialog: React.FC<ContratoAcoesDialogProps> = ({ contrato, ope
   };
   
   const handlePrint = () => {
-    if (contrato?.conteudo_renderizado) {
-        const isHtml = contrato.valores_tags_preenchidos?.tipo_conteudo === 'html';
-        let printHtml = contrato.conteudo_renderizado;
-        
-        if (!isHtml) {
-            printHtml = `<pre style="white-space: pre-wrap; font-family: inherit; margin: 0;">${printHtml}</pre>`;
-        }
-        
-        printContent(printHtml, `Contrato: ${contrato.id}`);
+    if (!contrato?.conteudo_renderizado) {
+        showError('Conteúdo do contrato não disponível para impressão.');
+        return;
     }
+    
+    const isHtml = contrato.valores_tags_preenchidos?.tipo_conteudo === 'html';
+    let printHtml = contrato.conteudo_renderizado;
+    
+    // Adiciona a seção de assinaturas ao final do HTML para impressão
+    const assinaturasHtml = `
+        <div style="margin-top: 50px; padding-top: 20px; border-top: 1px solid #ccc; page-break-before: avoid;">
+            <h3 style="font-size: 16px; font-weight: bold; margin-bottom: 20px;">Assinaturas</h3>
+            <div style="display: flex; justify-content: space-around; text-align: center;">
+                <div style="width: 45%;">
+                    ${contrato.assinatura_proprietario_url ? `<img src="${contrato.assinatura_proprietario_url}" style="max-height: 50px; margin-bottom: 5px;" />` : ''}
+                    <div style="border-top: 1px solid #000; padding-top: 5px; font-size: 12px;">
+                        ${contrato.assinatura_proprietario_nome || 'Empresa Contratante'}
+                    </div>
+                    <p style="font-size: 10px; margin-top: 5px;">Contratante (Empresa)</p>
+                </div>
+                <div style="width: 45%;">
+                    ${contrato.assinatura_selfie_url ? `<img src="${contrato.assinatura_selfie_url}" style="max-height: 50px; margin-bottom: 5px;" />` : ''}
+                    <div style="border-top: 1px solid #000; padding-top: 5px; font-size: 12px;">
+                        ${contrato.assinatura_nome || 'Cliente Contratado'}
+                    </div>
+                    <p style="font-size: 10px; margin-top: 5px;">Contratado (Cliente)</p>
+                </div>
+            </div>
+            <p style="font-size: 10px; text-align: center; margin-top: 20px;">
+                Documento assinado eletronicamente em ${isAssinado ? format(new Date(contrato.updated_at), 'dd/MM/yyyy HH:mm') : 'Pendente'}.
+            </p>
+        </div>
+    `;
+    
+    if (isHtml) {
+        const bodyEndIndex = printHtml.toLowerCase().lastIndexOf('</body>');
+        if (bodyEndIndex !== -1) {
+            printHtml = printHtml.substring(0, bodyEndIndex) + assinaturasHtml + printHtml.substring(bodyEndIndex);
+        } else {
+            printHtml += assinaturasHtml;
+        }
+    } else {
+        printHtml += `\n\n--- Assinaturas ---\nContratante: ${contrato.assinatura_proprietario_nome || 'Empresa'}\nContratado: ${contrato.assinatura_nome || 'Cliente'}\nData: ${isAssinado ? format(new Date(contrato.updated_at), 'dd/MM/yyyy HH:mm') : 'Pendente'}`;
+    }
+    
+    printContent(printHtml, `Contrato Assinatura - ${contrato.id}`);
   };
   
   const handleBlockContract = async () => {
@@ -188,41 +256,7 @@ const ContratoAcoesDialog: React.FC<ContratoAcoesDialogProps> = ({ contrato, ope
   // Conteúdo a ser exibido na aba de prévia
   const contentToDisplay = contrato.conteudo_renderizado ? (
     isHtml ? (
-        // Injeta CSS de sobrescrita para garantir responsividade do template HTML
-        <div className="contract-preview-wrapper">
-            <style>{`
-                /* Sobrescreve o max-width fixo do template para telas pequenas */
-                .contract-preview-wrapper .container {
-                    max-width: 100% !important;
-                    padding: 10px !important; /* Reduz o padding interno */
-                    margin: 0 auto !important;
-                }
-                /* Garante que o card interno também se ajuste */
-                .contract-preview-wrapper .card {
-                    padding: 15px !important;
-                }
-                /* Garante que o layout de duas colunas se torne uma coluna em mobile */
-                @media (max-width: 640px) {
-                    .contract-preview-wrapper .two-col {
-                        grid-template-columns: 1fr !important;
-                    }
-                    .contract-preview-wrapper header {
-                        flex-direction: column;
-                        align-items: flex-start;
-                    }
-                    .contract-preview-wrapper .meta {
-                        text-align: left;
-                        margin-left: 0;
-                        margin-top: 10px;
-                    }
-                    .contract-preview-wrapper .signature-row {
-                        flex-direction: column;
-                        gap: 10px;
-                    }
-                }
-            `}</style>
-            <div dangerouslySetInnerHTML={{ __html: contrato.conteudo_renderizado }} />
-        </div>
+        <div dangerouslySetInnerHTML={{ __html: contrato.conteudo_renderizado }} />
     ) : (
         <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', margin: 0 }}>{contrato.conteudo_renderizado}</pre>
     )
@@ -289,6 +323,21 @@ const ContratoAcoesDialog: React.FC<ContratoAcoesDialogProps> = ({ contrato, ope
                                 <MessageSquare className="w-4 h-4 mr-2" /> Enviar por WhatsApp
                             </Button>
                         </div>
+                        
+                        {/* NOVO BOTÃO: Enviar Contrato Assinado */}
+                        {isAssinado && (
+                            <div className="pt-4 border-t">
+                                <Button 
+                                    onClick={handleSendSignedContractEmail} 
+                                    variant="default" 
+                                    className="w-full bg-green-600 hover:bg-green-700"
+                                    disabled={isSendingEmail}
+                                >
+                                    {isSendingEmail ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Mail className="w-4 h-4 mr-2" />}
+                                    Enviar Cópia Assinada ao Cliente
+                                </Button>
+                            </div>
+                        )}
                     </>
                 )}
             </TabsContent>

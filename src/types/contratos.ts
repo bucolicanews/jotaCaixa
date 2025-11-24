@@ -32,7 +32,11 @@ export interface ContratoGerado {
   criado_em: string;
   updated_at: string;
   
-  // NOVOS CAMPOS DE ASSINATURA
+  // CAMPOS DE ASSINATURA DO CLIENTE (CONTRATADO)
   assinatura_nome?: string | null;
   assinatura_selfie_url?: string | null;
+
+  // NOVOS CAMPOS DE ASSINATURA DO PROPRIETÁRIO (CONTRATANTE)
+  assinatura_proprietario_nome?: string | null;
+  assinatura_proprietario_url?: string | null;
 }

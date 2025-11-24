@@ -42,6 +42,7 @@ interface EmpresaLogada {
     bairro?: string | null;
     cidade?: string | null;
     estado?: string | null;
+    logo_url?: string | null; // ADICIONADO
 }
 
 interface EmpresaContrato {
@@ -157,6 +158,7 @@ const PreencherContrato: React.FC = () => {
         bairro: (profile as AdminProfile).bairro || (profile as ClienteProfile)?.bairro, 
         cidade: (profile as AdminProfile).cidade || (profile as ClienteProfile)?.cidade, 
         estado: (profile as AdminProfile).estado || (profile as ClienteProfile)?.estado,
+        logo_url: (profile as AdminProfile).logo_url || (profile as ClienteProfile)?.logo_url, // ADICIONADO
     };
   }, [perfil, isAdmin, isClient]);
 
@@ -179,7 +181,7 @@ const PreencherContrato: React.FC = () => {
     // 2. Buscar Clientes (Contratados) - AGORA BUSCA NA TABELA 'tbl_clientes' (Clientes do Sistema)
     let queryClients = supabase
         .from('tbl_clientes') // ALTERADO: Usando a tabela 'tbl_clientes'
-        .select('id, nome, razao_social, nome_fantasia, documento, email, telefone, cep, endereco, numero, complemento, bairro, cidade, estado') // Seleciona campos relevantes (REMOVIDO: cpf, cnpj, rg)
+        .select('id, nome, razao_social, nome_fantasia, documento, email, telefone, cep, endereco, numero, complemento, bairro, cidade, estado, cpf, cnpj, rg') // Seleciona campos relevantes
         .eq('admin_id', targetEmpresaId) // Filtra pelos clientes do Admin/Cliente
         .eq('aprovado', true) // Filtra apenas clientes aprovados
         .neq('id', targetEmpresaId) // GARANTE QUE O PROPRIETÁRIO NÃO ESTEJA NA LISTA DE CLIENTES CONTRATADOS
@@ -521,6 +523,11 @@ const PreencherContrato: React.FC = () => {
             ? format(dataVencimentoUnico!, 'yyyy-MM-dd')
             : format(dataPrimeiroVencimento!, 'yyyy-MM-dd');
             
+        // --- NOVO: Assinatura do Proprietário (Empresa) ---
+        const proprietarioNome = empresaLogada?.nome || 'Empresa Contratante';
+        const proprietarioUrl = empresaLogada?.logo_url || null;
+        // --------------------------------------------------
+            
         const contratoPayload = {
             modelo_id: modelo.id,
             cliente_id: clienteSelecionadoId, // Referencia tbl_clientes(id)
@@ -532,6 +539,10 @@ const PreencherContrato: React.FC = () => {
             dia_vencimento_parcela: tipoLancamento !== 'unico' ? intervaloDias : null,
             valores_tags_preenchidos: { ...valoresTags, titulo: tituloDocumento, tipo_conteudo: tipoConteudo },
             conteudo_renderizado: conteudoRenderizado,
+            
+            // Assinatura do Proprietário (Automática)
+            assinatura_proprietario_nome: proprietarioNome,
+            assinatura_proprietario_url: proprietarioUrl,
         };
         
         let contratoGeradoId: string;
@@ -747,19 +758,19 @@ const PreencherContrato: React.FC = () => {
   }
   
   // Filtra tags que já foram preenchidas automaticamente (para não pedir valor manual)
-  const tagsParaPreenchimentoManual = Object.keys(valoresTags).filter(tagKey => {
+  const tagsParaPreenchimentoManual = allAvailableTags.filter(tag => {
       // Exclui tags financeiras (que são preenchidas pelo formulário)
-      if (TAGS_PADRAO.some(t => t.origem_dado?.startsWith('contas_receber') && t.nome_tag === tagKey)) return false;
+      if (TAGS_PADRAO.some(t => t.origem_dado?.startsWith('contas_receber') && t.nome_tag === tag.nome_tag)) return false;
       
       // Exclui tags de sistema (EMPRESA_*) que foram preenchidas
-      if (tagKey.startsWith('{{EMPRESA_') && valoresTags[tagKey]) return false;
+      if (tag.nome_tag.startsWith('{{EMPRESA_') && valoresTags[tag.nome_tag]) return false;
       
       // Exclui tags de cliente (CLIENTE_*) que foram preenchidas
-      if (tagKey.startsWith('{{CLIENTE_') && valoresTags[tagKey]) return false;
+      if (tag.nome_tag.startsWith('{{CLIENTE_') && valoresTags[tag.nome_tag]) return false;
       
       // Inclui tags que não têm valor preenchido
-      return !valoresTags[tagKey];
-  });
+      return !valoresTags[tag.nome_tag];
+  }).map(tag => tag.nome_tag); // Mapeia para retornar apenas a string do nome da tag
 
   return (
     <LayoutPrincipal>
