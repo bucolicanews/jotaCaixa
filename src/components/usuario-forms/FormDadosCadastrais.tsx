@@ -1,8 +1,9 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect } from 'react';
 import { Control, useFormContext } from 'react-hook-form';
 import { Separator } from '@/components/ui/separator';
 import { useBulkTagManager } from '@/hooks/use-bulk-tag-manager';
 import { TaggedFormField } from './TaggedFormField'; // Importando o componente TaggedFormField
+import { showError } from '@/utils/toast'; // Importando showError
 
 interface TaggedFormFieldProps {
     fieldName: string;
@@ -20,10 +21,11 @@ interface TaggedFormFieldProps {
 
 // Componente wrapper para campos de Usuário (Funcionário)
 const UserTaggedFormField: React.FC<TaggedFormFieldProps> = (props) => {
+    const { control } = useFormContext();
     return (
         <TaggedFormField 
             {...props} 
-            control={useFormContext().control} 
+            control={control} 
             isClientScope={false} // Escopo de Usuário
         />
     );
@@ -43,13 +45,75 @@ interface FormDadosCadastraisProps {
 
 const FormDadosCadastrais: React.FC<FormDadosCadastraisProps> = ({ isSubmitting, resourceId, tagRefreshKey, onTagToggle, isReadOnly, isAddressLoading }) => {
     const { refetchStatus } = useBulkTagManager(resourceId);
+    const { control, watch, setValue } = useFormContext(); // Usando useFormContext para acessar o estado do pai
     
     const handleTagToggle = useCallback(() => {
         refetchStatus();
         onTagToggle();
     }, [refetchStatus, onTagToggle]);
     
-    // O isAddressLoading agora vem do componente pai
+    // Monitora o CEP para o lookup (a lógica de lookup está no FormUsuario.tsx)
+    const cepValue = watch('cep');
+    
+    // Lógica de CEP Lookup (Replicada aqui para fins de demonstração, mas o FormUsuario já a executa)
+    const fetchAddressByCep = useCallback(async (cep: string) => {
+        const cleanCep = cep.replace(/\D/g, '');
+
+        if (cleanCep.length !== 8) {
+            return;
+        }
+        
+        // Bloqueia a edição dos campos enquanto busca
+        setValue('endereco', 'Buscando...');
+        setValue('bairro', 'Buscando...');
+        setValue('cidade', 'Buscando...');
+        setValue('estado', 'Buscando...');
+        
+        try {
+            const response = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
+            const data = await response.json();
+
+            if (data.erro) {
+                showError('CEP não encontrado.');
+                setValue('endereco', '');
+                setValue('bairro', '');
+                setValue('cidade', '');
+                setValue('estado', '');
+                return;
+            }
+
+            // Preenche os campos
+            setValue('endereco', data.logradouro || '');
+            setValue('bairro', data.bairro || '');
+            setValue('cidade', data.localidade || '');
+            setValue('estado', data.uf || '');
+            
+        } catch (error) {
+            console.error('Erro ao consultar ViaCEP:', error);
+            showError('Falha ao consultar o CEP.');
+            setValue('endereco', '');
+            setValue('bairro', '');
+            setValue('cidade', '');
+            setValue('estado', '');
+        }
+    }, [setValue]);
+    
+    // Monitora a mudança do CEP para buscar o endereço (Apenas para garantir que a lógica de CEP do pai funcione)
+    useEffect(() => {
+        const cleanCep = cepValue?.replace(/\D/g, '');
+        
+        if (cleanCep && cleanCep.length === 8) {
+            // Chamada da função de busca (que está no contexto do FormUsuario)
+            fetchAddressByCep(cleanCep);
+        } else if (cleanCep && cleanCep.length > 0 && cleanCep.length < 8) {
+            // Limpa os campos de endereço se o CEP estiver incompleto
+            setValue('endereco', '');
+            setValue('bairro', '');
+            setValue('cidade', '');
+            setValue('estado', '');
+        }
+    }, [cepValue, fetchAddressByCep, setValue]);
+
 
     return (
         <div className="space-y-6">

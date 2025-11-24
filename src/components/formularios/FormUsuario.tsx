@@ -23,6 +23,9 @@ import FormDadosContratuais from '../usuario-forms/FormDadosContratuais';
 import FormFerias from '@/components/usuario-forms/FormFerias';
 import LogoUpload from '../LogoUpload'; // Importado para Cliente Profile
 import { Checkbox } from '../ui/checkbox'; // IMPORT CORRIGIDO
+import FormIdentificacao from '../cliente-forms/FormIdentificacao'; // NOVO IMPORT
+import FormContato from '../cliente-forms/FormContato'; // NOVO IMPORT
+import FormEndereco from '../cliente-forms/FormEndereco'; // NOVO IMPORT
 
 const textOptional = z.string().optional().or(z.literal(''));
 const urlSchema = z.string().url('URL inválida.').optional().or(z.literal(''));
@@ -629,59 +632,29 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                             </div>
                             <p className="text-sm text-muted-foreground mb-4">Estes campos são usados para preencher tags dinâmicas em contratos.</p>
                             
-                            <div className="space-y-4">
-                                <FormField control={form.control} name="razao_social" render={({ field }) => (
-                                    <FormItem><FormLabel>Razão Social (Opcional)</FormLabel><FormControl><Input placeholder="Razão Social" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
-                                )} />
-                                <FormField control={form.control} name="nome_fantasia" render={({ field }) => (
-                                    <FormItem><FormLabel>Nome Fantasia (Opcional)</FormLabel><FormControl><Input placeholder="Nome Fantasia" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
-                                )} />
-                                <FormField control={form.control} name="documento" render={({ field }) => (
-                                    <FormItem><FormLabel>Documento (CPF/CNPJ)</FormLabel><FormControl><Input placeholder="00.000.000/0000-00" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
-                                )} />
-                                <FormField control={form.control} name="cnpj" render={({ field }) => (
-                                    <FormItem><FormLabel>CNPJ (Opcional)</FormLabel><FormControl><Input placeholder="00.000.000/0000-00" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
-                                )} />
-                                <FormField control={form.control} name="cpf" render={({ field }) => (
-                                    <FormItem><FormLabel>CPF (Opcional)</FormLabel><FormControl><Input placeholder="000.000.000-00" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
-                                )} />
-                                <FormField control={form.control} name="rg" render={({ field }) => (
-                                    <FormItem><FormLabel>RG (Opcional)</FormLabel><FormControl><Input placeholder="00.000.000-0" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
-                                )} />
-                                <Separator />
-                            </div>
+                            <FormIdentificacao
+                                control={form.control as unknown as Control<any>}
+                                clienteId={clientProfile?.id}
+                                isSubmitting={isSubmitting}
+                                tagRefreshKey={refreshKey}
+                                onTagToggle={handleTagToggle}
+                            />
                             
-                            <h3 className="font-semibold text-lg">Endereço e Contato</h3>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <FormField control={form.control} name="telefone" render={({ field }) => (
-                                    <FormItem><FormLabel>Telefone</FormLabel><FormControl><Input placeholder="(00) 90000-0000" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
-                                )} />
-                                <FormField control={form.control} name="cep" render={({ field }) => (
-                                    <FormItem><FormLabel>CEP</FormLabel><FormControl><Input placeholder="00000-000" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
-                                )} />
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <FormField control={form.control} name="endereco" render={({ field }) => (
-                                    <FormItem><FormLabel>Logradouro/Rua</FormLabel><FormControl><Input placeholder="Rua Exemplo" {...field} disabled={isReadOnly || isAddressLoading} /></FormControl><FormMessage /></FormItem>
-                                )} />
-                                <FormField control={form.control} name="numero" render={({ field }) => (
-                                    <FormItem><FormLabel>Número</FormLabel><FormControl><Input placeholder="123" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
-                                )} />
-                                <FormField control={form.control} name="complemento" render={({ field }) => (
-                                    <FormItem><FormLabel>Complemento</FormLabel><FormControl><Input placeholder="Apto 101" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
-                                )} />
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <FormField control={form.control} name="bairro" render={({ field }) => (
-                                    <FormItem><FormLabel>Bairro</FormLabel><FormControl><Input placeholder="Centro" {...field} disabled={isReadOnly || isAddressLoading} /></FormControl><FormMessage /></FormItem>
-                                )} />
-                                <FormField control={form.control} name="cidade" render={({ field }) => (
-                                    <FormItem><FormLabel>Cidade</FormLabel><FormControl><Input placeholder="São Paulo" {...field} disabled={isReadOnly || isAddressLoading} /></FormControl><FormMessage /></FormItem>
-                                )} />
-                                <FormField control={form.control} name="estado" render={({ field }) => (
-                                    <FormItem><FormLabel>Estado (UF)</FormLabel><FormControl><Input placeholder="PA" {...field} disabled={isReadOnly || isAddressLoading} /></FormControl><FormMessage /></FormItem>
-                                )} />
-                            </div>
+                            <FormContato
+                                control={form.control as unknown as Control<any>}
+                                clienteId={clientProfile?.id}
+                                isSubmitting={isSubmitting}
+                                tagRefreshKey={refreshKey}
+                                onTagToggle={handleTagToggle}
+                            />
+                            
+                            <FormEndereco
+                                control={form.control as unknown as Control<any>}
+                                clienteId={clientProfile?.id}
+                                isSubmitting={isSubmitting}
+                                tagRefreshKey={refreshKey}
+                                onTagToggle={handleTagToggle}
+                            />
                         </TabsContent>
                     </Tabs>
                     
