@@ -7,13 +7,13 @@ import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { cn } from '@/lib/utils';
 import { Separator } from '@/components/ui/separator';
-import { Checkbox } from './ui/checkbox'; // Importando Checkbox
+import { Checkbox } from './ui/checkbox';
 
 interface LogoUploadProps {
   ownerId: string;
-  tableName: 'tbl_admins' | 'tbl_clientes'; // NOVO: Tabela de destino
+  tableName: 'tbl_admins' | 'tbl_clientes'; // Tabela de destino
   initialLogoUrl: string | null | undefined;
-  onUploadComplete: (url: string | null) => void;
+  onUploadComplete: (url: string | null) => void; // Callback para notificar o formulário pai
   isReadOnly: boolean;
   
   // NOVO PROP: Callback para sincronizar a URL com o campo de assinatura
@@ -27,36 +27,28 @@ const LogoUpload: React.FC<LogoUploadProps> = ({ ownerId, tableName, initialLogo
   const [loading, setLoading] = useState(false);
   const [currentUrl, setCurrentUrl] = useState(initialLogoUrl || '');
   const [manualUrl, setManualUrl] = useState(initialLogoUrl || '');
-  const [useAsSignature, setUseAsSignature] = useState(false); // NOVO ESTADO
+  const [useAsSignature, setUseAsSignature] = useState(!!initialLogoUrl);
 
   // Sincroniza o estado interno com a prop inicial
   useEffect(() => {
       setCurrentUrl(initialLogoUrl || '');
       setManualUrl(initialLogoUrl || '');
-      // Se a URL inicial existe, assume que ela está sendo usada como assinatura
       setUseAsSignature(!!initialLogoUrl); 
   }, [initialLogoUrl]);
   
   // Efeito para sincronizar a URL com o campo de assinatura no formulário pai
   useEffect(() => {
+      // Se estiver marcado para usar como assinatura, envia a URL atual.
+      // Se não estiver marcado, envia NULL (para limpar o campo de assinatura no formulário pai).
       if (useAsSignature) {
           onSyncUrl(currentUrl);
-      } else if (!currentUrl) {
+      } else if (!useAsSignature && currentUrl) {
+          // Se desmarcou, limpa o campo de assinatura no formulário pai, mas mantém a URL no DB até o save.
           onSyncUrl(null);
       }
   }, [useAsSignature, currentUrl, onSyncUrl]);
 
-  const updateProfile = async (url: string | null) => {
-      const { error: updateError } = await supabase
-          .from(tableName)
-          .update({ logo_url: url })
-          .eq('id', ownerId);
-          
-      if (updateError) {
-          console.error('Erro ao atualizar logo_url no DB:', updateError);
-          throw new Error(`Falha ao salvar URL no perfil: ${updateError.message}`);
-      }
-  };
+  // REMOVIDO: updateProfile (a atualização do DB será feita no FormPerfil)
 
   const handleFileUpload = async () => {
     if (!file || !ownerId) return;
@@ -81,14 +73,11 @@ const LogoUpload: React.FC<LogoUploadProps> = ({ ownerId, tableName, initialLogo
       const { data: publicUrlData } = supabase.storage.from(LOGO_BUCKET).getPublicUrl(filePath);
       const newUrl = publicUrlData.publicUrl;
       
-      // 3. Atualizar o perfil do Admin/Cliente com a nova URL
-      await updateProfile(newUrl);
-
-      showSuccess('Logo atualizada com sucesso!');
+      showSuccess('Logo enviada! Salve o formulário para confirmar.');
       setCurrentUrl(newUrl);
       setManualUrl(newUrl);
       setFile(null);
-      onUploadComplete(newUrl);
+      onUploadComplete(newUrl); // Notifica o pai
       setUseAsSignature(true); // Marca para usar como assinatura após upload
 
     } catch (error: any) {
@@ -105,12 +94,13 @@ const LogoUpload: React.FC<LogoUploadProps> = ({ ownerId, tableName, initialLogo
       
       try {
           const urlToSave = manualUrl.trim() || null;
-          await updateProfile(urlToSave);
           
-          showSuccess('URL da logo salva com sucesso!');
+          // Apenas atualiza o estado local e notifica o pai
           setCurrentUrl(urlToSave);
           onUploadComplete(urlToSave);
-          setUseAsSignature(!!urlToSave); // Marca para usar como assinatura se houver URL
+          setUseAsSignature(!!urlToSave);
+          
+          showSuccess('URL da logo atualizada localmente. Salve o formulário para confirmar.');
       } catch (error: any) {
           showError('Falha ao salvar URL: ' + error.message);
       } finally {
@@ -123,24 +113,13 @@ const LogoUpload: React.FC<LogoUploadProps> = ({ ownerId, tableName, initialLogo
     
     if (!window.confirm('Tem certeza que deseja remover a logo?')) return;
     
-    setLoading(true);
-    
-    try {
-        // 1. Remover a URL do perfil
-        await updateProfile(null);
-        
-        showSuccess('Logo removida com sucesso!');
-        setCurrentUrl(null);
-        setManualUrl('');
-        setFile(null);
-        onUploadComplete(null);
-        setUseAsSignature(false); // Desmarca o uso como assinatura
-        
-    } catch (error: any) {
-        showError('Falha ao remover logo: ' + error.message);
-    } finally {
-        setLoading(false);
-    }
+    // Apenas limpa o estado local e notifica o pai (a exclusão do arquivo no storage é opcional e complexa, focamos na remoção do link no DB)
+    setCurrentUrl(null);
+    setManualUrl('');
+    setFile(null);
+    onUploadComplete(null);
+    setUseAsSignature(false);
+    showSuccess('Logo removida localmente. Salve o formulário para confirmar.');
   };
 
   return (

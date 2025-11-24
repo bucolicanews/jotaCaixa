@@ -31,9 +31,9 @@ const formSchema = z.object({
   limite_usuarios: z.coerce.number().int().min(1, 'O limite deve ser pelo menos 1.').optional(),
   permissoes: z.record(z.boolean()).optional(),
   
-  // NOVOS CAMPOS DE ASSINATURA
+  // NOVOS CAMPOS DE ASSINATURA (Sincronizados com LogoUpload)
   assinatura_proprietario_nome: textOptional,
-  assinatura_proprietario_url: textOptional,
+  assinatura_proprietario_url: textOptional, // ÚNICO CAMPO DE URL
   
   // Dados Cadastrais (Comum a Cliente e Admin)
   cpf: textOptional,
@@ -100,8 +100,9 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete, 
       permissoes: defaultPermissoes,
       
       // NOVOS CAMPOS DE ASSINATURA
-      assinatura_proprietario_nome: (profileToEdit as ContratoGerado)?.assinatura_proprietario_nome || profileToEdit?.nome || '',
-      assinatura_proprietario_url: (profileToEdit as ContratoGerado)?.assinatura_proprietario_url || (profileToEdit as AdminProfile)?.logo_url || (profileToEdit as ClienteProfile)?.logo_url || '',
+      assinatura_proprietario_nome: (profileToEdit as ClienteProfile)?.assinatura_proprietario_nome || (profileToEdit as AdminProfile)?.assinatura_proprietario_nome || profileToEdit?.nome || '',
+      // Prioriza assinatura_proprietario_url, mas usa logo_url como fallback inicial
+      assinatura_proprietario_url: (profileToEdit as ClienteProfile)?.assinatura_proprietario_url || (profileToEdit as AdminProfile)?.assinatura_proprietario_url || (profileToEdit as AdminProfile)?.logo_url || (profileToEdit as ClienteProfile)?.logo_url || '',
       
       // Dados Cadastrais
       cpf: (profileToEdit as AdminProfile)?.cpf || (profileToEdit as ClienteProfile)?.cpf || '',
@@ -126,7 +127,7 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete, 
   });
   
   const cepValue = form.watch('cep');
-  const isAddressLoading = form.watch('endereco') === 'Buscando...'; // NOVO ESTADO DE CARREGAMENTO
+  const isAddressLoading = form.watch('endereco') === 'Buscando...';
   
   const fetchAddressByCep = useCallback(async (cep: string) => {
     const cleanCep = cep.replace(/\D/g, '');
@@ -135,7 +136,6 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete, 
       return;
     }
     
-    // Bloqueia a edição dos campos enquanto busca
     form.setValue('endereco', 'Buscando...');
     form.setValue('bairro', 'Buscando...');
     form.setValue('cidade', 'Buscando...');
@@ -154,7 +154,6 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete, 
         return;
       }
 
-      // Preenche os campos
       form.setValue('endereco', data.logradouro || '');
       form.setValue('bairro', data.bairro || '');
       form.setValue('cidade', data.localidade || '');
@@ -170,7 +169,6 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete, 
     }
   }, [form]);
   
-  // Monitora a mudança do CEP para buscar o endereço
   useEffect(() => {
     const cleanCep = cepValue?.replace(/\D/g, '');
     if (cleanCep && cleanCep.length === 8) {
@@ -196,8 +194,8 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete, 
   const handleLogoUploadComplete = useCallback(async (url: string | null) => {
       // Atualiza o campo de URL da assinatura com a nova URL da logo
       form.setValue('assinatura_proprietario_url', url || '');
-      await refetch();
-  }, [refetch, form]);
+      // Não precisa de refetch aqui, pois o save final fará isso.
+  }, [form]);
   
   // NOVO HANDLER: Sincroniza a URL da Logo com o campo de assinatura (usado pelo checkbox)
   const handleSyncUrl = useCallback((url: string | null) => {
@@ -247,7 +245,7 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete, 
         dataToUpdate.nome_fantasia = values.nome_fantasia || null;
         dataToUpdate.documento = values.documento || null;
         
-        // Adiciona a URL da logo (que é a mesma da assinatura)
+        // CRÍTICO: Sincroniza a URL da logo com o campo de assinatura
         dataToUpdate.logo_url = values.assinatura_proprietario_url || null;
         
         const { error } = await supabase.from('tbl_clientes').update(dataToUpdate).eq('id', perfilInicial.id);
@@ -270,7 +268,7 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete, 
         dataToUpdate.cidade = values.cidade || null;
         dataToUpdate.estado = values.estado || null;
         
-        // Adiciona a URL da logo (que é a mesma da assinatura)
+        // CRÍTICO: Sincroniza a URL da logo com o campo de assinatura
         dataToUpdate.logo_url = values.assinatura_proprietario_url || null;
         
         const { error } = await supabase.from('tbl_admins').update(dataToUpdate).eq('id', perfilInicial.id);
@@ -321,9 +319,7 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete, 
                               <FormItem><FormLabel>Nome da Empresa/Pessoa para Assinatura</FormLabel><FormControl><Input placeholder="Ex: Minha Empresa LTDA" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
                           )} />
                           
-                          <FormField control={form.control} name="assinatura_proprietario_url" render={({ field }) => (
-                              <FormItem><FormLabel>URL da Imagem de Assinatura (Logo)</FormLabel><FormControl><Input placeholder="URL da imagem de assinatura" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
-                          )} />
+                          {/* CAMPO DE URL REMOVIDO E SUBSTITUÍDO PELO LOGO UPLOAD */}
                           
                           <LogoUpload 
                               ownerId={perfilInicial.id}
@@ -341,7 +337,7 @@ const FormPerfil: React.FC<FormPerfilProps> = ({ perfilInicial, onSaveComplete, 
                           <Separator />
                           <h3 className="font-semibold text-lg">Configurações da Empresa</h3>
                           <FormField control={form.control} name="limite_usuarios" render={({ field }) => (
-                              <FormItem><FormLabel>Limite de Usuários</FormLabel><FormControl><Input type="number" placeholder="5" {...field} disabled={isReadOnly || isClient} /></FormControl><FormMessage /></FormItem>
+                              <FormItem><FormLabel>Limite de Usuários</Formulação><FormControl><Input type="number" placeholder="5" {...field} disabled={isReadOnly || isClient} /></FormControl><FormMessage /></FormItem>
                           )} />
                           
                           <div className="space-y-2 pt-4">

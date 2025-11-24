@@ -15,7 +15,7 @@ import { ptBR } from 'date-fns/locale';
 import { BASE_URL } from '@/config/app-config';
 import { useTicketNotifications } from '@/hooks/use-ticket-notifications';
 import { useOwnerBranding } from '@/hooks/use-owner-branding';
-import { useTheme } from '@/contexts/ThemeProvider'; // <-- IMPORT CORRIGIDO
+import { useTheme } from '@/contexts/ThemeProvider';
 
 const ThemeToggle = () => {
   const { theme, setTheme } = useTheme();
