@@ -144,14 +144,15 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick, adminBranding, l
   let textTitle = adminBranding?.nome || 'Fluxo de Caixa';
   let profileDescription = '';
   
+  // CORREÇÃO AQUI: Se for Usuário, o título principal deve ser o nome da empresa (ownerName)
   if (isAdmin) {
       profileDescription = 'Administrador do Sistema';
   } else if (isClient) {
       profileDescription = 'Cliente Principal';
-  } else if (isUserOfClient) {
-      profileDescription = `Funcionário de ${adminBranding?.nome || 'Cliente'}`;
-  } else if (isUserOfAdmin) {
-      profileDescription = `Funcionário de ${adminBranding?.nome || 'Admin'}`;
+  } else if (isUserOfClient || isUserOfAdmin) {
+      // Se for funcionário, o título é o nome da empresa (ownerName) e a descrição é o nome do funcionário
+      textTitle = adminBranding?.nome || 'Empresa Cliente';
+      profileDescription = `Funcionário: ${perfil?.nome || 'N/A'}`;
   } else if (perfil?.nome) {
       textTitle = perfil.nome;
   }
