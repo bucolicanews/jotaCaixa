@@ -154,7 +154,8 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
   const permissoesVisiveis = useMemo(() => {
       return PERMISSOES_DISPONIVEIS.filter((p: Permissao) => {
           if (criadorRole === 'Admin') return true;
-          return p.key === 'ponto_eletronico' || p.key === 'visualizar_proprio_ponto' || p.key === 'folha_ponto' || p.key === 'cadastrar_usuarios';
+          // Se for Cliente, permite gerenciar as permissões de RH e a nova de Suporte
+          return p.key === 'ponto_eletronico' || p.key === 'visualizar_proprio_ponto' || p.key === 'folha_ponto' || p.key === 'cadastrar_usuarios' || p.key === 'gestao_suporte';
       });
   }, [criadorRole]);
 
@@ -536,26 +537,6 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
   
   // 3. Controla a visibilidade do botão de salvar
   const shouldShowSaveButton = !isReadOnly && (!isSelfEditUsuario || activeTab === 'cadastrais');
-  
-  // 4. Define as abas visíveis
-  const tabs = useMemo(() => {
-      const baseTabs = [
-          { value: 'pessoal', label: 'Geral', component: FormGeral },
-          { value: 'cadastrais', label: 'Dados Cadastrais', component: FormDadosCadastrais },
-      ];
-      
-      if (isEditingUser || isNewClient) {
-          // Se for edição de Usuário (Funcionário) ou criação de novo Cliente (que usa o mesmo form)
-          baseTabs.splice(1, 0, 
-              { value: 'folgas', label: 'Folgas', component: FormFolgas },
-              { value: 'ferias', label: 'Férias', component: FormFerias },
-              { value: 'documentos', label: 'Documentos', component: FormDocumentos },
-              { value: 'contrato', label: 'Contrato (RH)', component: FormDadosContratuais }
-          );
-      }
-      
-      return baseTabs;
-  }, [isEditingUser, isNewClient]);
   
   // Se for Cliente Profile, remove as abas de RH
   if (isEditingClientProfile) {

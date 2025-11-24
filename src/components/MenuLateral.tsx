@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
-import { LayoutDashboard, DollarSign, ArrowUpCircle, ArrowDownCircle, Banknote, FileText, Upload, Settings, BookOpen, Users, Building2, Clock, Contact, CalendarCheck, User, FileSignature, Tag, FileTextIcon, Package, History, FileDown, MessageSquare, Scale, Loader2, TrendingUp } from 'lucide-react';
+import { LayoutDashboard, DollarSign, ArrowUpCircle, ArrowDownCircle, Banknote, FileText, Upload, Settings, BookOpen, Users, Building2, Clock, Contact, CalendarCheck, User, FileSignature, Tag, FileTextIcon, Package, History, FileDown, MessageSquare, Loader2, Scale, TrendingUp } from 'lucide-react';
 import React, { useMemo, useCallback, useState, useEffect } from 'react';
 import { useSessao } from '@/hooks/use-sessao';
 import { ClienteProfile, UsuarioProfile, AdminProfile, AdminUsuarioProfile } from '@/types/usuario';
@@ -88,7 +88,8 @@ const SECOES_MENU: MenuSection[] = [
         perfis: ['Admin', 'Cliente', 'Usuario'],
         itens: [
             { nome: 'Meus Tickets', caminho: '/suporte', icone: MessageSquare, perfis: ['Cliente', 'Usuario'] },
-            { nome: 'Gestão de Tickets', caminho: '/admin/suporte', icone: MessageSquare, perfis: ['Admin'] },
+            // ALTERADO: Agora acessível por Admin E Usuário com permissão 'gestao_suporte'
+            { nome: 'Gestão de Tickets', caminho: '/admin/suporte', icone: MessageSquare, perfis: ['Admin', 'Usuario'], permissionKey: 'gestao_suporte' },
         ]
     },
     {
@@ -212,6 +213,11 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick, adminBranding, l
             return false;
         }
         
+        // NOVO: Verifica a permissão de gestão de suporte
+        if (item.permissionKey === 'gestao_suporte') {
+            return userProfile.permissoes?.gestao_suporte === true;
+        }
+        
         if (item.permissionKey) {
             return userProfile.permissoes?.[item.permissionKey] === true;
         }
@@ -293,7 +299,7 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick, adminBranding, l
                                     {mensagensParaResponder > 9 ? '9+' : mensagensParaResponder}
                                 </span>
                             );
-                        } else if (item.caminho === '/admin/suporte' && mensagensParaResponder > 0 && isAdmin) {
+                        } else if (item.caminho === '/admin/suporte' && mensagensParaResponder > 0 && (isAdmin || userProfile?.permissoes?.gestao_suporte)) {
                             notificationBadge = (
                                 <span className="ml-auto h-5 w-5 rounded-full bg-red-500 flex items-center justify-center text-white text-xs font-bold">
                                     {mensagensParaResponder > 9 ? '9+' : mensagensParaResponder}
