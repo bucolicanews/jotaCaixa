@@ -160,83 +160,68 @@ const ContratoAcoesDialog: React.FC<ContratoAcoesDialogProps> = ({ contrato, ope
     
     const isHtml = contrato.valores_tags_preenchidos?.tipo_conteudo === 'html';
     let printHtml = contrato.conteudo_renderizado;
+    const isAssinado = contrato.status === 'ativo' || contrato.status === 'concluido';
+    
+    // Dados do Cliente
+    const clienteNome = contrato.assinatura_nome || contrato.valores_tags_preenchidos?.['{{CLIENTE_NOME}}'] || 'Cliente Contratado';
+    const clienteDocumento = contrato.valores_tags_preenchidos?.['{{CLIENTE_DOCUMENTO}}'] || contrato.valores_tags_preenchidos?.['{{CLIENTE_CPF}}'] || contrato.valores_tags_preenchidos?.['{{CLIENTE_CNPJ}}'] || 'Documento Não Informado';
+    const dataAssinatura = isAssinado ? format(new Date(contrato.updated_at), 'dd/MM/yyyy HH:mm') : 'Pendente';
     
     // --- Lógica de Injeção de Assinaturas ---
-    const assinaturasHtml = `
-        <div style="margin-top: 50px; padding-top: 20px; border-top: 1px solid #ccc; page-break-before: avoid;">
-            <h3 style="font-size: 16px; font-weight: bold; margin-bottom: 20px;">Assinaturas</h3>
-            <div style="display: flex; justify-content: space-around; text-align: center;">
-                <div style="width: 45%;">
-                    ${contrato.assinatura_proprietario_url ? `<img src="${contrato.assinatura_proprietario_url}" style="max-height: 50px; margin-bottom: 5px;" />` : '_________________________'}
-                    <div style="border-top: 1px solid #000; padding-top: 5px; font-size: 12px;">
-                        ${contrato.assinatura_proprietario_nome || 'Empresa Contratante'}
-                    </div>
-                    <p style="font-size: 10px; margin-top: 5px;">Contratante (Empresa)</p>
-                </div>
-                <div style="width: 45%;">
-                    ${contrato.assinatura_selfie_url ? `<img src="${contrato.assinatura_selfie_url}" style="max-height: 50px; margin-bottom: 5px;" />` : '_________________________'}
-                    <div style="border-top: 1px solid #000; padding-top: 5px; font-size: 12px;">
-                        ${contrato.assinatura_nome || 'Cliente Contratado'}
-                    </div>
-                    <p style="font-size: 10px; margin-top: 5px;">Contratado (Cliente)</p>
-                </div>
+    
+    // Bloco de Assinatura do Cliente (Detalhado)
+    const clienteSignatureBlock = isAssinado ? `
+        <div style="text-align: center; margin-top: 20px; font-size: 10pt;">
+            ${contrato.assinatura_selfie_url ? `<img src="${contrato.assinatura_selfie_url}" style="max-height: 50px; margin-bottom: 5px;" />` : '_________________________'}
+            <div style="border-top: 1px solid #000; padding-top: 5px; font-size: 12px; font-weight: bold;">
+                ${clienteNome}
             </div>
-            <p style="font-size: 10px; text-align: center; margin-top: 20px;">
-                Documento assinado eletronicamente em ${isAssinado ? format(new Date(contrato.updated_at), 'dd/MM/yyyy HH:mm') : 'Pendente'}.
-            </p>
+            <p style="font-size: 10px; margin: 2px 0;">CPF/CNPJ: ${clienteDocumento}</p>
+            <p style="font-size: 10px; margin: 2px 0;">Data Assinatura: ${dataAssinatura}</p>
+            <p style="font-size: 10px; margin-top: 5px;">Contratado (Cliente)</p>
+        </div>
+    ` : `
+        <div style="text-align: center; margin-top: 20px; font-size: 10pt;">
+            <div style="border-top: 1px solid #000; padding-top: 5px; font-size: 12px; font-weight: bold;">
+                ${clienteNome}
+            </div>
+            <p style="font-size: 10px; margin-top: 5px;">Pendente de Assinatura</p>
         </div>
     `;
     
-    // 1. Substituir as tags de assinatura no conteúdo renderizado
-    let finalContent = printHtml;
-    
-    const empresaSignature = `
-        <div style="text-align: center; margin-top: 20px;">
+    // Bloco de Assinatura da Empresa (Contratante)
+    const empresaSignatureBlock = `
+        <div style="text-align: center; margin-top: 20px; font-size: 10pt;">
             ${contrato.assinatura_proprietario_url ? `<img src="${contrato.assinatura_proprietario_url}" style="max-height: 50px; margin-bottom: 5px;" />` : '_________________________'}
-            <div style="border-top: 1px solid #000; padding-top: 5px; font-size: 12px;">
+            <div style="border-top: 1px solid #000; padding-top: 5px; font-size: 12px; font-weight: bold;">
                 ${contrato.assinatura_proprietario_nome || 'Empresa Contratante'}
             </div>
             <p style="font-size: 10px; margin-top: 5px;">Contratante (Empresa)</p>
         </div>
     `;
     
-    let clienteSignature = `
-        <div style="text-align: center; margin-top: 20px;">
-            ${contrato.assinatura_selfie_url ? `<img src="${contrato.assinatura_selfie_url}" style="max-height: 50px; margin-bottom: 5px;" />` : '_________________________'}
-            <div style="border-top: 1px solid #000; padding-top: 5px; font-size: 12px;">
-                ${contrato.assinatura_nome || 'Cliente Contratado'}
-            </div>
-            <p style="font-size: 10px; margin-top: 5px;">Contratado (Cliente)</p>
-        </div>
-    `;
-    
-    // Se não estiver assinado, usa placeholders
-    if (!isAssinado) {
-        clienteSignature = `
-            <div style="text-align: center; margin-top: 20px;">
-                <div style="border-top: 1px solid #000; padding-top: 5px; font-size: 12px;">
-                    Cliente Contratado
-                </div>
-                <p style="font-size: 10px; margin-top: 5px;">Pendente de Assinatura</p>
-            </div>
-        `;
-    }
-    
     // Substituição das tags de assinatura
-    finalContent = finalContent.replace(/\{\{ASSINATURA_EMPRESA\}\}/g, empresaSignature);
-    finalContent = finalContent.replace(/\{\{ASSINATURA_CLIENTE\}\}/g, clienteSignature);
+    finalContent = finalContent.replace(/\{\{ASSINATURA_EMPRESA\}\}/g, empresaSignatureBlock);
+    finalContent = finalContent.replace(/\{\{ASSINATURA_CLIENTE\}\}/g, clienteSignatureBlock);
     
     // 2. Se for HTML, injeta a seção de rodapé (data de assinatura)
     if (isHtml) {
+        // Adiciona um rodapé de validação eletrônica
+        const validationRodape = `
+            <div style="margin-top: 50px; padding-top: 20px; border-top: 1px solid #ccc; page-break-before: avoid; text-align: center; font-size: 10px;">
+                <p>Documento gerado e assinado eletronicamente. Validade jurídica conforme MP 2.200-2/2001.</p>
+            </div>
+        `;
         const bodyEndIndex = finalContent.toLowerCase().lastIndexOf('</body>');
         if (bodyEndIndex !== -1) {
-            finalContent = finalContent.substring(0, bodyEndIndex) + assinaturasHtml + finalContent.substring(bodyEndIndex);
+            finalContent = finalContent.substring(0, bodyEndIndex) + validationRodape + finalContent.substring(bodyEndIndex);
         } else {
-            finalContent += assinaturasHtml;
+            finalContent += validationRodape;
         }
     } else {
-        // Se for texto simples, adiciona o rodapé de assinatura
-        finalContent += `\n\n--- Assinaturas ---\nContratante: ${contrato.assinatura_proprietario_nome || 'Empresa'}\nContratado: ${contrato.assinatura_nome || 'Cliente'}\nData: ${isAssinado ? format(new Date(contrato.updated_at), 'dd/MM/yyyy HH:mm') : 'Pendente'}`;
+        // Se for texto simples, adiciona o rodapé de assinatura em formato de texto
+        finalContent = `<pre style="white-space: pre-wrap; font-family: inherit; margin: 0;">${finalContent}</pre>`;
+        finalContent += `\n\n--- Assinaturas ---\nContratante: ${contrato.assinatura_proprietario_nome || 'Empresa'}\nContratado: ${clienteNome}\nDocumento: ${clienteDocumento}\nData: ${dataAssinatura}\n\n(Documento assinado eletronicamente)`;
     }
     // --- Fim Lógica de Injeção de Assinaturas ---
     

@@ -114,7 +114,7 @@ const PreencherContrato: React.FC = () => {
   const [tipoConteudo, setTipoConteudo] = useState<TipoConteudo>('html'); 
   // ------------------------------------------------------
 
-  // FIX TS2304: Declarando isEditing no escopo do componente
+  // FIX 2304: Declarando isEditing no escopo do componente
   const isEditing = !!contratoId;
 
   
@@ -235,6 +235,7 @@ const PreencherContrato: React.FC = () => {
     }
     setModelo(modeloData as ContratoModelo);
     setTituloDocumento(modeloData.titulo);
+    setTipoConteudo(modeloData.tipo_conteudo as TipoConteudo); // Define o tipo de conteúdo do modelo
     
     // 2. Configurar Empresa Logada (Contratante)
     setEmpresaLogada(empresaLogadaMemo);
@@ -262,7 +263,7 @@ const PreencherContrato: React.FC = () => {
     if (contratoId) {
         const { data: contratoData, error: contratoLoadError } = await supabase
             .from('contratos_gerados')
-            .select('*')
+            .select('*, valores_tags_preenchidos')
             .eq('id', contratoId)
             .single();
             
@@ -279,6 +280,8 @@ const PreencherContrato: React.FC = () => {
         setClienteSelecionadoId(contrato.cliente_id);
         setValorTotal(contrato.valor_total); // Define o valor total
         setValoresTags(contrato.valores_tags_preenchidos || {});
+        setTituloDocumento(contrato.valores_tags_preenchidos?.titulo || modeloData.titulo);
+        setTipoConteudo(contrato.valores_tags_preenchidos?.tipo_conteudo || modeloData.tipo_conteudo as TipoConteudo);
         
         const numParcelas = contrato.numero_parcelas;
         const valorTotalContrato = contrato.valor_total;
@@ -352,7 +355,6 @@ const PreencherContrato: React.FC = () => {
             }
         }
         
-        setTipoConteudo(contrato.valores_tags_preenchidos?.tipo_conteudo || 'html');
     } else {
         // Novo Contrato
         const isHtmlContent = modeloData?.conteudo_template?.trim().startsWith('<') ?? true;
@@ -363,7 +365,7 @@ const PreencherContrato: React.FC = () => {
     setProprietarioContratoId(initialProprietarioContratoId);
     
     setCarregandoDados(false);
-  }, [modeloId, ownerIdLogado, navigate, role, perfil, usuario, isAdmin, isClient, contratoId, empresaLogadaMemo]);
+  }, [modeloId, ownerIdLogado, navigate, role, perfil, usuario, isAdmin, isClient, contratoId, empresaLogadaMemo, fetchDependentData]);
   
   // Efeito para monitorar a mudança do proprietário do contrato (proprietarioContratoId)
   useEffect(() => {
@@ -482,6 +484,7 @@ const PreencherContrato: React.FC = () => {
   
   const handlePreview = () => {
       if (!modelo) return;
+      
       const conteudoRenderizado = renderizarConteudo(modelo.conteudo_template, valoresTags);
       setConteudoPreview(conteudoRenderizado);
       setPreviewTitle(tituloDocumento || modelo.titulo);
@@ -767,6 +770,9 @@ const PreencherContrato: React.FC = () => {
       
       // Exclui tags de cliente (CLIENTE_*) que foram preenchidas
       if (tag.nome_tag.startsWith('{{CLIENTE_') && valoresTags[tag.nome_tag]) return false;
+      
+      // Exclui tags de assinatura (que são preenchidas na impressão)
+      if (tag.nome_tag.startsWith('{{ASSINATURA_')) return false;
       
       // Inclui tags que não têm valor preenchido
       return !valoresTags[tag.nome_tag];

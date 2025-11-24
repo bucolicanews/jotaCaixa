@@ -9,7 +9,7 @@ interface ContratoPreviewDialogProps {
   onOpenChange: (open: boolean) => void;
   conteudoHtml: string;
   titulo: string;
-  isHtml: boolean; // Novo prop
+  isHtml: boolean;
 }
 
 const ContratoPreviewDialog: React.FC<ContratoPreviewDialogProps> = ({ open, onOpenChange, conteudoHtml, titulo, isHtml }) => {
