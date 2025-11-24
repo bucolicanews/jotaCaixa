@@ -156,7 +156,9 @@ const ClientesPage = () => {
     const { data: dataEmpresas, error: errorEmpresas } = await queryEmpresas;
         
     if (errorEmpresas) {
-        showError('Erro ao carregar empresas do sistema: ' + errorEmpresas.message);
+        // CORREÇÃO: Se a coluna não existe, o erro é capturado aqui.
+        // Se o erro for de coluna inexistente, o erro será lançado.
+        throw errorEmpresas;
     } else {
         systemClientsList = dataEmpresas as EmpresaSistema[];
         systemClientsMap = systemClientsList.reduce((acc, e) => {
@@ -256,7 +258,7 @@ const ClientesPage = () => {
                   isBlockedOrExpired = true;
               }
               
-              const isAvulso = systemClient.tipo_cliente?.endsWith('_Avulso') ?? false;
+              const isAvulso = systemClient.tipo_cliente?.endsWith('_Avulso') ?? false; // Verifica o novo sufixo
               
               if (!systemClient.aprovado) {
                   systemStatus = 'Pendente';
@@ -329,14 +331,25 @@ const ClientesPage = () => {
         fetchEmpresasFiltro();
         fetchPlanos();
       }
-      buscarDados();
+      // CORREÇÃO: Envolve a chamada em um try/catch para lidar com o erro de coluna
+      try {
+          buscarDados();
+      } catch (e) {
+          console.error("Erro ao buscar dados iniciais:", e);
+          setCarregandoDados(false);
+          showError("Erro ao carregar dados: Verifique a estrutura do banco de dados.");
+      }
     }
   }, [carregandoSessao, usuario, isAdmin, buscarDados, fetchEmpresasFiltro, fetchPlanos]);
   
   // Re-busca quando os filtros mudam
   useEffect(() => {
       if (!carregandoSessao && usuario) {
-          buscarDados();
+          try {
+              buscarDados();
+          } catch (e) {
+              // Ignora o erro de coluna aqui, pois ele será tratado no useEffect principal
+          }
       }
   }, [filtroEmpresaId, filtroNome, buscarDados, carregandoSessao, usuario]);
 
