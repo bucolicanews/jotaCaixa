@@ -16,8 +16,9 @@ import { Separator } from '../ui/separator';
 import { Historico } from '@/types/historico';
 import { PlanoContas } from '@/types/plano-contas';
 import { useContabilConfig } from '@/hooks/use-contabil-config';
-import { Label } from '@/components/ui/label'; // IMPORT CORRIGIDO
-import { DialogDescription } from '@/components/ui/dialog'; // IMPORT CORRIGIDO
+import { Label } from '@/components/ui/label';
+import { DialogDescription } from '@/components/ui/dialog';
+import { formatCurrency } from '@/utils/formatters'; // IMPORT CORRIGIDO
 
 const formSchema = z.object({
   tipo_movimentacao: z.enum(['Entrada', 'Saida'], { required_error: 'Selecione o tipo de movimentação.' }),
