@@ -3,7 +3,7 @@ import { useForm, FormProvider, Control } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from '@/components/ui/button';
-import { Loader2, Tag, FileSignature } from 'lucide-react';
+import { Loader2, Tag, FileSignature, Building2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { AnyProfile, ClienteProfile, UsuarioProfile, UserRole, AdminUsuarioProfile } from '@/types/usuario';
@@ -680,7 +680,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
       );
   }
 
-  // --- RENDERIZAÇÃO PARA USUÁRIO (FUNCIONÁRIO) ---
+  // --- RENDERIZAÇÃO PARA EDIÇÃO DE USUÁRIO (FUNCIONÁRIO) ---
   return (
     <FormProvider {...formMethods}>
       <Form {...form}>
