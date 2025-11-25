@@ -342,6 +342,7 @@ export function useConciliacao(): ConciliacaoHook {
         (data || []).forEach(e => {
             const formattedDate = formatDDMMYYYYToISO(e.data);
             const normalizedDesc = normalizeString(e.descricao);
+            // CORREÇÃO CRÍTICA: Garante que o valor seja formatado com 2 casas decimais para comparação
             const uniqueKey = `${formattedDate}|${normalizedDesc}|${Number(e.valor).toFixed(2)}|${e.tipo}`;
             existingKeys.add(uniqueKey);
         });
