@@ -51,7 +51,8 @@ import Suporte from "./pages/Suporte";
 import AdminSuporte from "./pages/AdminSuporte";
 import ContasPatrimoniais from "./pages/ContasPatrimoniais";
 import Extratos from "./pages/Extratos";
-import Exportar from "./pages/Exportar"; // IMPORT ADICIONADO
+import Exportar from "./pages/Exportar";
+import LancamentosNaoMapeados from "./pages/LancamentosNaoMapeados"; // IMPORT ADICIONADO
 
 const queryClient = new QueryClient();
 
