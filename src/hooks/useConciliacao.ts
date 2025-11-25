@@ -307,8 +307,20 @@ export function useConciliacao(): ConciliacaoHook {
         return data && data.length > 0;
     }, []);
     
+    // NOVO TIPO AUXILIAR
+    interface SaldoInicialMap {
+        [contaContabilId: string]: number;
+    }
+
     // NOVO: Função para buscar extratos existentes na nova tabela
     const fetchExistingExtratos = useCallback(async (contaId: string, empresaId: string) => {
+        // --- INJEÇÃO DE DUPLICIDADE PARA TESTE (SOLICITADO PELO USUÁRIO) ---
+        // Transação: 25/11/2025,Transf Pix recebida,CRÉDITO,Suely Pojo Chagas,364
+        // Key: 2025-11-25|transfpixrecebida|364.00|Entrada
+        const hardcodedDuplicateKey = '2025-11-25|transfpixrecebida|364.00|Entrada';
+        const existingKeys = new Set<string>([hardcodedDuplicateKey]);
+        // --- FIM INJEÇÃO DE DUPLICIDADE PARA TESTE ---
+        
         const { data, error } = await supabase
             .from('extratos')
             .select('data, descricao, valor, tipo')
@@ -317,16 +329,19 @@ export function useConciliacao(): ConciliacaoHook {
             
         if (error) {
             console.error('Erro ao buscar extratos existentes:', error);
-            return new Set<string>();
+            // Retorna apenas a chave hardcoded em caso de erro
+            return existingKeys;
         }
         
         // Cria um Set de chaves únicas (Data YYYY-MM-DD | Descrição Normalizada | Valor (com sinal, 2 casas) | Tipo)
-        return new Set(data.map(e => {
+        (data || []).forEach(e => {
             const formattedDate = formatDDMMYYYYToISO(e.data);
             const normalizedDesc = normalizeString(e.descricao);
-            // Usamos o valor original (com sinal) para a verificação de unicidade
-            return `${formattedDate}|${normalizedDesc}|${Number(e.valor).toFixed(2)}|${e.tipo}`;
-        }));
+            const uniqueKey = `${formattedDate}|${normalizedDesc}|${Number(e.valor).toFixed(2)}|${e.tipo}`;
+            existingKeys.add(uniqueKey);
+        });
+        
+        return existingKeys;
     }, []);
 
 
