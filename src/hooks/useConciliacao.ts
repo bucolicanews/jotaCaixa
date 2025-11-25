@@ -49,17 +49,7 @@ interface ConciliacaoHook {
 }
 
 // Função auxiliar para calcular um hash simples do conteúdo do CSV (ignorando a primeira linha)
-const calculateContentHash = (csvContent: string): string => {
-    const lines = csvContent.split('\n').map(line => line.trim()).filter(line => line.length > 0);
-    if (lines.length <= 1) return ''; // Ignora cabeçalho
-    
-    // Concatena todas as linhas de dados (a partir da segunda linha)
-    const dataContent = lines.slice(1).join('|');
-    
-    // Em um ambiente real, usaríamos uma biblioteca de hash (ex: crypto.subtle.digest).
-    // Aqui, usamos uma concatenação simples como identificador de conteúdo.
-    return dataContent.substring(0, 255); // Limita o tamanho do hash para o campo TEXT
-};
+// REMOVIDA: calculateContentHash não é mais usada para duplicidade de arquivo.
 
 
 export function useConciliacao(): ConciliacaoHook {
@@ -291,21 +281,7 @@ export function useConciliacao(): ConciliacaoHook {
 
     // --- Lógica de Processamento de Arquivo ---
 
-    const checkFileDuplicity = useCallback(async (contentHash: string, empresaId: string): Promise<boolean> => {
-        const { data, error } = await supabase
-            .from('conciliacoes')
-            .select('id')
-            .eq('empresa_id', empresaId)
-            .eq('extrato_hash', contentHash) // Verifica pelo hash do conteúdo
-            .limit(1);
-            
-        if (error) {
-            console.error('Erro ao verificar duplicidade de conteúdo:', error);
-            return false; 
-        }
-        
-        return data && data.length > 0;
-    }, []);
+    // REMOVIDA: checkFileDuplicity (verificação de hash do arquivo inteiro)
     
     // NOVO: Função para buscar extratos existentes na nova tabela
     const fetchExistingExtratos = useCallback(async (contaId: string, empresaId: string) => {
@@ -339,28 +315,13 @@ export function useConciliacao(): ConciliacaoHook {
         
         setLoading(true);
         
-        // 1. Ler o conteúdo do arquivo para calcular o hash
+        // 1. Ler o conteúdo do arquivo (apenas para fins de log/hash futuro)
         const fileContent = await file.text();
-        const contentHash = calculateContentHash(fileContent);
         
-        if (!contentHash) {
-            showError('O arquivo está vazio ou não contém dados válidos.');
-            setLoading(false);
-            return;
-        }
-        
-        // 2. Verificar Duplicidade de Conteúdo (do arquivo completo)
-        const isDuplicatedContent = await checkFileDuplicity(contentHash, proprietarioDaConfiguracao);
-        if (isDuplicatedContent) {
-            showError(`O conteúdo deste extrato já foi importado anteriormente.`);
-            setLoading(false);
-            return;
-        }
-
-        // 3. Buscar extratos existentes na nova tabela 'extratos'
+        // 2. Buscar extratos existentes na nova tabela 'extratos'
         const existingExtratosSet = await fetchExistingExtratos(contaSelecionadaId, proprietarioDaConfiguracao);
         
-        // 4. Processar o CSV
+        // 3. Processar o CSV
         Papa.parse(file, {
             header: true,
             skipEmptyLines: true,
@@ -432,7 +393,7 @@ export function useConciliacao(): ConciliacaoHook {
             }
         });
         setLoading(false);
-    }, [file, configSelecionada, contaSelecionadaId, proprietarioDaConfiguracao, applyRegras, checkFileDuplicity, fetchExistingExtratos]);
+    }, [file, configSelecionada, contaSelecionadaId, proprietarioDaConfiguracao, applyRegras, fetchExistingExtratos]);
 
     // --- Lógica de Salvamento ---
 
@@ -565,7 +526,8 @@ export function useConciliacao(): ConciliacaoHook {
             
             // 4. Salvar o registro de conciliação (Histórico)
             const fileContent = await file.text();
-            const contentHash = calculateContentHash(fileContent);
+            // O hash do conteúdo é calculado aqui, mas não é mais usado para duplicidade de arquivo
+            const contentHash = file.name; // Usando o nome do arquivo como hash para fins de histórico
             
             const historicoPayload = {
                 empresa_id: proprietarioDaConfiguracao,
@@ -573,7 +535,7 @@ export function useConciliacao(): ConciliacaoHook {
                 id_saldo_contas: contaSelecionadaId,
                 nome_arquivo: file.name,
                 extrato_json: transacoesParaSalvar,
-                extrato_hash: contentHash, // Salva o hash do conteúdo
+                extrato_hash: contentHash, // Salva o nome do arquivo como hash
             };
             
             const { error: historicoError } = await supabase
