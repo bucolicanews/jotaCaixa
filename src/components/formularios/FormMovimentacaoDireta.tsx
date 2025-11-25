@@ -81,7 +81,7 @@ const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveC
                 .select('id, valor')
                 .eq('proprietario_id', ownerId)
                 .eq('origem', 'movimentacao_direta')
-                .eq('descricao', lancamentoInicial.descricao)
+                .eq('descricao', `DRE: ${lancamentoInicial.descricao}`) // CORREÇÃO: Busca pela descrição padronizada
                 .eq('tipo', oppositeType)
                 .is('conta_bancaria_id', null)
                 .neq('id', lancamentoInicial.id) // Ensure we don't select the primary launch itself
@@ -244,7 +244,8 @@ const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveC
     const lancamentoResultadoPayload = {
         proprietario_id: ownerId,
         data_movimentacao: dataMovimentacao,
-        descricao: `${values.tipo_movimentacao === 'Entrada' ? 'Reforço de Caixa' : 'Sangria de Caixa'}: ${contaResultado.Descricao}`,
+        // CORREÇÃO: Padroniza a descrição para facilitar a busca de estorno
+        descricao: `DRE: ${values.tipo_movimentacao} Direta: ${contaResultado.Descricao}`, 
         valor: valor,
         tipo: tipoResultado, // Tipo ajustado para a conta de Resultado
         conta_bancaria_id: null, // Não é conta bancária
@@ -323,8 +324,7 @@ const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveC
             <FormField control={form.control} name="valor" render={({ field }) => (
                 <FormItem>
                     <FormLabel>2. Valor (R$)</FormLabel>
-                    <FormControl><Input type="number" step="0.01" placeholder="0.00" {...field} /></FormControl>
-                    <FormMessage />
+                    <FormControl><Input type="number" step="0.01" placeholder="0.00" {...field} /></FormControl><FormMessage />
                 </FormItem>
             )} />
             

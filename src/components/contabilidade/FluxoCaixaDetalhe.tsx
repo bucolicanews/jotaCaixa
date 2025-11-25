@@ -257,6 +257,9 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
             // 2.1. Buscar o lançamento de partida dobrada (DRE)
             const oppositeType = lancamento.tipo === 'Entrada' ? 'Saida' : 'Entrada';
             
+            // CORREÇÃO CRÍTICA: Busca o lançamento DRE usando a descrição padronizada
+            const expectedDreDescription = `DRE: ${lancamento.descricao}`;
+            
             const { data: dreLaunch, error: fetchDreError } = await supabase
                 .from('lancamentos')
                 .select('id, tipo, conta_contabil_id, descricao')
@@ -266,6 +269,7 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
                 .eq('tipo', oppositeType)
                 .is('conta_bancaria_id', null)
                 .eq('origem', 'movimentacao_direta')
+                .eq('descricao', expectedDreDescription) // NOVO FILTRO
                 .limit(1)
                 .single();
                 
