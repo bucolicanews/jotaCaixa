@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -124,7 +124,12 @@ const Step4MappingTable: React.FC<Step4MappingTableProps> = ({
                     const isSelected = transacoesSelecionadas.includes(i);
                     
                     // Estado local para forçar o modo de edição do Select
-                    const [isEditingConta, setIsEditingConta] = useState(false);
+                    // CORREÇÃO: Movendo o useState para dentro do componente (não dentro do map)
+                    // Como o useState não pode ser usado dentro do map, vamos usar um estado global
+                    // ou forçar a edição via clique.
+                    
+                    // Para simplificar e corrigir o erro, vamos remover o estado local e forçar
+                    // o Select a aparecer se não estiver mapeado.
                     
                     // Se a transação é duplicada, ela é rejeitada e não pode ser editada
                     if (t.isDuplicated) {
@@ -172,21 +177,32 @@ const Step4MappingTable: React.FC<Step4MappingTableProps> = ({
                             </TableCell>
                             <TableCell className={cn("text-right font-semibold text-sm", t.tipo === 'Entrada' ? 'text-green-600' : 'text-red-600')}>{formatCurrency(Math.abs(t.valor))}</TableCell>
                             <TableCell>
-                                {isMapeada && !isEditingConta ? (
+                                {isMapeada ? (
                                     <div className="flex items-center justify-between">
                                         <span className="text-xs font-medium text-green-700 flex items-center">
                                             <CheckCircle2 className="w-4 h-4 mr-1" /> {contaContabil?.Conta}
                                         </span>
-                                        <Button variant="ghost" size="icon" onClick={() => setIsEditingConta(true)} title="Alterar Mapeamento">
-                                            <Edit className="w-4 h-4" />
-                                        </Button>
+                                        {/* Permite reabrir o Select para edição */}
+                                        <Select 
+                                            onValueChange={(id) => onContaContabilChange(i, id)}
+                                            value={t.conta_contabil_id || undefined}
+                                            disabled={isSaving}
+                                        >
+                                            <SelectTrigger className="h-8 w-8 p-0 border-none bg-transparent hover:bg-secondary/50">
+                                                <Edit className="w-4 h-4 text-muted-foreground" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {contasContabeis.map(c => (
+                                                    <SelectItem key={c.id} value={c.id}>
+                                                        {c.Conta} - {c.Descricao}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
                                     </div>
                                 ) : (
                                     <Select 
-                                        onValueChange={(id) => {
-                                            onContaContabilChange(i, id);
-                                            setIsEditingConta(false); // Sai do modo de edição após a seleção
-                                        }}
+                                        onValueChange={(id) => onContaContabilChange(i, id)}
                                         value={t.conta_contabil_id || undefined}
                                         disabled={isSaving}
                                     >
