@@ -58,6 +58,8 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
   const [editDialog, setEditDialog] = useState<{ open: boolean, lancamento: Lancamento | null }>({ open: false, lancamento: null });
   const [isDeleting, setIsDeleting] = useState(false);
 
+  const ownerId = empresaId;
+
   const fetchLancamentos = useCallback(async () => {
     setLoadingLancamentos(true);
     
@@ -124,7 +126,7 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
           const termo = filtroTextoDebounced.toLowerCase();
           filteredData = filteredData.filter(l => 
               l.id.toLowerCase().includes(termo) ||
-              l.conta_bancaria_id.toLowerCase().includes(termo)
+              l.conta_bancaria_id?.toLowerCase().includes(termo)
           );
       }
       
@@ -198,20 +200,21 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
   };
   
   const handleDelete = async (lancamento: Lancamento) => {
-    if (!window.confirm(`Tem certeza que deseja excluir o lançamento de ${lancamento.tipo} no valor de ${formatCurrency(lancamento.valor)}?`)) return;
+    if (!window.confirm(`Tem certeza que deseja excluir o lançamento de ${lancamento.tipo} no valor de ${formatCurrency(lancamento.valor)}? Esta ação irá registrar um ESTORNO contábil (se for Movimentação Direta).`)) return;
     
     setIsDeleting(true);
     
     try {
-        // O valor na tabela `lancamentos` é sempre positivo
         const valorAbsoluto = lancamento.valor; 
+        const dataEstornoISO = new Date().toISOString();
         
-        // 1. Se a origem for 'conciliacao_extrato', precisamos deletar o registro na tabela 'extratos' também.
+        // 1. Se a origem for 'conciliacao_extrato', deletamos o trio (Extrato, Lancamento Ativo, Lancamento DRE)
         if (lancamento.origem === 'conciliacao_extrato') {
-            // Busca o registro de extrato correspondente (usando a combinação de campos)
+            
+            // 1.1. Deletar o registro na tabela 'extratos'
             const valorComSinal = lancamento.tipo === 'Entrada' ? valorAbsoluto : -valorAbsoluto;
             
-            const { data: extratoData, error: extratoFetchError } = await supabase
+            const { data: extratoData } = await supabase
                 .from('extratos')
                 .select('id')
                 .eq('empresa_id', empresaId)
@@ -221,51 +224,103 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
                 .limit(1)
                 .single();
                 
-            if (extratoFetchError && extratoFetchError.code !== 'PGRST116') {
-                console.warn('Aviso: Falha ao buscar extrato correspondente:', extratoFetchError);
+            if (extratoData) {
+                await supabase.from('extratos').delete().eq('id', extratoData.id);
             }
             
-            if (extratoData) {
-                const { error: deleteExtratoError } = await supabase
-                    .from('extratos')
-                    .delete()
-                    .eq('id', extratoData.id);
+            // 1.2. Deletar o lançamento DRE pareado (que tem conta_contabil_id e conta_bancaria_id é null)
+            if (lancamento.conta_contabil_id) {
+                const oppositeType = lancamento.tipo === 'Entrada' ? 'Saida' : 'Entrada';
                 
-                if (deleteExtratoError) console.warn('Aviso: Falha ao deletar extrato correspondente:', deleteExtratoError);
+                await supabase
+                    .from('lancamentos')
+                    .delete()
+                    .eq('proprietario_id', empresaId)
+                    .eq('conta_contabil_id', lancamento.conta_contabil_id)
+                    .eq('valor', valorAbsoluto)
+                    .eq('tipo', oppositeType)
+                    .is('conta_bancaria_id', null)
+                    .eq('origem', 'conciliacao_extrato');
             }
+            
+            // 1.3. Deletar o lançamento principal (Caixa/Banco)
+            await supabase.from('lancamentos').delete().eq('id', lancamento.id);
+            
+            showSuccess('Lançamento conciliado e registros associados excluídos com sucesso.');
+            fetchLancamentos();
+            return;
         }
         
-        // 2. Se a origem for 'movimentacao_direta', precisamos deletar o lançamento de partida dobrada (DRE)
+        // 2. Se a origem for 'movimentacao_direta', criamos lançamentos de ESTORNO
         if (lancamento.origem === 'movimentacao_direta' && lancamento.conta_contabil_id) {
+            
+            // 2.1. Buscar o lançamento de partida dobrada (DRE)
             const oppositeType = lancamento.tipo === 'Entrada' ? 'Saida' : 'Entrada';
             
-            // Deleta o lançamento de Resultado/DRE (que tem conta_contabil_id e conta_bancaria_id é null)
-            const { error: deleteDreError } = await supabase
+            const { data: dreLaunch, error: fetchDreError } = await supabase
                 .from('lancamentos')
-                .delete()
+                .select('id, tipo, conta_contabil_id, descricao')
                 .eq('proprietario_id', empresaId)
                 .eq('conta_contabil_id', lancamento.conta_contabil_id)
-                .eq('descricao', lancamento.descricao)
-                .eq('valor', lancamento.valor)
+                .eq('valor', valorAbsoluto)
                 .eq('tipo', oppositeType)
-                .is('conta_bancaria_id', null);
+                .is('conta_bancaria_id', null)
+                .eq('origem', 'movimentacao_direta')
+                .limit(1)
+                .single();
                 
-            if (deleteDreError) console.warn('Aviso: Falha ao deletar lançamento DRE correspondente:', deleteDreError);
+            if (fetchDreError || !dreLaunch) {
+                console.error('Falha ao encontrar lançamento DRE pareado para estorno:', fetchDreError);
+                throw new Error('Não foi possível encontrar o lançamento DRE pareado para estorno.');
+            }
+            
+            // 2.2. Criar Lançamento de Estorno (Caixa/Banco) - Reverte o efeito no saldo
+            const estornoAtivoPayload = {
+                proprietario_id: empresaId,
+                data_movimentacao: dataEstornoISO,
+                descricao: `ESTORNO: ${lancamento.descricao}`,
+                valor: valorAbsoluto,
+                tipo: oppositeType, // Reverte o tipo original (Entrada -> Saida, Saida -> Entrada)
+                conta_bancaria_id: lancamento.conta_bancaria_id,
+                conta_contabil_id: lancamento.conta_contabil_id, // DRE account ID
+                origem: 'estorno_movimentacao_direta',
+                historico_id: lancamento.historico_id,
+            };
+            
+            // 2.3. Criar Lançamento de Estorno (DRE/Resultado) - Reverte o efeito na DRE
+            const estornoResultadoPayload = {
+                proprietario_id: empresaId,
+                data_movimentacao: dataEstornoISO,
+                descricao: `ESTORNO: ${dreLaunch.descricao || lancamento.descricao}`,
+                valor: valorAbsoluto,
+                tipo: dreLaunch.tipo === 'Entrada' ? 'Saida' : 'Entrada', // Reverte o tipo do DRE launch
+                conta_bancaria_id: null,
+                conta_contabil_id: dreLaunch.conta_contabil_id,
+                origem: 'estorno_movimentacao_direta',
+                historico_id: lancamento.historico_id,
+            };
+            
+            // 2.4. Inserir os dois lançamentos de estorno
+            await Promise.all([
+                supabase.from('lancamentos').insert(estornoAtivoPayload),
+                supabase.from('lancamentos').insert(estornoResultadoPayload),
+            ]);
+            
+            // 2.5. Deletar os lançamentos originais (L e D)
+            await supabase.from('lancamentos').delete().in('id', [lancamento.id, dreLaunch.id]);
+            
+            showSuccess('Estorno de movimentação direta registrado com sucesso! O saldo foi revertido.');
+            fetchLancamentos();
+            
+        } else {
+            // Fallback: Se a origem for desconhecida ou faltar conta contábil, apenas deleta o principal
+            await supabase.from('lancamentos').delete().eq('id', lancamento.id);
+            showSuccess('Lançamento excluído com sucesso! O saldo será reajustado.');
+            fetchLancamentos();
         }
         
-        // 3. Deletar o lançamento principal
-        const { error: deleteLaunchError } = await supabase
-            .from('lancamentos')
-            .delete()
-            .eq('id', lancamento.id);
-            
-        if (deleteLaunchError) throw deleteLaunchError;
-        
-        showSuccess('Lançamento excluído com sucesso! O saldo será reajustado.');
-        fetchLancamentos();
-        
     } catch (error: any) {
-        showError('Falha ao excluir lançamento: ' + error.message);
+        showError('Falha ao estornar/excluir lançamento: ' + error.message);
     } finally {
         setIsDeleting(false);
     }
