@@ -8,7 +8,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { AnyProfile, ClienteProfile, UsuarioProfile, UserRole, AdminUsuarioProfile } from '@/types/usuario';
 import { PERMISSOES_DISPONIVEIS, Permissao } from '@/config/permissoes';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import FormDadosCadastrais from '../usuario-forms/FormDadosCadastrais';
 import { Input } from '../ui/input';
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from '../ui/form';
@@ -26,6 +26,7 @@ import { Checkbox } from '../ui/checkbox';
 import FormIdentificacao from '../cliente-forms/FormIdentificacao';
 import FormContato from '../cliente-forms/FormContato';
 import FormEndereco from '../cliente-forms/FormEndereco';
+
 
 const textOptional = z.string().optional().or(z.literal(''));
 const urlSchema = z.string().url('URL inválida.').optional().or(z.literal(''));
@@ -528,7 +529,6 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
   
   // --- DEFINIÇÃO DO CONTEÚDO PRINCIPAL DO FORMULÁRIO ---
   let formContent;
-  let showTabs = false;
   
   if (isNewClient) {
       // Fluxo simplificado para criação de novo cliente
@@ -557,7 +557,6 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
       );
   } else if (isEditingClientProfile) {
       // Fluxo de edição de Cliente Profile (Empresa)
-      showTabs = true;
       const clientTabs = [
           { value: 'pessoal', label: 'Geral' },
           { value: 'identificacao', label: 'Identificação' },
@@ -623,7 +622,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                                       <FormLabel className="font-normal">{p.label}</FormLabel>
                                   </FormItem>
                               ))} />
-                          ))}
+                          )}
                       </div>
                   </div>
               </TabsContent>
@@ -664,7 +663,6 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
       );
   } else {
       // Fluxo de edição de Usuário (Funcionário)
-      showTabs = true;
       formContent = (
           <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
               <TabsList className="flex flex-wrap justify-start w-full h-auto p-1">
