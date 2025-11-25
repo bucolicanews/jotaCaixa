@@ -10,6 +10,7 @@ import { useOwnerBranding } from '@/hooks/use-owner-branding';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from '@/components/ui/dialog';
 import FormMovimentacaoDireta from '@/components/formularios/FormMovimentacaoDireta';
+import FormMovimentacaoDiretaDialog from '@/components/formularios/FormMovimentacaoDiretaDialog'; // IMPORT ADICIONADO
 
 const FluxoCaixa: React.FC = () => {
   const { usuario, perfil, role, carregando: carregandoSessao } = useSessao();

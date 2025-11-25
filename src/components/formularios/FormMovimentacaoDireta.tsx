@@ -19,6 +19,7 @@ import { Label } from '@/components/ui/label';
 import { DialogDescription } from '@/components/ui/dialog';
 import { formatCurrency } from '@/utils/formatters';
 import { format } from 'date-fns';
+import { useSessao } from '@/hooks/use-sessao'; // IMPORT CORRIGIDO
 
 // Interface for the primary launch (linked to the bank account)
 interface LancamentoPrimario {
