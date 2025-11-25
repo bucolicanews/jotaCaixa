@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, ArrowUpCircle, ArrowDownCircle, Filter, Search, Banknote, Wallet, Landmark, Printer, Edit } from 'lucide-react';
+import { Loader2, ArrowUpCircle, ArrowDownCircle, Filter, Search, Banknote, Wallet, Landmark, Printer, Edit, Trash2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { showError } from '@/utils/toast';
+import { showError, showSuccess } from '@/utils/toast';
 import { formatCurrency, formatarData } from '@/utils/formatters';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
@@ -20,12 +20,14 @@ import ReactDOMServer from 'react-dom/server';
 import FluxoCaixaPrint from './FluxoCaixaPrint';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../ui/dropdown-menu';
 import FormMovimentacaoDiretaDialog, { LancamentoPrimario } from '@/components/formularios/FormMovimentacaoDiretaDialog';
+import FormLancamentoGeralDialog, { LancamentoGeral } from '@/components/formularios/FormLancamentoGeralDialog'; // IMPORTADO
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '../ui/alert-dialog'; // IMPORTADO
 
-// Interface para o lançamento primário (ligado à conta bancária)
-interface Lancamento extends LancamentoPrimario {
+// Interface para o lançamento (baseado na tabela lancamentos)
+interface Lancamento extends LancamentoGeral {
+  // Campos adicionais que vêm do SELECT
   conciliado: boolean;
   origem: string;
-  documento: string | null;
   
   // Relações
   saldo_contas: { nome: string } | null;
@@ -54,6 +56,7 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
   
   // Edição
   const [editDialog, setEditDialog] = useState<{ open: boolean, lancamento: Lancamento | null }>({ open: false, lancamento: null });
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const fetchLancamentos = useCallback(async () => {
     setLoadingLancamentos(true);
@@ -80,10 +83,10 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
         tipo,
         conta_bancaria_id,
         conta_contabil_id,
+        historico_id,
+        documento,
         conciliado,
         origem,
-        documento,
-        historico_id,
         saldo_contas:conta_bancaria_id ( nome )
       `)
       .eq('proprietario_id', empresaId) // ALTERADO: empresa_id -> proprietario_id
@@ -97,7 +100,6 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
     // Filtro de texto: busca por ID, descrição ou documento
     if (filtroTextoDebounced) {
         const termo = `%${filtroTextoDebounced}%`;
-        // CORREÇÃO: Foca apenas em campos de texto (descricao e documento)
         query = query.or(`descricao.ilike.${termo},documento.ilike.${termo}`);
     }
     
@@ -186,12 +188,87 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
   };
   
   const handleOpenEdit = (lancamento: Lancamento) => {
+    // Passa o objeto completo, que agora inclui todos os campos necessários
     setEditDialog({ open: true, lancamento });
   };
 
   const handleEditSaveComplete = () => {
       setEditDialog({ open: false, lancamento: null });
       fetchLancamentos(); // Refetch data
+  };
+  
+  const handleDelete = async (lancamento: Lancamento) => {
+    if (!window.confirm(`Tem certeza que deseja excluir o lançamento de ${lancamento.tipo} no valor de ${formatCurrency(lancamento.valor)}?`)) return;
+    
+    setIsDeleting(true);
+    
+    try {
+        // O valor na tabela `lancamentos` é sempre positivo
+        const valorAbsoluto = lancamento.valor; 
+        
+        // 1. Se a origem for 'conciliacao_extrato', precisamos deletar o registro na tabela 'extratos' também.
+        if (lancamento.origem === 'conciliacao_extrato') {
+            // Busca o registro de extrato correspondente (usando a combinação de campos)
+            const valorComSinal = lancamento.tipo === 'Entrada' ? valorAbsoluto : -valorAbsoluto;
+            
+            const { data: extratoData, error: extratoFetchError } = await supabase
+                .from('extratos')
+                .select('id')
+                .eq('empresa_id', empresaId)
+                .eq('id_saldo_contas', lancamento.conta_bancaria_id)
+                .eq('descricao', lancamento.descricao)
+                .eq('valor', valorComSinal)
+                .limit(1)
+                .single();
+                
+            if (extratoFetchError && extratoFetchError.code !== 'PGRST116') {
+                console.warn('Aviso: Falha ao buscar extrato correspondente:', extratoFetchError);
+            }
+            
+            if (extratoData) {
+                const { error: deleteExtratoError } = await supabase
+                    .from('extratos')
+                    .delete()
+                    .eq('id', extratoData.id);
+                
+                if (deleteExtratoError) console.warn('Aviso: Falha ao deletar extrato correspondente:', deleteExtratoError);
+            }
+        }
+        
+        // 2. Se a origem for 'movimentacao_direta', precisamos deletar o lançamento de partida dobrada (DRE)
+        if (lancamento.origem === 'movimentacao_direta' && lancamento.conta_contabil_id) {
+            const oppositeType = lancamento.tipo === 'Entrada' ? 'Saida' : 'Entrada';
+            
+            // Deleta o lançamento de Resultado/DRE (que tem conta_contabil_id e conta_bancaria_id é null)
+            const { error: deleteDreError } = await supabase
+                .from('lancamentos')
+                .delete()
+                .eq('proprietario_id', empresaId)
+                .eq('conta_contabil_id', lancamento.conta_contabil_id)
+                .eq('descricao', lancamento.descricao)
+                .eq('valor', lancamento.valor)
+                .eq('tipo', oppositeType)
+                .is('conta_bancaria_id', null);
+                
+            if (deleteDreError) console.warn('Aviso: Falha ao deletar lançamento DRE correspondente:', deleteDreError);
+        }
+        
+        // 3. Deletar o lançamento principal
+        const { error: deleteLaunchError } = await supabase
+            .from('lancamentos')
+            .delete()
+            .eq('id', lancamento.id);
+            
+        if (deleteLaunchError) throw deleteLaunchError;
+        
+        showSuccess('Lançamento excluído com sucesso! O saldo será reajustado.');
+        fetchLancamentos();
+        
+    } catch (error: any) {
+        showError('Falha ao excluir lançamento: ' + error.message);
+    } finally {
+        setIsDeleting(false);
+    }
   };
 
   return (
@@ -336,11 +413,33 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
                       </TableCell>
                       <TableCell className="w-[100px] text-right">
                           <div className="flex justify-end space-x-2">
-                              {l.origem === 'movimentacao_direta' && (
-                                  <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(l)} title="Editar Movimentação">
-                                      <Edit className="w-4 h-4" />
-                                  </Button>
-                              )}
+                              {/* BOTÃO DE EDIÇÃO (AGORA PARA TODOS) */}
+                              <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(l)} title="Editar Lançamento">
+                                  <Edit className="w-4 h-4" />
+                              </Button>
+                              
+                              {/* BOTÃO DE DELETAR (AGORA PARA TODOS) */}
+                              <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                      <Button variant="ghost" size="icon" disabled={isDeleting} title="Excluir Lançamento">
+                                          <Trash2 className="w-4 h-4 text-red-500" />
+                                      </Button>
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent>
+                                      <AlertDialogHeader>
+                                          <AlertDialogTitle>Excluir Lançamento?</AlertDialogTitle>
+                                          <AlertDialogDescription>
+                                              Esta ação removerá o lançamento principal e, se aplicável, o lançamento de partida dobrada (DRE) e o registro de extrato. O saldo será reajustado.
+                                          </AlertDialogDescription>
+                                      </AlertDialogHeader>
+                                      <AlertDialogFooter>
+                                          <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
+                                          <AlertDialogAction onClick={() => handleDelete(l)} disabled={isDeleting}>
+                                              {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Excluir'}
+                                          </AlertDialogAction>
+                                      </AlertDialogFooter>
+                                  </AlertDialogContent>
+                              </AlertDialog>
                           </div>
                       </TableCell>
                     </TableRow>
@@ -354,7 +453,7 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
     </div>
     
     {editDialog.lancamento && (
-        <FormMovimentacaoDiretaDialog
+        <FormLancamentoGeralDialog
             open={editDialog.open}
             onOpenChange={(open) => setEditDialog({ open, lancamento: null })}
             lancamentoInicial={editDialog.lancamento}
