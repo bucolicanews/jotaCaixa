@@ -100,8 +100,11 @@ const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveC
   }, [isEditing, lancamentoInicial, ownerId, dreLaunchId]);
 
 
-  // Busca apenas contas de Caixa/Banco (Ativo)
+  // Busca apenas contas de Ativo (Debito) e escopo 'bancos'
   const { contas: contasAtivo, carregando: loadingContas, refetch: refetchSaldos } = useSaldoContaCalculado('Debito', 'todos', '', 'bancos');
+  
+  // NOVO: Filtra as contas para mostrar apenas as marcadas como CAIXA
+  const contasCaixa = contasAtivo.filter(c => c.plano_contas?.is_caixa);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -168,10 +171,11 @@ const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveC
   }, [ownerId, refetchSaldos, fetchHistoricos, fetchContasResultado]);
 
   useEffect(() => {
-    if (!form.getValues('conta_bancaria_id') && contasAtivo.length > 0) {
-        form.setValue('conta_bancaria_id', contasAtivo[0].id);
+    // Se não estiver editando e houver contas de caixa, define a primeira como padrão
+    if (!isEditing && !form.getValues('conta_bancaria_id') && contasCaixa.length > 0) {
+        form.setValue('conta_bancaria_id', contasCaixa[0].id);
     }
-  }, [contasAtivo, form]);
+  }, [contasCaixa, form, isEditing]);
 
   const onSubmit = async (values: FormValues) => {
     if (!ownerId) {
@@ -330,7 +334,7 @@ const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveC
             
             <FormField control={form.control} name="conta_bancaria_id" render={({ field }) => (
                 <FormItem>
-                    <FormLabel>3. Conta {tipoMovimentacao === 'Entrada' ? 'Destino' : 'Origem'} (Ativo)</FormLabel>
+                    <FormLabel>3. Conta {tipoMovimentacao === 'Entrada' ? 'Destino' : 'Origem'} (Caixa)</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value || undefined} disabled={loadingContas || isEditing}>
                         <FormControl>
                             <SelectTrigger>
@@ -338,7 +342,7 @@ const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveC
                             </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                            {contasAtivo.map(c => (
+                            {contasCaixa.map(c => (
                                 <SelectItem key={c.id} value={c.id}>
                                     {c.nome} ({formatCurrency(c.saldo_atual)})
                                 </SelectItem>
@@ -346,6 +350,9 @@ const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveC
                         </SelectContent>
                     </Select>
                     <FormMessage />
+                    {contasCaixa.length === 0 && !loadingContas && (
+                        <p className="text-xs text-red-500">Nenhuma conta marcada como Caixa encontrada. Verifique Bancos/Caixas.</p>
+                    )}
                 </FormItem>
             )} />
         </div>
