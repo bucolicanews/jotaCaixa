@@ -291,17 +291,24 @@ export function useConciliacao(): ConciliacaoHook {
 
     // --- Lógica de Processamento de Arquivo ---
 
-    const checkFileDuplicity = useCallback(async (contentHash: string, empresaId: string): Promise<boolean> => {
-        // DESABILITADO: Não verifica mais a duplicidade do arquivo inteiro
-        return false;
+    // NOVO: Função para buscar todas as datas únicas já registradas na tabela 'extratos'
+    const fetchExistingDates = useCallback(async (contaId: string, empresaId: string): Promise<Set<string>> => {
+        const { data, error } = await supabase
+            .from('extratos')
+            .select('data')
+            .eq('empresa_id', empresaId)
+            .eq('id_saldo_contas', contaId);
+            
+        if (error) {
+            console.error('Erro ao buscar datas existentes:', error);
+            return new Set();
+        }
+        
+        // Retorna um Set de datas no formato YYYY-MM-DD
+        return new Set((data || []).map(e => formatDDMMYYYYToISO(e.data)).filter((d): d is string => !!d));
     }, []);
-    
-    // NOVO TIPO AUXILIAR
-    interface SaldoInicialMap {
-        [contaContabilId: string]: number;
-    }
 
-    // NOVO: Função para buscar extratos existentes na nova tabela
+    // NOVO: Função para buscar extratos existentes na nova tabela (para duplicidade de transação)
     const fetchExistingExtratos = useCallback(async (contaId: string, empresaId: string) => {
         
         const existingKeys = new Set<string>();
@@ -348,17 +355,14 @@ export function useConciliacao(): ConciliacaoHook {
             return;
         }
         
-        // 2. Verificar Duplicidade de Conteúdo (do arquivo completo) - DESABILITADO
-        // const isDuplicatedContent = await checkFileDuplicity(contentHash, proprietarioDaConfiguracao);
-        // if (isDuplicatedContent) {
-        //     showError(`O conteúdo deste extrato já foi importado anteriormente.`);
-        //     setLoading(false);
-        //     return;
-        // }
-
-        // 3. Buscar extratos existentes na nova tabela 'extratos'
+        // 2. Buscar datas já existentes no banco
+        const existingDatesSet = await fetchExistingDates(contaSelecionadaId, proprietarioDaConfiguracao);
+        
+        // 3. Buscar chaves de transação existentes (para duplicidade)
         const existingExtratosSet = await fetchExistingExtratos(contaSelecionadaId, proprietarioDaConfiguracao);
         
+        let rejectedDates: Set<string> = new Set();
+
         // 4. Processar o CSV
         Papa.parse(file, {
             header: true,
@@ -381,8 +385,6 @@ export function useConciliacao(): ConciliacaoHook {
                     const dataMovimentacao = row[config.mapeamento.data];
                     
                     let formattedDate: string | null = null;
-                    
-                    // Tenta formatar a data do CSV (DD/MM/YYYY) para YYYY-MM-DD
                     formattedDate = formatDDMMYYYYToISO(dataMovimentacao);
                     
                     if (!formattedDate) {
@@ -398,10 +400,17 @@ export function useConciliacao(): ConciliacaoHook {
                     let isDuplicated = false;
                     let motivoDuplicidade: string | null = null;
                     
-                    // Verifica duplicidade contra a tabela 'extratos'
+                    // Verifica duplicidade de transação
                     if (existingExtratosSet.has(uniqueKey)) {
                         isDuplicated = true;
                         motivoDuplicidade = 'Transação já existe na tabela de extratos.';
+                    }
+                    
+                    // NOVO: Verifica se a data já foi conciliada (se a transação não for duplicada por chave)
+                    if (!isDuplicated && formattedDate && existingDatesSet.has(formattedDate)) {
+                        isDuplicated = true;
+                        motivoDuplicidade = 'Data já conciliada.';
+                        rejectedDates.add(formattedDate);
                     }
 
                     return {
@@ -424,14 +433,22 @@ export function useConciliacao(): ConciliacaoHook {
                 setTransacoesSelecionadas([]);
                 setContaContabilLote(null);
                 
-                showSuccess(`${transacoesValidas.length} transações válidas importadas. ${transacoesRejeitadas.length} duplicadas rejeitadas.`);
+                let successMessage = `${transacoesValidas.length} transações válidas importadas.`;
+                if (transacoesRejeitadas.length > 0) {
+                    successMessage += ` ${transacoesRejeitadas.length} rejeitadas (Duplicidade ou Data já conciliada).`;
+                }
+                if (rejectedDates.size > 0) {
+                    successMessage += ` Datas ignoradas: ${Array.from(rejectedDates).map(d => format(parseISO(d), 'dd/MM')).join(', ')}.`;
+                }
+                
+                showSuccess(successMessage);
             },
             error: (err) => {
                 showError('Erro ao processar o arquivo CSV: ' + err.message);
             }
         });
         setLoading(false);
-    }, [file, configSelecionada, contaSelecionadaId, proprietarioDaConfiguracao, applyRegras, fetchExistingExtratos]);
+    }, [file, configSelecionada, contaSelecionadaId, proprietarioDaConfiguracao, applyRegras, fetchExistingDates, fetchExistingExtratos]);
 
     // --- Lógica de Salvamento ---
 
