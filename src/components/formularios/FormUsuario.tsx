@@ -1,18 +1,17 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
-import { useForm, FormProvider } from 'react-hook-form';
-import type { Control, UseFormReturn } from 'react-hook-form';
+import { useForm, FormProvider, Control } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from '@/components/ui/button';
-import { Loader2, Tag, FileSignature, Building2 } from 'lucide-react';
+import { Loader2, Tag, FileSignature } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { AnyProfile, ClienteProfile, UsuarioProfile, UserRole, AdminUsuarioProfile } from '@/types/usuario';
 import { PERMISSOES_DISPONIVEIS, Permissao } from '@/config/permissoes';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import FormDadosCadastrais from '../usuario-forms/FormDadosCadastrais';
 import { Input } from '../ui/input';
-import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from '../ui/form';
+import { FormField, FormItem, FormLabel, FormControl, FormMessage, Form } from '../ui/form';
 import { useBulkTagManager } from '@/hooks/use-bulk-tag-manager';
 import { format } from 'date-fns';
 import { BASE_URL } from '@/config/app-config';
@@ -22,12 +21,11 @@ import FormFolgas from '../formularios/FormFolgas';
 import FormDocumentos from '../usuario-forms/FormDocumentos';
 import FormDadosContratuais from '../usuario-forms/FormDadosContratuais';
 import FormFerias from '@/components/usuario-forms/FormFerias';
-import LogoUpload from '../LogoUpload';
-import { Checkbox } from '../ui/checkbox';
-import FormIdentificacao from '../cliente-forms/FormIdentificacao';
-import FormContato from '../cliente-forms/FormContato';
-import FormEndereco from '../cliente-forms/FormEndereco';
-
+import LogoUpload from '../LogoUpload'; // Importado para Cliente Profile
+import { Checkbox } from '../ui/checkbox'; // IMPORT CORRIGIDO
+import FormIdentificacao from '../cliente-forms/FormIdentificacao'; // NOVO IMPORT
+import FormContato from '../cliente-forms/FormContato'; // NOVO IMPORT
+import FormEndereco from '../cliente-forms/FormEndereco'; // NOVO IMPORT
 
 const textOptional = z.string().optional().or(z.literal(''));
 const urlSchema = z.string().url('URL inválida.').optional().or(z.literal(''));
@@ -66,11 +64,10 @@ const formSchema = z.object({
   nome_fantasia: textOptional,
   documento: textOptional,
   cnpj: textOptional,
-  limite_usuarios: z.coerce.number().int().min(1, 'O limite deve ser pelo menos 1.').optional(),
   
   // NOVOS CAMPOS DE ASSINATURA (Apenas para Cliente Profile)
   assinatura_proprietario_nome: textOptional,
-  assinatura_proprietario_url: urlSchema,
+  assinatura_proprietario_url: textOptional,
   
   // Dados Contratuais (Apenas para UsuarioProfile)
   data_inicio_contrato: z.date().optional().nullable(),
@@ -157,11 +154,12 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
   const permissoesVisiveis = useMemo(() => {
       return PERMISSOES_DISPONIVEIS.filter((p: Permissao) => {
           if (criadorRole === 'Admin') return true;
+          // Se for Cliente, permite gerenciar as permissões de RH e a nova de Suporte
           return p.key === 'ponto_eletronico' || p.key === 'visualizar_proprio_ponto' || p.key === 'folha_ponto' || p.key === 'cadastrar_usuarios' || p.key === 'gestao_suporte';
       });
   }, [criadorRole]);
 
-  const form = useForm({
+  const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
         nome: '',
@@ -169,34 +167,8 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
         senha: '',
         permissoes: {},
     },
-  }) as UseFormReturn<FormValues>;
-// ...existing code...
-      const clientTabs = [
-          { value: 'pessoal', label: 'Geral' },
-          { value: 'identificacao', label: 'Identificação' },
-          { value: 'contato', label: 'Contato' },
-          { value: 'endereco', label: 'Endereço' },
-      ];
-      
--      formContent = (
--          <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
--              <TabsList className="flex flex-wrap justify-start w-full h-auto p-1">
--                  {clientTabs.map(tab => (
--                      <TabsTrigger key={tab.value} value={tab.value} className="flex-1 md:flex-none md:w-1/4">{tab.label}</TabsTrigger>
--                  ))}
--              </TabsList>
--              ...
--          </Tabs>
--      );
-+      formContent = <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-+              <TabsList className="flex flex-wrap justify-start w-full h-auto p-1">
-+                  {clientTabs.map(tab => (
-+                      <TabsTrigger key={tab.value} value={tab.value} className="flex-1 md:flex-none md:w-1/4">{tab.label}</TabsTrigger>
-+                  ))}
-+              </TabsList>
-+              ...
-+          </Tabs>;
- // ...existing code...  
+  });
+  
   const { watch, setValue } = form;
   const cepValue = watch('cep');
   const isAddressLoading = watch('endereco') === 'Buscando...';
@@ -208,6 +180,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
       return;
     }
     
+    // Bloqueia a edição dos campos enquanto busca
     setValue('endereco', 'Buscando...');
     setValue('bairro', 'Buscando...');
     setValue('cidade', 'Buscando...');
@@ -226,6 +199,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
         return;
       }
 
+      // Preenche os campos
       setValue('endereco', data.logradouro || '');
       setValue('bairro', data.bairro || '');
       setValue('cidade', data.localidade || '');
@@ -241,12 +215,14 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
     }
   }, [setValue]);
   
+  // Monitora a mudança do CEP para buscar o endereço
   useEffect(() => {
     const cleanCep = cepValue?.replace(/\D/g, '');
     
     if (cleanCep && cleanCep.length === 8) {
       handleCepLookup(cleanCep);
     } else if (cleanCep && cleanCep.length > 0 && cleanCep.length < 8) {
+      // Limpa os campos de endereço se o CEP estiver incompleto
       setValue('endereco', '');
       setValue('bairro', '');
       setValue('cidade', '');
@@ -260,14 +236,14 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
 
     const defaultPermissoes = permissoesVisiveis.reduce((acc: Record<string, boolean>, p: Permissao) => {
         if (profileToEdit && 'permissoes' in profileToEdit && (profileToEdit as any).permissoes) {
+            // Se for edição, usa as permissões existentes
             acc[p.key] = (profileToEdit as any).permissoes[p.key] !== false;
         } else {
+            // SE FOR CRIAÇÃO DE NOVO USUÁRIO: Apenas Ponto Eletrônico e Visualizar Próprio Ponto são true
             acc[p.key] = p.key === 'ponto_eletronico' || p.key === 'visualizar_proprio_ponto';
         }
         return acc;
     }, {} as Record<string, boolean>);
-    
-    const clientProfileData = isEditingClientProfile ? clientProfile : null;
     
     const resetValues: Partial<FormValues> = {
         nome: profileToEdit?.nome || '',
@@ -276,13 +252,13 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
         permissoes: defaultPermissoes,
         
         // Dados de Cliente Profile
-        limite_usuarios: clientProfileData?.limite_usuarios || 5,
-        razao_social: clientProfileData?.razao_social || '',
-        nome_fantasia: clientProfileData?.nome_fantasia || '',
-        documento: clientProfileData?.documento || '',
-        cnpj: clientProfileData?.cnpj || '',
-        assinatura_proprietario_nome: clientProfileData?.assinatura_proprietario_nome || clientProfileData?.nome || '',
-        assinatura_proprietario_url: clientProfileData?.assinatura_proprietario_url || clientProfileData?.logo_url || '',
+        limite_usuarios: clientProfile?.limite_usuarios || 5,
+        razao_social: clientProfile?.razao_social || '',
+        nome_fantasia: clientProfile?.nome_fantasia || '',
+        documento: clientProfile?.documento || '',
+        cnpj: clientProfile?.cnpj || '',
+        assinatura_proprietario_nome: clientProfile?.assinatura_proprietario_nome || clientProfile?.nome || '',
+        assinatura_proprietario_url: clientProfile?.assinatura_proprietario_url || clientProfile?.logo_url || '',
         
         // Dados de Usuário Profile
         dias_folga_fixos: userProfile?.dias_folga_fixos || ['Saturday', 'Sunday'],
@@ -296,18 +272,18 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
         tipo_aviso: (userProfile?.tipo_aviso || 'Nenhum') as FormValues['tipo_aviso'],
         
         // Dados Cadastrais (Comum)
-        cpf: userProfile?.cpf || clientProfileData?.cpf || '',
-        rg: userProfile?.rg || clientProfileData?.rg || '',
+        cpf: userProfile?.cpf || clientProfile?.cpf || '',
+        rg: userProfile?.rg || clientProfile?.rg || '',
         nome_mae: userProfile?.nome_mae || '',
         nome_pai: userProfile?.nome_pai || '',
-        telefone: userProfile?.telefone || clientProfileData?.telefone || '',
-        cep: userProfile?.cep || clientProfileData?.cep || '',
-        endereco: userProfile?.endereco || clientProfileData?.endereco || '',
-        numero: userProfile?.numero || clientProfileData?.numero || '',
-        complemento: userProfile?.complemento || clientProfileData?.complemento || '',
-        bairro: userProfile?.bairro || clientProfileData?.bairro || '',
-        cidade: userProfile?.cidade || clientProfileData?.cidade || '',
-        estado: userProfile?.estado || clientProfileData?.estado || '',
+        telefone: userProfile?.telefone || clientProfile?.telefone || '',
+        cep: userProfile?.cep || clientProfile?.cep || '',
+        endereco: userProfile?.endereco || clientProfile?.endereco || '',
+        numero: userProfile?.numero || clientProfile?.numero || '',
+        complemento: userProfile?.complemento || clientProfile?.complemento || '',
+        bairro: userProfile?.bairro || clientProfile?.bairro || '',
+        cidade: userProfile?.cidade || clientProfile?.cidade || '',
+        estado: userProfile?.estado || clientProfile?.estado || '',
         
         // Documentos (URLs)
         rg_url: userProfile?.rg_url || '',
@@ -327,7 +303,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
     };
 
     form.reset(resetValues);
-  }, [profileToEdit, isNewClient, permissoesVisiveis, isEditingClientProfile, clientProfile, userProfile]);
+  }, [profileToEdit, isNewClient, permissoesVisiveis]);
 
   const handleSelectAll = (select: boolean) => {
     permissoesVisiveis.forEach((p: Permissao) => {
@@ -339,17 +315,19 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
       refetchStatus();
   }, [refetchStatus]);
   
+  // NOVO HANDLER: Sincroniza a URL da Logo com o campo de assinatura
   const handleLogoUploadComplete = useCallback(async (url: string | null) => {
-      form.setValue('assinatura_proprietario_url', url || null, { shouldDirty: true });
-      
-      if (isEditingClientProfile && clientProfile) {
-          const { error } = await supabase.from('tbl_clientes').update({ logo_url: url || null }).eq('id', clientProfile.id);
-          if (error) console.error('Falha ao atualizar logo_url na tbl_clientes:', error);
+      // Atualiza o campo de URL da assinatura com a nova URL da logo
+      form.setValue('assinatura_proprietario_url', url || '');
+      // Se for Cliente Profile, atualiza o logo_url também
+      if (isEditingClientProfile) {
+          await supabase.from('tbl_clientes').update({ logo_url: url || null }).eq('id', clientProfile!.id);
       }
   }, [form, isEditingClientProfile, clientProfile]);
   
+  // NOVO HANDLER: Sincroniza a URL da Logo com o campo de assinatura (usado pelo checkbox)
   const handleSyncUrl = useCallback((url: string | null) => {
-      form.setValue('assinatura_proprietario_url', url || null, { shouldDirty: true });
+      form.setValue('assinatura_proprietario_url', url || '');
   }, [form]);
   
   const isContractEditable = criadorRole === 'Admin' || criadorRole === 'Cliente';
@@ -535,267 +513,256 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
     }
   };
   
-  const formMethods = form;
-  
   // --- Lógica de Read-Only para Tabs ---
   const isSelfEditUsuario = criadorRole === 'Usuario';
   
+  // NOVO HANDLER: Intercepta a mudança de aba para bloquear se estiver desabilitada
   const handleTabChange = (newTab: string) => {
       setActiveTab(newTab);
   };
   
+  // Read-Only status para os componentes filhos
   const isChildFormReadOnly = (tabValue: string) => {
+      // 1. Se o modo read-only global (passado pelo gestor) estiver ativo, todos os filhos são read-only.
       if (isReadOnly) return true; 
+      
+      // 2. Se for edição de perfil de funcionário por ele mesmo
       if (isSelfEditUsuario) {
+          // Apenas 'cadastrais' deve ser editável. Todos os outros são read-only.
           return tabValue !== 'cadastrais';
       }
+      
       return false;
   };
   
+  // 3. Controla a visibilidade do botão de salvar
   const shouldShowSaveButton = !isReadOnly && (!isSelfEditUsuario || activeTab === 'cadastrais');
   
-  // --- DEFINIÇÃO DO CONTEÚDO PRINCIPAL DO FORMULÁRIO ---
-  let formContent;
-  
-  if (isNewClient) {
-      // Fluxo simplificado para criação de novo cliente
-      formContent = (
-          <>
-              <h3 className="font-semibold text-lg">Dados de Acesso e Empresa</h3>
-              <FormField control={form.control} name="nome" render={({ field }) => (
-                  <FormItem><FormLabel>Nome da Empresa / Pessoa</FormLabel><FormControl><Input placeholder="Nome Fantasia ou Nome Completo" {...field} disabled={isSubmitting} /></FormControl><FormMessage /></FormItem>
-              )} />
-              <FormField control={form.control} name="email" render={({ field }) => (
-                  <FormItem><FormLabel>Email (Login)</FormLabel><FormControl><Input type="email" placeholder="email@empresa.com" {...field} disabled={isSubmitting} /></FormControl><FormMessage /></FormItem>
-              )} />
-              <FormField control={form.control} name="senha" render={({ field }) => (
-                  <FormItem><FormLabel>Criar Senha</FormLabel><FormControl><Input type="password" placeholder="••••••••" {...field} disabled={isSubmitting} /></FormControl><FormMessage /></FormItem>
-              )} />
-              
-              <Separator />
-              <h3 className="font-semibold text-lg">Documentos (Opcional)</h3>
-              <FormField control={form.control} name="documento" render={({ field }) => (
-                  <FormItem><FormLabel>CPF/CNPJ</FormLabel><FormControl><Input placeholder="00.000.000/0000-00" {...field} disabled={isSubmitting} /></FormControl><FormMessage /></FormItem>
-              )} />
-              <FormField control={form.control} name="razao_social" render={({ field }) => (
-                  <FormItem><FormLabel>Razão Social</FormLabel><FormControl><Input placeholder="Razão Social" {...field} disabled={isSubmitting} /></FormControl><FormMessage /></FormItem>
-              )} />
-          </>
-      );
-  } else if (isEditingClientProfile) {
-      // Fluxo de edição de Cliente Profile (Empresa)
+  // Se for Cliente Profile, remove as abas de RH
+  if (isEditingClientProfile) {
       const clientTabs = [
-          { value: 'pessoal', label: 'Geral' },
-          { value: 'identificacao', label: 'Identificação' },
-          { value: 'contato', label: 'Contato' },
-          { value: 'endereco', label: 'Endereço' },
+          { value: 'pessoal', label: 'Geral', component: FormGeral },
+          { value: 'identificacao', label: 'Identificação', component: FormIdentificacao },
+          { value: 'contato', label: 'Contato', component: FormContato },
+          { value: 'endereco', label: 'Endereço', component: FormEndereco },
       ];
       
-      formContent = (
-          <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-              <TabsList className="flex flex-wrap justify-start w-full h-auto p-1">
-                  {clientTabs.map(tab => (
-                      <TabsTrigger key={tab.value} value={tab.value} className="flex-1 md:flex-none md:w-1/4">{tab.label}</TabsTrigger>
-                  ))}
-              </TabsList>
-              
-              {/* TAB 1: GERAL (CLIENTE PROFILE) */}
-              <TabsContent value="pessoal" className="mt-4 space-y-4 p-4">
-                  <FormField control={form.control} name="nome" render={({ field }) => (
-                      <FormItem><FormLabel>Nome Completo</FormLabel><FormControl><Input placeholder="Nome completo" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
-                  )} />
-                  <FormField control={form.control} name="email" render={({ field }) => (
-                      <FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" placeholder="email@exemplo.com" {...field} disabled /></FormControl><FormMessage /></FormItem>
-                  )} />
-                  <FormField control={form.control} name="senha" render={({ field }) => (
-                      <FormItem><FormLabel>Alterar Senha (Opcional)</FormLabel><FormControl><Input type="password" placeholder="••••••••" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
-                  )} />
-                  
-                  <Separator />
-                  <h3 className="font-semibold text-lg flex items-center"><FileSignature className="w-4 h-4 mr-2" /> Assinatura e Branding</h3>
-                  
-                  <FormField control={form.control} name="assinatura_proprietario_nome" render={({ field }) => (
-                      <FormItem><FormLabel>Nome da Empresa/Pessoa para Assinatura</FormLabel><FormControl><Input placeholder="Ex: Minha Empresa LTDA" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
-                  )} />
-                  
-                  <LogoUpload 
-                      ownerId={clientProfile!.id}
-                      tableName={'tbl_clientes'}
-                      initialLogoUrl={form.watch('assinatura_proprietario_url')}
-                      onUploadComplete={handleLogoUploadComplete}
-                      onSyncUrl={handleSyncUrl}
-                      isReadOnly={isSubmitting || isReadOnly}
-                  />
-                  
-                  <Separator />
-                  <h3 className="font-semibold text-lg">Configurações da Empresa</h3>
-                  <FormField control={form.control} name="limite_usuarios" render={({ field }) => (
-                      <FormItem><FormLabel>Limite de Usuários</FormLabel><FormControl><Input type="number" placeholder="5" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
-                  )} />
-                  
-                  <div className="space-y-2 pt-4">
-                      <div className="flex justify-between items-center mb-1">
-                          <FormLabel>Permissões de Acesso</FormLabel>
-                          <div className="space-x-2">
-                              <Button type="button" variant="link" size="sm" onClick={() => handleSelectAll(true)} className="p-0 h-auto" disabled={isSubmitting || isReadOnly}>Selecionar Todos</Button>
-                              <Button type="button" variant="link" size="sm" onClick={() => handleSelectAll(false)} className="p-0 h-auto text-destructive" disabled={isSubmitting || isReadOnly}>Desmarcar Todos</Button>
-                          </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-4 rounded-lg border p-4">
-                          {PERMISSOES_DISPONIVEIS.filter((p: Permissao) => p.key !== 'ponto_eletronico' && p.key !== 'visualizar_proprio_ponto').map((p: Permissao) => (
-                              <FormField key={p.key} control={form.control} name={`permissoes.${p.key}`} render={({ field }) => (
-                                  <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                                      <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} disabled={isSubmitting || isReadOnly} /></FormControl>
-                                      <FormLabel className="font-normal">{p.label}</FormLabel>
-                                  </FormItem>
-                              ))} />
-                          )}
-                      </div>
-                  </div>
-              </TabsContent>
-              
-              {/* TAB 2: IDENTIFICAÇÃO (CLIENTE PROFILE) */}
-              <TabsContent value="identificacao" className="mt-4 space-y-6 p-4">
-                  <FormIdentificacao
-                      control={form.control as unknown as Control<any>}
-                      clienteId={clientProfile?.id}
-                      isSubmitting={isSubmitting}
-                      tagRefreshKey={refreshKey}
-                      onTagToggle={handleTagToggle}
-                  />
-              </TabsContent>
-              
-              {/* TAB 3: CONTATO (CLIENTE PROFILE) */}
-              <TabsContent value="contato" className="mt-4 space-y-6 p-4">
-                  <FormContato
-                      control={form.control as unknown as Control<any>}
-                      clienteId={clientProfile?.id}
-                      isSubmitting={isSubmitting}
-                      tagRefreshKey={refreshKey}
-                      onTagToggle={handleTagToggle}
-                  />
-              </TabsContent>
-              
-              {/* TAB 4: ENDEREÇO (CLIENTE PROFILE) */}
-              <TabsContent value="endereco" className="mt-4 space-y-6 p-4">
-                  <FormEndereco
-                      control={form.control as unknown as Control<any>}
-                      clienteId={clientProfile?.id}
-                      isSubmitting={isSubmitting}
-                      tagRefreshKey={refreshKey}
-                      onTagToggle={handleTagToggle}
-                  />
-              </TabsContent>
-          </Tabs>
-      );
-  } else {
-      // Fluxo de edição de Usuário (Funcionário)
-      formContent = (
-          <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-              <TabsList className="flex flex-wrap justify-start w-full h-auto p-1">
-                  <TabsTrigger value="pessoal" className="flex-1 md:flex-none md:w-1/6">Geral</TabsTrigger>
-                  <TabsTrigger value="folgas" className="flex-1 md:flex-none md:w-1/6">Folgas</TabsTrigger>
-                  <TabsTrigger value="ferias" className="flex-1 md:flex-none md:w-1/6">Férias</TabsTrigger>
-                  <TabsTrigger value="cadastrais" className="flex-1 md:flex-none md:w-1/6">Dados Cadastrais</TabsTrigger>
-                  <TabsTrigger value="documentos" className="flex-1 md:flex-none md:w-1/6">Documentos</TabsTrigger>
-                  <TabsTrigger value="contrato" className="flex-1 md:flex-none md:w-1/6">Contrato (RH)</TabsTrigger>
-              </TabsList>
-              
-              {/* TAB 1: GERAL */}
-              <TabsContent value="pessoal" className="mt-4 space-y-4 p-4">
-                  <FormGeral
-                      control={form.control}
-                      isSubmitting={isSubmitting}
-                      permissoesVisiveis={permissoesVisiveis}
-                      handleSelectAll={handleSelectAll}
-                      isReadOnly={isChildFormReadOnly('pessoal')}
-                  />
-                  
-                  {/* Campos de Login (Apenas para criação ou alteração de senha) */}
-                  <Separator />
-                  <h3 className="font-semibold text-lg">Acesso e Login</h3>
-                  <FormField control={form.control} name="email" render={({ field }) => (
-                      <FormItem><FormLabel>Email (Login)</FormLabel><FormControl><Input type="email" placeholder="email@exemplo.com" {...field} disabled={isEditing || isChildFormReadOnly('pessoal')} /></FormControl><FormMessage /></FormItem>
-                  )} />
-                  {!isEditing && <FormField control={form.control} name="senha" render={({ field }) => (
-                      <FormItem><FormLabel>Criar Senha</FormLabel><FormControl><Input type="password" placeholder="••••••••" {...field} disabled={isChildFormReadOnly('pessoal')} /></FormControl><FormMessage /></FormItem>
-                  )} />}
-                  {isEditing && <FormField control={form.control} name="senha" render={({ field }) => (
-                      <FormItem><FormLabel>Alterar Senha (Opcional)</FormLabel><FormControl><Input type="password" placeholder="••••••••" {...field} disabled={isChildFormReadOnly('pessoal')} /></FormControl><FormMessage /></FormItem>
-                  )} />}
-              </TabsContent>
-              
-              {/* TAB 2: FOLGAS FIXAS */}
-              <TabsContent value="folgas" className="mt-4 space-y-6 p-4">
-                  <FormFolgas
-                      control={form.control as unknown as Control<any>}
-                      isSubmitting={isSubmitting}
-                      usuarioInicial={userProfile}
-                      isReadOnly={isChildFormReadOnly('folgas')}
-                  />
-              </TabsContent>
-              
-              {/* TAB 3: FÉRIAS (CRUD) */}
-              <TabsContent value="ferias" className="mt-4 space-y-6 p-4">
-                  <FormFerias
-                      usuarioInicial={userProfile}
-                      isReadOnly={isChildFormReadOnly('ferias')}
-                  />
-              </TabsContent>
-
-              {/* TAB 4: DADOS CADASTRAIS (EDITÁVEL) */}
-              <TabsContent value="cadastrais" className="mt-4 space-y-6 p-4">
-                  <div className="flex justify-between items-center">
-                      <h3 className="font-semibold text-lg flex items-center"><Tag className="w-5 h-5 mr-2" /> Tags de Contrato</h3>
-                  </div>
-                  <p className="text-sm text-muted-foreground mb-4">Dados pessoais e de contato do funcionário.</p>
-                  
-                  <FormDadosCadastrais
-                      control={form.control as unknown as Control<any>}
-                      isSubmitting={isSubmitting}
-                      resourceId={resourceId}
-                      tagRefreshKey={refreshKey}
-                      onTagToggle={handleTagToggle}
-                      isReadOnly={isChildFormReadOnly('cadastrais')}
-                      isClientScope={false}
-                      isAddressLoading={isAddressLoading}
-                  />
-              </TabsContent>
-              
-              {/* TAB 5: DOCUMENTOS DE ADMISSÃO */}
-              <TabsContent value="documentos" className="mt-4 space-y-6 p-4">
-                  <FormDocumentos
-                      control={form.control as unknown as Control<any>}
-                      isSubmitting={isSubmitting}
-                      resourceId={resourceId}
-                      isReadOnly={isChildFormReadOnly('documentos')}
-                  />
-              </TabsContent>
-
-              {/* TAB 6: DADOS CONTRATUAIS (RH) */}
-              <TabsContent value="contrato" className="mt-4 space-y-6 p-4">
-                  <FormDadosContratuais
-                      control={form.control as unknown as Control<any>}
-                      isSubmitting={isSubmitting}
-                      isContractEditable={isContractEditable}
-                      isReadOnly={isChildFormReadOnly('contrato')}
-                  />
-              </TabsContent>
-          </Tabs>
+      return (
+        <FormProvider {...form}>
+            <Form {...form}>
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                    <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
+                        <TabsList className="flex flex-wrap justify-start w-full h-auto p-1">
+                            {clientTabs.map(tab => (
+                                <TabsTrigger key={tab.value} value={tab.value} className="flex-1 md:flex-none md:w-1/4">{tab.label}</TabsTrigger>
+                            ))}
+                        </TabsList>
+                        
+                        {/* TAB 1: GERAL (CLIENTE PROFILE) */}
+                        <TabsContent value="pessoal" className="mt-4 space-y-4 p-4">
+                            <FormField control={form.control} name="nome" render={({ field }) => (
+                                <FormItem><FormLabel>Nome Completo</FormLabel><FormControl><Input placeholder="Nome completo" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
+                            )} />
+                            <FormField control={form.control} name="email" render={({ field }) => (
+                                <FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" placeholder="email@exemplo.com" {...field} disabled /></FormControl><FormMessage /></FormItem>
+                            )} />
+                            <FormField control={form.control} name="senha" render={({ field }) => (
+                                <FormItem><FormLabel>Alterar Senha (Opcional)</FormLabel><FormControl><Input type="password" placeholder="••••••••" {...field} disabled={isReadOnly || isEditingClientProfile} /></FormControl><FormMessage /></FormItem>
+                            )} />
+                            
+                            <Separator />
+                            <h3 className="font-semibold text-lg flex items-center"><FileSignature className="w-4 h-4 mr-2" /> Assinatura e Branding</h3>
+                            
+                            <FormField control={form.control} name="assinatura_proprietario_nome" render={({ field }) => (
+                                <FormItem><FormLabel>Nome da Empresa/Pessoa para Assinatura</FormLabel><FormControl><Input placeholder="Ex: Minha Empresa LTDA" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
+                            )} />
+                            
+                            <FormField control={form.control} name="assinatura_proprietario_url" render={({ field }) => (
+                                <FormItem><FormLabel>URL da Imagem de Assinatura (Logo)</FormLabel><FormControl><Input placeholder="URL da imagem de assinatura" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
+                            )} />
+                            
+                            <LogoUpload 
+                                ownerId={clientProfile!.id}
+                                tableName={'tbl_clientes'}
+                                initialLogoUrl={form.watch('assinatura_proprietario_url')}
+                                onUploadComplete={handleLogoUploadComplete}
+                                onSyncUrl={handleSyncUrl} // NOVO PROP
+                                isReadOnly={isSubmitting || isReadOnly}
+                            />
+                            
+                            <Separator />
+                            <h3 className="font-semibold text-lg">Configurações da Empresa</h3>
+                            <FormField control={form.control} name="limite_usuarios" render={({ field }) => (
+                                <FormItem><FormLabel>Limite de Usuários</FormLabel><FormControl><Input type="number" placeholder="5" {...field} disabled={isReadOnly || isEditingClientProfile} /></FormControl><FormMessage /></FormItem>
+                            )} />
+                            
+                            <div className="space-y-2 pt-4">
+                                <div className="flex justify-between items-center mb-1">
+                                    <FormLabel>Permissões de Acesso</FormLabel>
+                                    <div className="space-x-2">
+                                        <Button type="button" variant="link" size="sm" onClick={() => handleSelectAll(true)} className="p-0 h-auto" disabled={isSubmitting || isReadOnly || isEditingClientProfile}>Selecionar Todos</Button>
+                                        <Button type="button" variant="link" size="sm" onClick={() => handleSelectAll(false)} className="p-0 h-auto text-destructive" disabled={isSubmitting || isReadOnly || isEditingClientProfile}>Desmarcar Todos</Button>
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4 rounded-lg border p-4">
+                                    {PERMISSOES_DISPONIVEIS.filter((p: Permissao) => p.key !== 'ponto_eletronico' && p.key !== 'visualizar_proprio_ponto').map((p: Permissao) => (
+                                        <FormField key={p.key} control={form.control} name={`permissoes.${p.key}`} render={({ field }) => (
+                                            <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                                                <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} disabled={isSubmitting || isReadOnly || isEditingClientProfile} /></FormControl>
+                                                <FormLabel className="font-normal">{p.label}</FormLabel>
+                                            </FormItem>
+                                        )} />
+                                    ))}
+                                </div>
+                            </div>
+                        </TabsContent>
+                        
+                        {/* TAB 2: IDENTIFICAÇÃO (CLIENTE PROFILE) */}
+                        <TabsContent value="identificacao" className="mt-4 space-y-6 p-4">
+                            <FormIdentificacao
+                                control={form.control as unknown as Control<any>}
+                                clienteId={clientProfile?.id}
+                                isSubmitting={isSubmitting}
+                                tagRefreshKey={refreshKey}
+                                onTagToggle={handleTagToggle}
+                            />
+                        </TabsContent>
+                        
+                        {/* TAB 3: CONTATO (CLIENTE PROFILE) */}
+                        <TabsContent value="contato" className="mt-4 space-y-6 p-4">
+                            <FormContato
+                                control={form.control as unknown as Control<any>}
+                                clienteId={clientProfile?.id}
+                                isSubmitting={isSubmitting}
+                                tagRefreshKey={refreshKey}
+                                onTagToggle={handleTagToggle}
+                            />
+                        </TabsContent>
+                        
+                        {/* TAB 4: ENDEREÇO (CLIENTE PROFILE) */}
+                        <TabsContent value="endereco" className="mt-4 space-y-6 p-4">
+                            <FormEndereco
+                                control={form.control as unknown as Control<any>}
+                                clienteId={clientProfile?.id}
+                                isSubmitting={isSubmitting}
+                                tagRefreshKey={refreshKey}
+                                onTagToggle={handleTagToggle}
+                            />
+                        </TabsContent>
+                    </Tabs>
+                    
+                    <Button type="submit" className="w-full" disabled={isSubmitting || isReadOnly}>
+                        {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Salvar Alterações
+                    </Button>
+                </form>
+            </Form>
+        </FormProvider>
       );
   }
-  
-  // --- RETORNO UNIFICADO ---
+
+  // --- RENDERIZAÇÃO PARA USUÁRIO (FUNCIONÁRIO) ---
   return (
-    <FormProvider {...formMethods}>
+    <FormProvider {...form}>
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-          {formContent}
+          <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
+            <TabsList className="flex flex-wrap justify-start w-full h-auto p-1">
+              <TabsTrigger value="pessoal" className="flex-1 md:flex-none md:w-1/6">Geral</TabsTrigger>
+              <TabsTrigger value="folgas" className="flex-1 md:flex-none md:w-1/6">Folgas</TabsTrigger>
+              <TabsTrigger value="ferias" className="flex-1 md:flex-none md:w-1/6">Férias</TabsTrigger>
+              <TabsTrigger value="cadastrais" className="flex-1 md:flex-none md:w-1/6">Dados Cadastrais</TabsTrigger>
+              <TabsTrigger value="documentos" className="flex-1 md:flex-none md:w-1/6">Documentos</TabsTrigger>
+              <TabsTrigger value="contrato" className="flex-1 md:flex-none md:w-1/6">Contrato (RH)</TabsTrigger>
+            </TabsList>
+            
+            {/* TAB 1: GERAL */}
+            <TabsContent value="pessoal" className="mt-4 space-y-4 p-4">
+              <FormGeral
+                  control={form.control}
+                  isSubmitting={isSubmitting}
+                  permissoesVisiveis={permissoesVisiveis}
+                  handleSelectAll={handleSelectAll}
+                  isReadOnly={isChildFormReadOnly('pessoal')}
+              />
+              
+              {/* Campos de Login (Apenas para criação ou alteração de senha) */}
+              <Separator />
+              <h3 className="font-semibold text-lg">Acesso e Login</h3>
+              <FormField control={form.control} name="email" render={({ field }) => (
+                  <FormItem><FormLabel>Email (Login)</FormLabel><FormControl><Input type="email" placeholder="email@exemplo.com" {...field} disabled={isEditing || isChildFormReadOnly('pessoal')} /></FormControl><FormMessage /></FormItem>
+              )} />
+              {!isEditing && <FormField control={form.control} name="senha" render={({ field }) => (
+                  <FormItem><FormLabel>Criar Senha</FormLabel><FormControl><Input type="password" placeholder="••••••••" {...field} disabled={isChildFormReadOnly('pessoal')} /></FormControl><FormMessage /></FormItem>
+              )} />}
+              {isEditing && <FormField control={form.control} name="senha" render={({ field }) => (
+                  <FormItem><FormLabel>Alterar Senha (Opcional)</FormLabel><FormControl><Input type="password" placeholder="••••••••" {...field} disabled={isChildFormReadOnly('pessoal')} /></FormControl><FormMessage /></FormItem>
+              )} />}
+            </TabsContent>
+            
+            {/* TAB 2: FOLGAS FIXAS */}
+            <TabsContent value="folgas" className="mt-4 space-y-6 p-4">
+                <FormFolgas
+                    control={form.control as unknown as Control<any>}
+                    isSubmitting={isSubmitting}
+                    usuarioInicial={userProfile}
+                    isReadOnly={isChildFormReadOnly('folgas')}
+                />
+            </TabsContent>
+            
+            {/* TAB 3: FÉRIAS (CRUD) */}
+            <TabsContent value="ferias" className="mt-4 space-y-6 p-4">
+                <FormFerias
+                    usuarioInicial={userProfile}
+                    isReadOnly={isChildFormReadOnly('ferias')}
+                />
+            </TabsContent>
+
+            {/* TAB 4: DADOS CADASTRAIS (EDITÁVEL) */}
+            <TabsContent value="cadastrais" className="mt-4 space-y-6 p-4">
+                <div className="flex justify-between items-center">
+                    <h3 className="font-semibold text-lg flex items-center"><Tag className="w-5 h-5 mr-2" /> Tags de Contrato</h3>
+                </div>
+                <p className="text-sm text-muted-foreground mb-4">Dados pessoais e de contato do funcionário.</p>
+                
+                <FormDadosCadastrais
+                    control={form.control as unknown as Control<any>}
+                    isSubmitting={isSubmitting}
+                    resourceId={resourceId}
+                    tagRefreshKey={refreshKey}
+                    onTagToggle={handleTagToggle}
+                    isReadOnly={isChildFormReadOnly('cadastrais')}
+                    isClientScope={false} // Escopo de Usuário
+                    isAddressLoading={isAddressLoading} // Passa o estado de carregamento
+                />
+            </TabsContent>
+            
+            {/* TAB 5: DOCUMENTOS DE ADMISSÃO */}
+            <TabsContent value="documentos" className="mt-4 space-y-6 p-4">
+                <FormDocumentos
+                    control={form.control as unknown as Control<any>}
+                    isSubmitting={isSubmitting}
+                    resourceId={resourceId}
+                    isReadOnly={isChildFormReadOnly('documentos')}
+                />
+            </TabsContent>
+
+            {/* TAB 6: DADOS CONTRATUAIS (RH) */}
+            <TabsContent value="contrato" className="mt-4 space-y-6 p-4">
+                <FormDadosContratuais
+                    control={form.control as unknown as Control<any>}
+                    isSubmitting={isSubmitting}
+                    isContractEditable={isContractEditable}
+                    isReadOnly={isChildFormReadOnly('contrato')}
+                />
+            </TabsContent>
+          </Tabs>
           
+          {/* O botão de salvar só é habilitado se não for read-only globalmente E se for a aba editável para o usuário funcionário */}
           {shouldShowSaveButton && (
               <Button type="submit" className="w-full" disabled={isSubmitting}>
                 {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {isNewClient ? 'Convidar Cliente' : 'Salvar Alterações'}
+                Salvar Alterações
               </Button>
           )}
         </form>
