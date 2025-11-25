@@ -47,7 +47,7 @@ const Conciliacao = () => {
     handleContaContabilLoteChange,
     handleApplyLote,
     handleSaveConciliacao,
-    handleDeleteHistorico,
+    handleDeleteHistorico, // CORRIGIDO: Agora está sendo desestruturado
     handleViewHistoricoDetails,
     setHistoricoDetalhesOpen,
     fetchConfigs,

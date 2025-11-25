@@ -43,7 +43,7 @@ interface ConciliacaoHook {
     handleContaContabilLoteChange: (id: string) => void;
     handleApplyLote: () => void;
     handleSaveConciliacao: () => Promise<void>;
-    handleDeleteHistorico: () => Promise<void>;
+    handleDeleteHistorico: () => Promise<void>; // ADICIONADO
     handleViewHistoricoDetails: (h: ConciliacaoHistorico) => void;
     setHistoricoDetalhesOpen: (open: boolean) => void;
     fetchConfigs: () => Promise<void>;
@@ -77,7 +77,7 @@ export function useConciliacao(): ConciliacaoHook {
     const [fileHash, setFileHash] = useState<string | null>(null); // NOVO ESTADO
 
     const contaSelecionada = useMemo(() => contas.find(c => c.id === contaSelecionadaId), [contas, contaSelecionadaId]);
-    const proprietarioDaConfiguracao = contaSelecionada?.proprietario_id;
+    const proprietarioDaConfiguracao = contaSelecionada?.proprietario_id || usuario?.id; // Usando usuario.id como fallback
 
     // --- Funções de Busca de Dados ---
 
@@ -279,6 +279,29 @@ export function useConciliacao(): ConciliacaoHook {
         setHistoricoDetalhesOpen(open);
         if (!open) setHistoricoSelecionado(null);
     }, []);
+    
+    const handleDeleteHistorico = useCallback(async () => {
+        if (!usuario?.id) return;
+        setIsDeletingHistorico(true);
+        
+        try {
+            // Deleta todos os registros de histórico para o usuário logado
+            const { error } = await supabase
+                .from('conciliacoes')
+                .delete()
+                .eq('empresa_id', usuario.id);
+                
+            if (error) throw error;
+            
+            showSuccess('Histórico de conciliações limpo com sucesso.');
+            fetchHistorico();
+        } catch (error: any) {
+            showError('Falha ao limpar histórico: ' + error.message);
+        } finally {
+            setIsDeletingHistorico(false);
+        }
+    }, [usuario, fetchHistorico]);
+
 
     // --- Lógica de Processamento de Arquivo ---
 
@@ -651,7 +674,7 @@ export function useConciliacao(): ConciliacaoHook {
         handleContaContabilLoteChange,
         handleApplyLote,
         handleSaveConciliacao,
-        handleDeleteHistorico,
+        handleDeleteHistorico, // RETORNANDO A FUNÇÃO
         handleViewHistoricoDetails,
         setHistoricoDetalhesOpen: handleSetHistoricoDetalhesOpen,
         fetchConfigs,
