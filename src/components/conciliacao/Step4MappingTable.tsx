@@ -41,10 +41,14 @@ const Step4MappingTable: React.FC<Step4MappingTableProps> = ({
   onSaveConciliacao,
 }) => {
   
-  const transacoesNaoConciliadas = transacoes.filter(t => !t.conta_contabil_id && !t.isDuplicated);
-  const transacoesRejeitadas = transacoes.filter(t => t.isDuplicated);
-  const transacoesValidas = transacoes.filter(t => !t.isDuplicated);
-  
+//   const transacoesNaoConciliadas = transacoes.filter(t => !t.conta_contabil_id && !t.isDuplicated);
+//   const transacoesRejeitadas = transacoes.filter(t => t.isDuplicated);
+//   const transacoesValidas = transacoes.filter(t => !t.isDuplicated);
+    
+    const transacoesRejeitadas = transacoes.filter(t => t.isDuplicated);
+    const transacoesValidas = transacoes.filter(t => !t.isDuplicated);
+    const transacoesNaoConciliadas = transacoesValidas.filter(t => !t.conta_contabil_id);
+    
   const allValidSelected = transacoesSelecionadas.length === transacoesValidas.length && transacoesValidas.length > 0;
 
   return (

@@ -40,8 +40,6 @@ import AssinarContrato from "./pages/AssinarContrato";
 import ContratoLinkPage from "./pages/ContratoLinkPage";
 import DRE from "./pages/DRE";
 import GerenciarHistoricos from "./pages/GerenciarHistoricos";
-import Exportar from "./pages/Exportar";
-import LancamentosNaoMapeados from "./pages/LancamentosNaoMapeados";
 import ClientesPage from "./pages/Clientes";
 import SiteLayout from "./components/SiteLayout";
 import Index from "./pages/Index";
@@ -52,6 +50,7 @@ import GerarDocumentoSocietario from "./pages/GerarDocumentoSocietario";
 import Suporte from "./pages/Suporte";
 import AdminSuporte from "./pages/AdminSuporte";
 import ContasPatrimoniais from "./pages/ContasPatrimoniais";
+import Extratos from "./pages/Extratos"; // IMPORT ADICIONADO
 
 const queryClient = new QueryClient();
 
@@ -287,6 +286,9 @@ const App = () => (
             {/* NOVAS ROTAS: Suporte */}
             <Route path="/suporte" element={<Suporte />} />
             <Route path="/admin/suporte" element={<AdminSuporte />} />
+            
+            {/* NOVA ROTA: Extratos */}
+            <Route path="/extratos" element={<Extratos />} />
 
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
