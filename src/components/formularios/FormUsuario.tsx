@@ -170,7 +170,33 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
         permissoes: {},
     },
   }) as UseFormReturn<FormValues>;
-  
+// ...existing code...
+      const clientTabs = [
+          { value: 'pessoal', label: 'Geral' },
+          { value: 'identificacao', label: 'Identificação' },
+          { value: 'contato', label: 'Contato' },
+          { value: 'endereco', label: 'Endereço' },
+      ];
+      
+-      formContent = (
+-          <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
+-              <TabsList className="flex flex-wrap justify-start w-full h-auto p-1">
+-                  {clientTabs.map(tab => (
+-                      <TabsTrigger key={tab.value} value={tab.value} className="flex-1 md:flex-none md:w-1/4">{tab.label}</TabsTrigger>
+-                  ))}
+-              </TabsList>
+-              ...
+-          </Tabs>
+-      );
++      formContent = <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
++              <TabsList className="flex flex-wrap justify-start w-full h-auto p-1">
++                  {clientTabs.map(tab => (
++                      <TabsTrigger key={tab.value} value={tab.value} className="flex-1 md:flex-none md:w-1/4">{tab.label}</TabsTrigger>
++                  ))}
++              </TabsList>
++              ...
++          </Tabs>;
+ // ...existing code...  
   const { watch, setValue } = form;
   const cepValue = watch('cep');
   const isAddressLoading = watch('endereco') === 'Buscando...';
