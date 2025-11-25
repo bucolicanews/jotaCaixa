@@ -434,11 +434,12 @@ export function useConciliacao(): ConciliacaoHook {
                 setContaContabilLote(null);
                 
                 let successMessage = `${transacoesValidas.length} transações válidas importadas.`;
-                if (transacoesRejeitadas.length > 0) {
-                    successMessage += ` ${transacoesRejeitadas.length} rejeitadas (Duplicidade ou Data já conciliada).`;
-                }
+                
                 if (rejectedDates.size > 0) {
-                    successMessage += ` Datas ignoradas: ${Array.from(rejectedDates).map(d => format(parseISO(d), 'dd/MM')).join(', ')}.`;
+                    const rejectedDatesArray = Array.from(rejectedDates).map(d => format(parseISO(d), 'dd/MM'));
+                    showError(`Datas já conciliadas: ${rejectedDatesArray.join(', ')}. Apenas transações de dias novos foram importadas.`);
+                } else if (transacoesRejeitadas.length > 0) {
+                    successMessage += ` ${transacoesRejeitadas.length} rejeitadas (Duplicidade de transação).`;
                 }
                 
                 showSuccess(successMessage);
