@@ -164,7 +164,7 @@ const ExtratoFormDialog: React.FC<ExtratoFormDialogProps> = ({ extratoInicial, o
                         
                         <FormField control={form.control} name="conta_contabil_id" render={({ field }) => (
                             <FormItem>
-                                <FormLabel>Conta Contábil (Resultado)</Label>
+                                <FormLabel>Conta Contábil (Resultado)</FormLabel>
                                 <Select onValueChange={field.onChange} value={field.value || undefined}>
                                     <FormControl><SelectTrigger><SelectValue placeholder="Selecione a conta de resultado" /></SelectTrigger></FormControl>
                                     <SelectContent>

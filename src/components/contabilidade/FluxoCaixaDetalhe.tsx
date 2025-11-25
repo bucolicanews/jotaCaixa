@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, ArrowUpCircle, ArrowDownCircle, Filter, Search, Banknote, Wallet, Landmark, Printer } from 'lucide-react';
+import { Loader2, ArrowUpCircle, ArrowDownCircle, Filter, Search, Banknote, Wallet, Landmark, Printer, Edit } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError } from '@/utils/toast';
 import { formatCurrency, formatarData } from '@/utils/formatters';
@@ -19,15 +19,10 @@ import { usePrint } from '@/hooks/use-print';
 import ReactDOMServer from 'react-dom/server';
 import FluxoCaixaPrint from './FluxoCaixaPrint';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../ui/dropdown-menu';
+import FormMovimentacaoDiretaDialog, { LancamentoPrimario } from '@/components/formularios/FormMovimentacaoDiretaDialog';
 
-interface Lancamento {
-  id: string;
-  data_movimentacao: string;
-  descricao: string;
-  valor: number;
-  tipo: 'Entrada' | 'Saida';
-  conta_bancaria_id: string;
-  conta_contabil_id: string;
+// Interface para o lançamento primário (ligado à conta bancária)
+interface Lancamento extends LancamentoPrimario {
   conciliado: boolean;
   origem: string;
   documento: string | null;
@@ -56,6 +51,9 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
   const [filtroTexto, setFiltroTexto] = useState('');
   const filtroTextoDebounced = useDebounce(filtroTexto, 500);
   const [filtroPeriodo, setFiltroPeriodo] = useState<DateRange | undefined>(undefined);
+  
+  // Edição
+  const [editDialog, setEditDialog] = useState<{ open: boolean, lancamento: Lancamento | null }>({ open: false, lancamento: null });
 
   const fetchLancamentos = useCallback(async () => {
     setLoadingLancamentos(true);
@@ -75,7 +73,17 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
     let query = supabase
       .from('lancamentos')
       .select(`
-        *,
+        id,
+        data_movimentacao,
+        descricao,
+        valor,
+        tipo,
+        conta_bancaria_id,
+        conta_contabil_id,
+        conciliado,
+        origem,
+        documento,
+        historico_id,
         saldo_contas:conta_bancaria_id ( nome )
       `)
       .eq('proprietario_id', empresaId) // ALTERADO: empresa_id -> proprietario_id
@@ -107,14 +115,9 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
       showError('Erro ao carregar lançamentos: ' + error.message);
       setLancamentos([]);
     } else {
-      const mappedData = (data as any[]).map(l => ({
-          ...l,
-          saldo_contas: l.saldo_contas, 
-          plano_contas: null,
-      })) as Lancamento[];
+      let filteredData = data as Lancamento[];
       
       // Filtro de ID no frontend (para IDs de lançamento ou conta bancária)
-      let filteredData = mappedData;
       if (filtroTextoDebounced) {
           const termo = filtroTextoDebounced.toLowerCase();
           filteredData = filteredData.filter(l => 
@@ -181,8 +184,18 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
     const htmlContent = ReactDOMServer.renderToStaticMarkup(printComponent);
     printContent(htmlContent, `Relatório Fluxo de Caixa - ${format(new Date(), 'yyyyMMdd')}`, orientation);
   };
+  
+  const handleOpenEdit = (lancamento: Lancamento) => {
+    setEditDialog({ open: true, lancamento });
+  };
+
+  const handleEditSaveComplete = () => {
+      setEditDialog({ open: false, lancamento: null });
+      fetchLancamentos(); // Refetch data
+  };
 
   return (
+    <>
     <div className="space-y-6">
       
       {/* Resumo de Saldos */}
@@ -298,13 +311,14 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
                   <TableHead>Descrição</TableHead>
                   <TableHead className="w-[100px] text-center">Tipo</TableHead>
                   <TableHead className="w-[120px] text-right">Valor</TableHead>
+                  <TableHead className="w-[100px] text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loadingLancamentos ? (
-                  <TableRow><TableCell colSpan={5} className="text-center py-8"><Loader2 className="h-6 w-6 animate-spin mx-auto text-primary" /></TableCell></TableRow>
+                  <TableRow><TableCell colSpan={6} className="text-center py-8"><Loader2 className="h-6 w-6 animate-spin mx-auto text-primary" /></TableCell></TableRow>
                 ) : lancamentos.length === 0 ? (
-                  <TableRow><TableCell colSpan={5} className="text-center py-4 text-muted-foreground">Nenhum lançamento encontrado com os filtros aplicados.</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={6} className="text-center py-4 text-muted-foreground">Nenhum lançamento encontrado com os filtros aplicados.</TableCell></TableRow>
                 ) : (
                   lancamentos.map((l) => (
                     <TableRow key={l.id}>
@@ -317,8 +331,17 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
                           {l.tipo}
                         </Badge>
                       </TableCell>
-                      <TableCell className={cn("text-right font-semibold", l.tipo === 'Entrada' ? 'text-green-600' : 'text-red-600')}>
-                        {formatCurrency(l.valor)}
+                      <TableCell className={cn("text-right font-semibold", l.valor >= 0 ? 'text-green-600' : 'text-red-600')}>
+                        {formatCurrency(Math.abs(l.valor))}
+                      </TableCell>
+                      <TableCell className="w-[100px] text-right">
+                          <div className="flex justify-end space-x-2">
+                              {l.origem === 'movimentacao_direta' && (
+                                  <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(l)} title="Editar Movimentação">
+                                      <Edit className="w-4 h-4" />
+                                  </Button>
+                              )}
+                          </div>
                       </TableCell>
                     </TableRow>
                   ))
@@ -329,6 +352,16 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
         </CardContent>
       </Card>
     </div>
+    
+    {editDialog.lancamento && (
+        <FormMovimentacaoDiretaDialog
+            open={editDialog.open}
+            onOpenChange={(open) => setEditDialog({ open, lancamento: null })}
+            lancamentoInicial={editDialog.lancamento}
+            onSaveComplete={handleEditSaveComplete}
+        />
+    )}
+    </>
   );
 };
 
