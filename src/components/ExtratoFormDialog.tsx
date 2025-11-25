@@ -12,7 +12,6 @@ import { showError, showSuccess } from '@/utils/toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { PlanoContas } from '@/types/plano-contas';
 import { TransacaoExtrato } from '@/types/conciliacao';
-import { formatarData } from '@/utils/formatters';
 import { Card, CardContent } from './ui/card';
 
 // Tipo de Extrato (simplificado para edição)
