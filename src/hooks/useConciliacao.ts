@@ -10,42 +10,7 @@ import { format, parseISO } from 'date-fns';
 import { formatDDMMYYYYToISO, normalizeString } from '@/utils/formatters'; // Importando normalizeString
 
 interface ConciliacaoHook {
-    // State
-    loading: boolean;
-    isSaving: boolean;
-    isDeletingHistorico: boolean;
-    activeTab: string;
-    contas: SaldoConta[];
-    configs: ConfiguracaoConciliacao[];
-    contasContabeis: PlanoContas[];
-    historico: ConciliacaoHistorico[];
-    contaSelecionadaId: string | null;
-    configSelecionada: ConfiguracaoConciliacao | null;
-    file: File | null;
-    transacoes: TransacaoExtrato[];
-    transacoesSelecionadas: number[];
-    contaContabilLote: string | null;
-    historicoSelecionado: ConciliacaoHistorico | null;
-    historicoDetalhesOpen: boolean;
-    proprietarioDaConfiguracao: string | undefined | null;
-
-    // Handlers
-    setActiveTab: (tab: string) => void;
-    handleReset: (keepAccountId?: boolean) => void;
-    handleSelectAccount: (id: string) => void;
-    handleSelectConfig: (id: string) => void;
-    handleFileChange: (file: File | null) => void;
-    handleParseFile: () => Promise<void>;
-    handleContaContabilChange: (index: number, contaContabilId: string) => void;
-    handleToggleSelection: (index: number, checked: boolean) => void;
-    handleSelectAll: (checked: boolean) => void;
-    handleContaContabilLoteChange: (id: string) => void;
-    handleApplyLote: () => void;
-    handleSaveConciliacao: () => Promise<void>;
-    handleDeleteHistorico: () => Promise<void>;
-    handleViewHistoricoDetails: (h: ConciliacaoHistorico) => void;
-    setHistoricoDetalhesOpen: (open: boolean) => void;
-    fetchConfigs: () => Promise<void>;
+// ... (restante da interface)
 }
 
 // Função auxiliar para calcular um hash simples do conteúdo do CSV (ignorando a primeira linha)
@@ -299,8 +264,11 @@ export function useConciliacao(): ConciliacaoHook {
             const formattedDate = formatDDMMYYYYToISO(e.data);
             // CRÍTICO: Normaliza a descrição do banco de dados
             const normalizedDesc = normalizeString(e.descricao); 
+            // CRÍTICO: Garante que o valor do DB seja formatado com 2 casas decimais
+            const formattedValue = Number(e.valor).toFixed(2);
+            
             // Usamos o valor original (com sinal) para a verificação de unicidade
-            return `${formattedDate}|${normalizedDesc}|${Number(e.valor).toFixed(2)}|${e.tipo}`;
+            return `${formattedDate}|${normalizedDesc}|${formattedValue}|${e.tipo}`;
         }));
     }, []);
 
@@ -330,7 +298,7 @@ export function useConciliacao(): ConciliacaoHook {
                     const valorStr = String(row[config.mapeamento.valor] || '0').replace(',', '.');
                     let valor = parseFloat(valorStr);
                     
-                    if (config.coluna_tipo_transacao && row[config.coluna_tipo_transacao] !== config.valor_credito) {
+                    if (config.coluna_tipo_transacao && row[config.mapeamento.tipo_transacao] !== config.valor_credito) {
                         valor = -Math.abs(valor);
                     }
                     
@@ -354,8 +322,11 @@ export function useConciliacao(): ConciliacaoHook {
                     // CRÍTICO: Normaliza a descrição da transação importada
                     const normalizedDesc = normalizeString(row[config.mapeamento.descricao]);
                     
+                    // CRÍTICO: Garante que o valor do CSV seja formatado com 2 casas decimais
+                    const formattedValue = Number(valor).toFixed(2);
+                    
                     // Chave de comparação para a transação atual (usando a data formatada YYYY-MM-DD e valor com sinal)
-                    const uniqueKey = `${formattedDate}|${normalizedDesc}|${Number(valor).toFixed(2)}|${tipo}`;
+                    const uniqueKey = `${formattedDate}|${normalizedDesc}|${formattedValue}|${tipo}`;
                     
                     let isDuplicated = false;
                     let motivoDuplicidade: string | null = null;
