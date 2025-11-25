@@ -514,22 +514,22 @@ const PlanoContasPage = () => {
                       <TableHead className="w-[100px] text-center">Caixa/Banco</TableHead>
                       <TableHead className="w-[100px] text-center">Patrimonial</TableHead>
                       <TableHead className="w-[100px] text-center">Resultado</TableHead>
-                      <TableHead className="w-[100px] text-center">Caixa</TableHead> {/* NOVO */}
-                      <TableHead className="w-[100px] text-center">Banco</TableHead> {/* NOVO */}
+                      <TableHead className="w-[100px] text-center">Caixa</TableHead>
+                      <TableHead className="w-[100px] text-center">Banco</TableHead>
                       <TableHead className="w-[100px] text-right">Ações</TableHead>
                     </TableRow>
                   </thead>
                   <tbody className="[&_tr:last-child]:border-0">
                     {carregandoContas ? (
                       <TableRow>
-                        <TableCell colSpan={10} className="text-center py-8"> {/* COLSPAN AJUSTADO PARA 10 */}
+                        <TableCell colSpan={10} className="text-center py-8">
                           <Loader2 className="h-6 w-6 animate-spin mx-auto text-primary" />
                         </TableCell>
                       </TableRow>
                     ) : contas.length === 0 ? (
                       <TableRow>
                         <TableCell
-                          colSpan={10} // COLSPAN AJUSTADO PARA 10
+                          colSpan={10}
                           className="text-center py-4 text-muted-foreground"
                         >
                           Nenhuma conta encontrada com os filtros aplicados.
