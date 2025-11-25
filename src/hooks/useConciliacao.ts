@@ -281,8 +281,6 @@ export function useConciliacao(): ConciliacaoHook {
 
     // --- Lógica de Processamento de Arquivo ---
 
-    // REMOVIDA: checkFileDuplicity (verificação de hash do arquivo inteiro)
-    
     // NOVO: Função para buscar extratos existentes na nova tabela
     const fetchExistingExtratos = useCallback(async (contaId: string, empresaId: string) => {
         const { data, error } = await supabase
