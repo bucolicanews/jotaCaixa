@@ -292,19 +292,8 @@ export function useConciliacao(): ConciliacaoHook {
     // --- Lógica de Processamento de Arquivo ---
 
     const checkFileDuplicity = useCallback(async (contentHash: string, empresaId: string): Promise<boolean> => {
-        const { data, error } = await supabase
-            .from('conciliacoes')
-            .select('id')
-            .eq('empresa_id', empresaId)
-            .eq('extrato_hash', contentHash) // Verifica pelo hash do conteúdo
-            .limit(1);
-            
-        if (error) {
-            console.error('Erro ao verificar duplicidade de conteúdo:', error);
-            return false; 
-        }
-        
-        return data && data.length > 0;
+        // DESABILITADO: Não verifica mais a duplicidade do arquivo inteiro
+        return false;
     }, []);
     
     // NOVO TIPO AUXILIAR
@@ -314,12 +303,8 @@ export function useConciliacao(): ConciliacaoHook {
 
     // NOVO: Função para buscar extratos existentes na nova tabela
     const fetchExistingExtratos = useCallback(async (contaId: string, empresaId: string) => {
-        // --- INJEÇÃO DE DUPLICIDADE PARA TESTE (SOLICITADO PELO USUÁRIO) ---
-        // Transação: 25/11/2025,Transf Pix recebida,CRÉDITO,Suely Pojo Chagas,364
-        // Key: 2025-11-25|transfpixrecebida|364.00|Entrada
-        const hardcodedDuplicateKey = '2025-11-25|transfpixrecebida|364.00|Entrada';
-        const existingKeys = new Set<string>([hardcodedDuplicateKey]);
-        // --- FIM INJEÇÃO DE DUPLICIDADE PARA TESTE ---
+        
+        const existingKeys = new Set<string>();
         
         const { data, error } = await supabase
             .from('extratos')
@@ -329,7 +314,6 @@ export function useConciliacao(): ConciliacaoHook {
             
         if (error) {
             console.error('Erro ao buscar extratos existentes:', error);
-            // Retorna apenas a chave hardcoded em caso de erro
             return existingKeys;
         }
         
@@ -364,13 +348,13 @@ export function useConciliacao(): ConciliacaoHook {
             return;
         }
         
-        // 2. Verificar Duplicidade de Conteúdo (do arquivo completo)
-        const isDuplicatedContent = await checkFileDuplicity(contentHash, proprietarioDaConfiguracao);
-        if (isDuplicatedContent) {
-            showError(`O conteúdo deste extrato já foi importado anteriormente.`);
-            setLoading(false);
-            return;
-        }
+        // 2. Verificar Duplicidade de Conteúdo (do arquivo completo) - DESABILITADO
+        // const isDuplicatedContent = await checkFileDuplicity(contentHash, proprietarioDaConfiguracao);
+        // if (isDuplicatedContent) {
+        //     showError(`O conteúdo deste extrato já foi importado anteriormente.`);
+        //     setLoading(false);
+        //     return;
+        // }
 
         // 3. Buscar extratos existentes na nova tabela 'extratos'
         const existingExtratosSet = await fetchExistingExtratos(contaSelecionadaId, proprietarioDaConfiguracao);
@@ -447,7 +431,7 @@ export function useConciliacao(): ConciliacaoHook {
             }
         });
         setLoading(false);
-    }, [file, configSelecionada, contaSelecionadaId, proprietarioDaConfiguracao, applyRegras, checkFileDuplicity, fetchExistingExtratos]);
+    }, [file, configSelecionada, contaSelecionadaId, proprietarioDaConfiguracao, applyRegras, fetchExistingExtratos]);
 
     // --- Lógica de Salvamento ---
 
