@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
-import { useForm, FormProvider, Control } from 'react-hook-form';
+import { useForm, FormProvider } from 'react-hook-form';
+import type { Control, UseFormReturn } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from '@/components/ui/button';
@@ -160,7 +161,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
       });
   }, [criadorRole]);
 
-  const form = useForm<FormValues>({
+  const form = useForm({
     resolver: zodResolver(formSchema),
     defaultValues: {
         nome: '',
@@ -168,7 +169,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
         senha: '',
         permissoes: {},
     },
-  });
+  }) as UseFormReturn<FormValues>;
   
   const { watch, setValue } = form;
   const cepValue = watch('cep');
