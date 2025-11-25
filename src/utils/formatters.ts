@@ -68,3 +68,18 @@ export function sanitizeConteudo(conteudo: string | null | undefined): string {
         .replace(/<dyad-[^>]+>/g, '')
         .replace(/<\/dyad-[^>]+>/g, '');
 }
+
+/**
+ * Calcula um hash simples do conteúdo de dados de um CSV (ignorando o cabeçalho).
+ * Usado para verificar se o mesmo arquivo foi importado duas vezes.
+ */
+export const calculateContentHash = (csvContent: string): string => {
+    const lines = csvContent.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+    if (lines.length <= 1) return ''; 
+    
+    // Concatena todas as linhas de dados (a partir da segunda linha)
+    const dataContent = lines.slice(1).join('|');
+    
+    // Retorna uma substring para evitar exceder o limite de 255 caracteres do campo TEXT
+    return dataContent.substring(0, 255); 
+};

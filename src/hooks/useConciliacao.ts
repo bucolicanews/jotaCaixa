@@ -7,7 +7,7 @@ import { ConfiguracaoConciliacao, TransacaoExtrato, ConciliacaoRegra, Conciliaca
 import { PlanoContas } from '@/types/plano-contas';
 import Papa, { ParseResult } from 'papaparse';
 import { format, parseISO } from 'date-fns';
-import { formatDDMMYYYYToISO, normalizeString } from '@/utils/formatters'; // Importando normalizeString
+import { formatDDMMYYYYToISO, normalizeString, calculateContentHash } from '@/utils/formatters'; // Importando calculateContentHash
 
 interface ConciliacaoHook {
     // State
@@ -28,6 +28,7 @@ interface ConciliacaoHook {
     historicoSelecionado: ConciliacaoHistorico | null;
     historicoDetalhesOpen: boolean;
     proprietarioDaConfiguracao: string | undefined | null;
+    fileHash: string | null; // ADICIONADO
 
     // Handlers
     setActiveTab: (tab: string) => void;
@@ -47,20 +48,6 @@ interface ConciliacaoHook {
     setHistoricoDetalhesOpen: (open: boolean) => void;
     fetchConfigs: () => Promise<void>;
 }
-
-// Função auxiliar para calcular um hash simples do conteúdo do CSV (ignorando a primeira linha)
-const calculateContentHash = (csvContent: string): string => {
-    const lines = csvContent.split('\n').map(line => line.trim()).filter(line => line.length > 0);
-    if (lines.length <= 1) return ''; // Ignora cabeçalho
-    
-    // Concatena todas as linhas de dados (a partir da segunda linha)
-    const dataContent = lines.slice(1).join('|');
-    
-    // Em um ambiente real, usaríamos uma biblioteca de hash (ex: crypto.subtle.digest).
-    // Aqui, usamos uma concatenação simples como identificador de conteúdo.
-    return dataContent.substring(0, 255); // Limita o tamanho do hash para o campo TEXT
-};
-
 
 export function useConciliacao(): ConciliacaoHook {
     const { usuario } = useSessao();
@@ -87,6 +74,7 @@ export function useConciliacao(): ConciliacaoHook {
     
     const [historicoDetalhesOpen, setHistoricoDetalhesOpen] = useState(false);
     const [historicoSelecionado, setHistoricoSelecionado] = useState<ConciliacaoHistorico | null>(null);
+    const [fileHash, setFileHash] = useState<string | null>(null); // NOVO ESTADO
 
     const contaSelecionada = useMemo(() => contas.find(c => c.id === contaSelecionadaId), [contas, contaSelecionadaId]);
     const proprietarioDaConfiguracao = contaSelecionada?.proprietario_id;
@@ -208,6 +196,7 @@ export function useConciliacao(): ConciliacaoHook {
         setTransacoesSelecionadas([]);
         setContaContabilLote(null);
         setFile(null);
+        setFileHash(null); // NOVO RESET
         setActiveTab('conciliacao');
     }, []);
 
@@ -221,11 +210,13 @@ export function useConciliacao(): ConciliacaoHook {
         setConfigSelecionada(configs.find(c => c.id === id) || null);
         setTransacoes([]);
         setFile(null);
+        setFileHash(null); // Limpa o hash ao mudar a config
     }, [configs]);
 
     const handleFileChange = useCallback((newFile: File | null) => {
         setFile(newFile);
         setTransacoes([]);
+        setFileHash(null); // Limpa o hash ao mudar o arquivo
     }, []);
     
     const handleContaContabilChange = useCallback((index: number, contaContabilId: string) => {
@@ -355,6 +346,26 @@ export function useConciliacao(): ConciliacaoHook {
             return;
         }
         
+        // NOVO CHECK: Verificar se o hash do arquivo já foi importado
+        const { count: hashCount, error: hashError } = await supabase
+            .from('conciliacoes')
+            .select('id', { count: 'exact', head: true })
+            .eq('empresa_id', proprietarioDaConfiguracao)
+            .eq('extrato_hash', contentHash);
+            
+        if (hashError) {
+            setLoading(false);
+            throw hashError;
+        }
+        
+        if ((hashCount || 0) > 0) {
+            showError('Este arquivo já foi importado anteriormente.');
+            setLoading(false);
+            return;
+        }
+        
+        setFileHash(contentHash); // SALVA O HASH AQUI
+
         // 2. Buscar datas já existentes no banco
         const existingDatesSet = await fetchExistingDates(contaSelecionadaId, proprietarioDaConfiguracao);
         
@@ -406,7 +417,7 @@ export function useConciliacao(): ConciliacaoHook {
                         motivoDuplicidade = 'Transação já existe na tabela de extratos.';
                     }
                     
-                    // NOVO: Verifica se a data já foi conciliada (se a transação não for duplicada por chave)
+                    // Verifica se a data já foi conciliada (se a transação não for duplicada por chave)
                     if (!isDuplicated && formattedDate && existingDatesSet.has(formattedDate)) {
                         isDuplicated = true;
                         motivoDuplicidade = 'Data já conciliada.';
@@ -454,8 +465,8 @@ export function useConciliacao(): ConciliacaoHook {
     // --- Lógica de Salvamento ---
 
     const handleSaveConciliacao = useCallback(async () => {
-        if (!contaSelecionadaId || !proprietarioDaConfiguracao || !file) {
-            showError('Conta bancária, proprietário ou arquivo não definidos.');
+        if (!contaSelecionadaId || !proprietarioDaConfiguracao || !file || !fileHash) { // USANDO fileHash
+            showError('Conta bancária, proprietário, arquivo ou hash não definidos.');
             return;
         }
         
@@ -489,7 +500,6 @@ export function useConciliacao(): ConciliacaoHook {
                 const valor = Math.abs(t.valor);
                 
                 // Transação 1: Movimentação de Caixa/Banco (Ativo)
-                // Ativo é Devedora: Entrada (Débito) = 'Entrada', Saída (Crédito) = 'Saida'
                 const lancamentoAtivo = {
                     proprietario_id: proprietarioDaConfiguracao,
                     data_movimentacao: formattedDate || t.data,
@@ -504,7 +514,6 @@ export function useConciliacao(): ConciliacaoHook {
                 };
                 
                 // Transação 2: Partida Dobrada (Resultado - Receita/Despesa)
-                // Resultado é Credora: Entrada (Débito) = 'Entrada', Saída (Crédito) = 'Saida'
                 let tipoResultado: 'Entrada' | 'Saida';
                 
                 if (t.tipo === 'Entrada') {
@@ -581,16 +590,13 @@ export function useConciliacao(): ConciliacaoHook {
             }
             
             // 4. Salvar o registro de conciliação (Histórico)
-            const fileContent = await file.text();
-            const contentHash = calculateContentHash(fileContent);
-            
             const historicoPayload = {
                 empresa_id: proprietarioDaConfiguracao,
                 usuario_id: usuario?.id,
                 id_saldo_contas: contaSelecionadaId,
                 nome_arquivo: file.name,
                 extrato_json: transacoesParaSalvar,
-                extrato_hash: contentHash, // Salva o hash do conteúdo
+                extrato_hash: fileHash, // USANDO O HASH ARMAZENADO
             };
             
             const { error: historicoError } = await supabase
@@ -608,29 +614,7 @@ export function useConciliacao(): ConciliacaoHook {
         } finally {
             setIsSaving(false);
         }
-    }, [contaSelecionadaId, proprietarioDaConfiguracao, file, transacoes, usuario?.id, fetchHistorico, handleReset]);
-
-    const handleDeleteHistorico = useCallback(async () => {
-        if (!usuario?.id) return;
-        
-        setIsDeletingHistorico(true);
-        
-        try {
-            const { error } = await supabase
-                .from('conciliacoes')
-                .delete()
-                .eq('empresa_id', usuario.id);
-                
-            if (error) throw error;
-            
-            showSuccess(`Histórico de ${historico.length} conciliações removido com sucesso.`);
-            fetchHistorico();
-        } catch (error: any) {
-            showError('Falha ao limpar histórico: ' + error.message);
-        } finally {
-            setIsDeletingHistorico(false);
-        }
-    }, [usuario?.id, historico.length, fetchHistorico]);
+    }, [contaSelecionadaId, proprietarioDaConfiguracao, file, fileHash, transacoes, usuario?.id, fetchHistorico, handleReset]);
 
 
     return {
@@ -652,6 +636,7 @@ export function useConciliacao(): ConciliacaoHook {
         historicoSelecionado,
         historicoDetalhesOpen,
         proprietarioDaConfiguracao,
+        fileHash, // RETORNANDO O HASH
 
         // Handlers
         setActiveTab,
