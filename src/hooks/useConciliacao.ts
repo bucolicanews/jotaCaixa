@@ -37,7 +37,7 @@ export function useConciliacao(): ConciliacaoHook {
     const [transacoes, setTransacoes] = useState<TransacaoExtrato[]>([]);
     const [regras, setRegras] = useState<ConciliacaoRegra[]>([]);
     
-    const [transacoesSelecionadas, setTransacoesSelecionadas] = useState<number[]>([]);
+    const [transacoesSelecionadas, setTransacoesSelecionadas] = setTransacoesSelecionadas] = useState<number[]>([]);
     const [contaContabilLote, setContaContabilLote] = useState<string | null>(null);
     
     const [historicoDetalhesOpen, setHistoricoDetalhesOpen] = useState(false);
@@ -298,8 +298,14 @@ export function useConciliacao(): ConciliacaoHook {
                     const valorStr = String(row[config.mapeamento.valor] || '0').replace(',', '.');
                     let valor = parseFloat(valorStr);
                     
-                    if (config.coluna_tipo_transacao && row[config.mapeamento.tipo_transacao] !== config.valor_credito) {
-                        valor = -Math.abs(valor);
+                    // LÓGICA DE SINAL CORRIGIDA:
+                    // Se o valor lido já for negativo, ele é mantido.
+                    // Se o valor for positivo E houver uma coluna de tipo, aplicamos a regra.
+                    if (valor >= 0 && config.coluna_tipo_transacao) {
+                        if (row[config.coluna_tipo_transacao] !== config.valor_credito) {
+                            // Se não for o valor de crédito, é uma saída (débito)
+                            valor = -Math.abs(valor);
+                        }
                     }
                     
                     const identificacao = config.mapeamento.identificacao 
