@@ -13,7 +13,6 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
 import { PlanoContas } from '@/types/plano-contas';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -40,6 +39,8 @@ type FormInitialData = PlanoContas | (NovaContaInicial & {
     is_conta_caixa_banco: boolean; // RENOMEADO
     is_conta_patrimonial: boolean; // NOVO CAMPO
     is_conta_resultado: boolean;
+    is_caixa: boolean; // NOVO
+    is_banco: boolean; // NOVO
 });
 
 // Mapeamento de cores para os níveis hierárquicos
@@ -396,7 +397,9 @@ const PlanoContasPage = () => {
             Descricao: '', 
             is_conta_caixa_banco: false, // RENOMEADO
             is_conta_patrimonial: false, // NOVO CAMPO
-            is_conta_resultado: false 
+            is_conta_resultado: false,
+            is_caixa: false, // NOVO
+            is_banco: false, // NOVO
         } as FormInitialData
         : null);
 
@@ -510,20 +513,22 @@ const PlanoContasPage = () => {
                       <TableHead className="w-[100px] text-center">Caixa/Banco</TableHead>
                       <TableHead className="w-[100px] text-center">Patrimonial</TableHead>
                       <TableHead className="w-[100px] text-center">Resultado</TableHead>
+                      <TableHead className="w-[100px] text-center">Caixa</TableHead> {/* NOVO */}
+                      <TableHead className="w-[100px] text-center">Banco</TableHead> {/* NOVO */}
                       <TableHead className="w-[100px] text-right">Ações</TableHead>
                     </TableRow>
                   </thead>
                   <tbody className="[&_tr:last-child]:border-0">
                     {carregandoContas ? (
                       <TableRow>
-                        <TableCell colSpan={8} className="text-center py-8">
+                        <TableCell colSpan={10} className="text-center py-8"> {/* COLSPAN AJUSTADO PARA 10 */}
                           <Loader2 className="h-6 w-6 animate-spin mx-auto text-primary" />
                         </TableCell>
                       </TableRow>
                     ) : contas.length === 0 ? (
                       <TableRow>
                         <TableCell
-                          colSpan={8}
+                          colSpan={10} // COLSPAN AJUSTADO PARA 10
                           className="text-center py-4 text-muted-foreground"
                         >
                           Nenhuma conta encontrada com os filtros aplicados.
@@ -603,7 +608,6 @@ const PlanoContasPage = () => {
                                   )}
                                 </TableCell>
                                 
-                                {/* NOVA COLUNA: CONTA PATRIMONIAL */}
                                 <TableCell className="text-center">
                                   {conta.Analitica === 'Sim' ? (
                                     <EditableCell
@@ -624,6 +628,36 @@ const PlanoContasPage = () => {
                                       id={conta.id}
                                       initialValue={conta.is_conta_resultado}
                                       fieldName="is_conta_resultado"
+                                      onSaveSuccess={handleInlineSaveSuccess}
+                                      isEditable={true}
+                                    />
+                                  ) : (
+                                    '-'
+                                  )}
+                                </TableCell>
+                                
+                                {/* NOVO CAMPO: IS CAIXA */}
+                                <TableCell className="text-center">
+                                  {conta.Analitica === 'Sim' ? (
+                                    <EditableCell
+                                      id={conta.id}
+                                      initialValue={conta.is_caixa}
+                                      fieldName="is_caixa"
+                                      onSaveSuccess={handleInlineSaveSuccess}
+                                      isEditable={true}
+                                    />
+                                  ) : (
+                                    '-'
+                                  )}
+                                </TableCell>
+                                
+                                {/* NOVO CAMPO: IS BANCO */}
+                                <TableCell className="text-center">
+                                  {conta.Analitica === 'Sim' ? (
+                                    <EditableCell
+                                      id={conta.id}
+                                      initialValue={conta.is_banco}
+                                      fieldName="is_banco"
                                       onSaveSuccess={handleInlineSaveSuccess}
                                       isEditable={true}
                                     />

@@ -10,6 +10,8 @@ export interface PlanoContas {
   is_conta_resultado: boolean; // NOVO CAMPO
   criado_em: string;
   atualizado_em: string;
+  is_caixa: boolean; // ADICIONADO
+  is_banco: boolean; // ADICIONADO
 }
 
 export interface ContaCSV {

@@ -52,6 +52,8 @@ const formSchema = z.object({
   is_conta_caixa_banco: z.boolean().optional(), // RENOMEADO
   is_conta_patrimonial: z.boolean().optional(), // NOVO CAMPO
   is_conta_resultado: z.boolean().optional(),
+  is_caixa: z.boolean().optional(), // NOVO
+  is_banco: z.boolean().optional(), // NOVO
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -81,6 +83,8 @@ const FormPlanoContas: React.FC<FormPlanoContasProps> = ({ proprietarioId, conta
       is_conta_caixa_banco: (contaInicial as any)?.is_conta_caixa_banco || false, // Corrigido acesso
       is_conta_patrimonial: contaInicial?.is_conta_patrimonial || false, // NOVO CAMPO
       is_conta_resultado: contaInicial?.is_conta_resultado || false,
+      is_caixa: contaInicial?.is_caixa || false, // NOVO
+      is_banco: contaInicial?.is_banco || false, // NOVO
     },
   });
   
@@ -141,6 +145,8 @@ const FormPlanoContas: React.FC<FormPlanoContasProps> = ({ proprietarioId, conta
       is_conta_caixa_banco: isAnalitica ? values.is_conta_caixa_banco : false, // Aplica filtro
       is_conta_patrimonial: isAnalitica ? values.is_conta_patrimonial : false, // Aplica filtro
       is_conta_resultado: isAnalitica ? values.is_conta_resultado : false, // Aplica filtro
+      is_caixa: isAnalitica ? values.is_caixa : false, // NOVO
+      is_banco: isAnalitica ? values.is_banco : false, // NOVO
     };
 
     let error = null;
@@ -274,6 +280,56 @@ const FormPlanoContas: React.FC<FormPlanoContasProps> = ({ proprietarioId, conta
             )}
         />
         
+        {/* NOVO CAMPO: IS CAIXA */}
+        <FormField
+            control={form.control}
+            name="is_caixa"
+            render={({ field }) => (
+                <FormItem className={cn("flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4 transition-opacity", isAnalitica ? 'opacity-100' : 'opacity-50 pointer-events-none')}>
+                    <FormControl>
+                        <Checkbox
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                            disabled={!isAnalitica}
+                        />
+                    </FormControl>
+                    <div className="space-y-1 leading-none">
+                        <FormLabel>
+                            É uma Conta de Caixa (Dinheiro Físico)
+                        </FormLabel>
+                        <p className="text-sm text-muted-foreground">
+                            Usado para diferenciar contas de caixa de contas bancárias.
+                        </p>
+                    </div>
+                </FormItem>
+            )}
+        />
+        
+        {/* NOVO CAMPO: IS BANCO */}
+        <FormField
+            control={form.control}
+            name="is_banco"
+            render={({ field }) => (
+                <FormItem className={cn("flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4 transition-opacity", isAnalitica ? 'opacity-100' : 'opacity-50 pointer-events-none')}>
+                    <FormControl>
+                        <Checkbox
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                            disabled={!isAnalitica}
+                        />
+                    </FormControl>
+                    <div className="space-y-1 leading-none">
+                        <FormLabel>
+                            É uma Conta Bancária (Conta Corrente)
+                        </FormLabel>
+                        <p className="text-sm text-muted-foreground">
+                            Usado para diferenciar contas bancárias de contas de caixa.
+                        </p>
+                    </div>
+                </FormItem>
+            )}
+        />
+        
         {/* NOVO CAMPO: IS CONTA PATRIMONIAL */}
         <FormField
             control={form.control}
@@ -323,7 +379,6 @@ const FormPlanoContas: React.FC<FormPlanoContasProps> = ({ proprietarioId, conta
                 </FormItem>
             )}
         />
-        {/* FIM NOVO CAMPO */}
         
         <Button type="submit" className="w-full" disabled={form.formState.isSubmitting || isMaskInvalid}>
           {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
