@@ -42,7 +42,7 @@ const useSaldoContaCalculado = (filtroTipoSaldo: 'todos' | 'Credito' | 'Debito' 
       // 1. Buscar contas de saldo (filtradas ou todas)
       let contasQuery = supabase
         .from('saldo_contas')
-        .select(`*, plano_contas ( id, Conta, Descricao, is_conta_caixa_banco, is_conta_patrimonial )`) // Incluindo novos campos
+        .select(`*, plano_contas ( id, Conta, Descricao, is_conta_caixa_banco, is_conta_patrimonial, is_caixa, is_banco )`) // ADICIONADO is_caixa e is_banco
         .eq('proprietario_id', targetEmpresaId);
         
       // Aplica Filtros de UI
@@ -186,5 +186,3 @@ const useSaldoContaCalculado = (filtroTipoSaldo: 'todos' | 'Credito' | 'Debito' 
 
   return { contas, totalSaldo, carregando, refetch };
 };
-
-export default useSaldoContaCalculado;
