@@ -50,7 +50,8 @@ import GerarDocumentoSocietario from "./pages/GerarDocumentoSocietario";
 import Suporte from "./pages/Suporte";
 import AdminSuporte from "./pages/AdminSuporte";
 import ContasPatrimoniais from "./pages/ContasPatrimoniais";
-import Extratos from "./pages/Extratos"; // IMPORT ADICIONADO
+import Extratos from "./pages/Extratos";
+import Exportar from "./pages/Exportar"; // IMPORT ADICIONADO
 
 const queryClient = new QueryClient();
 
