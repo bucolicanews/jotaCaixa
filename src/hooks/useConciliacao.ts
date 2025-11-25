@@ -322,7 +322,7 @@ export function useConciliacao(): ConciliacaoHook {
         
         // Cria um Set de chaves únicas (Data YYYY-MM-DD | Descrição Normalizada | Valor (com sinal, 2 casas) | Tipo)
         return new Set(data.map(e => {
-            const formattedDate = format(parseISO(e.data), 'yyyy-MM-dd');
+            const formattedDate = formatDDMMYYYYToISO(e.data);
             const normalizedDesc = normalizeString(e.descricao);
             // Usamos o valor original (com sinal) para a verificação de unicidade
             return `${formattedDate}|${normalizedDesc}|${Number(e.valor).toFixed(2)}|${e.tipo}`;
@@ -442,6 +442,20 @@ export function useConciliacao(): ConciliacaoHook {
             return;
         }
         
+        // 1. Buscar a conta contábil do saldo_contas (Ativo/Caixa)
+        const { data: contaAtivoData } = await supabase
+            .from('saldo_contas')
+            .select('conta_contabil_id')
+            .eq('id', contaSelecionadaId)
+            .single();
+            
+        const contaAtivoCaixaId = contaAtivoData?.conta_contabil_id;
+        
+        if (!contaAtivoCaixaId) {
+            showError('A conta bancária selecionada não está vinculada a um Plano de Contas (Ativo).');
+            return;
+        }
+        
         const transacoesParaSalvar = transacoes.filter(t => t.conta_contabil_id && !t.isDuplicated);
         
         if (transacoesParaSalvar.length === 0) {
@@ -453,21 +467,51 @@ export function useConciliacao(): ConciliacaoHook {
         
         try {
             // Prepara o payload para a tabela 'lancamentos'
-            const lancamentosPayload = transacoesParaSalvar.map(t => {
+            const lancamentosPayload = transacoesParaSalvar.flatMap(t => {
                 const formattedDate = formatDDMMYYYYToISO(t.data);
+                const valor = Math.abs(t.valor);
                 
-                return {
-                    proprietario_id: proprietarioDaConfiguracao, // ALTERADO: empresa_id -> proprietario_id
+                // Transação 1: Movimentação de Caixa/Banco (Ativo)
+                // Ativo é Devedora: Entrada (Débito) = 'Entrada', Saída (Crédito) = 'Saida'
+                const lancamentoAtivo = {
+                    proprietario_id: proprietarioDaConfiguracao,
                     data_movimentacao: formattedDate || t.data,
                     descricao: t.descricao,
-                    valor: Math.abs(t.valor), // Valor absoluto para lancamentos
-                    tipo: t.tipo,
+                    valor: valor,
+                    tipo: t.tipo, // Usa o tipo original (Entrada/Saida)
                     conta_bancaria_id: contaSelecionadaId,
-                    conta_contabil_id: t.conta_contabil_id,
+                    conta_contabil_id: contaAtivoCaixaId, // Conta de Ativo/Caixa
                     conciliado: true,
                     origem: 'conciliacao_extrato',
                     documento: t.identificacao || null,
                 };
+                
+                // Transação 2: Partida Dobrada (Resultado - Receita/Despesa)
+                // Resultado é Credora: Entrada (Débito) = 'Entrada', Saída (Crédito) = 'Saida'
+                let tipoResultado: 'Entrada' | 'Saida';
+                
+                if (t.tipo === 'Entrada') {
+                    // Entrada (Receita): D: Ativo, C: Receita -> Receita é Credora, então C = 'Saida'
+                    tipoResultado = 'Saida';
+                } else {
+                    // Saída (Despesa): D: Despesa, C: Ativo -> Despesa é Credora, então D = 'Entrada'
+                    tipoResultado = 'Entrada';
+                }
+                
+                const lancamentoResultado = {
+                    proprietario_id: proprietarioDaConfiguracao,
+                    data_movimentacao: formattedDate || t.data,
+                    descricao: t.descricao,
+                    valor: valor,
+                    tipo: tipoResultado, // Tipo ajustado para a conta de Resultado
+                    conta_bancaria_id: null, // Não é conta bancária
+                    conta_contabil_id: t.conta_contabil_id, // Conta de Resultado (Receita/Despesa)
+                    conciliado: true,
+                    origem: 'conciliacao_extrato',
+                    documento: t.identificacao || null,
+                };
+                
+                return [lancamentoAtivo, lancamentoResultado];
             });
             
             // Prepara o payload para a tabela 'extratos' (para controle de duplicidade futura)
@@ -487,7 +531,7 @@ export function useConciliacao(): ConciliacaoHook {
                 };
             });
             
-            // 1. Inserir Lançamentos (Movimentação de Saldo)
+            // 1. Inserir Lançamentos (Movimentação de Saldo e Partida Dobrada)
             const { error: lancamentoError } = await supabase
                 .from('lancamentos')
                 .insert(lancamentosPayload);
@@ -538,7 +582,7 @@ export function useConciliacao(): ConciliacaoHook {
                 
             if (historicoError) throw historicoError;
 
-            showSuccess(`${lancamentosPayload.length} lançamentos conciliados e salvos com sucesso!`);
+            showSuccess(`${lancamentosPayload.length / 2} transações conciliadas e salvas com sucesso!`);
             handleReset();
             fetchHistorico();
             
