@@ -297,7 +297,8 @@ export function useConciliacao(): ConciliacaoHook {
         // Cria um Set de chaves únicas (Data YYYY-MM-DD | Descrição Normalizada | Valor (com sinal, 2 casas) | Tipo)
         return new Set(data.map(e => {
             const formattedDate = formatDDMMYYYYToISO(e.data);
-            const normalizedDesc = normalizeString(e.descricao);
+            // CRÍTICO: Normaliza a descrição do banco de dados
+            const normalizedDesc = normalizeString(e.descricao); 
             // Usamos o valor original (com sinal) para a verificação de unicidade
             return `${formattedDate}|${normalizedDesc}|${Number(e.valor).toFixed(2)}|${e.tipo}`;
         }));
@@ -350,6 +351,7 @@ export function useConciliacao(): ConciliacaoHook {
                         formattedDate = dataMovimentacao; 
                     }
                     
+                    // CRÍTICO: Normaliza a descrição da transação importada
                     const normalizedDesc = normalizeString(row[config.mapeamento.descricao]);
                     
                     // Chave de comparação para a transação atual (usando a data formatada YYYY-MM-DD e valor com sinal)
