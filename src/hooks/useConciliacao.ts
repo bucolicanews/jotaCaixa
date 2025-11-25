@@ -10,11 +10,56 @@ import { format, parseISO } from 'date-fns';
 import { formatDDMMYYYYToISO, normalizeString } from '@/utils/formatters'; // Importando normalizeString
 
 interface ConciliacaoHook {
-// ... (restante da interface)
+    // State
+    loading: boolean;
+    isSaving: boolean;
+    isDeletingHistorico: boolean;
+    activeTab: string;
+    contas: SaldoConta[];
+    configs: ConfiguracaoConciliacao[];
+    contasContabeis: PlanoContas[];
+    historico: ConciliacaoHistorico[];
+    contaSelecionadaId: string | null;
+    configSelecionada: ConfiguracaoConciliacao | null;
+    file: File | null;
+    transacoes: TransacaoExtrato[];
+    transacoesSelecionadas: number[];
+    contaContabilLote: string | null;
+    historicoSelecionado: ConciliacaoHistorico | null;
+    historicoDetalhesOpen: boolean;
+    proprietarioDaConfiguracao: string | undefined | null;
+
+    // Handlers
+    setActiveTab: (tab: string) => void;
+    handleReset: (keepAccountId?: boolean) => void;
+    handleSelectAccount: (id: string) => void;
+    handleSelectConfig: (id: string) => void;
+    handleFileChange: (file: File | null) => void;
+    handleParseFile: () => Promise<void>;
+    handleContaContabilChange: (index: number, contaContabilId: string) => void;
+    handleToggleSelection: (index: number, checked: boolean) => void;
+    handleSelectAll: (checked: boolean) => void;
+    handleContaContabilLoteChange: (id: string) => void;
+    handleApplyLote: () => void;
+    handleSaveConciliacao: () => Promise<void>;
+    handleDeleteHistorico: () => Promise<void>;
+    handleViewHistoricoDetails: (h: ConciliacaoHistorico) => void;
+    setHistoricoDetalhesOpen: (open: boolean) => void;
+    fetchConfigs: () => Promise<void>;
 }
 
 // Função auxiliar para calcular um hash simples do conteúdo do CSV (ignorando a primeira linha)
-// REMOVIDA: calculateContentHash não é mais usada para duplicidade de arquivo.
+const calculateContentHash = (csvContent: string): string => {
+    const lines = csvContent.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+    if (lines.length <= 1) return ''; // Ignora cabeçalho
+    
+    // Concatena todas as linhas de dados (a partir da segunda linha)
+    const dataContent = lines.slice(1).join('|');
+    
+    // Em um ambiente real, usaríamos uma biblioteca de hash (ex: crypto.subtle.digest).
+    // Aqui, usamos uma concatenação simples como identificador de conteúdo.
+    return dataContent.substring(0, 255); // Limita o tamanho do hash para o campo TEXT
+};
 
 
 export function useConciliacao(): ConciliacaoHook {
@@ -37,7 +82,7 @@ export function useConciliacao(): ConciliacaoHook {
     const [transacoes, setTransacoes] = useState<TransacaoExtrato[]>([]);
     const [regras, setRegras] = useState<ConciliacaoRegra[]>([]);
     
-    const [transacoesSelecionadas, setTransacoesSelecionadas] = setTransacoesSelecionadas] = useState<number[]>([]);
+    const [transacoesSelecionadas, setTransacoesSelecionadas] = useState<number[]>([]);
     const [contaContabilLote, setContaContabilLote] = useState<string | null>(null);
     
     const [historicoDetalhesOpen, setHistoricoDetalhesOpen] = useState(false);
@@ -246,6 +291,22 @@ export function useConciliacao(): ConciliacaoHook {
 
     // --- Lógica de Processamento de Arquivo ---
 
+    const checkFileDuplicity = useCallback(async (contentHash: string, empresaId: string): Promise<boolean> => {
+        const { data, error } = await supabase
+            .from('conciliacoes')
+            .select('id')
+            .eq('empresa_id', empresaId)
+            .eq('extrato_hash', contentHash) // Verifica pelo hash do conteúdo
+            .limit(1);
+            
+        if (error) {
+            console.error('Erro ao verificar duplicidade de conteúdo:', error);
+            return false; 
+        }
+        
+        return data && data.length > 0;
+    }, []);
+    
     // NOVO: Função para buscar extratos existentes na nova tabela
     const fetchExistingExtratos = useCallback(async (contaId: string, empresaId: string) => {
         const { data, error } = await supabase
@@ -262,13 +323,9 @@ export function useConciliacao(): ConciliacaoHook {
         // Cria um Set de chaves únicas (Data YYYY-MM-DD | Descrição Normalizada | Valor (com sinal, 2 casas) | Tipo)
         return new Set(data.map(e => {
             const formattedDate = formatDDMMYYYYToISO(e.data);
-            // CRÍTICO: Normaliza a descrição do banco de dados
-            const normalizedDesc = normalizeString(e.descricao); 
-            // CRÍTICO: Garante que o valor do DB seja formatado com 2 casas decimais
-            const formattedValue = Number(e.valor).toFixed(2);
-            
+            const normalizedDesc = normalizeString(e.descricao);
             // Usamos o valor original (com sinal) para a verificação de unicidade
-            return `${formattedDate}|${normalizedDesc}|${formattedValue}|${e.tipo}`;
+            return `${formattedDate}|${normalizedDesc}|${Number(e.valor).toFixed(2)}|${e.tipo}`;
         }));
     }, []);
 
@@ -282,13 +339,28 @@ export function useConciliacao(): ConciliacaoHook {
         
         setLoading(true);
         
-        // 1. Ler o conteúdo do arquivo (apenas para fins de log/hash futuro)
+        // 1. Ler o conteúdo do arquivo para calcular o hash
         const fileContent = await file.text();
+        const contentHash = calculateContentHash(fileContent);
         
-        // 2. Buscar extratos existentes na nova tabela 'extratos'
+        if (!contentHash) {
+            showError('O arquivo está vazio ou não contém dados válidos.');
+            setLoading(false);
+            return;
+        }
+        
+        // 2. Verificar Duplicidade de Conteúdo (do arquivo completo)
+        const isDuplicatedContent = await checkFileDuplicity(contentHash, proprietarioDaConfiguracao);
+        if (isDuplicatedContent) {
+            showError(`O conteúdo deste extrato já foi importado anteriormente.`);
+            setLoading(false);
+            return;
+        }
+
+        // 3. Buscar extratos existentes na nova tabela 'extratos'
         const existingExtratosSet = await fetchExistingExtratos(contaSelecionadaId, proprietarioDaConfiguracao);
         
-        // 3. Processar o CSV
+        // 4. Processar o CSV
         Papa.parse(file, {
             header: true,
             skipEmptyLines: true,
@@ -298,14 +370,8 @@ export function useConciliacao(): ConciliacaoHook {
                     const valorStr = String(row[config.mapeamento.valor] || '0').replace(',', '.');
                     let valor = parseFloat(valorStr);
                     
-                    // LÓGICA DE SINAL CORRIGIDA:
-                    // Se o valor lido já for negativo, ele é mantido.
-                    // Se o valor for positivo E houver uma coluna de tipo, aplicamos a regra.
-                    if (valor >= 0 && config.coluna_tipo_transacao) {
-                        if (row[config.coluna_tipo_transacao] !== config.valor_credito) {
-                            // Se não for o valor de crédito, é uma saída (débito)
-                            valor = -Math.abs(valor);
-                        }
+                    if (config.coluna_tipo_transacao && row[config.coluna_tipo_transacao] !== config.valor_credito) {
+                        valor = -Math.abs(valor);
                     }
                     
                     const identificacao = config.mapeamento.identificacao 
@@ -325,14 +391,10 @@ export function useConciliacao(): ConciliacaoHook {
                         formattedDate = dataMovimentacao; 
                     }
                     
-                    // CRÍTICO: Normaliza a descrição da transação importada
                     const normalizedDesc = normalizeString(row[config.mapeamento.descricao]);
                     
-                    // CRÍTICO: Garante que o valor do CSV seja formatado com 2 casas decimais
-                    const formattedValue = Number(valor).toFixed(2);
-                    
                     // Chave de comparação para a transação atual (usando a data formatada YYYY-MM-DD e valor com sinal)
-                    const uniqueKey = `${formattedDate}|${normalizedDesc}|${formattedValue}|${tipo}`;
+                    const uniqueKey = `${formattedDate}|${normalizedDesc}|${Number(valor).toFixed(2)}|${tipo}`;
                     
                     let isDuplicated = false;
                     let motivoDuplicidade: string | null = null;
@@ -370,7 +432,7 @@ export function useConciliacao(): ConciliacaoHook {
             }
         });
         setLoading(false);
-    }, [file, configSelecionada, contaSelecionadaId, proprietarioDaConfiguracao, applyRegras, fetchExistingExtratos]);
+    }, [file, configSelecionada, contaSelecionadaId, proprietarioDaConfiguracao, applyRegras, checkFileDuplicity, fetchExistingExtratos]);
 
     // --- Lógica de Salvamento ---
 
@@ -503,8 +565,7 @@ export function useConciliacao(): ConciliacaoHook {
             
             // 4. Salvar o registro de conciliação (Histórico)
             const fileContent = await file.text();
-            // O hash do conteúdo é calculado aqui, mas não é mais usado para duplicidade de arquivo
-            const contentHash = file.name; // Usando o nome do arquivo como hash para fins de histórico
+            const contentHash = calculateContentHash(fileContent);
             
             const historicoPayload = {
                 empresa_id: proprietarioDaConfiguracao,
@@ -512,7 +573,7 @@ export function useConciliacao(): ConciliacaoHook {
                 id_saldo_contas: contaSelecionadaId,
                 nome_arquivo: file.name,
                 extrato_json: transacoesParaSalvar,
-                extrato_hash: contentHash, // Salva o nome do arquivo como hash
+                extrato_hash: contentHash, // Salva o hash do conteúdo
             };
             
             const { error: historicoError } = await supabase

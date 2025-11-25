@@ -39,7 +39,6 @@ export const formatDDMMYYYYToISO = (dateString: string): string | null => {
 
 /**
  * Normaliza uma string para comparação (lowercase, trim, remove acentos e caracteres especiais).
- * CRÍTICO: Remove todos os caracteres que não são letras, números ou espaços.
  */
 export const normalizeString = (str: string | null | undefined): string => {
     if (!str) return '';
@@ -48,8 +47,7 @@ export const normalizeString = (str: string | null | undefined): string => {
     const normalized = String(str).normalize("NFD").replace(/[\u0300-\u036f]/g, "");
     
     // 2. Converte para minúsculas, remove espaços extras e caracteres não alfanuméricos (exceto espaços)
-    // Novo regex: remove tudo que não for letra (a-z), número (0-9) ou espaço (\s)
-    return normalized.toLowerCase().trim().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' '); // Reduz múltiplos espaços para um único
+    return normalized.toLowerCase().trim().replace(/[^a-z0-9\s]/g, '');
 };
 
 /**

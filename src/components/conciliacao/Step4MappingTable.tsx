@@ -1,10 +1,10 @@
-import React, { useState, useMemo } from 'react';
+import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Loader2, Save, List, ArrowUpCircle, ArrowDownCircle, Check, CheckCircle2, AlertTriangle, Edit } from 'lucide-react';
+import { Loader2, Save, List, ArrowUpCircle, ArrowDownCircle, Check, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { TransacaoExtrato } from '@/types/conciliacao';
 import { PlanoContas } from '@/types/plano-contas';
 import { cn } from '@/lib/utils';
@@ -60,7 +60,7 @@ const Step4MappingTable: React.FC<Step4MappingTableProps> = ({
                 <ul className="list-disc list-inside text-sm text-red-600 dark:text-red-400">
                     {transacoesRejeitadas.map((t, i) => (
                         <li key={i}>
-                            {t.data} - {t.descricao} ({formatCurrency(Math.abs(t.valor))}) - Motivo: {t.motivoDuplicidade}
+                            Linha {transacoes.indexOf(t) + 1}: {t.data} - {t.descricao} ({formatCurrency(Math.abs(t.valor))})
                         </li>
                     ))}
                 </ul>
@@ -123,47 +123,13 @@ const Step4MappingTable: React.FC<Step4MappingTableProps> = ({
                     const contaContabil = contasContabeis.find(c => c.id === t.conta_contabil_id);
                     const isSelected = transacoesSelecionadas.includes(i);
                     
-                    // Estado local para forçar o modo de edição do Select
-                    // CORREÇÃO: Movendo o useState para dentro do componente (não dentro do map)
-                    // Como o useState não pode ser usado dentro do map, vamos usar um estado global
-                    // ou forçar a edição via clique.
-                    
-                    // Para simplificar e corrigir o erro, vamos remover o estado local e forçar
-                    // o Select a aparecer se não estiver mapeado.
-                    
-                    // Se a transação é duplicada, ela é rejeitada e não pode ser editada
-                    if (t.isDuplicated) {
-                        return (
-                            <TableRow key={i} className={'bg-red-500/30 opacity-60'}>
-                                <TableCell className="text-center">
-                                    <Checkbox disabled />
-                                </TableCell>
-                                <TableCell className="text-xs">{t.data}</TableCell>
-                                <TableCell className="text-sm">{t.descricao}</TableCell>
-                                <TableCell className="hidden sm:table-cell text-xs text-muted-foreground">{t.identificacao || '-'}</TableCell>
-                                <TableCell>
-                                    <Badge variant={t.tipo === 'Entrada' ? 'success' : 'destructive'} className="flex items-center justify-center">
-                                        {t.tipo === 'Entrada' ? <ArrowUpCircle className="w-3 h-3 mr-1" /> : <ArrowDownCircle className="w-3 h-3 mr-1" />}
-                                        {t.tipo}
-                                    </Badge>
-                                </TableCell>
-                                <TableCell className={cn("text-right font-semibold text-sm", t.tipo === 'Entrada' ? 'text-green-600' : 'text-red-600')}>{formatCurrency(Math.abs(t.valor))}</TableCell>
-                                <TableCell>
-                                    <span className="text-xs font-medium text-red-700 flex items-center">
-                                        <AlertTriangle className="w-4 h-4 mr-1" /> DUPLICADA
-                                    </span>
-                                </TableCell>
-                            </TableRow>
-                        );
-                    }
-                    
                     return (
-                        <TableRow key={i} className={cn(isMapeada ? 'bg-green-500/10' : 'bg-red-500/10', isSelected && 'bg-blue-100/50 dark:bg-blue-900/20')}>
+                        <TableRow key={i} className={cn(t.isDuplicated ? 'bg-red-500/30 opacity-60' : (isMapeada ? 'bg-green-500/10' : 'bg-red-500/10'), isSelected && 'bg-blue-100/50 dark:bg-blue-900/20')}>
                             <TableCell className="text-center">
                                 <Checkbox 
                                     checked={isSelected}
                                     onCheckedChange={(checked) => onToggleSelection(i, !!checked)}
-                                    disabled={isSaving}
+                                    disabled={isSaving || t.isDuplicated}
                                 />
                             </TableCell>
                             <TableCell className="text-xs">{t.data}</TableCell>
@@ -177,29 +143,14 @@ const Step4MappingTable: React.FC<Step4MappingTableProps> = ({
                             </TableCell>
                             <TableCell className={cn("text-right font-semibold text-sm", t.tipo === 'Entrada' ? 'text-green-600' : 'text-red-600')}>{formatCurrency(Math.abs(t.valor))}</TableCell>
                             <TableCell>
-                                {isMapeada ? (
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-xs font-medium text-green-700 flex items-center">
-                                            <CheckCircle2 className="w-4 h-4 mr-1" /> {contaContabil?.Conta}
-                                        </span>
-                                        {/* Permite reabrir o Select para edição */}
-                                        <Select 
-                                            onValueChange={(id) => onContaContabilChange(i, id)}
-                                            value={t.conta_contabil_id || undefined}
-                                            disabled={isSaving}
-                                        >
-                                            <SelectTrigger className="h-8 w-8 p-0 border-none bg-transparent hover:bg-secondary/50">
-                                                <Edit className="w-4 h-4 text-muted-foreground" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {contasContabeis.map(c => (
-                                                    <SelectItem key={c.id} value={c.id}>
-                                                        {c.Conta} - {c.Descricao}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
+                                {t.isDuplicated ? (
+                                    <span className="text-xs font-medium text-red-700 flex items-center">
+                                        <AlertTriangle className="w-4 h-4 mr-1" /> DUPLICADA
+                                    </span>
+                                ) : isMapeada ? (
+                                    <span className="text-xs font-medium text-green-700 flex items-center">
+                                        <CheckCircle2 className="w-4 h-4 mr-1" /> {contaContabil?.Conta}
+                                    </span>
                                 ) : (
                                     <Select 
                                         onValueChange={(id) => onContaContabilChange(i, id)}
