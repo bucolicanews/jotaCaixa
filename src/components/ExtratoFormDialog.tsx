@@ -6,13 +6,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Loader2, Save } from 'lucide-react';
+import { Loader2, Save, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { PlanoContas } from '@/types/plano-contas';
 import { TransacaoExtrato } from '@/types/conciliacao';
 import { formatarData } from '@/utils/formatters';
+import { Card, CardContent } from './ui/card';
 
 // Tipo de Extrato (simplificado para edição)
 interface ExtratoRecord extends TransacaoExtrato {
@@ -119,6 +120,16 @@ const ExtratoFormDialog: React.FC<ExtratoFormDialogProps> = ({ extratoInicial, o
                     <DialogTitle>{isEditing ? 'Editar' : 'Novo'} Registro de Extrato</DialogTitle>
                     <DialogDescription>ID: {extratoInicial?.id.substring(0, 8)}...</DialogDescription>
                 </DialogHeader>
+                
+                <Card className="border-yellow-500/50 bg-yellow-50 dark:bg-yellow-900/20">
+                    <CardContent className="p-3 flex items-start space-x-2">
+                        <AlertTriangle className="w-5 h-5 flex-shrink-0 text-yellow-700 dark:text-yellow-300" />
+                        <p className="text-xs text-yellow-700 dark:text-yellow-300">
+                            Atenção: A edição deste registro de extrato NÃO reverte ou altera automaticamente os lançamentos contábeis já criados. Se o valor ou a conta contábil mudarem, você deve ajustar o lançamento manualmente na página de Bancos.
+                        </p>
+                    </CardContent>
+                </Card>
+                
                 <Form {...form}>
                     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                         <div className="grid grid-cols-2 gap-4">
@@ -154,7 +165,7 @@ const ExtratoFormDialog: React.FC<ExtratoFormDialogProps> = ({ extratoInicial, o
                         
                         <FormField control={form.control} name="conta_contabil_id" render={({ field }) => (
                             <FormItem>
-                                <FormLabel>Conta Contábil (Resultado)</FormLabel>
+                                <FormLabel>Conta Contábil (Resultado)</Label>
                                 <Select onValueChange={field.onChange} value={field.value || undefined}>
                                     <FormControl><SelectTrigger><SelectValue placeholder="Selecione a conta de resultado" /></SelectTrigger></FormControl>
                                     <SelectContent>

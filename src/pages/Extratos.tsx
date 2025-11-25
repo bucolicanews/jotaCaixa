@@ -119,20 +119,52 @@ const Extratos: React.FC = () => {
       setDialogAberto(true);
   };
   
-  const handleDelete = async (id: string) => {
-    if (!window.confirm('Tem certeza que deseja excluir este registro de extrato?')) return;
+  const handleDelete = async (extrato: ExtratoRecord) => {
+    if (!window.confirm('Tem certeza que deseja excluir este registro de extrato? Esta ação também tentará DELETAR os lançamentos contábeis correspondentes na tabela Lançamentos.')) return;
     
     setIsDeleting(true);
     try {
-        // Deleta o registro da tabela 'extratos'
-        const { error } = await supabase
+        // 1. Deletar os lançamentos correspondentes na tabela 'lancamentos'
+        // Usamos a combinação de campos que são únicos para lançamentos de conciliação:
+        // proprietario_id, conta_bancaria_id, descricao, valor (absoluto) e origem='conciliacao_extrato'
+        
+        const valorAbsoluto = Math.abs(extrato.valor);
+        
+        // Deleta o lançamento de Ativo/Caixa (que tem conta_bancaria_id)
+        const { error: deleteAtivoError } = await supabase
+            .from('lancamentos')
+            .delete()
+            .eq('proprietario_id', extrato.empresa_id)
+            .eq('conta_bancaria_id', extrato.id_saldo_contas)
+            .eq('descricao', extrato.descricao)
+            .eq('valor', valorAbsoluto)
+            .eq('origem', 'conciliacao_extrato');
+            
+        if (deleteAtivoError) console.warn('Aviso: Falha ao deletar lançamento de Ativo/Caixa:', deleteAtivoError);
+        
+        // Deleta o lançamento de Resultado/DRE (que tem conta_contabil_id)
+        if (extrato.conta_contabil_id) {
+            const { error: deleteResultadoError } = await supabase
+                .from('lancamentos')
+                .delete()
+                .eq('proprietario_id', extrato.empresa_id)
+                .eq('conta_contabil_id', extrato.conta_contabil_id)
+                .eq('descricao', extrato.descricao)
+                .eq('valor', valorAbsoluto)
+                .eq('origem', 'conciliacao_extrato');
+                
+            if (deleteResultadoError) console.warn('Aviso: Falha ao deletar lançamento de Resultado/DRE:', deleteResultadoError);
+        }
+        
+        // 2. Deleta o registro da tabela 'extratos'
+        const { error: extratoError } = await supabase
             .from('extratos')
             .delete()
-            .eq('id', id);
+            .eq('id', extrato.id);
             
-        if (error) throw error;
+        if (extratoError) throw extratoError;
         
-        showSuccess('Registro de extrato excluído com sucesso.');
+        showSuccess('Registro de extrato e lançamentos contábeis correspondentes excluídos com sucesso.');
         fetchExtratos();
     } catch (error: any) {
         showError('Falha ao excluir extrato: ' + error.message);
@@ -244,12 +276,12 @@ const Extratos: React.FC = () => {
                                   <AlertDialogHeader>
                                       <AlertDialogTitle>Excluir Registro de Extrato?</AlertDialogTitle>
                                       <AlertDialogDescription>
-                                          Esta ação removerá o registro de extrato. Se houver um lançamento correspondente na tabela 'lancamentos', ele não será removido automaticamente.
+                                          Esta ação removerá o registro de extrato e tentará DELETAR os lançamentos contábeis correspondentes. O saldo da conta será recalculado.
                                       </AlertDialogDescription>
                                   </AlertDialogHeader>
                                   <AlertDialogFooter>
                                       <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
-                                      <AlertDialogAction onClick={() => handleDelete(e.id)} disabled={isDeleting}>
+                                      <AlertDialogAction onClick={() => handleDelete(e)} disabled={isDeleting}>
                                           {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Excluir'}
                                       </AlertDialogAction>
                                   </AlertDialogFooter>
