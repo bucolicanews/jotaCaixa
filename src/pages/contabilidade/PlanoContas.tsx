@@ -25,6 +25,7 @@ import { useDebounce } from '@/hooks/use-debounce';
 import EditableCell from '@/components/contabilidade/EditableCell';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
+import { useSessao } from '@/hooks/use-sessao';
 
 // Tipo para inicializar o formulário de nova conta
 interface NovaContaInicial {
