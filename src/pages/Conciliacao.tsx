@@ -13,7 +13,6 @@ import Step2SelectConfig from '@/components/conciliacao/Step2SelectConfig';
 import Step3ImportFile from '@/components/conciliacao/Step3ImportFile';
 import Step4MappingTable from '@/components/conciliacao/Step4MappingTable';
 import HistoricoTab from '@/components/conciliacao/HistoricoTab';
-import ExistingLaunchesTab from '@/components/conciliacao/ExistingLaunchesTab'; // NOVO IMPORT
 import { useConciliacao } from '@/hooks/useConciliacao';
 import { formatCurrency } from '@/utils/formatters'; // Importando formatCurrency
 
@@ -85,9 +84,8 @@ const Conciliacao = () => {
       <ConciliacaoHeader onReset={handleReset} />
       
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="conciliacao">Nova Conciliação</TabsTrigger>
-            <TabsTrigger value="existentes">Existentes ({transacoesRejeitadas.length})</TabsTrigger>
             <TabsTrigger value="historico">Histórico</TabsTrigger>
         </TabsList>
         
@@ -142,14 +140,6 @@ const Conciliacao = () => {
                     </div>
                 )}
             </div>
-        </TabsContent>
-        
-        <TabsContent value="existentes" className="mt-4">
-            <ExistingLaunchesTab
-                transacoesRejeitadas={transacoesRejeitadas}
-                loading={loading}
-                formatCurrency={formatCurrency}
-            />
         </TabsContent>
         
         <TabsContent value="historico" className="mt-4">

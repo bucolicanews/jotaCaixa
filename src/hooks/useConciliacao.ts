@@ -179,6 +179,7 @@ export function useConciliacao(): ConciliacaoHook {
 
     const applyRegras = useCallback((rawTransacoes: TransacaoExtrato[]): TransacaoExtrato[] => {
         return rawTransacoes.map(t => {
+            // A regra só se aplica se a transação não for duplicada
             if (t.isDuplicated) return t;
             
             const regra = regras.find(r => 
@@ -246,6 +247,7 @@ export function useConciliacao(): ConciliacaoHook {
     }, []);
     
     const handleSelectAll = useCallback((checked: boolean) => {
+        // Seleciona apenas as transações que NÃO são duplicadas
         const validIndexes = transacoes
             .map((t, i) => ({ t, i }))
             .filter(({ t }) => !t.isDuplicated)
@@ -469,26 +471,22 @@ export function useConciliacao(): ConciliacaoHook {
                             } as TransacaoExtrato;
                         }).filter(t => t.data && t.descricao);
                         
+                        // 4. Aplica regras de mapeamento APENAS nas transações válidas
                         const transacoesValidas = rawTransacoes.filter(t => !t.isDuplicated);
-                        const transacoesRejeitadasLocal = rawTransacoes.filter(t => t.isDuplicated);
+                        const transacoesMapeadas = applyRegras(transacoesValidas);
                         
-                        // Normaliza descrição ANTES de aplicar regras (evita falso negativo)
-                        const transacoesValidasNormalizadas = transacoesValidas.map(t => ({
-                            ...t,
-                            descricao: t.descricao,
-                        }));
+                        // 5. Combina transações mapeadas e rejeitadas para a exibição unificada
+                        const transacoesCompletas = [...transacoesMapeadas, ...rawTransacoes.filter(t => t.isDuplicated)];
                         
-                        const transacoesMapeadas = applyRegras(transacoesValidasNormalizadas);
-                        
-                        setTransacoes(transacoesMapeadas); // APENAS AS VÁLIDAS E MAPEADAS
-                        setTransacoesRejeitadas(transacoesRejeitadasLocal); // APENAS AS REJEITADAS
+                        setTransacoes(transacoesCompletas); // LISTA COMPLETA
+                        setTransacoesRejeitadas(rawTransacoes.filter(t => t.isDuplicated)); // APENAS PARA CONTAGEM
                         setTransacoesSelecionadas([]);
                         setContaContabilLote(null);
                         
                         let successMessage = `${transacoesValidas.length} transações válidas importadas.`;
                         
-                        if (transacoesRejeitadasLocal.length > 0) {
-                            successMessage += ` ${transacoesRejeitadasLocal.length} rejeitadas (Duplicidade de transação).`;
+                        if (rawTransacoes.filter(t => t.isDuplicated).length > 0) {
+                            successMessage += ` ${rawTransacoes.filter(t => t.isDuplicated).length} rejeitadas (Duplicidade de transação).`;
                         }
                         
                         showSuccess(successMessage);
@@ -528,6 +526,7 @@ export function useConciliacao(): ConciliacaoHook {
             return;
         }
         
+        // Filtra apenas transações válidas e mapeadas
         const transacoesParaSalvar = transacoes.filter(t => t.conta_contabil_id && !t.isDuplicated);
         
         if (transacoesParaSalvar.length === 0) {
