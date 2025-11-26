@@ -31,7 +31,7 @@ const Step1SelectAccount: React.FC<Step1SelectAccountProps> = ({ contas, loading
         </Select>
         {contasFiltradas.length === 0 && !loading && (
             <p className="text-sm text-red-500 mt-2">
-                Nenhuma conta marcada como Banco encontrada. Verifique o Plano de Contas.
+                Nenhuma conta marcada como Banco encontrada. Certifique-se de que a conta contábil está marcada como "Banco" no Plano de Contas E está vinculada a um registro em Bancos/Caixas.
             </p>
         )}
       </CardContent>
