@@ -11,7 +11,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { CalendarIcon, Loader2, PlusCircle, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale'; // IMPORT CORRIGIDO
+import { ptBR } from 'date-fns/locale';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { useSessao } from '@/hooks/use-sessao';
@@ -181,25 +181,34 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
         console.error('Erro ao buscar histórico padrão CP:', error);
     }
     
-    const id = data?.historico_id || null;
-    setHistoricoPadraoId(id);
-    // Não define o valor aqui, será feito no useEffect de inicialização
+    return data?.historico_id || null;
   }, [isAdmin, adminId]);
 
   // Efeito de Inicialização (Chamado ao abrir o modal)
   useEffect(() => {
-      if (open && parcela && adminId) {
+      if (!open || !parcela || !adminId) {
           setIsInitialized(false);
+          return;
+      }
+      
+      // Se já estiver inicializado, não faz nada
+      if (isInitialized) return;
+      
+      // 1. Busca todos os dados necessários em paralelo
+      const initializeData = async () => {
           refetchSaldos();
           fetchHistoricos();
           fetchContasPatrimoniais();
-          if (isAdmin) {
-              fetchMapeamentoContabil();
-              fetchHistoricoPadrao();
-          }
           
-          // 1. Buscar a conta sintética para obter o id_conta_patrimonial
-          const fetchContaSintetica = async () => {
+          let contaPatrimonialId: string | null = null;
+          let defaultHistoricoId: string | null = null;
+          
+          if (isAdmin) {
+              await fetchMapeamentoContabil();
+              defaultHistoricoId = await fetchHistoricoPadrao();
+              setHistoricoPadraoId(defaultHistoricoId);
+              
+              // Busca a conta sintética para obter o id_conta_patrimonial
               const { data: contaSintetica, error: csError } = await supabase
                   .from(tabelaContasPagar)
                   .select('id_conta_patrimonial')
@@ -209,27 +218,29 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
               if (csError) {
                   console.error('Erro ao buscar conta sintética:', csError);
               }
-              
-              const contaPatrimonialId = contaSintetica?.id_conta_patrimonial || null;
-              
-              // 2. Resetar o formulário com os valores iniciais
-              reset({
-                  data_pagamento: new Date(),
-                  forma_pagamento: 'Pix',
-                  pagamentos: contasOrigem.length > 0 
-                      ? [{ conta_id: contasOrigem[0].id, valor_pago: saldoDevedor }]
-                      : [],
-                  historico_id: historicoPadraoId,
-                  salvar_como_padrao: false,
-                  conta_patrimonial_id: contaPatrimonialId, // PRÉ-SELECIONA A CONTA PATRIMONIAL
-              });
-              
-              setIsInitialized(true);
-          };
+              contaPatrimonialId = contaSintetica?.id_conta_patrimonial || null;
+          }
           
-          fetchContaSintetica();
-      }
-  }, [open, parcela, adminId, isAdmin, refetchSaldos, fetchHistoricos, fetchContasPatrimoniais, fetchMapeamentoContabil, fetchHistoricoPadrao, reset, contasOrigem, saldoDevedor, historicoPadraoId]);
+          // 2. Resetar o formulário com os valores iniciais
+          const initialPagamentos = contasOrigem.length > 0 
+              ? [{ conta_id: contasOrigem[0].id, valor_pago: saldoDevedor }]
+              : [];
+              
+          reset({
+              data_pagamento: new Date(),
+              forma_pagamento: 'Pix',
+              pagamentos: initialPagamentos,
+              historico_id: defaultHistoricoId,
+              salvar_como_padrao: false,
+              conta_patrimonial_id: contaPatrimonialId, // PRÉ-SELECIONA A CONTA PATRIMONIAL
+          });
+          
+          setIsInitialized(true);
+      };
+      
+      initializeData();
+      
+  }, [open, parcela, adminId, isAdmin, refetchSaldos, fetchHistoricos, fetchContasPatrimoniais, fetchMapeamentoContabil, fetchHistoricoPadrao, reset, contasOrigem, saldoDevedor]);
 
   useEffect(() => {
     // Se a inicialização falhou em pré-selecionar a conta de origem (porque contasOrigem estava vazia),
