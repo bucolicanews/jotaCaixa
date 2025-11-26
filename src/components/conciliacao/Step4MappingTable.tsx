@@ -11,7 +11,7 @@ import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 
 interface Step4MappingTableProps {
-  transacoes: TransacaoExtrato[];
+  transacoes: TransacaoExtrato[]; // Agora contém APENAS transações válidas
   contasContabeis: PlanoContas[];
   transacoesSelecionadas: number[];
   contaContabilLote: string | null;
@@ -41,31 +41,16 @@ const Step4MappingTable: React.FC<Step4MappingTableProps> = ({
   onSaveConciliacao,
 }) => {
   
-    const transacoesRejeitadas = transacoes.filter(t => t.isDuplicated);
-    const transacoesValidas = transacoes.filter(t => !t.isDuplicated);
+    // Transações rejeitadas não estão mais nesta lista, mas mantemos a lógica de contagem
+    const transacoesValidas = transacoes;
     const transacoesNaoConciliadas = transacoesValidas.filter(t => !t.conta_contabil_id);
     
-    const allValidSelected = transacoesSelecionadas.length === transacoesValidas.filter(t => !t.isDuplicated).length && transacoesValidas.length > 0;
+    const allValidSelected = transacoesSelecionadas.length === transacoesValidas.length && transacoesValidas.length > 0;
 
   return (
-    <Card className="col-span-1 md:col-span-3 h-full flex flex-col"> {/* Adicionado h-full e flex-col */}
-      <CardHeader><CardTitle className="flex items-center"><List className="w-5 h-5 mr-2" /> Transações Importadas do Extrato</CardTitle></CardHeader>
-      <CardContent className="flex-1 flex flex-col"> {/* Adicionado flex-1 e flex-col */}
-        
-        {transacoesRejeitadas.length > 0 && (
-            <div className="p-3 bg-red-100 dark:bg-red-900/20 border border-red-500 rounded-md mb-4">
-                <h3 className="font-semibold text-red-700 dark:text-red-300 flex items-center mb-2">
-                    <AlertTriangle className="w-5 h-5 mr-2" /> {transacoesRejeitadas.length} Transações Rejeitadas (Duplicidade)
-                </h3>
-                <ul className="list-disc list-inside text-sm text-red-600 dark:text-red-400">
-                    {transacoesRejeitadas.map((t, i) => (
-                        <li key={i}>
-                            Linha {transacoes.indexOf(t) + 1}: {t.data} - {t.descricao} ({formatCurrency(Math.abs(t.valor))}) - Motivo: {t.motivoDuplicidade}
-                        </li>
-                    ))}
-                </ul>
-            </div>
-        )}
+    <Card className="col-span-1 md:col-span-3 h-full flex flex-col">
+      <CardHeader><CardTitle className="flex items-center"><List className="w-5 h-5 mr-2" /> Transações Pendentes de Mapeamento ({transacoesValidas.length})</CardTitle></CardHeader>
+      <CardContent className="flex-1 flex flex-col">
         
         {/* Ações em Lote (Responsivo) */}
         <div className="flex flex-col md:flex-row items-center space-y-3 md:space-y-0 md:space-x-4 p-3 bg-secondary rounded-md mb-4">
@@ -97,7 +82,6 @@ const Step4MappingTable: React.FC<Step4MappingTableProps> = ({
         </div>
         
         {/* Tabela de Mapeamento (Scrollable) */}
-        {/* Ajustado max-h para ocupar mais espaço vertical */}
         <div className="overflow-x-auto overflow-y-auto flex-1 border rounded-md max-h-[70vh]"> 
           <Table>
             <TableHeader><TableRow>
@@ -116,17 +100,17 @@ const Step4MappingTable: React.FC<Step4MappingTableProps> = ({
                 <TableHead className="w-[250px] min-w-[200px]">Conta Contábil</TableHead>
             </TableRow></TableHeader>
             <TableBody>
-              {transacoes.length === 0 ? (
-                <TableRow><TableCell colSpan={7} className="text-center h-24">Nenhuma transação importada.</TableCell></TableRow>
+              {transacoesValidas.length === 0 ? (
+                <TableRow><TableCell colSpan={7} className="text-center h-24">Nenhuma transação válida importada.</TableCell></TableRow>
               ) : (
-                transacoes.map((t, i) => {
+                transacoesValidas.map((t, i) => {
                     const isMapeada = !!t.conta_contabil_id;
                     const contaContabil = contasContabeis.find(c => c.id === t.conta_contabil_id);
                     const isSelected = transacoesSelecionadas.includes(i);
-                    const isDisabled = t.isDuplicated || isSaving; // Desabilita se for duplicada
+                    const isDisabled = isSaving;
                     
                     return (
-                        <TableRow key={i} className={cn(t.isDuplicated ? 'bg-red-500/30 opacity-60' : (isMapeada ? 'bg-green-500/10' : 'bg-red-500/10'), isSelected && 'bg-blue-100/50 dark:bg-blue-900/20')}>
+                        <TableRow key={i} className={cn(isMapeada ? 'bg-green-500/10' : 'bg-red-500/10', isSelected && 'bg-blue-100/50 dark:bg-blue-900/20')}>
                             <TableCell className="text-center">
                                 <Checkbox 
                                     checked={isSelected}
@@ -145,11 +129,7 @@ const Step4MappingTable: React.FC<Step4MappingTableProps> = ({
                             </TableCell>
                             <TableCell className={cn("text-right font-semibold text-sm", t.tipo === 'Entrada' ? 'text-green-600' : 'text-red-600')}>{formatCurrency(Math.abs(t.valor))}</TableCell>
                             <TableCell>
-                                {t.isDuplicated ? (
-                                    <span className="text-xs font-medium text-red-700 flex items-center">
-                                        <AlertTriangle className="w-4 h-4 mr-1" /> DUPLICADA
-                                    </span>
-                                ) : isMapeada ? (
+                                {isMapeada ? (
                                     <span className="text-xs font-medium text-green-700 flex items-center">
                                         <CheckCircle2 className="w-4 h-4 mr-1" /> {contaContabil?.Conta}
                                     </span>
@@ -187,7 +167,7 @@ const Step4MappingTable: React.FC<Step4MappingTableProps> = ({
             </p>
             <Button 
                 onClick={onSaveConciliacao} 
-                disabled={isSaving || transacoes.filter(t => t.conta_contabil_id && !t.isDuplicated).length === 0}
+                disabled={isSaving || transacoes.filter(t => t.conta_contabil_id).length === 0}
                 className="w-full sm:w-auto"
             >
                 {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}

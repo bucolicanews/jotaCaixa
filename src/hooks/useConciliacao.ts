@@ -476,8 +476,8 @@ export function useConciliacao(): ConciliacaoHook {
                 
                 const transacoesMapeadas = applyRegras(transacoesValidas);
                 
-                setTransacoes(transacoesMapeadas); // Apenas transações válidas para a tabela de mapeamento
-                setTransacoesRejeitadas(transacoesRejeitadas); // Transações rejeitadas para a nova aba
+                setTransacoes(transacoesMapeadas); // APENAS AS VÁLIDAS E MAPEADAS
+                setTransacoesRejeitadas(transacoesRejeitadas); // APENAS AS REJEITADAS
                 setTransacoesSelecionadas([]);
                 setContaContabilLote(null);
                 
