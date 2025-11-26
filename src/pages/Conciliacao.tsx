@@ -30,7 +30,6 @@ const Conciliacao = () => {
     configSelecionada,
     file,
     transacoes,
-    transacoesRejeitadas, // NOVO ESTADO
     transacoesSelecionadas,
     contaContabilLote,
     historicoSelecionado,
@@ -53,7 +52,7 @@ const Conciliacao = () => {
     handleViewHistoricoDetails,
     setHistoricoDetalhesOpen,
     fetchConfigs,
-  } = useConciliacao();
+  } = useConciliacao(true); // PASSANDO isBancoOnly = true
   
   // Estado local para o diálogo de configuração (para edição/criação)
   const [dialogOpen, setDialogOpen] = useState(false);

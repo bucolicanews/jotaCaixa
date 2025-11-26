@@ -26,7 +26,13 @@ const FluxoCaixa: React.FC = () => {
   const empresaId = getEmpresaId();
   
   // Usamos o hook de saldo calculado para obter todas as contas e o saldo total
-  const { contas, totalSaldo, carregando: carregandoSaldos, refetch: refetchSaldos } = useSaldoContaCalculado('todos', 'todos', '', 'bancos');
+  const { contas, totalSaldo, carregando: carregandoSaldos, refetch: refetchSaldos } = useSaldoContaCalculado(
+      'todos', 
+      'todos', 
+      '', 
+      'bancos', // ESCOPO: Apenas contas marcadas como Caixa/Banco
+      false // isBancoOnly: false (queremos Caixa E Banco)
+  );
 
   const handleSaveComplete = () => {
     setDialogAberto(false);

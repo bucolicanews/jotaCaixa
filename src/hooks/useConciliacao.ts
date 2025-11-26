@@ -8,6 +8,7 @@ import { PlanoContas } from '@/types/plano-contas';
 import Papa, { ParseResult } from 'papaparse';
 import { format, parseISO } from 'date-fns';
 import { formatDDMMYYYYToISO, normalizeString } from '@/utils/formatters'; // Importando normalizeString
+import useSaldoContaCalculado from './use-saldo-conta-calculado'; // Importando useSaldoContaCalculado
 
 interface ConciliacaoHook {
     // State
@@ -61,7 +62,7 @@ const calculateContentHash = (csvContent: string): string => {
     return dataContent.substring(0, 255); // Limita o tamanho do hash para o campo TEXT
 };
 
-export function useConciliacao(): ConciliacaoHook {
+export function useConciliacao(isBancoOnly: boolean = false): ConciliacaoHook {
     const { usuario } = useSessao();
     
     // --- Estados ---
@@ -70,7 +71,6 @@ export function useConciliacao(): ConciliacaoHook {
     const [isDeletingHistorico, setIsDeletingHistorico] = useState(false);
     const [activeTab, setActiveTab] = useState('conciliacao');
     
-    const [contas, setContas] = useState<SaldoConta[]>([]);
     const [configs, setConfigs] = useState<ConfiguracaoConciliacao[]>([]);
     const [contasContabeis, setContasContabeis] = useState<PlanoContas[]>([]);
     const [historico, setHistorico] = useState<ConciliacaoHistorico[]>([]);
@@ -87,19 +87,19 @@ export function useConciliacao(): ConciliacaoHook {
     const [historicoDetalhesOpen, setHistoricoDetalhesOpen] = useState(false);
     const [historicoSelecionado, setHistoricoSelecionado] = useState<ConciliacaoHistorico | null>(null);
 
+    // NOVO: Usando useSaldoContaCalculado para buscar contas de saldo (filtradas por isBancoOnly)
+    const { contas, carregando: carregandoContas } = useSaldoContaCalculado(
+        'todos', 
+        'todos', 
+        '', 
+        'bancos', 
+        isBancoOnly // Passando o novo parâmetro
+    );
+    
     const contaSelecionada = useMemo(() => contas.find(c => c.id === contaSelecionadaId), [contas, contaSelecionadaId]);
     const proprietarioDaConfiguracao = contaSelecionada?.proprietario_id;
 
     // --- Funções de Busca de Dados ---
-
-    const fetchContas = useCallback(async () => {
-        if (!usuario?.id) return;
-        setLoading(true);
-        const { data, error } = await supabase.from('saldo_contas').select('*, conta_contabil_id').eq('proprietario_id', usuario.id);
-        if (error) showError('Erro ao carregar contas: ' + error.message);
-        else setContas(data as SaldoConta[]);
-        setLoading(false);
-    }, [usuario]);
 
     const fetchConfigs = useCallback(async () => {
         if (!contaSelecionadaId) return;
@@ -111,22 +111,20 @@ export function useConciliacao(): ConciliacaoHook {
     const fetchContasContabeis = useCallback(async () => {
         if (!proprietarioDaConfiguracao || !contaSelecionada) return;
         
+        // CORREÇÃO: Buscando apenas contas de Resultado (Receita/Despesa)
         const { data, error } = await supabase
             .from('plano_contas')
-            .select('id, Conta, Descricao, Analitica, is_conta_saldo, is_conta_resultado')
+            .select('id, Conta, Descricao, Analitica, is_conta_resultado')
             .eq('proprietario_id', proprietarioDaConfiguracao)
             .eq('Analitica', 'Sim')
-            .eq('is_conta_resultado', true)
+            .eq('is_conta_resultado', true) // Filtra apenas contas de Resultado
             .order('Conta');
             
         if (error) {
             showError('Erro ao carregar Plano de Contas: ' + error.message);
             setContasContabeis([]);
         } else {
-            const filteredContas = (data as PlanoContas[]).filter(c => 
-                c.id !== contaSelecionada.conta_contabil_id
-            );
-            setContasContabeis(filteredContas);
+            setContasContabeis(data as PlanoContas[]);
         }
     }, [proprietarioDaConfiguracao, contaSelecionada]);
     
@@ -162,9 +160,10 @@ export function useConciliacao(): ConciliacaoHook {
 
     // --- Efeitos ---
     useEffect(() => {
-        fetchContas();
+        // O loading agora depende do carregamento das contas de saldo
+        setLoading(carregandoContas);
         fetchHistorico();
-    }, [fetchContas, fetchHistorico]);
+    }, [carregandoContas, fetchHistorico]);
     
     useEffect(() => {
         if (contaSelecionadaId) {
@@ -174,7 +173,6 @@ export function useConciliacao(): ConciliacaoHook {
     }, [contaSelecionadaId, fetchContasContabeis, fetchRegras]);
 
     useEffect(() => {
-        // Este efeito é importante para resetar configs quando a conta muda
         fetchConfigs();
         setConfigSelecionada(null);
     }, [contaSelecionadaId, fetchConfigs]);
@@ -186,7 +184,7 @@ export function useConciliacao(): ConciliacaoHook {
             if (t.isDuplicated) return t;
             
             const regra = regras.find(r => 
-                t.descricao.toLowerCase().includes(r.descricao_extrato.toLowerCase()) && r.tipo_lancamento === t.tipo
+                normalizeString(t.descricao).includes(r.descricao_extrato.toLowerCase()) && r.tipo_lancamento === t.tipo
             );
             
             if (regra) {
@@ -288,14 +286,14 @@ export function useConciliacao(): ConciliacaoHook {
         if (!open) setHistoricoSelecionado(null);
     }, []);
 
-    // --- Lógica de Processamento de Arquivo ---
-
+    // --- Lógica de Processamento de Arquivo (Movida para useConciliacaoLogic) ---
+    
     const checkFileDuplicity = useCallback(async (contentHash: string, empresaId: string): Promise<boolean> => {
         const { data, error } = await supabase
             .from('conciliacoes')
             .select('id')
             .eq('empresa_id', empresaId)
-            .eq('extrato_hash', contentHash) // Verifica pelo hash do conteúdo
+            .eq('extrato_hash', contentHash)
             .limit(1);
             
         if (error) {
@@ -306,7 +304,6 @@ export function useConciliacao(): ConciliacaoHook {
         return data && data.length > 0;
     }, []);
     
-    // NOVO: Função para buscar extratos existentes na nova tabela
     const fetchExistingExtratos = useCallback(async (contaId: string, empresaId: string) => {
         const { data, error } = await supabase
             .from('extratos')
@@ -319,11 +316,9 @@ export function useConciliacao(): ConciliacaoHook {
             return new Set<string>();
         }
         
-        // Cria um Set de chaves únicas (Data YYYY-MM-DD | Descrição Normalizada | Valor (com sinal, 2 casas) | Tipo)
         return new Set(data.map(e => {
             const formattedDate = format(parseISO(e.data), 'yyyy-MM-dd');
             const normalizedDesc = normalizeString(e.descricao);
-            // Usamos o valor original (com sinal) para a verificação de unicidade
             return `${formattedDate}|${normalizedDesc}|${Number(e.valor).toFixed(2)}|${e.tipo}`;
         }));
     }, []);
@@ -337,106 +332,118 @@ export function useConciliacao(): ConciliacaoHook {
         
         setLoading(true);
         
-        // 1. Ler o conteúdo do arquivo para calcular o hash
-        const fileContent = await file.text();
-        const contentHash = calculateContentHash(fileContent);
-        
-        if (!contentHash) {
-            showError('O arquivo está vazio ou não contém dados válidos.');
-            setLoading(false);
-            return;
-        }
-        
-        // 2. Verificar Duplicidade de Conteúdo (do arquivo completo)
-        const isDuplicatedContent = await checkFileDuplicity(contentHash, proprietarioDaConfiguracao);
-        if (isDuplicatedContent) {
-            showError(`O conteúdo deste extrato já foi importado anteriormente.`);
-            setLoading(false);
-            return;
-        }
-
-        // 3. Buscar extratos existentes na nova tabela 'extratos'
-        const existingExtratosSet = await fetchExistingExtratos(contaSelecionadaId, proprietarioDaConfiguracao);
-        
-        // 4. Processar o CSV
-        Papa.parse(file, {
-            header: true,
-            skipEmptyLines: true,
-            dynamicTyping: true,
-            complete: (results: ParseResult<any>) => {
-                const rawTransacoes: TransacaoExtrato[] = results.data.map((row: any) => {
-                    const valorStr = String(row[config.mapeamento.valor] || '0').replace(',', '.');
-                    let valor = parseFloat(valorStr);
-                    
-                    if (config.coluna_tipo_transacao && row[config.coluna_tipo_transacao] !== config.valor_credito) {
-                        valor = -Math.abs(valor);
-                    }
-                    
-                    const identificacao = config.mapeamento.identificacao 
-                        ? String(row[config.mapeamento.identificacao] || '') 
-                        : undefined;
-                        
-                    const tipo = (valor >= 0 ? 'Entrada' : 'Saida') as 'Entrada' | 'Saida';
-                    const dataMovimentacao = row[config.mapeamento.data];
-                    
-                    let formattedDate: string | null = null;
-                    
-                    // Tenta formatar a data do CSV (DD/MM/YYYY) para YYYY-MM-DD
-                    formattedDate = formatDDMMYYYYToISO(dataMovimentacao);
-                    
-                    if (!formattedDate) {
-                        console.error('Falha ao formatar data do CSV:', dataMovimentacao);
-                        formattedDate = dataMovimentacao; 
-                    }
-                    
-                    const normalizedDesc = normalizeString(row[config.mapeamento.descricao]);
-                    
-                    // Chave de comparação para a transação atual (usando a data formatada YYYY-MM-DD e valor com sinal)
-                    const uniqueKey = `${formattedDate}|${normalizedDesc}|${Number(valor).toFixed(2)}|${tipo}`;
-                    
-                    let isDuplicated = false;
-                    let motivoDuplicidade: string | null = null;
-                    
-                    // Verifica duplicidade contra a tabela 'extratos'
-                    if (existingExtratosSet.has(uniqueKey)) {
-                        isDuplicated = true;
-                        motivoDuplicidade = 'Transação já existe na tabela de extratos.';
-                    }
-
-                    return {
-                        data: dataMovimentacao,
-                        descricao: row[config.mapeamento.descricao],
-                        valor: valor,
-                        tipo: tipo,
-                        identificacao: identificacao,
-                        isDuplicated: isDuplicated,
-                        motivoDuplicidade: motivoDuplicidade,
-                    };
-                }).filter(t => t.data && t.descricao);
-                
-                const transacoesValidas = rawTransacoes.filter(t => !t.isDuplicated);
-                const transacoesRejeitadas = rawTransacoes.filter(t => t.isDuplicated);
-                
-                const transacoesMapeadas = applyRegras(transacoesValidas);
-                
-                setTransacoes([...transacoesMapeadas, ...transacoesRejeitadas]);
-                setTransacoesSelecionadas([]);
-                setContaContabilLote(null);
-                
-                showSuccess(`${transacoesValidas.length} transações válidas importadas. ${transacoesRejeitadas.length} duplicadas rejeitadas.`);
-            },
-            error: (err) => {
-                showError('Erro ao processar o arquivo CSV: ' + err.message);
+        try {
+            const fileContent = await file.text();
+            const contentHash = calculateContentHash(fileContent);
+            
+            if (!contentHash) {
+                showError('O arquivo está vazio ou não contém dados válidos.');
+                setLoading(false);
+                return;
             }
-        });
-        setLoading(false);
+            
+            const isDuplicatedContent = await checkFileDuplicity(contentHash, proprietarioDaConfiguracao);
+            if (isDuplicatedContent) {
+                showError(`O conteúdo deste extrato já foi importado anteriormente.`);
+                setLoading(false);
+                return;
+            }
+
+            const existingExtratosSet = await fetchExistingExtratos(contaSelecionadaId, proprietarioDaConfiguracao);
+            
+            Papa.parse(file, {
+                header: true,
+                skipEmptyLines: true,
+                dynamicTyping: true,
+                complete: (results: ParseResult<any>) => {
+                    try {
+                        const rawTransacoes: TransacaoExtrato[] = results.data.map((row: any) => {
+                            const valorStr = String(row[config.mapeamento.valor] || '0').replace(',', '.');
+                            let valor = parseFloat(valorStr);
+                            
+                            if (config.coluna_tipo_transacao && row[config.coluna_tipo_transacao] !== config.valor_credito) {
+                                valor = -Math.abs(valor);
+                            }
+                            
+                            const identificacao = config.mapeamento.identificacao 
+                                ? String(row[config.mapeamento.identificacao] || '') 
+                                : undefined;
+                                
+                            const tipo = (valor >= 0 ? 'Entrada' : 'Saida') as 'Entrada' | 'Saida';
+                            const dataMovimentacao = row[config.mapeamento.data];
+                            
+                            let formattedDate: string | null = null;
+                            formattedDate = formatDDMMYYYYToISO(dataMovimentacao);
+                            
+                            if (!formattedDate) {
+                                formattedDate = dataMovimentacao; 
+                            }
+                            
+                            const normalizedDesc = normalizeString(row[config.mapeamento.descricao]);
+                            const uniqueKey = `${formattedDate}|${normalizedDesc}|${Number(valor).toFixed(2)}|${tipo}`;
+                            
+                            let isDuplicated = false;
+                            let motivoDuplicidade: string | null = null;
+                            
+                            if (existingExtratosSet.has(uniqueKey)) {
+                                isDuplicated = true;
+                                motivoDuplicidade = 'Transação já existe na tabela de extratos.';
+                            }
+
+                            return {
+                                data: dataMovimentacao,
+                                descricao: row[config.mapeamento.descricao],
+                                valor: valor,
+                                tipo: tipo,
+                                identificacao: identificacao,
+                                isDuplicated: isDuplicated,
+                                motivoDuplicidade: motivoDuplicidade,
+                            };
+                        }).filter(t => t.data && t.descricao);
+                        
+                        const transacoesValidas = rawTransacoes.filter(t => !t.isDuplicated);
+                        const transacoesRejeitadas = rawTransacoes.filter(t => t.isDuplicated);
+                        
+                        const transacoesMapeadas = applyRegras(transacoesValidas);
+                        
+                        setTransacoes([...transacoesMapeadas, ...transacoesRejeitadas]);
+                        setTransacoesSelecionadas([]);
+                        setContaContabilLote(null);
+                        
+                        showSuccess(`${transacoesValidas.length} transações válidas importadas. ${transacoesRejeitadas.length} duplicadas rejeitadas.`);
+                    } catch (innerErr: any) {
+                        console.error('Erro ao processar resultado do CSV:', innerErr);
+                        showError('Erro ao processar o arquivo CSV: ' + (innerErr?.message || String(innerErr)));
+                    } finally {
+                        setLoading(false);
+                    }
+                },
+                error: (err) => {
+                    console.error('Papa.parse error:', err);
+                    setLoading(false);
+                    showError('Erro ao processar o arquivo CSV: ' + err.message);
+                }
+            });
+        } catch (err: any) {
+            console.error('Erro em handleParseFile:', err);
+            setLoading(false);
+            showError('Erro ao processar o arquivo: ' + (err?.message || String(err)));
+        }
     }, [file, configSelecionada, contaSelecionadaId, proprietarioDaConfiguracao, applyRegras, checkFileDuplicity, fetchExistingExtratos]);
 
-    // --- Lógica de Salvamento ---
+    // --- Lógica de Salvamento (Partidas Dobradas) ---
 
     const handleSaveConciliacao = useCallback(async () => {
-        if (!contaSelecionadaId || !proprietarioDaConfiguracao || !file) {
-            showError('Conta bancária, proprietário ou arquivo não definidos.');
+        if (!contaSelecionadaId || !proprietarioDaConfiguracao || !file || !contaSelecionada || !usuario?.id) {
+            showError('Dados de sessão, conta bancária, proprietário, arquivo ou hash não definidos.');
+            return;
+        }
+        
+        // 1. Buscar a conta contábil do saldo_contas (Ativo/Caixa)
+        const contaAtivoCaixaId = contaSelecionada.plano_contas?.id;
+        
+        if (!contaAtivoCaixaId) {
+            showError('A conta bancária selecionada não está vinculada a um Plano de Contas (Ativo).');
             return;
         }
         
@@ -451,33 +458,69 @@ export function useConciliacao(): ConciliacaoHook {
         
         try {
             // Prepara o payload para a tabela 'lancamentos'
-            const lancamentosPayload = transacoesParaSalvar.map(t => {
-                const formattedDate = formatDDMMYYYYToISO(t.data);
+            const lancamentosPayload = transacoesParaSalvar.flatMap(t => {
+                const formattedDate = formatDDMMYYYYToISO(t.data) || String(t.data);
+                const valor = Math.abs(Number(t.valor));
                 
-                return {
-                    proprietario_id: proprietarioDaConfiguracao, // ALTERADO: empresa_id -> proprietario_id
-                    data_movimentacao: formattedDate || t.data,
+                // Transação 1: Movimentação de Caixa/Banco (Ativo)
+                const lancamentoAtivo: any = {
+                    proprietario_id: proprietarioDaConfiguracao,
+                    data_movimentacao: formattedDate,
                     descricao: t.descricao,
-                    valor: Math.abs(t.valor), // Valor absoluto para lancamentos
+                    valor: valor,
                     tipo: t.tipo,
                     conta_bancaria_id: contaSelecionadaId,
+                    conta_contabil_id: contaAtivoCaixaId,
+                    conciliado: true,
+                    origem: 'conciliacao_extrato',
+                    documento: t.identificacao || null,
+                };
+                
+                // Transação 2: Partida Dobrada (Resultado - Receita/Despesa)
+                let tipoResultado: 'Entrada' | 'Saida';
+                
+                if (t.tipo === 'Entrada') {
+                    tipoResultado = 'Saida'; // Crédito na Receita (Credora)
+                } else {
+                    tipoResultado = 'Entrada'; // Débito na Despesa (Credora)
+                }
+                
+                const lancamentoResultado: any = {
+                    proprietario_id: proprietarioDaConfiguracao,
+                    data_movimentacao: formattedDate,
+                    descricao: t.descricao,
+                    valor: valor,
+                    tipo: tipoResultado,
+                    conta_bancaria_id: null,
                     conta_contabil_id: t.conta_contabil_id,
                     conciliado: true,
                     origem: 'conciliacao_extrato',
                     documento: t.identificacao || null,
                 };
+                
+                // CRÍTICO: Adiciona a referência cruzada (conta_resultado_id)
+                const idAtivo = crypto.randomUUID();
+                const idResultado = crypto.randomUUID();
+                
+                lancamentoAtivo.id = idAtivo;
+                lancamentoAtivo.conta_resultado_id = idResultado;
+                
+                lancamentoResultado.id = idResultado;
+                lancamentoResultado.conta_resultado_id = idAtivo;
+                
+                return [lancamentoAtivo, lancamentoResultado];
             });
             
-            // Prepara o payload para a tabela 'extratos' (para controle de duplicidade futura)
+            // Prepara o payload para a tabela 'extratos'
             const extratosPayload = transacoesParaSalvar.map(t => {
-                const formattedDate = formatDDMMYYYYToISO(t.data);
+                const formattedDate = formatDDMMYYYYToISO(t.data) || String(t.data);
                 
                 return {
                     empresa_id: proprietarioDaConfiguracao,
                     id_saldo_contas: contaSelecionadaId,
-                    data: formattedDate || t.data,
+                    data: formattedDate,
                     descricao: t.descricao,
-                    valor: t.valor, // Valor original (com sinal) para extratos
+                    valor: t.valor,
                     tipo: t.tipo,
                     identificacao: t.identificacao || null,
                     conciliado: true,
@@ -485,7 +528,7 @@ export function useConciliacao(): ConciliacaoHook {
                 };
             });
             
-            // 1. Inserir Lançamentos (Movimentação de Saldo)
+            // 1. Inserir Lançamentos (Movimentação de Saldo e Partida Dobrada)
             const { error: lancamentoError } = await supabase
                 .from('lancamentos')
                 .insert(lancamentosPayload);
@@ -527,7 +570,7 @@ export function useConciliacao(): ConciliacaoHook {
                 id_saldo_contas: contaSelecionadaId,
                 nome_arquivo: file.name,
                 extrato_json: transacoesParaSalvar,
-                extrato_hash: contentHash, // Salva o hash do conteúdo
+                extrato_hash: contentHash,
             };
             
             const { error: historicoError } = await supabase
@@ -536,7 +579,7 @@ export function useConciliacao(): ConciliacaoHook {
                 
             if (historicoError) throw historicoError;
 
-            showSuccess(`${lancamentosPayload.length} lançamentos conciliados e salvos com sucesso!`);
+            showSuccess(`${lancamentosPayload.length / 2} transações conciliadas e salvas com sucesso!`);
             handleReset();
             fetchHistorico();
             
@@ -545,7 +588,7 @@ export function useConciliacao(): ConciliacaoHook {
         } finally {
             setIsSaving(false);
         }
-    }, [contaSelecionadaId, proprietarioDaConfiguracao, file, transacoes, usuario?.id, fetchHistorico, handleReset]);
+    }, [contaSelecionadaId, proprietarioDaConfiguracao, file, transacoes, usuario?.id, fetchHistorico, handleReset, contaSelecionada]);
 
     const handleDeleteHistorico = useCallback(async () => {
         if (!usuario?.id) return;
@@ -608,4 +651,3 @@ export function useConciliacao(): ConciliacaoHook {
         fetchConfigs,
     };
 }
-
