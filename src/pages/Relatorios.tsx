@@ -2,7 +2,7 @@ import LayoutPrincipal from '@/components/LayoutPrincipal';
 import ReportCard from '@/components/ReportCard';
 import { useSessao } from '@/hooks/use-sessao';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
-import { ArrowDownCircle, ArrowUpCircle, BarChart3, Scale, TrendingUp, FileBarChart, Users, Clock, Search, Filter } from 'lucide-react';
+import { ArrowDownCircle, ArrowUpCircle, BarChart3, Scale, TrendingUp, FileBarChart, Users, Clock, Search, Filter, FileTextIcon, BookOpen } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useState, useMemo } from 'react';
 import { Input } from '@/components/ui/input';
@@ -61,6 +61,22 @@ const REPORTS_DATA = [
     description: "Análise de receitas e despesas para cálculo do lucro/prejuízo.",
     icon: BarChart3,
     link: "/relatorios/dre",
+    permissionKey: 'relatorios',
+    permissionLabel: 'Relatórios',
+  },
+  {
+    title: "Balancete de Verificação",
+    description: "Relatório contábil completo com saldos iniciais, movimentos e saldos finais.",
+    icon: FileTextIcon,
+    link: "/relatorios/balancete",
+    permissionKey: 'relatorios',
+    permissionLabel: 'Relatórios',
+  },
+  {
+    title: "Livro Razão",
+    description: "Detalhe de todos os lançamentos e saldos acumulados por conta analítica.",
+    icon: BookOpen,
+    link: "/relatorios/razao",
     permissionKey: 'relatorios',
     permissionLabel: 'Relatórios',
   },
