@@ -58,9 +58,9 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
   // Edição
   const [editDialog, setEditDialog] = useState<{ open: boolean, lancamento: Lancamento | null }>({ open: false, lancamento: null });
 
-  // NOVO: Filtra as contas para o Select (apenas Caixa ou Banco)
-  const contasCaixaBanco = useMemo(() => {
-      return contas.filter(c => c.plano_contas?.is_caixa || c.plano_contas?.is_banco);
+  // NOVO: Filtra as contas para o Select (apenas Caixa)
+  const contasCaixa = useMemo(() => {
+      return contas.filter(c => c.plano_contas?.is_caixa === true);
   }, [contas]);
 
   const fetchLancamentos = useCallback(async () => {
@@ -68,7 +68,7 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
     
     // 1. Determinar as contas a serem consideradas
     const contasFiltradasIds = filtroContaId === 'todos' 
-        ? contasCaixaBanco.map(c => c.id) // USANDO APENAS CAIXA/BANCO
+        ? contasCaixa.map(c => c.id) // USANDO APENAS CAIXA
         : [filtroContaId];
         
     if (contasFiltradasIds.length === 0) {
@@ -138,7 +138,7 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
       setLancamentos(filteredData);
     }
     setLoadingLancamentos(false);
-  }, [empresaId, filtroContaId, filtroTipo, filtroTextoDebounced, filtroPeriodo, contasCaixaBanco]); // Adicionado contasCaixaBanco
+  }, [empresaId, filtroContaId, filtroTipo, filtroTextoDebounced, filtroPeriodo, contasCaixa]); // Alterado contasCaixaBanco para contasCaixa
 
   useEffect(() => {
     fetchLancamentos();
@@ -366,7 +366,7 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
                 </SelectTrigger>
                 <SelectContent>
                     <SelectItem value="todos">Todas as Contas</SelectItem>
-                    {contasCaixaBanco.map(c => (
+                    {contasCaixa.map(c => (
                         <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
                     ))}
                 </SelectContent>
