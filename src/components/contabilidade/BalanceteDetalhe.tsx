@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatCurrency } from '@/utils/formatters';
 import { cn } from '@/lib/utils';
-import { Loader2, Printer, FileTextIcon } from 'lucide-react';
+import { Loader2, Printer, FileTextIcon, Scale, TrendingUp } from 'lucide-react';
 import { DateRange } from 'react-day-picker';
 import { Button } from '../ui/button';
 import { usePrint } from '@/hooks/use-print';
@@ -102,6 +102,44 @@ const BalanceteDetalhe: React.FC<BalanceteDetalheProps> = ({ filtroPeriodo, filt
 
   return (
     <div className="space-y-6">
+      {/* NOVO: Cards de Resumo */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card className="border-l-4 border-red-500">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-red-700 dark:text-red-300">Total Débito (Movimento)</CardTitle>
+                <TrendingUp className="w-4 h-4 text-red-500" />
+            </CardHeader>
+            <CardContent>
+                <div className="text-2xl font-bold mt-1 text-red-600">
+                    {formatCurrency(totais.totalDebito)}
+                </div>
+            </CardContent>
+        </Card>
+        <Card className="border-l-4 border-green-500">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-green-700 dark:text-green-300">Total Crédito (Movimento)</CardTitle>
+                <TrendingUp className="w-4 h-4 text-green-500" />
+            </CardHeader>
+            <CardContent>
+                <div className="text-2xl font-bold mt-1 text-green-600">
+                    {formatCurrency(totais.totalCredito)}
+                </div>
+            </CardContent>
+        </Card>
+        <Card className={cn("border-l-4", totais.totalSaldoFinal >= 0 ? "border-blue-500" : "border-red-500")}>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-foreground">Saldo Final (Total)</CardTitle>
+                <Scale className="w-4 h-4 text-primary" />
+            </CardHeader>
+            <CardContent>
+                <div className={cn("text-2xl font-bold mt-1", totais.totalSaldoFinal >= 0 ? "text-blue-600" : "text-red-600")}>
+                    {formatCurrency(totais.totalSaldoFinal)}
+                </div>
+            </CardContent>
+        </Card>
+      </div>
+      {/* FIM NOVO: Cards de Resumo */}
+
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-xl flex items-center"><FileTextIcon className="w-5 h-5 mr-2" /> Balancete de Verificação</CardTitle>
