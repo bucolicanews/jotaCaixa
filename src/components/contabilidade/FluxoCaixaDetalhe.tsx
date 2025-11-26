@@ -212,44 +212,16 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
         const dreLaunchId = lancamento.conta_resultado_id;
         
         if (!dreLaunchId) {
-            // Se a referência cruzada falhar, tenta a busca inversa (para compatibilidade com lançamentos antigos)
-            const oppositeType = lancamento.tipo === 'Entrada' ? 'Saida' : 'Entrada';
-            const { data: oldDreLaunch, error: oldDreError } = await supabase
-                .from('lancamentos')
-                .select('id')
-                .eq('proprietario_id', empresaId)
-                .eq('origem', 'movimentacao_direta')
-                .eq('descricao', lancamento.descricao)
-                .eq('tipo', oppositeType)
-                .is('conta_bancaria_id', null)
-                .neq('id', lancamento.id)
-                .limit(1)
-                .single();
-                
-            if (oldDreError || !oldDreLaunch) {
-                throw new Error('Não foi possível encontrar o lançamento contábil de partida dobrada para estorno.');
-            }
-            
-            // Usa o ID encontrado na busca inversa
-            const oldDreId = oldDreLaunch.id;
-            
-            // 2. Deletar os dois lançamentos originais
-            const { error: deleteError } = await supabase
-                .from('lancamentos')
-                .delete()
-                .in('id', [lancamento.id, oldDreId]);
-                
-            if (deleteError) throw deleteError;
-            
-        } else {
-            // 2. Deletar os dois lançamentos originais (usando a referência cruzada)
-            const { error: deleteError } = await supabase
-                .from('lancamentos')
-                .delete()
-                .in('id', [lancamento.id, dreLaunchId]);
-                
-            if (deleteError) throw deleteError;
+            throw new Error('Referência cruzada (conta_resultado_id) não encontrada no lançamento primário.');
         }
+        
+        // 2. Deletar os dois lançamentos originais
+        const { error: deleteError } = await supabase
+            .from('lancamentos')
+            .delete()
+            .in('id', [lancamento.id, dreLaunchId]);
+            
+        if (deleteError) throw deleteError;
         
         // 3. Criar o lançamento de estorno (Entrada/Saída oposta)
         const estornoTipo = lancamento.tipo === 'Entrada' ? 'Saida' : 'Entrada';
