@@ -12,9 +12,8 @@ interface Step1SelectAccountProps {
 
 const Step1SelectAccount: React.FC<Step1SelectAccountProps> = ({ contas, loading, onSelectAccount, contaSelecionadaId }) => {
   
-  // Filtra as contas para mostrar apenas aquelas marcadas como Banco (is_banco)
-  // Conciliação é tipicamente feita com extratos bancários.
-  const contasFiltradas = contas.filter(c => c.plano_contas?.is_banco);
+  // Filtra as contas para mostrar apenas aquelas marcadas explicitamente como Banco (is_banco: true)
+  const contasFiltradas = contas.filter(c => c.plano_contas?.is_banco === true);
   
   return (
     <Card>
