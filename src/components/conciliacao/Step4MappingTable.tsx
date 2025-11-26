@@ -4,7 +4,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Loader2, Save, List, ArrowUpCircle, ArrowDownCircle, Check, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { Loader2, Save, List, ArrowUpCircle, ArrowDownCircle, Check, CheckCircle2 } from 'lucide-react';
 import { TransacaoExtrato } from '@/types/conciliacao';
 import { PlanoContas } from '@/types/plano-contas';
 import { cn } from '@/lib/utils';
