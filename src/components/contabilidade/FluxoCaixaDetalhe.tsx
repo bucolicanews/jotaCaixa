@@ -234,7 +234,7 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
             data_movimentacao: new Date().toISOString(),
             descricao: estornoDescricao,
             valor: valor,
-            tipo: estornoTipo, // Tipo oposto
+            tipo: estornoTipo, // Tipo oposto (Entrada -> Saida, Saida -> Entrada)
             conta_bancaria_id: lancamento.conta_bancaria_id,
             conta_contabil_id: lancamento.conta_contabil_id, // Conta Ativo/Caixa
             origem: 'estorno_direto',
@@ -243,6 +243,8 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
         
         // Lançamento 2: Estorno no Resultado (DRE)
         // O tipo do lançamento de Resultado/DRE é o oposto do tipo do lançamento de Ativo/Caixa
+        // Se o original era Entrada (D: Ativo, C: Receita/Saida), o estorno é (D: Receita/Entrada, C: Ativo/Saida)
+        // O tipo do lançamento de Resultado/DRE deve ser o oposto do tipo do lançamento de Ativo/Caixa
         const estornoResultadoTipo = estornoTipo === 'Entrada' ? 'Saida' : 'Entrada'; 
         const contaResultadoId = lancamento.conta_contabil_id; // Conta de Resultado original
         
@@ -251,7 +253,7 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
             data_movimentacao: new Date().toISOString(),
             descricao: estornoDescricao,
             valor: valor,
-            tipo: estornoResultadoTipo,
+            tipo: estornoResultadoTipo, // Tipo oposto ao do Ativo (Entrada -> Saida, Saida -> Entrada)
             conta_bancaria_id: null,
             conta_contabil_id: contaResultadoId,
             origem: 'estorno_direto',
@@ -432,7 +434,7 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
                                             </Button>
                                             <AlertDialog>
                                                 <AlertDialogTrigger asChild>
-                                                    <Button variant="ghost" size="icon" disabled={isUndoing} title="Estornar Lançamento">
+                                                    <Button variant="ghost" size="icon" disabled={isUndoing || isEstornada} title="Estornar Lançamento">
                                                         <Undo2 className="w-4 h-4 text-red-500" />
                                                     </Button>
                                                 </AlertDialogTrigger>
