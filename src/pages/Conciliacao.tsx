@@ -47,7 +47,7 @@ const Conciliacao = () => {
     handleContaContabilLoteChange,
     handleApplyLote,
     handleSaveConciliacao,
-    handleDeleteHistorico, // CORRIGIDO: Agora está sendo desestruturado
+    handleDeleteHistorico,
     handleViewHistoricoDetails,
     setHistoricoDetalhesOpen,
     fetchConfigs,
@@ -88,51 +88,56 @@ const Conciliacao = () => {
         </TabsList>
         
         <TabsContent value="conciliacao" className="mt-4">
-            {/* Ajustado para grid-cols-1 em mobile e md:grid-cols-3 em desktop */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <Step1SelectAccount
-                    contas={contas}
-                    loading={loading}
-                    onSelectAccount={handleSelectAccount}
-                    contaSelecionadaId={contaSelecionadaId}
-                />
+            {/* NOVO LAYOUT DE DUAS COLUNAS: lg:grid-cols-3 para a estrutura principal */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 
-                {contaSelecionadaId && (
-                    <Step2SelectConfig
-                        configs={configs}
-                        configSelecionada={configSelecionada}
-                        onSelectConfig={handleSelectConfig}
-                        onOpenDialog={handleOpenConfigDialog}
-                    />
-                )}
-                
-                {configSelecionada && (
-                    <Step3ImportFile
-                        file={file}
+                {/* COLUNA ESQUERDA: Passos de Configuração (Ocupa 1/3 no desktop) */}
+                <div className="space-y-6 lg:col-span-1">
+                    <Step1SelectAccount
+                        contas={contas}
                         loading={loading}
-                        onFileChange={handleFileChange}
-                        onProcessFile={handleParseFile}
+                        onSelectAccount={handleSelectAccount}
+                        contaSelecionadaId={contaSelecionadaId}
                     />
+                    
+                    {contaSelecionadaId && (
+                        <Step2SelectConfig
+                            configs={configs}
+                            configSelecionada={configSelecionada}
+                            onSelectConfig={handleSelectConfig}
+                            onOpenDialog={handleOpenConfigDialog}
+                        />
+                    )}
+                    
+                    {configSelecionada && (
+                        <Step3ImportFile
+                            file={file}
+                            loading={loading}
+                            onFileChange={handleFileChange}
+                            onProcessFile={handleParseFile}
+                        />
+                    )}
+                </div>
+                
+                {/* COLUNA DIREITA: Tabela de Mapeamento (Ocupa 2/3 no desktop) */}
+                {transacoes.length > 0 && (
+                    <div className="lg:col-span-2">
+                        <Step4MappingTable
+                            transacoes={transacoes}
+                            contasContabeis={contasContabeis}
+                            transacoesSelecionadas={transacoesSelecionadas}
+                            contaContabilLote={contaContabilLote}
+                            isSaving={isSaving}
+                            onToggleSelection={handleToggleSelection}
+                            onSelectAll={handleSelectAll}
+                            onContaContabilChange={handleContaContabilChange}
+                            onContaContabilLoteChange={handleContaContabilLoteChange}
+                            onApplyLote={handleApplyLote}
+                            onSaveConciliacao={handleSaveConciliacao}
+                        />
+                    </div>
                 )}
             </div>
-            
-            {transacoes.length > 0 && (
-                <div className="mt-6">
-                    <Step4MappingTable
-                        transacoes={transacoes}
-                        contasContabeis={contasContabeis}
-                        transacoesSelecionadas={transacoesSelecionadas}
-                        contaContabilLote={contaContabilLote}
-                        isSaving={isSaving}
-                        onToggleSelection={handleToggleSelection}
-                        onSelectAll={handleSelectAll}
-                        onContaContabilChange={handleContaContabilChange}
-                        onContaContabilLoteChange={handleContaContabilLoteChange}
-                        onApplyLote={handleApplyLote}
-                        onSaveConciliacao={handleSaveConciliacao}
-                    />
-                </div>
-            )}
         </TabsContent>
         
         <TabsContent value="historico" className="mt-4">
@@ -147,7 +152,6 @@ const Conciliacao = () => {
       
       {contaSelecionadaId && (
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          {/* Ajustado para sm:max-w-lg para melhor responsividade */}
           <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader><DialogTitle>{configParaEditar ? 'Editar' : 'Nova'} Configuração de Mapeamento</DialogTitle></DialogHeader>
             <FormConciliacaoConfig 
