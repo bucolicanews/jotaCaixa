@@ -90,7 +90,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
     },
   });
   
-  const { control, watch } = form;
+  const { control, watch, reset, setValue } = form;
   const { fields, append, remove } = useFieldArray({
     control,
     name: "pagamentos",
@@ -183,11 +183,12 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
     
     const id = data?.historico_id || null;
     setHistoricoPadraoId(id);
-    form.setValue('historico_id', id);
-  }, [isAdmin, adminId, form]);
+    // Não define o valor aqui, será feito no useEffect de inicialização
+  }, [isAdmin, adminId]);
 
+  // Efeito de Inicialização (Chamado ao abrir o modal)
   useEffect(() => {
-      if (open) {
+      if (open && parcela && adminId) {
           setIsInitialized(false);
           refetchSaldos();
           fetchHistoricos();
@@ -196,24 +197,47 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
               fetchMapeamentoContabil();
               fetchHistoricoPadrao();
           }
+          
+          // 1. Buscar a conta sintética para obter o id_conta_patrimonial
+          const fetchContaSintetica = async () => {
+              const { data: contaSintetica, error: csError } = await supabase
+                  .from(tabelaContasPagar)
+                  .select('id_conta_patrimonial')
+                  .eq('id', parcela.conta_pagar_id)
+                  .single();
+                  
+              if (csError) {
+                  console.error('Erro ao buscar conta sintética:', csError);
+              }
+              
+              const contaPatrimonialId = contaSintetica?.id_conta_patrimonial || null;
+              
+              // 2. Resetar o formulário com os valores iniciais
+              reset({
+                  data_pagamento: new Date(),
+                  forma_pagamento: 'Pix',
+                  pagamentos: contasOrigem.length > 0 
+                      ? [{ conta_id: contasOrigem[0].id, valor_pago: saldoDevedor }]
+                      : [],
+                  historico_id: historicoPadraoId,
+                  salvar_como_padrao: false,
+                  conta_patrimonial_id: contaPatrimonialId, // PRÉ-SELECIONA A CONTA PATRIMONIAL
+              });
+              
+              setIsInitialized(true);
+          };
+          
+          fetchContaSintetica();
       }
-  }, [open, isAdmin, refetchSaldos, fetchMapeamentoContabil, fetchHistoricos, fetchContasPatrimoniais, fetchHistoricoPadrao]);
+  }, [open, parcela, adminId, isAdmin, refetchSaldos, fetchHistoricos, fetchContasPatrimoniais, fetchMapeamentoContabil, fetchHistoricoPadrao, reset, contasOrigem, saldoDevedor, historicoPadraoId]);
 
   useEffect(() => {
-    if (open && !loadingContas && !isInitialized) {
-        form.reset({
-            data_pagamento: new Date(),
-            forma_pagamento: 'Pix',
-            pagamentos: contasOrigem.length > 0 
-                ? [{ conta_id: contasOrigem[0].id, valor_pago: saldoDevedor }]
-                : [],
-            historico_id: form.getValues('historico_id'),
-            salvar_como_padrao: false,
-            conta_patrimonial_id: form.getValues('conta_patrimonial_id'),
-        });
-        setIsInitialized(true);
+    // Se a inicialização falhou em pré-selecionar a conta de origem (porque contasOrigem estava vazia),
+    // tenta novamente quando as contasOrigem carregarem.
+    if (open && !loadingContas && isInitialized && fields.length === 0 && contasOrigem.length > 0) {
+        append({ conta_id: contasOrigem[0].id, valor_pago: saldoDevedor });
     }
-  }, [open, loadingContas, contasOrigem, saldoDevedor, isInitialized, form]);
+  }, [open, loadingContas, contasOrigem, saldoDevedor, isInitialized, append, fields.length]);
 
   const onSubmit = async (values: FormValues) => {
     if (!parcela || !adminId || !values.conta_patrimonial_id) {
