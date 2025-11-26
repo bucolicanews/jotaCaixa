@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Loader2, ArrowUpCircle, ArrowDownCircle, Filter, Search, Banknote, Wallet, Landmark, Printer, Edit } from 'lucide-react';
@@ -55,12 +55,17 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
   // Edição
   const [editDialog, setEditDialog] = useState<{ open: boolean, lancamento: Lancamento | null }>({ open: false, lancamento: null });
 
+  // NOVO: Filtra as contas para o Select (apenas Caixa ou Banco)
+  const contasCaixaBanco = useMemo(() => {
+      return contas.filter(c => c.plano_contas?.is_caixa || c.plano_contas?.is_banco);
+  }, [contas]);
+
   const fetchLancamentos = useCallback(async () => {
     setLoadingLancamentos(true);
     
     // 1. Determinar as contas a serem consideradas
     const contasFiltradasIds = filtroContaId === 'todos' 
-        ? contas.map(c => c.id) 
+        ? contasCaixaBanco.map(c => c.id) // USANDO APENAS CAIXA/BANCO
         : [filtroContaId];
         
     if (contasFiltradasIds.length === 0) {
@@ -129,7 +134,7 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
       setLancamentos(filteredData);
     }
     setLoadingLancamentos(false);
-  }, [empresaId, filtroContaId, filtroTipo, filtroTextoDebounced, filtroPeriodo, contas]);
+  }, [empresaId, filtroContaId, filtroTipo, filtroTextoDebounced, filtroPeriodo, contasCaixaBanco]); // Adicionado contasCaixaBanco
 
   useEffect(() => {
     fetchLancamentos();
@@ -277,7 +282,7 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
                 </SelectTrigger>
                 <SelectContent>
                     <SelectItem value="todos">Todas as Contas</SelectItem>
-                    {contas.map(c => (
+                    {contasCaixaBanco.map(c => (
                         <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
                     ))}
                 </SelectContent>

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import FormMovimentacaoDireta, { LancamentoPrimario } from './FormMovimentacaoDireta';
 
 interface FormMovimentacaoDiretaDialogProps {
@@ -17,6 +17,9 @@ const FormMovimentacaoDiretaDialog: React.FC<FormMovimentacaoDiretaDialogProps> 
             <DialogContent className="sm:max-w-[425px] max-h-[95vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle>{isEditing ? 'Editar' : 'Nova'} Movimentação Direta</DialogTitle>
+                    <DialogDescription>
+                        {isEditing ? 'Ajuste os valores e contas da movimentação.' : 'Registre entradas (reforço) ou saídas (sangria) de caixa/banco com partida dobrada.'}
+                    </DialogDescription>
                 </DialogHeader>
                 <FormMovimentacaoDireta
                     lancamentoInicial={lancamentoInicial}

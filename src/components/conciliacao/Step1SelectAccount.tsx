@@ -1,17 +1,20 @@
-//import React from 'react';
-import React, { useState } from "react";
+import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { SaldoConta } from '@/types/saldo-conta';
+import { SaldoContaDetalhada } from '@/types/saldo-conta'; // Usando SaldoContaDetalhada para acessar plano_contas
 
 interface Step1SelectAccountProps {
-  contas: SaldoConta[];
+  contas: SaldoContaDetalhada[]; // Alterado para SaldoContaDetalhada
   loading: boolean;
   onSelectAccount: (id: string) => void;
   contaSelecionadaId: string | null;
 }
 
 const Step1SelectAccount: React.FC<Step1SelectAccountProps> = ({ contas, loading, onSelectAccount, contaSelecionadaId }) => {
+  
+  // Filtra as contas para mostrar apenas aquelas marcadas como Caixa ou Banco
+  const contasFiltradas = contas.filter(c => c.plano_contas?.is_caixa || c.plano_contas?.is_banco);
+  
   return (
     <Card>
       <CardHeader><CardTitle>Passo 1: Selecione a Conta Bancária</CardTitle></CardHeader>
@@ -21,11 +24,16 @@ const Step1SelectAccount: React.FC<Step1SelectAccountProps> = ({ contas, loading
             <SelectValue placeholder={loading ? "Carregando..." : "Selecione a conta para conciliar"} />
           </SelectTrigger>
           <SelectContent>
-            {contas.map(c => (
+            {contasFiltradas.map(c => (
               <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
             ))}
           </SelectContent>
         </Select>
+        {contasFiltradas.length === 0 && !loading && (
+            <p className="text-sm text-red-500 mt-2">
+                Nenhuma conta marcada como Caixa ou Banco encontrada.
+            </p>
+        )}
       </CardContent>
     </Card>
   );
