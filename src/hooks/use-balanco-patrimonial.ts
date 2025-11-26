@@ -34,6 +34,11 @@ export const useBalancoPatrimonial = (dataFim: Date | null): BalancoPatrimonialH
   const { configMap } = useContabilConfig();
   const [balanco, setBalanco] = useState<ContaBP[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshKey, setRefreshKey] = useState(0); // NOVO ESTADO
+
+  const refetch = useCallback(() => {
+      setRefreshKey(prev => prev + 1);
+  }, []);
 
   const calcularSaldo = useCallback((lancamentos: Lancamento[], conta: PlanoContas, saldoInicial: number) => {
     let saldo = saldoInicial; // INCLUINDO SALDO INICIAL
@@ -156,7 +161,7 @@ export const useBalancoPatrimonial = (dataFim: Date | null): BalancoPatrimonialH
     
     setBalanco(balancoCalculado);
     setLoading(false);
-  }, [usuario?.id, dataFim, calcularSaldosRecursivo]);
+  }, [usuario?.id, dataFim, calcularSaldosRecursivo, refreshKey]); // Adicionando refreshKey
 
   useEffect(() => {
     fetchBalanco();
@@ -169,13 +174,14 @@ export const useBalancoPatrimonial = (dataFim: Date | null): BalancoPatrimonialH
   
   // Calculate DRE result (Resultado Líquido)
   const getSomaPorTipo = (contas: ContaBP[], prefix: string) => {
+    // Busca a soma do saldo_final de todas as contas que começam com o prefixo
     return contas.filter(c => c.Conta.startsWith(prefix)).reduce((sum, c) => sum + c.saldo_final, 0);
   };
   
   const totalReceita = getSomaPorTipo(balanco, configMap.Receita || '4');
   
-  // Custo e Despesa são Credoras no Balanço, mas para o cálculo do Resultado Líquido,
-  // precisamos do valor absoluto (positivo) para subtrair da Receita.
+  // CORREÇÃO CRÍTICA: Força o valor absoluto para Custo e Despesa antes de subtrair
+  // Isso garante que o valor seja tratado como um custo positivo na DRE.
   const totalCusto = Math.abs(getSomaPorTipo(balanco, configMap.Custo || '5'));
   const totalDespesa = Math.abs(getSomaPorTipo(balanco, configMap.Despesa || '6'));
   
@@ -192,6 +198,6 @@ export const useBalancoPatrimonial = (dataFim: Date | null): BalancoPatrimonialH
     resultadoLiquido,
     totalPassivoPL,
     carregando: loading,
-    refetch: fetchBalanco,
+    refetch, // EXPORTANDO O REFETCH
   };
 };

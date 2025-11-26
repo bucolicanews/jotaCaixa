@@ -276,6 +276,8 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
         showError('Falha ao estornar lançamento: ' + error.message);
     } finally {
         setIsUndoing(false);
+        // Adiciona um pequeno delay para garantir que o banco de dados sincronize
+        await new Promise(resolve => setTimeout(resolve, 500)); 
         fetchLancamentos(); // GARANTINDO O RECALCULO DOS LANÇAMENTOS
         refetchSaldos(); // CRÍTICO: Força o recálculo do saldo total
     }
