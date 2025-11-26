@@ -24,6 +24,7 @@ interface ConciliacaoHook {
     configSelecionada: ConfiguracaoConciliacao | null;
     file: File | null;
     transacoes: TransacaoExtrato[];
+    transacoesRejeitadas: TransacaoExtrato[]; // NOVO ESTADO
     transacoesSelecionadas: number[];
     contaContabilLote: string | null;
     historicoSelecionado: ConciliacaoHistorico | null;
@@ -76,6 +77,7 @@ export function useConciliacao(): ConciliacaoHook {
     const [configSelecionada, setConfigSelecionada] = useState<ConfiguracaoConciliacao | null>(null);
     const [file, setFile] = useState<File | null>(null);
     const [transacoes, setTransacoes] = useState<TransacaoExtrato[]>([]);
+    const [transacoesRejeitadas, setTransacoesRejeitadas] = useState<TransacaoExtrato[]>([]); // NOVO ESTADO
     const [regras, setRegras] = useState<ConciliacaoRegra[]>([]);
     
     const [transacoesSelecionadas, setTransacoesSelecionadas] = useState<number[]>([]);
@@ -198,6 +200,7 @@ export function useConciliacao(): ConciliacaoHook {
         }
         setConfigSelecionada(null);
         setTransacoes([]);
+        setTransacoesRejeitadas([]); // NOVO RESET
         setTransacoesSelecionadas([]);
         setContaContabilLote(null);
         setFile(null);
@@ -214,6 +217,7 @@ export function useConciliacao(): ConciliacaoHook {
     const handleSelectConfig = useCallback((id: string) => {
         setConfigSelecionada(configs.find(c => c.id === id) || null);
         setTransacoes([]);
+        setTransacoesRejeitadas([]); // NOVO RESET
         setFile(null);
         setFileHash(null); // Limpa o hash ao mudar a config
     }, [configs]);
@@ -221,6 +225,7 @@ export function useConciliacao(): ConciliacaoHook {
     const handleFileChange = useCallback((newFile: File | null) => {
         setFile(newFile);
         setTransacoes([]);
+        setTransacoesRejeitadas([]); // NOVO RESET
         setFileHash(null); // Limpa o hash ao mudar o arquivo
     }, []);
     
@@ -449,8 +454,8 @@ export function useConciliacao(): ConciliacaoHook {
                     
                     // Verifica se a data já foi conciliada (se a transação não for duplicada por chave)
                     // REMOVIDO: A verificação de data já conciliada não é mais necessária, pois a chave única já garante a duplicidade.
-                    // if (!isDuplicated && formattedDate && existingDatesSet.has(formattedDate)) {
-                    //     isDuplicated = true;
+                    // if (!isDuplicada && formattedDate && existingDatesSet.has(formattedDate)) {
+                    //     isDuplicada = true;
                     //     motivoDuplicidade = 'Data já conciliada.';
                     //     rejectedDates.add(formattedDate);
                     // }
@@ -471,7 +476,8 @@ export function useConciliacao(): ConciliacaoHook {
                 
                 const transacoesMapeadas = applyRegras(transacoesValidas);
                 
-                setTransacoes([...transacoesMapeadas, ...transacoesRejeitadas]);
+                setTransacoes(transacoesMapeadas); // Apenas transações válidas para a tabela de mapeamento
+                setTransacoesRejeitadas(transacoesRejeitadas); // Transações rejeitadas para a nova aba
                 setTransacoesSelecionadas([]);
                 setContaContabilLote(null);
                 
@@ -671,6 +677,7 @@ export function useConciliacao(): ConciliacaoHook {
         configSelecionada,
         file,
         transacoes,
+        transacoesRejeitadas, // RETORNANDO O NOVO ESTADO
         transacoesSelecionadas,
         contaContabilLote,
         historicoSelecionado,
