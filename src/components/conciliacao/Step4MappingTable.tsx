@@ -58,9 +58,11 @@ const Step4MappingTable: React.FC<Step4MappingTableProps> = ({
                 <h3 className="font-semibold text-red-700 dark:text-red-300 flex items-center">
                     <AlertTriangle className="w-5 h-5 mr-2" /> {transacoesRejeitadas.length} Transações Rejeitadas (Duplicidade)
                 </h3>
-                <p className="text-sm text-red-600 dark:text-red-400 mt-1">
-                    As transações rejeitadas estão marcadas em vermelho escuro e não podem ser mapeadas ou salvas.
-                </p>
+                <ul className="list-disc list-inside text-sm text-red-600 dark:text-red-400 mt-1">
+                    {transacoesRejeitadas.map((t, index) => (
+                        <li key={index}>Linha {index + 1}: {t.data} - {t.descricao} ({formatCurrency(Math.abs(t.valor))})</li>
+                    ))}
+                </ul>
             </div>
         )}
         
