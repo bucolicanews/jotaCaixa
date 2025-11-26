@@ -12,8 +12,9 @@ interface Step1SelectAccountProps {
 
 const Step1SelectAccount: React.FC<Step1SelectAccountProps> = ({ contas, loading, onSelectAccount, contaSelecionadaId }) => {
   
-  // Filtra as contas para mostrar apenas aquelas marcadas como Caixa ou Banco
-  const contasFiltradas = contas.filter(c => c.plano_contas?.is_caixa || c.plano_contas?.is_banco);
+  // Filtra as contas para mostrar apenas aquelas marcadas como Banco (is_banco)
+  // Conciliação é tipicamente feita com extratos bancários.
+  const contasFiltradas = contas.filter(c => c.plano_contas?.is_banco);
   
   return (
     <Card>
@@ -31,7 +32,7 @@ const Step1SelectAccount: React.FC<Step1SelectAccountProps> = ({ contas, loading
         </Select>
         {contasFiltradas.length === 0 && !loading && (
             <p className="text-sm text-red-500 mt-2">
-                Nenhuma conta marcada como Caixa ou Banco encontrada.
+                Nenhuma conta marcada como Banco encontrada. Verifique o Plano de Contas.
             </p>
         )}
       </CardContent>
