@@ -59,6 +59,8 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
   
   const [historicos, setHistoricos] = useState<Historico[]>([]);
   const [loadingHistoricos, setLoadingHistoricos] = useState(true);
+  const [historicoPadraoId, setHistoricoPadraoId] = useState<string | null>(null);
+  
   const [contasPatrimoniais, setContasPatrimoniais] = useState<PlanoContas[]>([]); // NOVO ESTADO
   const [loadingContasPatrimoniais, setLoadingContasPatrimoniais] = useState(true); // NOVO ESTADO
   
@@ -149,7 +151,8 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
         .select('id, Conta, Descricao')
         .eq('proprietario_id', adminId)
         .eq('Analitica', 'Sim')
-        .eq('is_conta_patrimonial', true) // FILTRO PRINCIPAL
+        .eq('is_conta_patrimonial', true)
+        .eq('is_a_pagar', true) // FILTRO CRÍTICO: Apenas contas marcadas como Contas a Pagar
         .or(`Conta.like.${ativoCode}.%,Conta.like.${passivoCode}.%,Conta.like.${plCode}.%`)
         .order('Conta');
         
@@ -162,43 +165,38 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
     setLoadingContasPatrimoniais(false);
   }, [adminId, configMap.Ativo, configMap.Passivo, configMap['Patrimonio Liquido']]);
   
-  const fetchConfigAndDefaults = useCallback(async () => {
+  const fetchHistoricoPadrao = useCallback(async () => {
     if (!isAdmin || !adminId) return;
     
-    // 1. Buscar Histórico Padrão
-    const { data: historicoData } = await supabase
+    const { data, error } = await supabase
         .from('configuracao_historico_padrao')
         .select('historico_id')
         .eq('proprietario_id', adminId)
-        .eq('tipo_registro', 'pagamento_padrao')
+        .eq('tipo_registro', 'pagamento_padrao') // NOVO TIPO DE REGISTRO
         .limit(1)
         .single();
         
-    const defaultHistoricoId = historicoData?.historico_id || null;
-    form.setValue('historico_id', defaultHistoricoId);
+    if (error && error.code !== 'PGRST116') {
+        console.error('Erro ao buscar histórico padrão CP:', error);
+    }
     
-    // 2. Buscar Conta Patrimonial da Conta Sintética (Obrigação a Pagar)
-    const { data: contaSintetica } = await supabase
-        .from(tabelaContasPagar)
-        .select('id_conta_patrimonial')
-        .eq('id', parcela!.conta_pagar_id)
-        .single();
-        
-    form.setValue('conta_patrimonial_id', contaSintetica?.id_conta_patrimonial || null);
-    
-  }, [isAdmin, adminId, form, tabelaContasPagar, parcela]);
+    const id = data?.historico_id || null;
+    setHistoricoPadraoId(id);
+    form.setValue('historico_id', id);
+  }, [isAdmin, adminId, form]);
 
   useEffect(() => {
       if (open) {
+          setIsInitialized(false);
           refetchSaldos();
           fetchHistoricos();
           fetchContasPatrimoniais();
           if (isAdmin) {
               fetchMapeamentoContabil();
-              fetchConfigAndDefaults();
+              fetchHistoricoPadrao();
           }
       }
-  }, [open, isAdmin, refetchSaldos, fetchMapeamentoContabil, fetchHistoricos, fetchContasPatrimoniais, fetchConfigAndDefaults]);
+  }, [open, isAdmin, refetchSaldos, fetchMapeamentoContabil, fetchHistoricos, fetchContasPatrimoniais, fetchHistoricoPadrao]);
 
   useEffect(() => {
     if (open && !loadingContas && !isInitialized) {
@@ -208,9 +206,9 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
             pagamentos: contasOrigem.length > 0 
                 ? [{ conta_id: contasOrigem[0].id, valor_pago: saldoDevedor }]
                 : [],
-            historico_id: form.getValues('historico_id'), // Mantém o valor padrão carregado
+            historico_id: form.getValues('historico_id'),
             salvar_como_padrao: false,
-            conta_patrimonial_id: form.getValues('conta_patrimonial_id'), // Mantém o valor padrão carregado
+            conta_patrimonial_id: form.getValues('conta_patrimonial_id'),
         });
         setIsInitialized(true);
     }
@@ -322,6 +320,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
               origem: 'pagamento_manual',
               historico_id: values.historico_id,
           };
+          
           await supabase.from('lancamentos').insert(lancamentoPatrimonialPayload);
       } else {
           console.warn('Aviso: Conta Patrimonial (Obrigação a Pagar) não mapeada. Balanço pode estar incompleto.');
@@ -383,7 +382,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
-              <FormField control={form.control} name="data_pagamento" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Data do Pagamento</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "dd/MM/yy") : <span>Data</span>}<CalendarIcon className="ml-auto h-4 w-4 opacity-50" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus /></PopoverContent></Popover><FormMessage /></FormItem>)} />
+              <FormField control={form.control} name="data_pagamento" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Data do Pagamento</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "dd/MM/yy") : <span>Data</span>}<CalendarIcon className="ml-auto h-4 w-4 opacity-50" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus locale={ptBR} /></PopoverContent></Popover><FormMessage /></FormItem>)} />
               <FormField control={form.control} name="forma_pagamento" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Forma de Pagamento</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
             </div>
             
@@ -459,7 +458,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
                         <FormMessage />
                         {contasPatrimoniais.length === 0 && !loadingContasPatrimoniais && (
                             <p className="text-sm text-red-500">
-                                Nenhuma conta Patrimonial (Passivo) marcada no Plano de Contas.
+                                Nenhuma conta Patrimonial marcada como Contas a Pagar no Plano de Contas.
                             </p>
                         )}
                     </FormItem>
