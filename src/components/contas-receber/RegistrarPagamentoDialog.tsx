@@ -164,7 +164,6 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
     const defaultHistoricoId = historicoData?.historico_id || null;
     
     // 2. Buscar Conta Patrimonial da Conta Sintética (Direito a Receber)
-    const tabelaContasReceber = isAdmin ? 'admin_contas_receber' : 'contas_receber';
     const { data: contaSintetica } = await supabase
         .from(tabelaContasReceber)
         .select('id_conta_patrimonial')
@@ -431,7 +430,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px] max-h-[95vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-lg max-h-[95vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Registrar Recebimento</DialogTitle>
           <DialogDescription>Saldo devedor da parcela: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(saldoDevedor)}</DialogDescription>
