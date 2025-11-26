@@ -79,7 +79,7 @@ const useSaldoContaCalculado = (filtroTipoSaldo: 'todos' | 'Credito' | 'Debito' 
       
       let lancamentosQuery = supabase
         .from('lancamentos')
-        .select('valor, tipo, conta_contabil_id, conta_bancaria_id') // ADD conta_bancaria_id
+        .select('valor, tipo, conta_contabil_id, conta_bancaria_id, origem') // ADD origem
         .eq('proprietario_id', targetEmpresaId)
         .or(orClauses.join(','));
 
@@ -114,6 +114,9 @@ const useSaldoContaCalculado = (filtroTipoSaldo: 'todos' | 'Credito' | 'Debito' 
       }, {} as Record<string, string>);
 
       lancamentosData.forEach(l => {
+        // IGNORA LANÇAMENTOS ORIGINAIS ESTORNADOS
+        if (l.origem === 'movimentacao_direta_estornada') return; 
+        
         let targetSaldoId: string | null = null;
         
         // Prioridade 1: Movimentação de Caixa/Banco (usa conta_bancaria_id)

@@ -75,7 +75,12 @@ export const useBalancoPatrimonial = (dataFim: Date | null): BalancoPatrimonialH
     
     const mapContas = (contas: PlanoContas[]): ContaBP[] => {
         return contas.map(conta => {
-            const lancamentosDaConta = lancamentos.filter(l => l.conta_contabil_id === conta.id);
+            // Filtra lançamentos que pertencem a esta conta E que não foram estornados
+            const lancamentosDaConta = lancamentos.filter(l => 
+                l.conta_contabil_id === conta.id && 
+                l.origem !== 'movimentacao_direta_estornada' // IGNORA LANÇAMENTOS ORIGINAIS ESTORNADOS
+            );
+            
             const saldoInicial = saldosIniciais[conta.id] || 0; // Obtém o saldo inicial
             const saldo = calcularSaldo(lancamentosDaConta, conta, saldoInicial); // Passa o saldo inicial
             
