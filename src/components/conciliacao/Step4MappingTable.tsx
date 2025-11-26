@@ -1,4 +1,5 @@
-import React, { useMemo } from 'react';
+
+import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -11,7 +12,7 @@ import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 
 interface Step4MappingTableProps {
-  transacoes: TransacaoExtrato[]; // Contém transações válidas E rejeitadas
+  transacoes: TransacaoExtrato[];
   contasContabeis: PlanoContas[];
   transacoesSelecionadas: number[];
   contaContabilLote: string | null;
@@ -41,26 +42,27 @@ const Step4MappingTable: React.FC<Step4MappingTableProps> = ({
   onSaveConciliacao,
 }) => {
   
-  const transacoesValidas = transacoes.filter(t => !t.isDuplicated);
+  const transacoesNaoConciliadas = transacoes.filter(t => !t.conta_contabil_id && !t.isDuplicated);
   const transacoesRejeitadas = transacoes.filter(t => t.isDuplicated);
-  const transacoesNaoConciliadas = transacoesValidas.filter(t => !t.conta_contabil_id);
+  const transacoesValidas = transacoes.filter(t => !t.isDuplicated);
   
   const allValidSelected = transacoesSelecionadas.length === transacoesValidas.length && transacoesValidas.length > 0;
 
   return (
-    <Card className="col-span-1 md:col-span-3 h-full flex flex-col">
-      <CardHeader><CardTitle className="flex items-center"><List className="w-5 h-5 mr-2" /> Transações Importadas do Extrato ({transacoes.length})</CardTitle></CardHeader>
-      <CardContent className="flex-1 flex flex-col">
+    <Card className="col-span-1 md:col-span-3">
+      <CardHeader><CardTitle className="flex items-center"><List className="w-5 h-5 mr-2" /> Transações Importadas do Extrato</CardTitle></CardHeader>
+      <CardContent>
         
-        {/* Alerta de Duplicidade (Topo) */}
         {transacoesRejeitadas.length > 0 && (
             <div className="p-3 bg-red-100 dark:bg-red-900/20 border border-red-500 rounded-md mb-4">
-                <h3 className="font-semibold text-red-700 dark:text-red-300 flex items-center">
+                <h3 className="font-semibold text-red-700 dark:text-red-300 flex items-center mb-2">
                     <AlertTriangle className="w-5 h-5 mr-2" /> {transacoesRejeitadas.length} Transações Rejeitadas (Duplicidade)
                 </h3>
-                <ul className="list-disc list-inside text-sm text-red-600 dark:text-red-400 mt-1">
-                    {transacoesRejeitadas.map((t, index) => (
-                        <li key={index}>Linha {index + 1}: {t.data} - {t.descricao} ({formatCurrency(Math.abs(t.valor))})</li>
+                <ul className="list-disc list-inside text-sm text-red-600 dark:text-red-400">
+                    {transacoesRejeitadas.map((t, i) => (
+                        <li key={i}>
+                            Linha {transacoes.indexOf(t) + 1}: {t.data} - {t.descricao} ({formatCurrency(Math.abs(t.valor))})
+                        </li>
                     ))}
                 </ul>
             </div>
@@ -96,14 +98,14 @@ const Step4MappingTable: React.FC<Step4MappingTableProps> = ({
         </div>
         
         {/* Tabela de Mapeamento (Scrollable) */}
-        <div className="overflow-x-auto overflow-y-auto flex-1 border rounded-md max-h-[70vh]"> 
+        <div className="overflow-x-auto max-h-[400px] border rounded-md">
           <Table>
             <TableHeader><TableRow>
                 <TableHead className="w-[40px] text-center">
                     <Checkbox 
                         checked={allValidSelected}
                         onCheckedChange={(checked) => onSelectAll(!!checked)}
-                        disabled={isSaving || transacoesValidas.length === 0}
+                        disabled={isSaving}
                     />
                 </TableHead>
                 <TableHead className="w-[80px]">Data</TableHead>
@@ -121,22 +123,14 @@ const Step4MappingTable: React.FC<Step4MappingTableProps> = ({
                     const isMapeada = !!t.conta_contabil_id;
                     const contaContabil = contasContabeis.find(c => c.id === t.conta_contabil_id);
                     const isSelected = transacoesSelecionadas.includes(i);
-                    const isDuplicated = t.isDuplicated;
-                    const isDisabled = isSaving || isDuplicated;
                     
                     return (
-                        <TableRow 
-                            key={i} 
-                            className={cn(
-                                isDuplicated ? 'bg-red-500/30 opacity-60' : (isMapeada ? 'bg-green-500/10' : 'bg-red-500/10'), 
-                                isSelected && 'bg-blue-100/50 dark:bg-blue-900/20'
-                            )}
-                        >
+                        <TableRow key={i} className={cn(t.isDuplicated ? 'bg-red-500/30 opacity-60' : (isMapeada ? 'bg-green-500/10' : 'bg-red-500/10'), isSelected && 'bg-blue-100/50 dark:bg-blue-900/20')}>
                             <TableCell className="text-center">
                                 <Checkbox 
                                     checked={isSelected}
                                     onCheckedChange={(checked) => onToggleSelection(i, !!checked)}
-                                    disabled={isDisabled}
+                                    disabled={isSaving || t.isDuplicated}
                                 />
                             </TableCell>
                             <TableCell className="text-xs">{t.data}</TableCell>
@@ -150,7 +144,7 @@ const Step4MappingTable: React.FC<Step4MappingTableProps> = ({
                             </TableCell>
                             <TableCell className={cn("text-right font-semibold text-sm", t.tipo === 'Entrada' ? 'text-green-600' : 'text-red-600')}>{formatCurrency(Math.abs(t.valor))}</TableCell>
                             <TableCell>
-                                {isDuplicated ? (
+                                {t.isDuplicated ? (
                                     <span className="text-xs font-medium text-red-700 flex items-center">
                                         <AlertTriangle className="w-4 h-4 mr-1" /> DUPLICADA
                                     </span>
@@ -162,7 +156,7 @@ const Step4MappingTable: React.FC<Step4MappingTableProps> = ({
                                     <Select 
                                         onValueChange={(id) => onContaContabilChange(i, id)}
                                         value={t.conta_contabil_id || undefined}
-                                        disabled={isDisabled}
+                                        disabled={isSaving}
                                     >
                                         <SelectTrigger className="h-8 text-xs">
                                             <SelectValue placeholder="Mapear para Conta Contábil" />
@@ -192,7 +186,7 @@ const Step4MappingTable: React.FC<Step4MappingTableProps> = ({
             </p>
             <Button 
                 onClick={onSaveConciliacao} 
-                disabled={isSaving || transacoesValidas.filter(t => t.conta_contabil_id).length === 0}
+                disabled={isSaving || transacoes.filter(t => t.conta_contabil_id && !t.isDuplicated).length === 0}
                 className="w-full sm:w-auto"
             >
                 {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
