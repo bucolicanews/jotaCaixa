@@ -52,9 +52,9 @@ const Step4MappingTable: React.FC<Step4MappingTableProps> = ({
   const allValidSelected = transacoesSelecionadas.length === transacoesValidas.length && transacoesValidas.length > 0;
 
   return (
-    <Card className="col-span-1 md:col-span-3">
+    <Card className="col-span-1 md:col-span-3 h-full flex flex-col"> {/* Adicionado h-full e flex-col */}
       <CardHeader><CardTitle className="flex items-center"><List className="w-5 h-5 mr-2" /> Transações Importadas do Extrato</CardTitle></CardHeader>
-      <CardContent>
+      <CardContent className="flex-1 flex flex-col"> {/* Adicionado flex-1 e flex-col */}
         
         {transacoesRejeitadas.length > 0 && (
             <div className="p-3 bg-red-100 dark:bg-red-900/20 border border-red-500 rounded-md mb-4">
@@ -101,7 +101,8 @@ const Step4MappingTable: React.FC<Step4MappingTableProps> = ({
         </div>
         
         {/* Tabela de Mapeamento (Scrollable) */}
-        <div className="overflow-x-auto max-h-[400px] border rounded-md">
+        {/* Ajustado max-h para ocupar mais espaço vertical */}
+        <div className="overflow-x-auto overflow-y-auto flex-1 border rounded-md max-h-[70vh]"> 
           <Table>
             <TableHeader><TableRow>
                 <TableHead className="w-[40px] text-center">
