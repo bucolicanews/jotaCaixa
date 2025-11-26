@@ -60,9 +60,26 @@ const Extratos: React.FC = () => {
 
   const fetchContas = useCallback(async () => {
     if (!ownerId) return;
-    const { data, error } = await supabase.from('saldo_contas').select('id, nome').eq('proprietario_id', ownerId);
-    if (error) console.error('Erro ao carregar contas:', error);
-    else setContasDisponiveis(data || []);
+    
+    // Busca contas de saldo que estão vinculadas a uma conta contábil marcada como is_banco = true
+    const { data, error } = await supabase
+        .from('saldo_contas')
+        .select(`
+            id, 
+            nome, 
+            plano_contas ( is_banco )
+        `)
+        .eq('proprietario_id', ownerId)
+        .eq('plano_contas.is_banco', true); // FILTRO CRÍTICO: Apenas contas bancárias
+
+    if (error) {
+        console.error('Erro ao carregar contas:', error);
+        setContasDisponiveis([]);
+    } else {
+        // Filtra para garantir que apenas contas com is_banco = true sejam retornadas
+        const filtered = (data || []).filter(c => c.plano_contas?.is_banco === true);
+        setContasDisponiveis(filtered.map(c => ({ id: c.id, nome: c.nome })) || []);
+    }
   }, [ownerId]);
   
   const fetchContasContabeisResultado = useCallback(async () => {
