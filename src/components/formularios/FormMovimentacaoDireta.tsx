@@ -31,6 +31,7 @@ interface LancamentoPrimario {
     conta_bancaria_id: string;
     historico_id: string | null;
     conta_contabil_id: string; // This is the DRE account ID (Resultado)
+    conta_resultado_id: string; // NOVO: ID do lançamento emparelhado
 }
 export type { LancamentoPrimario };
 
@@ -61,7 +62,9 @@ const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveC
   const [contasResultado, setContasResultado] = useState<PlanoContas[]>([]);
   const [loadingContasResultado, setLoadingContasResultado] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [dreLaunchId, setDreLaunchId] = useState<string | null>(null); // State for paired DRE launch ID
+  
+  // NOVO ESTADO: ID do lançamento de DRE emparelhado (para edição)
+  const [dreLaunchId, setDreLaunchId] = useState<string | null>(lancamentoInicial?.conta_resultado_id || null); 
   
   const ownerId = usuario?.id;
 
@@ -69,28 +72,38 @@ const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveC
   useEffect(() => {
     if (isEditing && lancamentoInicial?.id && !dreLaunchId && ownerId) {
         const fetchPairedLaunch = async () => {
-            // The paired launch has the same proprietario_id, same description, same absolute value, 
-            // opposite type, and conta_bancaria_id is null.
-            const oppositeType = lancamentoInicial.tipo === 'Entrada' ? 'Saida' : 'Entrada';
-            const valorAbsoluto = Math.abs(lancamentoInicial.valor);
-            
-            // We search for the paired launch using the primary launch's ID as a reference, 
-            // but filtering by the DRE launch characteristics.
+            // Busca o lançamento emparelhado usando a referência cruzada
             const { data, error } = await supabase
                 .from('lancamentos')
-                .select('id, valor')
+                .select('id')
                 .eq('proprietario_id', ownerId)
                 .eq('origem', 'movimentacao_direta')
-                .eq('descricao', lancamentoInicial.descricao)
-                .eq('tipo', oppositeType)
+                .eq('conta_resultado_id', lancamentoInicial.id) // Busca onde o ID do lançamento primário é a referência
                 .is('conta_bancaria_id', null)
-                .neq('id', lancamentoInicial.id) // Ensure we don't select the primary launch itself
                 .limit(1)
                 .single();
                 
             if (error || !data) {
                 console.error('Could not find paired DRE launch for editing:', error);
-                // This is a critical error for editing, but we proceed to allow the user to try saving.
+                // Se não encontrar, tenta a busca inversa (caso o campo tenha sido salvo de forma antiga)
+                const { data: oldData } = await supabase
+                    .from('lancamentos')
+                    .select('id')
+                    .eq('proprietario_id', ownerId)
+                    .eq('origem', 'movimentacao_direta')
+                    .eq('descricao', lancamentoInicial.descricao)
+                    .neq('id', lancamentoInicial.id)
+                    .is('conta_bancaria_id', null)
+                    .limit(1)
+                    .single();
+                
+                if (oldData) {
+                    setDreLaunchId(oldData.id);
+                    return;
+                }
+                
+                // Se ainda assim não encontrar, lança o erro
+                throw new Error('Não foi possível encontrar o lançamento contábil de partida dobrada para edição.');
             } else {
                 setDreLaunchId(data.id);
             }
@@ -268,6 +281,10 @@ const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveC
               throw new Error('Não foi possível encontrar o lançamento contábil de partida dobrada para edição.');
           }
           
+          // 3. CRÍTICO: Atualiza a referência cruzada antes do upsert
+          lancamentoAtivoPayload.conta_resultado_id = launchIdResultado;
+          lancamentoResultadoPayload.conta_resultado_id = launchIdAtivo;
+          
           // Executa o UPSERT para ambos os lançamentos
           const [resAtivo, resResultado] = await Promise.all([
               supabase.from('lancamentos').upsert({ ...lancamentoAtivoPayload, id: launchIdAtivo }),
@@ -281,6 +298,16 @@ const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveC
           
       } else {
           // Criação (INSERT)
+          // 3. CRÍTICO: Gera IDs e define a referência cruzada
+          const idAtivo = crypto.randomUUID();
+          const idResultado = crypto.randomUUID();
+          
+          lancamentoAtivoPayload.id = idAtivo;
+          lancamentoAtivoPayload.conta_resultado_id = idResultado;
+          
+          lancamentoResultadoPayload.id = idResultado;
+          lancamentoResultadoPayload.conta_resultado_id = idAtivo;
+          
           const [resAtivo, resResultado] = await Promise.all([
               supabase.from('lancamentos').insert(lancamentoAtivoPayload),
               supabase.from('lancamentos').insert(lancamentoResultadoPayload),
@@ -327,8 +354,7 @@ const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveC
             <FormField control={form.control} name="valor" render={({ field }) => (
                 <FormItem>
                     <FormLabel>2. Valor (R$)</FormLabel>
-                    <FormControl><Input type="number" step="0.01" placeholder="0.00" {...field} /></FormControl>
-                    <FormMessage />
+                    <FormControl><Input type="number" step="0.01" placeholder="0.00" {...field} /></FormControl><FormMessage />
                 </FormItem>
             )} />
             

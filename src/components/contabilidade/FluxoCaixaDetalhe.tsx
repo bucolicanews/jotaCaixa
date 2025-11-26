@@ -91,6 +91,7 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
         origem,
         documento,
         historico_id,
+        conta_resultado_id,
         saldo_contas:conta_bancaria_id ( nome )
       `)
       .eq('proprietario_id', empresaId) // ALTERADO: empresa_id -> proprietario_id
@@ -207,30 +208,18 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
     setIsUndoing(true);
     
     try {
-        // 1. Buscar o lançamento de partida dobrada (DRE)
-        const oppositeType = lancamento.tipo === 'Entrada' ? 'Saida' : 'Entrada';
+        // 1. Buscar o ID do lançamento de partida dobrada (DRE) usando a referência cruzada
+        const dreLaunchId = lancamento.conta_resultado_id;
         
-        const { data: dreLaunch, error: dreError } = await supabase
-            .from('lancamentos')
-            .select('id')
-            .eq('proprietario_id', empresaId)
-            .eq('origem', 'movimentacao_direta')
-            .eq('descricao', lancamento.descricao)
-            .eq('tipo', oppositeType)
-            .is('conta_bancaria_id', null)
-            .neq('id', lancamento.id)
-            .limit(1)
-            .single();
-            
-        if (dreError || !dreLaunch) {
-            throw new Error('Não foi possível encontrar o lançamento contábil de partida dobrada para estorno.');
+        if (!dreLaunchId) {
+            throw new Error('Referência cruzada (conta_resultado_id) não encontrada no lançamento primário.');
         }
         
         // 2. Deletar os dois lançamentos originais
         const { error: deleteError } = await supabase
             .from('lancamentos')
             .delete()
-            .in('id', [lancamento.id, dreLaunch.id]);
+            .in('id', [lancamento.id, dreLaunchId]);
             
         if (deleteError) throw deleteError;
         
@@ -250,6 +239,7 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
             conta_contabil_id: lancamento.conta_contabil_id, // Conta Ativo/Caixa
             origem: 'estorno_direto',
             historico_id: lancamento.historico_id,
+            // CRÍTICO: Não precisa de conta_resultado_id para estorno
         };
         
         // Lançamento 2: Estorno no Resultado (DRE)
@@ -266,6 +256,7 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
             conta_contabil_id: contaResultadoId,
             origem: 'estorno_direto',
             historico_id: lancamento.historico_id,
+            // CRÍTICO: Não precisa de conta_resultado_id para estorno
         };
         
         const [resAtivo, resResultado] = await Promise.all([
