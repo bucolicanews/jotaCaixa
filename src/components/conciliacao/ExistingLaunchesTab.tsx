@@ -34,8 +34,9 @@ const ExistingLaunchesTab: React.FC<ExistingLaunchesTabProps> = ({ transacoesRej
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[100px]">Data</TableHead>
-                <TableHead className="min-w-[200px]">Descrição</TableHead>
+                <TableHead className="w-[80px]">Data</TableHead>
+                <TableHead className="min-w-[150px]">Descrição (Transação)</TableHead>
+                <TableHead className="w-[100px]">Identificação</TableHead>
                 <TableHead className="w-[80px]">Tipo</TableHead>
                 <TableHead className="w-[120px] text-right">Valor</TableHead>
                 <TableHead className="min-w-[200px]">Motivo</TableHead>
@@ -43,14 +44,15 @@ const ExistingLaunchesTab: React.FC<ExistingLaunchesTabProps> = ({ transacoesRej
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={5} className="text-center h-24">Carregando...</TableCell></TableRow>
+                <TableRow><TableCell colSpan={6} className="text-center h-24">Carregando...</TableCell></TableRow>
               ) : totalRejeitadas === 0 ? (
-                <TableRow><TableCell colSpan={5} className="text-center h-24 text-muted-foreground">Nenhum lançamento duplicado encontrado no arquivo importado.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={6} className="text-center h-24 text-muted-foreground">Nenhum lançamento duplicado encontrado no arquivo importado.</TableCell></TableRow>
               ) : (
                 transacoesRejeitadas.map((t, i) => (
                   <TableRow key={i} className="bg-red-500/10">
                     <TableCell className="text-xs">{t.data}</TableCell>
                     <TableCell className="text-sm">{t.descricao}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{t.identificacao || '-'}</TableCell>
                     <TableCell>
                       <Badge variant={t.tipo === 'Entrada' ? 'success' : 'destructive'} className="flex items-center justify-center">
                         {t.tipo === 'Entrada' ? <ArrowUpCircle className="w-3 h-3 mr-1" /> : <ArrowDownCircle className="w-3 h-3 mr-1" />}
