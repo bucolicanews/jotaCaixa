@@ -203,7 +203,7 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
   };
   
   const handleEstorno = async (lancamento: Lancamento) => {
-    if (!window.confirm('Tem certeza que deseja estornar este lançamento? Isso criará um lançamento de estorno e removerá os lançamentos originais.')) return;
+    if (!window.confirm('Tem certeza que deseja estornar este lançamento? Isso criará um lançamento de estorno e marcará o original como estornado.')) return;
     
     setIsUndoing(true);
     
@@ -215,13 +215,13 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
             throw new Error('Referência cruzada (conta_resultado_id) não encontrada no lançamento primário.');
         }
         
-        // 2. Deletar os dois lançamentos originais
-        const { error: deleteError } = await supabase
+        // 2. Marcar os lançamentos originais como estornados (para desabilitar o botão de estorno)
+        const { error: updateError } = await supabase
             .from('lancamentos')
-            .delete()
+            .update({ origem: 'movimentacao_direta_estornada' })
             .in('id', [lancamento.id, dreLaunchId]);
             
-        if (deleteError) throw deleteError;
+        if (updateError) throw updateError;
         
         // 3. Criar o lançamento de estorno (Entrada/Saída oposta)
         const estornoTipo = lancamento.tipo === 'Entrada' ? 'Saida' : 'Entrada';
@@ -258,6 +258,7 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
             historico_id: lancamento.historico_id,
         };
         
+        // 4. Inserir os novos lançamentos de estorno
         const [resAtivo, resResultado] = await Promise.all([
             supabase.from('lancamentos').insert(estornoAtivoPayload),
             supabase.from('lancamentos').insert(estornoResultadoPayload),
@@ -406,12 +407,13 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
                   lancamentos.map((l) => {
                     const isDirectMovement = l.origem === 'movimentacao_direta';
                     const isEstorno = l.origem === 'estorno_direto';
+                    const isEstornada = l.origem === 'movimentacao_direta_estornada';
                     
                     return (
-                        <TableRow key={l.id} className={cn(isEstorno && 'bg-red-500/10')}>
+                        <TableRow key={l.id} className={cn(isEstorno && 'bg-red-500/10', isEstornada && 'opacity-50')}>
                             <TableCell className="text-sm">{formatarData(l.data_movimentacao)}</TableCell>
                             <TableCell className="font-medium text-sm">{l.saldo_contas?.nome || 'N/A'}</TableCell>
-                            <TableCell className="text-sm">{l.descricao}</TableCell>
+                            <TableCell className="text-sm">{l.descricao} {isEstornada && '(ESTORNADO)'}</TableCell>
                             <TableCell className="text-center">
                                 <Badge variant={l.tipo === 'Entrada' ? 'success' : 'destructive'} className="flex items-center justify-center">
                                     {l.tipo === 'Entrada' ? <ArrowUpCircle className="w-3 h-3 mr-1" /> : <ArrowDownCircle className="w-3 h-3 mr-1" />}
@@ -438,7 +440,7 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
                                                     <AlertDialogHeader>
                                                         <AlertDialogTitle>Confirmar Estorno?</AlertDialogTitle>
                                                         <AlertDialogDescription>
-                                                            Esta ação irá criar um novo par de lançamentos de estorno (com o valor oposto) e remover os lançamentos originais. O saldo da conta será reajustado.
+                                                            Esta ação irá criar um novo par de lançamentos de estorno (com o valor oposto) e **marcará os lançamentos originais como estornados**, mantendo o histórico. O saldo da conta será reajustado.
                                                         </AlertDialogDescription>
                                                     </AlertDialogHeader>
                                                     <AlertDialogFooter>
