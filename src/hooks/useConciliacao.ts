@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSessao } from './use-sessao';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
-import { SaldoConta } from '@/types/saldo-conta';
+import { SaldoContaDetalhada } from '@/types/saldo-conta';
 import { ConfiguracaoConciliacao, TransacaoExtrato, ConciliacaoRegra, ConciliacaoHistorico } from '@/types/conciliacao';
 import { PlanoContas } from '@/types/plano-contas';
 import Papa, { ParseResult } from 'papaparse';
@@ -16,7 +16,7 @@ interface ConciliacaoHook {
     isSaving: boolean;
     isDeletingHistorico: boolean;
     activeTab: string;
-    contas: SaldoConta[];
+    contas: SaldoContaDetalhada[];
     configs: ConfiguracaoConciliacao[];
     contasContabeis: PlanoContas[];
     historico: ConciliacaoHistorico[];
@@ -388,7 +388,7 @@ export function useConciliacao(): ConciliacaoHook {
         }
         
         if ((hashCount || 0) > 0) {
-            showError('Este arquivo já foi importado anteriormente.');
+            showError('Este arquivo já foi importado anteriormente (Bloqueio por Hash).');
             setLoading(false);
             return;
         }
@@ -413,6 +413,7 @@ export function useConciliacao(): ConciliacaoHook {
                     const valorStr = String(row[config.mapeamento.valor] || '0').replace(',', '.');
                     let valor = parseFloat(valorStr);
                     
+                    // Lógica para determinar o sinal do valor
                     if (config.coluna_tipo_transacao && row[config.coluna_tipo_transacao] !== config.valor_credito) {
                         valor = -Math.abs(valor);
                     }
@@ -440,18 +441,19 @@ export function useConciliacao(): ConciliacaoHook {
                     let isDuplicated = false;
                     let motivoDuplicidade: string | null = null;
                     
-                    // Verifica duplicidade de transação
+                    // Verifica duplicidade de transação (CHAVE ÚNICA)
                     if (existingExtratosSet.has(uniqueKey)) {
                         isDuplicated = true;
                         motivoDuplicidade = 'Transação já existe na tabela de extratos.';
                     }
                     
                     // Verifica se a data já foi conciliada (se a transação não for duplicada por chave)
-                    if (!isDuplicated && formattedDate && existingDatesSet.has(formattedDate)) {
-                        isDuplicated = true;
-                        motivoDuplicidade = 'Data já conciliada.';
-                        rejectedDates.add(formattedDate);
-                    }
+                    // REMOVIDO: A verificação de data já conciliada não é mais necessária, pois a chave única já garante a duplicidade.
+                    // if (!isDuplicated && formattedDate && existingDatesSet.has(formattedDate)) {
+                    //     isDuplicated = true;
+                    //     motivoDuplicidade = 'Data já conciliada.';
+                    //     rejectedDates.add(formattedDate);
+                    // }
 
                     return {
                         data: dataMovimentacao,
@@ -475,10 +477,7 @@ export function useConciliacao(): ConciliacaoHook {
                 
                 let successMessage = `${transacoesValidas.length} transações válidas importadas.`;
                 
-                if (rejectedDates.size > 0) {
-                    const rejectedDatesArray = Array.from(rejectedDates).map(d => format(parseISO(d), 'dd/MM'));
-                    showError(`Datas já conciliadas: ${rejectedDatesArray.join(', ')}. Apenas transações de dias novos foram importadas.`);
-                } else if (transacoesRejeitadas.length > 0) {
+                if (transacoesRejeitadas.length > 0) {
                     successMessage += ` ${transacoesRejeitadas.length} rejeitadas (Duplicidade de transação).`;
                 }
                 
