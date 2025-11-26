@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, ArrowUpCircle, ArrowDownCircle, Filter, Search, Banknote, Wallet, Landmark, Printer, Edit } from 'lucide-react';
+import { Loader2, ArrowUpCircle, ArrowDownCircle, Filter, Search, Banknote, Wallet, Landmark, Printer, Edit, Undo2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { showError } from '@/utils/toast';
+import { showError, showSuccess } from '@/utils/toast';
 import { formatCurrency, formatarData } from '@/utils/formatters';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
@@ -20,6 +20,7 @@ import ReactDOMServer from 'react-dom/server';
 import FluxoCaixaPrint from './FluxoCaixaPrint';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../ui/dropdown-menu';
 import FormMovimentacaoDiretaDialog, { LancamentoPrimario } from '@/components/formularios/FormMovimentacaoDiretaDialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '../ui/alert-dialog';
 
 // Interface para o lançamento primário (ligado à conta bancária)
 interface Lancamento extends LancamentoPrimario {
@@ -44,6 +45,7 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
   
   const [lancamentos, setLancamentos] = useState<Lancamento[]>([]);
   const [loadingLancamentos, setLoadingLancamentos] = useState(true);
+  const [isUndoing, setIsUndoing] = useState(false); // NOVO ESTADO
   
   // Filtros
   const [filtroContaId, setFiltroContaId] = useState('todos');
@@ -198,6 +200,92 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
       setEditDialog({ open: false, lancamento: null });
       fetchLancamentos(); // Refetch data
   };
+  
+  const handleEstorno = async (lancamento: Lancamento) => {
+    if (!window.confirm('Tem certeza que deseja estornar este lançamento? Isso criará um lançamento de estorno e removerá os lançamentos originais.')) return;
+    
+    setIsUndoing(true);
+    
+    try {
+        // 1. Buscar o lançamento de partida dobrada (DRE)
+        const oppositeType = lancamento.tipo === 'Entrada' ? 'Saida' : 'Entrada';
+        
+        const { data: dreLaunch, error: dreError } = await supabase
+            .from('lancamentos')
+            .select('id')
+            .eq('proprietario_id', empresaId)
+            .eq('origem', 'movimentacao_direta')
+            .eq('descricao', lancamento.descricao)
+            .eq('tipo', oppositeType)
+            .is('conta_bancaria_id', null)
+            .neq('id', lancamento.id)
+            .limit(1)
+            .single();
+            
+        if (dreError || !dreLaunch) {
+            throw new Error('Não foi possível encontrar o lançamento contábil de partida dobrada para estorno.');
+        }
+        
+        // 2. Deletar os dois lançamentos originais
+        const { error: deleteError } = await supabase
+            .from('lancamentos')
+            .delete()
+            .in('id', [lancamento.id, dreLaunch.id]);
+            
+        if (deleteError) throw deleteError;
+        
+        // 3. Criar o lançamento de estorno (Entrada/Saída oposta)
+        const estornoTipo = lancamento.tipo === 'Entrada' ? 'Saida' : 'Entrada';
+        const estornoDescricao = `Estorno: ${lancamento.descricao}`;
+        const valor = Math.abs(lancamento.valor);
+        
+        // Lançamento 1: Estorno no Ativo (Caixa/Banco)
+        const estornoAtivoPayload = {
+            proprietario_id: empresaId,
+            data_movimentacao: new Date().toISOString(),
+            descricao: estornoDescricao,
+            valor: valor,
+            tipo: estornoTipo, // Tipo oposto
+            conta_bancaria_id: lancamento.conta_bancaria_id,
+            conta_contabil_id: lancamento.conta_contabil_id, // Conta Ativo/Caixa
+            origem: 'estorno_direto',
+            historico_id: lancamento.historico_id,
+        };
+        
+        // Lançamento 2: Estorno no Resultado (DRE)
+        const estornoResultadoTipo = estornoTipo === 'Entrada' ? 'Saida' : 'Entrada'; // Tipo oposto ao estorno do ativo
+        const contaResultadoId = lancamento.conta_contabil_id; // Conta de Resultado original
+        
+        const estornoResultadoPayload = {
+            proprietario_id: empresaId,
+            data_movimentacao: new Date().toISOString(),
+            descricao: estornoDescricao,
+            valor: valor,
+            tipo: estornoResultadoTipo,
+            conta_bancaria_id: null,
+            conta_contabil_id: contaResultadoId,
+            origem: 'estorno_direto',
+            historico_id: lancamento.historico_id,
+        };
+        
+        const [resAtivo, resResultado] = await Promise.all([
+            supabase.from('lancamentos').insert(estornoAtivoPayload),
+            supabase.from('lancamentos').insert(estornoResultadoPayload),
+        ]);
+        
+        if (resAtivo.error) throw resAtivo.error;
+        if (resResultado.error) throw resResultado.error;
+        
+        showSuccess('Lançamento estornado com sucesso! Um novo registro de estorno foi criado.');
+        fetchLancamentos();
+        
+    } catch (error: any) {
+        console.error('Erro ao estornar lançamento:', error);
+        showError('Falha ao estornar lançamento: ' + error.message);
+    } finally {
+        setIsUndoing(false);
+    }
+  };
 
   return (
     <>
@@ -325,31 +413,59 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
                 ) : lancamentos.length === 0 ? (
                   <TableRow><TableCell colSpan={6} className="text-center py-4 text-muted-foreground">Nenhum lançamento encontrado com os filtros aplicados.</TableCell></TableRow>
                 ) : (
-                  lancamentos.map((l) => (
-                    <TableRow key={l.id}>
-                      <TableCell className="text-sm">{formatarData(l.data_movimentacao)}</TableCell>
-                      <TableCell className="font-medium text-sm">{l.saldo_contas?.nome || 'N/A'}</TableCell>
-                      <TableCell className="text-sm">{l.descricao}</TableCell>
-                      <TableCell className="text-center">
-                        <Badge variant={l.tipo === 'Entrada' ? 'success' : 'destructive'} className="flex items-center justify-center">
-                          {l.tipo === 'Entrada' ? <ArrowUpCircle className="w-3 h-3 mr-1" /> : <ArrowDownCircle className="w-3 h-3 mr-1" />}
-                          {l.tipo}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className={cn("text-right font-semibold", l.valor >= 0 ? 'text-green-600' : 'text-red-600')}>
-                        {formatCurrency(Math.abs(l.valor))}
-                      </TableCell>
-                      <TableCell className="w-[100px] text-right">
-                          <div className="flex justify-end space-x-2">
-                              {l.origem === 'movimentacao_direta' && (
-                                  <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(l)} title="Editar Movimentação">
-                                      <Edit className="w-4 h-4" />
-                                  </Button>
-                              )}
-                          </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
+                  lancamentos.map((l) => {
+                    const isDirectMovement = l.origem === 'movimentacao_direta';
+                    const isEstorno = l.origem === 'estorno_direto';
+                    
+                    return (
+                        <TableRow key={l.id} className={cn(isEstorno && 'bg-red-500/10')}>
+                            <TableCell className="text-sm">{formatarData(l.data_movimentacao)}</TableCell>
+                            <TableCell className="font-medium text-sm">{l.saldo_contas?.nome || 'N/A'}</TableCell>
+                            <TableCell className="text-sm">{l.descricao}</TableCell>
+                            <TableCell className="text-center">
+                                <Badge variant={l.tipo === 'Entrada' ? 'success' : 'destructive'} className="flex items-center justify-center">
+                                    {l.tipo === 'Entrada' ? <ArrowUpCircle className="w-3 h-3 mr-1" /> : <ArrowDownCircle className="w-3 h-3 mr-1" />}
+                                    {l.tipo}
+                                </Badge>
+                            </TableCell>
+                            <TableCell className={cn("text-right font-semibold", l.valor >= 0 ? 'text-green-600' : 'text-red-600')}>
+                                {formatCurrency(Math.abs(l.valor))}
+                            </TableCell>
+                            <TableCell className="w-[100px] text-right">
+                                <div className="flex justify-end space-x-2">
+                                    {isDirectMovement && (
+                                        <>
+                                            <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(l)} title="Editar Movimentação">
+                                                <Edit className="w-4 h-4" />
+                                            </Button>
+                                            <AlertDialog>
+                                                <AlertDialogTrigger asChild>
+                                                    <Button variant="ghost" size="icon" disabled={isUndoing} title="Estornar Lançamento">
+                                                        <Undo2 className="w-4 h-4 text-red-500" />
+                                                    </Button>
+                                                </AlertDialogTrigger>
+                                                <AlertDialogContent>
+                                                    <AlertDialogHeader>
+                                                        <AlertDialogTitle>Confirmar Estorno?</AlertDialogTitle>
+                                                        <AlertDialogDescription>
+                                                            Esta ação irá criar um novo par de lançamentos de estorno (com o valor oposto) e remover os lançamentos originais. O saldo da conta será reajustado.
+                                                        </AlertDialogDescription>
+                                                    </AlertDialogHeader>
+                                                    <AlertDialogFooter>
+                                                        <AlertDialogCancel disabled={isUndoing}>Cancelar</AlertDialogCancel>
+                                                        <AlertDialogAction onClick={() => handleEstorno(l)} disabled={isUndoing}>
+                                                            {isUndoing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Confirmar Estorno'}
+                                                        </AlertDialogAction>
+                                                    </AlertDialogFooter>
+                                                </AlertDialogContent>
+                                            </AlertDialog>
+                                        </>
+                                    )}
+                                </div>
+                            </TableCell>
+                        </TableRow>
+                    );
+                  })
                 )}
               </TableBody>
             </Table>
