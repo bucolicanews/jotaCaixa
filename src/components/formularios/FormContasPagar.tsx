@@ -111,18 +111,14 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
     if (!adminId) return;
     setLoadingContasPatrimoniais(true);
     
-    const ativoCode = configMap.Ativo || '1';
-    const passivoCode = configMap.Passivo || '2';
-    const plCode = configMap['Patrimonio Liquido'] || '3';
-    
     // Busca contas Patrimoniais (Ativo, Passivo, PL)
     const { data, error } = await supabase
         .from('plano_contas')
         .select('id, Conta, Descricao')
         .eq('proprietario_id', adminId)
         .eq('Analitica', 'Sim')
-        .eq('is_conta_patrimonial', true) // FILTRO PRINCIPAL
-        .or(`Conta.like.${ativoCode}.%,Conta.like.${passivoCode}.%,Conta.like.${plCode}.%`)
+        .eq('is_conta_patrimonial', true)
+        .eq('is_a_pagar', true) // NOVO FILTRO: Apenas contas marcadas como Contas a Pagar
         .order('Conta');
         
     if (error) {
@@ -132,7 +128,7 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
         setContasPatrimoniais(data as PlanoContas[]);
     }
     setLoadingContasPatrimoniais(false);
-  }, [adminId, configMap.Ativo, configMap.Passivo, configMap['Patrimonio Liquido']]);
+  }, [adminId]);
 
   useEffect(() => {
     if (isAdmin) {
@@ -369,7 +365,7 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
                     <FormMessage />
                     {contasPatrimoniais.length === 0 && !loadingContasPatrimoniais && (
                         <p className="text-sm text-red-500">
-                            Nenhuma conta Patrimonial marcada no Plano de Contas.
+                            Nenhuma conta Patrimonial marcada como Contas a Pagar no Plano de Contas.
                         </p>
                     )}
                 </FormItem>
