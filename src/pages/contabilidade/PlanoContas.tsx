@@ -42,6 +42,8 @@ type FormInitialData = PlanoContas | (NovaContaInicial & {
     is_conta_resultado: boolean;
     is_caixa: boolean; // NOVO
     is_banco: boolean; // NOVO
+    is_a_receber: boolean; // NOVO
+    is_a_pagar: boolean; // NOVO
 });
 
 // Mapeamento de cores para os níveis hierárquicos
@@ -281,12 +283,6 @@ const PlanoContasPage = () => {
       // 1. Determinar a máscara de padding
       const maskParts = mascaraAtiva?.split('.') || [];
       
-      if (maskParts.length === 0) {
-          showError("A máscara de código não foi carregada. Verifique as configurações.");
-          setPopoverOpen(false);
-          return;
-      }
-      
       // Função auxiliar para calcular o próximo segmento
       const calculateNextSegment = (prefixo: string, nivelSegmento: number, paddingLength: number): string => {
           const prefixoBusca = prefixo ? prefixo + '.' : '';
@@ -401,6 +397,8 @@ const PlanoContasPage = () => {
             is_conta_resultado: false,
             is_caixa: false, // NOVO
             is_banco: false, // NOVO
+            is_a_receber: false, // NOVO
+            is_a_pagar: false, // NOVO
         } as FormInitialData
         : null);
 
@@ -511,7 +509,8 @@ const PlanoContasPage = () => {
                       <TableHead className="w-[100px]">Cód. Reduzido</TableHead>
                       <TableHead>Descrição</TableHead>
                       <TableHead className="w-[100px] text-center">Analítica</TableHead>
-                      <TableHead className="w-[100px] text-center">Caixa/Banco</TableHead>
+                      <TableHead className="w-[100px] text-center">CR</TableHead>
+                      <TableHead className="w-[100px] text-center">CP</TableHead>
                       <TableHead className="w-[100px] text-center">Patrimonial</TableHead>
                       <TableHead className="w-[100px] text-center">Resultado</TableHead>
                       <TableHead className="w-[100px] text-center">Caixa</TableHead>
@@ -522,14 +521,14 @@ const PlanoContasPage = () => {
                   <tbody className="[&_tr:last-child]:border-0">
                     {carregandoContas ? (
                       <TableRow>
-                        <TableCell colSpan={10} className="text-center py-8">
+                        <TableCell colSpan={11} className="text-center py-8">
                           <Loader2 className="h-6 w-6 animate-spin mx-auto text-primary" />
                         </TableCell>
                       </TableRow>
                     ) : contas.length === 0 ? (
                       <TableRow>
                         <TableCell
-                          colSpan={10}
+                          colSpan={11}
                           className="text-center py-4 text-muted-foreground"
                         >
                           Nenhuma conta encontrada com os filtros aplicados.
@@ -595,12 +594,28 @@ const PlanoContasPage = () => {
                                   {conta.Analitica}
                                 </TableCell>
                                 
+                                {/* NOVO CAMPO: IS A RECEBER */}
                                 <TableCell className="text-center">
                                   {conta.Analitica === 'Sim' ? (
                                     <EditableCell
                                       id={conta.id}
-                                      initialValue={conta.is_conta_caixa_banco}
-                                      fieldName="is_conta_caixa_banco"
+                                      initialValue={conta.is_a_receber}
+                                      fieldName="is_a_receber"
+                                      onSaveSuccess={handleInlineSaveSuccess}
+                                      isEditable={true}
+                                    />
+                                  ) : (
+                                    '-'
+                                  )}
+                                </TableCell>
+                                
+                                {/* NOVO CAMPO: IS A PAGAR */}
+                                <TableCell className="text-center">
+                                  {conta.Analitica === 'Sim' ? (
+                                    <EditableCell
+                                      id={conta.id}
+                                      initialValue={conta.is_a_pagar}
+                                      fieldName="is_a_pagar"
                                       onSaveSuccess={handleInlineSaveSuccess}
                                       isEditable={true}
                                     />

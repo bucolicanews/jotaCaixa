@@ -11,7 +11,7 @@ import { Checkbox } from '../ui/checkbox'; // Importando Checkbox
 interface EditableCellProps {
   id: string; // ID da conta
   initialValue: string | number | boolean | null | undefined; // Suporta booleano
-  fieldName: keyof PlanoContas; // Nome do campo a ser atualizado (Conta, Descricao, codigo_reduzido, is_conta_caixa_banco, is_conta_patrimonial, is_conta_resultado)
+  fieldName: keyof PlanoContas; // Nome do campo a ser atualizado (Conta, Descricao, codigo_reduzido, is_conta_caixa_banco, is_conta_patrimonial, is_conta_resultado, is_caixa, is_banco, is_a_receber, is_a_pagar)
   onSaveSuccess: () => void;
   className?: string;
   isEditable: boolean; // Se a célula pode ser editada
@@ -25,7 +25,7 @@ const EditableCell: React.FC<EditableCellProps> = ({
   className,
   isEditable,
 }) => {
-  const isBoolean = fieldName === 'is_conta_caixa_banco' || fieldName === 'is_conta_patrimonial' || fieldName === 'is_conta_resultado' || fieldName === 'is_caixa' || fieldName === 'is_banco';
+  const isBoolean = fieldName === 'is_conta_caixa_banco' || fieldName === 'is_conta_patrimonial' || fieldName === 'is_conta_resultado' || fieldName === 'is_caixa' || fieldName === 'is_banco' || fieldName === 'is_a_receber' || fieldName === 'is_a_pagar';
   const initialBooleanValue = isBoolean ? !!initialValue : false;
   
   const [isEditing, setIsEditing] = useState(false);

@@ -54,6 +54,8 @@ const formSchema = z.object({
   is_conta_resultado: z.boolean().optional(),
   is_caixa: z.boolean().optional(), // NOVO
   is_banco: z.boolean().optional(), // NOVO
+  is_a_receber: z.boolean().optional(), // NOVO CAMPO
+  is_a_pagar: z.boolean().optional(), // NOVO CAMPO
 }).superRefine((data, ctx) => {
     if (data.Analitica === 'Sim' && (data.is_caixa || data.is_banco) && data.is_conta_patrimonial) {
         ctx.addIssue({
@@ -100,6 +102,8 @@ const FormPlanoContas: React.FC<FormPlanoContasProps> = ({ proprietarioId, conta
       is_conta_resultado: contaInicial?.is_conta_resultado || false,
       is_caixa: contaInicial?.is_caixa || false, // NOVO
       is_banco: contaInicial?.is_banco || false, // NOVO
+      is_a_receber: contaInicial?.is_a_receber || false, // NOVO CAMPO
+      is_a_pagar: contaInicial?.is_a_pagar || false, // NOVO CAMPO
     },
   });
   
@@ -126,13 +130,13 @@ const FormPlanoContas: React.FC<FormPlanoContasProps> = ({ proprietarioId, conta
         .select('mascara_codigo')
         .eq('proprietario_id', proprietarioId)
         .limit(1)
-        .single();
+        .maybeSingle(); // Busca a máscara
         
-    if (error && error.code !== 'PGRST116') {
+    if (error) {
         console.error('Erro ao buscar máscara:', error);
     }
     
-    setMascara(data?.mascara_codigo || null);
+    setMascaraAtiva(data?.mascara_codigo || null);
     setLoadingMascara(false);
   }, [proprietarioId]);
   
@@ -167,6 +171,8 @@ const FormPlanoContas: React.FC<FormPlanoContasProps> = ({ proprietarioId, conta
       is_conta_resultado: isAnalitica ? values.is_conta_resultado : false,
       is_caixa: isAnalitica ? values.is_caixa : false,
       is_banco: isAnalitica ? values.is_banco : false,
+      is_a_receber: isAnalitica ? values.is_a_receber : false, // NOVO CAMPO
+      is_a_pagar: isAnalitica ? values.is_a_pagar : false, // NOVO CAMPO
     };
 
     let error = null;
@@ -273,6 +279,60 @@ const FormPlanoContas: React.FC<FormPlanoContasProps> = ({ proprietarioId, conta
               <FormMessage />
             </FormItem>
           )}
+        />
+        
+        <h3 className={cn("font-semibold mt-6 border-t pt-4", isAnalitica ? 'opacity-100' : 'opacity-50')}>
+            Flags de Uso (Apenas Analíticas)
+        </h3>
+        
+        {/* NOVO CAMPO: IS A RECEBER */}
+        <FormField
+            control={form.control}
+            name="is_a_receber"
+            render={({ field }) => (
+                <FormItem className={cn("flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4 transition-opacity", isAnalitica ? 'opacity-100' : 'opacity-50 pointer-events-none')}>
+                    <FormControl>
+                        <Checkbox
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                            disabled={!isAnalitica}
+                        />
+                    </FormControl>
+                    <div className="space-y-1 leading-none">
+                        <FormLabel>
+                            Usar como Contas a Receber (CR)
+                        </FormLabel>
+                        <p className="text-sm text-muted-foreground">
+                            Marca esta conta como um destino válido para lançamentos de Contas a Receber.
+                        </p>
+                    </div>
+                </FormItem>
+            )}
+        />
+        
+        {/* NOVO CAMPO: IS A PAGAR */}
+        <FormField
+            control={form.control}
+            name="is_a_pagar"
+            render={({ field }) => (
+                <FormItem className={cn("flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4 transition-opacity", isAnalitica ? 'opacity-100' : 'opacity-50 pointer-events-none')}>
+                    <FormControl>
+                        <Checkbox
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                            disabled={!isAnalitica}
+                        />
+                    </FormControl>
+                    <div className="space-y-1 leading-none">
+                        <FormLabel>
+                            Usar como Contas a Pagar (CP)
+                        </FormLabel>
+                        <p className="text-sm text-muted-foreground">
+                            Marca esta conta como um destino válido para lançamentos de Contas a Pagar.
+                        </p>
+                    </div>
+                </FormItem>
+            )}
         />
         
         {/* NOVO CAMPO: IS CAIXA */}
