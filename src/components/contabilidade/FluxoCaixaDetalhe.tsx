@@ -38,9 +38,10 @@ interface FluxoCaixaDetalheProps {
   totalSaldo: number;
   logoUrl: string | null; // NOVO PROP
   ownerName: string; // NOVO PROP
+  refetchSaldos: () => void; // NOVO PROP
 }
 
-const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas, totalSaldo, logoUrl, ownerName }) => {
+const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas, totalSaldo, logoUrl, ownerName, refetchSaldos }) => {
   const { printContent } = usePrint();
   
   const [lancamentos, setLancamentos] = useState<Lancamento[]>([]);
@@ -200,6 +201,7 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
   const handleEditSaveComplete = () => {
       setEditDialog({ open: false, lancamento: null });
       fetchLancamentos(); // Refetch data
+      refetchSaldos(); // CRÍTICO: Força o recálculo do saldo total
   };
   
   const handleEstorno = async (lancamento: Lancamento) => {
@@ -243,14 +245,7 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
         
         // Lançamento 2: Estorno no Resultado (DRE)
         // O tipo do lançamento de Resultado/DRE é o oposto do tipo do lançamento de Ativo/Caixa
-        // Se o original era Entrada (D: Ativo, C: Receita/Saida), o estorno é (D: Receita/Entrada, C: Ativo/Saida)
-        // O tipo do lançamento de Resultado/DRE deve ser o oposto do tipo do lançamento de Ativo/Caixa
-        const estornoResultadoTipo = lancamento.tipo; // CORREÇÃO: O tipo do lançamento de Resultado é o mesmo do original (Entrada/Saida)
-        
-        // Se o original era Entrada (D: Ativo, C: Receita/Saida), o estorno é (D: Receita/Entrada, C: Ativo/Saida)
-        // O tipo do lançamento de Resultado/DRE deve ser o oposto do tipo do lançamento de Ativo/Caixa
         const estornoResultadoTipoCorrigido = estornoTipo === 'Entrada' ? 'Saida' : 'Entrada'; 
-        
         const contaResultadoId = lancamento.conta_contabil_id; // Conta de Resultado original
         
         const estornoResultadoPayload = {
@@ -281,7 +276,8 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
         showError('Falha ao estornar lançamento: ' + error.message);
     } finally {
         setIsUndoing(false);
-        fetchLancamentos(); // GARANTINDO O RECALCULO
+        fetchLancamentos(); // GARANTINDO O RECALCULO DOS LANÇAMENTOS
+        refetchSaldos(); // CRÍTICO: Força o recálculo do saldo total
     }
   };
 

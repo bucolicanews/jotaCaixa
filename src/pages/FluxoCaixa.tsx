@@ -76,6 +76,7 @@ const FluxoCaixa: React.FC = () => {
         totalSaldo={totalSaldo}
         logoUrl={logoUrl}
         ownerName={ownerName}
+        refetchSaldos={refetchSaldos} {/* NOVO PROP */}
       />
     </LayoutPrincipal>
   );
