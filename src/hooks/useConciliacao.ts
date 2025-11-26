@@ -6,7 +6,7 @@ import { SaldoContaDetalhada } from '@/types/saldo-conta';
 import { ConfiguracaoConciliacao, TransacaoExtrato, ConciliacaoRegra, ConciliacaoHistorico } from '@/types/conciliacao';
 import { PlanoContas } from '@/types/plano-contas';
 import Papa, { ParseResult } from 'papaparse';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, parse, isValid, endOfDay } from 'date-fns';
 import { formatDDMMYYYYToISO, normalizeString, calculateContentHash } from '@/utils/formatters'; // Importando calculateContentHash
 import useSaldoContaCalculado from './use-saldo-conta-calculado'; // Importando o hook
 
@@ -182,7 +182,7 @@ export function useConciliacao(): ConciliacaoHook {
             if (t.isDuplicated) return t;
             
             const regra = regras.find(r => 
-                t.descricao.toLowerCase().includes(r.descricao_extrato.toLowerCase()) && r.tipo_lancamento === t.tipo
+                normalizeString(String(t.descricao)).includes(r.descricao_extrato.toLowerCase()) && r.tipo_lancamento === t.tipo
             );
             
             if (regra) {
@@ -348,11 +348,10 @@ export function useConciliacao(): ConciliacaoHook {
             return existingKeys;
         }
         
-        // Cria um Set de chaves únicas (Data YYYY-MM-DD | Descrição Normalizada | Valor (com sinal, 2 casas) | Tipo)
+        // Cria um Set de chaves únicas (Data YYYY-MM-DD | Descrição Normalizada | Valor (2 casas) | Tipo)
         (data || []).forEach(e => {
             const formattedDate = formatDDMMYYYYToISO(e.data);
             const normalizedDesc = normalizeString(e.descricao);
-            // CORREÇÃO CRÍTICA: Garante que o valor seja formatado com 2 casas decimais para comparação
             const uniqueKey = `${formattedDate}|${normalizedDesc}|${Number(e.valor).toFixed(2)}|${e.tipo}`;
             existingKeys.add(uniqueKey);
         });
@@ -368,132 +367,171 @@ export function useConciliacao(): ConciliacaoHook {
         }
         const config = configSelecionada;
         
+        // helper local para formatar datas com vários fallbacks
+        const safeFormatDate = (dateStr: string | undefined | null): string | null => {
+            if (!dateStr && dateStr !== '') return null;
+            // 1) tentativa padrão (utilitário que você já tem)
+            const candidate1 = formatDDMMYYYYToISO(dateStr as string);
+            if (candidate1) return candidate1;
+            // 2) parse ISO direto
+            try {
+                const parsedIso = parseISO(dateStr as string);
+                if (isValid(parsedIso)) return format(parsedIso, 'yyyy-MM-dd');
+            } catch (e) {}
+            // 3) parse dd/MM/yyyy
+            try {
+                const parsedBR = parse(dateStr as string, 'dd/MM/yyyy', new Date());
+                if (isValid(parsedBR)) return format(parsedBR, 'yyyy-MM-dd');
+            } catch (e) {}
+            // 4) fallback para tentativa livre: aceitar strings já no formato yyyy-MM-dd
+            try {
+                const parsedLoose = parse(dateStr as string, 'yyyy-MM-dd', new Date());
+                if (isValid(parsedLoose)) return format(parsedLoose, 'yyyy-MM-dd');
+            } catch (e) {}
+            // nada válido
+            return null;
+        };
+
         setLoading(true);
         
-        // 1. Ler o conteúdo do arquivo para calcular o hash
-        const fileContent = await file.text();
-        const contentHash = calculateContentHash(fileContent);
-        
-        if (!contentHash) {
-            showError('O arquivo está vazio ou não contém dados válidos.');
-            setLoading(false);
-            return;
-        }
-        
-        // NOVO CHECK: Verificar se o hash do arquivo já foi importado
-        const { count: hashCount, error: hashError } = await supabase
-            .from('conciliacoes')
-            .select('id', { count: 'exact', head: true })
-            .eq('empresa_id', proprietarioDaConfiguracao)
-            .eq('extrato_hash', contentHash);
+        try {
+            // 1. Ler o conteúdo do arquivo para calcular o hash
+            const fileContent = await file.text();
+            const contentHash = calculateContentHash(fileContent);
             
-        if (hashError) {
-            setLoading(false);
-            throw hashError;
-        }
-        
-        if ((hashCount || 0) > 0) {
-            showError('Este arquivo já foi importado anteriormente (Bloqueio por Hash).');
-            setLoading(false);
-            return;
-        }
-        
-        setFileHash(contentHash); // SALVA O HASH AQUI
-
-        // 2. Buscar datas já existentes no banco
-        const existingDatesSet = await fetchExistingDates(contaSelecionadaId, proprietarioDaConfiguracao);
-        
-        // 3. Buscar chaves de transação existentes (para duplicidade)
-        const existingExtratosSet = await fetchExistingExtratos(contaSelecionadaId, proprietarioDaConfiguracao);
-        
-        let rejectedDates: Set<string> = new Set();
-
-        // 4. Processar o CSV
-        Papa.parse(file, {
-            header: true,
-            skipEmptyLines: true,
-            dynamicTyping: true,
-            complete: (results: ParseResult<any>) => {
-                const rawTransacoes: TransacaoExtrato[] = results.data.map((row: any) => {
-                    const valorStr = String(row[config.mapeamento.valor] || '0').replace(',', '.');
-                    let valor = parseFloat(valorStr);
-                    
-                    // Lógica para determinar o sinal do valor
-                    if (config.coluna_tipo_transacao && row[config.coluna_tipo_transacao] !== config.valor_credito) {
-                        valor = -Math.abs(valor);
-                    }
-                    
-                    const identificacao = config.mapeamento.identificacao 
-                        ? String(row[config.mapeamento.identificacao] || '') 
-                        : undefined;
-                        
-                    const tipo = (valor >= 0 ? 'Entrada' : 'Saida') as 'Entrada' | 'Saida';
-                    const dataMovimentacao = row[config.mapeamento.data];
-                    
-                    let formattedDate: string | null = null;
-                    formattedDate = formatDDMMYYYYToISO(dataMovimentacao);
-                    
-                    if (!formattedDate) {
-                        console.error('Falha ao formatar data do CSV:', dataMovimentacao);
-                        formattedDate = dataMovimentacao; 
-                    }
-                    
-                    const normalizedDesc = normalizeString(row[config.mapeamento.descricao]);
-                    
-                    // Chave de comparação para a transação atual (usando a data formatada YYYY-MM-DD e valor com sinal)
-                    const uniqueKey = `${formattedDate}|${normalizedDesc}|${Number(valor).toFixed(2)}|${tipo}`;
-                    
-                    let isDuplicated = false;
-                    let motivoDuplicidade: string | null = null;
-                    
-                    // Verifica duplicidade de transação (CHAVE ÚNICA)
-                    if (existingExtratosSet.has(uniqueKey)) {
-                        isDuplicated = true;
-                        motivoDuplicidade = 'Transação já existe na tabela de extratos.';
-                    }
-                    
-                    // Verifica se a data já foi conciliada (se a transação não for duplicada por chave)
-                    // REMOVIDO: A verificação de data já conciliada não é mais necessária, pois a chave única já garante a duplicidade.
-                    // if (!isDuplicada && formattedDate && existingDatesSet.has(formattedDate)) {
-                    //     isDuplicada = true;
-                    //     motivoDuplicidade = 'Data já conciliada.';
-                    //     rejectedDates.add(formattedDate);
-                    // }
-
-                    return {
-                        data: dataMovimentacao,
-                        descricao: row[config.mapeamento.descricao],
-                        valor: valor,
-                        tipo: tipo,
-                        identificacao: identificacao,
-                        isDuplicated: isDuplicated,
-                        motivoDuplicidade: motivoDuplicidade,
-                    };
-                }).filter(t => t.data && t.descricao);
-                
-                const transacoesValidas = rawTransacoes.filter(t => !t.isDuplicated);
-                const transacoesRejeitadas = rawTransacoes.filter(t => t.isDuplicated);
-                
-                const transacoesMapeadas = applyRegras(transacoesValidas);
-                
-                setTransacoes(transacoesMapeadas); // APENAS AS VÁLIDAS E MAPEADAS
-                setTransacoesRejeitadas(transacoesRejeitadas); // APENAS AS REJEITADAS
-                setTransacoesSelecionadas([]);
-                setContaContabilLote(null);
-                
-                let successMessage = `${transacoesValidas.length} transações válidas importadas.`;
-                
-                if (transacoesRejeitadas.length > 0) {
-                    successMessage += ` ${transacoesRejeitadas.length} rejeitadas (Duplicidade de transação).`;
-                }
-                
-                showSuccess(successMessage);
-            },
-            error: (err) => {
-                showError('Erro ao processar o arquivo CSV: ' + err.message);
+            if (!contentHash) {
+                showError('O arquivo está vazio ou não contém dados válidos.');
+                setLoading(false);
+                return;
             }
-        });
-        setLoading(false);
+            
+            // NOVO CHECK: Verificar se o hash do arquivo já foi importado
+            const { count: hashCount, error: hashError } = await supabase
+                .from('conciliacoes')
+                .select('id', { count: 'exact', head: true })
+                .eq('empresa_id', proprietarioDaConfiguracao)
+                .eq('extrato_hash', contentHash);
+                
+            if (hashError) {
+                setLoading(false);
+                throw hashError;
+            }
+            
+            if ((hashCount || 0) > 0) {
+                showError('Este arquivo já foi importado anteriormente (Bloqueio por Hash).');
+                setLoading(false);
+                return;
+            }
+            
+            setFileHash(contentHash); // SALVA O HASH AQUI
+
+            // 2. Buscar datas já existentes no banco
+            const existingDatesSet = await fetchExistingDates(contaSelecionadaId, proprietarioDaConfiguracao);
+            
+            // 3. Buscar chaves de transação existentes (para duplicidade)
+            const existingExtratosSet = await fetchExistingExtratos(contaSelecionadaId, proprietarioDaConfiguracao);
+            
+            let rejectedDates: Set<string> = new Set();
+
+            // 4. Processar o CSV
+            Papa.parse(file, {
+                header: true,
+                skipEmptyLines: true,
+                dynamicTyping: true,
+                complete: (results: ParseResult<any>) => {
+                    try {
+                        const rawTransacoes: TransacaoExtrato[] = results.data.map((row: any) => {
+                            // valor vindo do CSV *sempre* tratado como texto primeiro e convertido
+                            const rawValorStr = String(row[config.mapeamento.valor] ?? '0').replace(/\s+/g, '').replace(',', '.');
+                            const parsedValor = Number(parseFloat(rawValorStr || '0'));
+                            let valor = isNaN(parsedValor) ? 0 : parsedValor;
+                            
+                            // Lógica para determinar o sinal do valor (mantemos valor numérico real)
+                            if (config.coluna_tipo_transacao && row[config.coluna_tipo_transacao] !== config.valor_credito) {
+                                valor = -Math.abs(valor);
+                            }
+                            
+                            const identificacao = config.mapeamento.identificacao 
+                                ? String(row[config.mapeamento.identificacao] || '') 
+                                : undefined;
+                                
+                            const tipo = (valor >= 0 ? 'Entrada' : 'Saida') as 'Entrada' | 'Saida';
+                            const dataMovimentacaoRaw = row[config.mapeamento.data];
+                            
+                            let formattedDate: string | null = safeFormatDate(dataMovimentacaoRaw);
+                            if (!formattedDate) {
+                                // Garantir que haja algum valor (manter a original se não formatável)
+                                console.error('Falha ao formatar data do CSV:', dataMovimentacaoRaw);
+                                formattedDate = String(dataMovimentacaoRaw || '');
+                            }
+                            
+                            const descricaoRaw = row[config.mapeamento.descricao] ?? '';
+                            const normalizedDesc = normalizeString(String(descricaoRaw));
+                            
+                            // Chave de comparação para a transação atual (usando a data formatada YYYY-MM-DD e valor com sinal, 2 casas)
+                            const uniqueKey = `${formattedDate}|${normalizedDesc}|${Number(valor).toFixed(2)}|${tipo}`;
+                            
+                            let isDuplicated = false;
+                            let motivoDuplicidade: string | null = null;
+                            
+                            // Verifica duplicidade de transação (CHAVE ÚNICA)
+                            if (existingExtratosSet.has(uniqueKey)) {
+                                isDuplicated = true;
+                                motivoDuplicidade = 'Transação já existe na tabela de extratos.';
+                            }
+                            
+                            return {
+                                data: dataMovimentacaoRaw,
+                                descricao: String(descricaoRaw),
+                                valor: valor,
+                                tipo: tipo,
+                                identificacao: identificacao,
+                                isDuplicated: isDuplicated,
+                                motivoDuplicidade: motivoDuplicidade,
+                            } as TransacaoExtrato;
+                        }).filter(t => t.data && t.descricao);
+                        
+                        const transacoesValidas = rawTransacoes.filter(t => !t.isDuplicated);
+                        const transacoesRejeitadasLocal = rawTransacoes.filter(t => t.isDuplicated);
+                        
+                        // Normaliza descrição ANTES de aplicar regras (evita falso negativo)
+                        const transacoesValidasNormalizadas = transacoesValidas.map(t => ({
+                            ...t,
+                            descricao: t.descricao,
+                        }));
+                        
+                        const transacoesMapeadas = applyRegras(transacoesValidasNormalizadas);
+                        
+                        setTransacoes(transacoesMapeadas); // APENAS AS VÁLIDAS E MAPEADAS
+                        setTransacoesRejeitadas(transacoesRejeitadasLocal); // APENAS AS REJEITADAS
+                        setTransacoesSelecionadas([]);
+                        setContaContabilLote(null);
+                        
+                        let successMessage = `${transacoesValidas.length} transações válidas importadas.`;
+                        
+                        if (transacoesRejeitadasLocal.length > 0) {
+                            successMessage += ` ${transacoesRejeitadasLocal.length} rejeitadas (Duplicidade de transação).`;
+                        }
+                        
+                        showSuccess(successMessage);
+                    } catch (innerErr: any) {
+                        console.error('Erro ao processar resultado do CSV:', innerErr);
+                        showError('Erro ao processar o arquivo CSV: ' + (innerErr?.message || String(innerErr)));
+                    } finally {
+                        setLoading(false);
+                    }
+                },
+                error: (err) => {
+                    console.error('Papa.parse error:', err);
+                    setLoading(false);
+                    showError('Erro ao processar o arquivo CSV: ' + err.message);
+                }
+            });
+        } catch (err: any) {
+            console.error('Erro em handleParseFile:', err);
+            setLoading(false);
+            showError('Erro ao processar o arquivo: ' + (err?.message || String(err)));
+        }
     }, [file, configSelecionada, contaSelecionadaId, proprietarioDaConfiguracao, applyRegras, fetchExistingDates, fetchExistingExtratos]);
 
     // --- Lógica de Salvamento ---
@@ -530,13 +568,16 @@ export function useConciliacao(): ConciliacaoHook {
         try {
             // Prepara o payload para a tabela 'lancamentos'
             const lancamentosPayload = transacoesParaSalvar.flatMap(t => {
-                const formattedDate = formatDDMMYYYYToISO(t.data);
-                const valor = Math.abs(t.valor);
+                const formattedDate = (() => {
+                    const candidate = formatDDMMYYYYToISO(t.data);
+                    return candidate || String(t.data);
+                })();
+                const valor = Math.abs(Number(t.valor));
                 
                 // Transação 1: Movimentação de Caixa/Banco (Ativo)
-                const lancamentoAtivo = {
+                const lancamentoAtivo: any = {
                     proprietario_id: proprietarioDaConfiguracao,
-                    data_movimentacao: formattedDate || t.data,
+                    data_movimentacao: formattedDate,
                     descricao: t.descricao,
                     valor: valor,
                     tipo: t.tipo, // Usa o tipo original (Entrada/Saida)
@@ -558,9 +599,9 @@ export function useConciliacao(): ConciliacaoHook {
                     tipoResultado = 'Entrada';
                 }
                 
-                const lancamentoResultado = {
+                const lancamentoResultado: any = {
                     proprietario_id: proprietarioDaConfiguracao,
-                    data_movimentacao: formattedDate || t.data,
+                    data_movimentacao: formattedDate,
                     descricao: t.descricao,
                     valor: valor,
                     tipo: tipoResultado, // Tipo ajustado para a conta de Resultado
@@ -588,14 +629,15 @@ export function useConciliacao(): ConciliacaoHook {
             
             // Prepara o payload para a tabela 'extratos' (para controle de duplicidade futura)
             const extratosPayload = transacoesParaSalvar.map(t => {
-                const formattedDate = formatDDMMYYYYToISO(t.data);
+                const formattedDate = formatDDMMYYYYToISO(t.data) || String(t.data);
                 
                 return {
                     empresa_id: proprietarioDaConfiguracao,
                     id_saldo_contas: contaSelecionadaId,
-                    data: formattedDate || t.data,
+                    data: formattedDate,
                     descricao: t.descricao,
-                    valor: t.valor, // Valor original (com sinal) para extratos
+                    // salva como número com 2 casas (coerente com comparação feita em fetchExistingExtratos)
+                    valor: Number(Number(t.valor).toFixed(2)),
                     tipo: t.tipo,
                     identificacao: t.identificacao || null,
                     conciliado: true,
