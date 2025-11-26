@@ -7,8 +7,8 @@ import { ConfiguracaoConciliacao, TransacaoExtrato, ConciliacaoRegra, Conciliaca
 import { PlanoContas } from '@/types/plano-contas';
 import Papa, { ParseResult } from 'papaparse';
 import { format, parseISO, parse, isValid, endOfDay } from 'date-fns';
-import { formatDDMMYYYYToISO, normalizeString, calculateContentHash } from '@/utils/formatters'; // Importando calculateContentHash
-import useSaldoContaCalculado from './use-saldo-conta-calculado'; // Importando o hook
+import { formatDDMMYYYYToISO, normalizeString, calculateContentHash } from '@/utils/formatters';
+import useSaldoContaCalculado from './use-saldo-conta-calculado';
 
 interface ConciliacaoHook {
     // State
@@ -45,7 +45,7 @@ interface ConciliacaoHook {
     handleContaContabilLoteChange: (id: string) => void;
     handleApplyLote: () => void;
     handleSaveConciliacao: () => Promise<void>;
-    handleDeleteHistorico: () => Promise<void>; // ADICIONADO
+    handleDeleteHistorico: () => Promise<void>;
     handleViewHistoricoDetails: (h: ConciliacaoHistorico) => void;
     setHistoricoDetalhesOpen: (open: boolean) => void;
     fetchConfigs: () => Promise<void>;
@@ -85,7 +85,7 @@ export function useConciliacao(): ConciliacaoHook {
     
     const [historicoDetalhesOpen, setHistoricoDetalhesOpen] = useState(false);
     const [historicoSelecionado, setHistoricoSelecionado] = useState<ConciliacaoHistorico | null>(null);
-    const [fileHash, setFileHash] = useState<string | null>(null); // NOVO ESTADO
+    const [fileHash, setFileHash] = useState<string | null>(null); // ADICIONADO
 
     const contaSelecionada = useMemo(() => contasCalculadas.find(c => c.id === contaSelecionadaId), [contasCalculadas, contaSelecionadaId]);
     const proprietarioDaConfiguracao = contaSelecionada?.proprietario_id || usuario?.id; // Usando usuario.id como fallback
@@ -120,7 +120,7 @@ export function useConciliacao(): ConciliacaoHook {
             setContasContabeis([]);
         } else {
             const filteredContas = (data as PlanoContas[]).filter(c => 
-                c.id !== contaSelecionada.conta_contabil_id
+                c.id !== contaSelecionada.plano_contas?.id // Filtra a conta de Ativo/Caixa
             );
             setContasContabeis(filteredContas);
         }
@@ -315,23 +315,6 @@ export function useConciliacao(): ConciliacaoHook {
 
     // --- Lógica de Processamento de Arquivo ---
 
-    // NOVO: Função para buscar todas as datas únicas já registradas na tabela 'extratos'
-    const fetchExistingDates = useCallback(async (contaId: string, empresaId: string): Promise<Set<string>> => {
-        const { data, error } = await supabase
-            .from('extratos')
-            .select('data')
-            .eq('empresa_id', empresaId)
-            .eq('id_saldo_contas', contaId);
-            
-        if (error) {
-            console.error('Erro ao buscar datas existentes:', error);
-            return new Set();
-        }
-        
-        // Retorna um Set de datas no formato YYYY-MM-DD
-        return new Set((data || []).map(e => formatDDMMYYYYToISO(e.data)).filter((d): d is string => !!d));
-    }, []);
-
     // NOVO: Função para buscar extratos existentes na nova tabela (para duplicidade de transação)
     const fetchExistingExtratos = useCallback(async (contaId: string, empresaId: string) => {
         
@@ -425,15 +408,10 @@ export function useConciliacao(): ConciliacaoHook {
             
             setFileHash(contentHash); // SALVA O HASH AQUI
 
-            // 2. Buscar datas já existentes no banco
-            const existingDatesSet = await fetchExistingDates(contaSelecionadaId, proprietarioDaConfiguracao);
-            
-            // 3. Buscar chaves de transação existentes (para duplicidade)
+            // 2. Buscar chaves de transação existentes (para duplicidade)
             const existingExtratosSet = await fetchExistingExtratos(contaSelecionadaId, proprietarioDaConfiguracao);
             
-            let rejectedDates: Set<string> = new Set();
-
-            // 4. Processar o CSV
+            // 3. Processar o CSV
             Papa.parse(file, {
                 header: true,
                 skipEmptyLines: true,
@@ -532,7 +510,7 @@ export function useConciliacao(): ConciliacaoHook {
             setLoading(false);
             showError('Erro ao processar o arquivo: ' + (err?.message || String(err)));
         }
-    }, [file, configSelecionada, contaSelecionadaId, proprietarioDaConfiguracao, applyRegras, fetchExistingDates, fetchExistingExtratos]);
+    }, [file, configSelecionada, contaSelecionadaId, proprietarioDaConfiguracao, applyRegras, fetchExistingExtratos]);
 
     // --- Lógica de Salvamento ---
 
@@ -543,13 +521,7 @@ export function useConciliacao(): ConciliacaoHook {
         }
         
         // 1. Buscar a conta contábil do saldo_contas (Ativo/Caixa)
-        const { data: contaAtivoData } = await supabase
-            .from('saldo_contas')
-            .select('conta_contabil_id')
-            .eq('id', contaSelecionadaId)
-            .single();
-            
-        const contaAtivoCaixaId = contaAtivoData?.conta_contabil_id;
+        const contaAtivoCaixaId = contaSelecionada?.plano_contas?.id;
         
         if (!contaAtivoCaixaId) {
             showError('A conta bancária selecionada não está vinculada a um Plano de Contas (Ativo).');
@@ -702,8 +674,30 @@ export function useConciliacao(): ConciliacaoHook {
         } finally {
             setIsSaving(false);
         }
-    }, [contaSelecionadaId, proprietarioDaConfiguracao, file, fileHash, transacoes, usuario?.id, fetchHistorico, handleReset]);
+    }, [contaSelecionadaId, proprietarioDaConfiguracao, file, fileHash, transacoes, usuario?.id, fetchHistorico, handleReset, contaSelecionada?.plano_contas?.id]);
 
+
+    const handleDeleteHistorico = useCallback(async () => {
+        if (!usuario?.id) return;
+        
+        setIsDeletingHistorico(true);
+        
+        try {
+            const { error } = await supabase
+                .from('conciliacoes')
+                .delete()
+                .eq('empresa_id', usuario.id);
+                
+            if (error) throw error;
+            
+            showSuccess(`Histórico de ${historico.length} conciliações removido com sucesso.`);
+            fetchHistorico();
+        } catch (error: any) {
+            showError('Falha ao limpar histórico: ' + error.message);
+        } finally {
+            setIsDeletingHistorico(false);
+        }
+    }, [usuario?.id, historico.length, fetchHistorico]);
 
     return {
         // State
@@ -740,7 +734,7 @@ export function useConciliacao(): ConciliacaoHook {
         handleContaContabilLoteChange,
         handleApplyLote,
         handleSaveConciliacao,
-        handleDeleteHistorico, // RETORNANDO A FUNÇÃO
+        handleDeleteHistorico,
         handleViewHistoricoDetails,
         setHistoricoDetalhesOpen: handleSetHistoricoDetalhesOpen,
         fetchConfigs,
