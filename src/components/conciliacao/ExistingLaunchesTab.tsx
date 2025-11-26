@@ -5,6 +5,7 @@ import { AlertTriangle, ArrowUpCircle, ArrowDownCircle } from 'lucide-react';
 import { TransacaoExtrato } from '@/types/conciliacao';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { formatarData } from '@/utils/formatters'; // Importando formatarData
 
 interface ExistingLaunchesTabProps {
   transacoesRejeitadas: TransacaoExtrato[];
@@ -20,7 +21,7 @@ const ExistingLaunchesTab: React.FC<ExistingLaunchesTabProps> = ({ transacoesRej
     <Card className="h-full flex flex-col">
       <CardHeader>
         <CardTitle className="flex items-center text-red-600">
-          <AlertTriangle className="w-5 h-5 mr-2" /> Lançamentos Existentes ({totalRejeitadas})
+          <AlertTriangle className="w-5 h-5 mr-2" /> Lançamentos Rejeitados ({totalRejeitadas})
         </CardTitle>
       </CardHeader>
       <CardContent className="flex-1 flex flex-col">
@@ -50,7 +51,7 @@ const ExistingLaunchesTab: React.FC<ExistingLaunchesTabProps> = ({ transacoesRej
               ) : (
                 transacoesRejeitadas.map((t, i) => (
                   <TableRow key={i} className="bg-red-500/10">
-                    <TableCell className="text-xs">{t.data}</TableCell>
+                    <TableCell className="text-xs">{formatarData(t.data)}</TableCell>
                     <TableCell className="text-sm">{t.descricao}</TableCell>
                     <TableCell className="text-xs text-muted-foreground">{t.identificacao || '-'}</TableCell>
                     <TableCell>

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -11,7 +11,7 @@ import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 
 interface Step4MappingTableProps {
-  transacoes: TransacaoExtrato[]; // Agora contém APENAS transações válidas
+  transacoes: TransacaoExtrato[]; // Contém APENAS transações válidas (não duplicadas)
   contasContabeis: PlanoContas[];
   transacoesSelecionadas: number[];
   contaContabilLote: string | null;
@@ -41,11 +41,11 @@ const Step4MappingTable: React.FC<Step4MappingTableProps> = ({
   onSaveConciliacao,
 }) => {
   
-    // Transações rejeitadas não estão mais nesta lista, mas mantemos a lógica de contagem
-    const transacoesValidas = transacoes;
-    const transacoesNaoConciliadas = transacoesValidas.filter(t => !t.conta_contabil_id);
-    
-    const allValidSelected = transacoesSelecionadas.length === transacoesValidas.length && transacoesValidas.length > 0;
+  // Agora 'transacoes' já deve conter apenas as válidas (não duplicadas)
+  const transacoesValidas = transacoes;
+  const transacoesNaoConciliadas = transacoesValidas.filter(t => !t.conta_contabil_id);
+  
+  const allValidSelected = transacoesSelecionadas.length === transacoesValidas.length && transacoesValidas.length > 0;
 
   return (
     <Card className="col-span-1 md:col-span-3 h-full flex flex-col">
