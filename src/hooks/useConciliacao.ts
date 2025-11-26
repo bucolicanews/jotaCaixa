@@ -8,6 +8,7 @@ import { PlanoContas } from '@/types/plano-contas';
 import Papa, { ParseResult } from 'papaparse';
 import { format, parseISO } from 'date-fns';
 import { formatDDMMYYYYToISO, normalizeString, calculateContentHash } from '@/utils/formatters'; // Importando calculateContentHash
+import useSaldoContaCalculado from './use-saldo-conta-calculado'; // Importando o hook
 
 interface ConciliacaoHook {
     // State
@@ -58,7 +59,15 @@ export function useConciliacao(): ConciliacaoHook {
     const [isDeletingHistorico, setIsDeletingHistorico] = useState(false);
     const [activeTab, setActiveTab] = useState('conciliacao');
     
-    const [contas, setContas] = useState<SaldoConta[]>([]);
+    // Hook para buscar saldos de contas (Ativo/Passivo) - AGORA FILTRA APENAS BANCOS
+    const { contas: contasCalculadas, carregando: loadingContas } = useSaldoContaCalculado(
+        'todos', 
+        'todos', 
+        '', 
+        'bancos',
+        true // NOVO: Filtra apenas contas marcadas como Banco
+    );
+    
     const [configs, setConfigs] = useState<ConfiguracaoConciliacao[]>([]);
     const [contasContabeis, setContasContabeis] = useState<PlanoContas[]>([]);
     const [historico, setHistorico] = useState<ConciliacaoHistorico[]>([]);
@@ -76,19 +85,15 @@ export function useConciliacao(): ConciliacaoHook {
     const [historicoSelecionado, setHistoricoSelecionado] = useState<ConciliacaoHistorico | null>(null);
     const [fileHash, setFileHash] = useState<string | null>(null); // NOVO ESTADO
 
-    const contaSelecionada = useMemo(() => contas.find(c => c.id === contaSelecionadaId), [contas, contaSelecionadaId]);
+    const contaSelecionada = useMemo(() => contasCalculadas.find(c => c.id === contaSelecionadaId), [contasCalculadas, contaSelecionadaId]);
     const proprietarioDaConfiguracao = contaSelecionada?.proprietario_id || usuario?.id; // Usando usuario.id como fallback
 
     // --- Funções de Busca de Dados ---
 
     const fetchContas = useCallback(async () => {
-        if (!usuario?.id) return;
-        setLoading(true);
-        const { data, error } = await supabase.from('saldo_contas').select('*, conta_contabil_id').eq('proprietario_id', usuario.id);
-        if (error) showError('Erro ao carregar contas: ' + error.message);
-        else setContas(data as SaldoConta[]);
-        setLoading(false);
-    }, [usuario]);
+        // A busca de contas agora é feita pelo useSaldoContaCalculado
+        setLoading(loadingContas);
+    }, [loadingContas]);
 
     const fetchConfigs = useCallback(async () => {
         if (!contaSelecionadaId) return;
@@ -561,6 +566,18 @@ export function useConciliacao(): ConciliacaoHook {
                     documento: t.identificacao || null,
                 };
                 
+                // CRÍTICO: Adiciona a referência cruzada (conta_resultado_id)
+                // O lançamento de Ativo aponta para o ID do lançamento de Resultado
+                // O lançamento de Resultado aponta para o ID do lançamento de Ativo
+                const idAtivo = crypto.randomUUID();
+                const idResultado = crypto.randomUUID();
+                
+                lancamentoAtivo.id = idAtivo;
+                lancamentoAtivo.conta_resultado_id = idResultado;
+                
+                lancamentoResultado.id = idResultado;
+                lancamentoResultado.conta_resultado_id = idAtivo;
+                
                 return [lancamentoAtivo, lancamentoResultado];
             });
             
@@ -643,11 +660,11 @@ export function useConciliacao(): ConciliacaoHook {
 
     return {
         // State
-        loading,
+        loading: loading || loadingContas,
         isSaving,
         isDeletingHistorico,
         activeTab,
-        contas,
+        contas: contasCalculadas,
         configs,
         contasContabeis,
         historico,

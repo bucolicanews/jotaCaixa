@@ -18,7 +18,13 @@ interface SaldoContaCalculadoHook {
   refetch: () => void;
 }
 
-const useSaldoContaCalculado = (filtroTipoSaldo: 'todos' | 'Credito' | 'Debito' | 'Receita' | 'Despesa', filtroContaContabilId: string, filtroNomeDebounced: string, scope: Scope = 'bancos'): SaldoContaCalculadoHook => {
+const useSaldoContaCalculado = (
+    filtroTipoSaldo: 'todos' | 'Credito' | 'Debito' | 'Receita' | 'Despesa', 
+    filtroContaContabilId: string, 
+    filtroNomeDebounced: string, 
+    scope: Scope = 'bancos',
+    isBancoOnly: boolean = false // NOVO PARÂMETRO
+): SaldoContaCalculadoHook => {
   const { usuario, perfil, role, carregando: carregandoSessao } = useSessao();
   const [contas, setContas] = useState<SaldoCalculado[]>([]);
   const [carregando, setCarregando] = useState(true);
@@ -160,6 +166,11 @@ const useSaldoContaCalculado = (filtroTipoSaldo: 'todos' | 'Credito' | 'Debito' 
           filteredContas = filteredContas.filter(c => c.plano_contas?.is_conta_patrimonial);
       }
       
+      // NOVO FILTRO: Apenas contas marcadas como Banco (para Conciliação)
+      if (isBancoOnly) {
+          filteredContas = filteredContas.filter(c => c.plano_contas?.is_banco === true);
+      }
+      
       // 5. Aplicar filtro de nome no frontend (se a busca por ILIKE não for suficiente)
       if (filtroNomeDebounced) {
           const termo = filtroNomeDebounced.toLowerCase();
@@ -179,7 +190,7 @@ const useSaldoContaCalculado = (filtroTipoSaldo: 'todos' | 'Credito' | 'Debito' 
     } finally {
       setCarregando(false);
     }
-  }, [empresaId, carregandoSessao, filtroNomeDebounced, fetchContasAndLancamentos, scope]);
+  }, [empresaId, carregandoSessao, filtroNomeDebounced, fetchContasAndLancamentos, scope, isBancoOnly]);
 
   useEffect(() => {
     buscarContas();
