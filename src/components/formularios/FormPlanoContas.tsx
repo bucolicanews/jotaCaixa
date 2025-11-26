@@ -54,6 +54,21 @@ const formSchema = z.object({
   is_conta_resultado: z.boolean().optional(),
   is_caixa: z.boolean().optional(), // NOVO
   is_banco: z.boolean().optional(), // NOVO
+}).superRefine((data, ctx) => {
+    if (data.Analitica === 'Sim' && (data.is_caixa || data.is_banco) && data.is_conta_patrimonial) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'Uma conta não pode ser Caixa/Banco E Patrimonial ao mesmo tempo.',
+            path: ['is_conta_patrimonial'],
+        });
+    }
+    if (data.Analitica === 'Sim' && data.is_caixa && data.is_banco) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'Uma conta não pode ser Caixa E Banco ao mesmo tempo.',
+            path: ['is_banco'],
+        });
+    }
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -90,6 +105,8 @@ const FormPlanoContas: React.FC<FormPlanoContasProps> = ({ proprietarioId, conta
   
   const isAnalitica = form.watch('Analitica') === 'Sim';
   const contaCodigo = form.watch('Conta');
+  const isCaixa = form.watch('is_caixa');
+  const isBanco = form.watch('is_banco');
   
   // Efeito para preencher o Código Reduzido automaticamente
   useEffect(() => {
@@ -136,17 +153,20 @@ const FormPlanoContas: React.FC<FormPlanoContasProps> = ({ proprietarioId, conta
     // Lógica de segurança: Se não for analítica, as flags booleanas devem ser FALSE
     const isAnalitica = values.Analitica === 'Sim';
     
+    // CRÍTICO: Sincroniza is_conta_caixa_banco
+    const finalIsContaCaixaBanco = isAnalitica && (values.is_caixa || values.is_banco);
+    
     const dataToSave = {
       proprietario_id: proprietarioId,
       Conta: values.Conta,
       codigo_reduzido: values.codigo_reduzido || null,
       Descricao: values.Descricao,
       Analitica: values.Analitica,
-      is_conta_caixa_banco: isAnalitica ? values.is_conta_caixa_banco : false, // Aplica filtro
-      is_conta_patrimonial: isAnalitica ? values.is_conta_patrimonial : false, // Aplica filtro
-      is_conta_resultado: isAnalitica ? values.is_conta_resultado : false, // Aplica filtro
-      is_caixa: isAnalitica ? values.is_caixa : false, // NOVO
-      is_banco: isAnalitica ? values.is_banco : false, // NOVO
+      is_conta_caixa_banco: finalIsContaCaixaBanco, // VALOR SINCRONIZADO
+      is_conta_patrimonial: isAnalitica ? values.is_conta_patrimonial : false,
+      is_conta_resultado: isAnalitica ? values.is_conta_resultado : false,
+      is_caixa: isAnalitica ? values.is_caixa : false,
+      is_banco: isAnalitica ? values.is_banco : false,
     };
 
     let error = null;
@@ -255,31 +275,6 @@ const FormPlanoContas: React.FC<FormPlanoContasProps> = ({ proprietarioId, conta
           )}
         />
         
-        {/* CAMPO: IS CONTA CAIXA/BANCO (Antigo IS CONTA SALDO) */}
-        <FormField
-            control={form.control}
-            name="is_conta_caixa_banco"
-            render={({ field }) => (
-                <FormItem className={cn("flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4 transition-opacity", isAnalitica ? 'opacity-100' : 'opacity-50 pointer-events-none')}>
-                    <FormControl>
-                        <Checkbox
-                            checked={field.value}
-                            onCheckedChange={field.onChange}
-                            disabled={!isAnalitica}
-                        />
-                    </FormControl>
-                    <div className="space-y-1 leading-none">
-                        <FormLabel>
-                            Usar como Conta de Saldo (Caixa/Banco)
-                        </FormLabel>
-                        <p className="text-sm text-muted-foreground">
-                            Se marcada, esta conta contábil poderá ser vinculada a uma Conta/Caixa em Bancos.
-                        </p>
-                    </div>
-                </FormItem>
-            )}
-        />
-        
         {/* NOVO CAMPO: IS CAIXA */}
         <FormField
             control={form.control}
@@ -320,15 +315,33 @@ const FormPlanoContas: React.FC<FormPlanoContasProps> = ({ proprietarioId, conta
                     </FormControl>
                     <div className="space-y-1 leading-none">
                         <FormLabel>
-                            É uma Conta Bancária (Conta Corrente)
+                            É uma Conta Bancária (Conciliação)
                         </FormLabel>
                         <p className="text-sm text-muted-foreground">
-                            Usado para diferenciar contas bancárias de contas de caixa.
+                            Se marcada, esta conta será listada para Conciliação Bancária.
                         </p>
                     </div>
                 </FormItem>
             )}
         />
+        
+        {/* CAMPO: IS CONTA CAIXA/BANCO (SINCRONIZADO) */}
+        <div className={cn("flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4 bg-secondary/50 transition-opacity", isAnalitica ? 'opacity-100' : 'opacity-50 pointer-events-none')}>
+            <div className="space-y-1 leading-none">
+                <FormLabel className="font-bold">
+                    Conta de Saldo (Caixa/Banco)
+                </FormLabel>
+                <p className="text-sm text-muted-foreground">
+                    Esta flag é ativada automaticamente se for Caixa OU Banco.
+                </p>
+            </div>
+            <div className="ml-auto">
+                <Checkbox
+                    checked={isCaixa || isBanco}
+                    disabled
+                />
+            </div>
+        </div>
         
         {/* NOVO CAMPO: IS CONTA PATRIMONIAL */}
         <FormField
