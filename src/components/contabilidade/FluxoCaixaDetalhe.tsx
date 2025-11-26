@@ -245,7 +245,12 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
         // O tipo do lançamento de Resultado/DRE é o oposto do tipo do lançamento de Ativo/Caixa
         // Se o original era Entrada (D: Ativo, C: Receita/Saida), o estorno é (D: Receita/Entrada, C: Ativo/Saida)
         // O tipo do lançamento de Resultado/DRE deve ser o oposto do tipo do lançamento de Ativo/Caixa
-        const estornoResultadoTipo = estornoTipo === 'Entrada' ? 'Saida' : 'Entrada'; 
+        const estornoResultadoTipo = lancamento.tipo; // CORREÇÃO: O tipo do lançamento de Resultado é o mesmo do original (Entrada/Saida)
+        
+        // Se o original era Entrada (D: Ativo, C: Receita/Saida), o estorno é (D: Receita/Entrada, C: Ativo/Saida)
+        // O tipo do lançamento de Resultado/DRE deve ser o oposto do tipo do lançamento de Ativo/Caixa
+        const estornoResultadoTipoCorrigido = estornoTipo === 'Entrada' ? 'Saida' : 'Entrada'; 
+        
         const contaResultadoId = lancamento.conta_contabil_id; // Conta de Resultado original
         
         const estornoResultadoPayload = {
@@ -253,7 +258,7 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
             data_movimentacao: new Date().toISOString(),
             descricao: estornoDescricao,
             valor: valor,
-            tipo: estornoResultadoTipo, // Tipo oposto ao do Ativo (Entrada -> Saida, Saida -> Entrada)
+            tipo: estornoResultadoTipoCorrigido, // Tipo oposto ao do Ativo (Entrada -> Saida, Saida -> Entrada)
             conta_bancaria_id: null,
             conta_contabil_id: contaResultadoId,
             origem: 'estorno_direto',
@@ -270,13 +275,13 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
         if (resResultado.error) throw resResultado.error;
         
         showSuccess('Lançamento estornado com sucesso! Um novo registro de estorno foi criado.');
-        fetchLancamentos();
         
     } catch (error: any) {
         console.error('Erro ao estornar lançamento:', error);
         showError('Falha ao estornar lançamento: ' + error.message);
     } finally {
         setIsUndoing(false);
+        fetchLancamentos(); // GARANTINDO O RECALCULO
     }
   };
 
