@@ -75,8 +75,8 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
   const [mapeamentoContabil, setMapeamentoContabil] = useState<Record<string, string | null>>({});
   const [historicos, setHistoricos] = useState<Historico[]>([]);
   const [contasPatrimoniais, setContasPatrimoniais] = useState<PlanoContas[]>([]);
-  const [contasReceita, setContasReceita] = useState<PlanoContas[]>([]);
   const [loadingContasPatrimoniais, setLoadingContasPatrimoniais] = useState(true);
+  const [contasReceita, setContasReceita] = useState<PlanoContas[]>([]);
   const [loadingContasReceita, setLoadingContasReceita] = useState(true);
   const [isCreatingHistorico, setIsCreatingHistorico] = useState(false);
   const isEditing = !!contaInicial;
@@ -141,6 +141,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
         .eq('proprietario_id', ownerId)
         .eq('Analitica', 'Sim')
         .eq('is_conta_patrimonial', true)
+        .eq('is_a_receber', true) // NOVO FILTRO: Apenas contas marcadas como Contas a Receber
         .or(`Conta.like.${ativoCode}.%,Conta.like.${passivoCode}.%,Conta.like.${plCode}.%`)
         .order('Conta');
         
@@ -490,7 +491,7 @@ return (
 
             {contasPatrimoniais.length === 0 && !loadingContasPatrimoniais && (
               <p className="text-sm text-red-500">
-                Nenhuma conta Patrimonial marcada no Plano de Contas.
+                Nenhuma conta Patrimonial marcada como Contas a Receber no Plano de Contas.
               </p>
             )}
           </FormItem>
