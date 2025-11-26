@@ -4,10 +4,11 @@ import { LayoutDashboard, DollarSign, ArrowUpCircle, ArrowDownCircle, Banknote, 
 import React, { useMemo, useCallback, useState, useEffect } from 'react';
 import { useSessao } from '@/hooks/use-sessao';
 import { ClienteProfile, UsuarioProfile, AdminProfile, AdminUsuarioProfile } from '@/types/usuario';
-import { isPast, parseISO, format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useTicketNotifications } from '@/hooks/use-ticket-notifications';
-import { supabase } from '@/integrations/supabase/client'; // Importando supabase
+import { useOwnerBranding } from '@/hooks/use-owner-branding';
+import { useTheme } from '@/contexts/ThemeProvider';
 
 interface ItemMenu {
   nome: string;
@@ -46,6 +47,8 @@ const SECOES_MENU: MenuSection[] = [
         titulo: 'Financeiro',
         perfis: ['Admin', 'Cliente', 'Usuario'],
         itens: [
+            // ITEM MOVIDO E RENOMEADO
+            { nome: 'Saldos das Contas', caminho: '/bancos', icone: Banknote, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'bancos' },
             { nome: 'Fluxo de Caixa', caminho: '/relatorios/fluxo-caixa', icone: TrendingUp, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'bancos' },
             { nome: 'Contas a Pagar', caminho: '/contas-pagar', icone: ArrowDownCircle, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'contas_pagar' },
             { nome: 'Contas a Receber', caminho: '/contas-receber', icone: ArrowUpCircle, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'contas_receber' },
@@ -56,7 +59,6 @@ const SECOES_MENU: MenuSection[] = [
         titulo: 'Banco',
         perfis: ['Admin', 'Cliente', 'Usuario'],
         itens: [
-            { nome: 'Contas Saldo/Caixa', caminho: '/bancos', icone: Banknote, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'bancos' },
             { nome: 'Conciliação', caminho: '/conciliacao', icone: DollarSign, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'conciliacao' },
             { nome: 'Extratos Salvos', caminho: '/extratos', icone: Eye, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'conciliacao' }, // NOVO ITEM
         ]
