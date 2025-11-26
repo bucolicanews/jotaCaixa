@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Banknote, Filter, Search, Eye, Edit, Trash2 } from 'lucide-react';
+import { Loader2, Banknote, Filter, Search, Eye, Edit, Trash2, Printer } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
@@ -18,6 +18,14 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import ExtratoFormDialog from '@/components/ExtratoFormDialog';
 import { PlanoContas } from '@/types/plano-contas';
 import { useContabilConfig } from '@/hooks/use-contabil-config';
+import { DateRangePicker } from '@/components/DateRangePicker';
+import { DateRange } from 'react-day-picker';
+import { format, parseISO } from 'date-fns';
+import { usePrint } from '@/hooks/use-print';
+import ReactDOMServer from 'react-dom/server';
+import ExtratosPrint from '@/components/contabilidade/ExtratosPrint';
+import { useOwnerBranding } from '@/hooks/use-owner-branding';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 
 interface ExtratoRecord extends TransacaoExtrato {
     id: string;
@@ -29,6 +37,8 @@ interface ExtratoRecord extends TransacaoExtrato {
 const Extratos: React.FC = () => {
   const { usuario, carregando: carregandoSessao } = useSessao();
   const { configMap } = useContabilConfig();
+  const { printContent } = usePrint();
+  const { logoUrl, ownerName } = useOwnerBranding();
   
   const [extratos, setExtratos] = useState<ExtratoRecord[]>([]);
   const [contasContabeisResultado, setContasContabeisResultado] = useState<PlanoContas[]>([]);
@@ -40,6 +50,7 @@ const Extratos: React.FC = () => {
   const [filtroTexto, setFiltroTexto] = useState('');
   const filtroTextoDebounced = useDebounce(filtroTexto, 500);
   const [contasDisponiveis, setContasDisponiveis] = useState<{ id: string, nome: string }[]>([]);
+  const [filtroPeriodo, setFiltroPeriodo] = useState<DateRange | undefined>(undefined); // NOVO ESTADO
   
   // Edição
   const [extratoParaEditar, setExtratoParaEditar] = useState<ExtratoRecord | null>(null);
@@ -94,6 +105,14 @@ const Extratos: React.FC = () => {
         const termo = `%${filtroTextoDebounced}%`;
         query = query.or(`descricao.ilike.${termo},identificacao.ilike.${termo}`);
     }
+    
+    // NOVO FILTRO DE DATA
+    if (filtroPeriodo?.from) {
+        query = query.gte('data', format(filtroPeriodo.from, 'yyyy-MM-dd'));
+    }
+    if (filtroPeriodo?.to) {
+        query = query.lte('data', format(filtroPeriodo.to, 'yyyy-MM-dd'));
+    }
 
     const { data, error } = await query;
 
@@ -104,7 +123,7 @@ const Extratos: React.FC = () => {
       setExtratos(data as ExtratoRecord[]);
     }
     setCarregandoExtratos(false);
-  }, [ownerId, filtroContaId, filtroTextoDebounced]);
+  }, [ownerId, filtroContaId, filtroTextoDebounced, filtroPeriodo]);
 
   useEffect(() => {
     if (!carregandoSessao && ownerId) {
@@ -125,9 +144,6 @@ const Extratos: React.FC = () => {
     setIsDeleting(true);
     try {
         // 1. Deletar os lançamentos correspondentes na tabela 'lancamentos'
-        // Usamos a combinação de campos que são únicos para lançamentos de conciliação:
-        // proprietario_id, conta_bancaria_id, descricao, valor (absoluto) e origem='conciliacao_extrato'
-        
         const valorAbsoluto = Math.abs(extrato.valor);
         
         // Deleta o lançamento de Ativo/Caixa (que tem conta_bancaria_id)
@@ -178,6 +194,25 @@ const Extratos: React.FC = () => {
       setExtratoParaEditar(null);
       fetchExtratos();
   };
+  
+  const handlePrint = (orientation: 'portrait' | 'landscape') => {
+    if (extratos.length === 0) {
+        showError('Nenhum extrato para imprimir.');
+        return;
+    }
+    
+    const printComponent = (
+        <ExtratosPrint
+            data={extratos}
+            filtroPeriodo={filtroPeriodo}
+            logoUrl={logoUrl}
+            ownerName={ownerName}
+        />
+    );
+
+    const htmlContent = ReactDOMServer.renderToStaticMarkup(printComponent);
+    printContent(htmlContent, `Extratos - ${ownerName}`, orientation);
+  };
 
   if (carregandoSessao || carregandoExtratos) {
     return (
@@ -200,7 +235,9 @@ const Extratos: React.FC = () => {
       </h1>
       
       <Card className="mb-6">
-        <CardHeader className="pb-2"><CardTitle className="text-lg flex items-center"><Filter className="w-4 h-4 mr-2" /> Filtros</CardTitle></CardHeader>
+        <CardHeader className="pb-2">
+            <CardTitle className="text-lg flex items-center"><Filter className="w-4 h-4 mr-2" /> Filtros e Ações</CardTitle>
+        </CardHeader>
         <CardContent className="flex flex-col md:flex-row gap-4">
             <div className="relative w-full md:w-[300px]">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -223,6 +260,24 @@ const Extratos: React.FC = () => {
                     ))}
                 </SelectContent>
             </Select>
+            
+            <DateRangePicker date={filtroPeriodo} setDate={setFiltroPeriodo} />
+            
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <Button variant="outline" className="w-full md:w-auto" disabled={extratos.length === 0}>
+                        <Printer className="w-4 h-4 mr-2" /> Imprimir
+                    </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => handlePrint('portrait')}>
+                        Imprimir (Retrato)
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handlePrint('landscape')}>
+                        Imprimir (Paisagem)
+                    </DropdownMenuItem>
+                </DropdownMenuContent>
+            </DropdownMenu>
         </CardContent>
       </Card>
 
