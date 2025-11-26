@@ -677,28 +677,6 @@ export function useConciliacao(): ConciliacaoHook {
     }, [contaSelecionadaId, proprietarioDaConfiguracao, file, fileHash, transacoes, usuario?.id, fetchHistorico, handleReset, contaSelecionada?.plano_contas?.id]);
 
 
-    const handleDeleteHistorico = useCallback(async () => {
-        if (!usuario?.id) return;
-        
-        setIsDeletingHistorico(true);
-        
-        try {
-            const { error } = await supabase
-                .from('conciliacoes')
-                .delete()
-                .eq('empresa_id', usuario.id);
-                
-            if (error) throw error;
-            
-            showSuccess(`Histórico de ${historico.length} conciliações removido com sucesso.`);
-            fetchHistorico();
-        } catch (error: any) {
-            showError('Falha ao limpar histórico: ' + error.message);
-        } finally {
-            setIsDeletingHistorico(false);
-        }
-    }, [usuario?.id, historico.length, fetchHistorico]);
-
     return {
         // State
         loading: loading || loadingContas,
