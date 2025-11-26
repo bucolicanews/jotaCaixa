@@ -135,6 +135,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
         .eq('proprietario_id', ownerId)
         .eq('Analitica', 'Sim')
         .eq('is_conta_patrimonial', true)
+        .eq('is_a_receber', true) // NOVO FILTRO: Apenas contas marcadas como Contas a Receber
         .or(`Conta.like.${ativoCode}.%,Conta.like.${passivoCode}.%,Conta.like.${plCode}.%`)
         .order('Conta');
         
@@ -148,7 +149,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
   }, [ownerId, configMap.Ativo, configMap.Passivo, configMap['Patrimonio Liquido']]);
   
   const fetchConfigAndDefaults = useCallback(async () => {
-    if (!isAdmin || !ownerId) return;
+    if (!parcela || !ownerId) return;
     
     // 1. Buscar Histórico Padrão
     const { data: historicoData } = await supabase
@@ -166,31 +167,30 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
     const { data: contaSintetica } = await supabase
         .from(tabelaContasReceber)
         .select('id_conta_patrimonial')
-        .eq('id', parcela!.conta_receber_id)
+        .eq('id', parcela.conta_receber_id)
         .single();
         
+    // PRÉ-SELECIONA A CONTA PATRIMONIAL DA CONTA SINTÉTICA
     form.setValue('conta_patrimonial_id', contaSintetica?.id_conta_patrimonial || null);
     
-  }, [isAdmin, ownerId, form, tabelaContasReceber, parcela]);
+    // 3. Pré-seleciona a primeira conta de destino (Caixa/Banco)
+    if (contasDestino.length > 0) {
+        setValue('conta_id', contasDestino[0].id);
+    }
+    
+  }, [parcela, ownerId, form, tabelaContasReceber, contasDestino, setValue]);
 
   useEffect(() => {
       if (open) {
           refetchSaldos();
           fetchHistoricos();
           fetchContasPatrimoniais();
-          if (isAdmin) {
+          // Chama a função de defaults APENAS se a parcela estiver definida
+          if (parcela) {
               fetchConfigAndDefaults();
           }
       }
-  }, [open, refetchSaldos, fetchHistoricos, fetchContasPatrimoniais, fetchConfigAndDefaults, isAdmin]);
-
-  useEffect(() => {
-    if (open && !loadingContas && contasDestino.length > 0) {
-        if (!form.getValues('conta_id')) {
-            setValue('conta_id', contasDestino[0].id);
-        }
-    }
-  }, [open, loadingContas, contasDestino, setValue, form]);
+  }, [open, refetchSaldos, fetchHistoricos, fetchContasPatrimoniais, fetchConfigAndDefaults, parcela]);
 
 
   const valorRecebido = form.watch('valor_recebido');
@@ -422,7 +422,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <FormField control={form.control} name="valor_recebido" render={({ field }) => (<FormItem><FormLabel>Valor Recebido</FormLabel><FormControl><Input type="number" step="0.01" {...field} /></FormControl><FormMessage /></FormItem>)} />
-              <FormField control={form.control} name="data_pagamento" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Data</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "dd/MM/yy") : <span>Data</span>}<CalendarIcon className="ml-auto h-4 w-4 opacity-50" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus locale={ptBR} /></PopoverContent></Popover><FormMessage /></FormItem>)} />
+              <FormField control={form.control} name="data_pagamento" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Data</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "dd/MM/yy", { locale: ptBR }) : <span>Data</span>}<CalendarIcon className="ml-auto h-4 w-4 opacity-50" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus locale={ptBR} /></PopoverContent></Popover><FormMessage /></FormItem>)} />
             </div>
             
             <div className="grid grid-cols-2 gap-4">
@@ -461,16 +461,16 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
                 render={({ field }) => (
                     <FormItem>
                         <FormLabel>Conta Patrimonial (Direito a Receber)</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value || undefined} disabled={loadingContasPatrimoniais}>
+                        <Select onValueChange={field.onChange} value={field.value || "0"} disabled={loadingContasPatrimoniais}>
                             <FormControl>
                                 <SelectTrigger>
                                     <SelectValue placeholder={loadingContasPatrimoniais ? "Carregando Contas..." : `Selecione a conta de Ativo (${configMap.Ativo}.x.x)`} />
                                 </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                                <SelectItem value={null as any}>Nenhum (Não Mapear)</SelectItem>
+                                <SelectItem value="0">Nenhum (Não Mapear)</SelectItem>
                                 {contasPatrimoniais.map(c => (
-                                    <SelectItem key={c.id} value={c.id}>
+                                    <SelectItem key={c.id} value={String(c.id)}>
                                         {c.Conta} - {c.Descricao}
                                     </SelectItem>
                                 ))}
@@ -479,7 +479,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
                         <FormMessage />
                         {contasPatrimoniais.length === 0 && !loadingContasPatrimoniais && (
                             <p className="text-sm text-red-500">
-                                Nenhuma conta Patrimonial (Ativo) marcada no Plano de Contas.
+                                Nenhuma conta Patrimonial marcada como Contas a Receber no Plano de Contas.
                             </p>
                         )}
                     </FormItem>
@@ -495,16 +495,16 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
                         render={({ field }) => (
                             <FormItem>
                                 <FormLabel>Histórico do Recebimento (Opcional)</FormLabel>
-                                <Select onValueChange={field.onChange} value={field.value || undefined} disabled={loadingHistoricos}>
+                                <Select onValueChange={field.onChange} value={field.value || "0"} disabled={loadingHistoricos}>
                                     <FormControl>
                                         <SelectTrigger>
                                             <SelectValue placeholder={loadingHistoricos ? "Carregando Históricos..." : "Selecione o histórico"} />
                                         </SelectTrigger>
                                     </FormControl>
                                     <SelectContent>
-                                        <SelectItem value={null as any}>Nenhum</SelectItem>
+                                        <SelectItem value="0">Nenhum</SelectItem>
                                         {historicos.map(h => (
-                                            <SelectItem key={h.id} value={h.id}>
+                                            <SelectItem key={h.id} value={String(h.id)}>
                                                 {h.codigo && <span className="font-mono text-xs mr-2">[{h.codigo}]</span>}
                                                 {h.descricao}
                                             </SelectItem>
