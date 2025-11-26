@@ -126,7 +126,8 @@ const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveC
       valor: Math.abs(lancamentoInicial?.valor || 0),
       conta_bancaria_id: lancamentoInicial?.conta_bancaria_id || undefined,
       historico_id: lancamentoInicial?.historico_id || null,
-      conta_resultado_id: lancamentoInicial?.conta_contabil_id || undefined,
+      // CORREÇÃO AQUI: Usa conta_contabil_id do lançamento inicial (que é o ID da conta DRE)
+      conta_resultado_id: lancamentoInicial?.conta_contabil_id || undefined, 
     },
   });
   
