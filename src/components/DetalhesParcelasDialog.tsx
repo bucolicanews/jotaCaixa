@@ -214,7 +214,7 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
             .in('id', contaIds);
             
         const saldoContaMap = (saldosData || []).reduce((acc, s) => {
-            acc[s.id] = s.conta_contabil_id;
+            if (s.conta_contabil_id) acc[s.id] = s.conta_contabil_id;
             return acc;
         }, {} as Record<string, string | null>);
         

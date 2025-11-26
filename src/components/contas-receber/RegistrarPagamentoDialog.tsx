@@ -56,7 +56,7 @@ type FormValues = z.infer<typeof formSchema>;
 interface RegistrarPagamentoDialogProps {
   parcela: ParcelaParaPagamento | null;
   open: boolean;
-  onOpenChange: (open: (open: boolean) => void) => void;
+  onOpenChange: (open: boolean) => void;
   onSaveComplete: () => void;
 }
 
@@ -69,6 +69,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
   const [loadingHistoricos, setLoadingHistoricos] = useState(true);
   const [contasPatrimoniais, setContasPatrimoniais] = useState<PlanoContas[]>([]);
   const [loadingContasPatrimoniais, setLoadingContasPatrimoniais] = useState(true);
+  const [isInitialized, setIsInitialized] = useState(false);
   
   // Determina as tabelas de destino
   const tabelaRecebimentos = isAdmin ? 'admin_recebimentos' : 'recebimentos';
@@ -87,7 +88,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      valor_recebido: saldoDevedor,
+      valor_recebido: 0,
       data_pagamento: new Date(),
       forma_pagamento: 'Pix',
       conta_id: null,
@@ -100,8 +101,8 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
     },
   });
   
-  // Desestruturando setValue para usar nas funções de callback
-  const { setValue } = form;
+  // Desestruturando setValue e reset para usar nas funções de callback
+  const { setValue, reset } = form;
 
   const fetchHistoricos = useCallback(async () => {
     if (!ownerId) return;
@@ -161,36 +162,53 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
         .single();
         
     const defaultHistoricoId = historicoData?.historico_id || null;
-    form.setValue('historico_id', defaultHistoricoId);
     
     // 2. Buscar Conta Patrimonial da Conta Sintética (Direito a Receber)
+    const tabelaContasReceber = isAdmin ? 'admin_contas_receber' : 'contas_receber';
     const { data: contaSintetica } = await supabase
         .from(tabelaContasReceber)
         .select('id_conta_patrimonial')
         .eq('id', parcela.conta_receber_id)
         .single();
         
-    // PRÉ-SELECIONA A CONTA PATRIMONIAL DA CONTA SINTÉTICA
-    form.setValue('conta_patrimonial_id', contaSintetica?.id_conta_patrimonial || null);
+    const contaPatrimonialId = contaSintetica?.id_conta_patrimonial || null;
     
-    // 3. Pré-seleciona a primeira conta de destino (Caixa/Banco)
-    if (contasDestino.length > 0) {
-        setValue('conta_id', contasDestino[0].id);
-    }
+    // 3. Resetar o formulário com os valores iniciais
+    reset({
+        valor_recebido: saldoDevedor,
+        data_pagamento: new Date(),
+        forma_pagamento: 'Pix',
+        conta_id: contasDestino.length > 0 ? contasDestino[0].id : null,
+        acao_saldo_restante: 'reprogramar',
+        numero_novas_parcelas: 2,
+        intervalo_dias_novas_parcelas: 30,
+        historico_id: defaultHistoricoId,
+        salvar_como_padrao: false,
+        conta_patrimonial_id: contaPatrimonialId, // PRÉ-SELECIONA A CONTA PATRIMONIAL
+    });
     
-  }, [parcela, ownerId, form, tabelaContasReceber, contasDestino, setValue]);
+    setIsInitialized(true);
+    
+  }, [parcela, ownerId, reset, tabelaContasReceber, contasDestino, saldoDevedor, isAdmin]);
 
   useEffect(() => {
-      if (open) {
+      if (open && !isInitialized) {
+          // 1. Força o refetch dos dados externos
           refetchSaldos();
           fetchHistoricos();
           fetchContasPatrimoniais();
-          // Chama a função de defaults APENAS se a parcela estiver definida
+          
+          // 2. Inicializa o formulário APENAS quando a parcela estiver disponível
           if (parcela) {
               fetchConfigAndDefaults();
           }
       }
-  }, [open, refetchSaldos, fetchHistoricos, fetchContasPatrimoniais, fetchConfigAndDefaults, parcela]);
+      
+      // Limpa o estado de inicialização ao fechar
+      if (!open) {
+          setIsInitialized(false);
+      }
+  }, [open, isInitialized, refetchSaldos, fetchHistoricos, fetchContasPatrimoniais, fetchConfigAndDefaults, parcela]);
 
 
   const valorRecebido = form.watch('valor_recebido');
@@ -430,13 +448,14 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
                 <FormField control={form.control} name="conta_id" render={({ field }) => (
                     <FormItem>
                         <FormLabel>Conta/Caixa de Destino (Ativo)</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value || undefined} disabled={loadingContas}>
+                        <Select onValueChange={field.onChange} value={field.value || "0"} disabled={loadingContas}>
                             <FormControl>
                                 <SelectTrigger>
                                     <SelectValue placeholder={loadingContas ? "Carregando Contas..." : "Selecione a conta"} />
                                 </SelectTrigger>
                             </FormControl>
                             <SelectContent>
+                                <SelectItem value="0" disabled>Selecione a conta</SelectItem>
                                 {contasDestino.map(c => (
                                     <SelectItem key={c.id} value={c.id}>
                                         {c.nome} ({c.tipo_saldo})
@@ -542,7 +561,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
               <div className="space-y-4 pt-4 border-t">
                 <h3 className="font-semibold text-destructive">Saldo restante: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(saldoRestante)}</h3>
                 <FormField control={form.control} name="acao_saldo_restante" render={({ field }) => (
-                  <FormItem><FormLabel>O que fazer com o saldo restante?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="space-y-2"><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="desconto" /></FormControl><FormLabel className="font-normal">Conceder Desconto (Perdoar)</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="reprogramar" /></FormControl><FormLabel className="font-normal">Reprogramar Saldo</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="parcelar" /></FormControl><FormLabel className="font-normal">Parcelar Saldo</FormLabel></FormItem></RadioGroup></FormControl></FormItem>
+                  <FormItem><FormLabel>O que fazer com o saldo restante?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="space-y-2"><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="desconto" /></FormControl><FormLabel className="font-normal">Conceder Desconto (Perdoar)</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="reprogramar" /></FormControl><FormLabel className="font-normal">Reprogramar Saldo</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="parcelar" /></FormControl><FormLabel className="font-normal">Parcelar Saldo</FormLabel></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>
                 )} />
                 {acaoSaldoRestante === 'reprogramar' && <FormField control={form.control} name="nova_data_vencimento" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Nova Data de Vencimento</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "PPP", { locale: ptBR }) : <span>Escolha a data</span>}<CalendarIcon className="ml-auto h-4 w-4 opacity-50" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus locale={ptBR} /></PopoverContent></Popover><FormMessage /></FormItem>)} />}
                 {acaoSaldoRestante === 'parcelar' && (
