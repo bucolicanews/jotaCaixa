@@ -20,8 +20,8 @@ import { Separator } from "@/components/ui/separator";
 const formatCurrency = (value: number) =>
     value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-// Nome do bucket de armazenamento para comprovantes (USANDO UM BUCKET EXISTENTE)
-const COMPROVANTE_BUCKET = 'documentos-admissao'; 
+// Nome do bucket de armazenamento para comprovantes
+const COMPROVANTE_BUCKET = 'comprovantes-financeiros'; 
 
 interface ParcelaParaPagamento extends AdminParcelaPagar {
     fornecedor: string;
@@ -90,7 +90,7 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
         setIsUploading(true);
         
         const fileExt = file.name.split('.').pop();
-        // Usando uma subpasta 'comprovantes-cp' dentro do bucket existente
+        // Usando uma subpasta 'comprovantes-cp' dentro do bucket
         const fileName = `${adminId}/${parcelaId}/comprovantes-cp/${Date.now()}.${fileExt}`;
         
         try {
