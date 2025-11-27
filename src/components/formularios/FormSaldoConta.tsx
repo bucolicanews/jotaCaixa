@@ -21,7 +21,7 @@ const formSchema = z.object({
     required_error: 'O tipo de saldo é obrigatório.',
   }),
   conta_contabil_id: z.string().uuid('Selecione uma conta contábil válida.').nullable(),
-  saldo_inicial: z.coerce.number().optional().default(0),
+  // Removendo saldo_inicial do esquema de validação, mas mantendo-o no defaultValues para o payload
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -78,7 +78,7 @@ const FormSaldoConta: React.FC<FormSaldoContaProps> = ({ contaInicial, onSaveCom
       nome: contaInicial?.nome || '',
       tipo_saldo: contaInicial?.tipo_saldo === 'Receita' || contaInicial?.tipo_saldo === 'Despesa' ? 'Debito' : contaInicial?.tipo_saldo || 'Credito', // Fallback para Debito/Credito
       conta_contabil_id: contaInicial?.conta_contabil_id || null,
-      saldo_inicial: contaInicial?.saldo_inicial || 0,
+      // Removido saldo_inicial do defaultValues do RHF, mas o valor será forçado no payload
     },
   });
 
@@ -92,7 +92,8 @@ const FormSaldoConta: React.FC<FormSaldoContaProps> = ({ contaInicial, onSaveCom
       proprietario_id: empresaId,
       nome: values.nome,
       tipo_saldo: values.tipo_saldo,
-      saldo_inicial: values.saldo_inicial,
+      // CRÍTICO: Força saldo_inicial para 0 na criação, ou mantém o valor existente na edição
+      saldo_inicial: isEditing ? contaInicial?.saldo_inicial : 0, 
       conta_contabil_id: values.conta_contabil_id,
     };
 
@@ -195,25 +196,7 @@ const FormSaldoConta: React.FC<FormSaldoContaProps> = ({ contaInicial, onSaveCom
           )}
         />
         
-        {/* O campo Saldo Inicial só é exibido se NÃO estiver editando */}
-        {!isEditing && (
-            <FormField
-              control={form.control}
-              name="saldo_inicial"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Saldo Inicial (R$)</FormLabel>
-                  <FormControl>
-                    <Input type="number" step="0.01" placeholder="0.00" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                  <p className="text-xs text-muted-foreground">
-                      Este é o saldo de partida. O saldo atual será calculado a partir deste valor mais os lançamentos.
-                  </p>
-                </FormItem>
-              )}
-            />
-        )}
+        {/* Saldo Inicial removido do JSX */}
         
         <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
           {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
