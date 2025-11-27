@@ -227,7 +227,30 @@ const ContratoAcoesDialog: React.FC<ContratoAcoesDialogProps> = ({ contrato, ope
     }
     // --- Fim Lógica de Injeção de Assinaturas ---
     
-    printContent(finalContent, `Contrato Assinatura - ${contrato.id}`);
+    // --- NOVO: Injeção da Logo no Cabeçalho de Impressão ---
+    const logoUrl = contrato.assinatura_proprietario_url;
+    const ownerName = contrato.assinatura_proprietario_nome || 'Empresa Contratante';
+    
+    let headerHtml = '';
+    if (logoUrl) {
+        headerHtml = `
+            <div class="print-header" style="display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 15px;">
+                <img src="${logoUrl}" alt="${ownerName}" class="print-logo" style="max-height: 50px; max-width: 150px; object-fit: contain;" />
+                <h1 style="font-size: 16px; font-weight: bold; margin: 0; text-align: right;">${contrato.valores_tags_preenchidos?.titulo || 'Contrato'}</h1>
+            </div>
+        `;
+    }
+    
+    // Envolve o conteúdo final com o cabeçalho
+    const finalPrintHtml = `
+        ${headerHtml}
+        <div style="padding-top: 10px;">
+            ${finalContent}
+        </div>
+    `;
+    // --- FIM NOVO ---
+    
+    printContent(finalPrintHtml, `Contrato Assinatura - ${contrato.id}`);
   };
   
   const handleBlockContract = async () => {
