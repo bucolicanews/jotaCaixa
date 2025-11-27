@@ -106,8 +106,15 @@ const RazaoDetalhe: React.FC<RazaoDetalheProps> = ({ filtroPeriodo }) => {
             <div className="space-y-8">
                 {contasFiltradas.map(conta => {
                     const lancamentos = lancamentosPorConta[conta.id] || [];
-                    const saldoInicial = lancamentos.length > 0 ? lancamentos[0].saldo_anterior : 0;
-                    const saldoFinal = lancamentos.length > 0 ? lancamentos[lancamentos.length - 1].saldo_acumulado : saldoInicial;
+                    
+                    // CORREÇÃO APLICADA AQUI: Se não houver lançamentos no período, o saldo inicial é o saldo final do cálculo.
+                    const saldoInicial = lancamentos.length > 0 
+                        ? lancamentos[0].saldo_anterior 
+                        : (lancamentos.length === 0 && contas.find(c => c.id === conta.id)?.saldo_final) || 0;
+                        
+                    const saldoFinal = lancamentos.length > 0 
+                        ? lancamentos[lancamentos.length - 1].saldo_acumulado 
+                        : saldoInicial;
                     
                     return (
                         <Card key={conta.id} className="border-l-4 border-primary/50">
@@ -157,7 +164,7 @@ const RazaoDetalhe: React.FC<RazaoDetalheProps> = ({ filtroPeriodo }) => {
                                                 <TableCell className={cn("text-right text-lg", saldoFinal < 0 ? 'text-red-700' : 'text-blue-700')}>
                                                     {formatCurrency(saldoFinal)}
                                                 </TableCell>
-                                            </TableRow>
+                                            </TableCell>
                                         </TableBody>
                                     </Table>
                                 </div>
