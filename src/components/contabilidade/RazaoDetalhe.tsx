@@ -107,10 +107,11 @@ const RazaoDetalhe: React.FC<RazaoDetalheProps> = ({ filtroPeriodo }) => {
                 {contasFiltradas.map(conta => {
                     const lancamentos = lancamentosPorConta[conta.id] || [];
                     
-                    // CORREÇÃO APLICADA AQUI: Se não houver lançamentos no período, o saldo inicial é o saldo final do cálculo.
+                    // O saldo inicial é o saldo anterior do primeiro lançamento, ou 0 se não houver lançamentos.
+                    // Se não houver lançamentos, precisamos buscar o saldo acumulado anterior (que é o saldo final do cálculo no hook).
                     const saldoInicial = lancamentos.length > 0 
                         ? lancamentos[0].saldo_anterior 
-                        : (lancamentos.length === 0 && contas.find(c => c.id === conta.id)?.saldo_final) || 0;
+                        : (contas.find(c => c.id === conta.id)?.saldo_final) || 0;
                         
                     const saldoFinal = lancamentos.length > 0 
                         ? lancamentos[lancamentos.length - 1].saldo_acumulado 
@@ -157,6 +158,16 @@ const RazaoDetalhe: React.FC<RazaoDetalheProps> = ({ filtroPeriodo }) => {
                                                     </TableCell>
                                                 </TableRow>
                                             ))}
+                                            
+                                            {/* Linha de Totais do Período */}
+                                            {lancamentos.length > 0 && (
+                                                <TableRow className="bg-secondary/50 font-bold border-t-2">
+                                                    <TableCell colSpan={3}>TOTAIS DO PERÍODO</TableCell>
+                                                    <TableCell className="text-right text-red-700">{formatCurrency(lancamentos.filter(l => l.tipo === 'Entrada').reduce((sum, l) => sum + l.valor, 0))}</TableCell>
+                                                    <TableCell className="text-right text-green-700">{formatCurrency(lancamentos.filter(l => l.tipo === 'Saida').reduce((sum, l) => sum + l.valor, 0))}</TableCell>
+                                                    <TableCell className="text-right"></TableCell>
+                                                </TableRow>
+                                            )}
                                             
                                             {/* Linha de Saldo Final */}
                                             <TableRow className="bg-primary/20 font-bold border-t-2 border-primary">
