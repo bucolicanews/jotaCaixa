@@ -52,21 +52,25 @@ export const useRazao = (filtroPeriodo: DateRange | undefined): RazaoHook => {
   // 1. Função para determinar a natureza da conta (Devedora/Credora)
   const getNatureza = useCallback((conta: PlanoContas): 'Devedora' | 'Credora' => {
     const prefix = conta.Conta.split('.')[0];
+    // Ativo (1) é Devedora. Passivo (2), PL (3), Receita (4), Custo (5), Despesa (6) são Credoras.
     return prefix === (configMap.Ativo || '1') ? 'Devedora' : 'Credora';
   }, [configMap]);
   
   // 2. Função para calcular o Saldo Inicial (acumulado antes do período)
   const calcularSaldoInicial = useCallback((conta: PlanoContas, lancamentosAnteriores: Lancamento[], saldosIniciais: SaldoInicialMap) => {
-    let saldo = saldosIniciais[conta.id] || 0;
+    // Saldo inicial da conta (apenas se for conta de saldo/caixa)
+    let saldo = saldosIniciais[conta.id] || 0; 
     const natureza = getNatureza(conta);
     
     for (const lancamento of lancamentosAnteriores) {
         const valor = Math.abs(parseFloat(lancamento.valor));
         
         if (natureza === 'Devedora') {
+            // Devedora (Ativo): Entrada (+) / Saída (-)
             if (lancamento.tipo === 'Entrada') saldo += valor;
             else if (lancamento.tipo === 'Saida') saldo -= valor;
-        } else { // Credora
+        } else { 
+            // Credora (Passivo, PL, Resultado): Entrada (-) / Saída (+)
             if (lancamento.tipo === 'Entrada') saldo -= valor;
             else if (lancamento.tipo === 'Saida') saldo += valor;
         }
@@ -114,7 +118,8 @@ export const useRazao = (filtroPeriodo: DateRange | undefined): RazaoHook => {
             } as LancamentoRazao);
         }
         
-        if (lancamentosRazao.length > 0 || saldoAcumulado !== 0) {
+        // Inclui a conta se houver movimento no período OU se o saldo inicial/final for diferente de zero
+        if (lancamentosRazao.length > 0 || Math.abs(saldoAcumulado) > 0.01) {
             lancamentosPorContaMap[contaId] = lancamentosRazao;
             contasRazao.push({ ...conta, natureza_contabil: natureza });
         }
@@ -134,9 +139,10 @@ export const useRazao = (filtroPeriodo: DateRange | undefined): RazaoHook => {
     const dataInicio = filtroPeriodo.from;
     const dataFim = filtroPeriodo.to;
     
+    // Datas formatadas para o banco (meio-dia UTC para evitar problemas de fuso)
     const startOfPeriod = format(dataInicio, 'yyyy-MM-dd') + 'T00:00:00Z';
     const endOfPeriod = format(dataFim, 'yyyy-MM-dd') + 'T23:59:59Z';
-    const beforePeriod = format(dataInicio, 'yyyy-MM-dd') + 'T00:00:00Z';
+    const beforePeriod = format(dataInicio, 'yyyy-MM-dd') + 'T00:00:00Z'; // Lançamentos antes do período
 
     // 1. Buscar Plano de Contas (apenas analíticas)
     const { data: contasData, error: contasError } = await supabase
