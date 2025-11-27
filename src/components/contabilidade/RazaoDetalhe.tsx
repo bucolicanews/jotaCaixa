@@ -164,7 +164,7 @@ const RazaoDetalhe: React.FC<RazaoDetalheProps> = ({ filtroPeriodo }) => {
                                                 <TableCell className={cn("text-right text-lg", saldoFinal < 0 ? 'text-red-700' : 'text-blue-700')}>
                                                     {formatCurrency(saldoFinal)}
                                                 </TableCell>
-                                            </TableCell>
+                                            </TableRow>
                                         </TableBody>
                                     </Table>
                                 </div>
