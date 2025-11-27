@@ -70,6 +70,28 @@ export function sanitizeConteudo(conteudo: string | null | undefined): string {
 }
 
 /**
+ * Remove todas as tags HTML de uma string, preservando as quebras de linha.
+ * @param html O conteúdo HTML gerado pelo editor WYSIWYG.
+ * @returns O texto puro.
+ */
+export function stripHtmlTags(html: string | null | undefined): string {
+    if (!html) return "";
+
+    // 1. Substitui <br> e </p> por quebras de linha (\n)
+    let text = html.replace(/<br\s*\/?>/gi, "\n");
+    text = text.replace(/<\/p>/gi, "\n");
+    
+    // 2. Remove todas as outras tags HTML
+    text = text.replace(/<[^>]*>/g, '');
+    
+    // 3. Remove múltiplos espaços em branco e quebras de linha vazias
+    text = text.replace(/&nbsp;/g, ' ');
+    text = text.replace(/\n\s*\n/g, '\n\n');
+    
+    return text.trim();
+}
+
+/**
  * Calcula um hash simples do conteúdo de dados de um CSV (ignorando o cabeçalho).
  * Usado para verificar se o mesmo arquivo foi importado duas vezes.
  */

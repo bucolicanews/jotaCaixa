@@ -18,7 +18,7 @@ import ContratoPreviewDialog from '../contratos/ContratoPreviewDialog';
 import { TAGS_PADRAO } from '@/config/contrato-tags-padrao';
 import { cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { sanitizeConteudo } from '@/utils/formatters';
+import { sanitizeConteudo, stripHtmlTags } from '@/utils/formatters';
 import RichTextEditor from '@/components/ui/RichTextEditor'; // Importando o editor
 
 // Extensão local para ContratoModelo
@@ -98,10 +98,16 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
         return;
     }
     
+    let finalContent = values.conteudo_template;
+    
+    // CRÍTICO: Se o tipo for 'texto', removemos todas as tags HTML antes de salvar
+    if (values.tipo_conteudo === 'texto') {
+        finalContent = stripHtmlTags(finalContent);
+    }
+    
     const dataToSave = {
       titulo: values.titulo,
-      // Se for HTML, o conteúdo é salvo como código. Se for texto, é salvo como HTML gerado pelo editor.
-      conteudo_template: values.conteudo_template, 
+      conteudo_template: finalContent, 
       tipo_conteudo: values.tipo_conteudo,
       empresa_id: ownerId,
     };
@@ -138,6 +144,11 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
           const regex = new RegExp(tag.nome_tag, 'g');
           previewContent = previewContent.replace(regex, `[${tag.descricao}]`);
       });
+      
+      // Se for texto simples, precisamos renderizar o texto puro na prévia
+      if (tipoConteudoWatch === 'texto') {
+          previewContent = stripHtmlTags(previewContent);
+      }
       
       setConteudoPreview(previewContent);
       setPreviewTitle(form.getValues('titulo'));
@@ -219,7 +230,7 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Selecione o formato" />
-                        </SelectTrigger>
+                        </Trigger>
                       </FormControl>
                       <SelectContent>
                         <SelectItem value="html">HTML (Edição de Código)</SelectItem>
