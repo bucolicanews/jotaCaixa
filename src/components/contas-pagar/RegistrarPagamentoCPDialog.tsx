@@ -17,12 +17,13 @@ import { showError, showSuccess } from '@/utils/toast';
 import { useSessao } from '@/hooks/use-sessao';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { AdminParcelaPagar } from '@/types/contas-pagar';
-import useSaldoContaCalculado from '@/hooks/use-saldo-conta-calculado';
+import useSaldoContaCalculado, { SaldoCalculado } from '@/hooks/use-saldo-conta-calculado';
 import { Separator } from '../ui/separator';
 import { Historico } from '@/types/historico';
 import { Checkbox } from '../ui/checkbox';
-import { PlanoContas } from '@/types/plano-contas'; // Importando PlanoContas
-import { useContabilConfig } from '@/hooks/use-contabil-config'; // Importando useContabilConfig
+import { PlanoContas } from '@/types/plano-contas';
+import { useContabilConfig } from '@/hooks/use-contabil-config';
+import FormExtratoManualCP from './FormExtratoManualCP'; // NOVO IMPORT
 
 interface ParcelaParaPagamento extends AdminParcelaPagar {
   fornecedor: string;
@@ -60,21 +61,24 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
   
   const [historicos, setHistoricos] = useState<Historico[]>([]);
   const [loadingHistoricos, setLoadingHistoricos] = useState(true);
-  const [historicoPadraoId, setHistoricoPadraoId] = useState<string | null>(null);
   
-  const [contasPatrimoniais, setContasPatrimoniais] = useState<PlanoContas[]>([]); // NOVO ESTADO
-  const [loadingContasPatrimoniais, setLoadingContasPatrimoniais] = useState(true); // NOVO ESTADO
+  const [contasPatrimoniais, setContasPatrimoniais] = useState<PlanoContas[]>([]);
+  const [loadingContasPatrimoniais, setLoadingContasPatrimoniais] = useState(true);
   
   const [mapeamentoContabil, setMapeamentoContabil] = useState<Record<string, string | null>>({});
   const [isInitialized, setIsInitialized] = useState(false);
   
+  const [extratoManualDialog, setExtratoManualDialog] = useState(false); // NOVO ESTADO
+  const [pendingPaymentData, setPendingPaymentData] = useState<FormValues | null>(null); // NOVO ESTADO
+
   const tabelaPagamentos = 'admin_pagamentos';
   const tabelaParcelas = 'admin_parcelas_pagar';
-  const tabelaContasPagar = 'admin_contas_pagar'; // Adicionado
+  const tabelaContasPagar = 'admin_contas_pagar';
   
   const adminId = usuario?.id;
 
-  const { contas: contasOrigem, carregando: loadingContas, refetch: refetchSaldos } = useSaldoContaCalculado('todos', 'todos', '', 'bancos');
+  // CORREÇÃO: Usando isBancoOnly=false para buscar todas as contas de saldo (Caixa e Banco)
+  const { contas: contasOrigem, carregando: loadingContas, refetch: refetchSaldos } = useSaldoContaCalculado('todos', 'todos', '', 'bancos', false);
 
   const saldoDevedor = parcela ? parcela.valor_parcela - (parcela.valor_pago || 0) : 0;
 
@@ -86,7 +90,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
       pagamentos: [],
       historico_id: null,
       salvar_como_padrao: false,
-      conta_patrimonial_id: null, // NOVO DEFAULT
+      conta_patrimonial_id: null,
     },
   });
   
@@ -142,19 +146,13 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
     if (!adminId) return;
     setLoadingContasPatrimoniais(true);
     
-    const ativoCode = configMap.Ativo || '1';
-    const passivoCode = configMap.Passivo || '2';
-    const plCode = configMap['Patrimonio Liquido'] || '3';
-    
-    // Busca contas Patrimoniais (Ativo, Passivo, PL)
     const { data, error } = await supabase
         .from('plano_contas')
         .select('id, Conta, Descricao')
         .eq('proprietario_id', adminId)
         .eq('Analitica', 'Sim')
         .eq('is_conta_patrimonial', true)
-        .eq('is_a_pagar', true) // FILTRO CRÍTICO: Apenas contas marcadas como Contas a Pagar
-        .or(`Conta.like.${ativoCode}.%,Conta.like.${passivoCode}.%,Conta.like.${plCode}.%`)
+        .eq('is_a_pagar', true)
         .order('Conta');
         
     if (error) {
@@ -164,7 +162,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
         setContasPatrimoniais(data as PlanoContas[]);
     }
     setLoadingContasPatrimoniais(false);
-  }, [adminId, configMap.Ativo, configMap.Passivo, configMap['Patrimonio Liquido']]);
+  }, [adminId]);
   
   const fetchHistoricoPadrao = useCallback(async () => {
     if (!isAdmin || !adminId) return;
@@ -173,7 +171,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
         .from('configuracao_historico_padrao')
         .select('historico_id')
         .eq('proprietario_id', adminId)
-        .eq('tipo_registro', 'pagamento_padrao') // NOVO TIPO DE REGISTRO
+        .eq('tipo_registro', 'pagamento_padrao')
         .limit(1)
         .single();
         
@@ -191,10 +189,8 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
           return;
       }
       
-      // Se já estiver inicializado, não faz nada
       if (isInitialized) return;
       
-      // 1. Busca todos os dados necessários em paralelo
       const initializeData = async () => {
           refetchSaldos();
           fetchHistoricos();
@@ -208,20 +204,15 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
               defaultHistoricoId = await fetchHistoricoPadrao();
               setHistoricoPadraoId(defaultHistoricoId);
               
-              // Busca a conta sintética para obter o id_conta_patrimonial
-              const { data: contaSintetica, error: csError } = await supabase
+              const { data: contaSintetica } = await supabase
                   .from(tabelaContasPagar)
                   .select('id_conta_patrimonial')
                   .eq('id', parcela.conta_pagar_id)
                   .single();
                   
-              if (csError) {
-                  console.error('Erro ao buscar conta sintética:', csError);
-              }
               contaPatrimonialId = contaSintetica?.id_conta_patrimonial || null;
           }
           
-          // 2. Resetar o formulário com os valores iniciais
           const initialPagamentos = contasOrigem.length > 0 
               ? [{ conta_id: contasOrigem[0].id, valor_pago: saldoDevedor }]
               : [];
@@ -232,7 +223,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
               pagamentos: initialPagamentos,
               historico_id: defaultHistoricoId,
               salvar_como_padrao: false,
-              conta_patrimonial_id: contaPatrimonialId, // PRÉ-SELECIONA A CONTA PATRIMONIAL
+              conta_patrimonial_id: contaPatrimonialId,
           });
           
           setIsInitialized(true);
@@ -243,55 +234,34 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
   }, [open, parcela, adminId, isAdmin, refetchSaldos, fetchHistoricos, fetchContasPatrimoniais, fetchMapeamentoContabil, fetchHistoricoPadrao, reset, contasOrigem, saldoDevedor]);
 
   useEffect(() => {
-    // Se a inicialização falhou em pré-selecionar a conta de origem (porque contasOrigem estava vazia),
-    // tenta novamente quando as contasOrigem carregarem.
     if (open && !loadingContas && isInitialized && fields.length === 0 && contasOrigem.length > 0) {
         append({ conta_id: contasOrigem[0].id, valor_pago: saldoDevedor });
     }
   }, [open, loadingContas, contasOrigem, saldoDevedor, isInitialized, append, fields.length]);
 
-  const onSubmit = async (values: FormValues) => {
+  // --- FUNÇÃO DE SALVAMENTO DIRETO (SEM EXTRATO MANUAL) ---
+  const saveDirectPayment = async (values: FormValues) => {
     if (!parcela || !adminId || !values.conta_patrimonial_id) {
         showError('Dados da parcela, administrador ou conta patrimonial estão incompletos.');
         return;
     }
     
-    if (Math.abs(restante) > 0.01) {
-        showError('O valor total pago deve ser igual ao saldo devedor da parcela.');
-        return;
-    }
+    setLoading(true);
 
-    for (const pagamento of values.pagamentos) {
-        const contaSelecionada = contasOrigem.find(c => c.id === pagamento.conta_id);
-        if (!contaSelecionada) {
-            showError(`Conta de origem com ID ${pagamento.conta_id} não encontrada.`);
-            return;
-        }
-        if (contaSelecionada.saldo_atual < pagamento.valor_pago) {
-            showError(`Saldo insuficiente na conta "${contaSelecionada.nome}". Saldo: ${formatCurrency(contaSelecionada.saldo_atual)}, Tentativa de Pagar: ${formatCurrency(pagamento.valor_pago)}`);
-            return;
-        }
-    }
-
-    const contaPagamento = mapeamentoContabil['pagamento']; // Conta de Ativo/Passivo (Pagamento)
+    const contaPagamento = mapeamentoContabil['pagamento'];
     const contaParcelaPagar = mapeamentoContabil['parcela_pagar'];
     
-    // 0. Buscar a Conta Patrimonial da Conta Sintética (para o lançamento de estorno)
     const { data: contaSintetica, error: csError } = await supabase
         .from(tabelaContasPagar)
-        .select('id_conta_patrimonial, descricao, id_conta_resultado') // <-- AGORA INCLUI id_conta_resultado
+        .select('id_conta_patrimonial, descricao, id_conta_resultado')
         .eq('id', parcela.conta_pagar_id)
         .single();
         
-    if (csError) {
-        showError('Erro ao buscar conta sintética para Balanço: ' + csError.message);
-        return;
-    }
+    if (csError) throw csError;
     const contaPatrimonial = contaSintetica?.id_conta_patrimonial;
     const descricaoContaSintetica = contaSintetica?.descricao || 'Pagamento';
-    const contaDespesaCriacao = contaSintetica?.id_conta_resultado; // Conta de Despesa/Custo (DRE)
+    const contaDespesaCriacao = contaSintetica?.id_conta_resultado;
     
-    // CORREÇÃO DE FUSO HORÁRIO
     const dataPagamento = values.data_pagamento;
     const dataNoonUTC = new Date(Date.UTC(dataPagamento.getFullYear(), dataPagamento.getMonth(), dataPagamento.getDate(), 12, 0, 0));
     const dataPagamentoISO = dataNoonUTC.toISOString();
@@ -304,36 +274,31 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
             admin_id: adminId, 
             valor_pago: pagamento.valor_pago, 
             conta_id: pagamento.conta_id,
-            id_conta_contabil: contaPagamento, // Conta de Ativo/Passivo (Pagamento)
+            id_conta_contabil: contaPagamento,
             data_pagamento: dataPagamentoISO,
             forma_pagamento: values.forma_pagamento,
             tipo_pagamento: 'total',
             historico_id: values.historico_id,
-            id_conta_resultado: contaDespesaCriacao, // NOVO: Salva a conta de Despesa/Custo
+            id_conta_resultado: contaDespesaCriacao,
         };
         
         const { error: pagamentoError } = await supabase.from(tabelaPagamentos).insert(pagamentoPayload);
         if (pagamentoError) throw pagamentoError;
         
-        // 2. Registrar o Lançamento na conta de Saldo (Movimentação de Caixa/Banco) - CRÉDITO (Ativo)
-        // D: ??? / C: Ativo (contaPagamento)
-        
-        // Buscar a conta de saldo (Caixa/Banco) para obter o conta_contabil_id
+        // 2. Registrar o Lançamento no Ativo (Caixa/Banco) - CRÉDITO (Saída)
         const contaDestinoDetalhe = contasOrigem.find(c => c.id === pagamento.conta_id);
         const contaContabilCaixaBanco = contaDestinoDetalhe?.plano_contas?.id;
         
-        if (!contaContabilCaixaBanco) {
-            throw new Error('Conta de origem não possui vínculo contábil.');
-        }
+        if (!contaContabilCaixaBanco) throw new Error('Conta de origem não possui vínculo contábil.');
         
         const lancamentoAtivoPayload = {
             proprietario_id: adminId,
             data_movimentacao: dataPagamentoISO,
             descricao: `Pagamento Parcela ${parcela.id} - ${parcela.fornecedor}`, 
             valor: pagamento.valor_pago,
-            tipo: 'Saida' as const, // Saída do Ativo (Credit) - CORRECT
+            tipo: 'Saida' as const,
             conta_bancaria_id: pagamento.conta_id,
-            conta_contabil_id: contaContabilCaixaBanco, // <-- USANDO CONTA CONTÁBIL DO SALDO
+            conta_contabil_id: contaContabilCaixaBanco,
             origem: 'pagamento_manual',
             historico_id: values.historico_id,
         };
@@ -343,26 +308,23 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
       }
 
       // 3. Lançamento de Estorno da Conta Patrimonial (Passivo) - DÉBITO (Diminui Passivo)
-      // D: Passivo (values.conta_patrimonial_id) / C: ???
-      if (values.conta_patrimonial_id) {
+      if (contaPatrimonial) {
           const lancamentoPatrimonialPayload = {
               proprietario_id: adminId,
               data_movimentacao: dataPagamentoISO,
               descricao: `Estorno Patrimonial CP: ${descricaoContaSintetica} (CP ID: ${parcela.conta_pagar_id.substring(0, 8)})`,
-              valor: totalPago, // USANDO O VALOR TOTAL PAGO
-              tipo: 'Entrada' as const, // Entrada (Débito) para diminuir o Passivo (Credor)
+              valor: totalPago,
+              tipo: 'Entrada' as const,
               conta_bancaria_id: null,
-              conta_contabil_id: values.conta_patrimonial_id,
+              conta_contabil_id: contaPatrimonial,
               origem: 'pagamento_manual',
               historico_id: values.historico_id,
           };
           
           await supabase.from('lancamentos').insert(lancamentoPatrimonialPayload);
-      } else {
-          console.warn('Aviso: Conta Patrimonial (Obrigação a Pagar) não mapeada. Balanço pode estar incompleto.');
       }
       
-      // 4. Atualizar a parcela para 'paga'
+      // 4. Atualizar a parcela e a conta sintética
       await supabase.from(tabelaParcelas).update({
         status: 'paga',
         valor_pago: (parcela.valor_pago || 0) + totalPago,
@@ -370,27 +332,17 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
         id_conta_contabil: contaParcelaPagar,
       }).eq('id', parcela.id);
       
-      // 5. Verificar se a conta sintética está quitada
-      const { count: parcelasPendentesCount, error: countError } = await supabase
+      const { count: parcelasPendentesCount } = await supabase
           .from(tabelaParcelas)
           .select('id', { count: 'exact', head: true })
           .eq('conta_pagar_id', parcela.conta_pagar_id)
           .in('status', ['aberta', 'parcial', 'reprogramada']);
           
-      if (countError) {
-          console.error('Erro ao contar parcelas pendentes:', countError);
-      } else if (parcelasPendentesCount === 0) {
-          const { error: updateContaError } = await supabase
-              .from(tabelaContasPagar)
-              .update({ status: 'pago' })
-              .eq('id', parcela.conta_pagar_id);
-              
-          if (updateContaError) {
-                  console.error('Erro ao atualizar conta sintética para pago:', updateContaError);
-              }
-          }
+      if (parcelasPendentesCount === 0) {
+          await supabase.from(tabelaContasPagar).update({ status: 'pago' }).eq('id', parcela.conta_pagar_id);
+      }
       
-      // 6. Salvar Histórico Padrão (se marcado)
+      // 5. Salvar Histórico Padrão (se marcado)
       if (isAdmin && values.salvar_como_padrao && values.historico_id) {
           await supabase.from('configuracao_historico_padrao').upsert({
               proprietario_id: adminId,
@@ -401,174 +353,229 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
 
       showSuccess('Pagamento registrado com sucesso!');
       onSaveComplete();
+      onOpenChange(false);
+
     } catch (error: any) {
       showError(`Falha ao registrar pagamento: ${error.message}`);
+    } finally {
+      setLoading(false);
     }
+  };
+  // --- FIM FUNÇÃO DE SALVAMENTO DIRETO ---
+
+
+  const onSubmit = async (values: FormValues) => {
+    if (!parcela || !adminId) {
+        showError('Dados da parcela ou administrador estão incompletos.');
+        return;
+    }
+    
+    if (Math.abs(restante) > 0.01) {
+        showError('O valor total pago deve ser igual ao saldo devedor da parcela.');
+        return;
+    }
+    
+    // 1. Verificar se alguma conta de origem é um BANCO
+    const hasBankPayment = values.pagamentos.some(p => {
+        const conta = contasOrigem.find(c => c.id === p.conta_id);
+        return conta?.plano_contas?.is_banco === true;
+    });
+    
+    // 2. Se houver pagamento via Banco, abre o modal de Extrato Manual
+    if (hasBankPayment) {
+        setPendingPaymentData(values);
+        setExtratoManualDialog(true);
+        // O fluxo de salvamento será continuado no FormExtratoManualCP
+        return;
+    }
+    
+    // 3. Se for apenas Caixa ou outras contas (não Banco), salva diretamente
+    await saveDirectPayment(values);
   };
 
   const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl max-h-[95vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Registrar Pagamento</DialogTitle>
-          <DialogDescription>Saldo devedor da parcela: {formatCurrency(saldoDevedor)}</DialogDescription>
-        </DialogHeader>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <FormField control={form.control} name="data_pagamento" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Data do Pagamento</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "dd/MM/yy", { locale: ptBR }) : <span>Data</span>}<CalendarIcon className="ml-auto h-4 w-4 opacity-50" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus locale={ptBR} /></PopoverContent></Popover><FormMessage /></FormItem>)} />
-              <FormField control={form.control} name="forma_pagamento" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Forma de Pagamento</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
-            </div>
-            
-            <Separator />
-            
-            <div className="space-y-4">
-                <FormLabel>Fontes de Pagamento (Ativo)</FormLabel>
-                {fields.map((item, index) => (
-                    <div key={item.id} className="flex items-end space-x-2 p-2 border rounded-md">
-                        <FormField
-                            control={control}
-                            name={`pagamentos.${index}.conta_id`}
-                            render={({ field }) => (
-                                <FormItem className="flex-1">
-                                    <Select onValueChange={field.onChange} value={field.value || undefined} disabled={loadingContas}>
-                                        <FormControl><SelectTrigger><SelectValue placeholder="Selecione a conta" /></SelectTrigger></FormControl>
-                                        <SelectContent>
-                                            {contasOrigem.map(c => (
-                                                <SelectItem key={c.id} value={c.id}>
-                                                    {c.nome} ({formatCurrency(c.saldo_atual)})
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                    <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-                        <FormField
-                            control={control}
-                            name={`pagamentos.${index}.valor_pago`}
-                            render={({ field }) => (
-                                <FormItem className="w-1/3">
-                                    <FormControl><Input type="number" step="0.01" placeholder="Valor" {...field} /></FormControl>
-                                    <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-                        <Button type="button" variant="destructive" size="icon" onClick={() => remove(index)} disabled={fields.length <= 1}>
-                            <Trash2 className="w-4 h-4" />
-                        </Button>
-                    </div>
-                ))}
-                <Button type="button" variant="outline" size="sm" onClick={() => append({ conta_id: '', valor_pago: 0 })}>
-                    <PlusCircle className="w-4 h-4 mr-2" /> Adicionar Fonte de Pagamento
-                </Button>
-            </div>
-            
-            <Separator />
-            
-            {/* NOVO CAMPO: Conta Patrimonial (Obrigação a Pagar) */}
-            <FormField
-                control={form.control}
-                name="conta_patrimonial_id"
-                render={({ field }) => (
-                    <FormItem>
-                        <FormLabel>Conta Patrimonial (Obrigação a Pagar)</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value || undefined} disabled={loadingContasPatrimoniais}>
-                            <FormControl>
-                                <SelectTrigger>
-                                    <SelectValue placeholder={loadingContasPatrimoniais ? "Carregando Contas..." : `Selecione a conta de Passivo (${configMap.Passivo}.x.x)`} />
-                                </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                                <SelectItem value={null as any}>Nenhum (Não Mapear)</SelectItem>
-                                {contasPatrimoniais.map(c => (
-                                    <SelectItem key={c.id} value={c.id}>
-                                        {c.Conta} - {c.Descricao}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                        <FormMessage />
-                        {contasPatrimoniais.length === 0 && !loadingContasPatrimoniais && (
-                            <p className="text-sm text-red-500">
-                                Nenhuma conta Patrimonial marcada como Contas a Pagar no Plano de Contas.
-                            </p>
-                        )}
-                    </FormItem>
-                )}
-            />
-            
-            {/* Histórico */}
-            {isAdmin && (
-                <div className="space-y-2 pt-2 border-t">
-                    <FormField
-                        control={form.control}
-                        name="historico_id"
-                        render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Histórico do Pagamento (Opcional)</FormLabel>
-                                <Select onValueChange={field.onChange} value={field.value || undefined} disabled={loadingHistoricos}>
-                                    <FormControl>
-                                        <SelectTrigger>
-                                            <SelectValue placeholder={loadingHistoricos ? "Carregando Históricos..." : "Selecione o histórico"} />
-                                        </SelectTrigger>
-                                    </FormControl>
-                                    <SelectContent>
-                                        <SelectItem value={null as any}>Nenhum</SelectItem>
-                                        {historicos.map(h => (
-                                            <SelectItem key={h.id} value={h.id}>
-                                                {h.codigo && `[${h.codigo}] `}{h.descricao}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                                <FormMessage />
-                            </FormItem>
-                        )}
-                    />
-                    <FormField
-                        control={form.control}
-                        name="salvar_como_padrao"
-                        render={({ field }) => (
-                            <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-3">
-                                <FormControl>
-                                    <Checkbox
-                                        checked={field.value}
-                                        onCheckedChange={field.onChange}
-                                        disabled={!form.watch('historico_id')}
-                                    />
-                                </FormControl>
-                                <div className="space-y-1 leading-none">
-                                    <FormLabel>
-                                        Definir este Histórico como Padrão para Pagamentos
-                                    </FormLabel>
-                                </div>
-                            </FormItem>
-                        )}
-                    />
-                </div>
-            )}
-            
-            <div className="p-4 bg-secondary rounded-md space-y-2 text-sm">
-                <div className="flex justify-between font-medium"><p>Total Informado:</p><p>{formatCurrency(totalPago)}</p></div>
-                <Separator />
-                <div className={cn("flex justify-between font-bold text-lg", Math.abs(restante) > 0.01 ? 'text-red-600' : 'text-green-600')}>
-                    <p>Restante a Pagar:</p>
-                    <p>{formatCurrency(restante)}</p>
-                </div>
-            </div>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-2xl max-h-[95vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Registrar Pagamento</DialogTitle>
+            <DialogDescription>Saldo devedor da parcela: {formatCurrency(saldoDevedor)}</DialogDescription>
+          </DialogHeader>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <FormField control={form.control} name="data_pagamento" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Data do Pagamento</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "dd/MM/yy", { locale: ptBR }) : <span>Data</span>}<CalendarIcon className="ml-auto h-4 w-4 opacity-50" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus locale={ptBR} /></PopoverContent></Popover><FormMessage /></FormItem>)} />
+                <FormField control={form.control} name="forma_pagamento" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Forma de Pagamento</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
+              </div>
+              
+              <Separator />
+              
+              <div className="space-y-4">
+                  <FormLabel>Fontes de Pagamento (Ativo)</FormLabel>
+                  {fields.map((item, index) => (
+                      <div key={item.id} className="flex items-end space-x-2 p-2 border rounded-md">
+                          <FormField
+                              control={control}
+                              name={`pagamentos.${index}.conta_id`}
+                              render={({ field }) => (
+                                  <FormItem className="flex-1">
+                                      <Select onValueChange={field.onChange} value={field.value || undefined} disabled={loadingContas}>
+                                          <FormControl><SelectTrigger><SelectValue placeholder="Selecione a conta" /></SelectTrigger></FormControl>
+                                          <SelectContent>
+                                              {contasOrigem.map(c => (
+                                                  <SelectItem key={c.id} value={c.id}>
+                                                      {c.nome} ({formatCurrency(c.saldo_atual)})
+                                                  </SelectItem>
+                                              ))}
+                                          </SelectContent>
+                                      </Select>
+                                      <FormMessage />
+                                  </FormItem>
+                              )}
+                          />
+                          <FormField
+                              control={control}
+                              name={`pagamentos.${index}.valor_pago`}
+                              render={({ field }) => (
+                                  <FormItem className="w-1/3">
+                                      <FormControl><Input type="number" step="0.01" placeholder="Valor" {...field} /></FormControl>
+                                      <FormMessage />
+                                  </FormItem>
+                              )}
+                          />
+                          <Button type="button" variant="destructive" size="icon" onClick={() => remove(index)} disabled={fields.length <= 1}>
+                              <Trash2 className="w-4 h-4" />
+                          </Button>
+                      </div>
+                  ))}
+                  <Button type="button" variant="outline" size="sm" onClick={() => append({ conta_id: '', valor_pago: 0 })}>
+                      <PlusCircle className="w-4 h-4 mr-2" /> Adicionar Fonte de Pagamento
+                  </Button>
+              </div>
+              
+              <Separator />
+              
+              {/* Conta Patrimonial (Obrigação a Pagar) */}
+              <FormField
+                  control={form.control}
+                  name="conta_patrimonial_id"
+                  render={({ field }) => (
+                      <FormItem>
+                          <FormLabel>Conta Patrimonial (Obrigação a Pagar)</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value || undefined} disabled={loadingContasPatrimoniais}>
+                              <FormControl>
+                                  <SelectTrigger>
+                                      <SelectValue placeholder={loadingContasPatrimoniais ? "Carregando Contas..." : `Selecione a conta de Passivo (${configMap.Passivo}.x.x)`} />
+                                  </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                  <SelectItem value={null as any}>Nenhum (Não Mapear)</SelectItem>
+                                  {contasPatrimoniais.map(c => (
+                                      <SelectItem key={c.id} value={c.id}>
+                                          {c.Conta} - {c.Descricao}
+                                      </SelectItem>
+                                  ))}
+                              </SelectContent>
+                          </Select>
+                          <FormMessage />
+                          {contasPatrimoniais.length === 0 && !loadingContasPatrimoniais && (
+                              <p className="text-sm text-red-500">
+                                  Nenhuma conta Patrimonial marcada como Contas a Pagar no Plano de Contas.
+                              </p>
+                          )}
+                      </FormItem>
+                  )}
+              />
+              
+              {/* Histórico */}
+              {isAdmin && (
+                  <div className="space-y-2 pt-2 border-t">
+                      <FormField
+                          control={form.control}
+                          name="historico_id"
+                          render={({ field }) => (
+                              <FormItem>
+                                  <FormLabel>Histórico do Pagamento (Opcional)</FormLabel>
+                                  <Select onValueChange={field.onChange} value={field.value || undefined} disabled={loadingHistoricos}>
+                                      <FormControl>
+                                          <SelectTrigger>
+                                              <SelectValue placeholder={loadingHistoricos ? "Carregando Históricos..." : "Selecione o histórico"} />
+                                          </SelectTrigger>
+                                      </FormControl>
+                                      <SelectContent>
+                                          <SelectItem value={null as any}>Nenhum</SelectItem>
+                                          {historicos.map(h => (
+                                              <SelectItem key={h.id} value={h.id}>
+                                                  {h.codigo && `[${h.codigo}] `}{h.descricao}
+                                              </SelectItem>
+                                          ))}
+                                      </SelectContent>
+                                  </Select>
+                                  <FormMessage />
+                              </FormItem>
+                          )}
+                      />
+                      <FormField
+                          control={form.control}
+                          name="salvar_como_padrao"
+                          render={({ field }) => (
+                              <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-3">
+                                  <FormControl>
+                                      <Checkbox
+                                          checked={field.value}
+                                          onCheckedChange={field.onChange}
+                                          disabled={!form.watch('historico_id')}
+                                      />
+                                  </FormControl>
+                                  <div className="space-y-1 leading-none">
+                                      <FormLabel>
+                                          Definir este Histórico como Padrão para Pagamentos
+                                      </FormLabel>
+                                  </div>
+                              </FormItem>
+                          )}
+                      />
+                  </div>
+              )}
+              
+              <div className="p-4 bg-secondary rounded-md space-y-2 text-sm">
+                  <div className="flex justify-between font-medium"><p>Total Informado:</p><p>{formatCurrency(totalPago)}</p></div>
+                  <Separator />
+                  <div className={cn("flex justify-between font-bold text-lg", Math.abs(restante) > 0.01 ? 'text-red-600' : 'text-green-600')}>
+                      <p>Restante a Pagar:</p>
+                      <p>{formatCurrency(restante)}</p>
+                  </div>
+              </div>
 
-            <Button type="submit" className="w-full" disabled={form.formState.isSubmitting || Math.abs(restante) > 0.01}>
-              <Loader2 className={cn("mr-2 h-4 w-4 animate-spin", !form.formState.isSubmitting && "hidden")} />
-              Confirmar Pagamento
-            </Button>
-          </form>
-        </Form>
-      </DialogContent>
-    </Dialog>
+              <Button type="submit" className="w-full" disabled={form.formState.isSubmitting || Math.abs(restante) > 0.01}>
+                <Loader2 className={cn("mr-2 h-4 w-4 animate-spin", !form.formState.isSubmitting && "hidden")} />
+                Confirmar Pagamento
+              </Button>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+      
+      {/* NOVO MODAL DE EXTRATO MANUAL */}
+      {extratoManualDialog && pendingPaymentData && parcela && (
+          <Dialog open={extratoManualDialog} onOpenChange={setExtratoManualDialog}>
+              <FormExtratoManualCP
+                  parcela={parcela}
+                  pagamentoDetalhes={pendingPaymentData.pagamentos.map(p => ({ conta_id: p.conta_id, valor_pago: p.valor_pago }))}
+                  formaPagamento={pendingPaymentData.forma_pagamento}
+                  dataPagamento={pendingPaymentData.data_pagamento}
+                  historicoId={pendingPaymentData.historico_id}
+                  contaPatrimonialId={pendingPaymentData.conta_patrimonial_id}
+                  contasOrigem={contasOrigem}
+                  mapeamentoContabil={mapeamentoContabil}
+                  onSaveComplete={onSaveComplete}
+                  onClose={() => setExtratoManualDialog(false)}
+              />
+          </Dialog>
+      )}
+    </>
   );
 };
 
