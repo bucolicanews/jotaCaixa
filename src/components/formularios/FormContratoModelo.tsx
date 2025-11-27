@@ -101,7 +101,10 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
     
     // CRÍTICO: Se o tipo for 'texto', removemos todas as tags HTML antes de salvar
     if (values.tipo_conteudo === 'texto') {
-        finalContent = stripHtmlTags(finalContent);
+        // Se for texto, o RichTextEditor já retorna HTML, mas o stripHtmlTags
+        // foi removido para permitir a formatação básica (negrito, alinhamento)
+        // no preview e impressão.
+        // finalContent = stripHtmlTags(finalContent); // REMOVIDO
     }
     
     const dataToSave = {
@@ -144,10 +147,7 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
           previewContent = previewContent.replace(regex, `[${tag.descricao}]`);
       });
       
-      // Se for texto simples, precisamos renderizar o texto puro na prévia
-      if (tipoConteudoWatch === 'texto') {
-          previewContent = stripHtmlTags(previewContent);
-      }
+      // Se for texto simples, o conteúdo já é HTML do editor, então não precisamos de stripHtmlTags
       
       setConteudoPreview(previewContent);
       setPreviewTitle(form.getValues('titulo'));

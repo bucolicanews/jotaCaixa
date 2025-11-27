@@ -18,7 +18,7 @@ export function usePrint() {
 
       const pageSize = orientation === 'landscape' ? 'A4 landscape' : 'A4 portrait';
 
-      // Estilos otimizados para impressão A4
+      // Estilos otimizados para impressão A4 e inclusão de estilos básicos do Tailwind/Prose
       const printStyles = `
         <style>
           /* Configuração A4 dinâmica */
@@ -28,12 +28,24 @@ export function usePrint() {
           }
           
           body { 
-            font-family: Arial, sans-serif; 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             margin: 0; 
             padding: 0; 
             color: #000; 
             font-size: 10pt; 
           }
+          
+          /* Estilos básicos do Tailwind/Prose para formatação de texto */
+          .prose {
+            max-width: 100%;
+            line-height: 1.6;
+          }
+          .prose h1 { font-size: 1.5em; font-weight: bold; margin-top: 1em; }
+          .prose h2 { font-size: 1.3em; font-weight: bold; margin-top: 1em; }
+          .prose p { margin-top: 0.5em; margin-bottom: 0.5em; }
+          .prose strong { font-weight: bold; }
+          .prose em { font-style: italic; }
+          .prose ul, .prose ol { margin-left: 1.5em; }
           
           /* Container principal que deve se expandir */
           .print-container {
@@ -48,7 +60,7 @@ export function usePrint() {
             padding-bottom: 10px; 
             margin-bottom: 15px; 
             page-break-after: avoid;
-            display: flex; /* Adicionado para layout de logo/título */
+            display: flex;
             align-items: center;
             justify-content: space-between;
           }
@@ -84,7 +96,7 @@ export function usePrint() {
             width: 100%; 
             border-collapse: collapse; 
             margin-top: 5px; 
-            table-layout: fixed; /* Garante que a largura da tabela seja respeitada */
+            table-layout: fixed;
           }
           .print-table th, .print-table td { 
             border: 1px solid #ccc; 
@@ -92,14 +104,14 @@ export function usePrint() {
             text-align: left; 
             font-size: 9pt; 
             word-wrap: break-word; 
-            white-space: normal; /* Permite quebra de linha */
+            white-space: normal;
             overflow: visible; 
             text-overflow: clip; 
           }
           .print-table th { 
             background-color: #f0f0f0; 
             font-weight: bold;
-            white-space: normal; /* Permite quebra de linha no cabeçalho */
+            white-space: normal;
           }
           
           /* Estilos para a linha de total */
@@ -133,7 +145,9 @@ export function usePrint() {
         </style>
       `;
       
-      // Removemos a classe 'landscape' do body, pois a orientação é definida no @page
+      // Envolve o conteúdo em uma div 'prose' para aplicar os estilos de tipografia
+      const finalContent = `<div class="prose">${contentHtml}</div>`;
+
       printWindow.document.write(`
         <!DOCTYPE html>
         <html>
@@ -147,7 +161,7 @@ export function usePrint() {
                 <button onclick="window.print()" style="padding: 10px 20px; margin-top: 10px; cursor: pointer;">Imprimir Agora</button>
             </div>
             <div class="print-container">
-                ${contentHtml}
+                ${finalContent}
             </div>
           </body>
         </html>
