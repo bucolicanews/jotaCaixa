@@ -242,6 +242,7 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
                         </Button>
                     </FormLabel>
                     <FormControl>
+                        {/* CORREÇÃO AQUI: Renderização condicional */}
                         {tipoConteudoWatch === 'html' ? (
                             <RichTextEditor
                                 value={field.value}
