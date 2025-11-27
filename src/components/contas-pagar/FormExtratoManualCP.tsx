@@ -14,6 +14,11 @@ import { AdminParcelaPagar } from '@/types/contas-pagar';
 import { SaldoCalculado } from '@/hooks/use-saldo-conta-calculado';
 import { Historico } from '@/types/historico';
 import { Textarea } from '../ui/textarea';
+import { Separator } from "@/components/ui/separator";
+
+// Função local para formatar moeda (caso não exista)
+const formatCurrency = (value: number) =>
+    value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 // Nome do bucket de armazenamento para comprovantes
 const COMPROVANTE_BUCKET = 'comprovantes-pagamento'; 
@@ -112,16 +117,30 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
 
     const onSubmit = async (values: FormValues) => {
         setLoading(true);
-        
+
         try {
             let comprovanteUrl: string | null = values.comprovante_url || null;
-            
+
             // 1. Upload do comprovante (se houver arquivo)
             if (comprovanteFile) {
                 comprovanteUrl = await uploadComprovante(comprovanteFile, parcela.id);
             }
             
-            // 2. Inserir o registro na tabela 'extratos' (apenas para contas do tipo 'Banco')
+            // 2. Buscar a Conta Sintética para obter a conta de Despesa/Custo (DRE)
+            const { data: contaSintetica, error: csError } = await supabase
+                .from('admin_contas_pagar')
+                .select('id_conta_patrimonial, descricao, id_conta_resultado')
+                .eq('id', parcela.conta_pagar_id)
+                .single();
+                
+            if (csError) throw csError;
+            const contaPatrimonial = contaSintetica?.id_conta_patrimonial;
+            const descricaoContaSintetica = contaSintetica?.descricao || 'Pagamento';
+            const contaDespesaCriacao = contaSintetica?.id_conta_resultado;
+            
+            const dataPagamentoISO = format(dataPagamento, 'yyyy-MM-dd') + 'T12:00:00Z';
+            
+            // 3. Inserir o registro na tabela 'extratos' (apenas para contas do tipo 'Banco')
             const extratosPayload = pagamentoDetalhes
                 .map(p => {
                     const contaOrigem = contasOrigem.find(c => c.id === p.conta_id);
@@ -152,24 +171,10 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
                 showSuccess(`${extratosPayload.length} registros de extrato criados.`);
             }
             
-            // 3. Continuar com o fluxo de pagamento (Registrar Pagamento e Lançamentos)
-            
-            // 3.1. Buscar a Conta Sintética para obter a conta de Despesa/Custo (DRE)
-            const { data: contaSintetica, error: csError } = await supabase
-                .from('admin_contas_pagar')
-                .select('id_conta_patrimonial, descricao, id_conta_resultado')
-                .eq('id', parcela.conta_pagar_id)
-                .single();
-                
-            if (csError) throw csError;
-            const contaPatrimonial = contaSintetica?.id_conta_patrimonial;
-            const descricaoContaSintetica = contaSintetica?.descricao || 'Pagamento';
-            const contaDespesaCriacao = contaSintetica?.id_conta_resultado;
-            
-            const dataPagamentoISO = format(dataPagamento, 'yyyy-MM-dd') + 'T12:00:00Z';
+            // 4. Continuar com o fluxo de pagamento (Registrar Pagamento e Lançamentos)
             
             for (const pagamento of pagamentoDetalhes) {
-                // 3.2. Registrar Pagamento (Histórico)
+                // 4.1. Registrar Pagamento (Histórico)
                 const pagamentoPayload = { 
                     parcela_id: parcela.id, 
                     admin_id: adminId, 
@@ -187,7 +192,7 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
                 const { error: pagamentoError } = await supabase.from('admin_pagamentos').insert(pagamentoPayload);
                 if (pagamentoError) throw pagamentoError;
                 
-                // 3.3. Registrar o Lançamento no Ativo (Caixa/Banco) - CRÉDITO (Saída)
+                // 4.2. Registrar o Lançamento no Ativo (Caixa/Banco) - CRÉDITO (Saída)
                 const contaDestinoDetalhe = contasOrigem.find(c => c.id === pagamento.conta_id);
                 const contaContabilCaixaBanco = contaDestinoDetalhe?.plano_contas?.id;
                 
@@ -209,7 +214,7 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
                 if (lancamentoAtivoError) throw lancamentoAtivoError;
             }
             
-            // 3.4. Lançamento de Estorno da Conta Patrimonial (Passivo) - DÉBITO (Diminui Passivo)
+            // 4.3. Lançamento de Estorno da Conta Patrimonial (Passivo) - DÉBITO (Diminui Passivo)
             if (contaPatrimonial) {
                 const lancamentoPatrimonialPayload = {
                     proprietario_id: adminId,
@@ -225,7 +230,7 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
                 await supabase.from('lancamentos').insert(lancamentoPatrimonialPayload);
             }
             
-            // 3.5. Atualizar a parcela e a conta sintética
+            // 4.4. Atualizar a parcela e a conta sintética
             await supabase.from('admin_parcelas_pagar').update({
                 status: 'paga',
                 valor_pago: (parcela.valor_pago || 0) + totalPago,
@@ -243,7 +248,7 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
                 await supabase.from('admin_contas_pagar').update({ status: 'pago' }).eq('id', parcela.conta_pagar_id);
             }
 
-            // 3.6. Salvar Histórico Padrão (se marcado)
+            // 4.5. Salvar Histórico Padrão (se marcado)
             if (adminId && form.getValues('salvar_como_padrao') && historicoId) {
                 await supabase.from('configuracao_historico_padrao').upsert({
                     proprietario_id: adminId,
@@ -340,7 +345,6 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
                 </Button>
             </form>
         </Form>
-      </DialogContent>
     );
 };
 
