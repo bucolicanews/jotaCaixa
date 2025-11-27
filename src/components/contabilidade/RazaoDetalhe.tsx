@@ -142,6 +142,7 @@ const RazaoDetalhe: React.FC<RazaoDetalheProps> = ({ filtroPeriodo }) => {
                                                     <TableCell>{formatarData(l.data_movimentacao)}</TableCell>
                                                     <TableCell className="text-xs">{l.origem}</TableCell>
                                                     <TableCell className="text-sm">{l.descricao}</TableCell>
+                                                    {/* Débito é Entrada, Crédito é Saída */}
                                                     <TableCell className="text-right text-red-600">{l.tipo === 'Entrada' ? formatCurrency(l.valor) : '-'}</TableCell>
                                                     <TableCell className="text-right text-green-600">{l.tipo === 'Saida' ? formatCurrency(l.valor) : '-'}</TableCell>
                                                     <TableCell className={cn("text-right font-medium", l.saldo_acumulado < 0 ? 'text-red-600' : 'text-blue-600')}>
