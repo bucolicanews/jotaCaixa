@@ -52,19 +52,18 @@ export const normalizeString = (str: string | null | undefined): string => {
 
 /**
  * Sanitiza conteúdo de texto para ser seguro dentro de um Textarea controlado por React,
- * escapando strings que podem ser interpretadas como fechamento de tags JSX (ex: </dyad-file>).
+ * removendo apenas tags e atributos de desenvolvimento, mas permitindo HTML válido.
+ * 
+ * NOTA: A remoção da substituição de tags HTML (ex: < -> &lt;) é crucial para salvar HTML.
  */
 export function sanitizeConteudo(conteudo: string | null | undefined): string {
     if (!conteudo) return "";
 
     return conteudo
-        // 1. Escapa fechamentos de tags (</tag>) para evitar quebra de JSX
-        .replace(/<\/([a-zA-Z0-9\-_:]+)>/g, '<\\/$1>')
-        
-        // 2. Remove atributos de desenvolvimento (data-dyad-id)
+        // 1. Remove atributos de desenvolvimento (data-dyad-id)
         .replace(/data-dyad-[a-zA-Z0-9_-]+="[^"]*"/g, '')
         
-        // 3. Remove tags Dyad (se houver)
+        // 2. Remove tags Dyad (se houver)
         .replace(/<dyad-[^>]+>/g, '')
         .replace(/<\/dyad-[^>]+>/g, '');
 }
