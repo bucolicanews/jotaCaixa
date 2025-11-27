@@ -294,7 +294,7 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
                             <div 
                                 key={tag.nome_tag} 
                                 className="p-2 border rounded-md cursor-pointer hover:bg-accent/50 transition-colors"
-                                draggable={tipoConteudoWatch === 'html'} // Apenas arrastável se for HTML (Textarea)
+                                draggable={tipoConteudoWatch === 'texto'} // Apenas arrastável se for texto simples
                                 onDragStart={(e) => handleDragStart(e, tag.nome_tag)}
                                 onClick={() => {
                                     navigator.clipboard.writeText(tag.nome_tag);

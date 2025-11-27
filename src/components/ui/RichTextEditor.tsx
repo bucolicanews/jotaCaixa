@@ -14,6 +14,7 @@ const modules = {
     [{ 'header': [1, 2, false] }],
     ['bold', 'italic', 'underline', 'strike', 'blockquote'],
     [{ 'list': 'ordered' }, { 'list': 'bullet' }, { 'indent': '-1' }, { 'indent': '+1' }],
+    [{ 'align': [] }], // ADICIONADO: Botões de alinhamento
     ['link', 'image'],
     ['clean']
   ],
@@ -23,6 +24,7 @@ const formats = [
   'header',
   'bold', 'italic', 'underline', 'strike', 'blockquote',
   'list', 'bullet', 'indent',
+  'align', // ADICIONADO: Formato de alinhamento
   'link', 'image'
 ];
 
