@@ -227,7 +227,7 @@ const FormExtratoManualCR: React.FC<FormExtratoManualCRProps> = ({
                     conta_id: contaDestinoId,
                     id_conta_resultado: contaReceitaResultado,
                     observacao: values.observacao || null,
-                    anexo_url: comprovanteUrl,
+                    anexo_url: comprovanteUrl, // Adiciona a URL do comprovante
                 };
             }
             
