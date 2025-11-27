@@ -90,6 +90,23 @@ const formSchema = z.object({
     proprietario_documento_id: z.string().uuid('Selecione o proprietário.'),
     tipo_conteudo: z.enum(['html', 'texto']),
     valores_tags: z.record(z.string()).optional(),
+    
+    // Campos de Faturamento (Adicionados ao esquema para validação)
+    valor_total: z.coerce.number().positive('O valor deve ser maior que zero.'),
+    tipo_lancamento: z.enum(['unico', 'repetir', 'parcelar'], { required_error: 'Selecione o tipo de lançamento.' }),
+    data_vencimento_unico: z.date().optional(),
+    numero_parcelas: z.coerce.number().int().min(1).optional(),
+    data_primeiro_vencimento: z.date().optional(),
+    intervalo_dias: z.coerce.number().int().min(1).optional(),
+}).superRefine((data, ctx) => {
+    if (data.tipo_lancamento === 'unico' && !data.data_vencimento_unico) {
+        ctx.addIssue({ code: 'custom', message: 'A data de vencimento é obrigatória.', path: ['data_vencimento_unico'] });
+    }
+    if (data.tipo_lancamento !== 'unico') {
+        if (!data.numero_parcelas || data.numero_parcelas < 1) ctx.addIssue({ code: 'custom', message: 'Informe um número de parcelas válido.', path: ['numero_parcelas'] });
+        if (!data.data_primeiro_vencimento) ctx.addIssue({ code: 'custom', message: 'A data do primeiro vencimento é obrigatória.', path: ['data_primeiro_vencimento'] });
+        if (!data.intervalo_dias || data.intervalo_dias < 1) ctx.addIssue({ code: 'custom', message: 'Informe um intervalo de dias válido.', path: ['intervalo_dias'] });
+    }
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -108,7 +125,7 @@ const PreencherContrato: React.FC = () => {
   const [contratoInicial, setContratoInicial] = useState<ContratoGerado | null>(null);
   const [tagsCustomizadas, setTagsCustomizadas] = useState<ContratoTag[]>([]);
   
-  const [valoresTags, setValoresTags] = useState<Record<string, string>>({});
+  const [clientesCR, setClientesCR] = useState<ClienteCRCompleto[]>([]);
   const [carregandoDados, setCarregandoDados] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
@@ -116,23 +133,9 @@ const PreencherContrato: React.FC = () => {
   const [conteudoPreview, setConteudoPreview] = useState('');
   const [previewTitle, setPreviewTitle] = useState('');
   
-  const [clienteSelecionadoId, setClienteSelecionadoId] = useState<string>('');
-  const [valorTotal, setValorTotal] = useState<number>(0);
-  const [tituloDocumento, setTituloDocumento] = useState('');
-  
-  const [proprietarioContratoId, setProprietarioContratoId] = useState<string | null>(null); 
   const [empresasContrato, setEmpresasContrato] = useState<EmpresaContrato[]>([]);
   const [empresaLogada, setEmpresaLogada] = useState<EmpresaLogada | null>(null);
   
-  // --- ESTADOS DE PAGAMENTO (MANTIDOS PARA CONTRATOS) ---
-  const [tipoLancamento, setTipoLancamento] = useState<TipoLancamento>('unico');
-  const [dataVencimentoUnico, setDataVencimentoUnico] = useState<Date | undefined>(undefined);
-  const [numeroParcelas, setNumeroParcelas] = useState<number>(1);
-  const [dataPrimeiroVencimento, setDataPrimeiroVencimento] = useState<Date | undefined>(undefined);
-  const [intervaloDias, setIntervaloDias] = useState<number>(30);
-  const [tipoConteudo, setTipoConteudo] = useState<TipoConteudo>('html'); 
-  // ------------------------------------------------------
-
   // FIX 2304: Declarando isEditing no escopo do componente
   const isEditing = !!contratoId;
 
@@ -149,9 +152,44 @@ const PreencherContrato: React.FC = () => {
   const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
   const formatDate = (date: Date) => format(date, 'dd/MM/yyyy');
 
+  const form = useForm<FormValues>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+        titulo_documento: '',
+        cliente_id: '',
+        proprietario_documento_id: '',
+        tipo_conteudo: 'html',
+        valores_tags: {},
+        
+        // Valores de Faturamento
+        valor_total: 0,
+        tipo_lancamento: 'unico',
+        data_vencimento_unico: undefined,
+        numero_parcelas: 1,
+        data_primeiro_vencimento: undefined,
+        intervalo_dias: 30,
+    },
+  });
+  
+  const { watch, setValue, getValues } = form;
+  
+  const clienteSelecionadoId = watch('cliente_id');
+  const proprietarioContratoId = watch('proprietario_documento_id');
+  const tituloDocumento = watch('titulo_documento');
+  const tipoConteudo = watch('tipo_conteudo');
+  const valoresTags = watch('valores_tags') || {};
+  
+  // Valores de Faturamento
+  const valorTotal = watch('valor_total');
+  const tipoLancamento = watch('tipo_lancamento');
+  const dataVencimentoUnico = watch('data_vencimento_unico');
+  const numeroParcelas = watch('numero_parcelas') || 1;
+  const dataPrimeiroVencimento = watch('data_primeiro_vencimento');
+  const intervaloDias = watch('intervalo_dias') || 30;
+
   // Cliente selecionado (para preenchimento de tags)
   const clienteSelecionado = useMemo(() => {
-      return clientesCR.find(c => c.id === clienteSelecionadoId);
+      return clientesCR.find((c: ClienteCRCompleto) => c.id === clienteSelecionadoId);
   }, [clientesCR, clienteSelecionadoId]);
 
   // Dados da Empresa Logada (para preenchimento de tags {{EMPRESA_*}})
@@ -184,240 +222,7 @@ const PreencherContrato: React.FC = () => {
   }, [perfil, isAdmin, isClient]);
 
 
-  // --- FUNÇÃO DE BUSCA DE CLIENTES E TAGS DEPENDENTE DO PROPRIETÁRIO ---
-  const fetchDependentData = useCallback(async (targetEmpresaId: string) => {
-    if (!targetEmpresaId) return;
-    
-    // 1. Buscar Tags Customizadas ATIVAS
-    const { data: tagsData } = await supabase
-        .from('contrato_tags')
-        .select('*')
-        .eq('empresa_id', targetEmpresaId)
-        .order('nome_tag', { ascending: true });
-        
-    if (tagsData) {
-        setTagsCustomizadas(tagsData as ContratoTag[]);
-    }
-    
-    // 2. Buscar Clientes (Contratados) - AGORA BUSCA NA TABELA 'tbl_clientes' (Clientes do Sistema)
-    let queryClients = supabase
-        .from('tbl_clientes') // ALTERADO: Usando a tabela 'tbl_clientes'
-        .select('id, nome, razao_social, nome_fantasia, documento, email, telefone, cep, endereco, numero, complemento, bairro, cidade, estado, cpf, cnpj, rg') // Seleciona campos relevantes
-        .eq('admin_id', targetEmpresaId) // Filtra pelos clientes do Admin/Cliente
-        .eq('aprovado', true) // Filtra apenas clientes aprovados
-        .neq('id', targetEmpresaId) // GARANTE QUE O PROPRIETÁRIO NÃO ESTEJA NA LISTA DE CLIENTES CONTRATADOS
-        .order('nome');
-        
-    const { data: clientesCRData, error: errorCR } = await queryClients;
-        
-    if (errorCR) {
-        showError('Erro ao carregar clientes do sistema: ' + errorCR.message);
-        setClientesCR([]);
-    } else {
-        // Mapeia os dados para o formato ClienteCRCompleto (que é mais genérico)
-        const mappedClients = (clientesCRData as any[]).map(c => ({
-            ...c,
-            proprietario_id: targetEmpresaId, // Adiciona o proprietário para consistência
-            telefone_fixo: null, // Não existe em tbl_clientes
-            data_nascimento: null, // Não existe em tbl_clientes
-        })) as ClienteCRCompleto[];
-        
-        setClientesCR(mappedClients);
-        
-        // Se o cliente selecionado não estiver mais na lista, limpa a seleção
-        if (clienteSelecionadoId && !mappedClients.some(c => c.id === clienteSelecionadoId)) {
-            setClienteSelecionadoId('');
-        }
-    }
-    
-  }, [clienteSelecionadoId]);
-
-
-  // --- FUNÇÃO PRINCIPAL DE BUSCA DE DADOS INICIAIS ---
-  const buscarDados = useCallback(async () => {
-    if ((!modeloId && !contratoId) || !ownerIdLogado) {
-        setCarregandoDados(false);
-        return;
-    }
-    
-    setCarregandoDados(true);
-    
-    let initialProprietarioContratoId = ownerIdLogado;
-    let currentModelo: ContratoModelo | null = null;
-    let initialValoresTags: Record<string, string> = {};
-    let initialClienteId = '';
-    
-    // 2. Configurar Empresa Logada (Contratante)
-    setEmpresaLogada(empresaLogadaMemo);
-    
-    // 3. Configurar Empresas Contratantes (Apenas Admin)
-    if (isAdmin) {
-        const { data: clientsData, error: clientsError } = await supabase
-            .from('tbl_clientes')
-            .select('id, nome')
-            .eq('aprovado', true)
-            .order('nome');
-            
-        if (clientsError) {
-            showError('Erro ao carregar clientes do sistema: ' + clientsError.message);
-        } else {
-            const adminOption: EmpresaContrato = { id: ownerIdLogado, nome: 'Meus Contratos (Admin)' };
-            const allClients = [adminOption, ...(clientsData as EmpresaContrato[])];
-            setEmpresasContrato(allClients);
-            initialProprietarioContratoId = allClients[0].id;
-        }
-    }
-    
-    // 4. Carregar Contrato Inicial (se for edição)
-    if (contratoId) {
-        const { data: contratoData, error: contratoLoadError } = await supabase
-            .from('contratos_gerados')
-            .select('*, modelos_contrato:modelo_id(tipo_conteudo)')
-            .eq('id', contratoId)
-            .single();
-            
-        if (contratoLoadError) {
-            showError('Contrato para edição não encontrado ou acesso negado.');
-            navigate('/contratos', { replace: true });
-            return;
-        }
-        
-        const contrato = contratoData as ContratoGerado & { modelos_contrato: { tipo_conteudo: TipoConteudo } | null };
-        setContratoInicial(contrato);
-        initialProprietarioContratoId = contrato.proprietario_id; // Sobrescreve o ID inicial
-        
-        setClienteSelecionadoId(contrato.cliente_id);
-        setValorTotal(contrato.valor_total); // Define o valor total
-        setValoresTags(contrato.valores_tags_preenchidos || {});
-        setTituloDocumento(contrato.valores_tags_preenchidos?.titulo || '');
-        setTipoConteudo(contrato.valores_tags_preenchidos?.tipo_conteudo || contrato.modelos_contrato?.tipo_conteudo as TipoConteudo || 'html');
-        
-        const numParcelas = contrato.numero_parcelas;
-        const valorTotalContrato = contrato.valor_total;
-        
-        const isContractOwnerAdmin = contrato.proprietario_id === ownerIdLogado && isAdmin;
-        const tabelaContasReceber = isContractOwnerAdmin ? 'admin_contas_receber' : 'contas_receber';
-        const tabelaParcelas = isContractOwnerAdmin ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
-        
-        // Busca a conta sintética para obter o ID da conta a receber
-        const { data: contaReceberData } = await supabase
-            .from(tabelaContasReceber)
-            .select('id')
-            .eq('contrato_gerado_id', contrato.id)
-            .limit(1)
-            .single();
-            
-        const contaReceberId = contaReceberData?.id;
-
-        if (contaReceberId) {
-            const { data: primeiraParcela } = await supabase
-                .from(tabelaParcelas)
-                .select('valor_parcela, data_vencimento')
-                .eq('conta_receber_id', contaReceberId)
-                .order('numero_parcela', { ascending: true })
-                .limit(1)
-                .single();
-                
-            if (primeiraParcela) {
-                if (numParcelas === 1) {
-                    setTipoLancamento('unico');
-                    setDataVencimentoUnico(primeiraParcela.data_vencimento ? parseISO(primeiraParcela.data_vencimento) : undefined);
-                    setNumeroParcelas(1);
-                } else {
-                    const valorParcela = primeiraParcela.valor_parcela || 0;
-                    
-                    // Determina se é parcelar ou repetir
-                    if (Math.abs(valorTotalContrato - (valorParcela * numParcelas)) < 0.01) {
-                        setTipoLancamento('parcelar');
-                    } else {
-                        setTipoLancamento('repetir');
-                    }
-                    
-                    setNumeroParcelas(numParcelas);
-                    setDataPrimeiroVencimento(primeiraParcela.data_vencimento ? parseISO(primeiraParcela.data_vencimento) : undefined);
-                    setIntervaloDias(contrato.dia_vencimento_parcela || 30);
-                }
-            } else {
-                // Fallback: Usa os dados do contrato para preencher o formulário
-                if (numParcelas === 1) {
-                    setTipoLancamento('unico');
-                    setDataVencimentoUnico(contrato.data_inicio ? parseISO(contrato.data_inicio) : undefined);
-                } else {
-                    setTipoLancamento('parcelar'); // Assume parcelar como padrão para múltiplos
-                    setNumeroParcelas(numParcelas);
-                    setDataPrimeiroVencimento(contrato.data_inicio ? parseISO(contrato.data_inicio) : undefined);
-                    setIntervaloDias(contrato.dia_vencimento_parcela || 30);
-                }
-            }
-        } else {
-            // Se não encontrou a conta a receber (registro ausente)
-            console.error('LOG: Conta sintética não encontrada. Usando dados do contrato.');
-            // Fallback: Usa os dados do contrato para preencher o formulário
-            if (numParcelas === 1) {
-                setTipoLancamento('unico');
-                setDataVencimentoUnico(contrato.data_inicio ? parseISO(contrato.data_inicio) : undefined);
-            } else {
-                setTipoLancamento('parcelar');
-                setNumeroParcelas(numParcelas);
-                setDataPrimeiroVencimento(contrato.data_inicio ? parseISO(contrato.data_inicio) : undefined);
-                setIntervaloDias(contrato.dia_vencimento_parcela || 30);
-            }
-        }
-        
-        // 4.1. Buscar o modelo associado (para ter o objeto completo)
-        const { data: modeloData } = await supabase
-            .from('contrato_modelos')
-            .select('*, tipo_conteudo')
-            .eq('id', contrato.modelo_id)
-            .single();
-        currentModelo = modeloData as ContratoModelo;
-        
-    }
-    
-    // 5. Buscar Modelo (se for criação)
-    if (modeloId) {
-        const { data: modeloData, error: modeloError } = await supabase
-            .from('contrato_modelos')
-            .select('*, tipo_conteudo')
-            .eq('id', modeloId)
-            .single();
-            
-        if (modeloError) {
-            showError('Modelo não encontrado ou acesso negado.');
-            navigate('/contratos', { replace: true });
-            return;
-        }
-        currentModelo = modeloData as ContratoModelo;
-    }
-    
-    setModelo(currentModelo);
-    setProprietarioContratoId(initialProprietarioContratoId);
-    
-    // 6. Carregar dados dependentes (clientes e tags)
-    await fetchDependentData(initialProprietarioContratoId || ownerIdLogado);
-    
-    setCarregandoDados(false);
-    
-  // Removi `documentoInicial` das dependências para evitar loop
-  }, [modeloId, ownerIdLogado, navigate, role, perfil, usuario, isAdmin, isClient, contratoId, empresaLogadaMemo, fetchDependentData]);
-  
-  // Efeito para monitorar a mudança do proprietário do contrato (proprietarioContratoId)
-  useEffect(() => {
-      if (proprietarioContratoId) {
-          fetchDependentData(proprietarioContratoId);
-      }
-  }, [proprietarioContratoId, fetchDependentData]);
-
-
-  useEffect(() => {
-    if (!carregandoSessao && ownerIdLogado) {
-      buscarDados();
-    } else if (!carregandoSessao && !isAdmin && !isClient) {
-        navigate('/painel', { replace: true });
-    }
-  }, [carregandoSessao, ownerIdLogado, buscarDados, navigate, isAdmin, isClient]);
-
-  // --- Lógica de Preenchimento de Tags ---
+  // --- Lógica de Preenchimento de Tags (Refatorada para ser chamada apenas na inicialização) ---
   const allAvailableTags = useMemo(() => {
       // Combina tags padrão (sistema + financeiras) com as tags customizadas do usuário
       const customTagsMap = tagsCustomizadas.reduce((acc, tag) => {
@@ -526,21 +331,23 @@ const PreencherContrato: React.FC = () => {
   };
 
   const handleSalvarContrato = async (status: ContratoGerado['status']) => {
-    if (!modelo || !clienteSelecionadoId || !ownerIdLogado || !tituloDocumento || !proprietarioContratoId) {
+    const values = form.getValues();
+    
+    if (!modelo || !values.cliente_id || !ownerIdLogado || !values.titulo_documento || !values.proprietario_documento_id) {
         showError('Preencha Título, Cliente e Proprietário.');
         return;
     }
     
     // Validação de campos financeiros
-    if (valorTotal <= 0) {
+    if (values.valor_total <= 0) {
         showError('O valor total do contrato deve ser maior que zero.');
         return;
     }
-    if (tipoLancamento === 'unico' && !dataVencimentoUnico) {
+    if (values.tipo_lancamento === 'unico' && !values.data_vencimento_unico) {
         showError('Selecione a data de vencimento única.');
         return;
     }
-    if (tipoLancamento !== 'unico' && (!dataPrimeiroVencimento || numeroParcelas < 1 || intervaloDias < 1)) {
+    if (values.tipo_lancamento !== 'unico' && (!values.data_primeiro_vencimento || values.numero_parcelas < 1 || values.intervalo_dias < 1)) {
         showError('Preencha todos os campos de parcelamento.');
         return;
     }
@@ -549,16 +356,18 @@ const PreencherContrato: React.FC = () => {
     
     try {
         // 0. GARANTIR QUE O CLIENTE EXISTA NA TABELA 'tbl_clientes' (para FK)
-        const clienteSelecionado = clientesCR.find(c => c.id === clienteSelecionadoId);
+        const clienteSelecionado = clientesCR.find(c => c.id === values.cliente_id);
         if (!clienteSelecionado) throw new Error('Cliente selecionado não encontrado.');
         
         // 1. Renderizar Conteúdo Final
-        const conteudoRenderizado = renderizarConteudo(modelo.conteudo_template, valoresTags);
+        // CRÍTICO: Usa o valor do campo 'conteudo_template' do formulário (que pode ter sido editado no RichTextEditor)
+        const templateToRender = values.valores_tags?.['{{CONTEUDO_PRINCIPAL}}'] || modelo.conteudo_template;
+        const conteudoRenderizado = renderizarConteudo(templateToRender, values.valores_tags || {});
         
         // 2. Preparar dados do Contrato Gerado
-        const dataInicio = tipoLancamento === 'unico' 
-            ? format(dataVencimentoUnico!, 'yyyy-MM-dd')
-            : format(dataPrimeiroVencimento!, 'yyyy-MM-dd');
+        const dataInicio = values.tipo_lancamento === 'unico' 
+            ? format(values.data_vencimento_unico!, 'yyyy-MM-dd')
+            : format(values.data_primeiro_vencimento!, 'yyyy-MM-dd');
             
         // --- NOVO: Assinatura do Proprietário (Empresa) ---
         const proprietarioNome = empresaLogada?.assinatura_proprietario_nome || empresaLogada?.nome || 'Empresa Contratante';
@@ -567,14 +376,14 @@ const PreencherContrato: React.FC = () => {
             
         const contratoPayload = {
             modelo_id: modelo.id,
-            cliente_id: clienteSelecionadoId, // Referencia tbl_clientes(id)
-            proprietario_id: proprietarioContratoId,
+            cliente_id: values.cliente_id, // Referencia tbl_clientes(id)
+            proprietario_id: values.proprietario_documento_id,
             status: status,
-            valor_total: valorTotal,
+            valor_total: values.valor_total,
             data_inicio: dataInicio,
-            numero_parcelas: tipoLancamento === 'unico' ? 1 : numeroParcelas,
-            dia_vencimento_parcela: tipoLancamento !== 'unico' ? intervaloDias : null,
-            valores_tags_preenchidos: { ...valoresTags, titulo: tituloDocumento, tipo_conteudo: tipoConteudo },
+            numero_parcelas: values.tipo_lancamento === 'unico' ? 1 : values.numero_parcelas,
+            dia_vencimento_parcela: values.tipo_lancamento !== 'unico' ? values.intervalo_dias : null,
+            valores_tags_preenchidos: { ...values.valores_tags, titulo: values.titulo_documento, tipo_conteudo: values.tipo_conteudo },
             conteudo_renderizado: conteudoRenderizado,
             
             // Assinatura do Proprietário (Automática)
@@ -635,7 +444,7 @@ const PreencherContrato: React.FC = () => {
         
         // 3. Gerar Contas a Receber (Apenas se não for rascunho)
         if (status !== 'rascunho') {
-            const isContractOwnerAdmin = proprietarioContratoId === ownerIdLogado && isAdmin;
+            const isContractOwnerAdmin = values.proprietario_documento_id === ownerIdLogado && isAdmin;
             const tabelaContasReceber = isContractOwnerAdmin ? 'admin_contas_receber' : 'contas_receber';
             const tabelaParcelasReceber = isContractOwnerAdmin ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
             const ownerKey = isContractOwnerAdmin ? 'admin_id' : 'empresa_id';
@@ -667,14 +476,14 @@ const PreencherContrato: React.FC = () => {
             
             // 3.1. Criar Conta Sintética
             const contaReceberPayload = {
-                [ownerKey]: proprietarioContratoId,
-                cliente_id: clienteSelecionadoId, // Referencia tbl_clientes(id)
-                descricao: `Contrato: ${tituloDocumento}`,
-                valor_total: valorTotal,
+                [ownerKey]: values.proprietario_documento_id,
+                cliente_id: values.cliente_id, // Referencia tbl_clientes(id)
+                descricao: `Contrato: ${values.titulo_documento}`,
+                valor_total: values.valor_total,
                 data_emissao: format(new Date(), 'yyyy-MM-dd'),
                 data_vencimento: dataInicio,
                 status: 'aberta',
-                tipo_receita: tipoLancamento === 'unico' ? 'única' : 'recorrente',
+                tipo_receita: values.tipo_lancamento === 'unico' ? 'única' : 'recorrente',
                 contrato_gerado_id: contratoGeradoId,
                 ...(isAdmin && { id_conta_patrimonial: contaAReceberId }),
                 ...(isAdmin && { id_conta_resultado: contaReceitaResultado }), // NOVO CAMPO
@@ -691,16 +500,16 @@ const PreencherContrato: React.FC = () => {
             
             // 3.2. Criar Parcelas
             let parcelasParaInserir = [];
-            const valorParcela = tipoLancamento === 'parcelar' ? (valorTotal / numeroParcelas) : valorTotal;
+            const valorParcela = values.tipo_lancamento === 'parcelar' ? (values.valor_total / values.numero_parcelas) : values.valor_total;
             
-            for (let i = 0; i < numeroParcelas; i++) {
-                const vencimento = tipoLancamento === 'unico' 
-                    ? dataVencimentoUnico! 
-                    : addDays(dataPrimeiroVencimento!, i * intervaloDias);
+            for (let i = 0; i < values.numero_parcelas; i++) {
+                const vencimento = values.tipo_lancamento === 'unico' 
+                    ? values.data_vencimento_unico! 
+                    : addDays(values.data_primeiro_vencimento!, i * values.intervalo_dias);
                     
                 parcelasParaInserir.push({
                     conta_receber_id: newContaReceberId,
-                    [ownerKey]: proprietarioContratoId,
+                    [ownerKey]: values.proprietario_documento_id,
                     numero_parcela: i + 1,
                     valor_parcela: valorParcela,
                     data_vencimento: format(vencimento, 'yyyy-MM-dd'),
@@ -714,7 +523,7 @@ const PreencherContrato: React.FC = () => {
             
             // 4. Lançamento 1: DÉBITO (Ativo) - Aumenta o direito a receber
             const dataMovimentacao = format(new Date(), 'yyyy-MM-dd') + 'T12:00:00Z';
-            const launchDescription = `Contrato: ${tituloDocumento}`;
+            const launchDescription = `Contrato: ${values.titulo_documento}`;
             const contaReceberIdShort = newContaReceberId.substring(0, 8); // USANDO O ID DA CONTA RECEBER
             
             if (isAdmin && contaAReceberId) {
@@ -722,7 +531,7 @@ const PreencherContrato: React.FC = () => {
                     proprietario_id: ownerIdLogado,
                     data_movimentacao: dataMovimentacao,
                     descricao: `Lançamento Inicial CR: ${launchDescription} (CR ID: ${contaReceberIdShort})`, // CORRIGIDO
-                    valor: valorTotal,
+                    valor: values.valor_total,
                     tipo: 'Entrada' as const, // Entrada no Ativo (Débito)
                     conta_bancaria_id: null,
                     conta_contabil_id: contaAReceberId,
@@ -748,7 +557,7 @@ const PreencherContrato: React.FC = () => {
                     proprietario_id: ownerIdLogado,
                     data_movimentacao: dataMovimentacao,
                     descricao: `Receita: ${launchDescription} (CR ID: ${contaReceberIdShort})`, // CORRIGIDO
-                    valor: valorTotal,
+                    valor: values.valor_total,
                     tipo: 'Saida' as const, // Saída (Crédito) na Receita
                     conta_bancaria_id: null,
                     conta_contabil_id: contaReceitaResultado,
@@ -812,6 +621,9 @@ const PreencherContrato: React.FC = () => {
       // Inclui tags que não têm valor preenchido
       return !valoresTags[tag.nome_tag];
   }).map(tag => tag.nome_tag); // Mapeia para retornar apenas a string do nome da tag
+  
+  // Renderiza o conteúdo do template (usando o valor do formulário)
+  const templateContent = valoresTags['{{CONTEUDO_PRINCIPAL}}'] || modelo.conteudo_template;
 
   return (
     <LayoutPrincipal>
@@ -850,206 +662,267 @@ const PreencherContrato: React.FC = () => {
           </Button>
       </div>
       
-      {/* CORREÇÃO DE LARGURA: Removendo a limitação de largura do container principal */}
-      <div className="w-full">
-        
-        {/* Coluna 1: Dados e Faturamento */}
-        <Card className="h-fit w-full">
-            <CardHeader><CardTitle className="text-xl">Dados e Faturamento</CardTitle></CardHeader>
-            <CardContent className="space-y-6">
-                
-                {isAdmin && (
-                    <div className="space-y-2">
-                        <Label htmlFor="empresa-contrato">Empresa Contratante</Label>
-                        <Select 
-                            value={proprietarioContratoId || ''} 
-                            onValueChange={setProprietarioContratoId}
-                        >
-                            <SelectTrigger id="empresa-contrato">
-                                <Building2 className="w-4 h-4 mr-2 text-muted-foreground" />
-                                <SelectValue placeholder="Selecione a Empresa" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {empresasContrato.map((e: EmpresaContrato) => (
-                                    <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                )}
-                
-                <div className="space-y-2">
-                    <Label htmlFor="titulo-documento">Título do Contrato</Label>
-                    <Input 
-                        id="titulo-documento"
-                        value={tituloDocumento}
-                        onChange={(e) => setTituloDocumento(e.target.value)}
-                        placeholder={modelo.titulo}
-                    />
-                </div>
-                
-                <div className="space-y-2">
-                    <Label htmlFor="cliente">Cliente (Contratado)</Label>
-                    <Select value={clienteSelecionadoId} onValueChange={setClienteSelecionadoId} disabled={!proprietarioContratoId}>
-                        <SelectTrigger id="cliente">
-                            <SelectValue placeholder="Selecione o Cliente" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {clientesCR.map(c => (
-                                <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                </div>
-                
-                <div className="space-y-4 pt-4 border-t">
-                    <h3 data-dyad-id="src\pages\PreencherContrato.tsx:834:20" data-dyad-name="h3" class="font-semibold text-lg">Detalhes Financeiros</h3>
-                    
-                    {/* CORREÇÃO: Usando grid-cols-1 md:grid-cols-2 */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <Label htmlFor="valor-total">Valor Total do Contrato (R$)</Label>
-                            <Input 
-                                id="valor-total"
-                                type="number"
-                                step="0.01"
-                                value={valorTotal}
-                                onChange={(e) => setValorTotal(parseFloat(e.target.value) || 0)}
-                                placeholder="0.00"
-                            />
-                        </div>
-                        
-                        <div className="space-y-2">
-                            <Label>Tipo de Lançamento</Label>
-                            <RadioGroup value={tipoLancamento} onValueChange={(v: TipoLancamento) => setTipoLancamento(v)} className="flex space-x-4 pt-2">
-                                <div className="flex items-center space-x-2"><RadioGroupItem value="unico" id="unico" /><Label htmlFor="unico">Único</Label></div>
-                                <div className="flex items-center space-x-2"><RadioGroupItem value="parcelar" id="parcelar" /><Label htmlFor="parcelar">Parcelar</Label></div>
-                                <div className="flex items-center space-x-2"><RadioGroupItem value="repetir" id="repetir" /><Label htmlFor="repetir">Repetir</Label></div>
-                            </RadioGroup>
-                        </div>
-                    </div>
-                    {/* FIM DA CORREÇÃO */}
-                    
-                    {tipoLancamento === 'unico' && (
-                        <div className="space-y-2">
-                            <Label>Data de Vencimento</Label>
-                            <Popover>
-                                <PopoverTrigger asChild>
-                                    <Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !dataVencimentoUnico && "text-muted-foreground")}>
-                                        {dataVencimentoUnico ? formatDate(dataVencimentoUnico) : <span>Selecione a data</span>}
-                                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                                    </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-auto p-0" align="start">
-                                    <Calendar mode="single" selected={dataVencimentoUnico} onSelect={setDataVencimentoUnico} initialFocus />
-                                </PopoverContent>
-                            </Popover>
-                        </div>
-                    )}
-                    
-                    {tipoLancamento !== 'unico' && (
-                        <div className="grid grid-cols-3 gap-4">
-                            <div className="space-y-2">
-                                <Label>Nº Parcelas</Label>
-                                <Input type="number" value={numeroParcelas} onChange={(e) => setNumeroParcelas(parseInt(e.target.value) || 1)} />
-                            </div>
-                            <div className="space-y-2">
-                                <Label>Intervalo (dias)</Label>
-                                <Input type="number" value={intervaloDias} onChange={(e) => setIntervaloDias(parseInt(e.target.value) || 30)} />
-                            </div>
-                            <div className="space-y-2">
-                                <Label>1º Vencimento</Label>
-                                <Popover>
-                                    <PopoverTrigger asChild>
-                                        <Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !dataPrimeiroVencimento && "text-muted-foreground")}>
-                                            {dataPrimeiroVencimento ? formatDate(dataPrimeiroVencimento) : <span>Data</span>}
-                                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                                        </Button>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-auto p-0" align="start">
-                                        <Calendar mode="single" selected={dataPrimeiroVencimento} onSelect={setDataPrimeiroVencimento} initialFocus />
-                                    </PopoverContent>
-                                </Popover>
-                            </div>
-                        </div>
-                    )}
-                </div>
-                
-                <div className="space-y-4 pt-4 border-t">
-                    <h3 className="font-semibold text-lg">Tags Manuais</h3>
-                    <p className="text-sm text-muted-foreground">Preencha as tags que não foram preenchidas automaticamente.</p>
-                    
-                    {tagsParaPreenchimentoManual.length === 0 ? (
-                        <p className="text-muted-foreground text-sm">Nenhuma tag manual pendente.</p>
-                    ) : (
-                        tagsParaPreenchimentoManual.map(tagKey => (
-                            <div key={tagKey} className="space-y-1">
-                                <Label htmlFor={tagKey} className="font-semibold">{tagKey}</Label>
-                                <Input 
-                                    id={tagKey}
-                                    value={valoresTags[tagKey] || ''}
-                                    onChange={(e) => handleTagChange(tagKey, e.target.value)}
-                                    placeholder={`Insira o valor para ${tagKey}`}
-                                />
-                            </div>
-                        ))
-                    )}
-                </div>
-            </CardContent>
-        </Card>
-        
-        {/* Coluna 2: Template e Ações */}
-        <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle className="text-xl">Prévia do Template</CardTitle>
-                <div className="flex space-x-2">
-                    <Button 
-                        onClick={handlePreview} 
-                        variant="outline" 
-                        size="sm"
-                        disabled={!modelo || !clienteSelecionadoId}
-                    >
-                        <Eye className="mr-2 h-4 w-4" />
-                        Pré-visualizar
-                    </Button>
-                    <Button 
-                        onClick={() => handleSalvarContrato('rascunho')} 
-                        variant="secondary" 
-                        size="sm"
-                        disabled={isSubmitting || !clienteSelecionadoId}
-                    >
-                        <Save className="mr-2 h-4 w-4" />
-                        Salvar Rascunho
-                    </Button>
-                </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-                <div className="border rounded-md p-4 bg-secondary/50 max-h-[400px] overflow-y-auto">
-                    {modelo?.conteudo_template ? (
-                        // Renderiza o conteúdo como HTML para preservar a formatação do RichTextEditor
-                        <div 
-                            className="prose dark:prose-invert max-w-none"
-                            dangerouslySetInnerHTML={{ __html: renderizarConteudo(modelo.conteudo_template, valoresTags) }} 
-                        />
-                    ) : (
-                        <p className="text-muted-foreground">Selecione um modelo e um cliente para ver a prévia.</p>
-                    )}
-                </div>
-                
-                <div className="flex flex-col sm:flex-row gap-4 pt-4 border-t">
-                    <Button 
-                        onClick={() => handleSalvarContrato('pendente_assinatura')} 
-                        className="flex-1 h-12"
-                        disabled={isSubmitting || !clienteSelecionadoId || valorTotal <= 0}
-                    >
-                        {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileSignature className="mr-2 h-4 w-4" />}
-                        Gerar e Enviar para Assinatura
-                    </Button>
-                </div>
-            </CardContent>
-        </Card>
-        
-      </div>
+      <FormProvider {...form}>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit((values) => handleSalvarContrato('pendente_assinatura'))} className="space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              
+              {/* Coluna 1: Dados e Faturamento */}
+              <Card className="lg:col-span-1 h-fit">
+                  <CardHeader><CardTitle className="text-xl">Dados e Faturamento</CardTitle></CardHeader>
+                  <CardContent className="space-y-6">
+                      
+                      {isAdmin && (
+                          <FormField control={form.control} name="proprietario_documento_id" render={({ field }) => (
+                              <FormItem className="space-y-2">
+                                  <FormLabel htmlFor="empresa-contrato">Empresa Contratante</FormLabel>
+                                  <Select 
+                                      value={field.value || ''} 
+                                      onValueChange={field.onChange}
+                                  >
+                                      <FormControl>
+                                          <SelectTrigger id="empresa-contrato">
+                                              <Building2 className="w-4 h-4 mr-2 text-muted-foreground" />
+                                              <SelectValue placeholder="Selecione a Empresa" />
+                                          </SelectTrigger>
+                                      </FormControl>
+                                      <SelectContent>
+                                          {empresasContrato.map((e: EmpresaContrato) => (
+                                              <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>
+                                          ))}
+                                      </SelectContent>
+                                  </Select>
+                                  <FormMessage />
+                              </FormItem>
+                          )} />
+                      )}
+                      
+                      <FormField control={form.control} name="titulo_documento" render={({ field }) => (
+                          <FormItem className="space-y-2">
+                              <FormLabel htmlFor="titulo-documento">Título do Contrato</FormLabel>
+                              <FormControl>
+                                  <Input 
+                                      id="titulo-documento"
+                                      placeholder={modelo.titulo}
+                                      {...field}
+                                  />
+                              </FormControl>
+                              <FormMessage />
+                          </FormItem>
+                      )} />
+                      
+                      <FormField control={form.control} name="cliente_id" render={({ field }) => (
+                          <FormItem className="space-y-2">
+                              <FormLabel htmlFor="cliente">Cliente (Contratado)</FormLabel>
+                              <Select value={field.value} onValueChange={field.onChange} disabled={!proprietarioContratoId}>
+                                  <FormControl>
+                                      <SelectTrigger id="cliente">
+                                          <SelectValue placeholder="Selecione o Cliente" />
+                                      </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                      {clientesCR.map(c => (
+                                          <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
+                                      ))}
+                                  </SelectContent>
+                              </Select>
+                              <FormMessage />
+                          </FormItem>
+                      )} />
+                      
+                      <Separator />
+                      
+                      <div className="space-y-4">
+                          <h3 data-dyad-id="src\pages\PreencherContrato.tsx:834:20" data-dyad-name="h3" className="font-semibold text-lg">Detalhes Financeiros</h3>
+                          
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <FormField control={form.control} name="valor_total" render={({ field }) => (
+                                  <FormItem className="space-y-2">
+                                      <FormLabel htmlFor="valor-total">Valor Total do Contrato (R$)</FormLabel>
+                                      <FormControl>
+                                          <Input 
+                                              id="valor-total"
+                                              type="number"
+                                              step="0.01"
+                                              placeholder="0.00"
+                                              {...field}
+                                              value={field.value === 0 ? '' : field.value}
+                                              onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                                          />
+                                      </FormControl>
+                                      <FormMessage />
+                                  </FormItem>
+                              )} />
+                              
+                              <FormField control={form.control} name="tipo_lancamento" render={({ field }) => (
+                                  <FormItem className="space-y-2">
+                                      <FormLabel>Tipo de Lançamento</FormLabel>
+                                      <FormControl>
+                                          <RadioGroup value={field.value} onValueChange={field.onChange} className="flex space-x-4 pt-2">
+                                              <div className="flex items-center space-x-2"><RadioGroupItem value="unico" id="unico" /><Label htmlFor="unico">Único</Label></div>
+                                              <div className="flex items-center space-x-2"><RadioGroupItem value="parcelar" id="parcelar" /><Label htmlFor="parcelar">Parcelar</Label></div>
+                                              <div className="flex items-center space-x-2"><RadioGroupItem value="repetir" id="repetir" /><Label htmlFor="repetir">Repetir</Label></div>
+                                          </RadioGroup>
+                                      </FormControl>
+                                      <FormMessage />
+                                  </FormItem>
+                              )} />
+                          </div>
+                          
+                          {tipoLancamento === 'unico' && (
+                              <FormField control={form.control} name="data_vencimento_unico" render={({ field }) => (
+                                  <FormItem className="flex flex-col space-y-2">
+                                      <FormLabel>Data de Vencimento</FormLabel>
+                                      <Popover>
+                                          <PopoverTrigger asChild>
+                                              <FormControl>
+                                                  <Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
+                                                      {field.value ? formatDate(field.value) : <span>Selecione a data</span>}
+                                                      <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                                  </Button>
+                                              </FormControl>
+                                          </PopoverTrigger>
+                                          <PopoverContent className="w-auto p-0" align="start">
+                                              <Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus />
+                                          </PopoverContent>
+                                      </Popover>
+                                      <FormMessage />
+                                  </FormItem>
+                              )} />
+                          )}
+                          
+                          {tipoLancamento !== 'unico' && (
+                              <div className="grid grid-cols-3 gap-4">
+                                  <FormField control={form.control} name="numero_parcelas" render={({ field }) => (
+                                      <FormItem className="space-y-2">
+                                          <FormLabel>Nº Parcelas</FormLabel>
+                                          <FormControl>
+                                              <Input type="number" placeholder="3" {...field} value={field.value || ''} onChange={(e) => field.onChange(parseInt(e.target.value) || 1)} />
+                                          </FormControl>
+                                          <FormMessage />
+                                      </FormItem>
+                                  )} />
+                                  <FormField control={form.control} name="intervalo_dias" render={({ field }) => (
+                                      <FormItem className="space-y-2">
+                                          <FormLabel>Intervalo (dias)</FormLabel>
+                                          <FormControl>
+                                              <Input type="number" placeholder="30" {...field} value={field.value || ''} onChange={(e) => field.onChange(parseInt(e.target.value) || 30)} />
+                                          </FormControl>
+                                          <FormMessage />
+                                      </FormItem>
+                                  )} />
+                                  <FormField control={form.control} name="data_primeiro_vencimento" render={({ field }) => (
+                                      <FormItem className="flex flex-col space-y-2">
+                                          <FormLabel>1º Vencimento</FormLabel>
+                                          <Popover>
+                                              <PopoverTrigger asChild>
+                                                  <FormControl>
+                                                      <Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
+                                                          {field.value ? formatDate(field.value) : <span>Data</span>}
+                                                          <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                                      </Button>
+                                                  </FormControl>
+                                              </PopoverTrigger>
+                                              <PopoverContent className="w-auto p-0" align="start">
+                                                  <Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus />
+                                              </PopoverContent>
+                                          </Popover>
+                                          <FormMessage />
+                                      </FormItem>
+                                  )} />
+                              </div>
+                          )}
+                      </div>
+                      
+                      <div className="space-y-4 pt-4 border-t">
+                          <h3 className="font-semibold text-lg">Tags Manuais</h3>
+                          <p className="text-sm text-muted-foreground">Preencha as tags que não foram preenchidas automaticamente.</p>
+                          
+                          {tagsParaPreenchimentoManual.length === 0 ? (
+                              <p className="text-muted-foreground text-sm">Nenhuma tag manual pendente.</p>
+                          ) : (
+                              tagsParaPreenchimentoManual.map(tagKey => (
+                                  <FormField
+                                      key={tagKey}
+                                      control={form.control}
+                                      name={`valores_tags.${tagKey}`}
+                                      render={({ field }) => (
+                                          <FormItem className="space-y-1">
+                                              <FormLabel htmlFor={tagKey} className="font-semibold">{tagKey}</FormLabel>
+                                              <FormControl>
+                                                  <Input 
+                                                      id={tagKey}
+                                                      placeholder={`Insira o valor para ${tagKey}`}
+                                                      {...field}
+                                                      value={field.value || ''}
+                                                      onChange={(e) => handleTagChange(tagKey, e.target.value)}
+                                                  />
+                                              </FormControl>
+                                              <FormMessage />
+                                          </FormItem>
+                                      )}
+                                  />
+                              ))
+                          )}
+                      </div>
+                  </CardContent>
+              </Card>
+              
+              {/* Coluna 2: Template e Ações */}
+              <Card className="lg:col-span-2">
+                  <CardHeader className="flex flex-row items-center justify-between">
+                      <CardTitle className="text-xl">Prévia do Template</CardTitle>
+                      <div className="flex space-x-2">
+                          <Button 
+                              onClick={handlePreview} 
+                              variant="outline" 
+                              size="sm"
+                              disabled={!modelo || !clienteSelecionadoId}
+                          >
+                              <Eye className="mr-2 h-4 w-4" />
+                              Pré-visualizar
+                          </Button>
+                          <Button 
+                              onClick={() => handleSalvarContrato('rascunho')} 
+                              variant="secondary" 
+                              size="sm"
+                              disabled={isSubmitting || !clienteSelecionadoId}
+                          >
+                              <Save className="mr-2 h-4 w-4" />
+                              Salvar Rascunho
+                          </Button>
+                      </div>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                      <div className="border rounded-md p-4 bg-secondary/50 max-h-[400px] overflow-y-auto">
+                          {modelo?.conteudo_template ? (
+                              // Renderiza o conteúdo como HTML para preservar a formatação do RichTextEditor
+                              <div 
+                                  className="prose dark:prose-invert max-w-none"
+                                  dangerouslySetInnerHTML={{ __html: renderizarConteudo(templateContent, valoresTags) }} 
+                              />
+                          ) : (
+                              <p className="text-muted-foreground">Selecione um modelo e um cliente para ver a prévia.</p>
+                          )}
+                      </div>
+                      
+                      <div className="flex flex-col sm:flex-row gap-4 pt-4 border-t">
+                          <Button 
+                              onClick={() => handleSalvarContrato('pendente_assinatura')} 
+                              className="flex-1 h-12"
+                              disabled={isSubmitting || !clienteSelecionadoId || valorTotal <= 0}
+                          >
+                              {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileSignature className="mr-2 h-4 w-4" />}
+                              Gerar e Enviar para Assinatura
+                          </Button>
+                      </div>
+                  </CardContent>
+              </Card>
+              
+            </div>
+          </form>
+        </Form>
+      </FormProvider>
       
       <ContratoPreviewDialog
         open={previewOpen}

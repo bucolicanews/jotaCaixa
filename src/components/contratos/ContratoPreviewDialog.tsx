@@ -21,12 +21,16 @@ const ContratoPreviewDialog: React.FC<ContratoPreviewDialogProps> = ({ open, onO
     printContent(conteudoHtml, `Prévia do Contrato: ${titulo}`, 'portrait', isHtml);
   };
   
-  // Conteúdo a ser exibido na tela (sempre renderizado como HTML)
-  const contentToDisplay = (
+  // Conteúdo a ser exibido na tela
+  const contentToDisplay = isHtml ? (
+    // Se for HTML, renderiza o HTML
     <div 
         className="prose dark:prose-invert max-w-none" // Adiciona classes 'prose' para estilização básica de HTML
         dangerouslySetInnerHTML={{ __html: conteudoHtml }} 
     />
+  ) : (
+    // Se for Texto Simples, usa <pre> para preservar a formatação
+    <pre className="whitespace-pre-wrap font-sans text-base">{conteudoHtml}</pre>
   );
 
   return (

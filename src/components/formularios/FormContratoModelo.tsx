@@ -227,8 +227,8 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="html">HTML (Edição de Código)</SelectItem>
-                        <SelectItem value="texto">Texto Simples (Editor WYSIWYG)</SelectItem>
+                        <SelectItem value="html">HTML (Editor Visual)</SelectItem> {/* ALTERADO */}
+                        <SelectItem value="texto">Texto Simples (Textarea)</SelectItem> {/* ALTERADO */}
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -248,22 +248,22 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
                     </FormLabel>
                     <FormControl>
                         {/* Renderização condicional */}
-                        {tipoConteudoWatch === 'texto' ? (
+                        {tipoConteudoWatch === 'html' ? (
                             <RichTextEditor
                                 value={field.value}
                                 onChange={field.onChange}
-                                placeholder="Digite ou cole o texto aqui. A formatação será preservada."
+                                placeholder="Digite ou cole o conteúdo HTML aqui. Use o editor visual para formatar."
                                 className="min-h-[300px]"
                             />
                         ) : (
                             <Textarea 
                                 ref={textareaRef}
-                                placeholder="Cole o código HTML completo aqui (incluindo tags <html> e <style>)" 
+                                placeholder="Insira o texto simples aqui. Use quebras de linha para parágrafos." 
                                 {...field} 
                                 rows={20}
                                 className={cn(
                                     "font-mono text-sm", 
-                                    tipoConteudoWatch === 'html' ? 'bg-yellow-50/50 dark:bg-yellow-900/10' : ''
+                                    tipoConteudoWatch === 'texto' ? 'bg-yellow-50/50 dark:bg-yellow-900/10' : ''
                                 )}
                                 onDragOver={handleDragOver}
                                 onDrop={handleDrop}
