@@ -195,19 +195,25 @@ const FormSaldoConta: React.FC<FormSaldoContaProps> = ({ contaInicial, onSaveCom
           )}
         />
         
-        <FormField
-          control={form.control}
-          name="saldo_inicial"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Saldo Inicial (R$)</FormLabel>
-              <FormControl>
-                <Input type="number" step="0.01" placeholder="0.00" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+        {/* O campo Saldo Inicial só é exibido se NÃO estiver editando */}
+        {!isEditing && (
+            <FormField
+              control={form.control}
+              name="saldo_inicial"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Saldo Inicial (R$)</FormLabel>
+                  <FormControl>
+                    <Input type="number" step="0.01" placeholder="0.00" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                  <p className="text-xs text-muted-foreground">
+                      Este é o saldo de partida. O saldo atual será calculado a partir deste valor mais os lançamentos.
+                  </p>
+                </FormItem>
+              )}
+            />
+        )}
         
         <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
           {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
