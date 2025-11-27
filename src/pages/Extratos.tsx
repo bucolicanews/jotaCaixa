@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Banknote, Filter, Search, Eye, Edit, Trash2, Printer } from 'lucide-react';
+import { Loader2, Banknote, Filter, Search, Eye, Edit, Trash2, Printer, ArrowUpCircle, ArrowDownCircle, TrendingUp } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
@@ -50,7 +50,7 @@ const Extratos: React.FC = () => {
   const [filtroTexto, setFiltroTexto] = useState('');
   const filtroTextoDebounced = useDebounce(filtroTexto, 500);
   const [contasDisponiveis, setContasDisponiveis] = useState<{ id: string, nome: string }[]>([]);
-  const [filtroPeriodo, setFiltroPeriodo] = useState<DateRange | undefined>(undefined); // NOVO ESTADO
+  const [filtroPeriodo, setFiltroPeriodo] = useState<DateRange | undefined>(undefined);
   
   // Edição
   const [extratoParaEditar, setExtratoParaEditar] = useState<ExtratoRecord | null>(null);
@@ -230,6 +230,15 @@ const Extratos: React.FC = () => {
     const htmlContent = ReactDOMServer.renderToStaticMarkup(printComponent);
     printContent(htmlContent, `Extratos - ${ownerName}`, orientation);
   };
+  
+  // --- CÁLCULO DOS TOTAIS PARA OS CARDS ---
+  const { totalEntradas, totalSaidas, variacaoLiquida } = useMemo(() => {
+      const entradas = extratos.filter(e => e.tipo === 'Entrada').reduce((sum, e) => sum + Math.abs(e.valor), 0);
+      const saidas = extratos.filter(e => e.tipo === 'Saida').reduce((sum, e) => sum + Math.abs(e.valor), 0);
+      const variacao = entradas - saidas;
+      return { totalEntradas: entradas, totalSaidas: saidas, variacaoLiquida: variacao };
+  }, [extratos]);
+  // ---------------------------------------
 
   if (carregandoSessao || carregandoExtratos) {
     return (
@@ -250,6 +259,44 @@ const Extratos: React.FC = () => {
       <h1 className="text-2xl md:text-3xl font-bold mb-6 flex items-center">
         <Banknote className="w-6 h-6 mr-2" /> Extratos Bancários Salvos
       </h1>
+      
+      {/* NOVO: CARDS DE RESUMO */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+          <Card className="border-l-4 border-green-500">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium text-green-700 dark:text-green-300">Total de Entradas</CardTitle>
+                  <ArrowUpCircle className="w-4 h-4 text-green-500" />
+              </CardHeader>
+              <CardContent>
+                  <div className="text-2xl font-bold mt-1 text-green-600">
+                      {formatCurrency(totalEntradas)}
+                  </div>
+              </CardContent>
+          </Card>
+          <Card className="border-l-4 border-red-500">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium text-red-700 dark:text-red-300">Total de Saídas</CardTitle>
+                  <ArrowDownCircle className="w-4 h-4 text-red-500" />
+              </CardHeader>
+              <CardContent>
+                  <div className="text-2xl font-bold mt-1 text-red-600">
+                      {formatCurrency(totalSaidas)}
+                  </div>
+              </CardContent>
+          </Card>
+          <Card className={cn("border-l-4", variacaoLiquida >= 0 ? "border-blue-500" : "border-red-500")}>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium text-foreground">Variação Líquida</CardTitle>
+                  <TrendingUp className="w-4 h-4 text-primary" />
+              </CardHeader>
+              <CardContent>
+                  <div className={cn("text-2xl font-bold mt-1", variacaoLiquida >= 0 ? "text-blue-600" : "text-red-600")}>
+                      {formatCurrency(variacaoLiquida)}
+                  </div>
+              </CardContent>
+          </Card>
+      </div>
+      {/* FIM CARDS DE RESUMO */}
       
       <Card className="mb-6">
         <CardHeader className="pb-2">
