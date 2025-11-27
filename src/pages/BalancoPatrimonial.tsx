@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { useSessao } from '@/hooks/use-sessao';
-import { Loader2, Scale, Filter } from 'lucide-react';
+import { Loader2, Scale } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DateRangePicker } from '@/components/DateRangePicker';
 import { DateRange } from 'react-day-picker';
@@ -53,7 +53,7 @@ const BalancoPatrimonial: React.FC = () => {
       </h1>
       
       <Card className="mb-6">
-        <CardHeader><CardTitle className="text-lg flex items-center"><Filter className="w-4 h-4 mr-2" /> Filtros</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-lg">Filtros</CardTitle></CardHeader>
         <CardContent className="flex flex-col md:flex-row md:items-center gap-6">
             <div className="flex-1">
                 <p className="text-sm text-muted-foreground mb-3">O balanço será calculado até a data final selecionada.</p>
