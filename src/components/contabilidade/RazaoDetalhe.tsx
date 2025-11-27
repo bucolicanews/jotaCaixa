@@ -12,8 +12,8 @@ import { useSessao } from '@/hooks/use-sessao';
 import { showError } from '@/utils/toast';
 import { format } from 'date-fns';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { useRazao } from '@/hooks/contabilidade/useRazao'; // Hook a ser criado
-import RazaoPrint from './RazaoPrint'; // Componente de impressão a ser criado
+import { useRazao } from '@/hooks/contabilidade/useRazao';
+import RazaoPrint from './RazaoPrint';
 import { PlanoContas } from '@/types/plano-contas';
 
 interface RazaoDetalheProps {
