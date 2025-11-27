@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -71,6 +71,9 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
   const [contasPatrimoniais, setContasPatrimoniais] = useState<PlanoContas[]>([]);
   const [loadingContasPatrimoniais, setLoadingContasPatrimoniais] = useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
+  
+  // NOVO ESTADO: Loading manual
+  const [loading, setLoading] = useState(false); 
   
   // NOVO ESTADO: Modal de Extrato Manual
   const [extratoManualDialog, setExtratoManualDialog] = useState(false);
@@ -611,7 +614,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
                   )}
                 </div>
               )}
-              <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}><Loader2 className={cn("mr-2 h-4 w-4 animate-spin", !form.formState.isSubmitting && "hidden")} />Confirmar Recebimento</Button>
+              <Button type="submit" className="w-full" disabled={loading || form.formState.isSubmitting}><Loader2 className={cn("mr-2 h-4 w-4 animate-spin", (loading || form.formState.isSubmitting) && "hidden")} />Confirmar Recebimento</Button>
             </form>
           </Form>
         </DialogContent>

@@ -68,8 +68,12 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
   const [mapeamentoContabil, setMapeamentoContabil] = useState<Record<string, string | null>>({});
   const [isInitialized, setIsInitialized] = useState(false);
   
-  const [extratoManualDialog, setExtratoManualDialog] = useState(false); // NOVO ESTADO
-  const [pendingPaymentData, setPendingPaymentData] = useState<FormValues | null>(null); // NOVO ESTADO
+  // NOVO ESTADO: Loading manual
+  const [loading, setLoading] = useState(false); 
+  
+  // NOVO ESTADO: Modal de Extrato Manual
+  const [extratoManualDialog, setExtratoManualDialog] = useState(false);
+  const [pendingPaymentData, setPendingPaymentData] = useState<FormValues | null>(null);
 
   const tabelaPagamentos = 'admin_pagamentos';
   const tabelaParcelas = 'admin_parcelas_pagar';
@@ -245,7 +249,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
         return;
     }
     
-    setLoading(true);
+    setLoading(true); // <--- FIX: Use setLoading here
 
     const contaPagamento = mapeamentoContabil['pagamento'];
     const contaParcelaPagar = mapeamentoContabil['parcela_pagar'];
@@ -332,7 +336,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
       }).eq('id', parcela.id);
       
       const { count: parcelasPendentesCount } = await supabase
-          .from(tabelaParcelas)
+          .from(tabelaContasPagar)
           .select('id', { count: 'exact', head: true })
           .eq('conta_pagar_id', parcela.conta_pagar_id)
           .in('status', ['aberta', 'parcial', 'reprogramada']);
@@ -549,8 +553,8 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
                   </div>
               </div>
 
-              <Button type="submit" className="w-full" disabled={form.formState.isSubmitting || Math.abs(restante) > 0.01}>
-                <Loader2 className={cn("mr-2 h-4 w-4 animate-spin", !form.formState.isSubmitting && "hidden")} />
+              <Button type="submit" className="w-full" disabled={loading || form.formState.isSubmitting || Math.abs(restante) > 0.01}>
+                <Loader2 className={cn("mr-2 h-4 w-4 animate-spin", (loading || form.formState.isSubmitting) && "hidden")} />
                 Confirmar Pagamento
               </Button>
             </form>
