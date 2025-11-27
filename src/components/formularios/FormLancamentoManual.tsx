@@ -111,10 +111,8 @@ const FormLancamentoManual: React.FC<FormLancamentoManualProps> = ({ onSaveCompl
         return;
     }
 
-    const isSubmitting = form.formState.isSubmitting;
-    if (isSubmitting) return;
-    
-    form.setValue('data_movimentacao', values.data_movimentacao); // Garante que a data seja salva
+    // CRÍTICO: Define isSubmitting no início
+    form.setValue('data_movimentacao', values.data_movimentacao); 
     
     const dataMovimentacao = format(values.data_movimentacao, 'yyyy-MM-dd') + 'T12:00:00Z';
     const valor = values.valor;
@@ -140,7 +138,7 @@ const FormLancamentoManual: React.FC<FormLancamentoManualProps> = ({ onSaveCompl
         data_movimentacao: dataMovimentacao,
         descricao: `C: ${contaCredito.Descricao} - ${descricaoComplementar}`,
         valor: valor,
-        tipo: 'Saida' as const, // Crédito é sempre 'Saida'
+        tipo: 'Saida' as const, // Crédito é sempre 'Saída'
         conta_bancaria_id: null,
         conta_contabil_id: values.conta_credito_id,
         origem: 'lancamento_manual',
@@ -180,10 +178,7 @@ const FormLancamentoManual: React.FC<FormLancamentoManualProps> = ({ onSaveCompl
     return <div className="flex justify-center items-center h-40"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>;
   }
   
-  const getContaDisplay = (id: string | undefined) => {
-      const conta = contasAnaliticas.find(c => c.id === id);
-      return conta ? `${conta.Conta} - ${conta.Descricao}` : 'Selecione a conta';
-  };
+  const isFormValid = form.formState.isValid;
 
   return (
     <Form {...form}>
@@ -291,7 +286,7 @@ const FormLancamentoManual: React.FC<FormLancamentoManualProps> = ({ onSaveCompl
             </FormItem>
         )} />
 
-        <Button type="submit" className="w-full" disabled={form.formState.isSubmitting || !contaDebitoId || !contaCreditoId || !form.watch('valor')}>
+        <Button type="submit" className="w-full" disabled={form.formState.isSubmitting || !isFormValid}>
           {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           <Save className="mr-2 h-4 w-4" /> Registrar Lançamento
         </Button>
