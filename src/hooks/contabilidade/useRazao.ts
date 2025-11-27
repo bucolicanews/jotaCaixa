@@ -92,6 +92,11 @@ export const useRazao = (filtroPeriodo: DateRange | undefined): RazaoHook => {
         const lancamentosAntes = lancamentosAnteriores.filter(l => l.conta_contabil_id === contaId);
         let saldoAcumulado = calcularSaldoInicial(conta, lancamentosAntes, saldosIniciais);
         
+        // DEBUG: Loga o saldo inicial antes de processar o período
+        if (Math.abs(saldoAcumulado) > 0.01) {
+            console.log(`[Razao] Conta ${conta.Conta}: Saldo Inicial Calculado: ${saldoAcumulado}`);
+        }
+        
         // 3.2. Processar Lançamentos do Período
         const lancamentosDoPeriodo = lancamentosPeriodo.filter(l => l.conta_contabil_id === contaId)
             .sort((a, b) => parseISO(a.data_movimentacao).getTime() - parseISO(b.data_movimentacao).getTime());
@@ -195,6 +200,9 @@ export const useRazao = (filtroPeriodo: DateRange | undefined): RazaoHook => {
         }
         return acc;
     }, {} as SaldoInicialMap);
+    
+    // DEBUG: Loga o mapa de saldos iniciais
+    console.log('[Razao] Saldos Iniciais Map:', saldosIniciaisMap);
 
     const contasAnaliticas = contasData as PlanoContas[];
     
