@@ -54,13 +54,12 @@ const SECOES_MENU: MenuSection[] = [
             { nome: 'Contas a Receber', caminho: '/contas-receber', icone: ArrowUpCircle, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'contas_receber' },
         ]
     },
-    // NOVO: SEÇÃO BANCO
+    // NOVO: SEÇÃO LANÇAMENTOS
     {
-        titulo: 'Banco',
+        titulo: 'Lançamentos',
         perfis: ['Admin', 'Cliente', 'Usuario'],
         itens: [
-            { nome: 'Conciliação', caminho: '/conciliacao', icone: DollarSign, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'conciliacao' },
-            { nome: 'Extratos Salvos', caminho: '/extratos', icone: Eye, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'conciliacao' }, // NOVO ITEM
+            { nome: 'Lançamento Manual', caminho: '/lancamentos', icone: DollarSign, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'plano_contas' },
         ]
     },
     // NOVO: SEÇÃO CONTABILIDADE

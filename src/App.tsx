@@ -55,6 +55,7 @@ import Exportar from "./pages/Exportar";
 import LancamentosNaoMapeados from "./pages/LancamentosNaoMapeados";
 import Balancete from "./pages/Balancete"; // NOVO IMPORT
 import Razao from "./pages/Razao"; // NOVO IMPORT
+import Lancamentos from "./pages/Lancamentos"; // NOVO IMPORT
 
 const queryClient = new QueryClient();
 
@@ -262,8 +263,8 @@ const App = () => (
             <Route path="/relatorios/fluxo-caixa" element={<FluxoCaixa />} />
             <Route path="/relatorios/balanco" element={<BalancoPatrimonial />} />
             <Route path="/relatorios/dre" element={<DRE />} />
-            <Route path="/relatorios/balancete" element={<Balancete />} /> {/* NOVA ROTA */}
-            <Route path="/relatorios/razao" element={<Razao />} /> {/* NOVA ROTA */}
+            <Route path="/relatorios/balancete" element={<Balancete />} />
+            <Route path="/relatorios/razao" element={<Razao />} />
             <Route path="/relatorios/lancamentos-nao-mapeados" element={<LancamentosNaoMapeados />} />
             <Route path="/configuracoes" element={<Configuracoes />} />
             <Route path="/planos" element={<GerenciarPlanos />} />
@@ -295,6 +296,9 @@ const App = () => (
             
             {/* NOVA ROTA: Extratos */}
             <Route path="/extratos" element={<Extratos />} />
+            
+            {/* NOVA ROTA: Lançamentos Manuais */}
+            <Route path="/lancamentos" element={<Lancamentos />} />
 
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
