@@ -20,8 +20,8 @@ import { Separator } from "@/components/ui/separator";
 const formatCurrency = (value: number) =>
     value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-// Nome do bucket de armazenamento para comprovantes
-const COMPROVANTE_BUCKET = 'comprovantes-pagamento'; 
+// Nome do bucket de armazenamento para comprovantes (USANDO UM BUCKET EXISTENTE)
+const COMPROVANTE_BUCKET = 'documentos-admissao'; 
 
 interface ParcelaParaPagamento extends AdminParcelaPagar {
     fornecedor: string;
@@ -90,7 +90,8 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
         setIsUploading(true);
         
         const fileExt = file.name.split('.').pop();
-        const fileName = `${adminId}/${parcelaId}/${Date.now()}.${fileExt}`;
+        // Usando uma subpasta 'comprovantes-cp' dentro do bucket existente
+        const fileName = `${adminId}/${parcelaId}/comprovantes-cp/${Date.now()}.${fileExt}`;
         
         try {
             const { data, error: uploadError } = await supabase.storage
@@ -168,7 +169,6 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
             if (extratosPayload.length > 0) {
                 const { error: extratoError } = await supabase.from('extratos').insert(extratosPayload);
                 if (extratoError) throw extratoError;
-                showSuccess(`${extratosPayload.length} registros de extrato criados.`);
             }
             
             // 4. Continuar com o fluxo de pagamento (Registrar Pagamento e Lançamentos)
@@ -187,6 +187,8 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
                     historico_id: historicoId,
                     id_conta_resultado: contaDespesaCriacao,
                     observacao: values.observacao || null,
+                    // Adiciona a URL do comprovante ao registro de pagamento
+                    anexo_url: comprovanteUrl, 
                 };
                 
                 const { error: pagamentoError } = await supabase.from('admin_pagamentos').insert(pagamentoPayload);
