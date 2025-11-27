@@ -19,7 +19,6 @@ import { TAGS_PADRAO } from '@/config/contrato-tags-padrao';
 import { cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { sanitizeConteudo } from '@/utils/formatters';
-import RichTextEditor from '@/components/ui/RichTextEditor'; // NOVO IMPORT
 
 // Extensão local para ContratoModelo
 interface ExtendedContratoModelo extends ContratoModelo {
@@ -154,7 +153,7 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
       showSuccess('Todas as tags copiadas para a área de transferência!');
   };
   
-  // --- FUNÇÕES DE DRAG AND DROP (Apenas para Textarea Simples) ---
+  // --- FUNÇÕES DE DRAG AND DROP (Para Textarea Simples) ---
   
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>, tag: string) => {
       e.dataTransfer.setData("text/plain", tag);
@@ -168,7 +167,7 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
       e.preventDefault();
       const tag = e.dataTransfer.getData("text/plain");
       
-      if (!tag || tipoConteudoWatch === 'html') return; // Ignora se for HTML (RichTextEditor)
+      if (!tag) return;
       
       const textarea = textareaRef.current;
       if (!textarea) return;
@@ -222,7 +221,7 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="html">HTML (Editor Visual)</SelectItem>
+                        <SelectItem value="html">HTML (Edição de Código)</SelectItem>
                         <SelectItem value="texto">Texto Simples</SelectItem>
                       </SelectContent>
                     </Select>
@@ -242,25 +241,18 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
                         </Button>
                     </FormLabel>
                     <FormControl>
-                        {/* CORREÇÃO AQUI: Renderização condicional */}
-                        {tipoConteudoWatch === 'html' ? (
-                            <RichTextEditor
-                                value={field.value}
-                                onChange={field.onChange}
-                                placeholder="Cole o conteúdo HTML ou use o editor visual..."
-                                className="min-h-[300px]"
-                            />
-                        ) : (
-                            <Textarea 
-                                ref={textareaRef}
-                                placeholder="Insira o conteúdo do contrato aqui, usando as tags dinâmicas." 
-                                {...field} 
-                                rows={15}
-                                className="font-mono text-sm"
-                                onDragOver={handleDragOver}
-                                onDrop={handleDrop}
-                            />
-                        )}
+                        <Textarea 
+                            ref={textareaRef}
+                            placeholder={tipoConteudoWatch === 'html' ? "Cole o código HTML completo aqui (incluindo tags <html> e <style>)" : "Insira o conteúdo do contrato aqui, usando as tags dinâmicas."} 
+                            {...field} 
+                            rows={tipoConteudoWatch === 'html' ? 20 : 15} // Mais linhas para HTML
+                            className={cn(
+                                "font-mono text-sm", 
+                                tipoConteudoWatch === 'html' ? 'bg-yellow-50/50 dark:bg-yellow-900/10' : ''
+                            )}
+                            onDragOver={handleDragOver}
+                            onDrop={handleDrop}
+                        />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
