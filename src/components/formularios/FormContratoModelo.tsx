@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, Tag, Save, Eye } from 'lucide-react';
+import { Loader2, Tag, Save, Eye, Copy } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { ContratoModelo, ContratoTag } from '@/types/contratos';
@@ -145,6 +145,14 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
       return [...TAGS_PADRAO, ...tagsCustomizadas].sort((a, b) => a.nome_tag.localeCompare(b.nome_tag));
   }, [tagsCustomizadas]);
   
+  // --- NOVO HANDLER: Copiar todas as tags ---
+  const handleCopyAllTags = () => {
+      const tagsString = allTags.map(t => t.nome_tag).join(', ');
+      navigator.clipboard.writeText(tagsString);
+      showSuccess('Todas as tags copiadas para a área de transferência!');
+  };
+  // --- FIM NOVO HANDLER ---
+  
   // --- FUNÇÕES DE DRAG AND DROP ---
   
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>, tag: string) => {
@@ -260,6 +268,18 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
                 </CardHeader>
                 <CardContent>
                     <p className="text-sm text-muted-foreground mb-3">Clique para copiar ou arraste para o campo de conteúdo.</p>
+                    
+                    {/* NOVO BOTÃO DE COPIAR TUDO */}
+                    <Button 
+                        variant="secondary" 
+                        size="sm" 
+                        onClick={handleCopyAllTags}
+                        className="w-full mb-4"
+                        disabled={allTags.length === 0}
+                    >
+                        <Copy className="w-4 h-4 mr-2" /> Copiar Todas as Tags ({allTags.length})
+                    </Button>
+                    
                     <div className="space-y-2">
                         {allTags.map((tag: ContratoTag) => (
                             <div 

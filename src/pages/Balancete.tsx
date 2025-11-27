@@ -22,7 +22,7 @@ const Balancete: React.FC = () => {
     to: endOfMonth(new Date()),
   });
   
-  const [filtroSomenteComSaldo, setFiltroSomenteComSaldo] = useState(false);
+  const [filtroSomenteComSaldo, setFiltroSomenteComSaldo] = useState(true);
   
   const canAccessPage = role === 'Admin' || (role === 'Cliente' && (perfil as ClienteProfile)?.permissoes?.relatorios === true);
 
@@ -68,6 +68,7 @@ const Balancete: React.FC = () => {
                     id="filtro-saldo" 
                     checked={filtroSomenteComSaldo} 
                     onCheckedChange={setFiltroSomenteComSaldo} 
+                   
                 />
                 <Label htmlFor="filtro-saldo" className="text-sm">
                     Exibir Somente Contas com Saldo Final (R$ ≠ 0,00)
@@ -79,7 +80,7 @@ const Balancete: React.FC = () => {
       {isPeriodSelected ? (
         <BalanceteDetalhe 
             filtroPeriodo={filtroPeriodo}
-            filtroSomenteComSaldo={filtroSomenteComSaldo}
+            filtroSomenteComSaldo={filtroSomenteComSaldo} 
             logoUrl={logoUrl}
             ownerName={ownerName}
         />

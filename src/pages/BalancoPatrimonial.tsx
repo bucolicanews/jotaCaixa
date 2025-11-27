@@ -22,7 +22,7 @@ const BalancoPatrimonial: React.FC = () => {
   });
   
   // NOVO ESTADO: Filtro para mostrar apenas contas com saldo diferente de zero
-  const [filtroSomenteComSaldo, setFiltroSomenteComSaldo] = useState(false);
+  const [filtroSomenteComSaldo, setFiltroSomenteComSaldo] = useState(true);
   
   const canAccessPage = role === 'Admin' || (role === 'Cliente' && (perfil as any)?.permissoes?.relatorios === true);
 
