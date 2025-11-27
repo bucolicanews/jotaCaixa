@@ -47,7 +47,6 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
   const [conteudoPreview, setConteudoPreview] = useState('');
   const [previewTitle, setPreviewTitle] = useState('');
   
-  // NOVO: Referência para o Textarea (usado apenas para HTML)
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   
   const getOwnerId = () => {
@@ -230,7 +229,7 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Selecione o formato" />
-                        </Trigger>
+                        </SelectTrigger>
                       </FormControl>
                       <SelectContent>
                         <SelectItem value="html">HTML (Edição de Código)</SelectItem>
