@@ -107,7 +107,6 @@ const PreencherContrato: React.FC = () => {
   const [modelo, setModelo] = useState<ContratoModelo | null>(null);
   const [contratoInicial, setContratoInicial] = useState<ContratoGerado | null>(null);
   const [tagsCustomizadas, setTagsCustomizadas] = useState<ContratoTag[]>([]);
-  const [clientesCR, setClientesCR] = useState<ClienteCRCompleto[]>([]);
   
   const [valoresTags, setValoresTags] = useState<Record<string, string>>({});
   const [carregandoDados, setCarregandoDados] = useState(true);
@@ -243,11 +242,15 @@ const PreencherContrato: React.FC = () => {
     
     setCarregandoDados(true);
     
+    let initialProprietarioContratoId = ownerIdLogado;
+    let currentModelo: ContratoModelo | null = null;
+    let initialValoresTags: Record<string, string> = {};
+    let initialClienteId = '';
+    
     // 2. Configurar Empresa Logada (Contratante)
     setEmpresaLogada(empresaLogadaMemo);
     
     // 3. Configurar Empresas Contratantes (Apenas Admin)
-    let initialProprietarioContratoId = ownerIdLogado;
     if (isAdmin) {
         const { data: clientsData, error: clientsError } = await supabase
             .from('tbl_clientes')
@@ -269,7 +272,7 @@ const PreencherContrato: React.FC = () => {
     if (contratoId) {
         const { data: contratoData, error: contratoLoadError } = await supabase
             .from('contratos_gerados')
-            .select('*, valores_tags_preenchidos')
+            .select('*, modelos_contrato:modelo_id(tipo_conteudo)')
             .eq('id', contratoId)
             .single();
             
@@ -279,15 +282,15 @@ const PreencherContrato: React.FC = () => {
             return;
         }
         
-        const contrato = contratoData as ContratoGerado;
+        const contrato = contratoData as ContratoGerado & { modelos_contrato: { tipo_conteudo: TipoConteudo } | null };
         setContratoInicial(contrato);
         initialProprietarioContratoId = contrato.proprietario_id; // Sobrescreve o ID inicial
         
         setClienteSelecionadoId(contrato.cliente_id);
         setValorTotal(contrato.valor_total); // Define o valor total
         setValoresTags(contrato.valores_tags_preenchidos || {});
-        setTituloDocumento(contrato.valores_tags_preenchidos?.titulo || modeloData.titulo);
-        setTipoConteudo(contrato.valores_tags_preenchidos?.tipo_conteudo || modeloData.tipo_conteudo as TipoConteudo);
+        setTituloDocumento(contrato.valores_tags_preenchidos?.titulo || '');
+        setTipoConteudo(contrato.valores_tags_preenchidos?.tipo_conteudo || contrato.modelos_contrato?.tipo_conteudo as TipoConteudo || 'html');
         
         const numParcelas = contrato.numero_parcelas;
         const valorTotalContrato = contrato.valor_total;
@@ -361,6 +364,14 @@ const PreencherContrato: React.FC = () => {
             }
         }
         
+        // 4.1. Buscar o modelo associado (para ter o objeto completo)
+        const { data: modeloData } = await supabase
+            .from('contrato_modelos')
+            .select('*, tipo_conteudo')
+            .eq('id', contrato.modelo_id)
+            .single();
+        currentModelo = modeloData as ContratoModelo;
+        
     }
     
     // 5. Buscar Modelo (se for criação)
@@ -376,14 +387,18 @@ const PreencherContrato: React.FC = () => {
             navigate('/contratos', { replace: true });
             return;
         }
-        setModelo(modeloData as ContratoModelo);
-        setTituloDocumento(modeloData.titulo);
-        setTipoConteudo(modeloData.tipo_conteudo as TipoConteudo);
+        currentModelo = modeloData as ContratoModelo;
     }
     
+    setModelo(currentModelo);
     setProprietarioContratoId(initialProprietarioContratoId);
     
+    // 6. Carregar dados dependentes (clientes e tags)
+    await fetchDependentData(initialProprietarioContratoId || ownerIdLogado);
+    
     setCarregandoDados(false);
+    
+  // Removi `documentoInicial` das dependências para evitar loop
   }, [modeloId, ownerIdLogado, navigate, role, perfil, usuario, isAdmin, isClient, contratoId, empresaLogadaMemo, fetchDependentData]);
   
   // Efeito para monitorar a mudança do proprietário do contrato (proprietarioContratoId)
@@ -1011,7 +1026,11 @@ const PreencherContrato: React.FC = () => {
             <CardContent className="space-y-4">
                 <div className="border rounded-md p-4 bg-secondary/50 max-h-[400px] overflow-y-auto">
                     {modelo?.conteudo_template ? (
-                        <div dangerouslySetInnerHTML={{ __html: renderizarConteudo(modelo.conteudo_template, valoresTags) }} />
+                        // Renderiza o conteúdo como HTML para preservar a formatação do RichTextEditor
+                        <div 
+                            className="prose dark:prose-invert max-w-none"
+                            dangerouslySetInnerHTML={{ __html: renderizarConteudo(modelo.conteudo_template, valoresTags) }} 
+                        />
                     ) : (
                         <p className="text-muted-foreground">Selecione um modelo e um cliente para ver a prévia.</p>
                     )}

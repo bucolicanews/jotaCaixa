@@ -83,7 +83,7 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
     resolver: zodResolver(formSchema),
     defaultValues: {
       titulo: modeloInicial?.titulo || '',
-      // Se for HTML, aplicamos sanitize, senão, usamos o valor puro
+      // Aplica sanitize apenas se for HTML puro (para evitar quebra de tags)
       conteudo_template: modeloInicial?.conteudo_template ? sanitizeConteudo(modeloInicial.conteudo_template) : '', 
       tipo_conteudo: modeloInicial?.tipo_conteudo || 'html',
     },
@@ -99,12 +99,9 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
     
     let finalContent = values.conteudo_template;
     
-    // CRÍTICO: Se o tipo for 'texto', removemos todas as tags HTML antes de salvar
-    if (values.tipo_conteudo === 'texto') {
-        // Se for texto, o RichTextEditor já retorna HTML, mas o stripHtmlTags
-        // foi removido para permitir a formatação básica (negrito, alinhamento)
-        // no preview e impressão.
-        // finalContent = stripHtmlTags(finalContent); // REMOVIDO
+    // Se for HTML, sanitiza para evitar injeção de código malicioso no editor
+    if (values.tipo_conteudo === 'html') {
+        finalContent = sanitizeConteudo(finalContent);
     }
     
     const dataToSave = {
@@ -146,8 +143,6 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
           const regex = new RegExp(tag.nome_tag, 'g');
           previewContent = previewContent.replace(regex, `[${tag.descricao}]`);
       });
-      
-      // Se for texto simples, o conteúdo já é HTML do editor, então não precisamos de stripHtmlTags
       
       setConteudoPreview(previewContent);
       setPreviewTitle(form.getValues('titulo'));
@@ -252,7 +247,7 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
                         </Button>
                     </FormLabel>
                     <FormControl>
-                        {/* CORREÇÃO AQUI: Renderização condicional */}
+                        {/* Renderização condicional */}
                         {tipoConteudoWatch === 'texto' ? (
                             <RichTextEditor
                                 value={field.value}

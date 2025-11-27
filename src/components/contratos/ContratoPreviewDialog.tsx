@@ -19,15 +19,9 @@ const ContratoPreviewDialog: React.FC<ContratoPreviewDialogProps> = ({ open, onO
   const handlePrint = () => {
     let printHtml = conteudoHtml;
     
-    if (!isHtml) {
-        // Se for 'texto' (gerado pelo RichTextEditor), usamos o HTML gerado
-        // para preservar a formatação (negrito, alinhamento).
-        printHtml = conteudoHtml; 
-    } else {
-        // Se for 'html' (código puro), usamos o HTML puro.
-        printHtml = conteudoHtml;
-    }
-    
+    // Se for 'texto', o conteúdo já é HTML formatado pelo editor.
+    // Se for 'html', é o código HTML puro.
+    // Em ambos os casos, enviamos o HTML para a impressão.
     printContent(printHtml, `Prévia do Contrato: ${titulo}`);
   };
   
