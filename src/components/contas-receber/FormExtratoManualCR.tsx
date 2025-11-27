@@ -70,14 +70,17 @@ const FormExtratoManualCR: React.FC<FormExtratoManualCRProps> = ({
     onSaveComplete,
     onClose,
 }) => {
-    const { role } = useSessao();
+    const { role, usuario, perfil } = useSessao();
     const isAdmin = role === 'Admin';
     
     const [loading, setLoading] = useState(false);
     const [comprovanteFile, setComprovanteFile] = useState<File | null>(null);
     const [isUploading, setIsUploading] = useState(false);
     
-    const ownerId = parcela.empresa_id;
+    // CORREÇÃO: O ownerId para RLS é o ID do usuário logado (Admin/Cliente) ou o cliente_id (Usuário)
+    const ownerId = usuario?.id;
+    const proprietarioDaSessao = isAdmin ? usuario?.id : (perfil as any)?.cliente_id || (perfil as any)?.id;
+
     const valorRecebido = recebimentoDetalhes.valor_recebido;
     const contaDestinoId = recebimentoDetalhes.conta_id;
     
@@ -121,6 +124,11 @@ const FormExtratoManualCR: React.FC<FormExtratoManualCRProps> = ({
     };
 
     const onSubmit = async (values: FormValues) => {
+        if (!proprietarioDaSessao) {
+            showError('ID do proprietário da sessão não encontrado.');
+            return;
+        }
+        
         setLoading(true);
 
         const tabelaRecebimentos = isAdmin ? 'admin_recebimentos' : 'recebimentos';
@@ -129,6 +137,7 @@ const FormExtratoManualCR: React.FC<FormExtratoManualCRProps> = ({
         
         const valorPagoAnterior = parcela.valor_pago || 0;
         const novoValorPagoTotal = valorPagoAnterior + valorRecebido;
+        const saldoRestanteCalculado = parcela.valor_parcela - novoValorPagoTotal;
         const quitouComPagamentoAtual = novoValorPagoTotal >= parcela.valor_parcela;
         
         try {
@@ -148,7 +157,7 @@ const FormExtratoManualCR: React.FC<FormExtratoManualCRProps> = ({
                 
             if (csError) throw csError;
             const descricaoContaSintetica = contaSintetica?.descricao || 'Recebimento';
-            const contaReceitaResultado = contaSintetica?.id_conta_resultado;
+            const contaReceitaResultado = contaSintetica?.id_conta_resultado; // Conta de Receita (DRE)
             
             const dataPagamentoISO = format(dataPagamento, 'yyyy-MM-dd') + 'T12:00:00Z';
             
@@ -164,11 +173,11 @@ const FormExtratoManualCR: React.FC<FormExtratoManualCRProps> = ({
                 
                 // Busca a conta contábil de recebimento (se for Admin)
                 const contaContabilRecebimento = isAdmin 
-                    ? (await supabase.from('configuracao_contas_receber').select('conta_contabil_id').eq('proprietario_id', ownerId).eq('tipo_registro', 'recebimento').single()).data?.conta_contabil_id 
+                    ? (await supabase.from('configuracao_contas_receber').select('conta_contabil_id').eq('proprietario_id', proprietarioDaSessao).eq('tipo_registro', 'recebimento').single()).data?.conta_contabil_id 
                     : null;
                 
                 extratosPayload.push({
-                    empresa_id: ownerId,
+                    empresa_id: proprietarioDaSessao, // CORREÇÃO: Usando o ID do proprietário da sessão
                     id_saldo_contas: contaDestinoId,
                     data: format(dataPagamento, 'yyyy-MM-dd'),
                     descricao: values.descricao_extrato,
@@ -189,10 +198,10 @@ const FormExtratoManualCR: React.FC<FormExtratoManualCRProps> = ({
             
             // 4.1. Buscar contas contábeis necessárias para o lançamento
             const contaRecebimento = isAdmin 
-                ? (await supabase.from('configuracao_contas_receber').select('conta_contabil_id').eq('proprietario_id', ownerId).eq('tipo_registro', 'recebimento').single()).data?.conta_contabil_id 
+                ? (await supabase.from('configuracao_contas_receber').select('conta_contabil_id').eq('proprietario_id', proprietarioDaSessao).eq('tipo_registro', 'recebimento').single()).data?.conta_contabil_id 
                 : null;
             const contaParcela = isAdmin 
-                ? (await supabase.from('configuracao_contas_receber').select('conta_contabil_id').eq('proprietario_id', ownerId).eq('tipo_registro', 'parcela').single()).data?.conta_contabil_id 
+                ? (await supabase.from('configuracao_contas_receber').select('conta_contabil_id').eq('proprietario_id', proprietarioDaSessao).eq('tipo_registro', 'parcela').single()).data?.conta_contabil_id 
                 : null;
             
             // 4.2. Registrar o recebimento (Histórico)
@@ -200,7 +209,7 @@ const FormExtratoManualCR: React.FC<FormExtratoManualCRProps> = ({
             if (isAdmin) {
                 recebimentoBasePayload = { 
                     parcela_id: parcela.id, 
-                    admin_id: ownerId, 
+                    admin_id: proprietarioDaSessao, 
                     valor_recebido: valorRecebido, 
                     cliente_id: parcela.cliente_id || parcela.empresa_id,
                     conta_id: contaDestinoId,
@@ -213,7 +222,7 @@ const FormExtratoManualCR: React.FC<FormExtratoManualCRProps> = ({
             } else {
                 recebimentoBasePayload = { 
                     parcela_id: parcela.id, 
-                    empresa_id: ownerId, 
+                    empresa_id: proprietarioDaSessao, 
                     valor_recebido: valorRecebido,
                     conta_id: contaDestinoId,
                     id_conta_resultado: contaReceitaResultado,
@@ -244,7 +253,7 @@ const FormExtratoManualCR: React.FC<FormExtratoManualCRProps> = ({
             if (!contaContabilCaixaBanco) throw new Error('Conta de destino não possui vínculo contábil.');
             
             const lancamentoAtivoPayload = {
-                proprietario_id: ownerId,
+                proprietario_id: proprietarioDaSessao,
                 data_movimentacao: dataPagamentoISO,
                 descricao: `Recebimento Parcela ${parcela.id} - ${formaPagamento}`,
                 valor: valorRecebido,
@@ -259,7 +268,7 @@ const FormExtratoManualCR: React.FC<FormExtratoManualCRProps> = ({
             // 4.5. Lançamento de Estorno da Conta Patrimonial (Direito a Receber) - CRÉDITO (Passivo)
             if (contaPatrimonialId) {
                 const lancamentoPatrimonialPayload = {
-                    proprietario_id: ownerId,
+                    proprietario_id: proprietarioDaSessao,
                     data_movimentacao: dataPagamentoISO,
                     descricao: `Estorno Patrimonial CR: ${descricaoContaSintetica} (CR ID: ${parcela.conta_receber_id.substring(0, 8)})`,
                     valor: valorRecebido,
