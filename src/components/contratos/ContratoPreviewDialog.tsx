@@ -10,19 +10,15 @@ interface ContratoPreviewDialogProps {
   onOpenChange: (open: boolean) => void;
   conteudoHtml: string;
   titulo: string;
-  isHtml: boolean;
+  isHtml: boolean; // Flag que indica se o conteúdo é HTML puro
 }
 
 const ContratoPreviewDialog: React.FC<ContratoPreviewDialogProps> = ({ open, onOpenChange, conteudoHtml, titulo, isHtml }) => {
   const { printContent } = usePrint();
 
   const handlePrint = () => {
-    let printHtml = conteudoHtml;
-    
-    // Se for 'texto', o conteúdo já é HTML formatado pelo editor.
-    // Se for 'html', é o código HTML puro.
-    // Em ambos os casos, enviamos o HTML para a impressão.
-    printContent(printHtml, `Prévia do Contrato: ${titulo}`);
+    // Passamos o conteúdo, o título e a flag isHtml para o hook de impressão
+    printContent(conteudoHtml, `Prévia do Contrato: ${titulo}`, 'portrait', isHtml);
   };
   
   // Conteúdo a ser exibido na tela (sempre renderizado como HTML)

@@ -6,9 +6,10 @@ import { showError } from '@/utils/toast';
  * @param contentHtml O HTML completo do conteúdo a ser impresso.
  * @param title O título do documento de impressão.
  * @param orientation Define a orientação da impressão ('portrait' ou 'landscape').
+ * @param isRawHtml Se TRUE, o contentHtml é tratado como um documento HTML completo (não injeta estilos externos).
  */
 export function usePrint() {
-  const printContent = useCallback((contentHtml: string, title: string = 'Documento de Impressão', orientation: 'portrait' | 'landscape' = 'portrait') => {
+  const printContent = useCallback((contentHtml: string, title: string = 'Documento de Impressão', orientation: 'portrait' | 'landscape' = 'portrait', isRawHtml: boolean = false) => {
     try {
       const printWindow = window.open('', '_blank');
       if (!printWindow) {
@@ -16,156 +17,165 @@ export function usePrint() {
         return;
       }
 
-      const pageSize = orientation === 'landscape' ? 'A4 landscape' : 'A4 portrait';
+      if (isRawHtml) {
+          // MODO HTML PURO: O usuário forneceu o documento completo (incluindo <head> e <style>).
+          // Escrevemos o conteúdo diretamente para preservar a formatação e estrutura do usuário.
+          printWindow.document.write(contentHtml);
+      } else {
+          // MODO TEXTO SIMPLES (RichTextEditor): O conteúdo é um fragmento HTML.
+          // Injetamos a estrutura e os estilos de impressão padrão.
+          const pageSize = orientation === 'landscape' ? 'A4 landscape' : 'A4 portrait';
 
-      // Estilos otimizados para impressão A4 e inclusão de estilos básicos do Tailwind/Prose
-      const printStyles = `
-        <style>
-          /* Configuração A4 dinâmica */
-          @page {
-            size: ${pageSize};
-            margin: 15mm;
-          }
-          
-          body { 
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            margin: 0; 
-            padding: 0; 
-            color: #000; 
-            font-size: 10pt; 
-          }
-          
-          /* Estilos básicos do Tailwind/Prose para formatação de texto */
-          .prose {
-            max-width: 100%;
-            line-height: 1.6;
-          }
-          .prose h1 { font-size: 1.5em; font-weight: bold; margin-top: 1em; }
-          .prose h2 { font-size: 1.3em; font-weight: bold; margin-top: 1em; }
-          .prose p { margin-top: 0.5em; margin-bottom: 0.5em; }
-          .prose strong { font-weight: bold; }
-          .prose em { font-style: italic; }
-          .prose ul, .prose ol { margin-left: 1.5em; }
-          
-          /* Container principal que deve se expandir */
-          .print-container {
-              width: 100%;
-              max-width: 100%;
-              padding: 0;
-          }
-          
-          h1, h2, h3 { margin-top: 0; page-break-after: avoid; }
-          .print-header { 
-            border-bottom: 2px solid #000; 
-            padding-bottom: 10px; 
-            margin-bottom: 15px; 
-            page-break-after: avoid;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-          }
-          
-          .print-header-content {
-              flex-grow: 1;
-              margin-left: 15px;
-          }
-          
-          .print-logo {
-              max-height: 50px;
-              max-width: 150px;
-              object-fit: contain;
-          }
-          
-          .print-header h1 {
-              font-size: 16px;
-              font-weight: bold;
-              margin-bottom: 5px;
-          }
-          .print-header p {
-              margin: 0;
-              font-size: 10px;
-              color: #555;
-          }
-          
-          .print-section { 
-            margin-bottom: 15px; 
-            padding: 0; 
-            page-break-inside: avoid; 
-          }
-          .print-table { 
-            width: 100%; 
-            border-collapse: collapse; 
-            margin-top: 5px; 
-            table-layout: fixed;
-          }
-          .print-table th, .print-table td { 
-            border: 1px solid #ccc; 
-            padding: 4px 8px; 
-            text-align: left; 
-            font-size: 9pt; 
-            word-wrap: break-word; 
-            white-space: normal;
-            overflow: visible; 
-            text-overflow: clip; 
-          }
-          .print-table th { 
-            background-color: #f0f0f0; 
-            font-weight: bold;
-            white-space: normal;
-          }
-          
-          /* Estilos para a linha de total */
-          .print-table tfoot tr, .print-table tbody tr:last-child.total-row {
-              font-weight: bold;
-              border-top: 2px solid #000;
-              background-color: #e0e0e0;
-          }
+          // Estilos otimizados para impressão A4 e inclusão de estilos básicos do Tailwind/Prose
+          const printStyles = `
+            <style>
+              /* Configuração A4 dinâmica */
+              @page {
+                size: ${pageSize};
+                margin: 15mm;
+              }
+              
+              body { 
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+                margin: 0; 
+                padding: 0; 
+                color: #000; 
+                font-size: 10pt; 
+              }
+              
+              /* Estilos básicos do Tailwind/Prose para formatação de texto */
+              .prose {
+                max-width: 100%;
+                line-height: 1.6;
+              }
+              .prose h1 { font-size: 1.5em; font-weight: bold; margin-top: 1em; }
+              .prose h2 { font-size: 1.3em; font-weight: bold; margin-top: 1em; }
+              .prose p { margin-top: 0.5em; margin-bottom: 0.5em; }
+              .prose strong { font-weight: bold; }
+              .prose em { font-style: italic; }
+              .prose ul, .prose ol { margin-left: 1.5em; }
+              
+              /* Container principal que deve se expandir */
+              .print-container {
+                  width: 100%;
+                  max-width: 100%;
+                  padding: 0;
+              }
+              
+              h1, h2, h3 { margin-top: 0; page-break-after: avoid; }
+              .print-header { 
+                border-bottom: 2px solid #000; 
+                padding-bottom: 10px; 
+                margin-bottom: 15px; 
+                page-break-after: avoid;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+              }
+              
+              .print-header-content {
+                  flex-grow: 1;
+                  margin-left: 15px;
+              }
+              
+              .print-logo {
+                  max-height: 50px;
+                  max-width: 150px;
+                  object-fit: contain;
+              }
+              
+              .print-header h1 {
+                  font-size: 16px;
+                  font-weight: bold;
+                  margin-bottom: 5px;
+              }
+              .print-header p {
+                  margin: 0;
+                  font-size: 10px;
+                  color: #555;
+              }
+              
+              .print-section { 
+                margin-bottom: 15px; 
+                padding: 0; 
+                page-break-inside: avoid; 
+              }
+              .print-table { 
+                width: 100%; 
+                border-collapse: collapse; 
+                margin-top: 5px; 
+                table-layout: fixed;
+              }
+              .print-table th, .print-table td { 
+                border: 1px solid #ccc; 
+                padding: 4px 8px; 
+                text-align: left; 
+                font-size: 9pt; 
+                word-wrap: break-word; 
+                white-space: normal;
+                overflow: visible; 
+                text-overflow: clip; 
+              }
+              .print-table th { 
+                background-color: #f0f0f0; 
+                font-weight: bold;
+                white-space: normal;
+              }
+              
+              /* Estilos para a linha de total */
+              .print-table tfoot tr, .print-table tbody tr:last-child.total-row {
+                  font-weight: bold;
+                  border-top: 2px solid #000;
+                  background-color: #e0e0e0;
+              }
 
-          .print-signatures { 
-            display: flex; 
-            justify-content: space-around; 
-            margin-top: 40px; 
-            page-break-before: avoid;
-          }
-          .print-signature-line { 
-            width: 40%; 
-            border-top: 1px solid #000; 
-            padding-top: 5px; 
-            text-align: center; 
-            font-size: 9pt; 
-          }
+              .print-signatures { 
+                display: flex; 
+                justify-content: space-around; 
+                margin-top: 40px; 
+                page-break-before: avoid;
+              }
+              .print-signature-line { 
+                width: 40%; 
+                border-top: 1px solid #000; 
+                padding-top: 5px; 
+                text-align: center; 
+                font-size: 9pt; 
+              }
+              
+              /* Regras de quebra de página para tabelas */
+              @media print {
+                .print-table { page-break-inside: auto; }
+                .print-table tr { page-break-inside: avoid; page-break-after: auto; }
+                .print-table thead { display: table-header-group; } 
+                .no-print { display: none; }
+              }
+            </style>
+          `;
           
-          /* Regras de quebra de página para tabelas */
-          @media print {
-            .print-table { page-break-inside: auto; }
-            .print-table tr { page-break-inside: avoid; page-break-after: auto; }
-            .print-table thead { display: table-header-group; } 
-            .no-print { display: none; }
-          }
-        </style>
-      `;
+          // Envolve o conteúdo em uma div 'prose' para aplicar os estilos de tipografia
+          const finalContent = `<div class="prose">${contentHtml}</div>`;
+
+          printWindow.document.write(`
+            <!DOCTYPE html>
+            <html>
+              <head>
+                <title>${title}</title>
+                ${printStyles}
+              </head>
+              <body>
+                <div class="no-print" style="padding: 20px; text-align: center; background: #ffffe0; border: 1px solid #ccc;">
+                    <p style="font-size: 14pt; color: #333;">Documento pronto para impressão. Use <strong>Ctrl+P</strong> (ou Cmd+P) para imprimir.</p>
+                    <button onclick="window.print()" style="padding: 10px 20px; margin-top: 10px; cursor: pointer;">Imprimir Agora</button>
+                </div>
+                <div class="print-container">
+                    ${finalContent}
+                </div>
+              </body>
+            </html>
+          `);
+      }
       
-      // Envolve o conteúdo em uma div 'prose' para aplicar os estilos de tipografia
-      const finalContent = `<div class="prose">${contentHtml}</div>`;
-
-      printWindow.document.write(`
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <title>${title}</title>
-            ${printStyles}
-          </head>
-          <body>
-            <div class="no-print" style="padding: 20px; text-align: center; background: #ffffe0; border: 1px solid #ccc;">
-                <p style="font-size: 14pt; color: #333;">Documento pronto para impressão. Use <strong>Ctrl+P</strong> (ou Cmd+P) para imprimir.</p>
-                <button onclick="window.print()" style="padding: 10px 20px; margin-top: 10px; cursor: pointer;">Imprimir Agora</button>
-            </div>
-            <div class="print-container">
-                ${finalContent}
-            </div>
-          </body>
-        </html>
-      `);
       printWindow.document.close();
       printWindow.focus();
       
