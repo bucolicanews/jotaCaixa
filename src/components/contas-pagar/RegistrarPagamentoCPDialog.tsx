@@ -202,7 +202,6 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
           if (isAdmin) {
               await fetchMapeamentoContabil();
               defaultHistoricoId = await fetchHistoricoPadrao();
-              setHistoricoPadraoId(defaultHistoricoId);
               
               const { data: contaSintetica } = await supabase
                   .from(tabelaContasPagar)
@@ -378,6 +377,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
     // 1. Verificar se alguma conta de origem é um BANCO
     const hasBankPayment = values.pagamentos.some(p => {
         const conta = contasOrigem.find(c => c.id === p.conta_id);
+        // CRÍTICO: Verifica se a conta de saldo tem a flag is_banco = true
         return conta?.plano_contas?.is_banco === true;
     });
     
@@ -561,18 +561,26 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
       {/* NOVO MODAL DE EXTRATO MANUAL */}
       {extratoManualDialog && pendingPaymentData && parcela && (
           <Dialog open={extratoManualDialog} onOpenChange={setExtratoManualDialog}>
-              <FormExtratoManualCP
-                  parcela={parcela}
-                  pagamentoDetalhes={pendingPaymentData.pagamentos.map(p => ({ conta_id: p.conta_id, valor_pago: p.valor_pago }))}
-                  formaPagamento={pendingPaymentData.forma_pagamento}
-                  dataPagamento={pendingPaymentData.data_pagamento}
-                  historicoId={pendingPaymentData.historico_id}
-                  contaPatrimonialId={pendingPaymentData.conta_patrimonial_id}
-                  contasOrigem={contasOrigem}
-                  mapeamentoContabil={mapeamentoContabil}
-                  onSaveComplete={onSaveComplete}
-                  onClose={() => setExtratoManualDialog(false)}
-              />
+              <DialogContent className="sm:max-w-lg max-h-[95vh] overflow-y-auto">
+                  <DialogHeader>
+                      <DialogTitle>Registro de Extrato Manual</DialogTitle>
+                      <DialogDescription>
+                          Confirme os detalhes do extrato para evitar duplicidade na conciliação.
+                      </DialogDescription>
+                  </DialogHeader>
+                  <FormExtratoManualCP
+                      parcela={parcela}
+                      pagamentoDetalhes={pendingPaymentData.pagamentos.map(p => ({ conta_id: p.conta_id, valor_pago: p.valor_pago }))}
+                      formaPagamento={pendingPaymentData.forma_pagamento}
+                      dataPagamento={pendingPaymentData.data_pagamento}
+                      historicoId={pendingPaymentData.historico_id}
+                      contaPatrimonialId={pendingPaymentData.conta_patrimonial_id}
+                      contasOrigem={contasOrigem}
+                      mapeamentoContabil={mapeamentoContabil}
+                      onSaveComplete={onSaveComplete}
+                      onClose={() => setExtratoManualDialog(false)}
+                  />
+              </DialogContent>
           </Dialog>
       )}
     </>

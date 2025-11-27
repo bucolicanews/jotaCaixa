@@ -243,6 +243,15 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
                 await supabase.from('admin_contas_pagar').update({ status: 'pago' }).eq('id', parcela.conta_pagar_id);
             }
 
+            // 3.6. Salvar Histórico Padrão (se marcado)
+            if (adminId && form.getValues('salvar_como_padrao') && historicoId) {
+                await supabase.from('configuracao_historico_padrao').upsert({
+                    proprietario_id: adminId,
+                    tipo_registro: 'pagamento_padrao',
+                    historico_id: historicoId,
+                }, { onConflict: 'proprietario_id, tipo_registro' });
+            }
+
             showSuccess('Pagamento e Extrato registrados com sucesso!');
             onSaveComplete();
             onClose();
