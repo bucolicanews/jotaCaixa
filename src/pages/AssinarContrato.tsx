@@ -242,9 +242,9 @@ const AssinarContrato: React.FC = () => {
     let headerHtml = '';
     if (logoUrl) {
         headerHtml = `
-            <div class="print-header" style="display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 15px;">
-                <img src="${logoUrl}" alt="${ownerName}" class="print-logo" style="max-height: 50px; max-width: 150px; object-fit: contain;" />
-                <h1 style="font-size: 16px; font-weight: bold; margin: 0; text-align: right;">${contrato.valores_tags_preenchidos?.titulo || 'Contrato'}</h1>
+            <div class="print-header" style="display: flex; flex-direction: column; align-items: flex-start; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 15px;">
+                <img src="${logoUrl}" alt="${ownerName}" class="print-logo" style="max-height: 50px; max-width: 150px; object-fit: contain; margin-bottom: 5px;" />
+                <h1 style="font-size: 14px; font-weight: bold; margin: 0; text-align: left;">${ownerName}</h1>
             </div>
         `;
     }
