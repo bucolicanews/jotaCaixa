@@ -13,6 +13,11 @@ import FormDocumentoSocietarioModelo from '@/components/formularios/FormDocument
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Link } from 'react-router-dom';
 
+// Extensão local para DocumentoSocietarioModelo
+interface ExtendedDocumentoSocietarioModelo extends DocumentoSocietarioModelo {
+    tipo_conteudo?: 'html' | 'texto';
+}
+
 const GerenciarModelosSocietarios: React.FC = () => {
   const { role, perfil, usuario, carregando: carregandoSessao } = useSessao();
   const [modelos, setModelos] = useState<DocumentoSocietarioModelo[]>([]);
@@ -48,15 +53,18 @@ const GerenciarModelosSocietarios: React.FC = () => {
       .select('*')
       .order('titulo', { ascending: true });
       
-    // Se for Cliente, busca apenas os seus modelos (ownerId) e modelos globais (proprietario_id is null)
-    if (isCliente) {
-        query = query.or(`proprietario_id.eq.${ownerId},proprietario_id.is.null`);
+    // Se for Cliente ou Admin, busca seus próprios modelos E modelos globais (proprietario_id is null)
+    if (isCliente || isAdmin) {
+        // Construção segura da cláusula OR
+        const orClause = `proprietario_id.eq.${ownerId},proprietario_id.is.null`;
+        query = query.or(orClause);
     }
     // Se for Admin, a RLS permite ver todos os modelos (seus e dos clientes)
 
     const { data, error } = await query;
 
     if (error) {
+      console.error('Erro ao carregar modelos:', error);
       showError('Erro ao carregar modelos: ' + error.message);
       setModelos([]);
     } else {
