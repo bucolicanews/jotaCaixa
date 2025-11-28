@@ -19,7 +19,6 @@ import { TAGS_PADRAO } from '@/config/contrato-tags-padrao';
 import { cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { sanitizeConteudo } from '@/utils/formatters';
-import RichTextEditor from '@/components/RichTextEditor'; // NOVO IMPORT
 
 // Extensão local para ContratoModelo
 interface ExtendedContratoModelo extends ContratoModelo {
@@ -47,7 +46,7 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
   const [conteudoPreview, setConteudoPreview] = useState('');
   const [previewTitle, setPreviewTitle] = useState('');
   
-  // NOVO: Referência para o Textarea (usado apenas no modo Texto Simples)
+  // Referência para o Textarea (usado para Drag & Drop)
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   
   const getOwnerId = () => {
@@ -229,7 +228,7 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="html">HTML (Editor Visual)</SelectItem>
+                        <SelectItem value="html">HTML (Formatação Rica)</SelectItem>
                         <SelectItem value="texto">Texto Simples</SelectItem>
                       </SelectContent>
                     </Select>
@@ -249,15 +248,7 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
                         </Button>
                     </FormLabel>
                     <FormControl>
-                      {tipoConteudo === 'html' ? (
-                          <RichTextEditor
-                              value={field.value}
-                              onChange={field.onChange}
-                              placeholder="Insira o conteúdo formatado aqui..."
-                              className="min-h-[200px]"
-                          />
-                      ) : (
-                          <Textarea 
+                        <Textarea 
                             ref={textareaRef} 
                             placeholder="Insira o conteúdo do contrato aqui, usando as tags dinâmicas." 
                             {...field} 
@@ -265,8 +256,7 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
                             className={cn("font-mono text-sm", tipoConteudo === 'html' ? 'bg-yellow-50/50 dark:bg-yellow-900/10' : '')}
                             onDragOver={handleDragOver}
                             onDrop={handleDrop}
-                          />
-                      )}
+                        />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
