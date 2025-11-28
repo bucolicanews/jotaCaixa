@@ -161,26 +161,29 @@ const ExportarLancamentos: React.FC = () => {
         // Busca o par usando a referência cruzada (conta_resultado_id)
         const par = lancamentos.find(p => p.id === l.conta_resultado_id);
         
-        // Se o lançamento for de origem 'estorno_direto', ele não deve ter um par, pois ele é o estorno.
-        // Se for um lançamento de estorno, ele deve ser ignorado, pois o estorno é feito pelo par oposto.
+        // Se for um lançamento de estorno, ele não deve ter um par, pois ele é o estorno.
         if (l.origem === 'estorno_direto') {
             processedLaunchIds.add(l.id);
             continue;
         }
         
-        // Se for um lançamento que deveria ter um par (todos, exceto estorno_direto) e não tem, pula.
-        if (!par) {
-            // Verifica se é um lançamento que deveria ter um par (todos os lançamentos de partida dobrada)
-            if (l.conta_resultado_id) {
-                currentSkipped.push(`ID ${l.id.substring(0, 8)}: Lançamento de origem '${l.origem}' sem par de partida dobrada encontrado.`);
-            } else {
-                // Se não tem conta_resultado_id, é um lançamento que não faz parte de uma partida dobrada (deve ser ignorado)
-                currentSkipped.push(`ID ${l.id.substring(0, 8)}: Lançamento sem referência de partida dobrada. Ignorado.`);
-            }
+        // Se o lançamento deveria ter um par e não tem, pula.
+        if (!par && l.conta_resultado_id) {
+            currentSkipped.push(`ID ${l.id.substring(0, 8)}: Lançamento de origem '${l.origem}' sem par de partida dobrada encontrado.`);
             processedLaunchIds.add(l.id);
             continue;
         }
         
+        // Se não tem par E não tem conta_resultado_id, é um lançamento que não faz parte de uma partida dobrada (deve ser ignorado)
+        if (!par && !l.conta_resultado_id) {
+            currentSkipped.push(`ID ${l.id.substring(0, 8)}: Lançamento sem referência de partida dobrada. Ignorado.`);
+            processedLaunchIds.add(l.id);
+            continue;
+        }
+        
+        // Se chegamos aqui, temos um par (l e par)
+        if (!par) continue; // Deve ter sido pego pelo bloco acima, mas por segurança.
+
         // Encontramos o par. Agora, identificamos Débito e Crédito.
         const debito = l.tipo === 'Entrada' ? l : par;
         const credito = l.tipo === 'Saida' ? l : par;
@@ -194,21 +197,18 @@ const ExportarLancamentos: React.FC = () => {
         
         // 3. Mapeamento de Contas
         
-        // Conta Débito: Deve ser a conta contábil do lançamento de Débito (Entrada)
-        let contaDebitoCodigo = debito.conta_contabil?.Conta || '';
+        // Função auxiliar para obter o código da conta
+        const getContaCodigo = (lancamento: LancamentoCalima): string => {
+            // Prioridade 1: Se tem conta_bancaria_id, usa a conta contábil do saldo_contas (Ativo/Caixa)
+            if (lancamento.conta_bancaria_id && lancamento.conta_saldo?.conta_ativo?.Conta) {
+                return lancamento.conta_saldo.conta_ativo.Conta;
+            }
+            // Prioridade 2: Usa a conta contábil do próprio lançamento (DRE/Patrimonial)
+            return lancamento.conta_contabil?.Conta || '';
+        };
         
-        // Se o Débito for uma movimentação de Caixa/Banco, a conta contábil é a conta de Ativo (conta_ativo)
-        if (debito.conta_bancaria_id) {
-            contaDebitoCodigo = debito.conta_saldo?.conta_ativo?.Conta || '';
-        }
-        
-        // Conta Crédito: Deve ser a conta contábil do lançamento de Crédito (Saída)
-        let contaCreditoCodigo = credito.conta_contabil?.Conta || '';
-        
-        // Se o Crédito for uma movimentação de Caixa/Banco, a conta contábil é a conta de Ativo (conta_ativo)
-        if (credito.conta_bancaria_id) {
-            contaCreditoCodigo = credito.conta_saldo?.conta_ativo?.Conta || '';
-        }
+        const contaDebitoCodigo = getContaCodigo(debito);
+        const contaCreditoCodigo = getContaCodigo(credito);
         
         const historicoCodigo = debito.historicos?.codigo || credito.historicos?.codigo || '';
         
