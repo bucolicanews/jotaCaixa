@@ -118,7 +118,7 @@ const PreencherContrato: React.FC = () => {
   const [previewTitle, setPreviewTitle] = useState('');
   
   const [clienteSelecionadoId, setClienteSelecionadoId] = useState<string>('');
-  const [valorTotal, setValorTotal] = useState<number>(0);
+  const [valorTotal, setValorTotal] = useState<number>(0); // Valor digitado (pode ser total ou parcela)
   const [tituloDocumento, setTituloDocumento] = useState('');
   
   const [proprietarioContratoId, setProprietarioContratoId] = useState<string | null>(null); 
@@ -350,10 +350,14 @@ const PreencherContrato: React.FC = () => {
                     const valorParcela = primeiraParcela.valor_parcela || 0;
                     
                     // Determina se é parcelar ou repetir
-                    if (Math.abs(valorTotalContrato - (valorParcela * numParcelas)) < 0.01) {
+                    // Se o valor total do contrato for igual ao valor da parcela, é 'repetir'
+                    if (Math.abs(valorTotalContrato - valorParcela) < 0.01) {
+                        setTipoLancamento('repetir');
+                        setValorTotal(valorParcela); // Define o valor total como o valor da parcela
+                    } else if (Math.abs(valorTotalContrato - (valorParcela * numParcelas)) < 0.01) {
                         setTipoLancamento('parcelar');
                     } else {
-                        setTipoLancamento('repetir');
+                        setTipoLancamento('parcelar'); // Fallback
                     }
                     
                     setNumeroParcelas(numParcelas);
@@ -438,9 +442,25 @@ const PreencherContrato: React.FC = () => {
       return uniqueTags;
   }, [tagsCustomizadas]);
 
+  // NOVO CÁLCULO: Valor Total Real do Contrato
+  const valorTotalCalculado = useMemo(() => {
+      if (tipoLancamento === 'repetir') {
+          return valorTotal * numeroParcelas;
+      }
+      return valorTotal;
+  }, [valorTotal, numeroParcelas, tipoLancamento]);
+
   const updateTags = useCallback(() => {
     const newTags: Record<string, string> = {};
     
+    // Valor da Parcela
+    const valorParcela = numeroParcelas > 0 
+        ? (tipoLancamento === 'parcelar' ? valorTotal / numeroParcelas : valorTotal)
+        : valorTotal;
+        
+    // Valor Total (Corrigido para Repetir)
+    const valorTotalReal = valorTotalCalculado;
+
     allAvailableTags.forEach(tag => {
         const tagKey = tag.nome_tag;
         let tagValue: string | null = null;
@@ -467,12 +487,11 @@ const PreencherContrato: React.FC = () => {
             // Mapeamento de Tags Financeiras (VALOR_TOTAL_CONTRATO, etc.)
             else if (sourceTable === 'contas_receber') {
                 if (sourceField === 'valor_total') {
-                    tagValue = formatCurrency(valorTotal);
+                    tagValue = formatCurrency(valorTotalReal); // USANDO VALOR TOTAL REAL
                 } else if (sourceField === 'numero_parcelas') {
                     tagValue = String(numeroParcelas);
                 } else if (sourceField === 'valor_parcela') {
-                    const valorParcela = numeroParcelas > 0 ? valorTotal / numeroParcelas : valorTotal;
-                    tagValue = formatCurrency(valorParcela);
+                    tagValue = formatCurrency(valorParcela); // USANDO VALOR DA PARCELA
                 } else if (sourceField === 'data_vencimento') {
                     const data = tipoLancamento === 'unico' ? dataVencimentoUnico : dataPrimeiroVencimento;
                     tagValue = data ? formatDate(data) : '';
@@ -492,7 +511,7 @@ const PreencherContrato: React.FC = () => {
     });
     
     setValoresTags(newTags);
-  }, [clienteSelecionado, empresaLogada, valoresTags, allAvailableTags, valorTotal, numeroParcelas, tipoLancamento, dataVencimentoUnico, dataPrimeiroVencimento]);
+  }, [clienteSelecionado, empresaLogada, valoresTags, allAvailableTags, valorTotal, numeroParcelas, tipoLancamento, dataVencimentoUnico, dataPrimeiroVencimento, valorTotalCalculado]);
 
   useEffect(() => {
     updateTags();
@@ -530,7 +549,7 @@ const PreencherContrato: React.FC = () => {
     }
     
     // Validação de campos financeiros
-    if (valorTotal <= 0) {
+    if (valorTotalCalculado <= 0) {
         showError('O valor total do contrato deve ser maior que zero.');
         return;
     }
@@ -568,7 +587,7 @@ const PreencherContrato: React.FC = () => {
             cliente_id: clienteSelecionadoId, // Referencia tbl_clientes(id)
             proprietario_id: proprietarioContratoId,
             status: status,
-            valor_total: valorTotal,
+            valor_total: valorTotalCalculado, // USANDO VALOR TOTAL CALCULADO
             data_inicio: dataInicio,
             numero_parcelas: tipoLancamento === 'unico' ? 1 : numeroParcelas,
             dia_vencimento_parcela: tipoLancamento !== 'unico' ? intervaloDias : null,
@@ -599,7 +618,7 @@ const PreencherContrato: React.FC = () => {
             
             const { data: contaReceberData } = await supabase
                 .from(tabelaContasReceber)
-                .select('id')
+                .select('id, descricao')
                 .eq('contrato_gerado_id', contratoInicial.id)
                 .limit(1)
                 .single();
@@ -672,7 +691,7 @@ const PreencherContrato: React.FC = () => {
                 [ownerKey]: proprietarioContratoId,
                 cliente_id: clienteSelecionadoId, // Referencia tbl_clientes(id)
                 descricao: `Contrato: ${tituloDocumento}`,
-                valor_total: valorTotal,
+                valor_total: valorTotalCalculado, // USANDO VALOR TOTAL CALCULADO
                 data_emissao: format(new Date(), 'yyyy-MM-dd'),
                 data_vencimento: dataInicio,
                 status: 'aberta',
@@ -724,7 +743,7 @@ const PreencherContrato: React.FC = () => {
                     proprietario_id: ownerIdLogado,
                     data_movimentacao: dataMovimentacao,
                     descricao: `Lançamento Inicial CR: ${launchDescription} (CR ID: ${contaReceberIdShort})`, // CORRIGIDO
-                    valor: valorTotal,
+                    valor: valorTotalCalculado, // USANDO VALOR TOTAL CALCULADO
                     tipo: 'Entrada' as const, // Entrada no Ativo (Débito)
                     conta_bancaria_id: null,
                     conta_contabil_id: contaAReceberId,
@@ -740,7 +759,7 @@ const PreencherContrato: React.FC = () => {
                     proprietario_id: ownerIdLogado,
                     data_movimentacao: dataMovimentacao,
                     descricao: `Receita: ${launchDescription} (CR ID: ${contaReceberIdShort})`, // CORRIGIDO
-                    valor: valorTotal,
+                    valor: valorTotalCalculado, // USANDO VALOR TOTAL CALCULADO
                     tipo: 'Saida' as const, // Saída (Crédito) na Receita
                     conta_bancaria_id: null,
                     conta_contabil_id: contaReceitaResultado,
@@ -825,7 +844,7 @@ const PreencherContrato: React.FC = () => {
           <Button 
               onClick={() => handleSalvarContrato('pendente_assinatura')} 
               className="flex-1 h-12"
-              disabled={isSubmitting || !clienteSelecionadoId || valorTotal <= 0}
+              disabled={isSubmitting || !clienteSelecionadoId || valorTotalCalculado <= 0}
           >
               {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileSignature className="mr-2 h-4 w-4" />}
               Gerar e Enviar para Assinatura
@@ -889,7 +908,7 @@ const PreencherContrato: React.FC = () => {
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
-                            <Label htmlFor="valor-total">Valor Total do Contrato (R$)</Label>
+                            <Label htmlFor="valor-total">Valor {tipoLancamento === 'repetir' ? 'da Parcela' : 'Total do Contrato'} (R$)</Label>
                             <Input 
                                 id="valor-total"
                                 type="number"
@@ -951,6 +970,14 @@ const PreencherContrato: React.FC = () => {
                                     </PopoverContent>
                                 </Popover>
                             </div>
+                        </div>
+                    )}
+                    
+                    {/* NOVO: Exibição do Valor Total Calculado */}
+                    {tipoLancamento === 'repetir' && (
+                        <div className="p-3 bg-secondary rounded-md">
+                            <p className="text-sm font-medium">Valor Total do Contrato (Calculado)</p>
+                            <p className="text-lg font-bold text-primary">{formatCurrency(valorTotalCalculado)}</p>
                         </div>
                     )}
                 </div>
