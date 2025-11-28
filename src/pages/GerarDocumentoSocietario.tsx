@@ -1,4 +1,4 @@
-// src/pages/GerarDocumentoSocietarios.tsx
+// src/pages/GerarDocumentoSocietario.tsx
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -23,7 +23,6 @@ import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from '
 import { Textarea } from '@/components/ui/textarea';
 import { format } from 'date-fns';
 import { sanitizeConteudo } from '@/utils/formatters';
-import RichTextEditor from '@/components/RichTextEditor'; // IMPORTADO
 
 type TipoConteudo = 'html' | 'texto';
 type DocumentoStatus = 'rascunho' | 'finalizado' | 'arquivado' | 'ativo';
@@ -33,7 +32,6 @@ interface EmpresaContrato {
     nome: string;
 }
 
-// NOVO TIPO: Cliente CR com todos os campos de tag
 interface ClienteCRCompleto {
     id: string;
     proprietario_id?: string | null;
@@ -247,7 +245,7 @@ const GerarDocumentoSocietario: React.FC = () => {
     // 2. Buscar Clientes (Contratados)
     let queryClients = supabase
         .from('tbl_clientes')
-        .select('id, nome, razao_social, nome_fantasia, documento, email, telefone, cep, endereco, numero, complemento, bairro, cidade, estado, cpf, cnpj, rg')
+        .select('id, nome, razao_social, nome_fantasia, documento, email, telefone, cep, endereco, numero, complemento, bairro, cidade, estado, cpf, rg')
         .eq('admin_id', targetEmpresaId)
         .eq('aprovado', true)
         .neq('id', targetEmpresaId)
@@ -264,15 +262,9 @@ const GerarDocumentoSocietario: React.FC = () => {
         })) as ClienteCRCompleto[];
         
         setClientesCR(mappedClients);
-        
-        // Se o cliente selecionado não estiver mais na lista, limpa a seleção
-        if (clienteSelecionadoId && !mappedClients.some(c => c.id === clienteSelecionadoId)) {
-            // CORREÇÃO: Usando setValue do RHF para atualizar o estado
-            setValue('cliente_id', '');
-        }
     }
     
-  }, [clienteSelecionadoId, setValue]);
+  }, []);
 
 
   // --- FUNÇÃO PRINCIPAL DE BUSCA DE DADOS INICIAIS ---
@@ -293,7 +285,7 @@ const GerarDocumentoSocietario: React.FC = () => {
     if (documentoId) {
         const { data: doc, error: docLoadError } = await supabase
             .from('documentos_societarios_gerados')
-            .select('*, modelos_societarios(titulo)')
+            .select('*, modelos_societarios(tipo_conteudo)')
             .eq('id', documentoId)
             .single();
             
@@ -303,7 +295,7 @@ const GerarDocumentoSocietario: React.FC = () => {
             return;
         }
         
-        const documento = doc as DocumentoSocietarioGerado & { modelos_societarios: { titulo: string } | null };
+        const documento = doc as DocumentoSocietarioGerado & { modelos_societarios: { tipo_conteudo: TipoConteudo } | null };
         setDocumentoInicial(documento);
         initialProprietarioDocumentoId = documento.proprietario_id;
         initialClienteId = documento.cliente_id || '';
@@ -312,7 +304,7 @@ const GerarDocumentoSocietario: React.FC = () => {
         // 1.1. Buscar Modelo associado (apenas para ter o objeto completo)
         const { data: modeloData } = await supabase
             .from('modelos_societarios')
-            .select('*')
+            .select('*, tipo_conteudo')
             .eq('id', documento.modelo_id)
             .single();
         currentModelo = modeloData as DocumentoSocietarioModelo;
@@ -321,7 +313,7 @@ const GerarDocumentoSocietario: React.FC = () => {
         // 2. Buscar Modelo (se for criação)
         const { data: modeloData, error: modeloError } = await supabase
             .from('modelos_societarios')
-            .select('*')
+            .select('*, tipo_conteudo')
             .eq('id', modeloId)
             .single();
             
@@ -387,7 +379,7 @@ const GerarDocumentoSocietario: React.FC = () => {
           applyTagsToForm(getValues('valores_tags') || {}, clienteSelecionado, empresaLogada, modelo.conteudo_template);
       }
   // mantive dependências essenciais apenas
-  }, [clienteSelecionadoId, modelo, carregandoDados, clienteSelecionado, empresaLogada, getValues]);
+  }, [clienteSelecionadoId, modelo, carregandoDados, clienteSelecionado, empresaLogada, applyTagsToForm, getValues]);
 
 
   useEffect(() => {
@@ -608,7 +600,7 @@ const GerarDocumentoSocietario: React.FC = () => {
                       <FormField control={form.control} name="cliente_id" render={({ field }) => (
                           <FormItem className="space-y-2">
                               <FormLabel htmlFor="cliente">Cliente (Contratado)</FormLabel>
-                              <Select value={field.value} onValueChange={(v) => setValue('cliente_id', v)} disabled={!proprietarioDocumentoId}>
+                              <Select value={field.value} onValueChange={field.onChange} disabled={!proprietarioDocumentoId}>
                                   <FormControl>
                                       <SelectTrigger id="cliente">
                                           <SelectValue placeholder="Selecione o Cliente" />
@@ -675,11 +667,11 @@ const GerarDocumentoSocietario: React.FC = () => {
                               <FormItem>
                                   <FormLabel>Conteúdo Principal (Editável)</FormLabel>
                                   <FormControl>
-                                      <RichTextEditor
-                                          value={field.value || ''}
-                                          onChange={field.onChange}
-                                          placeholder="Edite o conteúdo principal do documento aqui..."
-                                          className="min-h-[400px] max-h-[calc(100vh-300px)]"
+                                      <Textarea 
+                                          placeholder="Edite o conteúdo principal do documento aqui..." 
+                                          {...field} 
+                                          rows={15}
+                                          className="font-mono text-sm"
                                       />
                                   </FormControl>
                                   <FormMessage />

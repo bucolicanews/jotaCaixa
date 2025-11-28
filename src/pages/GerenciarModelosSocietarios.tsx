@@ -45,7 +45,7 @@ const GerenciarModelosSocietarios: React.FC = () => {
     
     let query = supabase
       .from('modelos_societarios')
-      .select('*')
+      .select('*, tipo_conteudo')
       .order('titulo', { ascending: true });
       
     // Se for Cliente, busca apenas os seus modelos (ownerId) e modelos globais (proprietario_id is null)
