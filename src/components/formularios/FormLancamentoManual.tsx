@@ -39,6 +39,7 @@ const FormLancamentoManual: React.FC<FormLancamentoManualProps> = ({ onSaveCompl
   const [contasAnaliticas, setContasAnaliticas] = useState<PlanoContas[]>([]);
   const [historicos, setHistoricos] = useState<Historico[]>([]);
   const [loadingData, setLoadingData] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false); // Adicionado estado de submissão
   
   const ownerId = usuario?.id;
 
@@ -111,16 +112,20 @@ const FormLancamentoManual: React.FC<FormLancamentoManualProps> = ({ onSaveCompl
         return;
     }
 
-    // CRÍTICO: Define isSubmitting no início
-    form.setValue('data_movimentacao', values.data_movimentacao); 
+    setIsSubmitting(true); // Inicia submissão
     
     const dataMovimentacao = format(values.data_movimentacao, 'yyyy-MM-dd') + 'T12:00:00Z';
     const valor = values.valor;
     const historicoId = values.historico_id;
     const descricaoComplementar = values.descricao_complementar;
     
+    // CRÍTICO: Gera IDs e define a referência cruzada
+    const idDebito = crypto.randomUUID();
+    const idCredito = crypto.randomUUID();
+    
     // 1. Lançamento de Débito (Entrada)
     const lancamentoDebito = {
+        id: idDebito,
         proprietario_id: ownerId,
         data_movimentacao: dataMovimentacao,
         descricao: `D: ${contaDebito.Descricao} - ${descricaoComplementar}`,
@@ -130,10 +135,12 @@ const FormLancamentoManual: React.FC<FormLancamentoManualProps> = ({ onSaveCompl
         conta_contabil_id: values.conta_debito_id,
         origem: 'lancamento_manual',
         historico_id: historicoId,
+        conta_resultado_id: idCredito, // L1 aponta para L2
     };
     
     // 2. Lançamento de Crédito (Saída)
     const lancamentoCredito = {
+        id: idCredito,
         proprietario_id: ownerId,
         data_movimentacao: dataMovimentacao,
         descricao: `C: ${contaCredito.Descricao} - ${descricaoComplementar}`,
@@ -143,6 +150,7 @@ const FormLancamentoManual: React.FC<FormLancamentoManualProps> = ({ onSaveCompl
         conta_contabil_id: values.conta_credito_id,
         origem: 'lancamento_manual',
         historico_id: historicoId,
+        conta_resultado_id: idDebito, // L2 aponta para L1
     };
     
     // 3. Inserir ambos os lançamentos
@@ -157,13 +165,13 @@ const FormLancamentoManual: React.FC<FormLancamentoManualProps> = ({ onSaveCompl
         
         showSuccess(`Lançamento de ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor)} registrado com sucesso!`);
         
-        // Resetar formulário
+        // Resetar formulário (mantendo a data e o histórico)
         form.reset({
-            data_movimentacao: new Date(),
+            data_movimentacao: values.data_movimentacao,
             conta_debito_id: undefined,
             conta_credito_id: undefined,
             valor: undefined,
-            historico_id: values.historico_id, // Mantém o histórico selecionado
+            historico_id: values.historico_id, 
             descricao_complementar: '',
         });
         
@@ -171,6 +179,8 @@ const FormLancamentoManual: React.FC<FormLancamentoManualProps> = ({ onSaveCompl
         
     } catch (error: any) {
         showError('Falha ao registrar lançamento: ' + error.message);
+    } finally {
+        setIsSubmitting(false); // Finaliza submissão
     }
   };
 
@@ -286,8 +296,8 @@ const FormLancamentoManual: React.FC<FormLancamentoManualProps> = ({ onSaveCompl
             </FormItem>
         )} />
 
-        <Button type="submit" className="w-full" disabled={form.formState.isSubmitting || !isFormValid}>
-          {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+        <Button type="submit" className="w-full" disabled={isSubmitting || !isFormValid}>
+          {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           <Save className="mr-2 h-4 w-4" /> Registrar Lançamento
         </Button>
       </form>
