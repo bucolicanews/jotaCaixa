@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, Tag, Save, Eye, Copy } from 'lucide-react';
+import { Loader2, Tag, Save, Eye, Copy, PlusCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { ContratoModelo, ContratoTag } from '@/types/contratos';
@@ -346,7 +346,7 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
                             <Copy className="w-4 h-4 mr-2" /> Copiar Todas as Tags ({allTags.length})
                         </Button>
                         
-                        <div className="space-y-2 border rounded-md p-2 max-h-40 overflow-y-auto mb-4" onDragOver={handleDragOver} onDrop={handleDrop}>
+                        <div className="space-y-2 border rounded-md p-2 max-h-40 overflow-y-auto mb-4">
                             {allTags.map((tag: ContratoTag) => (
                                 <div 
                                     key={tag.nome_tag} 
@@ -404,6 +404,7 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
         onOpenChange={setPreviewOpen}
         conteudoHtml={conteudoPreview}
         titulo={form.getValues('titulo')}
+        isHtml={tipoConteudo === 'html'}
       />
     </>
   );
