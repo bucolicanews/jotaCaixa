@@ -516,6 +516,13 @@ const PreencherContrato: React.FC = () => {
   useEffect(() => {
     updateTags();
   }, [updateTags]);
+  
+  // NOVO EFEITO: Garante que o número de parcelas seja 1 quando o tipo for 'unico'
+  useEffect(() => {
+      if (tipoLancamento === 'unico') {
+          setNumeroParcelas(1);
+      }
+  }, [tipoLancamento]);
 
   const handleTagChange = (tag: string, value: string) => {
     setValoresTags(prev => ({ ...prev, [tag]: value }));
@@ -529,6 +536,12 @@ const PreencherContrato: React.FC = () => {
         const regex = new RegExp(tagKey, 'g');
         conteudoRenderizado = conteudoRenderizado.replace(regex, tags[tagKey]);
     });
+    
+    // 2. Lógica para omitir a descrição de parcelamento se for ÚNICO
+    if (tipoLancamento === 'unico') {
+        conteudoRenderizado = conteudoRenderizado.replace(/dividido em \d+ parcelas mensais/gi, 'em parcela única');
+        conteudoRenderizado = conteudoRenderizado.replace(/parcelas mensais/gi, 'parcela única');
+    }
     
     return conteudoRenderizado;
   };
@@ -628,8 +641,8 @@ const PreencherContrato: React.FC = () => {
                 const contaReceberId = contaReceberData.id;
                 
                 // Define os prefixos de descrição para exclusão
-                const oldLaunchDescriptionPrefix = `Lançamento Inicial CR: ${contratoInicial?.valores_tags_preenchidos?.titulo || 'Contrato'} (CR ID: ${contaReceberId.substring(0, 8)})`;
-                const oldReceitaDescriptionPrefix = `Receita: ${contratoInicial?.valores_tags_preenchidos?.titulo || 'Contrato'} (CR ID: ${contaReceberId.substring(0, 8)})`;
+                const oldLaunchDescriptionPrefix = `Lançamento Inicial CR: Contrato: ${contratoInicial?.valores_tags_preenchidos?.titulo || 'Contrato'} (CR ID: ${contaReceberId.substring(0, 8)})`;
+                const oldReceitaDescriptionPrefix = `Receita: Contrato: ${contratoInicial?.valores_tags_preenchidos?.titulo || 'Contrato'} (CR ID: ${contaReceberId.substring(0, 8)})`;
                 
                 // 1. Deletar Lançamentos associados (Patrimonial e Receita)
                 await supabase.from('lancamentos')
