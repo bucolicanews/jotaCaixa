@@ -344,22 +344,14 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
       <Card>
         <CardHeader><CardTitle className="text-xl flex items-center"><Banknote className="w-5 h-5 mr-2" /> Resumo de Saldo</CardTitle></CardHeader>
         <CardContent>
-            {/* Grid ajustado para 5 colunas no desktop */}
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            {/* Grid ajustado para 4 colunas no desktop */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 
                 {/* Saldo Total (Sempre visível) */}
                 <div className="p-3 bg-gray-100 dark:bg-gray-800 rounded-lg">
                     <h4 className="text-sm font-medium text-muted-foreground flex items-center"><Wallet className="w-4 h-4 mr-2" /> Saldo Total (Contas)</h4>
                     <p className={cn("text-lg font-bold mt-1 truncate", totalSaldo >= 0 ? 'text-green-600' : 'text-red-600')}>{formatCurrency(totalSaldo)}</p>
                 </div>
-                
-                {/* Saldo Inicial (Apenas se conta filtrada) */}
-                {isContaFiltrada && (
-                    <div className="p-3 bg-black/20 dark:bg-orange-900/20 rounded-lg text-white">
-                        <h4 className="text-sm font-medium flex items-center"><Landmark className="w-4 h-4 mr-2" /> Saldo Inicial (Conta)</h4>
-                        <p className={cn("text-lg font-bold mt-1 truncate", saldoInicialConta >= 0 ? 'text-white' : 'text-red-200')}>{formatCurrency(saldoInicialConta)}</p>
-                    </div>
-                )}
                 
                 {/* Entradas no Período */}
                 <div className="p-3 bg-green-100 dark:bg-green-900/20 rounded-lg">
@@ -374,7 +366,7 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
                 </div>
                 
                 {/* Saldo Final / Variação Líquida (Ocupa o restante da linha) */}
-                <div className={cn("p-3 rounded-lg", saldoFinalOuVariacao >= 0 ? "bg-blue-100 dark:bg-blue-900/20" : "bg-red-100 dark:bg-red-900/20", isContaFiltrada ? "md:col-span-1" : "md:col-span-2")}>
+                <div className={cn("p-3 rounded-lg", saldoFinalOuVariacao >= 0 ? "bg-blue-100 dark:bg-blue-900/20" : "bg-red-100 dark:bg-red-900/20")}>
                     <h4 className="text-sm font-medium text-muted-foreground flex items-center"><Landmark className="w-4 h-4 mr-2" /> {tituloSaldoFinal}</h4>
                     <p className={cn("text-lg font-bold mt-1 truncate", saldoFinalOuVariacao >= 0 ? "text-blue-600 dark:text-blue-400" : "text-red-600 dark:text-red-400")}>{formatCurrency(saldoFinalOuVariacao)}</p>
                 </div>
@@ -483,7 +475,7 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
                             </TableCell>
                             <TableCell className="w-[100px] text-right">
                                 <div className="flex justify-end space-x-2">
-                                    {isDirectMovement && (
+                                    {isDirectMovement && !isEstornada && (
                                         <>
                                             <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(l)} title="Editar Movimentação">
                                                 <Edit className="w-4 h-4" />
