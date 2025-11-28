@@ -30,7 +30,7 @@ interface LancamentoCalima {
     conta_resultado_id: string | null; // ID do lançamento emparelhado
     
     // Relações:
-    conta_contabil: { Conta: string, Descricao: string } | null; // NOVO: Relação direta com a conta contábil
+    conta_contabil: { Conta: string, Descricao: string } | null; // Conta DRE/Patrimonial
     historicos: { codigo: string | null } | null;
     
     // Relação para conta de saldo (só existe se conta_bancaria_id não for nulo)
@@ -182,7 +182,7 @@ const ExportarLancamentos: React.FC = () => {
         }
         
         // Se chegamos aqui, temos um par (l e par)
-        if (!par) continue; // Deve ter sido pego pelo bloco acima, mas por segurança.
+        if (!par) continue; 
 
         // Encontramos o par. Agora, identificamos Débito e Crédito.
         const debito = l.tipo === 'Entrada' ? l : par;
