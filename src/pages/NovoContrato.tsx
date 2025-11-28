@@ -35,7 +35,7 @@ const NovoContrato: React.FC = () => {
     
     let query = supabase
       .from('contrato_modelos')
-      .select('id, titulo, conteudo_template, empresa_id, criado_em, updated_at') // LISTANDO COLUNAS
+      .select('id, titulo, conteudo_template, empresa_id, criado_em') // REMOVIDO: updated_at
       .order('titulo', { ascending: true });
       
     if (isCliente) {

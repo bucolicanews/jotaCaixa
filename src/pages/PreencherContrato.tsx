@@ -241,7 +241,7 @@ const PreencherContrato: React.FC = () => {
     setCarregandoDados(true);
     
     let initialProprietarioContratoId = ownerIdLogado;
-    let modeloData: ContratoModelo | null = null;
+    let currentModelo: ContratoModelo | null = null;
     let initialValoresTags: Record<string, string> = {};
     let initialClienteId = '';
     
@@ -249,7 +249,7 @@ const PreencherContrato: React.FC = () => {
     if (modeloId) {
         const { data, error } = await supabase
             .from('contrato_modelos')
-            .select('*')
+            .select('id, titulo, conteudo_template, empresa_id, criado_em') // REMOVIDO: updated_at
             .eq('id', modeloId)
             .single();
             
@@ -261,7 +261,6 @@ const PreencherContrato: React.FC = () => {
         modeloData = data as ContratoModelo;
         setModelo(modeloData);
         setTituloDocumento(modeloData.titulo);
-        // tipoConteudo removido
         
         // NOVO: Inicializa o campo {{CONTEUDO_PRINCIPAL}} com o template do modelo
         initialValoresTags['{{CONTEUDO_PRINCIPAL}}'] = modeloData.conteudo_template;
@@ -310,7 +309,6 @@ const PreencherContrato: React.FC = () => {
         setValorTotal(contrato.valor_total); // Define o valor total
         setValoresTags(contrato.valores_tags_preenchidos || {});
         setTituloDocumento(contrato.valores_tags_preenchidos?.titulo || modeloData?.titulo || '');
-        // tipoConteudo removido
         
         const numParcelas = contrato.numero_parcelas;
         const valorTotalContrato = contrato.valor_total;
@@ -410,28 +408,6 @@ const PreencherContrato: React.FC = () => {
   }, [carregandoSessao, ownerIdLogado, buscarDados, navigate, isAdmin, isClient]);
 
   // --- Lógica de Preenchimento de Tags ---
-  const allAvailableTags = useMemo(() => {
-      // Combina tags padrão (sistema + financeiras) com as tags customizadas do usuário
-      const customTagsMap = tagsCustomizadas.reduce((acc, tag) => {
-          acc[tag.nome_tag] = tag;
-          return acc;
-      }, {} as Record<string, ContratoTag>);
-      
-      const combined = [...TAGS_PADRAO, ...tagsCustomizadas];
-      
-      // Remove duplicatas e ordena
-      const uniqueTags = Array.from(new Set(combined.map(t => t.nome_tag)))
-          .map(tagKey => {
-              const customTag = customTagsMap[tagKey];
-              const defaultTag = TAGS_PADRAO.find(t => t.nome_tag === tagKey);
-              return customTag || defaultTag;
-          })
-          .filter((t): t is ContratoTag => !!t)
-          .sort((a, b) => a.nome_tag.localeCompare(b.nome_tag));
-          
-      return uniqueTags;
-  }, [tagsCustomizadas]);
-
   const updateTags = useCallback(() => {
     const newTags: Record<string, string> = {};
     
