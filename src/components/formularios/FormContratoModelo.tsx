@@ -20,7 +20,6 @@ import { cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { sanitizeConteudo } from '@/utils/formatters';
 import RichTextEditor from '@/components/RichTextEditor';
-import { Label } from '@/components/ui/label'; // IMPORT CORRIGIDO
 
 // Extensão local para ContratoModelo
 interface ExtendedContratoModelo extends ContratoModelo {
@@ -30,7 +29,7 @@ interface ExtendedContratoModelo extends ContratoModelo {
 const formSchema = z.object({
   titulo: z.string().min(1, 'O título é obrigatório.'),
   conteudo_template: z.string().min(10, 'O conteúdo do template é muito curto.'),
-  // tipo_conteudo removido do schema
+  tipo_conteudo: z.enum(['html', 'texto']),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -47,6 +46,9 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
   const [previewOpen, setPreviewOpen] = useState(false);
   const [conteudoPreview, setConteudoPreview] = useState('');
   const [previewTitle, setPreviewTitle] = useState('');
+  
+  // Referência para o Textarea (usado para Drag & Drop)
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   
   const getOwnerId = () => {
     if (role === 'Admin') return usuario?.id || null;
@@ -84,11 +86,11 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
       titulo: modeloInicial?.titulo || '',
       // CRÍTICO: Se for HTML, sanitiza. Se for texto, salva como está.
       conteudo_template: modeloInicial?.conteudo_template || '', 
+      tipo_conteudo: modeloInicial?.tipo_conteudo || 'html', // GARANTINDO DEFAULT 'html'
     },
   });
   
-  // O tipo de conteúdo é sempre 'html' (Editor de Texto)
-  const tipoConteudo: 'html' = 'html'; 
+  const tipoConteudo = form.watch('tipo_conteudo'); // Observa o tipo de conteúdo
 
   const onSubmit = async (values: FormValues) => {
     if (!ownerId) {
@@ -98,9 +100,9 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
     
     const dataToSave = {
       titulo: values.titulo,
-      // Sempre sanitiza, pois o editor é HTML
-      conteudo_template: sanitizeConteudo(values.conteudo_template), 
-      tipo_conteudo: 'html', // Força o tipo para 'html'
+      // CRÍTICO: Sanitiza apenas se for HTML, senão salva o texto puro
+      conteudo_template: values.tipo_conteudo === 'html' ? sanitizeConteudo(values.conteudo_template) : values.conteudo_template, 
+      tipo_conteudo: values.tipo_conteudo, // INCLUINDO NO PAYLOAD
       empresa_id: ownerId, // Vincula ao Admin ou Cliente
     };
 
@@ -144,72 +146,57 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
       setPreviewOpen(true);
   };
   
-  // CORREÇÃO: Usando Map para garantir unicidade das tags
   const allTags = useMemo(() => {
-      const tagMap = new Map<string, ContratoTag>();
-      
-      // Adiciona tags customizadas (prioridade)
-      tagsCustomizadas.forEach(tag => tagMap.set(tag.nome_tag, tag));
-      
-      // Adiciona tags padrão (se não existirem no mapa)
-      TAGS_PADRAO.forEach(tag => {
-          if (!tagMap.has(tag.nome_tag)) {
-              tagMap.set(tag.nome_tag, tag);
-          }
-      });
-      
-      return Array.from(tagMap.values()).sort((a, b) => a.nome_tag.localeCompare(b.nome_tag));
+      return [...TAGS_PADRAO, ...tagsCustomizadas].sort((a, b) => a.nome_tag.localeCompare(b.nome_tag));
   }, [tagsCustomizadas]);
   
+  // --- NOVO HANDLER: Copiar todas as tags ---
   const handleCopyAllTags = () => {
       const tagsString = allTags.map(t => t.nome_tag).join(', ');
       navigator.clipboard.writeText(tagsString);
       showSuccess('Todas as tags copiadas para a área de transferência!');
   };
+  // --- FIM NOVO HANDLER ---
   
-  // --- FUNÇÕES DE INSERÇÃO DE TEXTO (Tags e Blocos) ---
-  
-  const handleInsertText = useCallback((insertText: string) => {
-      const current = form.getValues("conteudo_template") || "";
-
-      // Posição do cursor do textarea
-      const textarea = document.querySelector(".ql-editor") as HTMLDivElement;
-      if (!textarea) return;
-
-      // Simula a inserção de HTML no cursor
-      const selection = window.getSelection();
-      if (selection && selection.rangeCount > 0) {
-          const range = selection.getRangeAt(0);
-          range.deleteContents();
-          const el = document.createElement('span');
-          el.innerHTML = insertText;
-          range.insertNode(el);
-          range.collapse(false);
-          showSuccess(`Tag inserida no editor.`);
-      } else {
-          // Fallback para anexar no final
-          form.setValue("conteudo_template", current + insertText, { shouldDirty: true, shouldValidate: true });
-      }
-  }, [form]);
+  // --- FUNÇÕES DE DRAG AND DROP ---
   
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>, tag: string) => {
       e.dataTransfer.setData("text/plain", tag);
   };
   
-  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+  const handleDragOver = (e: React.DragEvent<HTMLTextAreaElement>) => {
       e.preventDefault(); // Permite que o drop ocorra
   };
   
-  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+  const handleDrop = (e: React.DragEvent<HTMLTextAreaElement>) => {
       e.preventDefault();
-      const text = e.dataTransfer.getData("text/plain");
-
-      if (text) {
-          handleInsertText(text);
-      }
+      const tag = e.dataTransfer.getData("text/plain");
+      
+      if (!tag) return;
+      
+      const textarea = textareaRef.current;
+      if (!textarea) return;
+      
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const currentValue = form.getValues('conteudo_template');
+      
+      // Insere a tag na posição do cursor
+      const newValue = currentValue.substring(0, start) + tag + currentValue.substring(end);
+      
+      // 1. ATUALIZAÇÃO CRÍTICA: Usar form.setValue para garantir que o react-hook-form registre a mudança
+      form.setValue('conteudo_template', newValue, { shouldDirty: true });
+      
+      // 2. CORREÇÃO: Força o foco e a posição do cursor após a atualização do valor
+      // O setTimeout é necessário para dar tempo ao React/RHF de processar o setValue
+      setTimeout(() => {
+          textarea.focus();
+          textarea.selectionStart = start + tag.length;
+          textarea.selectionEnd = start + tag.length;
+      }, 0);
   };
   
-  // --- FIM FUNÇÕES DE INSERÇÃO DE TEXTO ---
+  // --- FIM FUNÇÕES DE DRAG AND DROP ---
 
   return (
     <>
@@ -236,19 +223,20 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
                             <Eye className="mr-2 h-4 w-4" /> Pré-visualizar
                         </Button>
                     </CardHeader>
-                    <CardContent className="p-6 pt-0 flex-1 overflow-hidden">
+                    <CardContent className="flex-1 overflow-hidden">
                         <FormField
                             control={form.control}
                             name="conteudo_template"
                             render={({ field }) => (
                                 <FormItem className="h-full flex flex-col">
                                     <FormControl className="flex-1">
+                                        {/* CORREÇÃO: Usando RichTextEditor para ambos os modos */}
                                         <RichTextEditor
                                             value={field.value}
                                             onChange={field.onChange}
                                             placeholder="Insira o conteúdo formatado aqui..."
                                             className="flex-1"
-                                            // isSimpleTextMode removido
+                                            isSimpleTextMode={tipoConteudo === 'texto'}
                                         />
                                     </FormControl>
                                     <FormMessage />
@@ -259,7 +247,7 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
                 </Card>
             </div>
             
-            {/* Coluna 2: DADOS E TAGS (1/4 da largura) */}
+            {/* COLUNA 2: DADOS E TAGS (1/4 da largura) */}
             <div className="lg:col-span-1 space-y-4 flex flex-col">
                 <Card>
                     <CardHeader><CardTitle className="text-xl">Configuração</CardTitle></CardHeader>
@@ -277,19 +265,31 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
                                 </FormItem>
                             )}
                         />
-                        {/* CAMPO TIPO DE CONTEÚDO REMOVIDO */}
-                        <div className="space-y-2">
-                            <Label>Tipo de Conteúdo</Label>
-                            <Input readOnly value="Editor de Texto" className="font-semibold" />
-                        </div>
+                        <FormField
+                            control={form.control}
+                            name="tipo_conteudo"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Tipo de Conteúdo</FormLabel>
+                                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                        <FormControl>
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Selecione o formato" />
+                                            </SelectTrigger>
+                                        </FormControl>
+                                        <SelectContent>
+                                            <SelectItem value="html">HTML (Editor Visual)</SelectItem>
+                                            <SelectItem value="texto">Texto Simples</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
                     </CardContent>
                 </Card>
                 
-                <Card 
-                    className="flex-1 min-h-[200px] max-h-[calc(100vh-200px)] overflow-y-auto"
-                    onDragOver={handleDragOver}
-                    onDrop={handleDrop}
-                >
+                <Card className="flex-1 min-h-[200px] max-h-[calc(100vh-200px)] overflow-y-auto">
                     <CardHeader className="pb-2">
                         <CardTitle className="text-lg flex items-center"><Tag className="w-4 h-4 mr-2" /> Tags Disponíveis</CardTitle>
                     </CardHeader>
@@ -339,7 +339,7 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
         onOpenChange={setPreviewOpen}
         conteudoHtml={conteudoPreview}
         titulo={form.getValues('titulo')}
-        isHtml={true} // Sempre HTML
+        isHtml={form.getValues('tipo_conteudo') === 'html'}
       />
     </>
   );

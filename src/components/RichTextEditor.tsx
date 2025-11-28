@@ -1,10 +1,7 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React from 'react';
 import ReactQuill from 'react-quill';
-import 'react-quill/dist/quill.snow.css';
+import 'react-quill/dist/quill.snow.css'; // Importa o tema padrão 'snow'
 import { cn } from "@/lib/utils";
-import { Button } from './ui/button';
-import { Code, Edit } from 'lucide-react';
-import { Textarea } from './ui/textarea';
 
 interface RichTextEditorProps {
   value: string;
@@ -12,81 +9,65 @@ interface RichTextEditorProps {
   placeholder?: string;
   readOnly?: boolean;
   className?: string;
+  isSimpleTextMode?: boolean; // NOVO PROP: Para modo Texto Simples
 }
 
-const RichTextEditor: React.FC<RichTextEditorProps> = ({ value, onChange, placeholder, readOnly, className }) => {
-  const [isHtmlMode, setIsHtmlMode] = useState(false);
+// Módulos completos para o modo HTML
+const fullModules = {
+  toolbar: [
+    [{ 'header': [1, 2, false] }],
+    ['bold', 'italic', 'underline', 'strike', 'blockquote'],
+    [{ 'list': 'ordered' }, { 'list': 'bullet' }, { 'indent': '-1' }, { 'indent': '+1' }],
+    [{ 'align': [] }],
+    ['link', 'image'],
+    ['clean']
+  ],
+};
 
-  const toggleHtmlMode = useCallback(() => {
-    setIsHtmlMode(prev => !prev);
-  }, []);
-
-  // Removendo o botão customizado da barra de ferramentas do Quill
-  const modules = useMemo(() => ({
+// Módulos simplificados para o modo Texto Simples (apenas formatação básica)
+const simpleModules = {
     toolbar: [
-      [{ 'header': [1, 2, false] }],
-      ['bold', 'italic', 'underline', 'strike', 'blockquote'],
-      [{ 'list': 'ordered' }, { 'list': 'bullet' }, { 'indent': '-1' }, { 'indent': '+1' }],
-      [{ 'align': [] }],
-      ['link', 'image'],
-      ['clean'],
-    ]
-  }), []);
+        ['bold', 'italic', 'underline'],
+        [{ 'list': 'ordered' }, { 'list': 'bullet' }],
+        [{ 'align': [] }],
+    ],
+};
 
-  const formats = [
-    'header',
-    'bold', 'italic', 'underline', 'strike', 'blockquote',
-    'list', 'bullet', 'indent',
-    'link', 'image', 'align'
-  ];
+const formats = [
+  'header',
+  'bold', 'italic', 'underline', 'strike', 'blockquote',
+  'list', 'bullet', 'indent',
+  'link', 'image', 'align'
+];
+
+const RichTextEditor: React.FC<RichTextEditorProps> = ({ value, onChange, placeholder, readOnly, className, isSimpleTextMode = false }) => {
+  
+  const modules = isSimpleTextMode ? simpleModules : fullModules;
+  
+  // No modo Texto Simples, forçamos a conversão para texto puro antes de chamar o onChange
+  const handleChange = (content: string, delta: any, source: string, editor: any) => {
+      if (isSimpleTextMode) {
+          // Obtém o texto puro (mantendo apenas quebras de linha)
+          const plainText = editor.getText().replace(/\n$/, '');
+          onChange(plainText);
+      } else {
+          onChange(content);
+      }
+  };
 
   return (
-    <div className={cn(className, "flex flex-col h-full space-y-2")}>
-      
-      {/* Botão de Alternância no Topo */}
-      <div className="flex justify-end">
-        <Button 
-          type="button" 
-          variant="outline" 
-          size="sm"
-          onClick={toggleHtmlMode} 
-          disabled={readOnly}
-          className="w-full sm:w-auto"
-        >
-          {isHtmlMode ? (
-            <>
-              <Edit className="w-4 h-4 mr-2" /> Voltar para Editor Visual
-            </>
-          ) : (
-            <>
-              <Code className="w-4 h-4 mr-2" /> Editar Código-Fonte HTML
-            </>
-          )}
-        </Button>
-      </div>
-
-      {isHtmlMode ? (
-        <Textarea
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder="Edite o código HTML puro aqui..."
-          readOnly={readOnly}
-          className="flex-1 font-mono text-sm min-h-[300px]"
-        />
-      ) : (
-        <ReactQuill 
-          theme="snow" 
-          value={value} 
-          onChange={onChange} 
-          modules={modules}
-          formats={formats}
-          placeholder={placeholder}
-          readOnly={readOnly}
-          className="flex-1 flex flex-col" 
-          // Adicionando estilo para garantir que o editor tenha barra de rolagem
-          style={{ height: '100%', minHeight: '300px' }}
-        />
-      )}
+    <div className={cn(className, "flex flex-col h-full")}>
+      <ReactQuill 
+        theme="snow" 
+        value={value} 
+        onChange={handleChange} 
+        modules={modules}
+        formats={formats}
+        placeholder={placeholder}
+        readOnly={readOnly}
+        // Removendo altura fixa e usando flex-1 para ocupar o espaço restante
+        className="flex-1 flex flex-col" 
+      />
     </div>
   );
 };

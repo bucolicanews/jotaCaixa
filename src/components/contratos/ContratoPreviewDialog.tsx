@@ -28,11 +28,7 @@ const ContratoPreviewDialog: React.FC<ContratoPreviewDialogProps> = ({ open, onO
   
   // Conteúdo a ser exibido na tela
   const contentToDisplay = isHtml ? (
-    <div 
-        dangerouslySetInnerHTML={{ __html: conteudoHtml }} 
-        // CLASSE CRÍTICA: Aplica os estilos do Quill para formatação (h2, centralização, etc.)
-        className="ql-editor" 
-    />
+    <div dangerouslySetInnerHTML={{ __html: conteudoHtml }} />
   ) : (
     // Usa white-space: pre-wrap para preservar quebras de linha e espaços
     <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', margin: 0 }}>{conteudoHtml}</pre>
@@ -41,7 +37,7 @@ const ContratoPreviewDialog: React.FC<ContratoPreviewDialogProps> = ({ open, onO
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       {/* Ajustado para sm:max-w-full e max-h-[95vh] */}
-      <DialogContent className="sm:max-w-full md:max-w-5xl max-h-[95vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[90vw] md:max-w-5xl max-h-[95vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center">
             <Eye className="w-5 h-5 mr-2" /> Prévia do Contrato: {titulo}

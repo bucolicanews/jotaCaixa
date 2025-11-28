@@ -77,37 +77,3 @@
     @apply bg-background text-foreground;
   }
 }
-
-/* Estilos para o conteúdo gerado pelo RichTextEditor (Quill) */
-.ql-editor {
-  /* Garante que o editor tenha altura mínima e quebra de linha */
-  min-height: 200px;
-}
-
-/* Estilos para a prévia e impressão de conteúdo HTML */
-.ql-container, .ql-editor, .ql-editor p, .ql-editor h1, .ql-editor h2, .ql-editor h3, .ql-editor ul, .ql-editor ol {
-    /* Garante que o texto seja legível na prévia e na impressão */
-    font-size: 1rem;
-    line-height: 1.6;
-    margin-bottom: 1em;
-}
-
-.ql-editor h1 { font-size: 1.5em; font-weight: bold; }
-.ql-editor h2 { font-size: 1.3em; font-weight: bold; }
-.ql-editor h3 { font-size: 1.1em; font-weight: bold; }
-.ql-editor strong { font-weight: bold; }
-.ql-editor em { font-style: italic; }
-.ql-editor ul, .ql-editor ol { padding-left: 1.5em; }
-
-/* Adicionando estilos de alinhamento do Quill */
-.ql-align-left { text-align: left; }
-.ql-align-center { text-align: center; }
-.ql-align-right { text-align: right; }
-.ql-align-justify { text-align: justify; }
-
-/* Garante que a prévia do contrato/documento use esses estilos */
-.border.rounded-md.p-4.bg-background.shadow-inner div {
-    /* Aplica estilos básicos de tipografia para o conteúdo injetado */
-    font-size: 1rem;
-    line-height: 1.6;
-}

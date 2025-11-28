@@ -26,11 +26,7 @@ const DocumentoPreviewDialog: React.FC<DocumentoPreviewDialogProps> = ({ open, o
   };
   
   const contentToDisplay = isHtml ? (
-    <div 
-        dangerouslySetInnerHTML={{ __html: conteudoHtml }} 
-        // CLASSE CRÍTICA: Aplica os estilos do Quill para formatação (h2, centralização, etc.)
-        className="ql-editor"
-    />
+    <div dangerouslySetInnerHTML={{ __html: conteudoHtml }} />
   ) : (
     <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', margin: 0 }}>{conteudoHtml}</pre>
   );
