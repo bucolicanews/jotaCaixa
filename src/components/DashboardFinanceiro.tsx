@@ -605,7 +605,7 @@ const DashboardFinanceiro: React.FC = () => {
                             <p className="text-sm text-muted-foreground">Lucro/Prejuízo (Contas a Pagar/Receber)</p>
                             <p className={cn("text-3xl font-extrabold", lucroPrejuizo >= 0 ? "text-green-600" : "text-red-600")}>
                                 {formatCurrency(lucroPrejuizo)}
-                            </div>
+                            </p>
                         </div>
                     </CardContent>
                 </Card>
