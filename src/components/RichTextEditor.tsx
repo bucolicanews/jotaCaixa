@@ -21,22 +21,17 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ value, onChange, placeh
     setIsHtmlMode(prev => !prev);
   }, []);
 
+  // Removendo o botão customizado da barra de ferramentas do Quill
   const modules = useMemo(() => ({
-    toolbar: {
-      container: [
-        [{ 'header': [1, 2, false] }],
-        ['bold', 'italic', 'underline', 'strike', 'blockquote'],
-        [{ 'list': 'ordered' }, { 'list': 'bullet' }, { 'indent': '-1' }, { 'indent': '+1' }],
-        [{ 'align': [] }],
-        ['link', 'image'],
-        ['clean'],
-        ['htmlButton'] // Botão customizado
-      ],
-      handlers: {
-        htmlButton: toggleHtmlMode,
-      }
-    }
-  }), [toggleHtmlMode]);
+    toolbar: [
+      [{ 'header': [1, 2, false] }],
+      ['bold', 'italic', 'underline', 'strike', 'blockquote'],
+      [{ 'list': 'ordered' }, { 'list': 'bullet' }, { 'indent': '-1' }, { 'indent': '+1' }],
+      [{ 'align': [] }],
+      ['link', 'image'],
+      ['clean'],
+    ]
+  }), []);
 
   const formats = [
     'header',
@@ -45,18 +40,32 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ value, onChange, placeh
     'link', 'image', 'align'
   ];
 
-  if (isHtmlMode) {
-    return (
-      <div className={cn(className, "flex flex-col h-full space-y-2")}>
+  return (
+    <div className={cn(className, "flex flex-col h-full space-y-2")}>
+      
+      {/* Botão de Alternância no Topo */}
+      <div className="flex justify-end">
         <Button 
           type="button" 
-          variant="secondary" 
+          variant="outline" 
+          size="sm"
           onClick={toggleHtmlMode} 
-          className="w-full justify-start"
           disabled={readOnly}
+          className="w-full sm:w-auto"
         >
-          <Edit className="w-4 h-4 mr-2" /> Voltar para Editor Visual
+          {isHtmlMode ? (
+            <>
+              <Edit className="w-4 h-4 mr-2" /> Voltar para Editor Visual
+            </>
+          ) : (
+            <>
+              <Code className="w-4 h-4 mr-2" /> Editar Código-Fonte HTML
+            </>
+          )}
         </Button>
+      </div>
+
+      {isHtmlMode ? (
         <Textarea
           value={value}
           onChange={(e) => onChange(e.target.value)}
@@ -64,32 +73,18 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ value, onChange, placeh
           readOnly={readOnly}
           className="flex-1 font-mono text-sm min-h-[300px]"
         />
-      </div>
-    );
-  }
-
-  return (
-    <div className={cn(className, "flex flex-col h-full")}>
-      <ReactQuill 
-        theme="snow" 
-        value={value} 
-        onChange={onChange} 
-        modules={modules}
-        formats={formats}
-        placeholder={placeholder}
-        readOnly={readOnly}
-        className="flex-1 flex flex-col" 
-      />
-      {/* Adiciona o botão HTML abaixo do editor visual para o usuário alternar */}
-      <Button 
-        type="button" 
-        variant="outline" 
-        onClick={toggleHtmlMode} 
-        className="mt-2 w-full justify-start"
-        disabled={readOnly}
-      >
-        <Code className="w-4 h-4 mr-2" /> Editar Código-Fonte HTML
-      </Button>
+      ) : (
+        <ReactQuill 
+          theme="snow" 
+          value={value} 
+          onChange={onChange} 
+          modules={modules}
+          formats={formats}
+          placeholder={placeholder}
+          readOnly={readOnly}
+          className="flex-1 flex flex-col" 
+        />
+      )}
     </div>
   );
 };
