@@ -18,6 +18,8 @@ import { Calendar } from '../ui/calendar';
 import { CalendarIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ptBR } from 'date-fns/locale';
+import { SaldoContaDetalhada } from '@/types/saldo-conta';
+import { useContabilConfig } from '@/hooks/use-contabil-config';
 
 const formSchema = z.object({
   data_movimentacao: z.date({ required_error: 'A data é obrigatória.' }),
@@ -26,6 +28,9 @@ const formSchema = z.object({
   valor: z.coerce.number().positive('O valor deve ser maior que zero.'),
   historico_id: z.string().uuid('Selecione um histórico válido.').nullable(),
   descricao_complementar: z.string().optional().or(z.literal('')),
+  
+  // NOVO CAMPO: Conta de Saldo (para Débito)
+  conta_saldo_debito_id: z.string().uuid('Selecione a conta de saldo de Débito.').optional().nullable(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -36,10 +41,12 @@ interface FormLancamentoManualProps {
 
 const FormLancamentoManual: React.FC<FormLancamentoManualProps> = ({ onSaveComplete }) => {
   const { usuario } = useSessao();
+  const { configMap } = useContabilConfig();
   const [contasAnaliticas, setContasAnaliticas] = useState<PlanoContas[]>([]);
+  const [contasSaldo, setContasSaldo] = useState<SaldoContaDetalhada[]>([]); // NOVO ESTADO
   const [historicos, setHistoricos] = useState<Historico[]>([]);
   const [loadingData, setLoadingData] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false); // Adicionado estado de submissão
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   const ownerId = usuario?.id;
 
@@ -52,6 +59,7 @@ const FormLancamentoManual: React.FC<FormLancamentoManualProps> = ({ onSaveCompl
       valor: undefined,
       historico_id: null,
       descricao_complementar: '',
+      conta_saldo_debito_id: null,
     },
   });
   
@@ -63,10 +71,10 @@ const FormLancamentoManual: React.FC<FormLancamentoManualProps> = ({ onSaveCompl
     setLoadingData(true);
     
     try {
-      // 1. Buscar Contas Analíticas (Permite Lançamentos)
+      // 1. Buscar Contas Analíticas (Plano de Contas)
       const { data: contasData, error: contasError } = await supabase
         .from('plano_contas')
-        .select('id, Conta, Descricao, Analitica')
+        .select('id, Conta, Descricao, Analitica, is_conta_caixa_banco')
         .eq('proprietario_id', ownerId)
         .eq('Analitica', 'Sim')
         .order('Conta');
@@ -74,7 +82,17 @@ const FormLancamentoManual: React.FC<FormLancamentoManualProps> = ({ onSaveCompl
       if (contasError) throw contasError;
       setContasAnaliticas(contasData as PlanoContas[]);
       
-      // 2. Buscar Históricos
+      // 2. Buscar Contas de Saldo (Caixa/Banco/Patrimonial)
+      const { data: saldosData, error: saldosError } = await supabase
+        .from('saldo_contas')
+        .select(`*, plano_contas ( id, Conta, Descricao, is_conta_caixa_banco )`)
+        .eq('proprietario_id', ownerId)
+        .order('nome');
+        
+      if (saldosError) throw saldosError;
+      setContasSaldo(saldosData as SaldoContaDetalhada[]);
+      
+      // 3. Buscar Históricos
       const { data: hData, error: hError } = await supabase
         .from('historicos')
         .select('id, descricao, codigo')
@@ -96,6 +114,13 @@ const FormLancamentoManual: React.FC<FormLancamentoManualProps> = ({ onSaveCompl
       fetchContasEHistoricos();
     }
   }, [ownerId, fetchContasEHistoricos]);
+  
+  // NOVO: Verifica se a conta de Débito é um Caixa/Banco
+  const isDebitoCaixaBanco = useMemo(() => {
+      const conta = contasAnaliticas.find(c => c.id === contaDebitoId);
+      const prefix = conta?.Conta.split('.')[0];
+      return prefix === (configMap.Ativo || '1') && conta?.is_conta_caixa_banco;
+  }, [contasAnaliticas, contaDebitoId, configMap.Ativo]);
 
   const onSubmit = async (values: FormValues) => {
     if (!ownerId) { showError('ID do proprietário não encontrado.'); return; }
@@ -105,14 +130,19 @@ const FormLancamentoManual: React.FC<FormLancamentoManualProps> = ({ onSaveCompl
     }
     
     const contaDebito = contasAnaliticas.find(c => c.id === values.conta_debito_id);
-    const contaCredito = contasAnaliticas.find(c => c.id === values.conta_credito_id);
     
-    if (!contaDebito || !contaCredito) {
-        showError('Contas selecionadas não são válidas.');
+    if (!contaDebito) {
+        showError('Conta de Débito selecionada não é válida.');
+        return;
+    }
+    
+    // Validação: Se for Débito em Caixa/Banco, a conta de saldo deve ser selecionada
+    if (isDebitoCaixaBanco && !values.conta_saldo_debito_id) {
+        showError('Selecione a Conta de Saldo (Caixa/Banco) para o lançamento de Débito.');
         return;
     }
 
-    setIsSubmitting(true); // Inicia submissão
+    setIsSubmitting(true);
     
     const dataMovimentacao = format(values.data_movimentacao, 'yyyy-MM-dd') + 'T12:00:00Z';
     const valor = values.valor;
@@ -131,7 +161,8 @@ const FormLancamentoManual: React.FC<FormLancamentoManualProps> = ({ onSaveCompl
         descricao: `D: ${contaDebito.Descricao} - ${descricaoComplementar}`,
         valor: valor,
         tipo: 'Entrada' as const, // Débito é sempre 'Entrada'
-        conta_bancaria_id: null,
+        // NOVO: Vincula a conta de saldo se for Caixa/Banco
+        conta_bancaria_id: isDebitoCaixaBanco ? values.conta_saldo_debito_id : null, 
         conta_contabil_id: values.conta_debito_id,
         origem: 'lancamento_manual',
         historico_id: historicoId,
@@ -143,7 +174,7 @@ const FormLancamentoManual: React.FC<FormLancamentoManualProps> = ({ onSaveCompl
         id: idCredito,
         proprietario_id: ownerId,
         data_movimentacao: dataMovimentacao,
-        descricao: `C: ${contaCredito.Descricao} - ${descricaoComplementar}`,
+        descricao: `C: ${contasAnaliticas.find(c => c.id === values.conta_credito_id)?.Descricao} - ${descricaoComplementar}`,
         valor: valor,
         tipo: 'Saida' as const, // Crédito é sempre 'Saída'
         conta_bancaria_id: null,
@@ -173,6 +204,7 @@ const FormLancamentoManual: React.FC<FormLancamentoManualProps> = ({ onSaveCompl
             valor: undefined,
             historico_id: values.historico_id, 
             descricao_complementar: '',
+            conta_saldo_debito_id: null,
         });
         
         onSaveComplete();
@@ -217,7 +249,7 @@ const FormLancamentoManual: React.FC<FormLancamentoManualProps> = ({ onSaveCompl
         <div className="grid grid-cols-2 gap-4">
             <FormField control={form.control} name="conta_debito_id" render={({ field }) => (
                 <FormItem>
-                    <FormLabel>Conta Débito (D)</FormLabel>
+                    <FormLabel>Conta Contábil Débito (D)</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value || undefined}>
                         <FormControl>
                             <SelectTrigger className="text-red-600">
@@ -238,7 +270,7 @@ const FormLancamentoManual: React.FC<FormLancamentoManualProps> = ({ onSaveCompl
             
             <FormField control={form.control} name="conta_credito_id" render={({ field }) => (
                 <FormItem>
-                    <FormLabel>Conta Crédito (C)</FormLabel>
+                    <FormLabel>Conta Contábil Crédito (C)</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value || undefined}>
                         <FormControl>
                             <SelectTrigger className="text-green-600">
@@ -257,6 +289,37 @@ const FormLancamentoManual: React.FC<FormLancamentoManualProps> = ({ onSaveCompl
                 </FormItem>
             )} />
         </div>
+        
+        {/* NOVO CAMPO: Seleção de Conta de Saldo (Apenas se Débito for Caixa/Banco) */}
+        {isDebitoCaixaBanco && (
+            <FormField control={form.control} name="conta_saldo_debito_id" render={({ field }) => (
+                <FormItem>
+                    <FormLabel>Conta de Saldo (Caixa/Banco) - Onde o dinheiro entrou</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value || undefined}>
+                        <FormControl>
+                            <SelectTrigger className="border-blue-500">
+                                <SelectValue placeholder="Selecione a conta de saldo" />
+                            </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                            {contasSaldo
+                                .filter(c => c.conta_contabil_id === contaDebitoId)
+                                .map(c => (
+                                    <SelectItem key={c.id} value={c.id}>
+                                        {c.nome}
+                                    </SelectItem>
+                                ))}
+                        </SelectContent>
+                    </Select>
+                    <FormMessage />
+                    {contasSaldo.filter(c => c.conta_contabil_id === contaDebitoId).length === 0 && (
+                        <p className="text-xs text-red-500">
+                            Nenhuma conta de saldo vinculada à conta contábil de Débito.
+                        </p>
+                    )}
+                </FormItem>
+            )} />
+        )}
         
         <FormField control={form.control} name="valor" render={({ field }) => (
             <FormItem>
