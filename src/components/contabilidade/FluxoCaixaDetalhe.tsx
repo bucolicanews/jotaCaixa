@@ -197,10 +197,7 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
       };
   }, [lancamentos, filtroContaId, filtroPeriodo, contas]);
   // --- FIM CÁLCULO ---
-  
-  // Variáveis de escopo superior para os cards
-  const totalEntradas = totalEntradas;
-  const totalSaidas = totalSaidas;
+
   
   // Lógica Condicional para o Saldo Final/Variação
   let saldoFinalOuVariacao = 0;
