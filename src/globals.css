@@ -99,6 +99,12 @@
 .ql-editor em { font-style: italic; }
 .ql-editor ul, .ql-editor ol { padding-left: 1.5em; }
 
+/* Adicionando estilos de alinhamento do Quill */
+.ql-align-left { text-align: left; }
+.ql-align-center { text-align: center; }
+.ql-align-right { text-align: right; }
+.ql-align-justify { text-align: justify; }
+
 /* Garante que a prévia do contrato/documento use esses estilos */
 .border.rounded-md.p-4.bg-background.shadow-inner div {
     /* Aplica estilos básicos de tipografia para o conteúdo injetado */
