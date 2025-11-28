@@ -23,6 +23,7 @@ import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from '
 import { Textarea } from '@/components/ui/textarea';
 import { format } from 'date-fns';
 import { sanitizeConteudo } from '@/utils/formatters';
+import RichTextEditor from '@/components/RichTextEditor'; // IMPORTADO
 
 type TipoConteudo = 'html' | 'texto';
 type DocumentoStatus = 'rascunho' | 'finalizado' | 'arquivado' | 'ativo';
@@ -674,11 +675,11 @@ const GerarDocumentoSocietario: React.FC = () => {
                               <FormItem>
                                   <FormLabel>Conteúdo Principal (Editável)</FormLabel>
                                   <FormControl>
-                                      <Textarea 
-                                          placeholder="Edite o conteúdo principal do documento aqui..." 
-                                          {...field} 
-                                          rows={15}
-                                          className="font-mono text-sm"
+                                      <RichTextEditor
+                                          value={field.value || ''}
+                                          onChange={field.onChange}
+                                          placeholder="Edite o conteúdo principal do documento aqui..."
+                                          className="min-h-[400px] max-h-[calc(100vh-300px)]"
                                       />
                                   </FormControl>
                                   <FormMessage />
