@@ -18,7 +18,8 @@ import ContratoPreviewDialog from '../contratos/ContratoPreviewDialog';
 import { TAGS_PADRAO } from '@/config/contrato-tags-padrao';
 import { cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { sanitizeConteudo } from '@/utils/formatters'; // IMPORTADO
+import { sanitizeConteudo } from '@/utils/formatters';
+import RichTextEditor from '@/components/RichTextEditor'; // NOVO IMPORT
 
 // Extensão local para ContratoModelo
 interface ExtendedContratoModelo extends ContratoModelo {
@@ -46,7 +47,7 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
   const [conteudoPreview, setConteudoPreview] = useState('');
   const [previewTitle, setPreviewTitle] = useState('');
   
-  // NOVO: Referência para o Textarea
+  // NOVO: Referência para o Textarea (usado apenas no modo Texto Simples)
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   
   const getOwnerId = () => {
@@ -87,6 +88,8 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
       tipo_conteudo: modeloInicial?.tipo_conteudo || 'html', // GARANTINDO DEFAULT 'html'
     },
   });
+  
+  const tipoConteudo = form.watch('tipo_conteudo'); // Observa o tipo de conteúdo
 
   const onSubmit = async (values: FormValues) => {
     if (!ownerId) {
@@ -96,7 +99,8 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
     
     const dataToSave = {
       titulo: values.titulo,
-      conteudo_template: sanitizeConteudo(values.conteudo_template), // APLICA SANITIZE NO SALVAMENTO
+      // CRÍTICO: Sanitiza apenas se for HTML, senão salva o texto puro
+      conteudo_template: values.tipo_conteudo === 'html' ? sanitizeConteudo(values.conteudo_template) : values.conteudo_template, 
       tipo_conteudo: values.tipo_conteudo, // INCLUINDO NO PAYLOAD
       empresa_id: ownerId, // Vincula ao Admin ou Cliente
     };
@@ -225,7 +229,7 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="html">HTML</SelectItem>
+                        <SelectItem value="html">HTML (Editor Visual)</SelectItem>
                         <SelectItem value="texto">Texto Simples</SelectItem>
                       </SelectContent>
                     </Select>
@@ -245,15 +249,24 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
                         </Button>
                     </FormLabel>
                     <FormControl>
-                      <Textarea 
-                        ref={textareaRef} // Adicionando a referência
-                        placeholder="Insira o conteúdo do contrato aqui, usando as tags dinâmicas." 
-                        {...field} 
-                        rows={15}
-                        className={cn("font-mono text-sm", form.watch('tipo_conteudo') === 'html' ? 'bg-yellow-50/50 dark:bg-yellow-900/10' : '')}
-                        onDragOver={handleDragOver} // Manipulador de Drag Over
-                        onDrop={handleDrop} // Manipulador de Drop
-                      />
+                      {tipoConteudo === 'html' ? (
+                          <RichTextEditor
+                              value={field.value}
+                              onChange={field.onChange}
+                              placeholder="Insira o conteúdo formatado aqui..."
+                              className="min-h-[200px]"
+                          />
+                      ) : (
+                          <Textarea 
+                            ref={textareaRef} 
+                            placeholder="Insira o conteúdo do contrato aqui, usando as tags dinâmicas." 
+                            {...field} 
+                            rows={15}
+                            className={cn("font-mono text-sm", tipoConteudo === 'html' ? 'bg-yellow-50/50 dark:bg-yellow-900/10' : '')}
+                            onDragOver={handleDragOver}
+                            onDrop={handleDrop}
+                          />
+                      )}
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -285,8 +298,8 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
                             <div 
                                 key={tag.nome_tag} 
                                 className="p-2 border rounded-md cursor-pointer hover:bg-accent/50 transition-colors"
-                                draggable // Torna o elemento arrastável
-                                onDragStart={(e) => handleDragStart(e, tag.nome_tag)} // Inicia o drag
+                                draggable 
+                                onDragStart={(e) => handleDragStart(e, tag.nome_tag)} 
                                 onClick={() => {
                                     navigator.clipboard.writeText(tag.nome_tag);
                                     showSuccess(`Tag ${tag.nome_tag} copiada!`);
