@@ -121,12 +121,14 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
     }
     
     const dataToSave = {
-      proprietario_id: ownerId,
+      // CORREÇÃO CRÍTICA: Usando 'empresa_id' que é o nome da coluna na tabela
+      empresa_id: ownerId, 
       titulo: values.titulo,
       // CRÍTICO: Sanitiza apenas se for HTML, senão salva o texto puro
       conteudo_template: values.tipo_conteudo === 'html' ? sanitizeConteudo(values.conteudo_template) : values.conteudo_template,
-      // tipo_conteudo removido da tabela contrato_modelos
-      tipo_documento: values.tipo_documento || null,
+      // tipo_documento não existe na tabela contrato_modelos, mas é mantido no formSchema.
+      // Vamos removê-lo do payload para evitar o erro 400.
+      // tipo_documento: values.tipo_documento || null, // REMOVIDO
     };
 
     let error = null;
