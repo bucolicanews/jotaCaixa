@@ -109,10 +109,18 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
         return;
     }
     
+    // LOG PARA DEBUG
+    console.log('Payload de Documento Societário Modelo:', {
+        titulo: values.titulo,
+        conteudo_template: values.conteudo_template,
+        tipo_conteudo: 'html', // Forçado
+        tipo_documento: values.tipo_documento,
+    });
+    
     const dataToSave = {
       proprietario_id: ownerId,
       titulo: values.titulo,
-      // Sempre sanitiza, pois o editor é HTML
+      // CRÍTICO: Sanitiza, pois o editor é HTML
       conteudo_template: sanitizeConteudo(values.conteudo_template),
       tipo_conteudo: 'html', // Força o tipo para 'html'
       tipo_documento: values.tipo_documento || null,

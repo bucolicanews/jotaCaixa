@@ -120,15 +120,20 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
         return;
     }
     
+    // LOG PARA DEBUG
+    console.log('Payload de Contrato Modelo:', {
+        titulo: values.titulo,
+        conteudo_template: values.conteudo_template,
+        tipo_conteudo: values.tipo_conteudo,
+    });
+    
     const dataToSave = {
       // CORREÇÃO CRÍTICA: Usando 'empresa_id' que é o nome da coluna na tabela
       empresa_id: ownerId, 
       titulo: values.titulo,
       // CRÍTICO: Sanitiza apenas se for HTML, senão salva o texto puro
       conteudo_template: values.tipo_conteudo === 'html' ? sanitizeConteudo(values.conteudo_template) : values.conteudo_template,
-      // tipo_documento não existe na tabela contrato_modelos, mas é mantido no formSchema.
-      // Vamos removê-lo do payload para evitar o erro 400.
-      // tipo_documento: values.tipo_documento || null, // REMOVIDO
+      // REMOVIDO: tipo_conteudo e tipo_documento do payload, pois não existem na tabela contrato_modelos
     };
 
     let error = null;
@@ -332,6 +337,8 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
                                         size="sm" 
                                         onClick={() => handleInsertBloco(bloco)}
                                         className="justify-start truncate"
+                                        draggable
+                                        onDragStart={(e) => e.dataTransfer.setData("text/plain", `\n\n${bloco.conteudo}\n\n`)}
                                     >
                                         {bloco.titulo}
                                     </Button>
@@ -342,7 +349,41 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
                 </Card>
             </div>
           </div>
-      
+          
+          {/* Campos de Configuração (Movidos para o final) */}
+          <Card>
+              <CardHeader><CardTitle className="text-xl">Configuração do Documento</CardTitle></CardHeader>
+              <CardContent className="space-y-4">
+                  <FormField
+                      control={form.control}
+                      name="titulo"
+                      render={({ field }) => (
+                          <FormItem>
+                              <FormLabel>Título do Modelo</FormLabel>
+                              <FormControl>
+                                  <Input placeholder="Ex: Ata de Reunião" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                          </FormItem>
+                      )}
+                  />
+                  <FormField
+                      control={form.control}
+                      name="tipo_documento"
+                      render={({ field }) => (
+                          <FormItem>
+                              <FormLabel>Tipo de Documento (Ex: Ata, Contrato Social)</FormLabel>
+                              <FormControl><Input placeholder="Ex: Ata de Reunião" {...field} /></FormControl>
+                              <FormMessage />
+                          </FormItem>
+                      )}
+                  />
+                  <div className="space-y-2">
+                      <Label>Tipo de Conteúdo</Label>
+                      <Input readOnly value="Editor de Texto" className="font-semibold" />
+                  </div>
+              </CardContent>
+          </Card>
 
           <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
             {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -352,15 +393,15 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
         </form>
       </Form>
       
-      <ContratoPreviewDialog
+      <DocumentoPreviewDialog
         open={previewOpen}
         onOpenChange={setPreviewOpen}
         conteudoHtml={conteudoPreview}
         titulo={form.getValues('titulo')}
-        isHtml={tipoConteudo === 'html'}
+        isHtml={true} // Sempre HTML
       />
     </>
   );
 };
 
-export default FormContratoModelo;
+export default FormDocumentoSocietarioModelo;
