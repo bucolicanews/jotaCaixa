@@ -202,122 +202,136 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
     <>
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="md:col-span-2 space-y-4">
-              <FormField
-                control={form.control}
-                name="titulo"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Título do Modelo</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Ex: Contrato de Prestação de Serviços" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="tipo_conteudo"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Tipo de Conteúdo</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecione o formato" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="html">HTML (Editor Visual)</SelectItem>
-                        <SelectItem value="texto">Texto Simples</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="conteudo_template"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="flex justify-between items-center">
-                        Conteúdo do Template
-                        <Button type="button" variant="outline" size="sm" onClick={handlePreview} disabled={!field.value}>
+          {/* NOVO LAYOUT DE DUAS COLUNAS */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            
+            {/* COLUNA 1: CONTEÚDO DO TEMPLATE (2/3 da largura) */}
+            <div className="lg:col-span-2 space-y-4">
+                <Card className="h-full">
+                    <CardHeader className="flex flex-row items-center justify-between">
+                        <CardTitle className="text-xl">Conteúdo do Template</CardTitle>
+                        <Button type="button" variant="outline" size="sm" onClick={handlePreview} disabled={!form.watch('conteudo_template')}>
                             <Eye className="mr-2 h-4 w-4" /> Pré-visualizar
                         </Button>
-                    </FormLabel>
-                    <FormControl>
-                      {tipoConteudo === 'texto' ? (
-                          <RichTextEditor
-                              value={field.value}
-                              onChange={field.onChange}
-                              placeholder="Insira o conteúdo formatado aqui..."
-                              className="min-h-[200px]"
-                              isSimpleTextMode={true} // MODO TEXTO SIMPLES
-                          />
-                      ) : (
-                          <Textarea 
-                            ref={textareaRef} 
-                            placeholder="Insira o conteúdo do contrato aqui, usando as tags dinâmicas." 
-                            {...field} 
-                            rows={15}
-                            className={cn("font-mono text-sm", tipoConteudo === 'html' ? 'bg-yellow-50/50 dark:bg-yellow-900/10' : '')}
-                            onDragOver={handleDragOver}
-                            onDrop={handleDrop}
-                          />
-                      )}
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                    </CardHeader>
+                    <CardContent>
+                        <FormField
+                            control={form.control}
+                            name="conteudo_template"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormControl>
+                                        {tipoConteudo === 'texto' ? (
+                                            <RichTextEditor
+                                                value={field.value}
+                                                onChange={field.onChange}
+                                                placeholder="Insira o conteúdo formatado aqui..."
+                                                className="min-h-[400px]" // AUMENTANDO A ALTURA
+                                                isSimpleTextMode={true} // MODO TEXTO SIMPLES
+                                            />
+                                        ) : (
+                                            <Textarea 
+                                                ref={textareaRef} 
+                                                placeholder="Insira o conteúdo do contrato aqui, usando as tags dinâmicas." 
+                                                {...field} 
+                                                rows={20} // AUMENTANDO AS LINHAS
+                                                className={cn("font-mono text-sm", tipoConteudo === 'html' ? 'bg-yellow-50/50 dark:bg-yellow-900/10' : '')}
+                                                onDragOver={handleDragOver}
+                                                onDrop={handleDrop}
+                                            />
+                                        )}
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                    </CardContent>
+                </Card>
             </div>
             
-            {/* Coluna de Tags */}
-            <Card className="md:col-span-1 max-h-[600px] overflow-y-auto">
-                <CardHeader className="pb-2">
-                    <CardTitle className="text-lg flex items-center"><Tag className="w-4 h-4 mr-2" /> Tags Disponíveis</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <p className="text-sm text-muted-foreground mb-3">Clique para copiar ou arraste para o campo de conteúdo.</p>
-                    
-                    {/* NOVO BOTÃO DE COPIAR TUDO */}
-                    <Button 
-                        variant="secondary" 
-                        size="sm" 
-                        onClick={handleCopyAllTags}
-                        className="w-full mb-4"
-                        disabled={allTags.length === 0}
-                    >
-                        <Copy className="w-4 h-4 mr-2" /> Copiar Todas as Tags ({allTags.length})
-                    </Button>
-                    
-                    <div className="space-y-2">
-                        {allTags.map((tag: ContratoTag) => (
-                            <div 
-                                key={tag.nome_tag} 
-                                className="p-2 border rounded-md cursor-pointer hover:bg-accent/50 transition-colors"
-                                draggable 
-                                onDragStart={(e) => handleDragStart(e, tag.nome_tag)} 
-                                onClick={() => {
-                                    navigator.clipboard.writeText(tag.nome_tag);
-                                    showSuccess(`Tag ${tag.nome_tag} copiada!`);
-                                }}
-                            >
-                                <p className="font-mono text-xs font-semibold text-primary">{tag.nome_tag}</p>
-                                <p className="text-xs text-muted-foreground">{tag.descricao}</p>
-                            </div>
-                        ))}
-                    </div>
-                    <Separator className="my-4" />
-                    <p className="text-xs text-muted-foreground">
-                        Gerencie tags customizadas em <a href="/contratos/tags" className="underline">Cadastrar Tags</a>.
-                    </p>
-                </CardContent>
-            </Card>
+            {/* COLUNA 2: DADOS E TAGS (1/3 da largura) */}
+            <div className="lg:col-span-1 space-y-4">
+                <Card>
+                    <CardHeader><CardTitle className="text-xl">Configuração</CardTitle></CardHeader>
+                    <CardContent className="space-y-4">
+                        <FormField
+                            control={form.control}
+                            name="titulo"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Título do Modelo</FormLabel>
+                                    <FormControl>
+                                        <Input placeholder="Ex: Contrato de Prestação de Serviços" {...field} />
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                        <FormField
+                            control={form.control}
+                            name="tipo_conteudo"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Tipo de Conteúdo</FormLabel>
+                                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                        <FormControl>
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Selecione o formato" />
+                                            </SelectTrigger>
+                                        </FormControl>
+                                        <SelectContent>
+                                            <SelectItem value="html">HTML (Editor Visual)</SelectItem>
+                                            <SelectItem value="texto">Texto Simples</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                    </CardContent>
+                </Card>
+                
+                <Card className="max-h-[400px] overflow-y-auto">
+                    <CardHeader className="pb-2">
+                        <CardTitle className="text-lg flex items-center"><Tag className="w-4 h-4 mr-2" /> Tags Disponíveis</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <p className="text-sm text-muted-foreground mb-3">Clique para copiar ou arraste para o campo de conteúdo.</p>
+                        
+                        <Button 
+                            variant="secondary" 
+                            size="sm" 
+                            onClick={handleCopyAllTags}
+                            className="w-full mb-4"
+                            disabled={allTags.length === 0}
+                        >
+                            <Copy className="w-4 h-4 mr-2" /> Copiar Todas as Tags ({allTags.length})
+                        </Button>
+                        
+                        <div className="space-y-2">
+                            {allTags.map((tag: ContratoTag) => (
+                                <div 
+                                    key={tag.nome_tag} 
+                                    className="p-2 border rounded-md cursor-pointer hover:bg-accent/50 transition-colors"
+                                    draggable 
+                                    onDragStart={(e) => handleDragStart(e, tag.nome_tag)} 
+                                    onClick={() => {
+                                        navigator.clipboard.writeText(tag.nome_tag);
+                                        showSuccess(`Tag ${tag.nome_tag} copiada!`);
+                                    }}
+                                >
+                                    <p className="font-mono text-xs font-semibold text-primary">{tag.nome_tag}</p>
+                                    <p className="text-xs text-muted-foreground">{tag.descricao}</p>
+                                </div>
+                            ))}
+                        </div>
+                        <Separator className="my-4" />
+                        <p className="text-xs text-muted-foreground">
+                            Gerencie tags customizadas em <a href="/contratos/tags" className="underline">Cadastrar Tags</a>.
+                        </p>
+                    </CardContent>
+                </Card>
+            </div>
           </div>
 
           <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
