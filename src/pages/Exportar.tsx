@@ -6,7 +6,7 @@ import ExportarHistoricos from '@/components/calima/ExportarHistoricos';
 import ExportarLancamentos from '@/components/calima/ExportarLancamentos';
 import { useSessao } from '@/hooks/use-sessao';
 import { ClienteProfile } from '@/types/usuario';
-import ExportarPlanoContasButton from '@/components/contabilidade/ExportarPlanoContasButton'; // NOVO IMPORT
+import ExportarPlanoContasCard from '@/components/calima/ExportarPlanoContasCard'; // NOVO IMPORT
 
 const Exportar: React.FC = () => {
   const { role, perfil, carregando } = useSessao();
@@ -34,16 +34,8 @@ const Exportar: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <ExportarHistoricos />
         
-        {/* NOVO CARD PARA EXPORTAR PLANO DE CONTAS */}
-        <Card>
-            <CardHeader><CardTitle className="flex items-center"><BookOpen className="w-5 h-5 mr-2" /> Exportar Plano de Contas</CardTitle></CardHeader>
-            <CardContent className="space-y-4">
-                <p className="text-sm text-muted-foreground">
-                    Exporta o Plano de Contas completo no formato CSV (Conta;Código reduzido;Descrição;Analítica).
-                </p>
-                <ExportarPlanoContasButton />
-            </CardContent>
-        </Card>
+        {/* CARD PARA EXPORTAR PLANO DE CONTAS */}
+        <ExportarPlanoContasCard />
         
         <ExportarLancamentos />
       </div>
