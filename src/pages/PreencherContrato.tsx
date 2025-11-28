@@ -604,12 +604,15 @@ const PreencherContrato: React.FC = () => {
                 .limit(1)
                 .single();
             
-            // ... (Restante da lógica de exclusão de lançamentos e contas a receber)
+            // --- Lógica de Limpeza de Lançamentos Antigos (CORRIGIDA) ---
             if (contaReceberData) {
-                // 1. Deletar Lançamentos associados (Patrimonial e Receita)
-                const oldLaunchDescriptionPrefix = `Lançamento Inicial CR: ${contratoInicial?.valores_tags_preenchidos?.titulo || 'Contrato'} (CR ID: ${contaReceberData.id.substring(0, 8)})`;
-                const oldReceitaDescriptionPrefix = `Receita: ${contratoInicial?.valores_tags_preenchidos?.titulo || 'Contrato'} (CR ID: ${contratoInicial?.id.substring(0, 8)})`;
+                const contaReceberId = contaReceberData.id;
                 
+                // Define os prefixos de descrição para exclusão
+                const oldLaunchDescriptionPrefix = `Lançamento Inicial CR: ${contratoInicial?.valores_tags_preenchidos?.titulo || 'Contrato'} (CR ID: ${contaReceberId.substring(0, 8)})`;
+                const oldReceitaDescriptionPrefix = `Receita: ${contratoInicial?.valores_tags_preenchidos?.titulo || 'Contrato'} (CR ID: ${contaReceberId.substring(0, 8)})`;
+                
+                // 1. Deletar Lançamentos associados (Patrimonial e Receita)
                 await supabase.from('lancamentos')
                     .delete()
                     .eq('origem', 'lancamento_cr')
@@ -617,8 +620,9 @@ const PreencherContrato: React.FC = () => {
                     .or(`descricao.ilike.${oldLaunchDescriptionPrefix}%`, `descricao.ilike.${oldReceitaDescriptionPrefix}%`);
                 
                 // 2. Deletar a conta sintética (cascades to parcels)
-                await supabase.from(tabelaContasReceber).delete().eq('id', contaReceberData.id);
+                await supabase.from(tabelaContasReceber).delete().eq('id', contaReceberId);
             }
+            // --- FIM Lógica de Limpeza de Lançamentos Antigos ---
             
         } else {
             // Inserir Novo Contrato
@@ -727,16 +731,6 @@ const PreencherContrato: React.FC = () => {
                     origem: 'lancamento_cr',
                 };
                 
-                // Limpeza de lançamentos antigos (se edição)
-                if (isEditing) {
-                    const oldLaunchDescriptionPrefix = `Lançamento Inicial CR: ${contratoInicial?.valores_tags_preenchidos?.titulo || 'Contrato'} (CR ID: ${contratoInicial?.id.substring(0, 8)})`;
-                    await supabase.from('lancamentos')
-                        .delete()
-                        .eq('origem', 'lancamento_cr')
-                        .eq('proprietario_id', ownerIdLogado)
-                        .or(`descricao.ilike.${oldLaunchDescriptionPrefix}%`, `descricao.ilike.${oldReceitaDescriptionPrefix}%`);
-                }
-                
                 await supabase.from('lancamentos').insert(lancamentoPatrimonialPayload);
             }
             
@@ -752,16 +746,6 @@ const PreencherContrato: React.FC = () => {
                     conta_contabil_id: contaReceitaResultado,
                     origem: 'lancamento_cr',
                 };
-                
-                // Limpeza de lançamentos antigos (se edição)
-                if (isEditing) {
-                    const oldReceitaDescriptionPrefix = `Receita: ${contratoInicial?.valores_tags_preenchidos?.titulo || 'Contrato'} (CR ID: ${contratoInicial?.id.substring(0, 8)})`;
-                    await supabase.from('lancamentos')
-                        .delete()
-                        .eq('origem', 'lancamento_cr')
-                        .eq('proprietario_id', ownerIdLogado)
-                        .ilike('descricao', `${oldReceitaDescriptionPrefix}%`);
-                }
                 
                 await supabase.from('lancamentos').insert(lancamentoReceitaPayload);
             }
