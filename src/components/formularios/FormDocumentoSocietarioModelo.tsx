@@ -294,7 +294,7 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
                         {/* CAMPO TIPO DE CONTEÚDO REMOVIDO */}
                         <div className="space-y-2">
                             <Label>Tipo de Conteúdo</Label>
-                            <Input readOnly value="Editor de Texto (HTML)" className="font-semibold" />
+                            <Input readOnly value="Editor de Texto" className="font-semibold" />
                         </div>
                     </CardContent>
                 </Card>
