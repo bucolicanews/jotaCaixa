@@ -27,6 +27,7 @@ interface Lancamento extends LancamentoPrimario {
   conciliado: boolean;
   origem: string;
   documento: string | null;
+  is_saldo_inicial: boolean | null; // NOVO CAMPO
   
   // Relações
   saldo_contas: { nome: string } | null;
@@ -77,7 +78,7 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
         return;
     }
     
-    // 2. Buscar Lançamentos DENTRO do Período
+    // 2. Buscar Lançamentos DENTRO do Período E ANTERIORES (para Saldo Inicial)
     let query = supabase
       .from('lancamentos')
       .select(`
@@ -93,25 +94,16 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
         documento,
         historico_id,
         conta_resultado_id,
+        is_saldo_inicial,
         saldo_contas:conta_bancaria_id ( nome )
       `)
       .eq('proprietario_id', empresaId) // ALTERADO: empresa_id -> proprietario_id
       .in('conta_bancaria_id', contasFiltradasIds) // Filtra por contas selecionadas
       .order('data_movimentacao', { ascending: false });
       
-    if (filtroTipo !== 'todos') {
-        query = query.eq('tipo', filtroTipo);
-    }
-    
-    // Filtro de texto: busca por ID, descrição ou documento
-    if (filtroTextoDebounced) {
-        const termo = `%${filtroTextoDebounced}%`;
-        // CORREÇÃO: Foca apenas em campos de texto (descricao e documento)
-        query = query.or(`descricao.ilike.${termo},documento.ilike.${termo}`);
-    }
-    
     // Filtro de data para os lançamentos (apenas se houver data de início)
     if (filtroPeriodo?.from) {
+        // Busca todos os lançamentos a partir do início do período (para calcular o saldo inicial)
         query = query.gte('data_movimentacao', format(filtroPeriodo.from, 'yyyy-MM-dd'));
     }
     if (filtroPeriodo?.to) {
@@ -124,47 +116,107 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
       showError('Erro ao carregar lançamentos: ' + error.message);
       setLancamentos([]);
     } else {
-      let filteredData = data as Lancamento[];
+      let fetchedData = data as Lancamento[];
       
-      // Filtro de ID no frontend (para IDs de lançamento ou conta bancária)
+      // 3. Filtro de Tipo e Texto (aplicado no frontend para manter a lista completa para o cálculo)
+      
+      // Filtro de Tipo
+      if (filtroTipo !== 'todos') {
+          fetchedData = fetchedData.filter(l => l.tipo === filtroTipo);
+      }
+      
+      // Filtro de texto no frontend (para IDs de lançamento ou conta bancária)
       if (filtroTextoDebounced) {
           const termo = filtroTextoDebounced.toLowerCase();
-          filteredData = filteredData.filter(l => 
+          fetchedData = fetchedData.filter(l => 
               l.id.toLowerCase().includes(termo) ||
-              l.conta_bancaria_id.toLowerCase().includes(termo)
+              l.conta_bancaria_id.toLowerCase().includes(termo) ||
+              l.descricao.toLowerCase().includes(termo) ||
+              l.documento?.toLowerCase().includes(termo)
           );
       }
       
-      setLancamentos(filteredData);
+      setLancamentos(fetchedData);
     }
     setLoadingLancamentos(false);
-  }, [empresaId, filtroContaId, filtroTipo, filtroTextoDebounced, filtroPeriodo, contasCaixa]); // Alterado contasCaixaBanco para contasCaixa
+  }, [empresaId, filtroContaId, filtroTipo, filtroTextoDebounced, filtroPeriodo, contasCaixa]);
 
   useEffect(() => {
     fetchLancamentos();
   }, [fetchLancamentos]);
   
-  const totalEntradas = lancamentos.filter(l => l.tipo === 'Entrada').reduce((sum, l) => sum + l.valor, 0);
-  const totalSaidas = lancamentos.filter(l => l.tipo === 'Saida').reduce((sum, l) => sum + l.valor, 0);
+  // --- CÁLCULO DE SALDO INICIAL E MOVIMENTO DO PERÍODO ---
+  const { totalEntradas, totalSaidas, saldoInicialConta, lancamentosDoPeriodo } = useMemo(() => {
+      if (filtroContaId === 'todos' || !filtroPeriodo?.from) {
+          // Se for geral ou sem período, não calculamos saldo inicial de conta
+          return { totalEntradas: 0, totalSaidas: 0, saldoInicialConta: 0, lancamentosDoPeriodo: lancamentos };
+      }
+      
+      const contaSelecionada = contas.find(c => c.id === filtroContaId);
+      if (!contaSelecionada) return { totalEntradas: 0, totalSaidas: 0, saldoInicialConta: 0, lancamentosDoPeriodo: [] };
+      
+      const dataInicioFiltro = format(filtroPeriodo.from, 'yyyy-MM-dd');
+      
+      let saldoInicialBase = contaSelecionada.saldo_inicial;
+      let entradasAnteriores = 0;
+      let saidasAnteriores = 0;
+      let entradasPeriodo = 0;
+      let saidasPeriodo = 0;
+      
+      const lancamentosNoPeriodo: Lancamento[] = [];
+      
+      // Itera sobre todos os lançamentos buscados (que já estão filtrados pela conta)
+      for (const l of lancamentos) {
+          const dataLancamento = format(parseISO(l.data_movimentacao), 'yyyy-MM-dd');
+          const valor = l.valor;
+          
+          // CRÍTICO: Ignora lançamentos originais estornados
+          if (l.origem === 'movimentacao_direta_estornada') continue;
+          
+          // CRÍTICO: Ignora lançamentos de saldo inicial (Débito)
+          if (l.is_saldo_inicial && l.tipo === 'Entrada') continue;
+          
+          if (dataLancamento < dataInicioFiltro) {
+              // Lançamentos ANTERIORES ao período de filtro
+              if (l.tipo === 'Entrada') entradasAnteriores += valor;
+              else if (l.tipo === 'Saida') saidasAnteriores += valor;
+          } else {
+              // Lançamentos DENTRO do período de filtro
+              lancamentosNoPeriodo.push(l);
+              if (l.tipo === 'Entrada') entradasPeriodo += valor;
+              else if (l.tipo === 'Saida') saidasPeriodo += valor;
+          }
+      }
+      
+      // 1. Saldo Inicial (Acumulado até o dia anterior ao filtro)
+      const saldoInicialCalculado = saldoInicialBase + entradasAnteriores - saidasAnteriores;
+      
+      // 2. Movimento do Período
+      return {
+          totalEntradas: entradasPeriodo,
+          totalSaidas: saidasPeriodo,
+          saldoInicialConta: saldoInicialCalculado,
+          lancamentosDoPeriodo: lancamentosNoPeriodo,
+      };
+  }, [lancamentos, filtroContaId, filtroPeriodo, contas]);
+  // --- FIM CÁLCULO ---
+  
+  const totalEntradas = filtroContaId === 'todos' ? lancamentos.filter(l => l.tipo === 'Entrada').reduce((sum, l) => sum + l.valor, 0) : totalEntradas;
+  const totalSaidas = filtroContaId === 'todos' ? lancamentos.filter(l => l.tipo === 'Saida').reduce((sum, l) => sum + l.valor, 0) : totalSaidas;
   
   // Lógica Condicional para o Saldo Final/Variação
   let saldoFinalOuVariacao = 0;
   let tituloSaldoFinal = '';
-  let saldoInicialConta = 0;
   
   const isContaFiltrada = filtroContaId !== 'todos';
   
   if (isContaFiltrada) {
-      // 1. Se uma conta específica está filtrada, encontramos o saldo inicial dela
-      const contaSelecionada = contas.find(c => c.id === filtroContaId);
-      saldoInicialConta = contaSelecionada ? contaSelecionada.saldo_inicial : 0;
-      
-      // 2. Calculamos o Saldo Final da Conta (Saldo Inicial + Entradas - Saídas)
+      // 1. Se uma conta específica está filtrada, calculamos o Saldo Final
       saldoFinalOuVariacao = saldoInicialConta + totalEntradas - totalSaidas;
       tituloSaldoFinal = 'Saldo Final da Conta';
       
   } else {
-      // 3. Se todas as contas estão filtradas, mostramos a Variação Líquida do Período
+      // 2. Se todas as contas estão filtradas, mostramos a Variação Líquida do Período
       saldoFinalOuVariacao = totalEntradas - totalSaidas;
       tituloSaldoFinal = 'Variação Líquida do Período';
   }
@@ -178,15 +230,15 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
     const printComponent = (
         <FluxoCaixaPrint
             empresaId={empresaId}
-            lancamentos={lancamentos}
+            lancamentos={lancamentosDoPeriodo} // Usa apenas os lançamentos do período
             totalEntradas={totalEntradas}
             totalSaidas={totalSaidas}
             saldoFinalOuVariacao={saldoFinalOuVariacao}
             tituloSaldoFinal={tituloSaldoFinal}
             filtroPeriodo={filtroPeriodo}
             saldoInicialConta={saldoInicialConta}
-            logoUrl={logoUrl} // PASSANDO LOGO
-            ownerName={ownerName} // PASSANDO NOME
+            logoUrl={logoUrl}
+            ownerName={ownerName}
         />
     );
 
@@ -245,8 +297,12 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
         
         // Lançamento 2: Estorno no Resultado (DRE)
         // O tipo do lançamento de Resultado/DRE é o oposto do tipo do lançamento de Ativo/Caixa
+        const contaResultadoOriginal = lancamentos.find(l => l.id === dreLaunchId);
+        const contaResultadoId = contaResultadoOriginal?.conta_contabil_id; // Conta de Resultado original
+        
+        if (!contaResultadoId) throw new Error('Conta de resultado original não encontrada para estorno.');
+        
         const estornoResultadoTipoCorrigido = estornoTipo === 'Entrada' ? 'Saida' : 'Entrada'; 
-        const contaResultadoId = lancamento.conta_contabil_id; // Conta de Resultado original
         
         const estornoResultadoPayload = {
             proprietario_id: empresaId,
@@ -335,7 +391,7 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
             <CardTitle className="text-lg flex items-center"><Filter className="w-4 h-4 mr-2" /> Filtros de Lançamentos</CardTitle>
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                    <Button variant="outline" disabled={loadingLancamentos || lancamentos.length === 0}>
+                    <Button variant="outline" disabled={loadingLancamentos || lancamentosDoPeriodo.length === 0}>
                         <Printer className="w-4 h-4 mr-2" /> Imprimir Relatório
                     </Button>
                 </DropdownMenuTrigger>
@@ -389,7 +445,7 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
 
       {/* Tabela de Lançamentos */}
       <Card>
-        <CardHeader><CardTitle className="text-xl">Histórico de Lançamentos ({lancamentos.length})</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-xl">Histórico de Lançamentos ({lancamentosDoPeriodo.length})</CardTitle></CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
             <Table>
@@ -406,10 +462,10 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
               <TableBody>
                 {loadingLancamentos ? (
                   <TableRow><TableCell colSpan={6} className="text-center py-8"><Loader2 className="h-6 w-6 animate-spin mx-auto text-primary" /></TableCell></TableRow>
-                ) : lancamentos.length === 0 ? (
+                ) : lancamentosDoPeriodo.length === 0 ? (
                   <TableRow><TableCell colSpan={6} className="text-center py-4 text-muted-foreground">Nenhum lançamento encontrado com os filtros aplicados.</TableCell></TableRow>
                 ) : (
-                  lancamentos.map((l) => {
+                  lancamentosDoPeriodo.map((l) => {
                     const isDirectMovement = l.origem === 'movimentacao_direta';
                     const isEstorno = l.origem === 'estorno_direto';
                     const isEstornada = l.origem === 'movimentacao_direta_estornada';
