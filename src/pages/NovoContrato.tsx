@@ -22,7 +22,7 @@ const NovoContrato: React.FC = () => {
   // ID do proprietário (Admin ou Cliente)
   const getOwnerId = () => {
     if (isAdmin) return usuario?.id || null;
-    if (isCliente) return (perfil as ClienteProfile)?.id;
+    if (isClient) return (perfil as ClienteProfile)?.id;
     if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id; // FIX: proprietario_id -> cliente_id
     return null;
   };
@@ -35,7 +35,7 @@ const NovoContrato: React.FC = () => {
     
     let query = supabase
       .from('contrato_modelos')
-      .select('*')
+      .select('id, titulo, conteudo_template, empresa_id, criado_em, updated_at') // LISTANDO COLUNAS
       .order('titulo', { ascending: true });
       
     if (isCliente) {
@@ -77,7 +77,7 @@ const NovoContrato: React.FC = () => {
     );
   }
   
-  if (!isAdmin && !isCliente) {
+  if (!isAdmin && !isClient) {
     return <LayoutPrincipal><Card><CardHeader><CardTitle>Acesso Negado</CardTitle></CardHeader><CardContent><p>Apenas administradores e clientes podem criar contratos.</p></CardContent></Card></LayoutPrincipal>;
   }
 
