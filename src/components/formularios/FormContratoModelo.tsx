@@ -20,13 +20,16 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { sanitizeConteudo } from '@/utils/formatters';
 import RichTextEditor from '@/components/RichTextEditor';
 
-// Extensão local para ContratoModelo (tipo_conteudo removido)
-interface ExtendedContratoModelo extends ContratoModelo {}
+// Extensão local para ContratoModelo
+interface ExtendedContratoModelo extends ContratoModelo {
+    tipo_conteudo?: 'html' | 'texto'; // Reintroduzindo o campo
+}
 
 const formSchema = z.object({
   titulo: z.string().min(1, 'O título é obrigatório.'),
   conteudo_template: z.string().min(10, 'O conteúdo do template é muito curto.'),
-  // tipo_conteudo removido
+  tipo_documento: z.string().optional(),
+  tipo_conteudo: z.enum(['html', 'texto']), // Reintroduzindo no esquema
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -40,12 +43,10 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
   const isEditing = !!modeloInicial;
   const { role, perfil, usuario } = useSessao();
   const [tagsCustomizadas, setTagsCustomizadas] = useState<ContratoTag[]>([]);
+  const [blocos, setBlocos] = useState<BlocoSocietario[]>([]);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [conteudoPreview, setConteudoPreview] = useState('');
   const [previewTitle, setPreviewTitle] = useState('');
-  
-  // Referência para o Textarea (usado para Drag & Drop)
-  const textareaRef = useRef<HTMLTextAreaElement>(null); 
   
   const getOwnerId = () => {
     if (role === 'Admin') return usuario?.id || null;
@@ -56,36 +57,62 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
   
   const ownerId = getOwnerId();
 
-  const fetchTags = useCallback(async () => {
+  const fetchTagsAndBlocos = useCallback(async () => {
     if (!ownerId) return;
     
-    const { data, error } = await supabase
+    // 1. Buscar Tags Customizadas
+    const { data: tagsData } = await supabase
         .from('contrato_tags')
         .select('*')
         .eq('empresa_id', ownerId)
         .order('nome_tag', { ascending: true });
         
-    if (error) {
-        console.error('Erro ao carregar tags customizadas:', error);
-        setTagsCustomizadas([]);
+    if (tagsData) {
+        // Filtra tags financeiras (não são usadas em documentos societários)
+        const tagsNaoFinanceiras = TAGS_PADRAO.filter(t => !t.origem_dado?.startsWith('contas_receber'));
+        
+        // Combina tags padrão e customizadas
+        const customTagsMap = tagsData.reduce((acc, tag) => {
+            acc[tag.nome_tag] = tag;
+            return acc;
+        }, {} as Record<string, any>);
+        
+        const allTags = [...tagsNaoFinanceiras, ...tagsData]
+            .filter((t, index, self) => index === self.findIndex((t2) => t2.nome_tag === t.nome_tag))
+            .sort((a, b) => a.nome_tag.localeCompare(b.nome_tag));
+            
+        setTagsCustomizadas(allTags);
+    }
+    
+    // 2. Buscar Blocos de Conteúdo
+    const { data: blocosData, error: blocosError } = await supabase
+        .from('blocos_societarios')
+        .select('*')
+        .or(`proprietario_id.eq.${ownerId},proprietario_id.is.null`)
+        .order('titulo');
+        
+    if (blocosError) {
+        console.error('Erro ao carregar blocos:', blocosError);
     } else {
-        setTagsCustomizadas(data as ContratoTag[]);
+        setBlocos(blocosData as BlocoSocietario[]);
     }
   }, [ownerId]);
   
   useEffect(() => {
-      fetchTags();
-  }, [fetchTags]);
+      fetchTagsAndBlocos();
+  }, [fetchTagsAndBlocos]);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       titulo: modeloInicial?.titulo || '',
-      conteudo_template: modeloInicial?.conteudo_template || '', 
+      conteudo_template: modeloInicial?.conteudo_template ? sanitizeConteudo(modeloInicial.conteudo_template) : '', // APLICA SANITIZE
+      tipo_documento: modeloInicial?.tipo_documento || '',
+      tipo_conteudo: modeloInicial?.tipo_conteudo || 'html', // Default to HTML
     },
   });
   
-  // tipoConteudo removido
+  const tipoConteudo = form.watch('tipo_conteudo');
 
   const onSubmit = async (values: FormValues) => {
     if (!ownerId) {
@@ -94,23 +121,23 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
     }
     
     const dataToSave = {
+      proprietario_id: ownerId,
       titulo: values.titulo,
-      // Assume-se que o conteúdo é HTML e sanitiza
-      conteudo_template: sanitizeConteudo(values.conteudo_template), 
-      empresa_id: ownerId, // Vincula ao Admin ou Cliente
+      // CRÍTICO: Sanitiza apenas se for HTML, senão salva o texto puro
+      conteudo_template: values.tipo_conteudo === 'html' ? sanitizeConteudo(values.conteudo_template) : values.conteudo_template,
+      // tipo_conteudo removido da tabela contrato_modelos
+      tipo_documento: values.tipo_documento || null,
     };
 
     let error = null;
 
     if (isEditing) {
-      // Atualizar
       const result = await supabase
         .from('contrato_modelos')
         .update(dataToSave)
         .eq('id', modeloInicial.id);
       error = result.error;
     } else {
-      // Inserir
       const result = await supabase
         .from('contrato_modelos')
         .insert(dataToSave);
@@ -130,7 +157,7 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
       
       // Substituição básica para a prévia (apenas tags padrão)
       let previewContent = template;
-      [...TAGS_PADRAO, ...tagsCustomizadas].forEach(tag => {
+      tagsCustomizadas.forEach(tag => {
           const regex = new RegExp(tag.nome_tag, 'g');
           previewContent = previewContent.replace(regex, `[${tag.descricao}]`);
       });
@@ -141,7 +168,7 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
   };
   
   const allTags = useMemo(() => {
-      return [...TAGS_PADRAO, ...tagsCustomizadas].sort((a, b) => a.nome_tag.localeCompare(b.nome_tag));
+      return tagsCustomizadas.sort((a, b) => a.nome_tag.localeCompare(b.nome_tag));
   }, [tagsCustomizadas]);
   
   // --- NOVO HANDLER: Copiar todas as tags ---
@@ -152,20 +179,59 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
   };
   // --- FIM NOVO HANDLER ---
   
-  // --- FUNÇÕES DE DRAG AND DROP ---
+  // --- FUNÇÕES DE INSERÇÃO DE TEXTO (Tags e Blocos) ---
+  
+  const handleInsertText = useCallback((insertText: string) => {
+      const current = form.getValues("conteudo_template") || "";
+
+      // Posição do cursor do textarea
+      const textarea = document.getElementById("conteudo-template-textarea") as HTMLTextAreaElement;
+      if (!textarea) return;
+
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+
+      const newValue =
+          current.substring(0, start) + insertText + current.substring(end);
+
+      // 1. Atualiza o valor no RHF (CRÍTICO)
+      form.setValue("conteudo_template", newValue, { shouldDirty: true, shouldValidate: true });
+
+      // 2. Reposiciona o cursor após a inserção
+      setTimeout(() => {
+          textarea.focus();
+          textarea.selectionStart = textarea.selectionEnd = start + insertText.length;
+      }, 0);
+  }, [form]);
+  
+  const handleInsertBloco = (bloco: BlocoSocietario) => {
+      handleInsertText(`\n\n${bloco.conteudo}\n\n`);
+      showSuccess(`Bloco '${bloco.titulo}' inserido no conteúdo.`);
+  };
   
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>, tag: string) => {
       e.dataTransfer.setData("text/plain", tag);
   };
   
-  // A função handleDrop foi removida pois o RichTextEditor não usa um textarea simples
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+      e.preventDefault(); // Permite que o drop ocorra
+  };
   
-  // --- FIM FUNÇÕES DE DRAG AND DROP ---
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      const text = e.dataTransfer.getData("text/plain");
+
+      if (text) {
+          handleInsertText(text);
+      }
+  };
+  
+  // --- FIM FUNÇÕES DE INSERÇÃO DE TEXTO ---
 
   return (
     <>
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 h-full flex flex-col">
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             
             {/* NOVO: BOTÃO DE SALVAR NO TOPO */}
             <div className="flex justify-end pb-4 border-b">
@@ -193,12 +259,13 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
                             name="conteudo_template"
                             render={({ field }) => (
                                 <FormItem className="h-full flex flex-col">
-                                    <FormControl className="flex-1">
+                                    <FormControl className="flex-1" onDrop={handleDrop} onDragOver={handleDragOver}>
+                                        {/* Usando RichTextEditor para ambos os modos */}
                                         <RichTextEditor
                                             value={field.value}
                                             onChange={field.onChange}
                                             placeholder="Insira o conteúdo formatado aqui..."
-                                            // CRÍTICO: Definindo altura mínima e overflow para a barra de rolagem
+                                            isSimpleTextMode={tipoConteudo === 'texto'}
                                             className="flex-1 min-h-[400px] max-h-[calc(100vh-300px)]" 
                                         />
                                     </FormControl>
@@ -228,15 +295,45 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
                                 </FormItem>
                             )}
                         />
-                        {/* Campo tipo_conteudo removido */}
+                        <FormField
+                            control={form.control}
+                            name="tipo_conteudo"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Formato do Conteúdo</FormLabel>
+                                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                        <FormControl>
+                                            <SelectTrigger><SelectValue placeholder="Selecione o formato" /></SelectTrigger>
+                                        </FormControl>
+                                        <SelectContent>
+                                            <SelectItem value="html">HTML (Editor Visual)</SelectItem>
+                                            <SelectItem value="texto">Texto Simples</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                        <FormField
+                            control={form.control}
+                            name="tipo_documento"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Tipo de Documento (Ex: Ata)</FormLabel>
+                                    <FormControl><Input placeholder="Ex: Ata de Reunião" {...field} /></FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
                     </CardContent>
                 </Card>
                 
                 <Card className="flex-1 min-h-[200px] max-h-[calc(100vh-200px)] overflow-y-auto">
                     <CardHeader className="pb-2">
-                        <CardTitle className="text-lg flex items-center"><Tag className="w-4 h-4 mr-2" /> Tags Disponíveis</CardTitle>
+                        <CardTitle className="text-lg flex items-center"><Tag className="w-4 h-4 mr-2" /> Tags e Blocos</CardTitle>
                     </CardHeader>
                     <CardContent>
+                        <h4 className="font-semibold flex items-center mb-2">Tags Disponíveis</h4>
                         <p className="text-sm text-muted-foreground mb-3">Clique para copiar ou arraste para o campo de conteúdo.</p>
                         
                         <Button 
@@ -249,7 +346,7 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
                             <Copy className="w-4 h-4 mr-2" /> Copiar Todas as Tags ({allTags.length})
                         </Button>
                         
-                        <div className="space-y-2">
+                        <div className="space-y-2 border rounded-md p-2 max-h-40 overflow-y-auto mb-4" onDragOver={handleDragOver} onDrop={handleDrop}>
                             {allTags.map((tag: ContratoTag) => (
                                 <div 
                                     key={tag.nome_tag} 
@@ -266,14 +363,39 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
                                 </div>
                             ))}
                         </div>
+                        
                         <Separator className="my-4" />
-                        <p className="text-xs text-muted-foreground">
-                            Gerencie tags customizadas em <a href="/contratos/tags" className="underline">Cadastrar Tags</a>.
-                        </p>
+                        
+                        <h4 className="font-semibold flex items-center"><PlusCircle className="w-4 h-4 mr-2" /> Blocos de Conteúdo</h4>
+                        <p className="text-sm text-muted-foreground mb-3">Clique para inserir o bloco.</p>
+                        <div className="grid grid-cols-1 gap-2 max-h-40 overflow-y-auto p-2 border rounded-md">
+                            {blocos.length === 0 ? (
+                                <p className="text-muted-foreground text-sm">Nenhum bloco disponível.</p>
+                            ) : (
+                                blocos.map(bloco => (
+                                    <Button 
+                                        key={bloco.id} 
+                                        variant="outline" 
+                                        size="sm" 
+                                        onClick={() => handleInsertBloco(bloco)}
+                                        className="justify-start truncate"
+                                    >
+                                        {bloco.titulo}
+                                    </Button>
+                                ))
+                            )}
+                        </div>
                     </CardContent>
                 </Card>
             </div>
           </div>
+      
+
+          <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
+            {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            <Save className="mr-2 h-4 w-4" />
+            Salvar Modelo
+          </Button>
         </form>
       </Form>
       
