@@ -133,7 +133,7 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
       titulo: values.titulo,
       // CRÍTICO: Sanitiza apenas se for HTML, senão salva o texto puro
       conteudo_template: values.tipo_conteudo === 'html' ? sanitizeConteudo(values.conteudo_template) : values.conteudo_template,
-      // REMOVIDO: tipo_documento e tipo_conteudo do payload, pois não existem na tabela contrato_modelos
+      // REMOVIDO: tipo_conteudo e tipo_documento do payload, pois não existem na tabela contrato_modelos
     };
 
     let error = null;
@@ -327,19 +327,23 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
                         <h4 className="font-semibold flex items-center"><PlusCircle className="w-4 h-4 mr-2" /> Blocos de Conteúdo</h4>
                         <p className="text-sm text-muted-foreground mb-3">Clique para inserir o bloco.</p>
                         <div className="grid grid-cols-1 gap-2 max-h-40 overflow-y-auto p-2 border rounded-md">
-                            {blocos.map(bloco => (
-                                <Button 
-                                    key={bloco.id} 
-                                    variant="outline" 
-                                    size="sm" 
-                                    onClick={(e) => { e.preventDefault(); handleInsertBloco(bloco); }}
-                                    className="justify-start truncate"
-                                    draggable
-                                    onDragStart={(e) => e.dataTransfer.setData("text/plain", `\n\n${bloco.conteudo}\n\n`)}
-                                >
-                                    {bloco.titulo}
-                                </Button>
-                            ))}
+                            {blocos.length === 0 ? (
+                                <p className="text-muted-foreground text-sm">Nenhum bloco disponível.</p>
+                            ) : (
+                                blocos.map(bloco => (
+                                    <Button 
+                                        key={bloco.id} 
+                                        variant="outline" 
+                                        size="sm" 
+                                        onClick={(e) => { e.preventDefault(); handleInsertBloco(bloco); }}
+                                        className="justify-start truncate"
+                                        draggable
+                                        onDragStart={(e) => e.dataTransfer.setData("text/plain", `\n\n${bloco.conteudo}\n\n`)}
+                                    >
+                                        {bloco.titulo}
+                                    </Button>
+                                ))
+                            )}
                         </div>
                     </CardContent>
                 </Card>
