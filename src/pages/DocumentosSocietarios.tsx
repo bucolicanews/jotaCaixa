@@ -16,7 +16,7 @@ import ContratoPreviewDialog from '@/components/contratos/ContratoPreviewDialog'
 
 interface DocumentoComCliente extends DocumentoSocietarioGerado {
     cliente_nome: string | null; // NOVO CAMPO
-    modelos_societarios: { titulo: string, tipo_conteudo: 'html' | 'texto' } | null;
+    modelos_societarios: { titulo: string } | null; // tipo_conteudo removido
 }
 
 const DocumentosSocietarios: React.FC = () => {
@@ -28,7 +28,7 @@ const DocumentosSocietarios: React.FC = () => {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewContent, setPreviewContent] = useState('');
   const [previewTitle, setPreviewTitle] = useState('');
-  const [isPreviewHtml, setIsPreviewHtml] = useState(true);
+  // const [isPreviewHtml, setIsPreviewHtml] = useState(true); // Removido
   
   const [clienteNomeMap, setClienteNomeMap] = useState<Record<string, string>>({}); // NOVO ESTADO
 
@@ -59,8 +59,8 @@ const DocumentosSocietarios: React.FC = () => {
         conteudo_renderizado,
         data_registro,
         criado_em,
-        modelos_societarios ( titulo, tipo_conteudo )
-      `) // REMOVIDO clientes (nome)
+        modelos_societarios ( titulo )
+      `) // tipo_conteudo removido da seleção
       .eq('proprietario_id', ownerId)
       .order('data_registro', { ascending: false });
 
@@ -133,9 +133,8 @@ const DocumentosSocietarios: React.FC = () => {
   const handleView = (doc: DocumentoComCliente) => {
       setPreviewContent(doc.conteudo_renderizado || 'Conteúdo não renderizado.');
       setPreviewTitle(doc.valores_tags_preenchidos?.titulo || doc.modelos_societarios?.titulo || 'Documento');
-      // Determina se é HTML ou Texto Simples
-      const isHtml = doc.valores_tags_preenchidos?.tipo_conteudo === 'html' || doc.modelos_societarios?.tipo_conteudo === 'html';
-      setIsPreviewHtml(isHtml);
+      // Assume-se que o conteúdo é HTML
+      // setIsPreviewHtml(true); 
       setPreviewOpen(true);
   };
 
@@ -238,7 +237,6 @@ const DocumentosSocietarios: React.FC = () => {
         onOpenChange={setPreviewOpen}
         conteudoHtml={previewContent}
         titulo={previewTitle}
-        isHtml={isPreviewHtml} 
       />
     </LayoutPrincipal>
   );

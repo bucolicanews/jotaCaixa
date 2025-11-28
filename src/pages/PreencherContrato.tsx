@@ -28,10 +28,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { sanitizeConteudo } from '@/utils/formatters';
 
 type TipoLancamento = 'unico' | 'repetir' | 'parcelar';
-type TipoConteudo = 'html' | 'texto';
-
-// FIX 224, 234, 47: Define status type locally
-type DocumentoStatus = 'rascunho' | 'finalizado' | 'arquivado' | 'ativo';
+type TipoConteudo = 'html' | 'texto'; // Mantido para compatibilidade com o DB, mas fixado em 'html'
+type DocumentoStatus = 'rascunho' | 'pendente_assinatura' | 'ativo' | 'cancelado' | 'concluido' | 'bloqueado';
 
 interface EmpresaLogada {
     nome: string;
@@ -88,7 +86,7 @@ const formSchema = z.object({
     titulo_documento: z.string().min(1, 'O título é obrigatório.'),
     cliente_id: z.string().uuid('Selecione um cliente válido.'),
     proprietario_documento_id: z.string().uuid('Selecione o proprietário.'),
-    tipo_conteudo: z.enum(['html', 'texto']),
+    // tipo_conteudo removido do esquema
     valores_tags: z.record(z.string()).optional(),
 });
 
@@ -102,7 +100,7 @@ const PreencherContrato: React.FC = () => {
   const { role, perfil, usuario, carregando: carregandoSessao } = useSessao();
   
   const isAdmin = role === 'Admin';
-  const isClient = role === 'Cliente'; // DEFINIÇÃO CORRIGIDA
+  const isClient = role === 'Cliente';
   
   const [modelo, setModelo] = useState<ContratoModelo | null>(null);
   const [contratoInicial, setContratoInicial] = useState<ContratoGerado | null>(null);
@@ -131,17 +129,16 @@ const PreencherContrato: React.FC = () => {
   const [numeroParcelas, setNumeroParcelas] = useState<number>(1);
   const [dataPrimeiroVencimento, setDataPrimeiroVencimento] = useState<Date | undefined>(undefined);
   const [intervaloDias, setIntervaloDias] = useState<number>(30);
-  const [tipoConteudo, setTipoConteudo] = useState<TipoConteudo>('html'); 
+  const [tipoConteudo] = useState<TipoConteudo>('html'); // FIXADO EM 'html'
   // ------------------------------------------------------
 
-  // FIX 2304: Declarando isEditing no escopo do componente
   const isEditing = !!contratoId;
 
   
   const getOwnerIdLogado = () => {
     if (isAdmin) return usuario?.id || null;
     if (isClient) return (perfil as ClienteProfile)?.id;
-    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id; // FIX: proprietario_id -> cliente_id
+    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id;
     return null;
   };
   
@@ -252,7 +249,7 @@ const PreencherContrato: React.FC = () => {
     if (modeloId) {
         const { data, error } = await supabase
             .from('contrato_modelos')
-            .select('*, tipo_conteudo')
+            .select('*')
             .eq('id', modeloId)
             .single();
             
@@ -264,7 +261,7 @@ const PreencherContrato: React.FC = () => {
         modeloData = data as ContratoModelo;
         setModelo(modeloData);
         setTituloDocumento(modeloData.titulo);
-        setTipoConteudo(modeloData.tipo_conteudo as TipoConteudo);
+        // tipoConteudo removido
         
         // NOVO: Inicializa o campo {{CONTEUDO_PRINCIPAL}} com o template do modelo
         initialValoresTags['{{CONTEUDO_PRINCIPAL}}'] = modeloData.conteudo_template;
@@ -313,7 +310,7 @@ const PreencherContrato: React.FC = () => {
         setValorTotal(contrato.valor_total); // Define o valor total
         setValoresTags(contrato.valores_tags_preenchidos || {});
         setTituloDocumento(contrato.valores_tags_preenchidos?.titulo || modeloData?.titulo || '');
-        setTipoConteudo(contrato.valores_tags_preenchidos?.tipo_conteudo || modeloData?.tipo_conteudo as TipoConteudo || 'html');
+        // tipoConteudo removido
         
         const numParcelas = contrato.numero_parcelas;
         const valorTotalContrato = contrato.valor_total;
@@ -731,7 +728,7 @@ const PreencherContrato: React.FC = () => {
                         .delete()
                         .eq('origem', 'lancamento_cr')
                         .eq('proprietario_id', ownerIdLogado)
-                        .or(`descricao.ilike.${oldLaunchDescriptionPrefix}%`, `descricao.ilike.${oldReceitaDescriptionPrefix}%`);
+                        .ilike('descricao', `${oldLaunchDescriptionPrefix}%`);
                 }
                 
                 await supabase.from('lancamentos').insert(lancamentoPatrimonialPayload);
@@ -1025,7 +1022,6 @@ const PreencherContrato: React.FC = () => {
         onOpenChange={setPreviewOpen}
         conteudoHtml={conteudoPreview}
         titulo={previewTitle}
-        isHtml={tipoConteudo === 'html'}
       />
     </LayoutPrincipal>
   );

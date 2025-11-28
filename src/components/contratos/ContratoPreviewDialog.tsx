@@ -9,29 +9,20 @@ interface ContratoPreviewDialogProps {
   onOpenChange: (open: boolean) => void;
   conteudoHtml: string;
   titulo: string;
-  isHtml: boolean;
+  // isHtml removido
 }
 
-const ContratoPreviewDialog: React.FC<ContratoPreviewDialogProps> = ({ open, onOpenChange, conteudoHtml, titulo, isHtml }) => {
+const ContratoPreviewDialog: React.FC<ContratoPreviewDialogProps> = ({ open, onOpenChange, conteudoHtml, titulo }) => {
   const { printContent } = usePrint();
 
   const handlePrint = () => {
-    let printHtml = conteudoHtml;
-    
-    if (!isHtml) {
-        // Se for texto simples, envolve em <pre> para preservar a formatação na impressão
-        printHtml = `<pre style="white-space: pre-wrap; font-family: inherit; margin: 0;">${printHtml}</pre>`;
-    }
-    
-    printContent(printHtml, `Prévia do Contrato: ${titulo}`);
+    // Assume-se que o conteúdo é HTML (ou texto que será envolvido em <pre> se necessário)
+    printContent(conteudoHtml, `Prévia do Contrato: ${titulo}`);
   };
   
-  // Conteúdo a ser exibido na tela
-  const contentToDisplay = isHtml ? (
+  // Conteúdo a ser exibido na tela (assume-se que o conteúdo é HTML)
+  const contentToDisplay = (
     <div dangerouslySetInnerHTML={{ __html: conteudoHtml }} />
-  ) : (
-    // Usa white-space: pre-wrap para preservar quebras de linha e espaços
-    <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', margin: 0 }}>{conteudoHtml}</pre>
   );
 
   return (
@@ -43,7 +34,7 @@ const ContratoPreviewDialog: React.FC<ContratoPreviewDialogProps> = ({ open, onO
             <Eye className="w-5 h-5 mr-2" /> Prévia do Contrato: {titulo}
           </DialogTitle>
           <DialogDescription>
-            Esta é a visualização final do contrato com todas as tags preenchidas. Modo: {isHtml ? 'HTML' : 'Texto Simples'}.
+            Esta é a visualização final do contrato com todas as tags preenchidas.
           </DialogDescription>
         </DialogHeader>
         

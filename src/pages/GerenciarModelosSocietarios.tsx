@@ -13,12 +13,15 @@ import FormDocumentoSocietarioModelo from '@/components/formularios/FormDocument
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Link } from 'react-router-dom';
 
+// Extensão local para DocumentoSocietarioModelo (tipo_conteudo removido)
+interface ExtendedDocumentoSocietarioModelo extends DocumentoSocietarioModelo {}
+
 const GerenciarModelosSocietarios: React.FC = () => {
   const { role, perfil, usuario, carregando: carregandoSessao } = useSessao();
-  const [modelos, setModelos] = useState<DocumentoSocietarioModelo[]>([]);
+  const [modelos, setModelos] = useState<ExtendedDocumentoSocietarioModelo[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [modeloSelecionado, setModeloSelecionado] = useState<DocumentoSocietarioModelo | null>(null);
+  const [modeloSelecionado, setModeloSelecionado] = useState<ExtendedDocumentoSocietarioModelo | null>(null);
   const [activeTab, setActiveTab] = useState('meus_modelos');
 
   const isAdmin = role === 'Admin';
@@ -45,7 +48,7 @@ const GerenciarModelosSocietarios: React.FC = () => {
     
     let query = supabase
       .from('modelos_societarios')
-      .select('*, tipo_conteudo')
+      .select('*')
       .order('titulo', { ascending: true });
       
     // Se for Cliente, busca apenas os seus modelos (ownerId) e modelos globais (proprietario_id is null)
@@ -60,7 +63,7 @@ const GerenciarModelosSocietarios: React.FC = () => {
       showError('Erro ao carregar modelos: ' + error.message);
       setModelos([]);
     } else {
-      setModelos(data as DocumentoSocietarioModelo[]);
+      setModelos(data as ExtendedDocumentoSocietarioModelo[]);
     }
     setCarregando(false);
   }, [ownerId, isAdmin, isCliente]);
@@ -77,7 +80,7 @@ const GerenciarModelosSocietarios: React.FC = () => {
       buscarModelos();
   };
   
-  const handleEdit = (modelo: DocumentoSocietarioModelo) => {
+  const handleEdit = (modelo: ExtendedDocumentoSocietarioModelo) => {
       setModeloSelecionado(modelo);
       setDialogOpen(true);
   };
@@ -125,7 +128,7 @@ const GerenciarModelosSocietarios: React.FC = () => {
   const isSupervisao = isAdmin && activeTab === 'modelos_clientes';
 
   // Helper para renderizar a lista de modelos
-  const renderModelosList = (list: DocumentoSocietarioModelo[], isSupervisao: boolean) => (
+  const renderModelosList = (list: ExtendedDocumentoSocietarioModelo[], isSupervisao: boolean) => (
       <div className="space-y-4">
           {list.map((modelo) => {
               // Apenas o proprietário ou Admin (no modo não supervisão) pode editar/deletar
