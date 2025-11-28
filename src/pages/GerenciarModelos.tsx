@@ -15,7 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 // Extensão local para ContratoModelo
 interface ExtendedContratoModelo extends ContratoModelo {
-    tipo_conteudo?: 'html' | 'texto';
+    tipo_conteudo?: 'html' | 'texto'; // Reintroduzindo o campo
 }
 
 const GerenciarModelos: React.FC = () => {
@@ -50,7 +50,7 @@ const GerenciarModelos: React.FC = () => {
     
     let query = supabase
       .from('contrato_modelos')
-      .select('*, tipo_conteudo') // BUSCANDO O NOVO CAMPO
+      .select('*') // REMOVIDO: tipo_conteudo
       .order('titulo', { ascending: true });
       
     // Se for Cliente, busca apenas os seus modelos (RLS já garante isso)

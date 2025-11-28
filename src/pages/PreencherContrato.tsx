@@ -252,7 +252,7 @@ const PreencherContrato: React.FC = () => {
     if (modeloId) {
         const { data, error } = await supabase
             .from('contrato_modelos')
-            .select('*, tipo_conteudo')
+            .select('*') // REMOVIDO: tipo_conteudo
             .eq('id', modeloId)
             .single();
             
@@ -264,7 +264,7 @@ const PreencherContrato: React.FC = () => {
         modeloData = data as ContratoModelo;
         setModelo(modeloData);
         setTituloDocumento(modeloData.titulo);
-        setTipoConteudo(modeloData.tipo_conteudo as TipoConteudo);
+        setTipoConteudo('html'); // Default para HTML
         
         // NOVO: Inicializa o campo {{CONTEUDO_PRINCIPAL}} com o template do modelo
         initialValoresTags['{{CONTEUDO_PRINCIPAL}}'] = modeloData.conteudo_template;
@@ -287,7 +287,7 @@ const PreencherContrato: React.FC = () => {
             const adminOption: EmpresaContrato = { id: ownerIdLogado, nome: 'Meus Contratos (Admin)' };
             const allClients = [adminOption, ...(clientsData as EmpresaContrato[])];
             setEmpresasContrato(allClients);
-            initialProprietarioContratoId = allClients[0].id;
+            if (!contratoId) initialProprietarioContratoId = allClients[0].id;
         }
     }
     
@@ -313,7 +313,7 @@ const PreencherContrato: React.FC = () => {
         setValorTotal(contrato.valor_total); // Define o valor total
         setValoresTags(contrato.valores_tags_preenchidos || {});
         setTituloDocumento(contrato.valores_tags_preenchidos?.titulo || modeloData?.titulo || '');
-        setTipoConteudo(contrato.valores_tags_preenchidos?.tipo_conteudo || modeloData?.tipo_conteudo as TipoConteudo || 'html');
+        setTipoConteudo(contrato.valores_tags_preenchidos?.tipo_conteudo || 'html');
         
         const numParcelas = contrato.numero_parcelas;
         const valorTotalContrato = contrato.valor_total;
@@ -390,6 +390,9 @@ const PreencherContrato: React.FC = () => {
     }
     
     setProprietarioContratoId(initialProprietarioContratoId);
+    
+    // 5. Carregar dados dependentes (clientes e tags)
+    await fetchDependentData(initialProprietarioContratoId || ownerIdLogado);
     
     setCarregandoDados(false);
     

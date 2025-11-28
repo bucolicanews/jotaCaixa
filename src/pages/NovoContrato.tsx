@@ -35,7 +35,7 @@ const NovoContrato: React.FC = () => {
     
     let query = supabase
       .from('contrato_modelos')
-      .select('*')
+      .select('*') // REMOVIDO: tipo_conteudo
       .order('titulo', { ascending: true });
       
     if (isCliente) {
@@ -77,7 +77,7 @@ const NovoContrato: React.FC = () => {
     );
   }
   
-  if (!isAdmin && !isCliente) {
+  if (!isAdmin && !isClient) {
     return <LayoutPrincipal><Card><CardHeader><CardTitle>Acesso Negado</CardTitle></CardHeader><CardContent><p>Apenas administradores e clientes podem criar contratos.</p></CardContent></Card></LayoutPrincipal>;
   }
 
