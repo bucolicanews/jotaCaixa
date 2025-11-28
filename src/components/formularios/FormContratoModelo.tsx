@@ -29,7 +29,7 @@ interface ExtendedContratoModelo extends ContratoModelo {
 const formSchema = z.object({
   titulo: z.string().min(1, 'O título é obrigatório.'),
   conteudo_template: z.string().min(10, 'O conteúdo do template é muito curto.'),
-  tipo_conteudo: z.enum(['html', 'texto']),
+  // Removido tipo_conteudo do schema
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -46,9 +46,6 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
   const [previewOpen, setPreviewOpen] = useState(false);
   const [conteudoPreview, setConteudoPreview] = useState('');
   const [previewTitle, setPreviewTitle] = useState('');
-  
-  // Referência para o Textarea (usado para Drag & Drop)
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
   
   const getOwnerId = () => {
     if (role === 'Admin') return usuario?.id || null;
@@ -84,13 +81,12 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
     resolver: zodResolver(formSchema),
     defaultValues: {
       titulo: modeloInicial?.titulo || '',
-      // CRÍTICO: Se for HTML, sanitiza. Se for texto, salva como está.
       conteudo_template: modeloInicial?.conteudo_template || '', 
-      tipo_conteudo: modeloInicial?.tipo_conteudo || 'html', // GARANTINDO DEFAULT 'html'
     },
   });
   
-  const tipoConteudo = form.watch('tipo_conteudo'); // Observa o tipo de conteúdo
+  // O tipo de conteúdo é sempre 'html' (Editor de Texto)
+  const tipoConteudo: 'html' = 'html'; 
 
   const onSubmit = async (values: FormValues) => {
     if (!ownerId) {
@@ -100,9 +96,9 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
     
     const dataToSave = {
       titulo: values.titulo,
-      // CRÍTICO: Sanitiza apenas se for HTML, senão salva o texto puro
-      conteudo_template: values.tipo_conteudo === 'html' ? sanitizeConteudo(values.conteudo_template) : values.conteudo_template, 
-      tipo_conteudo: values.tipo_conteudo, // INCLUINDO NO PAYLOAD
+      // Sempre sanitiza, pois o editor é HTML
+      conteudo_template: sanitizeConteudo(values.conteudo_template), 
+      tipo_conteudo: 'html', // Força o tipo para 'html'
       empresa_id: ownerId, // Vincula ao Admin ou Cliente
     };
 
@@ -150,13 +146,11 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
       return [...TAGS_PADRAO, ...tagsCustomizadas].sort((a, b) => a.nome_tag.localeCompare(b.nome_tag));
   }, [tagsCustomizadas]);
   
-  // --- NOVO HANDLER: Copiar todas as tags ---
   const handleCopyAllTags = () => {
       const tagsString = allTags.map(t => t.nome_tag).join(', ');
       navigator.clipboard.writeText(tagsString);
       showSuccess('Todas as tags copiadas para a área de transferência!');
   };
-  // --- FIM NOVO HANDLER ---
   
   // --- FUNÇÕES DE INSERÇÃO DE TEXTO (Tags e Blocos) ---
   
@@ -167,41 +161,21 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
       const textarea = document.querySelector(".ql-editor") as HTMLDivElement;
       if (!textarea) return;
 
-      // Se for modo HTML, o RichTextEditor lida com a inserção
-      if (tipoConteudo === 'html') {
-          // Simula a inserção de HTML no cursor
-          const selection = window.getSelection();
-          if (selection && selection.rangeCount > 0) {
-              const range = selection.getRangeAt(0);
-              range.deleteContents();
-              const el = document.createElement('span');
-              el.innerHTML = insertText;
-              range.insertNode(el);
-              range.collapse(false);
-              showSuccess(`Tag inserida no editor.`);
-          } else {
-              // Fallback para anexar no final
-              form.setValue("conteudo_template", current + insertText, { shouldDirty: true, shouldValidate: true });
-          }
-          return;
+      // Simula a inserção de HTML no cursor
+      const selection = window.getSelection();
+      if (selection && selection.rangeCount > 0) {
+          const range = selection.getRangeAt(0);
+          range.deleteContents();
+          const el = document.createElement('span');
+          el.innerHTML = insertText;
+          range.insertNode(el);
+          range.collapse(false);
+          showSuccess(`Tag inserida no editor.`);
+      } else {
+          // Fallback para anexar no final
+          form.setValue("conteudo_template", current + insertText, { shouldDirty: true, shouldValidate: true });
       }
-      
-      // Se for modo Texto Simples (fallback para Textarea)
-      const start = textarea.selectionStart;
-      const end = textarea.selectionEnd;
-
-      const newValue =
-          current.substring(0, start) + insertText + current.substring(end);
-
-      // 1. Atualiza o valor no RHF (CRÍTICO)
-      form.setValue("conteudo_template", newValue, { shouldDirty: true, shouldValidate: true });
-
-      // 2. Reposiciona o cursor após a inserção
-      setTimeout(() => {
-          textarea.focus();
-          textarea.selectionStart = textarea.selectionEnd = start + insertText.length;
-      }, 0);
-  }, [form, tipoConteudo]);
+  }, [form]);
   
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>, tag: string) => {
       e.dataTransfer.setData("text/plain", tag);
@@ -254,13 +228,12 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
                             render={({ field }) => (
                                 <FormItem className="h-full flex flex-col">
                                     <FormControl className="flex-1">
-                                        {/* CORREÇÃO: Usando RichTextEditor para ambos os modos */}
                                         <RichTextEditor
                                             value={field.value}
                                             onChange={field.onChange}
                                             placeholder="Insira o conteúdo formatado aqui..."
                                             className="flex-1"
-                                            isSimpleTextMode={tipoConteudo === 'texto'}
+                                            // isSimpleTextMode removido
                                         />
                                     </FormControl>
                                     <FormMessage />
@@ -289,27 +262,11 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
                                 </FormItem>
                             )}
                         />
-                        <FormField
-                            control={form.control}
-                            name="tipo_conteudo"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Tipo de Conteúdo</FormLabel>
-                                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                        <FormControl>
-                                            <SelectTrigger>
-                                                <SelectValue placeholder="Selecione o formato" />
-                                            </SelectTrigger>
-                                        </FormControl>
-                                        <SelectContent>
-                                            <SelectItem value="html">HTML</SelectItem>
-                                            <SelectItem value="texto">Texto Simples</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                    <FormMessage />
-                                </FormItem>
-                            )}
-                        />
+                        {/* CAMPO TIPO DE CONTEÚDO REMOVIDO */}
+                        <div className="space-y-2">
+                            <Label>Tipo de Conteúdo</Label>
+                            <Input readOnly value="Editor de Texto (HTML)" className="font-semibold" />
+                        </div>
                     </CardContent>
                 </Card>
                 
@@ -367,7 +324,7 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
         onOpenChange={setPreviewOpen}
         conteudoHtml={conteudoPreview}
         titulo={form.getValues('titulo')}
-        isHtml={form.getValues('tipo_conteudo') === 'html'}
+        isHtml={true} // Sempre HTML
       />
     </>
   );

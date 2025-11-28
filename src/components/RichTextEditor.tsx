@@ -9,11 +9,10 @@ interface RichTextEditorProps {
   placeholder?: string;
   readOnly?: boolean;
   className?: string;
-  isSimpleTextMode?: boolean; // NOVO PROP: Para modo Texto Simples
 }
 
 // Módulos completos para o modo HTML
-const fullModules = {
+const modules = {
   toolbar: [
     [{ 'header': [1, 2, false] }],
     ['bold', 'italic', 'underline', 'strike', 'blockquote'],
@@ -24,15 +23,6 @@ const fullModules = {
   ],
 };
 
-// Módulos simplificados para o modo Texto Simples (apenas formatação básica)
-const simpleModules = {
-    toolbar: [
-        ['bold', 'italic', 'underline'],
-        [{ 'list': 'ordered' }, { 'list': 'bullet' }],
-        [{ 'align': [] }],
-    ],
-};
-
 const formats = [
   'header',
   'bold', 'italic', 'underline', 'strike', 'blockquote',
@@ -40,26 +30,16 @@ const formats = [
   'link', 'image', 'align'
 ];
 
-const RichTextEditor: React.FC<RichTextEditorProps> = ({ value, onChange, placeholder, readOnly, className, isSimpleTextMode = false }) => {
+const RichTextEditor: React.FC<RichTextEditorProps> = ({ value, onChange, placeholder, readOnly, className }) => {
   
-  const modules = isSimpleTextMode ? simpleModules : fullModules;
-  
-  // No modo Texto Simples, forçamos a conversão para texto puro antes de chamar o onChange
-  const handleChange = (content: string, delta: any, source: string, editor: any) => {
-      if (isSimpleTextMode) {
-          // Obtém o texto puro (mantendo apenas quebras de linha)
-          const plainText = editor.getText().replace(/\n$/, '');
-          onChange(plainText);
-      } else {
-          onChange(content);
-      }
+  // O editor agora sempre opera no modo HTML completo
+  const handleChange = (content: string) => {
+      onChange(content);
   };
 
   return (
     <div className={cn(className, "flex flex-col h-full")}>
       <ReactQuill 
-        // CRÍTICO: Adiciona uma chave para forçar a remontagem quando o modo muda
-        key={isSimpleTextMode ? 'simple' : 'html'} 
         theme="snow" 
         value={value} 
         onChange={handleChange} 
@@ -67,7 +47,6 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ value, onChange, placeh
         formats={formats}
         placeholder={placeholder}
         readOnly={readOnly}
-        // Removendo altura fixa e usando flex-1 para ocupar o espaço restante
         className="flex-1 flex flex-col" 
       />
     </div>

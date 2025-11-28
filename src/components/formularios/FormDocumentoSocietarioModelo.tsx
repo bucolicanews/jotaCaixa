@@ -30,7 +30,7 @@ const formSchema = z.object({
   titulo: z.string().min(1, 'O título é obrigatório.'),
   conteudo_template: z.string().min(10, 'O conteúdo do template é muito curto.'),
   tipo_documento: z.string().optional(),
-  tipo_conteudo: z.enum(['html', 'texto']),
+  // Removido tipo_conteudo do schema
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -49,9 +49,6 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
   const [conteudoPreview, setConteudoPreview] = useState('');
   const [previewTitle, setPreviewTitle] = useState('');
   
-  // Referência para o Textarea (usado para Drag & Drop)
-  const textareaRef = useRef<HTMLTextAreaElement>(null); 
-
   const getOwnerId = () => {
     if (role === 'Admin') return usuario?.id || null;
     if (role === 'Cliente') return (perfil as ClienteProfile)?.id;
@@ -110,14 +107,13 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
     resolver: zodResolver(formSchema),
     defaultValues: {
       titulo: modeloInicial?.titulo || '',
-      // CRÍTICO: Se for HTML, sanitiza. Se for texto, salva como está.
       conteudo_template: modeloInicial?.conteudo_template || '', 
       tipo_documento: modeloInicial?.tipo_documento || '',
-      tipo_conteudo: modeloInicial?.tipo_conteudo || 'html', // Default to HTML
     },
   });
   
-  const tipoConteudo = form.watch('tipo_conteudo'); // Observa o tipo de conteúdo
+  // O tipo de conteúdo é sempre 'html' (Editor de Texto)
+  const tipoConteudo: 'html' = 'html'; 
 
   const onSubmit = async (values: FormValues) => {
     if (!ownerId) {
@@ -128,9 +124,9 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
     const dataToSave = {
       proprietario_id: ownerId,
       titulo: values.titulo,
-      // CRÍTICO: Sanitiza apenas se for HTML, senão salva o texto puro
-      conteudo_template: values.tipo_conteudo === 'html' ? sanitizeConteudo(values.conteudo_template) : values.conteudo_template,
-      tipo_conteudo: values.tipo_conteudo,
+      // Sempre sanitiza, pois o editor é HTML
+      conteudo_template: sanitizeConteudo(values.conteudo_template),
+      tipo_conteudo: 'html', // Força o tipo para 'html'
       tipo_documento: values.tipo_documento || null,
     };
 
@@ -181,41 +177,21 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
       const textarea = document.querySelector(".ql-editor") as HTMLDivElement;
       if (!textarea) return;
 
-      // Se for modo HTML, o RichTextEditor lida com a inserção
-      if (tipoConteudo === 'html') {
-          // Simula a inserção de HTML no cursor
-          const selection = window.getSelection();
-          if (selection && selection.rangeCount > 0) {
-              const range = selection.getRangeAt(0);
-              range.deleteContents();
-              const el = document.createElement('span');
-              el.innerHTML = insertText;
-              range.insertNode(el);
-              range.collapse(false);
-              showSuccess(`Tag inserida no editor.`);
-          } else {
-              // Fallback para anexar no final
-              form.setValue("conteudo_template", current + insertText, { shouldDirty: true, shouldValidate: true });
-          }
-          return;
+      // Simula a inserção de HTML no cursor
+      const selection = window.getSelection();
+      if (selection && selection.rangeCount > 0) {
+          const range = selection.getRangeAt(0);
+          range.deleteContents();
+          const el = document.createElement('span');
+          el.innerHTML = insertText;
+          range.insertNode(el);
+          range.collapse(false);
+          showSuccess(`Tag inserida no editor.`);
+      } else {
+          // Fallback para anexar no final
+          form.setValue("conteudo_template", current + insertText, { shouldDirty: true, shouldValidate: true });
       }
-      
-      // Se for modo Texto Simples (fallback para Textarea)
-      const start = textarea.selectionStart;
-      const end = textarea.selectionEnd;
-
-      const newValue =
-          current.substring(0, start) + insertText + current.substring(end);
-
-      // 1. Atualiza o valor no RHF (CRÍTICO)
-      form.setValue("conteudo_template", newValue, { shouldDirty: true, shouldValidate: true });
-
-      // 2. Reposiciona o cursor após a inserção
-      setTimeout(() => {
-          textarea.focus();
-          textarea.selectionStart = textarea.selectionEnd = start + insertText.length;
-      }, 0);
-  }, [form, tipoConteudo]);
+  }, [form]);
   
   const handleInsertBloco = (bloco: BlocoSocietario) => {
       handleInsertText(`\n\n${bloco.conteudo}\n\n`);
@@ -275,7 +251,7 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
                                             onChange={field.onChange}
                                             placeholder="Insira o conteúdo formatado aqui..."
                                             className="flex-1"
-                                            isSimpleTextMode={tipoConteudo === 'texto'}
+                                            // isSimpleTextMode removido
                                         />
                                     </FormControl>
                                     <FormMessage />
@@ -314,25 +290,11 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
                                 </FormItem>
                             )}
                         />
-                        <FormField
-                            control={form.control}
-                            name="tipo_conteudo"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Formato do Conteúdo</FormLabel>
-                                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                        <FormControl>
-                                            <SelectTrigger><SelectValue placeholder="Selecione o formato" /></SelectTrigger>
-                                        </FormControl>
-                                        <SelectContent>
-                                            <SelectItem value="html">HTML</SelectItem>
-                                            <SelectItem value="texto">Texto Simples</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                    <FormMessage />
-                                </FormItem>
-                            )}
-                        />
+                        {/* CAMPO TIPO DE CONTEÚDO REMOVIDO */}
+                        <div className="space-y-2">
+                            <Label>Tipo de Conteúdo</Label>
+                            <Input readOnly value="Editor de Texto (HTML)" className="font-semibold" />
+                        </div>
                     </CardContent>
                 </Card>
                 
@@ -397,7 +359,7 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
         onOpenChange={setPreviewOpen}
         conteudoHtml={conteudoPreview}
         titulo={form.getValues('titulo')}
-        isHtml={tipoConteudo === 'html'}
+        isHtml={true} // Sempre HTML
       />
     </>
   );
