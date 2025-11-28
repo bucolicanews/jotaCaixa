@@ -84,7 +84,7 @@ interface FormPlanoContasProps {
 const FormPlanoContas: React.FC<FormPlanoContasProps> = ({ proprietarioId, contaInicial, onSaveComplete }) => {
   
   const isEditing = !!contaInicial && !!contaInicial.id;
-  const [mascara, setMascara] = useState<string | null>(null);
+  const [mascara, setMascaraAtiva] = useState<string | null>(null);
   const [loadingMascara, setLoadingMascara] = useState(true);
 
   const defaultConta = contaInicial?.Conta || '';
@@ -207,13 +207,11 @@ const FormPlanoContas: React.FC<FormPlanoContasProps> = ({ proprietarioId, conta
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
         
-        {loadingMascara ? (
-            <div className="flex justify-center items-center h-10"><Loader2 className="h-4 w-4 animate-spin text-primary" /></div>
-        ) : (
-            <div className="p-2 bg-secondary rounded-md text-sm">
-                Máscara Ativa: <span className="font-mono font-semibold text-primary">{mascara || 'Nenhuma'}</span>
-            </div>
-        )}
+        {/* REMOVIDO O BLOCO CONDICIONAL DO SPINNER AQUI */}
+        <div className="p-2 bg-secondary rounded-md text-sm">
+            Máscara Ativa: <span className="font-mono font-semibold text-primary">{mascara || 'Nenhuma'}</span>
+            {loadingMascara && <Loader2 className="h-4 w-4 animate-spin ml-2 inline-block text-primary" />}
+        </div>
         
         <FormField
           control={form.control}
