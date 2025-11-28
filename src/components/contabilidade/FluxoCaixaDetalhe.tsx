@@ -274,7 +274,22 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
             
         if (updateError) throw updateError;
         
-        // 3. Criar o lançamento de estorno (Entrada/Saída oposta)
+        // 3. Buscar o lançamento de DRE original para obter a conta contábil
+        const { data: contaResultadoOriginal, error: fetchDreError } = await supabase
+            .from('lancamentos')
+            .select('conta_contabil_id')
+            .eq('id', dreLaunchId)
+            .single();
+            
+        if (fetchDreError || !contaResultadoOriginal) {
+            // Se falhar, tentamos reverter o update de origem e lançamos o erro
+            await supabase.from('lancamentos').update({ origem: 'movimentacao_direta' }).in('id', [lancamento.id, dreLaunchId]);
+            throw new Error('Conta de resultado original não encontrada para estorno.');
+        }
+        
+        const contaResultadoId = contaResultadoOriginal.conta_contabil_id;
+        
+        // 4. Criar o lançamento de estorno (Entrada/Saída oposta)
         const estornoTipo = lancamento.tipo === 'Entrada' ? 'Saida' : 'Entrada';
         const estornoDescricao = `Estorno: ${lancamento.descricao}`;
         const valor = Math.abs(lancamento.valor);
@@ -294,11 +309,6 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
         
         // Lançamento 2: Estorno no Resultado (DRE)
         // O tipo do lançamento de Resultado/DRE é o oposto do tipo do lançamento de Ativo/Caixa
-        const contaResultadoOriginal = lancamentos.find(l => l.id === dreLaunchId);
-        const contaResultadoId = contaResultadoOriginal?.conta_contabil_id; // Conta de Resultado original
-        
-        if (!contaResultadoId) throw new Error('Conta de resultado original não encontrada para estorno.');
-        
         const estornoResultadoTipoCorrigido = estornoTipo === 'Entrada' ? 'Saida' : 'Entrada'; 
         
         const estornoResultadoPayload = {
@@ -313,7 +323,7 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
             historico_id: lancamento.historico_id,
         };
         
-        // 4. Inserir os novos lançamentos de estorno
+        // 5. Inserir os novos lançamentos de estorno
         const [resAtivo, resResultado] = await Promise.all([
             supabase.from('lancamentos').insert(estornoAtivoPayload),
             supabase.from('lancamentos').insert(estornoResultadoPayload),
