@@ -158,45 +158,69 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
   };
   // --- FIM NOVO HANDLER ---
   
-  // --- FUNÇÕES DE DRAG AND DROP ---
+  // --- FUNÇÕES DE INSERÇÃO DE TEXTO (Tags e Blocos) ---
+  
+  const handleInsertText = useCallback((insertText: string) => {
+      const current = form.getValues("conteudo_template") || "";
+
+      // Posição do cursor do textarea
+      const textarea = document.querySelector(".ql-editor") as HTMLDivElement;
+      if (!textarea) return;
+
+      // Se for modo HTML, o RichTextEditor lida com a inserção
+      if (tipoConteudo === 'html') {
+          // Simula a inserção de HTML no cursor
+          const selection = window.getSelection();
+          if (selection && selection.rangeCount > 0) {
+              const range = selection.getRangeAt(0);
+              range.deleteContents();
+              const el = document.createElement('span');
+              el.innerHTML = insertText;
+              range.insertNode(el);
+              range.collapse(false);
+              showSuccess(`Tag inserida no editor.`);
+          } else {
+              // Fallback para anexar no final
+              form.setValue("conteudo_template", current + insertText, { shouldDirty: true, shouldValidate: true });
+          }
+          return;
+      }
+      
+      // Se for modo Texto Simples (fallback para Textarea)
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+
+      const newValue =
+          current.substring(0, start) + insertText + current.substring(end);
+
+      // 1. Atualiza o valor no RHF (CRÍTICO)
+      form.setValue("conteudo_template", newValue, { shouldDirty: true, shouldValidate: true });
+
+      // 2. Reposiciona o cursor após a inserção
+      setTimeout(() => {
+          textarea.focus();
+          textarea.selectionStart = textarea.selectionEnd = start + insertText.length;
+      }, 0);
+  }, [form, tipoConteudo]);
   
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>, tag: string) => {
       e.dataTransfer.setData("text/plain", tag);
   };
   
-  const handleDragOver = (e: React.DragEvent<HTMLTextAreaElement>) => {
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
       e.preventDefault(); // Permite que o drop ocorra
   };
   
-  const handleDrop = (e: React.DragEvent<HTMLTextAreaElement>) => {
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
       e.preventDefault();
-      const tag = e.dataTransfer.getData("text/plain");
-      
-      if (!tag) return;
-      
-      const textarea = textareaRef.current;
-      if (!textarea) return;
-      
-      const start = textarea.selectionStart;
-      const end = textarea.selectionEnd;
-      const currentValue = form.getValues('conteudo_template');
-      
-      // Insere a tag na posição do cursor
-      const newValue = currentValue.substring(0, start) + tag + currentValue.substring(end);
-      
-      // 1. ATUALIZAÇÃO CRÍTICA: Usar form.setValue para garantir que o react-hook-form registre a mudança
-      form.setValue('conteudo_template', newValue, { shouldDirty: true });
-      
-      // 2. CORREÇÃO: Força o foco e a posição do cursor após a atualização do valor
-      // O setTimeout é necessário para dar tempo ao React/RHF de processar o setValue
-      setTimeout(() => {
-          textarea.focus();
-          textarea.selectionStart = start + tag.length;
-          textarea.selectionEnd = start + tag.length;
-      }, 0);
+      const text = e.dataTransfer.getData("text/plain");
+
+      if (text) {
+          handleInsertText(text);
+      }
   };
   
-  // --- FIM FUNÇÕES DE DRAG AND DROP ---
+  // --- FIM FUNÇÕES DE INSERÇÃO DE TEXTO ---
 
   return (
     <>
@@ -223,7 +247,7 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
                             <Eye className="mr-2 h-4 w-4" /> Pré-visualizar
                         </Button>
                     </CardHeader>
-                    <CardContent className="flex-1 overflow-hidden">
+                    <CardContent className="p-6 pt-0 flex-1 overflow-hidden">
                         <FormField
                             control={form.control}
                             name="conteudo_template"
@@ -247,7 +271,7 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
                 </Card>
             </div>
             
-            {/* COLUNA 2: DADOS E TAGS (1/4 da largura) */}
+            {/* Coluna 2: DADOS E TAGS (1/4 da largura) */}
             <div className="lg:col-span-1 space-y-4 flex flex-col">
                 <Card>
                     <CardHeader><CardTitle className="text-xl">Configuração</CardTitle></CardHeader>
@@ -278,7 +302,7 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
                                             </SelectTrigger>
                                         </FormControl>
                                         <SelectContent>
-                                            <SelectItem value="html">HTML (Editor Visual)</SelectItem>
+                                            <SelectItem value="html">HTML</SelectItem>
                                             <SelectItem value="texto">Texto Simples</SelectItem>
                                         </SelectContent>
                                     </Select>
@@ -289,7 +313,11 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
                     </CardContent>
                 </Card>
                 
-                <Card className="flex-1 min-h-[200px] max-h-[calc(100vh-200px)] overflow-y-auto">
+                <Card 
+                    className="flex-1 min-h-[200px] max-h-[calc(100vh-200px)] overflow-y-auto"
+                    onDragOver={handleDragOver}
+                    onDrop={handleDrop}
+                >
                     <CardHeader className="pb-2">
                         <CardTitle className="text-lg flex items-center"><Tag className="w-4 h-4 mr-2" /> Tags Disponíveis</CardTitle>
                     </CardHeader>

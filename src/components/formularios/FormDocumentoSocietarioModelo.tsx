@@ -110,13 +110,14 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
     resolver: zodResolver(formSchema),
     defaultValues: {
       titulo: modeloInicial?.titulo || '',
-      conteudo_template: modeloInicial?.conteudo_template ? sanitizeConteudo(modeloInicial.conteudo_template) : '', // APLICA SANITIZE
+      // CRÍTICO: Se for HTML, sanitiza. Se for texto, salva como está.
+      conteudo_template: modeloInicial?.conteudo_template || '', 
       tipo_documento: modeloInicial?.tipo_documento || '',
       tipo_conteudo: modeloInicial?.tipo_conteudo || 'html', // Default to HTML
     },
   });
   
-  const tipoConteudo = form.watch('tipo_conteudo');
+  const tipoConteudo = form.watch('tipo_conteudo'); // Observa o tipo de conteúdo
 
   const onSubmit = async (values: FormValues) => {
     if (!ownerId) {
@@ -177,9 +178,29 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
       const current = form.getValues("conteudo_template") || "";
 
       // Posição do cursor do textarea
-      const textarea = document.getElementById("conteudo-template-textarea") as HTMLTextAreaElement;
+      const textarea = document.querySelector(".ql-editor") as HTMLDivElement;
       if (!textarea) return;
 
+      // Se for modo HTML, o RichTextEditor lida com a inserção
+      if (tipoConteudo === 'html') {
+          // Simula a inserção de HTML no cursor
+          const selection = window.getSelection();
+          if (selection && selection.rangeCount > 0) {
+              const range = selection.getRangeAt(0);
+              range.deleteContents();
+              const el = document.createElement('span');
+              el.innerHTML = insertText;
+              range.insertNode(el);
+              range.collapse(false);
+              showSuccess(`Tag inserida no editor.`);
+          } else {
+              // Fallback para anexar no final
+              form.setValue("conteudo_template", current + insertText, { shouldDirty: true, shouldValidate: true });
+          }
+          return;
+      }
+      
+      // Se for modo Texto Simples (fallback para Textarea)
       const start = textarea.selectionStart;
       const end = textarea.selectionEnd;
 
@@ -194,7 +215,7 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
           textarea.focus();
           textarea.selectionStart = textarea.selectionEnd = start + insertText.length;
       }, 0);
-  }, [form]);
+  }, [form, tipoConteudo]);
   
   const handleInsertBloco = (bloco: BlocoSocietario) => {
       handleInsertText(`\n\n${bloco.conteudo}\n\n`);
@@ -205,11 +226,11 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
       e.dataTransfer.setData("text/plain", tag);
   };
   
-  const handleDragOver = (e: React.DragEvent<HTMLTextAreaElement>) => {
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
       e.preventDefault(); // Permite que o drop ocorra
   };
   
-  const handleDrop = (e: React.DragEvent<HTMLTextAreaElement>) => {
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
       e.preventDefault();
       const text = e.dataTransfer.getData("text/plain");
 
@@ -223,135 +244,151 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
   return (
     <>
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <div className="lg:col-span-2 space-y-4">
-              <FormField
-                control={form.control}
-                name="titulo"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Título do Modelo</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Ex: Ata de Reunião" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="tipo_documento"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Tipo de Documento (Ex: Ata, Contrato Social)</FormLabel>
-                    <FormControl><Input placeholder="Ex: Ata de Reunião" {...field} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="tipo_conteudo"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Formato do Conteúdo</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger><SelectValue placeholder="Selecione o formato" /></SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="html">HTML</SelectItem>
-                        <SelectItem value="texto">Texto Simples</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="conteudo_template"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="flex justify-between items-center">
-                        Conteúdo do Template
-                        <Button type="button" variant="outline" size="sm" onClick={handlePreview} disabled={!field.value}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 h-full flex flex-col">
+          <div className="flex justify-end pb-4 border-b">
+              <Button type="submit" disabled={form.formState.isSubmitting}>
+                  {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  <Save className="mr-2 h-4 w-4" />
+                  Salvar Modelo
+              </Button>
+          </div>
+            
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 flex-1 overflow-hidden">
+            
+            <div className="lg:col-span-3 space-y-4 flex flex-col h-full">
+                <Card className="h-full flex flex-col">
+                    <CardHeader className="flex flex-row items-center justify-between">
+                        <CardTitle className="text-xl">Conteúdo do Template</CardTitle>
+                        <Button type="button" variant="outline" size="sm" onClick={handlePreview} disabled={!form.watch('conteudo_template')}>
                             <Eye className="mr-2 h-4 w-4" /> Pré-visualizar
                         </Button>
-                    </FormLabel>
-                    <FormControl>
-                        {/* CORREÇÃO: Usando RichTextEditor para ambos os modos */}
-                        <RichTextEditor
-                            value={field.value}
-                            onChange={field.onChange}
-                            placeholder="Insira o conteúdo formatado aqui..."
-                            className="min-h-[300px]"
-                            isSimpleTextMode={tipoConteudo === 'texto'}
+                    </CardHeader>
+                    <CardContent className="p-6 pt-0 flex-1 overflow-hidden">
+                        <FormField
+                            control={form.control}
+                            name="conteudo_template"
+                            render={({ field }) => (
+                                <FormItem className="h-full flex flex-col">
+                                    <FormControl className="flex-1">
+                                        <RichTextEditor
+                                            value={field.value}
+                                            onChange={field.onChange}
+                                            placeholder="Insira o conteúdo formatado aqui..."
+                                            className="flex-1"
+                                            isSimpleTextMode={tipoConteudo === 'texto'}
+                                        />
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
                         />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                    </CardContent>
+                </Card>
             </div>
             
-            {/* Coluna de Tags e Blocos (Drag & Drop) */}
-            <Card className="lg:col-span-1 max-h-[600px] overflow-y-auto">
-                <CardHeader className="pb-2">
-                    <CardTitle className="text-lg flex items-center"><Tag className="w-4 h-4 mr-2" /> Tags e Blocos</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <h4 className="font-semibold flex items-center mb-2">Tags Disponíveis</h4>
-                    <p className="text-sm text-muted-foreground mb-3">Arraste as tags para o campo de conteúdo.</p>
-                    <div className="space-y-2 border rounded-md p-2 max-h-40 overflow-y-auto mb-4">
-                        {tagsCustomizadas.map((tag: any) => (
-                            <div 
-                                key={tag.nome_tag} 
-                                className="p-2 border rounded-md cursor-pointer hover:bg-accent/50 transition-colors"
-                                draggable
-                                onDragStart={(e) => handleDragStart(e, tag.nome_tag)}
-                                onClick={() => handleInsertText(tag.nome_tag)}
-                            >
-                                <p className="font-mono text-xs font-semibold text-primary">{tag.nome_tag}</p>
-                                <p className="text-xs text-muted-foreground">{tag.descricao}</p>
-                            </div>
-                        ))}
-                    </div>
-                    
-                    <Separator className="my-4" />
-                    
-                    <h4 className="font-semibold flex items-center"><PlusCircle className="w-4 h-4 mr-2" /> Blocos de Conteúdo</h4>
-                    <p className="text-sm text-muted-foreground mb-3">Clique ou arraste para inserir o bloco.</p>
-                    <div className="grid grid-cols-1 gap-2 max-h-40 overflow-y-auto p-2 border rounded-md">
-                        {blocos.length === 0 ? (
-                            <p className="text-muted-foreground text-sm">Nenhum bloco disponível.</p>
-                        ) : (
-                            blocos.map(bloco => (
-                                <Button 
-                                    key={bloco.id} 
-                                    variant="outline" 
-                                    size="sm" 
-                                    onClick={() => handleInsertBloco(bloco)}
-                                    className="justify-start truncate"
+            <div className="lg:col-span-1 space-y-4 flex flex-col">
+                <Card>
+                    <CardHeader><CardTitle className="text-xl">Configuração</CardTitle></CardHeader>
+                    <CardContent className="space-y-4">
+                        <FormField
+                            control={form.control}
+                            name="titulo"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Título do Modelo</FormLabel>
+                                    <FormControl>
+                                        <Input placeholder="Ex: Ata de Reunião" {...field} />
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                        <FormField
+                            control={form.control}
+                            name="tipo_documento"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Tipo de Documento (Ex: Ata, Contrato Social)</FormLabel>
+                                    <FormControl><Input placeholder="Ex: Ata de Reunião" {...field} /></FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                        <FormField
+                            control={form.control}
+                            name="tipo_conteudo"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Formato do Conteúdo</FormLabel>
+                                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                        <FormControl>
+                                            <SelectTrigger><SelectValue placeholder="Selecione o formato" /></SelectTrigger>
+                                        </FormControl>
+                                        <SelectContent>
+                                            <SelectItem value="html">HTML</SelectItem>
+                                            <SelectItem value="texto">Texto Simples</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                    </CardContent>
+                </Card>
+                
+                <Card 
+                    className="flex-1 min-h-[200px] max-h-[calc(100vh-200px)] overflow-y-auto"
+                    onDragOver={handleDragOver}
+                    onDrop={handleDrop}
+                >
+                    <CardHeader className="pb-2">
+                        <CardTitle className="text-lg flex items-center"><Tag className="w-4 h-4 mr-2" /> Tags e Blocos</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <p className="text-sm text-muted-foreground mb-3">Arraste as tags/blocos para o editor.</p>
+                        
+                        <h4 className="font-semibold flex items-center mb-2">Tags</h4>
+                        <div className="space-y-2 border rounded-md p-2 max-h-40 overflow-y-auto mb-4">
+                            {tagsCustomizadas.map((tag: any) => (
+                                <div 
+                                    key={tag.nome_tag} 
+                                    className="p-2 border rounded-md cursor-pointer hover:bg-accent/50 transition-colors"
                                     draggable
-                                    onDragStart={(e) => e.dataTransfer.setData("text/plain", `\n\n${bloco.conteudo}\n\n`)}
+                                    onDragStart={(e) => handleDragStart(e, tag.nome_tag)}
+                                    onClick={() => handleInsertText(tag.nome_tag)}
                                 >
-                                    {bloco.titulo}
-                                </Button>
-                            ))
-                        )}
-                    </div>
-                </CardContent>
-            </Card>
+                                    <p className="font-mono text-xs font-semibold text-primary">{tag.nome_tag}</p>
+                                    <p className="text-xs text-muted-foreground">{tag.descricao}</p>
+                                </div>
+                            ))}
+                        </div>
+                        
+                        <Separator className="my-4" />
+                        
+                        <h4 className="font-semibold flex items-center"><PlusCircle className="w-4 h-4 mr-2" /> Blocos</h4>
+                        <div className="grid grid-cols-1 gap-2 max-h-40 overflow-y-auto p-2 border rounded-md">
+                            {blocos.length === 0 ? (
+                                <p className="text-muted-foreground text-sm">Nenhum bloco disponível.</p>
+                            ) : (
+                                blocos.map(bloco => (
+                                    <Button 
+                                        key={bloco.id} 
+                                        variant="outline" 
+                                        size="sm" 
+                                        onClick={() => handleInsertBloco(bloco)}
+                                        className="justify-start truncate"
+                                        draggable
+                                        onDragStart={(e) => e.dataTransfer.setData("text/plain", `\n\n${bloco.conteudo}\n\n`)}
+                                    >
+                                        {bloco.titulo}
+                                    </Button>
+                                ))
+                            )}
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
           </div>
-          </div>
-
-          <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
-            {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            <Save className="mr-2 h-4 w-4" />
-            Salvar Modelo
-          </Button>
         </form>
       </Form>
       

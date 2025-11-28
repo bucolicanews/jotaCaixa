@@ -58,6 +58,8 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ value, onChange, placeh
   return (
     <div className={cn(className, "flex flex-col h-full")}>
       <ReactQuill 
+        // CRÍTICO: Adiciona uma chave para forçar a remontagem quando o modo muda
+        key={isSimpleTextMode ? 'simple' : 'html'} 
         theme="snow" 
         value={value} 
         onChange={handleChange} 
