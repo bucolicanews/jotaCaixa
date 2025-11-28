@@ -83,6 +83,8 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ value, onChange, placeh
           placeholder={placeholder}
           readOnly={readOnly}
           className="flex-1 flex flex-col" 
+          // Adicionando estilo para garantir que o editor tenha barra de rolagem
+          style={{ height: '100%', minHeight: '300px' }}
         />
       )}
     </div>

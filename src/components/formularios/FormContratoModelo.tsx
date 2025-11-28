@@ -30,7 +30,7 @@ interface ExtendedContratoModelo extends ContratoModelo {
 const formSchema = z.object({
   titulo: z.string().min(1, 'O título é obrigatório.'),
   conteudo_template: z.string().min(10, 'O conteúdo do template é muito curto.'),
-  // Removido tipo_conteudo do schema
+  // tipo_conteudo removido do schema
 });
 
 type FormValues = z.infer<typeof formSchema>;
