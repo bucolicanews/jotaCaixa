@@ -202,6 +202,15 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
     <>
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 h-full flex flex-col">
+            
+            {/* NOVO: BOTÃO DE SALVAR NO TOPO */}
+            <div className="flex justify-end pb-4 border-b">
+                <Button type="submit" disabled={form.formState.isSubmitting}>
+                    {form.formState.isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                    Salvar Modelo
+                </Button>
+            </div>
+            
           {/* NOVO LAYOUT DE DUAS COLUNAS */}
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 flex-1 overflow-hidden">
             
@@ -333,12 +342,6 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
                 </Card>
             </div>
           </div>
-
-          <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
-            {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            <Save className="mr-2 h-4 w-4" />
-            Salvar Modelo
-          </Button>
         </form>
       </Form>
       
