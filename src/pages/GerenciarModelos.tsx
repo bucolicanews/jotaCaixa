@@ -14,7 +14,9 @@ import ImportarModeloContrato from '@/components/contratos/ImportarModeloContrat
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 // Extensão local para ContratoModelo
-interface ExtendedContratoModelo extends ContratoModelo {}
+interface ExtendedContratoModelo extends ContratoModelo {
+    tipo_conteudo?: 'html' | 'texto';
+}
 
 const GerenciarModelos: React.FC = () => {
   const { role, perfil, usuario, carregando: carregandoSessao } = useSessao();
@@ -48,7 +50,7 @@ const GerenciarModelos: React.FC = () => {
     
     let query = supabase
       .from('contrato_modelos')
-      .select('id, titulo, conteudo_template, empresa_id, criado_em') // REMOVIDO: updated_at
+      .select('*, tipo_conteudo') // BUSCANDO O NOVO CAMPO
       .order('titulo', { ascending: true });
       
     // Se for Cliente, busca apenas os seus modelos (RLS já garante isso)
@@ -130,33 +132,24 @@ const GerenciarModelos: React.FC = () => {
   // Helper para renderizar a lista de modelos
   const renderModelosList = (list: ExtendedContratoModelo[], isSupervisao: boolean) => (
       <div className="space-y-4">
-          {list.map((modelo) => {
-              // Apenas o proprietário ou Admin (no modo não supervisão) pode editar/deletar
-              const canEditOrDelete = modelo.empresa_id === ownerId || isAdmin && !isSupervisao;
-              
-              return (
-                  <div key={modelo.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-secondary/50 transition-colors">
-                      <div className="flex-1 min-w-0">
-                          <p className="font-semibold truncate">{modelo.titulo}</p>
-                          {isSupervisao && <p className="text-xs text-muted-foreground">Empresa ID: {modelo.empresa_id}</p>}
-                          <p className="text-sm text-muted-foreground">Última atualização: {new Date(modelo.criado_em).toLocaleDateString()}</p>
-                      </div>
-                      <div className="flex space-x-2 ml-4">
-                          <Link to={`/contratos/preencher/${modelo.id}`}>
-                              <Button variant="secondary" size="sm" title="Usar Modelo">
-                                  <ArrowRight className="w-4 h-4 mr-2" /> Gerar
-                              </Button>
-                          </Link>
-                          <Button variant="outline" size="icon" onClick={() => handleEdit(modelo)} disabled={!canEditOrDelete} title={canEditOrDelete ? "Editar Modelo" : "Apenas visualização"}>
-                              <Edit className="w-4 h-4" />
-                          </Button>
-                          <Button variant="destructive" size="icon" onClick={() => handleDelete(modelo.id)} disabled={!canEditOrDelete} title={canEditOrDelete ? "Excluir Modelo" : "Apenas visualização"}>
-                              <Trash2 className="w-4 h-4" />
-                          </Button>
-                      </div>
+          {list.map((modelo) => (
+              <div key={modelo.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-secondary/50 transition-colors">
+                  <div className="flex-1 min-w-0">
+                      <p className="font-semibold truncate">{modelo.titulo}</p>
+                      {isSupervisao && <p className="text-xs text-muted-foreground">Empresa ID: {modelo.empresa_id}</p>}
+                      <p className="text-sm text-muted-foreground">Última atualização: {new Date(modelo.criado_em).toLocaleDateString()}</p>
                   </div>
-              );
-          })}
+                  <div className="flex space-x-2 ml-4">
+                      {/* Admin pode editar/deletar modelos de clientes, mas vamos restringir a edição para evitar quebra de dados */}
+                      <Button variant="outline" size="icon" onClick={() => handleEdit(modelo)} disabled={isSupervisao} title={isSupervisao ? "Apenas visualização" : "Editar Modelo"}>
+                          <Edit className="w-4 h-4" />
+                      </Button>
+                      <Button variant="destructive" size="icon" onClick={() => handleDelete(modelo.id)} disabled={isSupervisao} title={isSupervisao ? "Apenas visualização" : "Excluir Modelo"}>
+                          <Trash2 className="w-4 h-4" />
+                      </Button>
+                  </div>
+              </div>
+          ))}
       </div>
   );
 

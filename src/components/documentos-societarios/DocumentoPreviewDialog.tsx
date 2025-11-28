@@ -9,7 +9,7 @@ interface DocumentoPreviewDialogProps {
   onOpenChange: (open: boolean) => void;
   conteudoHtml: string;
   titulo: string;
-  isHtml: boolean; // Reintroduzindo isHtml
+  isHtml: boolean;
 }
 
 const DocumentoPreviewDialog: React.FC<DocumentoPreviewDialogProps> = ({ open, onOpenChange, conteudoHtml, titulo, isHtml }) => {
@@ -19,7 +19,6 @@ const DocumentoPreviewDialog: React.FC<DocumentoPreviewDialogProps> = ({ open, o
     let printHtml = conteudoHtml;
     
     if (!isHtml) {
-        // Se for texto simples, envolve em <pre> para manter a formatação
         printHtml = `<pre style="white-space: pre-wrap; font-family: inherit; margin: 0;">${printHtml}</pre>`;
     }
     
@@ -27,7 +26,11 @@ const DocumentoPreviewDialog: React.FC<DocumentoPreviewDialogProps> = ({ open, o
   };
   
   const contentToDisplay = isHtml ? (
-    <div dangerouslySetInnerHTML={{ __html: conteudoHtml }} />
+    <div 
+        dangerouslySetInnerHTML={{ __html: conteudoHtml }} 
+        // CLASSE CRÍTICA: Aplica os estilos do Quill para formatação (h2, centralização, etc.)
+        className="ql-editor"
+    />
   ) : (
     <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', margin: 0 }}>{conteudoHtml}</pre>
   );

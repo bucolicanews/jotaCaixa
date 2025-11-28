@@ -9,20 +9,31 @@ interface ModeloPreviewDialogProps {
   onOpenChange: (open: boolean) => void;
   conteudoTemplate: string;
   titulo: string;
-  // isHtml removido
+  isHtml: boolean; // Novo prop
 }
 
-const ModeloPreviewDialog: React.FC<ModeloPreviewDialogProps> = ({ open, onOpenChange, conteudoTemplate, titulo }) => {
+const ModeloPreviewDialog: React.FC<ModeloPreviewDialogProps> = ({ open, onOpenChange, conteudoTemplate, titulo, isHtml }) => {
   const { printContent } = usePrint();
 
   const handlePrint = () => {
-    // Assume-se que o conteúdo é HTML
-    printContent(conteudoTemplate, `Prévia do Modelo: ${titulo}`);
+    let htmlContent = conteudoTemplate;
+    // Substitui as tags por placeholders para a impressão
+    htmlContent = htmlContent.replace(/\{\{[A-Z0-9_]+\}\}/g, '[[VALOR DA TAG]]');
+    
+    if (!isHtml) {
+        // Se for texto simples, envolve em <pre> para preservar a formatação na impressão
+        htmlContent = `<pre style="white-space: pre-wrap; font-family: inherit; margin: 0;">${htmlContent}</pre>`;
+    }
+    
+    printContent(htmlContent, `Prévia do Modelo: ${titulo}`);
   };
   
-  // Conteúdo a ser exibido na tela (assume-se que o conteúdo é HTML)
-  const contentToDisplay = (
+  // Conteúdo a ser exibido na tela
+  const contentToDisplay = isHtml ? (
     <div dangerouslySetInnerHTML={{ __html: conteudoTemplate }} />
+  ) : (
+    // Usa white-space: pre-wrap para preservar quebras de linha e espaços
+    <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', margin: 0 }}>{conteudoTemplate}</pre>
   );
 
   return (
@@ -34,7 +45,7 @@ const ModeloPreviewDialog: React.FC<ModeloPreviewDialogProps> = ({ open, onOpenC
             <Eye className="w-5 h-5 mr-2" /> Prévia do Template: {titulo}
           </DialogTitle>
           <DialogDescription>
-            Visualização da formatação do template.
+            Visualização da formatação do template. Modo: {isHtml ? 'HTML' : 'Texto Simples'}.
           </DialogDescription>
         </DialogHeader>
         

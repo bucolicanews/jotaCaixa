@@ -1,8 +1,10 @@
-import React from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import ReactQuill from 'react-quill';
-import 'react-quill/dist/quill.snow.css'; // Importa o tema padrão 'snow'
+import 'react-quill/dist/quill.snow.css';
 import { cn } from "@/lib/utils";
-import { Textarea } from './ui/textarea'; // Importando Textarea para o modo simples
+import { Button } from './ui/button';
+import { Code, Edit } from 'lucide-react';
+import { Textarea } from './ui/textarea';
 
 interface RichTextEditorProps {
   value: string;
@@ -10,79 +12,81 @@ interface RichTextEditorProps {
   placeholder?: string;
   readOnly?: boolean;
   className?: string;
-  isSimpleTextMode?: boolean; // NOVO PROP
 }
 
-// Módulos completos para o modo HTML
-const fullModules = {
-  toolbar: [
-    [{ 'header': [1, 2, false] }],
-    ['bold', 'italic', 'underline', 'strike', 'blockquote'],
-    [{ 'list': 'ordered' }, { 'list': 'bullet' }, { 'indent': '-1' }, { 'indent': '+1' }],
-    [{ 'align': [] }],
-    ['link', 'image'],
-    ['clean']
-  ],
-};
+const RichTextEditor: React.FC<RichTextEditorProps> = ({ value, onChange, placeholder, readOnly, className }) => {
+  const [isHtmlMode, setIsHtmlMode] = useState(false);
 
-const formats = [
-  'header',
-  'bold', 'italic', 'underline', 'strike', 'blockquote',
-  'list', 'bullet', 'indent',
-  'link', 'image', 'align'
-];
+  const toggleHtmlMode = useCallback(() => {
+    setIsHtmlMode(prev => !prev);
+  }, []);
 
-const RichTextEditor: React.FC<RichTextEditorProps> = ({ value, onChange, placeholder, readOnly, className, isSimpleTextMode = false }) => {
-  
-  const modules = fullModules;
-  
-  const handleChange = (content: string) => {
-      onChange(content);
-  };
-  
-  // Se for modo texto simples, usa um Textarea
-  if (isSimpleTextMode) {
-      return (
-          <Textarea
-              id="conteudo-template-textarea" // ID para drag and drop
-              value={value}
-              onChange={(e) => onChange(e.target.value)}
-              placeholder={placeholder}
-              readOnly={readOnly}
-              rows={20}
-              className={cn(className, "font-mono text-sm")}
-          />
-      );
-  }
+  // Removendo o botão customizado da barra de ferramentas do Quill
+  const modules = useMemo(() => ({
+    toolbar: [
+      [{ 'header': [1, 2, false] }],
+      ['bold', 'italic', 'underline', 'strike', 'blockquote'],
+      [{ 'list': 'ordered' }, { 'list': 'bullet' }, { 'indent': '-1' }, { 'indent': '+1' }],
+      [{ 'align': [] }],
+      ['link', 'image'],
+      ['clean'],
+    ]
+  }), []);
+
+  const formats = [
+    'header',
+    'bold', 'italic', 'underline', 'strike', 'blockquote',
+    'list', 'bullet', 'indent',
+    'link', 'image', 'align'
+  ];
 
   return (
-    <div className={cn(className, "flex flex-col h-full")}>
-      <style>{`
-        /* Fixa a barra de ferramentas e permite rolagem no corpo do editor */
-        .ql-toolbar.ql-snow {
-          position: sticky;
-          top: 0;
-          z-index: 10;
-          background: hsl(var(--background));
-          border-top-left-radius: var(--radius);
-          border-top-right-radius: var(--radius);
-        }
-        .ql-container.ql-snow {
-          flex-grow: 1;
-          overflow-y: auto; /* Permite rolagem no corpo do editor */
-          min-height: 300px;
-        }
-      `}</style>
-      <ReactQuill 
-        theme="snow" 
-        value={value} 
-        onChange={handleChange} 
-        modules={modules}
-        formats={formats}
-        placeholder={placeholder}
-        readOnly={readOnly}
-        className="flex-1 flex flex-col" 
-      />
+    <div className={cn(className, "flex flex-col h-full space-y-2")}>
+      
+      {/* Botão de Alternância no Topo */}
+      <div className="flex justify-end">
+        <Button 
+          type="button" 
+          variant="outline" 
+          size="sm"
+          onClick={toggleHtmlMode} 
+          disabled={readOnly}
+          className="w-full sm:w-auto"
+        >
+          {isHtmlMode ? (
+            <>
+              <Edit className="w-4 h-4 mr-2" /> Voltar para Editor Visual
+            </>
+          ) : (
+            <>
+              <Code className="w-4 h-4 mr-2" /> Editar Código-Fonte HTML
+            </>
+          )}
+        </Button>
+      </div>
+
+      {isHtmlMode ? (
+        <Textarea
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="Edite o código HTML puro aqui..."
+          readOnly={readOnly}
+          className="flex-1 font-mono text-sm min-h-[300px]"
+        />
+      ) : (
+        <ReactQuill 
+          theme="snow" 
+          value={value} 
+          onChange={onChange} 
+          modules={modules}
+          formats={formats}
+          placeholder={placeholder}
+          readOnly={readOnly}
+          className="flex-1 flex flex-col" 
+          // Adicionando estilo para garantir que o editor tenha barra de rolagem
+          style={{ height: '100%', minHeight: '300px' }}
+        />
+      )}
     </div>
   );
 };

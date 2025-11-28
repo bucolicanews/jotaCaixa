@@ -24,7 +24,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { format } from 'date-fns';
 import { sanitizeConteudo } from '@/utils/formatters';
 
-type TipoConteudo = 'html' | 'texto'; // Mantido para compatibilidade com o DB, mas fixado em 'html'
+type TipoConteudo = 'html' | 'texto';
 type DocumentoStatus = 'rascunho' | 'finalizado' | 'arquivado' | 'ativo';
 
 interface EmpresaContrato {
@@ -60,7 +60,7 @@ const formSchema = z.object({
     titulo_documento: z.string().min(1, 'O título é obrigatório.'),
     cliente_id: z.string().uuid('Selecione um cliente válido.'),
     proprietario_documento_id: z.string().uuid('Selecione o proprietário.'),
-    // tipo_conteudo removido do esquema
+    tipo_conteudo: z.enum(['html', 'texto']),
     valores_tags: z.record(z.string()).optional(),
 });
 
@@ -109,7 +109,7 @@ const GerarDocumentoSocietario: React.FC = () => {
         titulo_documento: '',
         cliente_id: '',
         proprietario_documento_id: '',
-        // tipo_conteudo removido
+        tipo_conteudo: 'html',
         valores_tags: {},
     },
   });
@@ -119,7 +119,7 @@ const GerarDocumentoSocietario: React.FC = () => {
   const clienteSelecionadoId = watch('cliente_id');
   const proprietarioDocumentoId = watch('proprietario_documento_id');
   const tituloDocumento = watch('titulo_documento');
-  // tipoConteudo removido
+  const tipoConteudo = watch('tipo_conteudo');
   const valoresTags = watch('valores_tags') || {};
 
   // Cliente selecionado (para preenchimento de tags)
@@ -285,7 +285,7 @@ const GerarDocumentoSocietario: React.FC = () => {
     if (documentoId) {
         const { data: doc, error: docLoadError } = await supabase
             .from('documentos_societarios_gerados')
-            .select('*')
+            .select('*, modelos_societarios(tipo_conteudo)')
             .eq('id', documentoId)
             .single();
             
@@ -295,7 +295,7 @@ const GerarDocumentoSocietario: React.FC = () => {
             return;
         }
         
-        const documento = doc as DocumentoSocietarioGerado;
+        const documento = doc as DocumentoSocietarioGerado & { modelos_societarios: { tipo_conteudo: TipoConteudo } | null };
         setDocumentoInicial(documento);
         initialProprietarioDocumentoId = documento.proprietario_id;
         initialClienteId = documento.cliente_id || '';
@@ -304,7 +304,7 @@ const GerarDocumentoSocietario: React.FC = () => {
         // 1.1. Buscar Modelo associado (apenas para ter o objeto completo)
         const { data: modeloData } = await supabase
             .from('modelos_societarios')
-            .select('*')
+            .select('*, tipo_conteudo')
             .eq('id', documento.modelo_id)
             .single();
         currentModelo = modeloData as DocumentoSocietarioModelo;
@@ -313,7 +313,7 @@ const GerarDocumentoSocietario: React.FC = () => {
         // 2. Buscar Modelo (se for criação)
         const { data: modeloData, error: modeloError } = await supabase
             .from('modelos_societarios')
-            .select('*')
+            .select('*, tipo_conteudo')
             .eq('id', modeloId)
             .single();
             
@@ -355,7 +355,7 @@ const GerarDocumentoSocietario: React.FC = () => {
         titulo_documento: (documentoId ? (initialValoresTags?.titulo || '') : (currentModelo?.titulo || '')) || '',
         cliente_id: initialClienteId,
         proprietario_documento_id: initialProprietarioDocumentoId || '',
-        // tipo_conteudo removido
+        tipo_conteudo: currentModelo?.tipo_conteudo || 'html',
         valores_tags: initialValoresTags,
     });
     
@@ -448,7 +448,7 @@ const GerarDocumentoSocietario: React.FC = () => {
             valores_tags_preenchidos: { 
                 ...values.valores_tags, 
                 titulo: values.titulo_documento, 
-                // tipo_conteudo removido
+                tipo_conteudo: values.tipo_conteudo,
                 '{{CONTEUDO_PRINCIPAL}}': sanitizeConteudo(values.valores_tags?.['{{CONTEUDO_PRINCIPAL}}'] || ''), // Salva o conteúdo principal sanitizado
             },
             conteudo_renderizado: conteudoRenderizado,
@@ -711,7 +711,7 @@ const GerarDocumentoSocietario: React.FC = () => {
         onOpenChange={setPreviewOpen}
         conteudoHtml={conteudoPreview}
         titulo={previewTitle}
-        isHtml={true} // FIXADO EM HTML
+        isHtml={tipoConteudo === 'html'}
       />
     </LayoutPrincipal>
   );

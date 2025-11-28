@@ -28,8 +28,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { sanitizeConteudo } from '@/utils/formatters';
 
 type TipoLancamento = 'unico' | 'repetir' | 'parcelar';
-type TipoConteudo = 'html' | 'texto'; // Mantido para compatibilidade com o DB, mas fixado em 'html'
-type DocumentoStatus = 'rascunho' | 'pendente_assinatura' | 'ativo' | 'cancelado' | 'concluido' | 'bloqueado';
+type TipoConteudo = 'html' | 'texto';
+
+// FIX 224, 234, 47: Define status type locally
+type DocumentoStatus = 'rascunho' | 'finalizado' | 'arquivado' | 'ativo';
 
 interface EmpresaLogada {
     nome: string;
@@ -86,7 +88,7 @@ const formSchema = z.object({
     titulo_documento: z.string().min(1, 'O título é obrigatório.'),
     cliente_id: z.string().uuid('Selecione um cliente válido.'),
     proprietario_documento_id: z.string().uuid('Selecione o proprietário.'),
-    // tipo_conteudo removido do esquema
+    tipo_conteudo: z.enum(['html', 'texto']),
     valores_tags: z.record(z.string()).optional(),
 });
 
@@ -100,7 +102,7 @@ const PreencherContrato: React.FC = () => {
   const { role, perfil, usuario, carregando: carregandoSessao } = useSessao();
   
   const isAdmin = role === 'Admin';
-  const isClient = role === 'Cliente';
+  const isClient = role === 'Cliente'; // DEFINIÇÃO CORRIGIDA
   
   const [modelo, setModelo] = useState<ContratoModelo | null>(null);
   const [contratoInicial, setContratoInicial] = useState<ContratoGerado | null>(null);
@@ -129,16 +131,17 @@ const PreencherContrato: React.FC = () => {
   const [numeroParcelas, setNumeroParcelas] = useState<number>(1);
   const [dataPrimeiroVencimento, setDataPrimeiroVencimento] = useState<Date | undefined>(undefined);
   const [intervaloDias, setIntervaloDias] = useState<number>(30);
-  const [tipoConteudo] = useState<TipoConteudo>('html'); // FIXADO EM 'html'
+  const [tipoConteudo, setTipoConteudo] = useState<TipoConteudo>('html'); 
   // ------------------------------------------------------
 
+  // FIX 2304: Declarando isEditing no escopo do componente
   const isEditing = !!contratoId;
 
   
   const getOwnerIdLogado = () => {
     if (isAdmin) return usuario?.id || null;
     if (isClient) return (perfil as ClienteProfile)?.id;
-    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id;
+    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id; // FIX: proprietario_id -> cliente_id
     return null;
   };
   
@@ -241,7 +244,7 @@ const PreencherContrato: React.FC = () => {
     setCarregandoDados(true);
     
     let initialProprietarioContratoId = ownerIdLogado;
-    let currentModelo: ContratoModelo | null = null;
+    let modeloData: ContratoModelo | null = null;
     let initialValoresTags: Record<string, string> = {};
     let initialClienteId = '';
     
@@ -249,7 +252,7 @@ const PreencherContrato: React.FC = () => {
     if (modeloId) {
         const { data, error } = await supabase
             .from('contrato_modelos')
-            .select('id, titulo, conteudo_template, empresa_id, criado_em') // REMOVIDO: updated_at
+            .select('*, tipo_conteudo')
             .eq('id', modeloId)
             .single();
             
@@ -261,6 +264,7 @@ const PreencherContrato: React.FC = () => {
         modeloData = data as ContratoModelo;
         setModelo(modeloData);
         setTituloDocumento(modeloData.titulo);
+        setTipoConteudo(modeloData.tipo_conteudo as TipoConteudo);
         
         // NOVO: Inicializa o campo {{CONTEUDO_PRINCIPAL}} com o template do modelo
         initialValoresTags['{{CONTEUDO_PRINCIPAL}}'] = modeloData.conteudo_template;
@@ -309,6 +313,7 @@ const PreencherContrato: React.FC = () => {
         setValorTotal(contrato.valor_total); // Define o valor total
         setValoresTags(contrato.valores_tags_preenchidos || {});
         setTituloDocumento(contrato.valores_tags_preenchidos?.titulo || modeloData?.titulo || '');
+        setTipoConteudo(contrato.valores_tags_preenchidos?.tipo_conteudo || modeloData?.tipo_conteudo as TipoConteudo || 'html');
         
         const numParcelas = contrato.numero_parcelas;
         const valorTotalContrato = contrato.valor_total;
@@ -408,6 +413,28 @@ const PreencherContrato: React.FC = () => {
   }, [carregandoSessao, ownerIdLogado, buscarDados, navigate, isAdmin, isClient]);
 
   // --- Lógica de Preenchimento de Tags ---
+  const allAvailableTags = useMemo(() => {
+      // Combina tags padrão (sistema + financeiras) com as tags customizadas do usuário
+      const customTagsMap = tagsCustomizadas.reduce((acc, tag) => {
+          acc[tag.nome_tag] = tag;
+          return acc;
+      }, {} as Record<string, ContratoTag>);
+      
+      const combined = [...TAGS_PADRAO, ...tagsCustomizadas];
+      
+      // Remove duplicatas e ordena
+      const uniqueTags = Array.from(new Set(combined.map(t => t.nome_tag)))
+          .map(tagKey => {
+              const customTag = customTagsMap[tagKey];
+              const defaultTag = TAGS_PADRAO.find(t => t.nome_tag === tagKey);
+              return customTag || defaultTag;
+          })
+          .filter((t): t is ContratoTag => !!t)
+          .sort((a, b) => a.nome_tag.localeCompare(b.nome_tag));
+          
+      return uniqueTags;
+  }, [tagsCustomizadas]);
+
   const updateTags = useCallback(() => {
     const newTags: Record<string, string> = {};
     
@@ -704,7 +731,7 @@ const PreencherContrato: React.FC = () => {
                         .delete()
                         .eq('origem', 'lancamento_cr')
                         .eq('proprietario_id', ownerIdLogado)
-                        .ilike('descricao', `${oldLaunchDescriptionPrefix}%`);
+                        .or(`descricao.ilike.${oldLaunchDescriptionPrefix}%`, `descricao.ilike.${oldReceitaDescriptionPrefix}%`);
                 }
                 
                 await supabase.from('lancamentos').insert(lancamentoPatrimonialPayload);
@@ -998,6 +1025,7 @@ const PreencherContrato: React.FC = () => {
         onOpenChange={setPreviewOpen}
         conteudoHtml={conteudoPreview}
         titulo={previewTitle}
+        isHtml={tipoConteudo === 'html'}
       />
     </LayoutPrincipal>
   );
