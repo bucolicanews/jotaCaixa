@@ -201,43 +201,43 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
   return (
     <>
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 h-full flex flex-col">
           {/* NOVO LAYOUT DE DUAS COLUNAS */}
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 flex-1 overflow-hidden">
             
             {/* COLUNA 1: CONTEÚDO DO TEMPLATE (3/4 da largura) */}
-            <div className="lg:col-span-3 space-y-4">
-                <Card className="h-full">
+            <div className="lg:col-span-3 space-y-4 flex flex-col h-full">
+                <Card className="h-full flex flex-col">
                     <CardHeader className="flex flex-row items-center justify-between">
                         <CardTitle className="text-xl">Conteúdo do Template</CardTitle>
                         <Button type="button" variant="outline" size="sm" onClick={handlePreview} disabled={!form.watch('conteudo_template')}>
                             <Eye className="mr-2 h-4 w-4" /> Pré-visualizar
                         </Button>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="flex-1 overflow-hidden">
                         <FormField
                             control={form.control}
                             name="conteudo_template"
                             render={({ field }) => (
-                                <FormItem>
-                                    <FormControl>
-                                        {tipoConteudo === 'html' ? (
-                                            <Textarea 
-                                                ref={textareaRef} 
-                                                placeholder="Insira o conteúdo do contrato aqui, usando as tags dinâmicas." 
-                                                {...field} 
-                                                rows={20} // AUMENTANDO AS LINHAS
-                                                className={cn("font-mono text-sm min-h-[600px]", tipoConteudo === 'html' ? 'bg-yellow-50/50 dark:bg-yellow-900/10' : '')}
-                                                onDragOver={handleDragOver}
-                                                onDrop={handleDrop}
-                                            />
-                                        ) : (
+                                <FormItem className="h-full flex flex-col">
+                                    <FormControl className="flex-1">
+                                        {tipoConteudo === 'texto' ? (
                                             <RichTextEditor
                                                 value={field.value}
                                                 onChange={field.onChange}
                                                 placeholder="Insira o conteúdo formatado aqui..."
-                                                className="min-h-[600px]" // AUMENTANDO A ALTURA
-                                                isSimpleTextMode={true} // MODO TEXTO SIMPLES
+                                                className="flex-1" // Permite que o editor se expanda
+                                                isSimpleTextMode={true}
+                                            />
+                                        ) : (
+                                            <Textarea 
+                                                ref={textareaRef} 
+                                                placeholder="Insira o conteúdo do contrato aqui, usando as tags dinâmicas." 
+                                                {...field} 
+                                                rows={20}
+                                                className={cn("font-mono text-sm flex-1 min-h-[400px]", tipoConteudo === 'html' ? 'bg-yellow-50/50 dark:bg-yellow-900/10' : '')}
+                                                onDragOver={handleDragOver}
+                                                onDrop={handleDrop}
                                             />
                                         )}
                                     </FormControl>
@@ -250,7 +250,7 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
             </div>
             
             {/* COLUNA 2: DADOS E TAGS (1/4 da largura) */}
-            <div className="lg:col-span-1 space-y-4">
+            <div className="lg:col-span-1 space-y-4 flex flex-col">
                 <Card>
                     <CardHeader><CardTitle className="text-xl">Configuração</CardTitle></CardHeader>
                     <CardContent className="space-y-4">
@@ -291,7 +291,7 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
                     </CardContent>
                 </Card>
                 
-                <Card className="max-h-[400px] overflow-y-auto">
+                <Card className="flex-1 min-h-[200px] max-h-[calc(100vh-200px)] overflow-y-auto">
                     <CardHeader className="pb-2">
                         <CardTitle className="text-lg flex items-center"><Tag className="w-4 h-4 mr-2" /> Tags Disponíveis</CardTitle>
                     </CardHeader>
