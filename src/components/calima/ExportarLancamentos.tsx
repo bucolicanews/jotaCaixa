@@ -26,16 +26,18 @@ interface LancamentoCalima {
     conta_contabil_id: string;
     historico_id: string | null;
     descricao: string;
-    proprietario_id: string; // ALTERADO: empresa_id -> proprietario_id
+    proprietario_id: string;
+    conta_resultado_id: string | null; // ID do lançamento emparelhado
     
     // Relações:
-    conta_resultado: { Conta: string }[] | null; 
-    historicos: { codigo: string | null }[] | null;
+    conta_contabil: { Conta: string, Descricao: string } | null; // NOVO: Relação direta com a conta contábil
+    historicos: { codigo: string | null } | null;
     
+    // Relação para conta de saldo (só existe se conta_bancaria_id não for nulo)
     conta_saldo: {
         conta_contabil_id: string;
-        conta_ativo: { Conta: string }[] | null; 
-    }[] | null;
+        conta_ativo: { Conta: string } | null; 
+    } | null;
 }
 
 const ExportarLancamentos: React.FC = () => {
@@ -46,11 +48,11 @@ const ExportarLancamentos: React.FC = () => {
   const [filtroPeriodo, setFiltroPeriodo] = useState<DateRange | undefined>(undefined);
   const [cnpjCpf, setCnpjCpf] = useState('');
   const [skippedLaunches, setSkippedLaunches] = useState<string[]>([]);
-  const [totalNaoMapeados, setTotalNaoMapeados] = useState(0); // NOVO ESTADO
+  const [totalNaoMapeados, setTotalNaoMapeados] = useState(0);
 
   const getOwnerId = () => {
     if (role === 'Admin' || role === 'Cliente') return (perfil as any)?.id;
-    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id; // FIX: proprietario_id -> cliente_id
+    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id;
     return null;
   };
   
@@ -65,10 +67,9 @@ const ExportarLancamentos: React.FC = () => {
               documento = adminProfile.cnpj || adminProfile.cpf || '';
           } else if (role === 'Cliente') {
               const clienteProfile = perfil as ClienteProfile;
-              // CORREÇÃO: Acessando 'documento' que agora existe em ClienteProfile
               documento = clienteProfile.documento || clienteProfile.cpf || ''; 
           }
-          setCnpjCpf(documento.replace(/\D/g, '')); // Remove caracteres não numéricos
+          setCnpjCpf(documento.replace(/\D/g, ''));
       }
   }, [carregando, perfil, role]);
   
@@ -110,7 +111,7 @@ const ExportarLancamentos: React.FC = () => {
       const startDate = format(filtroPeriodo.from, 'yyyy-MM-dd');
       const endDate = format(filtroPeriodo.to, 'yyyy-MM-dd');
 
-      // 1. Buscar Lançamentos com as contas contábeis e históricos
+      // 1. Buscar TODOS os Lançamentos do Período (incluindo as partidas dobradas)
       const { data, error } = await supabase
         .from('lancamentos')
         .select(`
@@ -121,19 +122,22 @@ const ExportarLancamentos: React.FC = () => {
           documento,
           descricao,
           proprietario_id,
+          conta_contabil_id,
+          conta_bancaria_id,
+          conta_resultado_id,
           
-          conta_resultado:plano_contas!conta_contabil_id ( Conta ),
+          conta_contabil:conta_contabil_id ( Conta, Descricao ),
+          historicos:historico_id ( codigo ),
           
-          historicos:historicos!historico_id ( codigo ),
-          
-          conta_saldo:saldo_contas!conta_bancaria_id ( 
+          conta_saldo:conta_bancaria_id ( 
             conta_contabil_id,
             conta_ativo:plano_contas!conta_contabil_id ( Conta )
           )
         `)
-        .eq('proprietario_id', ownerId) // USANDO proprietario_id
+        .eq('proprietario_id', ownerId)
         .gte('data_movimentacao', startDate)
         .lte('data_movimentacao', endDate)
+        .neq('origem', 'movimentacao_direta_estornada') // Ignora lançamentos originais estornados
         .order('data_movimentacao', { ascending: true });
 
       if (error) throw error;
@@ -147,51 +151,92 @@ const ExportarLancamentos: React.FC = () => {
       }
       
       const currentSkipped: string[] = [];
+      const processedLaunchIds = new Set<string>();
+      const dataToExport: any[] = [];
 
-      // 2. Mapeamento para o formato Calima (Partidas Dobradas)
-      const dataToExport = lancamentos.map(l => {
-        // Acessa o primeiro elemento do array de relações
-        const contaResultadoCodigo = l.conta_resultado?.[0]?.Conta || '';
+      // 2. Agrupar em Pares (Débito/Crédito)
+      for (const l of lancamentos) {
+        if (processedLaunchIds.has(l.id)) continue;
+
+        // Busca o par usando a referência cruzada (conta_resultado_id)
+        const par = lancamentos.find(p => p.id === l.conta_resultado_id);
         
-        // CORREÇÃO: Acessa o primeiro elemento de conta_saldo, e depois o primeiro elemento de conta_ativo
-        const contaSaldoCodigo = l.conta_saldo?.[0]?.conta_ativo?.[0]?.Conta || '';
-        
-        const historicoCodigo = l.historicos?.[0]?.codigo || '';
-        
-        // Verifica se as contas essenciais estão mapeadas
-        if (!contaResultadoCodigo || !contaSaldoCodigo || !l.historico_id) {
-            const tipoTransacao = l.tipo === 'Entrada' ? 'Receita/Ativo' : 'Despesa/Ativo';
-            const motivo = `Tipo: ${tipoTransacao}. Conta Resultado (${contaResultadoCodigo || 'N/A'}), Conta Saldo (${contaSaldoCodigo || 'N/A'}) ou Histórico (N/A) não mapeada.`;
-            currentSkipped.push(`ID ${l.id.substring(0, 8)} (${l.tipo}): ${l.descricao} - ${motivo}`);
-            return null;
+        // Se for um lançamento manual de partida dobrada, ele deve ter um par
+        if (l.origem === 'lancamento_manual' && !par) {
+            currentSkipped.push(`ID ${l.id.substring(0, 8)}: Lançamento manual sem par de partida dobrada encontrado.`);
+            processedLaunchIds.add(l.id);
+            continue;
         }
         
-        const valor = l.valor.toFixed(2).replace('.', ',');
-        const dataFormatada = format(new Date(l.data_movimentacao + 'T00:00:00'), 'dd/MM/yyyy');
-        
-        let contaDebito = '';
-        let contaCredito = '';
-        
-        // Regra de Partidas Dobradas
-        if (l.tipo === 'Entrada') {
-            // Entrada (Receita): D - Ativo (Caixa/Banco), C - Receita
-            contaDebito = contaSaldoCodigo;
-            contaCredito = contaResultadoCodigo;
-        } else {
-            // Saída (Despesa): D - Despesa, C - Ativo (Caixa/Banco)
-            contaDebito = contaResultadoCodigo;
-            contaCredito = contaSaldoCodigo;
+        // Se for um lançamento de conciliação/pagamento/recebimento, ele deve ter um par
+        if (l.origem !== 'lancamento_manual' && !par) {
+            currentSkipped.push(`ID ${l.id.substring(0, 8)}: Lançamento de origem '${l.origem}' sem par de partida dobrada encontrado.`);
+            processedLaunchIds.add(l.id);
+            continue;
         }
         
-        // Formato simplificado solicitado: Data;Valor;Conta Débito;Conta Crédito;Número Histórico
-        return {
+        // Se não for um par, tratamos como um lançamento único (que não deveria existir)
+        if (!par) {
+            currentSkipped.push(`ID ${l.id.substring(0, 8)}: Lançamento sem par de partida dobrada. Ignorado.`);
+            processedLaunchIds.add(l.id);
+            continue;
+        }
+        
+        // Encontramos o par. Agora, identificamos Débito e Crédito.
+        const debito = l.tipo === 'Entrada' ? l : par;
+        const credito = l.tipo === 'Saida' ? l : par;
+        
+        // CRÍTICO: Se o valor for zero, ignora (pode ser um estorno que se cancelou)
+        if (Math.abs(debito.valor) < 0.01 || Math.abs(credito.valor) < 0.01) {
+            processedLaunchIds.add(l.id);
+            processedLaunchIds.add(par.id);
+            continue;
+        }
+        
+        // 3. Mapeamento de Contas
+        
+        // Conta Débito: Deve ser a conta contábil do lançamento de Débito (Entrada)
+        let contaDebitoCodigo = debito.conta_contabil?.Conta || '';
+        
+        // Se o Débito for uma movimentação de Caixa/Banco, a conta contábil é a conta de Ativo (conta_ativo)
+        if (debito.conta_bancaria_id) {
+            contaDebitoCodigo = debito.conta_saldo?.conta_ativo?.Conta || '';
+        }
+        
+        // Conta Crédito: Deve ser a conta contábil do lançamento de Crédito (Saída)
+        let contaCreditoCodigo = credito.conta_contabil?.Conta || '';
+        
+        // Se o Crédito for uma movimentação de Caixa/Banco, a conta contábil é a conta de Ativo (conta_ativo)
+        if (credito.conta_bancaria_id) {
+            contaCreditoCodigo = credito.conta_saldo?.conta_ativo?.Conta || '';
+        }
+        
+        const historicoCodigo = debito.historicos?.codigo || credito.historicos?.codigo || '';
+        
+        // 4. Validação
+        if (!contaDebitoCodigo || !contaCreditoCodigo || !historicoCodigo) {
+            const motivo = `Conta Débito (${contaDebitoCodigo || 'N/A'}), Conta Crédito (${contaCreditoCodigo || 'N/A'}) ou Histórico (N/A) não mapeada.`;
+            currentSkipped.push(`ID ${l.id.substring(0, 8)}: ${debito.descricao} / ${credito.descricao} - ${motivo}`);
+            processedLaunchIds.add(l.id);
+            processedLaunchIds.add(par.id);
+            continue;
+        }
+        
+        // 5. Exportar
+        const valor = Math.abs(debito.valor).toFixed(2).replace('.', ',');
+        const dataFormatada = format(new Date(debito.data_movimentacao + 'T00:00:00'), 'dd/MM/yyyy');
+        
+        dataToExport.push({
             Data: dataFormatada,
             Valor: valor,
-            'Conta Débito': contaDebito,
-            'Conta Crédito': contaCredito,
+            'Conta Débito': contaDebitoCodigo,
+            'Conta Crédito': contaCreditoCodigo,
             'Número Histórico': historicoCodigo,
-        };
-      }).filter(l => l !== null); // Remove lançamentos que não puderam ser mapeados
+        });
+        
+        processedLaunchIds.add(l.id);
+        processedLaunchIds.add(par.id);
+      }
 
       setSkippedLaunches(currentSkipped);
 
@@ -201,8 +246,7 @@ const ExportarLancamentos: React.FC = () => {
           return;
       }
 
-      // 3. Exportar CSV
-      // Headers simplificados
+      // 6. Exportar CSV
       const headers = ['Data', 'Valor', 'Conta Débito', 'Conta Crédito', 'Número Histórico'];
 
       const csv = Papa.unparse(dataToExport, {
@@ -257,7 +301,6 @@ const ExportarLancamentos: React.FC = () => {
         
         <div className="space-y-4 border p-4 rounded-md">
             <Label>Período de Exportação</Label>
-            {/* Ajuste 1: Garantir que o DateRangePicker use w-full */}
             <DateRangePicker date={filtroPeriodo} setDate={setFiltroPeriodo} className="w-full" />
             
             <Label htmlFor="cnpj-cpf">CPF/CNPJ da Empresa (Obrigatório para Calima)</Label>
@@ -269,7 +312,6 @@ const ExportarLancamentos: React.FC = () => {
             />
         </div>
         
-        {/* Ajuste 2: Usar flex-col em mobile e flex-row em sm:flex-row para os botões */}
         <div className="flex flex-col sm:flex-row gap-4">
             <Button 
                 onClick={handleExport} 
