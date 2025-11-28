@@ -159,21 +159,14 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
       
       let entradasPeriodo = 0;
       let saidasPeriodo = 0;
-      let primeiroLancamentoValor = 0;
+      let saldoAcumuladoAntes = contaSelecionada.saldo_inicial;
       
       const lancamentosNoPeriodo: Lancamento[] = [];
       
-      // 1. Busca o primeiro lançamento da conta (para Saldo Inicial de Visualização)
+      // 1. Busca todos os lançamentos da conta (para calcular o saldo acumulado antes do período)
       const lancamentosDaConta = lancamentos.filter(l => l.conta_bancaria_id === filtroContaId);
-      const primeiroLancamento = lancamentosDaConta.slice().sort((a, b) => new Date(a.data_movimentacao).getTime() - new Date(b.data_movimentacao).getTime())[0];
       
-      if (primeiroLancamento) {
-          // O valor do primeiro lançamento é o valor absoluto, com sinal ajustado pela natureza da conta
-          const valor = primeiroLancamento.valor;
-          primeiroLancamentoValor = primeiroLancamento.tipo === 'Entrada' ? valor : -valor;
-      }
-      
-      // 2. Calcula Entradas/Saídas DENTRO do período de filtro
+      // 2. Calcula Saldo Acumulado ANTES do período de filtro
       for (const l of lancamentosDaConta) {
           const dataLancamento = format(parseISO(l.data_movimentacao), 'yyyy-MM-dd');
           const valor = l.valor;
@@ -181,17 +174,21 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
           // CRÍTICO: Ignora lançamentos originais estornados
           if (l.origem === 'movimentacao_direta_estornada') continue;
           
-          if (dataLancamento >= dataInicioFiltro) {
+          if (dataLancamento < dataInicioFiltro) {
+              if (l.tipo === 'Entrada') saldoAcumuladoAntes += valor;
+              else if (l.tipo === 'Saida') saldoAcumuladoAntes -= valor;
+          } else {
+              // 3. Calcula Entradas/Saídas DENTRO do período de filtro
               lancamentosNoPeriodo.push(l);
               if (l.tipo === 'Entrada') entradasPeriodo += valor;
               else if (l.tipo === 'Saida') saidasPeriodo += valor;
           }
       }
       
-      // 3. Saldo Inicial (Apenas para exibição)
-      const saldoInicialCalculado = primeiroLancamentoValor;
+      // 4. Saldo Inicial (para exibição) é o saldo acumulado antes do período
+      const saldoInicialCalculado = saldoAcumuladoAntes;
       
-      // 4. Movimento do Período
+      // 5. Movimento do Período
       return {
           totalEntradas: entradasPeriodo,
           totalSaidas: saidasPeriodo,
