@@ -164,7 +164,8 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
       const lancamentosNoPeriodo: Lancamento[] = [];
       
       // 1. Busca o primeiro lançamento da conta (para Saldo Inicial de Visualização)
-      const primeiroLancamento = lancamentos.slice().sort((a, b) => new Date(a.data_movimentacao).getTime() - new Date(b.data_movimentacao).getTime())[0];
+      const lancamentosDaConta = lancamentos.filter(l => l.conta_bancaria_id === filtroContaId);
+      const primeiroLancamento = lancamentosDaConta.slice().sort((a, b) => new Date(a.data_movimentacao).getTime() - new Date(b.data_movimentacao).getTime())[0];
       
       if (primeiroLancamento) {
           // O valor do primeiro lançamento é o valor absoluto, com sinal ajustado pela natureza da conta
@@ -173,7 +174,7 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
       }
       
       // 2. Calcula Entradas/Saídas DENTRO do período de filtro
-      for (const l of lancamentos) {
+      for (const l of lancamentosDaConta) {
           const dataLancamento = format(parseISO(l.data_movimentacao), 'yyyy-MM-dd');
           const valor = l.valor;
           
