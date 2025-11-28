@@ -11,13 +11,16 @@ import {
   Search,
   ArrowUp,
   ArrowRight,
+  FileDown, // Adicionado
+  FileUp, // Adicionado
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { PlanoContas } from '@/types/plano-contas';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import FormPlanoContas from '@/components/formularios/FormPlanoContas';
-import ImportarPlanoContas from '@/components/contabilidade/ImportarPlanoContas';
+import ImportarPlanoContas from '@/components/contabilidade/ImportarPlanoContas'; // Importado
+import ExportarPlanoContasButton from '@/components/contabilidade/ExportarPlanoContasButton'; // Importado
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -37,13 +40,13 @@ interface NovaContaInicial {
 type FormInitialData = PlanoContas | (NovaContaInicial & {
     codigo_reduzido: string;
     Descricao: string;
-    is_conta_caixa_banco: boolean; // RENOMEADO
-    is_conta_patrimonial: boolean; // NOVO CAMPO
+    is_conta_caixa_banco: boolean;
+    is_conta_patrimonial: boolean;
     is_conta_resultado: boolean;
-    is_caixa: boolean; // NOVO
-    is_banco: boolean; // NOVO
-    is_a_receber: boolean; // NOVO
-    is_a_pagar: boolean; // NOVO
+    is_caixa: boolean;
+    is_banco: boolean;
+    is_a_receber: boolean;
+    is_a_pagar: boolean;
 });
 
 // Mapeamento de cores para os níveis hierárquicos
@@ -189,7 +192,7 @@ const PlanoContasPage = () => {
       } else if (role === 'Cliente') {
           ownerId = (perfil as ClienteProfile)?.id || null;
       } else if (role === 'Usuario') {
-          ownerId = (perfil as UsuarioProfile)?.cliente_id || null; // FIX: proprietario_id -> cliente_id
+          ownerId = (perfil as UsuarioProfile)?.cliente_id || null;
       }
       
       if (ownerId) {
@@ -240,7 +243,7 @@ const PlanoContasPage = () => {
   const handleDelete = async (id: string) => {
     if (!window.confirm('Tem certeza que deseja excluir esta conta?')) return;
 
-    // CORREÇÃO CRÍTICA: Antes de deletar, setar as FKs para NULL
+    // CRÍTICO: Antes de deletar, setar as FKs para NULL
     try {
         // 1. Anular referências em tabelas dependentes
         await supabase.from('saldo_contas').update({ conta_contabil_id: null }).eq('conta_contabil_id', id);
@@ -392,13 +395,13 @@ const PlanoContasPage = () => {
             Analitica: novaContaInicial.Analitica,
             codigo_reduzido: '', 
             Descricao: '', 
-            is_conta_caixa_banco: false, // RENOMEADO
-            is_conta_patrimonial: false, // NOVO CAMPO
+            is_conta_caixa_banco: false,
+            is_conta_patrimonial: false,
             is_conta_resultado: false,
-            is_caixa: false, // NOVO
-            is_banco: false, // NOVO
-            is_a_receber: false, // NOVO
-            is_a_pagar: false, // NOVO
+            is_caixa: false,
+            is_banco: false,
+            is_a_receber: false,
+            is_a_pagar: false,
         } as FormInitialData
         : null);
 
@@ -406,45 +409,36 @@ const PlanoContasPage = () => {
     <LayoutPrincipal>
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
         <h1 className="text-2xl md:text-3xl font-bold">Plano de Contas</h1>
-        <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
-          <DialogTrigger asChild>
-            <Button onClick={() => { setContaSelecionada(null); setNovaContaInicial(null); }} className="w-full sm:w-auto">
-              <PlusCircle className="w-4 h-4 mr-2" />
-              Nova Conta
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px] max-h-[95vh] overflow-y-auto"> {/* APLICANDO MAX-H E OVERFLOW */}
-            <DialogHeader>
-              <DialogTitle>{(initialFormValues as PlanoContas)?.id ? 'Editar Conta' : 'Nova Conta'}</DialogTitle>
-            </DialogHeader>
-            <FormPlanoContas 
-              proprietarioId={proprietarioId}
-              contaInicial={initialFormValues as PlanoContas | null}
-              onSaveComplete={handleSaveComplete}
-            />
-          </DialogContent>
-        </Dialog>
+        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+            <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
+              <DialogTrigger asChild>
+                <Button onClick={() => { setContaSelecionada(null); setNovaContaInicial(null); }} className="w-full sm:w-auto">
+                  <PlusCircle className="w-4 h-4 mr-2" />
+                  Nova Conta
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[425px] max-h-[95vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>{(initialFormValues as PlanoContas)?.id ? 'Editar Conta' : 'Nova Conta'}</DialogTitle>
+                </DialogHeader>
+                <FormPlanoContas 
+                  proprietarioId={proprietarioId}
+                  contaInicial={initialFormValues as PlanoContas | null}
+                  onSaveComplete={handleSaveComplete}
+                />
+              </DialogContent>
+            </Dialog>
+            
+            <ImportarPlanoContas onImportComplete={handleImportComplete} />
+            <ExportarPlanoContasButton />
+        </div>
       </div>
 
       {/* GRID MODERNO DE DUAS COLUNAS */}
-      <div className="grid grid-cols-1 lg:grid-cols-[30%_70%] gap-6 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-[20%_80%] gap-6 items-start">
         
-        {/* COLUNA ESQUERDA */}
+        {/* COLUNA ESQUERDA: FILTROS */}
         <div className="space-y-6">
-          {/* IMPORTAR PLANO DE CONTAS */}
-          <Card className="shadow-md border border-border/50">
-            <CardHeader>
-              <CardTitle className="text-lg font-semibold flex items-center">
-                <ArrowRight className="w-4 h-4 mr-2 text-muted-foreground" />
-                Importar Plano de Contas
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ImportarPlanoContas onImportComplete={handleImportComplete} />
-            </CardContent>
-          </Card>
-
-          {/* FILTROS */}
           <Card className="shadow-md border border-border/50">
             <CardHeader>
               <CardTitle className="text-lg font-semibold flex items-center">
@@ -489,7 +483,7 @@ const PlanoContasPage = () => {
           </Card>
         </div>
 
-        {/* COLUNA DIREITA */}
+        {/* COLUNA DIREITA: TABELA */}
         <div>
           <Card className="shadow-md border border-border/50">
             <CardHeader className="flex justify-between items-center">
@@ -500,8 +494,8 @@ const PlanoContasPage = () => {
                 <Loader2 className="h-5 w-5 animate-spin text-primary" />
               )}
             </CardHeader>
-            <CardContent className="p-0"> {/* REMOVENDO PADDING */}
-              <div className="relative overflow-x-auto overflow-y-auto max-h-[95vh] rounded-md border border-border/50"> {/* AUMENTANDO ALTURA */}
+            <CardContent className="p-0">
+              <div className="relative overflow-x-auto overflow-y-auto max-h-[95vh] rounded-md border border-border/50">
                 <table className="w-full caption-bottom text-sm">
                   <thead className="[&_tr]:border-b sticky top-0 bg-background/95 backdrop-blur-sm z-20 shadow-sm">
                     <TableRow>
