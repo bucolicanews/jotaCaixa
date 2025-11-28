@@ -96,7 +96,7 @@ const ContratoAcoesDialog: React.FC<ContratoAcoesDialogProps> = ({ contrato, ope
   const handleSendSignedContractEmail = async () => {
       if (!contrato || !isAssinado) return;
       
-      const clienteEmail = contrato.valores_tags_preenchidas?.['{{CLIENTE_EMAIL}}'];
+      const clienteEmail = contrato.valores_tags_preenchidos?.['{{CLIENTE_EMAIL}}'];
       if (!clienteEmail) {
           showError('Email do cliente não encontrado nas tags.');
           return;
@@ -225,7 +225,6 @@ const ContratoAcoesDialog: React.FC<ContratoAcoesDialogProps> = ({ contrato, ope
         finalContent = `<pre style="white-space: pre-wrap; font-family: inherit; margin: 0;">${finalContent}</pre>`;
         finalContent += `\n\n--- Assinaturas ---\nContratante: ${contrato.assinatura_proprietario_nome || 'Empresa'}\nContratado: ${clienteNome}\nDocumento: ${clienteDocumento}\nData: ${dataAssinatura}\n\n(Documento assinado eletronicamente)`;
     }
-    // --- Fim Lógica de Injeção de Assinaturas ---
     
     // --- NOVO: Injeção da Logo no Cabeçalho de Impressão ---
     const logoUrl = contrato.assinatura_proprietario_url;
@@ -233,6 +232,7 @@ const ContratoAcoesDialog: React.FC<ContratoAcoesDialogProps> = ({ contrato, ope
     
     let headerHtml = '';
     if (logoUrl) {
+        // ESTILO CRÍTICO: Garante que a logo fique no canto superior esquerdo
         headerHtml = `
             <div class="print-header" style="display: flex; flex-direction: column; align-items: flex-start; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 15px;">
                 <img src="${logoUrl}" alt="${ownerName}" class="print-logo" style="max-height: 50px; max-width: 150px; object-fit: contain; margin-bottom: 5px;" />
@@ -303,7 +303,7 @@ const ContratoAcoesDialog: React.FC<ContratoAcoesDialogProps> = ({ contrato, ope
   if (!contrato) return null;
   
   // Verifica o tipo de conteúdo salvo no contrato
-  const isHtml = contrato.valores_tags_preenchidos?.tipo_conteudo === 'html';
+  const isHtml = contrato.valores_tags_preenchidas?.tipo_conteudo === 'html';
   
   // Conteúdo a ser exibido na aba de prévia
   const contentToDisplay = contrato.conteudo_renderizado ? (

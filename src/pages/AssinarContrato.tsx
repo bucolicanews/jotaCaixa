@@ -169,7 +169,7 @@ const AssinarContrato: React.FC = () => {
         return;
     }
     
-    const isHtml = contrato.valores_tags_preenchidos?.tipo_conteudo === 'html';
+    const isContentHtml = contrato.valores_tags_preenchidos?.tipo_conteudo === 'html';
     let finalContent = contrato.conteudo_renderizado;
     const isAssinado = contrato.status === 'ativo' || contrato.status === 'concluido';
     
@@ -241,6 +241,7 @@ const AssinarContrato: React.FC = () => {
     
     let headerHtml = '';
     if (logoUrl) {
+        // ESTILO CRÍTICO: Garante que a logo fique no canto superior esquerdo
         headerHtml = `
             <div class="print-header" style="display: flex; flex-direction: column; align-items: flex-start; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 15px;">
                 <img src="${logoUrl}" alt="${ownerName}" class="print-logo" style="max-height: 50px; max-width: 150px; object-fit: contain; margin-bottom: 5px;" />
@@ -351,7 +352,7 @@ const AssinarContrato: React.FC = () => {
                               <Camera className="w-4 h-4 mr-1" /> Visualizar Selfie de Assinatura
                           </a>
                       )}
-                      <Button variant="link" size="sm" onClick={() => sendSignedContractEmail(contrato.id, contrato.valores_tags_preenchidos?.['{{CLIENTE_EMAIL}}'])} className="h-auto p-0 text-blue-600 hover:text-blue-700 flex items-center">
+                      <Button variant="link" size="sm" onClick={() => sendSignedContractEmail(contrato.id, contrato.valores_tags_preenchidas?.['{{CLIENTE_EMAIL}}'])} className="h-auto p-0 text-blue-600 hover:text-blue-700 flex items-center">
                           <Mail className="w-4 h-4 mr-1" /> Reenviar Cópia Assinada
                       </Button>
                   </div>
