@@ -13,7 +13,7 @@ import { useDebounce } from '@/hooks/use-debounce';
 import { SaldoContaDetalhada } from '@/types/saldo-conta';
 import { DateRangePicker } from '@/components/DateRangePicker';
 import { DateRange } from 'react-day-picker';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { Button } from '../ui/button';
 import { usePrint } from '@/hooks/use-print';
 import ReactDOMServer from 'react-dom/server';
@@ -146,14 +146,14 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
   }, [fetchLancamentos]);
   
   // --- CÁLCULO DE SALDO INICIAL E MOVIMENTO DO PERÍODO ---
-  const { totalEntradas, totalSaidas, saldoInicialConta, lancamentosDoPeriodo } = useMemo(() => {
+  const { totalEntradasPeriodo, totalSaidasPeriodo, saldoInicialConta, lancamentosDoPeriodo } = useMemo(() => {
       if (filtroContaId === 'todos' || !filtroPeriodo?.from) {
           // Se for geral ou sem período, não calculamos saldo inicial de conta
-          return { totalEntradas: 0, totalSaidas: 0, saldoInicialConta: 0, lancamentosDoPeriodo: lancamentos };
+          return { totalEntradasPeriodo: 0, totalSaidasPeriodo: 0, saldoInicialConta: 0, lancamentosDoPeriodo: lancamentos };
       }
       
       const contaSelecionada = contas.find(c => c.id === filtroContaId);
-      if (!contaSelecionada) return { totalEntradas: 0, totalSaidas: 0, saldoInicialConta: 0, lancamentosDoPeriodo: [] };
+      if (!contaSelecionada) return { totalEntradasPeriodo: 0, totalSaidasPeriodo: 0, saldoInicialConta: 0, lancamentosDoPeriodo: [] };
       
       const dataInicioFiltro = format(filtroPeriodo.from, 'yyyy-MM-dd');
       
@@ -193,16 +193,17 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
       
       // 2. Movimento do Período
       return {
-          totalEntradas: entradasPeriodo,
-          totalSaidas: saidasPeriodo,
+          totalEntradasPeriodo: entradasPeriodo,
+          totalSaidasPeriodo: saidasPeriodo,
           saldoInicialConta: saldoInicialCalculado,
           lancamentosDoPeriodo: lancamentosNoPeriodo,
       };
   }, [lancamentos, filtroContaId, filtroPeriodo, contas]);
   // --- FIM CÁLCULO ---
   
-  const totalEntradas = filtroContaId === 'todos' ? lancamentos.filter(l => l.tipo === 'Entrada').reduce((sum, l) => sum + l.valor, 0) : totalEntradas;
-  const totalSaidas = filtroContaId === 'todos' ? lancamentos.filter(l => l.tipo === 'Saida').reduce((sum, l) => sum + l.valor, 0) : totalSaidas;
+  // Variáveis de escopo superior para os cards
+  const totalEntradas = filtroContaId === 'todos' ? lancamentos.filter(l => l.tipo === 'Entrada').reduce((sum, l) => sum + l.valor, 0) : totalEntradasPeriodo;
+  const totalSaidas = filtroContaId === 'todos' ? lancamentos.filter(l => l.tipo === 'Saida').reduce((sum, l) => sum + l.valor, 0) : totalSaidasPeriodo;
   
   // Lógica Condicional para o Saldo Final/Variação
   let saldoFinalOuVariacao = 0;
