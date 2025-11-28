@@ -146,7 +146,7 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
       
       // Substituição básica para a prévia (apenas tags padrão)
       let previewContent = template;
-      tagsCustomizadas.forEach(tag => {
+      allTags.forEach(tag => {
           const regex = new RegExp(tag.nome_tag, 'g');
           previewContent = previewContent.replace(regex, `[${tag.descricao}]`);
       });
@@ -177,28 +177,43 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
   
   const handleInsertText = useCallback((insertText: string) => {
       const current = form.getValues("conteudo_template") || "";
-
-      // Posição do cursor do textarea
-      const textarea = document.querySelector(".ql-editor") as HTMLDivElement;
-      if (!textarea) return;
-
-      // Simula a inserção de HTML no cursor
-      const selection = window.getSelection();
-      if (selection && selection.rangeCount > 0) {
-          const range = selection.getRangeAt(0);
-          range.deleteContents();
-          const el = document.createElement('span');
-          el.innerHTML = insertText;
-          range.insertNode(el);
-          range.collapse(false);
-          showSuccess(`Tag inserida no editor.`);
-      } else {
-          // Fallback para anexar no final
-          form.setValue("conteudo_template", current + insertText, { shouldDirty: true, shouldValidate: true });
+      
+      // Se estiver no modo HTML (Quill), precisamos manipular o DOM do Quill
+      const quillEditor = document.querySelector(".ql-editor");
+      
+      if (quillEditor) {
+          const selection = window.getSelection();
+          if (selection && selection.rangeCount > 0) {
+              const range = selection.getRangeAt(0);
+              
+              // Cria um nó de texto para inserir
+              const textNode = document.createTextNode(insertText);
+              
+              // Insere o nó no cursor
+              range.deleteContents();
+              range.insertNode(textNode);
+              
+              // Move o cursor para o final do texto inserido
+              range.setStartAfter(textNode);
+              range.setEndAfter(textNode);
+              selection.removeAllRanges();
+              selection.addRange(range);
+              
+              // Atualiza o valor do formulário com o novo HTML do Quill
+              form.setValue("conteudo_template", quillEditor.innerHTML, { shouldDirty: true, shouldValidate: true });
+              
+              showSuccess(`Tag inserida no editor.`);
+              return;
+          }
       }
+      
+      // Fallback: Se não for possível manipular o Quill, anexa no final
+      form.setValue("conteudo_template", current + insertText, { shouldDirty: true, shouldValidate: true });
+      
   }, [form]);
   
   const handleInsertBloco = (bloco: BlocoSocietario) => {
+      // Insere o conteúdo do bloco (que é texto puro ou HTML)
       handleInsertText(`\n\n${bloco.conteudo}\n\n`);
       showSuccess(`Bloco '${bloco.titulo}' inserido no conteúdo.`);
   };
@@ -250,13 +265,12 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
                             name="conteudo_template"
                             render={({ field }) => (
                                 <FormItem className="h-full flex flex-col">
-                                    <FormControl className="flex-1">
+                                    <FormControl className="flex-1" onDrop={handleDrop} onDragOver={handleDragOver}>
                                         <RichTextEditor
                                             value={field.value}
                                             onChange={field.onChange}
                                             placeholder="Insira o conteúdo formatado aqui..."
                                             className="flex-1"
-                                            // isSimpleTextMode removido
                                         />
                                     </FormControl>
                                     <FormMessage />
