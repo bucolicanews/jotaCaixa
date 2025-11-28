@@ -230,25 +230,14 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
                             render={({ field }) => (
                                 <FormItem className="h-full flex flex-col">
                                     <FormControl className="flex-1">
-                                        {tipoConteudo === 'texto' ? (
-                                            <RichTextEditor
-                                                value={field.value}
-                                                onChange={field.onChange}
-                                                placeholder="Insira o conteúdo formatado aqui..."
-                                                className="flex-1" // Permite que o editor se expanda
-                                                isSimpleTextMode={true}
-                                            />
-                                        ) : (
-                                            <Textarea 
-                                                ref={textareaRef} 
-                                                placeholder="Insira o conteúdo do contrato aqui, usando as tags dinâmicas." 
-                                                {...field} 
-                                                rows={20}
-                                                className={cn("font-mono text-sm flex-1 min-h-[400px]", tipoConteudo === 'html' ? 'bg-yellow-50/50 dark:bg-yellow-900/10' : '')}
-                                                onDragOver={handleDragOver}
-                                                onDrop={handleDrop}
-                                            />
-                                        )}
+                                        {/* CORREÇÃO: Usando RichTextEditor para ambos os modos */}
+                                        <RichTextEditor
+                                            value={field.value}
+                                            onChange={field.onChange}
+                                            placeholder="Insira o conteúdo formatado aqui..."
+                                            className="flex-1"
+                                            isSimpleTextMode={tipoConteudo === 'texto'}
+                                        />
                                     </FormControl>
                                     <FormMessage />
                                 </FormItem>

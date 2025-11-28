@@ -19,6 +19,7 @@ import { TAGS_PADRAO } from '@/config/contrato-tags-padrao';
 import { cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { sanitizeConteudo } from '@/utils/formatters';
+import RichTextEditor from '@/components/RichTextEditor'; // NOVO IMPORT
 
 // Extensão local para DocumentoSocietarioModelo
 interface ExtendedDocumentoSocietarioModelo extends DocumentoSocietarioModelo {
@@ -48,8 +49,8 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
   const [conteudoPreview, setConteudoPreview] = useState('');
   const [previewTitle, setPreviewTitle] = useState('');
   
-  // Removendo textareaRef, usaremos ID para acesso direto
-  // const textareaRef = useRef<HTMLTextAreaElement>(null); 
+  // Referência para o Textarea (usado para Drag & Drop)
+  const textareaRef = useRef<HTMLTextAreaElement>(null); 
 
   const getOwnerId = () => {
     if (role === 'Admin') return usuario?.id || null;
@@ -109,11 +110,13 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
     resolver: zodResolver(formSchema),
     defaultValues: {
       titulo: modeloInicial?.titulo || '',
-      conteudo_template: modeloInicial?.conteudo_template ? sanitizeConteudo(modeloInicial.conteudo_template) : '',
+      conteudo_template: modeloInicial?.conteudo_template ? sanitizeConteudo(modeloInicial.conteudo_template) : '', // APLICA SANITIZE
       tipo_documento: modeloInicial?.tipo_documento || '',
-      tipo_conteudo: modeloInicial?.tipo_conteudo || 'html',
+      tipo_conteudo: modeloInicial?.tipo_conteudo || 'html', // Default to HTML
     },
   });
+  
+  const tipoConteudo = form.watch('tipo_conteudo');
 
   const onSubmit = async (values: FormValues) => {
     if (!ownerId) {
@@ -124,7 +127,8 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
     const dataToSave = {
       proprietario_id: ownerId,
       titulo: values.titulo,
-      conteudo_template: sanitizeConteudo(values.conteudo_template),
+      // CRÍTICO: Sanitiza apenas se for HTML, senão salva o texto puro
+      conteudo_template: values.tipo_conteudo === 'html' ? sanitizeConteudo(values.conteudo_template) : values.conteudo_template,
       tipo_conteudo: values.tipo_conteudo,
       tipo_documento: values.tipo_documento || null,
     };
@@ -187,8 +191,8 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
 
       // 2. Reposiciona o cursor após a inserção
       setTimeout(() => {
-          textarea.selectionStart = textarea.selectionEnd = start + insertText.length;
           textarea.focus();
+          textarea.selectionStart = textarea.selectionEnd = start + insertText.length;
       }, 0);
   }, [form]);
   
@@ -220,8 +224,8 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
     <>
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="md:col-span-2 space-y-4">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div className="lg:col-span-2 space-y-4">
               <FormField
                 control={form.control}
                 name="titulo"
@@ -229,7 +233,7 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
                   <FormItem>
                     <FormLabel>Título do Modelo</FormLabel>
                     <FormControl>
-                      <Input placeholder="Ex: Contrato de Prestação de Serviços" {...field} />
+                      <Input placeholder="Ex: Ata de Reunião" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -254,9 +258,7 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
                     <FormLabel>Formato do Conteúdo</FormLabel>
                     <Select onValueChange={field.onChange} defaultValue={field.value}>
                       <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecione o formato" />
-                        </SelectTrigger>
+                        <SelectTrigger><SelectValue placeholder="Selecione o formato" /></SelectTrigger>
                       </FormControl>
                       <SelectContent>
                         <SelectItem value="html">HTML</SelectItem>
@@ -279,17 +281,14 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
                         </Button>
                     </FormLabel>
                     <FormControl>
-                      <Textarea 
-                        id="conteudo-template-textarea" // ID CRÍTICO PARA O CURSOR
-                        placeholder="Insira o conteúdo do documento aqui, usando as tags dinâmicas." 
-                        {...field} 
-                        rows={15}
-                        className={cn("font-mono text-sm", form.watch('tipo_conteudo') === 'html' ? 'bg-yellow-50/50 dark:bg-yellow-900/10' : '')}
-                        onDragOver={handleDragOver}
-                        onDrop={handleDrop}
-                        // O onChange é mantido para permitir a digitação normal
-                        onChange={(e) => field.onChange(e.target.value)}
-                      />
+                        {/* CORREÇÃO: Usando RichTextEditor para ambos os modos */}
+                        <RichTextEditor
+                            value={field.value}
+                            onChange={field.onChange}
+                            placeholder="Insira o conteúdo formatado aqui..."
+                            className="min-h-[300px]"
+                            isSimpleTextMode={tipoConteudo === 'texto'}
+                        />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -298,7 +297,7 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
             </div>
             
             {/* Coluna de Tags e Blocos (Drag & Drop) */}
-            <Card className="md:col-span-1 max-h-[600px] overflow-y-auto">
+            <Card className="lg:col-span-1 max-h-[600px] overflow-y-auto">
                 <CardHeader className="pb-2">
                     <CardTitle className="text-lg flex items-center"><Tag className="w-4 h-4 mr-2" /> Tags e Blocos</CardTitle>
                 </CardHeader>
@@ -346,6 +345,7 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
                 </CardContent>
             </Card>
           </div>
+          </div>
 
           <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
             {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -360,7 +360,7 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
         onOpenChange={setPreviewOpen}
         conteudoHtml={conteudoPreview}
         titulo={form.getValues('titulo')}
-        isHtml={form.getValues('tipo_conteudo') === 'html'}
+        isHtml={tipoConteudo === 'html'}
       />
     </>
   );
