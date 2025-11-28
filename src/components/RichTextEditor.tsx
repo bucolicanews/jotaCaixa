@@ -55,7 +55,7 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ value, onChange, placeh
   };
 
   return (
-    <div className={className}>
+    <div className={cn(className, "flex flex-col h-full")}>
       <ReactQuill 
         theme="snow" 
         value={value} 
@@ -64,7 +64,8 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ value, onChange, placeh
         formats={formats}
         placeholder={placeholder}
         readOnly={readOnly}
-        className="h-64 pb-10" // Altura fixa para o editor
+        // Removendo altura fixa e usando flex-1 para ocupar o espaço restante
+        className="flex-1 flex flex-col" 
       />
     </div>
   );
