@@ -335,7 +335,7 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
                                         key={bloco.id} 
                                         variant="outline" 
                                         size="sm" 
-                                        onClick={() => handleInsertBloco(bloco)}
+                                        onClick={(e) => { e.preventDefault(); handleInsertBloco(bloco); }}
                                         className="justify-start truncate"
                                         draggable
                                         onDragStart={(e) => e.dataTransfer.setData("text/plain", `\n\n${bloco.conteudo}\n\n`)}
@@ -378,10 +378,25 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
                           </FormItem>
                       )}
                   />
-                  <div className="space-y-2">
-                      <Label>Tipo de Conteúdo</Label>
-                      <Input readOnly value="Editor de Texto" className="font-semibold" />
-                  </div>
+                  <FormField
+                      control={form.control}
+                      name="tipo_conteudo"
+                      render={({ field }) => (
+                          <FormItem>
+                              <FormLabel>Formato do Conteúdo</FormLabel>
+                              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                  <FormControl>
+                                      <SelectTrigger><SelectValue placeholder="Selecione o formato" /></SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                      <SelectItem value="html">HTML (Editor Visual)</SelectItem>
+                                      <SelectItem value="texto">Texto Simples</SelectItem>
+                                  </SelectContent>
+                              </Select>
+                              <FormMessage />
+                          </FormItem>
+                      )}
+                  />
               </CardContent>
           </Card>
 
@@ -398,7 +413,7 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
         onOpenChange={setPreviewOpen}
         conteudoHtml={conteudoPreview}
         titulo={form.getValues('titulo')}
-        isHtml={true} // Sempre HTML
+        isHtml={tipoConteudo === 'html'}
       />
     </>
   );
