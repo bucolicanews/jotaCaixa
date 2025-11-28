@@ -5,7 +5,7 @@ export interface ModeloSocietario {
   conteudo_template: string;
   tipo_documento: string | null;
   criado_em: string;
-  tipo_conteudo: 'html' | 'texto';
+  // tipo_conteudo: 'html' | 'texto'; // REMOVIDO
 }
 export type DocumentoSocietarioModelo = ModeloSocietario;
 

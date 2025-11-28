@@ -16,7 +16,7 @@ import ContratoPreviewDialog from '@/components/contratos/ContratoPreviewDialog'
 
 interface DocumentoComCliente extends DocumentoSocietarioGerado {
     cliente_nome: string | null; // NOVO CAMPO
-    modelos_societarios: { titulo: string, tipo_conteudo: 'html' | 'texto' } | null;
+    modelos_societarios: { titulo: string } | null;
 }
 
 const DocumentosSocietarios: React.FC = () => {
@@ -59,7 +59,7 @@ const DocumentosSocietarios: React.FC = () => {
         conteudo_renderizado,
         data_registro,
         criado_em,
-        modelos_societarios ( titulo, tipo_conteudo )
+        modelos_societarios ( titulo )
       `) // REMOVIDO clientes (nome)
       .eq('proprietario_id', ownerId)
       .order('data_registro', { ascending: false });
@@ -133,8 +133,8 @@ const DocumentosSocietarios: React.FC = () => {
   const handleView = (doc: DocumentoComCliente) => {
       setPreviewContent(doc.conteudo_renderizado || 'Conteúdo não renderizado.');
       setPreviewTitle(doc.valores_tags_preenchidos?.titulo || doc.modelos_societarios?.titulo || 'Documento');
-      // Determina se é HTML ou Texto Simples
-      const isHtml = doc.valores_tags_preenchidos?.tipo_conteudo === 'html' || doc.modelos_societarios?.tipo_conteudo === 'html';
+      // Determina se é HTML ou Texto Simples (agora baseado apenas no valor salvo no documento gerado)
+      const isHtml = doc.valores_tags_preenchidos?.tipo_conteudo === 'html';
       setIsPreviewHtml(isHtml);
       setPreviewOpen(true);
   };

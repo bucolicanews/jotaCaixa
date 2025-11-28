@@ -32,6 +32,7 @@ interface EmpresaContrato {
     nome: string;
 }
 
+// NOVO TIPO: Cliente CR com todos os campos de tag
 interface ClienteCRCompleto {
     id: string;
     proprietario_id?: string | null;
@@ -245,7 +246,7 @@ const GerarDocumentoSocietario: React.FC = () => {
     // 2. Buscar Clientes (Contratados)
     let queryClients = supabase
         .from('tbl_clientes')
-        .select('id, nome, razao_social, nome_fantasia, documento, email, telefone, cep, endereco, numero, complemento, bairro, cidade, estado, cpf, rg')
+        .select('id, nome, razao_social, nome_fantasia, documento, email, telefone, cep, endereco, numero, complemento, bairro, cidade, estado, cpf, cnpj, rg')
         .eq('admin_id', targetEmpresaId)
         .eq('aprovado', true)
         .neq('id', targetEmpresaId)
@@ -262,9 +263,14 @@ const GerarDocumentoSocietario: React.FC = () => {
         })) as ClienteCRCompleto[];
         
         setClientesCR(mappedClients);
+        
+        // Se o cliente selecionado não estiver mais na lista, limpa a seleção
+        if (clienteSelecionadoId && !mappedClients.some(c => c.id === clienteSelecionadoId)) {
+            setClienteSelecionadoId('');
+        }
     }
     
-  }, []);
+  }, [clienteSelecionadoId]);
 
 
   // --- FUNÇÃO PRINCIPAL DE BUSCA DE DADOS INICIAIS ---
@@ -285,7 +291,7 @@ const GerarDocumentoSocietario: React.FC = () => {
     if (documentoId) {
         const { data: doc, error: docLoadError } = await supabase
             .from('documentos_societarios_gerados')
-            .select('*, modelos_societarios(tipo_conteudo)')
+            .select('*, modelos_societarios(titulo)')
             .eq('id', documentoId)
             .single();
             
@@ -295,7 +301,7 @@ const GerarDocumentoSocietario: React.FC = () => {
             return;
         }
         
-        const documento = doc as DocumentoSocietarioGerado & { modelos_societarios: { tipo_conteudo: TipoConteudo } | null };
+        const documento = doc as DocumentoSocietarioGerado & { modelos_societarios: { titulo: string } | null };
         setDocumentoInicial(documento);
         initialProprietarioDocumentoId = documento.proprietario_id;
         initialClienteId = documento.cliente_id || '';
@@ -304,7 +310,7 @@ const GerarDocumentoSocietario: React.FC = () => {
         // 1.1. Buscar Modelo associado (apenas para ter o objeto completo)
         const { data: modeloData } = await supabase
             .from('modelos_societarios')
-            .select('*, tipo_conteudo')
+            .select('*')
             .eq('id', documento.modelo_id)
             .single();
         currentModelo = modeloData as DocumentoSocietarioModelo;
@@ -313,7 +319,7 @@ const GerarDocumentoSocietario: React.FC = () => {
         // 2. Buscar Modelo (se for criação)
         const { data: modeloData, error: modeloError } = await supabase
             .from('modelos_societarios')
-            .select('*, tipo_conteudo')
+            .select('*')
             .eq('id', modeloId)
             .single();
             
@@ -379,7 +385,7 @@ const GerarDocumentoSocietario: React.FC = () => {
           applyTagsToForm(getValues('valores_tags') || {}, clienteSelecionado, empresaLogada, modelo.conteudo_template);
       }
   // mantive dependências essenciais apenas
-  }, [clienteSelecionadoId, modelo, carregandoDados, clienteSelecionado, empresaLogada, applyTagsToForm, getValues]);
+  }, [clienteSelecionadoId, modelo, carregandoDados, clienteSelecionado, empresaLogada, getValues]);
 
 
   useEffect(() => {
@@ -600,7 +606,7 @@ const GerarDocumentoSocietario: React.FC = () => {
                       <FormField control={form.control} name="cliente_id" render={({ field }) => (
                           <FormItem className="space-y-2">
                               <FormLabel htmlFor="cliente">Cliente (Contratado)</FormLabel>
-                              <Select value={field.value} onValueChange={field.onChange} disabled={!proprietarioDocumentoId}>
+                              <Select value={field.value} onValueChange={setClienteSelecionadoId} disabled={!proprietarioDocumentoId}>
                                   <FormControl>
                                       <SelectTrigger id="cliente">
                                           <SelectValue placeholder="Selecione o Cliente" />
