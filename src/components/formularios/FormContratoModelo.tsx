@@ -144,8 +144,21 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
       setPreviewOpen(true);
   };
   
+  // CORREÇÃO: Usando Map para garantir unicidade das tags
   const allTags = useMemo(() => {
-      return [...TAGS_PADRAO, ...tagsCustomizadas].sort((a, b) => a.nome_tag.localeCompare(b.nome_tag));
+      const tagMap = new Map<string, ContratoTag>();
+      
+      // Adiciona tags customizadas (prioridade)
+      tagsCustomizadas.forEach(tag => tagMap.set(tag.nome_tag, tag));
+      
+      // Adiciona tags padrão (se não existirem no mapa)
+      TAGS_PADRAO.forEach(tag => {
+          if (!tagMap.has(tag.nome_tag)) {
+              tagMap.set(tag.nome_tag, tag);
+          }
+      });
+      
+      return Array.from(tagMap.values()).sort((a, b) => a.nome_tag.localeCompare(b.nome_tag));
   }, [tagsCustomizadas]);
   
   const handleCopyAllTags = () => {

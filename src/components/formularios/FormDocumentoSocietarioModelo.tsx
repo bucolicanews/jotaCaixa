@@ -70,20 +70,7 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
         .order('nome_tag', { ascending: true });
         
     if (tagsData) {
-        // Filtra tags financeiras (não são usadas em documentos societários)
-        const tagsNaoFinanceiras = TAGS_PADRAO.filter(t => !t.origem_dado?.startsWith('contas_receber'));
-        
-        // Combina tags padrão e customizadas
-        const customTagsMap = tagsData.reduce((acc, tag) => {
-            acc[tag.nome_tag] = tag;
-            return acc;
-        }, {} as Record<string, any>);
-        
-        const allTags = [...tagsNaoFinanceiras, ...tagsData]
-            .filter((t, index, self) => index === self.findIndex((t2) => t2.nome_tag === t.nome_tag))
-            .sort((a, b) => a.nome_tag.localeCompare(b.nome_tag));
-            
-        setTagsCustomizadas(allTags);
+        setTagsCustomizadas(tagsData as any[]);
     }
     
     // 2. Buscar Blocos de Conteúdo
@@ -168,6 +155,23 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
       setPreviewTitle(form.getValues('titulo'));
       setPreviewOpen(true);
   };
+  
+  // CORREÇÃO: Usando Map para garantir unicidade das tags
+  const allTags = useMemo(() => {
+      const tagMap = new Map<string, any>();
+      
+      // Adiciona tags customizadas (prioridade)
+      tagsCustomizadas.forEach(tag => tagMap.set(tag.nome_tag, tag));
+      
+      // Adiciona tags padrão (filtrando tags financeiras)
+      TAGS_PADRAO.filter(t => !t.origem_dado?.startsWith('contas_receber')).forEach(tag => {
+          if (!tagMap.has(tag.nome_tag)) {
+              tagMap.set(tag.nome_tag, tag);
+          }
+      });
+      
+      return Array.from(tagMap.values()).sort((a, b) => a.nome_tag.localeCompare(b.nome_tag));
+  }, [tagsCustomizadas]);
   
   // --- FUNÇÕES DE INSERÇÃO DE TEXTO (Tags e Blocos) ---
   
@@ -312,7 +316,7 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
                         
                         <h4 className="font-semibold flex items-center mb-2">Tags</h4>
                         <div className="space-y-2 border rounded-md p-2 max-h-40 overflow-y-auto mb-4">
-                            {tagsCustomizadas.map((tag: any) => (
+                            {allTags.map((tag: any) => (
                                 <div 
                                     key={tag.nome_tag} 
                                     className="p-2 border rounded-md cursor-pointer hover:bg-accent/50 transition-colors"
