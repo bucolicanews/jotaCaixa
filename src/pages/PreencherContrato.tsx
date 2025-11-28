@@ -243,11 +243,37 @@ const PreencherContrato: React.FC = () => {
     
     setCarregandoDados(true);
     
+    let initialProprietarioContratoId = ownerIdLogado;
+    let modeloData: ContratoModelo | null = null;
+    let initialValoresTags: Record<string, string> = {};
+    let initialClienteId = '';
+    
+    // 1. Carregar Modelo (se for criação)
+    if (modeloId) {
+        const { data, error } = await supabase
+            .from('contrato_modelos')
+            .select('*, tipo_conteudo')
+            .eq('id', modeloId)
+            .single();
+            
+        if (error) {
+            showError('Modelo não encontrado ou acesso negado.');
+            navigate('/contratos', { replace: true });
+            return;
+        }
+        modeloData = data as ContratoModelo;
+        setModelo(modeloData);
+        setTituloDocumento(modeloData.titulo);
+        setTipoConteudo(modeloData.tipo_conteudo as TipoConteudo);
+        
+        // NOVO: Inicializa o campo {{CONTEUDO_PRINCIPAL}} com o template do modelo
+        initialValoresTags['{{CONTEUDO_PRINCIPAL}}'] = modeloData.conteudo_template;
+    }
+    
     // 2. Configurar Empresa Logada (Contratante)
     setEmpresaLogada(empresaLogadaMemo);
     
     // 3. Configurar Empresas Contratantes (Apenas Admin)
-    let initialProprietarioContratoId = ownerIdLogado;
     if (isAdmin) {
         const { data: clientsData, error: clientsError } = await supabase
             .from('tbl_clientes')
@@ -286,8 +312,8 @@ const PreencherContrato: React.FC = () => {
         setClienteSelecionadoId(contrato.cliente_id);
         setValorTotal(contrato.valor_total); // Define o valor total
         setValoresTags(contrato.valores_tags_preenchidos || {});
-        setTituloDocumento(contrato.valores_tags_preenchidos?.titulo || modeloData.titulo);
-        setTipoConteudo(contrato.valores_tags_preenchidos?.tipo_conteudo || modeloData.tipo_conteudo as TipoConteudo);
+        setTituloDocumento(contrato.valores_tags_preenchidos?.titulo || modeloData?.titulo || '');
+        setTipoConteudo(contrato.valores_tags_preenchidos?.tipo_conteudo || modeloData?.tipo_conteudo as TipoConteudo || 'html');
         
         const numParcelas = contrato.numero_parcelas;
         const valorTotalContrato = contrato.valor_total;
@@ -363,27 +389,11 @@ const PreencherContrato: React.FC = () => {
         
     }
     
-    // 5. Buscar Modelo (se for criação)
-    if (modeloId) {
-        const { data: modeloData, error: modeloError } = await supabase
-            .from('contrato_modelos')
-            .select('*, tipo_conteudo')
-            .eq('id', modeloId)
-            .single();
-            
-        if (modeloError) {
-            showError('Modelo não encontrado ou acesso negado.');
-            navigate('/contratos', { replace: true });
-            return;
-        }
-        setModelo(modeloData as ContratoModelo);
-        setTituloDocumento(modeloData.titulo);
-        setTipoConteudo(modeloData.tipo_conteudo as TipoConteudo);
-    }
-    
     setProprietarioContratoId(initialProprietarioContratoId);
     
     setCarregandoDados(false);
+    
+  // Removi `contratoInicial` das dependências para evitar loop
   }, [modeloId, ownerIdLogado, navigate, role, perfil, usuario, isAdmin, isClient, contratoId, empresaLogadaMemo, fetchDependentData]);
   
   // Efeito para monitorar a mudança do proprietário do contrato (proprietarioContratoId)
@@ -835,11 +845,11 @@ const PreencherContrato: React.FC = () => {
           </Button>
       </div>
       
-      {/* CORREÇÃO DE LARGURA: Removendo a limitação de largura do container principal */}
-      <div className="w-full">
+      {/* NOVO LAYOUT DE DUAS COLUNAS */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
-        {/* Coluna 1: Dados e Faturamento */}
-        <Card className="h-fit w-full">
+        {/* COLUNA 1: DADOS E FATURAMENTO */}
+        <Card className="lg:col-span-1 h-fit">
             <CardHeader><CardTitle className="text-xl">Dados e Faturamento</CardTitle></CardHeader>
             <CardContent className="space-y-6">
                 
@@ -888,9 +898,8 @@ const PreencherContrato: React.FC = () => {
                 </div>
                 
                 <div className="space-y-4 pt-4 border-t">
-                    <h3 data-dyad-id="src\pages\PreencherContrato.tsx:834:20" data-dyad-name="h3" class="font-semibold text-lg">Detalhes Financeiros</h3>
+                    <h3 className="font-semibold text-lg">Detalhes Financeiros</h3>
                     
-                    {/* CORREÇÃO: Usando grid-cols-1 md:grid-cols-2 */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label htmlFor="valor-total">Valor Total do Contrato (R$)</Label>
@@ -913,7 +922,6 @@ const PreencherContrato: React.FC = () => {
                             </RadioGroup>
                         </div>
                     </div>
-                    {/* FIM DA CORREÇÃO */}
                     
                     {tipoLancamento === 'unico' && (
                         <div className="space-y-2">
@@ -983,53 +991,33 @@ const PreencherContrato: React.FC = () => {
             </CardContent>
         </Card>
         
-        {/* Coluna 2: Template e Ações */}
-        <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle className="text-xl">Prévia do Template</CardTitle>
-                <div className="flex space-x-2">
-                    <Button 
-                        onClick={handlePreview} 
-                        variant="outline" 
-                        size="sm"
-                        disabled={!modelo || !clienteSelecionadoId}
-                    >
-                        <Eye className="mr-2 h-4 w-4" />
-                        Pré-visualizar
-                    </Button>
-                    <Button 
-                        onClick={() => handleSalvarContrato('rascunho')} 
-                        variant="secondary" 
-                        size="sm"
-                        disabled={isSubmitting || !clienteSelecionadoId}
-                    >
-                        <Save className="mr-2 h-4 w-4" />
-                        Salvar Rascunho
-                    </Button>
-                </div>
-            </CardHeader>
+        {/* COLUNA 2: PRÉVIA DO TEMPLATE */}
+        <Card className="lg:col-span-1">
+            <CardHeader><CardTitle className="text-xl">Prévia do Template</CardTitle></CardHeader>
             <CardContent className="space-y-4">
-                <div className="border rounded-md p-4 bg-secondary/50 max-h-[400px] overflow-y-auto">
+                <div className="border rounded-md p-4 bg-secondary/50 max-h-[70vh] overflow-y-auto">
                     {modelo?.conteudo_template ? (
                         <div dangerouslySetInnerHTML={{ __html: renderizarConteudo(modelo.conteudo_template, valoresTags) }} />
                     ) : (
                         <p className="text-muted-foreground">Selecione um modelo e um cliente para ver a prévia.</p>
                     )}
                 </div>
-                
-                <div className="flex flex-col sm:flex-row gap-4 pt-4 border-t">
-                    <Button 
-                        onClick={() => handleSalvarContrato('pendente_assinatura')} 
-                        className="flex-1 h-12"
-                        disabled={isSubmitting || !clienteSelecionadoId || valorTotal <= 0}
-                    >
-                        {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileSignature className="mr-2 h-4 w-4" />}
-                        Gerar e Enviar para Assinatura
-                    </Button>
-                </div>
             </CardContent>
         </Card>
         
+      </div>
+      
+      {/* Botão de Salvar Rascunho (Abaixo do grid) */}
+      <div className="mt-6 flex justify-end">
+          <Button 
+              onClick={() => handleSalvarContrato('rascunho')} 
+              variant="secondary" 
+              size="lg"
+              disabled={isSubmitting || !clienteSelecionadoId}
+          >
+              <Save className="mr-2 h-4 w-4" />
+              Salvar Rascunho
+          </Button>
       </div>
       
       <ContratoPreviewDialog
