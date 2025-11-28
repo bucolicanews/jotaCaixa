@@ -67,7 +67,8 @@ export function usePrint() {
           .print-header h1 {
               font-size: 16px;
               font-weight: bold;
-              margin-bottom: 5px;
+              margin: 0;
+              text-align: left;
           }
           .print-header p {
               margin: 0;
@@ -123,6 +124,13 @@ export function usePrint() {
             font-size: 9pt; 
           }
           
+          /* --- NOVO: Suporte a classes de alinhamento do Quill --- */
+          .ql-align-left { text-align: left !important; }
+          .ql-align-center { text-align: center !important; }
+          .ql-align-right { text-align: right !important; }
+          .ql-align-justify { text-align: justify !important; }
+          /* ------------------------------------------------------- */
+          
           /* Regras de quebra de página para tabelas */
           @media print {
             .print-table { page-break-inside: auto; }
@@ -133,7 +141,6 @@ export function usePrint() {
         </style>
       `;
       
-      // Removemos a classe 'landscape' do body, pois a orientação é definida no @page
       printWindow.document.write(`
         <!DOCTYPE html>
         <html>
