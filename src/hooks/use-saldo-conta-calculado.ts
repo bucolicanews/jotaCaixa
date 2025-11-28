@@ -85,7 +85,7 @@ const useSaldoContaCalculado = (
       
       let lancamentosQuery = supabase
         .from('lancamentos')
-        .select('valor, tipo, conta_contabil_id, conta_bancaria_id, origem') // ADD origem
+        .select('valor, tipo, conta_contabil_id, conta_bancaria_id, origem') // REMOVIDO is_saldo_inicial
         .eq('proprietario_id', targetEmpresaId)
         .or(orClauses.join(','));
 
@@ -122,6 +122,8 @@ const useSaldoContaCalculado = (
       lancamentosData.forEach(l => {
         // IGNORA LANÇAMENTOS ORIGINAIS ESTORNADOS
         if (l.origem === 'movimentacao_direta_estornada') return; 
+        
+        // REMOVIDO: Lógica de ignorar is_saldo_inicial
         
         let targetSaldoId: string | null = null;
         

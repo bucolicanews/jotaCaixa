@@ -20,6 +20,7 @@ import { cn } from '@/lib/utils';
 import { ptBR } from 'date-fns/locale';
 import { SaldoContaDetalhada } from '@/types/saldo-conta';
 import { useContabilConfig } from '@/hooks/use-contabil-config';
+import { Checkbox } from '../ui/checkbox';
 
 const formSchema = z.object({
   data_movimentacao: z.date({ required_error: 'A data é obrigatória.' }),
@@ -43,7 +44,7 @@ const FormLancamentoManual: React.FC<FormLancamentoManualProps> = ({ onSaveCompl
   const { usuario } = useSessao();
   const { configMap } = useContabilConfig();
   const [contasAnaliticas, setContasAnaliticas] = useState<PlanoContas[]>([]);
-  const [contasSaldo, setContasSaldo] = useState<SaldoContaDetalhada[]>([]); // NOVO ESTADO
+  const [contasSaldo, setContasSaldo] = useState<SaldoContaDetalhada[]>([]);
   const [historicos, setHistoricos] = useState<Historico[]>([]);
   const [loadingData, setLoadingData] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -212,7 +213,7 @@ const FormLancamentoManual: React.FC<FormLancamentoManualProps> = ({ onSaveCompl
     } catch (error: any) {
         showError('Falha ao registrar lançamento: ' + error.message);
     } finally {
-        setIsSubmitting(false); // Finaliza submissão
+        setIsSubmitting(false);
     }
   };
 
@@ -358,7 +359,7 @@ const FormLancamentoManual: React.FC<FormLancamentoManualProps> = ({ onSaveCompl
                 <FormMessage />
             </FormItem>
         )} />
-
+        
         <Button type="submit" className="w-full" disabled={isSubmitting || !isFormValid}>
           {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           <Save className="mr-2 h-4 w-4" /> Registrar Lançamento
