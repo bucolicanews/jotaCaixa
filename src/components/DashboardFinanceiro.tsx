@@ -332,8 +332,8 @@ const DashboardFinanceiro: React.FC = () => {
                 
                 {/* KPIs Dinâmicos (Conta Específica) */}
                 {isContaFiltrada && contaMensalData ? (
-                    <>
-                        {/* CARD REMOVIDO: Saldo Inicial (Mês) */}
+                    // NOVO LAYOUT: 3 COLUNAS (Entradas, Saídas, Saldo Final)
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:col-span-4">
                         <Card 
                             className="border-l-4 border-green-500 cursor-pointer hover:shadow-xl transition-shadow"
                             onClick={() => navigate('/relatorios/fluxo-caixa')}
@@ -373,7 +373,7 @@ const DashboardFinanceiro: React.FC = () => {
                                 </div>
                             </CardContent>
                         </Card>
-                    </>
+                    </div>
                 ) : (
                     // KPIs Gerais (Todas as Contas)
                     <>
@@ -605,7 +605,7 @@ const DashboardFinanceiro: React.FC = () => {
                             <p className="text-sm text-muted-foreground">Lucro/Prejuízo (Contas a Pagar/Receber)</p>
                             <p className={cn("text-3xl font-extrabold", lucroPrejuizo >= 0 ? "text-green-600" : "text-red-600")}>
                                 {formatCurrency(lucroPrejuizo)}
-                            </p>
+                            </div>
                         </div>
                     </CardContent>
                 </Card>
