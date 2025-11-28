@@ -161,23 +161,22 @@ const ExportarLancamentos: React.FC = () => {
         // Busca o par usando a referência cruzada (conta_resultado_id)
         const par = lancamentos.find(p => p.id === l.conta_resultado_id);
         
-        // Se for um lançamento manual de partida dobrada, ele deve ter um par
-        if (l.origem === 'lancamento_manual' && !par) {
-            currentSkipped.push(`ID ${l.id.substring(0, 8)}: Lançamento manual sem par de partida dobrada encontrado.`);
+        // Se o lançamento for de origem 'estorno_direto', ele não deve ter um par, pois ele é o estorno.
+        // Se for um lançamento de estorno, ele deve ser ignorado, pois o estorno é feito pelo par oposto.
+        if (l.origem === 'estorno_direto') {
             processedLaunchIds.add(l.id);
             continue;
         }
         
-        // Se for um lançamento de conciliação/pagamento/recebimento, ele deve ter um par
-        if (l.origem !== 'lancamento_manual' && !par) {
-            currentSkipped.push(`ID ${l.id.substring(0, 8)}: Lançamento de origem '${l.origem}' sem par de partida dobrada encontrado.`);
-            processedLaunchIds.add(l.id);
-            continue;
-        }
-        
-        // Se não for um par, tratamos como um lançamento único (que não deveria existir)
+        // Se for um lançamento que deveria ter um par (todos, exceto estorno_direto) e não tem, pula.
         if (!par) {
-            currentSkipped.push(`ID ${l.id.substring(0, 8)}: Lançamento sem par de partida dobrada. Ignorado.`);
+            // Verifica se é um lançamento que deveria ter um par (todos os lançamentos de partida dobrada)
+            if (l.conta_resultado_id) {
+                currentSkipped.push(`ID ${l.id.substring(0, 8)}: Lançamento de origem '${l.origem}' sem par de partida dobrada encontrado.`);
+            } else {
+                // Se não tem conta_resultado_id, é um lançamento que não faz parte de uma partida dobrada (deve ser ignorado)
+                currentSkipped.push(`ID ${l.id.substring(0, 8)}: Lançamento sem referência de partida dobrada. Ignorado.`);
+            }
             processedLaunchIds.add(l.id);
             continue;
         }
