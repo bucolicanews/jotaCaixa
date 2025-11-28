@@ -13,7 +13,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { PlanoContas } from '@/types/plano-contas';
 import { Historico } from '@/types/historico';
 import { useStripeConfigAdmin } from '@/integrations/stripe/use-stripe-config-admin';
-import { useContabilConfig } from '@/hooks/use-contabil-config'; // Importando useContabilConfig
+import { useContabilConfig } from '@/hooks/use-contabil-config';
+import { cn } from '@/lib/utils';
 
 const formSchema = z.object({
   stripe_publishable_key: z.string().min(1, 'A chave publicável é obrigatória.'),
