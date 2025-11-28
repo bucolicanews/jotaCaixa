@@ -281,55 +281,6 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
             
             {/* COLUNA 2: DADOS E TAGS (1/4 da largura) */}
             <div className="lg:col-span-1 space-y-4 flex flex-col">
-                <Card>
-                    <CardHeader><CardTitle className="text-xl">Configuração</CardTitle></CardHeader>
-                    <CardContent className="space-y-4">
-                        <FormField
-                            control={form.control}
-                            name="titulo"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Título do Modelo</FormLabel>
-                                    <FormControl>
-                                        <Input placeholder="Ex: Contrato de Prestação de Serviços" {...field} />
-                                    </FormControl>
-                                    <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-                        <FormField
-                            control={form.control}
-                            name="tipo_conteudo"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Formato do Conteúdo</FormLabel>
-                                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                        <FormControl>
-                                            <SelectTrigger><SelectValue placeholder="Selecione o formato" /></SelectTrigger>
-                                        </FormControl>
-                                        <SelectContent>
-                                            <SelectItem value="html">HTML (Editor Visual)</SelectItem>
-                                            <SelectItem value="texto">Texto Simples</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                    <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-                        <FormField
-                            control={form.control}
-                            name="tipo_documento"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Tipo de Documento (Ex: Ata)</FormLabel>
-                                    <FormControl><Input placeholder="Ex: Ata de Reunião" {...field} /></FormControl>
-                                    <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-                    </CardContent>
-                </Card>
-                
                 <Card className="flex-1 min-h-[200px] max-h-[calc(100vh-200px)] overflow-y-auto">
                     <CardHeader className="pb-2">
                         <CardTitle className="text-lg flex items-center"><Tag className="w-4 h-4 mr-2" /> Tags e Blocos</CardTitle>

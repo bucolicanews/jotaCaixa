@@ -19,8 +19,8 @@ import { TAGS_PADRAO } from '@/config/contrato-tags-padrao';
 import { cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { sanitizeConteudo } from '@/utils/formatters';
-import RichTextEditor from '@/components/RichTextEditor'; // NOVO IMPORT
-import { Label } from '@/components/ui/label'; // IMPORT CORRIGIDO
+import RichTextEditor from '@/components/RichTextEditor';
+import { Label } from '@/components/ui/label';
 
 // Extensão local para DocumentoSocietarioModelo
 interface ExtendedDocumentoSocietarioModelo extends DocumentoSocietarioModelo {
@@ -213,7 +213,6 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
   }, [form]);
   
   const handleInsertBloco = (bloco: BlocoSocietario) => {
-      // Insere o conteúdo do bloco (que é texto puro ou HTML)
       handleInsertText(`\n\n${bloco.conteudo}\n\n`);
       showSuccess(`Bloco '${bloco.titulo}' inserido no conteúdo.`);
   };
@@ -282,41 +281,6 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
             </div>
             
             <div className="lg:col-span-1 space-y-4 flex flex-col">
-                <Card>
-                    <CardHeader><CardTitle className="text-xl">Configuração</CardTitle></CardHeader>
-                    <CardContent className="space-y-4">
-                        <FormField
-                            control={form.control}
-                            name="titulo"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Título do Modelo</FormLabel>
-                                    <FormControl>
-                                        <Input placeholder="Ex: Ata de Reunião" {...field} />
-                                    </FormControl>
-                                    <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-                        <FormField
-                            control={form.control}
-                            name="tipo_documento"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Tipo de Documento (Ex: Ata, Contrato Social)</FormLabel>
-                                    <FormControl><Input placeholder="Ex: Ata de Reunião" {...field} /></FormControl>
-                                    <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-                        {/* CAMPO TIPO DE CONTEÚDO REMOVIDO */}
-                        <div className="space-y-2">
-                            <Label>Tipo de Conteúdo</Label>
-                            <Input readOnly value="Editor de Texto" className="font-semibold" />
-                        </div>
-                    </CardContent>
-                </Card>
-                
                 <Card 
                     className="flex-1 min-h-[200px] max-h-[calc(100vh-200px)] overflow-y-auto"
                     onDragOver={handleDragOver}
@@ -326,9 +290,9 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
                         <CardTitle className="text-lg flex items-center"><Tag className="w-4 h-4 mr-2" /> Tags e Blocos</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <p className="text-sm text-muted-foreground mb-3">Arraste as tags/blocos para o editor.</p>
+                        <h4 className="font-semibold flex items-center mb-2">Tags Disponíveis</h4>
+                        <p className="text-sm text-muted-foreground mb-3">Clique para copiar ou arraste para o editor.</p>
                         
-                        <h4 className="font-semibold flex items-center mb-2">Tags</h4>
                         <div className="space-y-2 border rounded-md p-2 max-h-40 overflow-y-auto mb-4">
                             {allTags.map((tag: any) => (
                                 <div 
@@ -370,6 +334,47 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
                 </Card>
             </div>
           </div>
+          
+          {/* Campos de Configuração (Movidos para o final) */}
+          <Card>
+              <CardHeader><CardTitle className="text-xl">Configuração do Documento</CardTitle></CardHeader>
+              <CardContent className="space-y-4">
+                  <FormField
+                      control={form.control}
+                      name="titulo"
+                      render={({ field }) => (
+                          <FormItem>
+                              <FormLabel>Título do Modelo</FormLabel>
+                              <FormControl>
+                                  <Input placeholder="Ex: Ata de Reunião" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                          </FormItem>
+                      )}
+                  />
+                  <FormField
+                      control={form.control}
+                      name="tipo_documento"
+                      render={({ field }) => (
+                          <FormItem>
+                              <FormLabel>Tipo de Documento (Ex: Ata, Contrato Social)</FormLabel>
+                              <FormControl><Input placeholder="Ex: Ata de Reunião" {...field} /></FormControl>
+                              <FormMessage />
+                          </FormItem>
+                      )}
+                  />
+                  <div className="space-y-2">
+                      <Label>Tipo de Conteúdo</Label>
+                      <Input readOnly value="Editor de Texto" className="font-semibold" />
+                  </div>
+              </CardContent>
+          </Card>
+
+          <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
+            {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            <Save className="mr-2 h-4 w-4" />
+            Salvar Modelo
+          </Button>
         </form>
       </Form>
       

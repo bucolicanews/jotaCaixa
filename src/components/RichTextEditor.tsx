@@ -21,7 +21,6 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ value, onChange, placeh
     setIsHtmlMode(prev => !prev);
   }, []);
 
-  // Removendo o botão customizado da barra de ferramentas do Quill
   const modules = useMemo(() => ({
     toolbar: [
       [{ 'header': [1, 2, false] }],
@@ -67,6 +66,7 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ value, onChange, placeh
 
       {isHtmlMode ? (
         <Textarea
+          id="conteudo-template-textarea" // Adicionando ID para manipulação de cursor
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder="Edite o código HTML puro aqui..."
