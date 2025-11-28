@@ -452,7 +452,7 @@ const DashboardFinanceiro: React.FC = () => {
                                     <CardTitle className="text-sm font-medium flex items-center"><ArrowUpCircle className="w-4 h-4 mr-2" /> Recebido (Mês)</CardTitle>
                                 </CardHeader>
                                 <CardContent>
-                                    <div data-dyad-id="src\components\DashboardFinanceiro.tsx:397:36" data-dyad-name="div" class="text-2xl font-bold text-green-600">
+                                    <div data-dyad-id="src\components\DashboardFinanceiro.tsx:397:36" data-dyad-name="div" className="text-2xl font-bold text-green-600">
                                         {formatCurrency(totalEntradasRealizadas)}
                                     </div>
                                 </CardContent>
@@ -465,7 +465,7 @@ const DashboardFinanceiro: React.FC = () => {
                                     <CardTitle className="text-sm font-medium flex items-center"><ArrowDownCircle className="w-4 h-4 mr-2" /> Pago (Mês)</CardTitle>
                                 </CardHeader>
                                 <CardContent>
-                                    <div data-dyad-id="src\components\DashboardFinanceiro.tsx:410:36" data-dyad-name="div" class="text-2xl font-bold text-red-600">
+                                    <div data-dyad-id="src\components\DashboardFinanceiro.tsx:410:36" data-dyad-name="div" className="text-2xl font-bold text-red-600">
                                         {formatCurrency(totalSaidasRealizadas)}
                                     </div>
                                 </CardContent>
@@ -478,7 +478,7 @@ const DashboardFinanceiro: React.FC = () => {
                                     <CardTitle className="text-sm font-medium flex items-center"><TrendingUp className="w-4 h-4 mr-2" /> Resultado Realizado (Mês)</CardTitle>
                                 </CardHeader>
                                 <CardContent>
-                                    <div data-dyad-id="src\components\DashboardFinanceiro.tsx:423:36" data-dyad-name="div" class="text-2xl font-bold">
+                                    <div data-dyad-id="src\components\DashboardFinanceiro.tsx:423:36" data-dyad-name="div" className="text-2xl font-bold">
                                         {formatCurrency(resultadoRealizado)}
                                     </div>
                                 </CardContent>
