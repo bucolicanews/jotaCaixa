@@ -20,6 +20,7 @@ import { cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { sanitizeConteudo } from '@/utils/formatters';
 import RichTextEditor from '@/components/RichTextEditor';
+import { Label } from '@/components/ui/label'; // IMPORT CORRIGIDO
 
 // Extensão local para ContratoModelo
 interface ExtendedContratoModelo extends ContratoModelo {
@@ -81,6 +82,7 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
     resolver: zodResolver(formSchema),
     defaultValues: {
       titulo: modeloInicial?.titulo || '',
+      // CRÍTICO: Se for HTML, sanitiza. Se for texto, salva como está.
       conteudo_template: modeloInicial?.conteudo_template || '', 
     },
   });

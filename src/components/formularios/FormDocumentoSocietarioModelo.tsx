@@ -20,6 +20,7 @@ import { cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { sanitizeConteudo } from '@/utils/formatters';
 import RichTextEditor from '@/components/RichTextEditor'; // NOVO IMPORT
+import { Label } from '@/components/ui/label'; // IMPORT CORRIGIDO
 
 // Extensão local para DocumentoSocietarioModelo
 interface ExtendedDocumentoSocietarioModelo extends DocumentoSocietarioModelo {
