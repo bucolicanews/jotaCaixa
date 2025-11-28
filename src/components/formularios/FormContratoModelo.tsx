@@ -19,7 +19,7 @@ import { TAGS_PADRAO } from '@/config/contrato-tags-padrao';
 import { cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { sanitizeConteudo } from '@/utils/formatters';
-import RichTextEditor from '@/components/RichTextEditor'; // NOVO IMPORT
+import RichTextEditor from '@/components/RichTextEditor';
 
 // Extensão local para ContratoModelo
 interface ExtendedContratoModelo extends ContratoModelo {
@@ -53,7 +53,7 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
   const getOwnerId = () => {
     if (role === 'Admin') return usuario?.id || null;
     if (role === 'Cliente') return (perfil as ClienteProfile)?.id;
-    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id; // FIX: proprietario_id -> cliente_id
+    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id;
     return null;
   };
   
@@ -203,10 +203,10 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
           {/* NOVO LAYOUT DE DUAS COLUNAS */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
             
-            {/* COLUNA 1: CONTEÚDO DO TEMPLATE (2/3 da largura) */}
-            <div className="lg:col-span-2 space-y-4">
+            {/* COLUNA 1: CONTEÚDO DO TEMPLATE (3/4 da largura) */}
+            <div className="lg:col-span-3 space-y-4">
                 <Card className="h-full">
                     <CardHeader className="flex flex-row items-center justify-between">
                         <CardTitle className="text-xl">Conteúdo do Template</CardTitle>
@@ -221,23 +221,23 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
                             render={({ field }) => (
                                 <FormItem>
                                     <FormControl>
-                                        {tipoConteudo === 'texto' ? (
-                                            <RichTextEditor
-                                                value={field.value}
-                                                onChange={field.onChange}
-                                                placeholder="Insira o conteúdo formatado aqui..."
-                                                className="min-h-[400px]" // AUMENTANDO A ALTURA
-                                                isSimpleTextMode={true} // MODO TEXTO SIMPLES
-                                            />
-                                        ) : (
+                                        {tipoConteudo === 'html' ? (
                                             <Textarea 
                                                 ref={textareaRef} 
                                                 placeholder="Insira o conteúdo do contrato aqui, usando as tags dinâmicas." 
                                                 {...field} 
                                                 rows={20} // AUMENTANDO AS LINHAS
-                                                className={cn("font-mono text-sm", tipoConteudo === 'html' ? 'bg-yellow-50/50 dark:bg-yellow-900/10' : '')}
+                                                className={cn("font-mono text-sm min-h-[600px]", tipoConteudo === 'html' ? 'bg-yellow-50/50 dark:bg-yellow-900/10' : '')}
                                                 onDragOver={handleDragOver}
                                                 onDrop={handleDrop}
+                                            />
+                                        ) : (
+                                            <RichTextEditor
+                                                value={field.value}
+                                                onChange={field.onChange}
+                                                placeholder="Insira o conteúdo formatado aqui..."
+                                                className="min-h-[600px]" // AUMENTANDO A ALTURA
+                                                isSimpleTextMode={true} // MODO TEXTO SIMPLES
                                             />
                                         )}
                                     </FormControl>
@@ -249,7 +249,7 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
                 </Card>
             </div>
             
-            {/* COLUNA 2: DADOS E TAGS (1/3 da largura) */}
+            {/* COLUNA 2: DADOS E TAGS (1/4 da largura) */}
             <div className="lg:col-span-1 space-y-4">
                 <Card>
                     <CardHeader><CardTitle className="text-xl">Configuração</CardTitle></CardHeader>
