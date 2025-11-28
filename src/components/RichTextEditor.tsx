@@ -12,9 +12,10 @@ interface RichTextEditorProps {
   placeholder?: string;
   readOnly?: boolean;
   className?: string;
+  isSimpleTextMode?: boolean; // NOVO PROP
 }
 
-const RichTextEditor: React.FC<RichTextEditorProps> = ({ value, onChange, placeholder, readOnly, className }) => {
+const RichTextEditor: React.FC<RichTextEditorProps> = ({ value, onChange, placeholder, readOnly, className, isSimpleTextMode = false }) => {
   const [isHtmlMode, setIsHtmlMode] = useState(false);
 
   const toggleHtmlMode = useCallback(() => {
@@ -38,38 +39,43 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ value, onChange, placeh
     'list', 'bullet', 'indent',
     'link', 'image', 'align'
   ];
+  
+  // Se estiver no modo de texto simples, forçamos o Textarea
+  const finalIsHtmlMode = isHtmlMode || isSimpleTextMode;
 
   return (
     <div className={cn(className, "flex flex-col h-full space-y-2")}>
       
-      {/* Botão de Alternância no Topo */}
-      <div className="flex justify-end">
-        <Button 
-          type="button" 
-          variant="outline" 
-          size="sm"
-          onClick={toggleHtmlMode} 
-          disabled={readOnly}
-          className="w-full sm:w-auto"
-        >
-          {isHtmlMode ? (
-            <>
-              <Edit className="w-4 h-4 mr-2" /> Voltar para Editor Visual
-            </>
-          ) : (
-            <>
-              <Code className="w-4 h-4 mr-2" /> Editar Código-Fonte HTML
-            </>
-          )}
-        </Button>
-      </div>
+      {/* Botão de Alternância no Topo (Oculto se for modo de texto simples) */}
+      {!isSimpleTextMode && (
+          <div className="flex justify-end">
+            <Button 
+              type="button" 
+              variant="outline" 
+              size="sm"
+              onClick={toggleHtmlMode} 
+              disabled={readOnly}
+              className="w-full sm:w-auto"
+            >
+              {finalIsHtmlMode ? (
+                <>
+                  <Edit className="w-4 h-4 mr-2" /> Voltar para Editor Visual
+                </>
+              ) : (
+                <>
+                  <Code className="w-4 h-4 mr-2" /> Editar Código-Fonte HTML
+                </>
+              )}
+            </Button>
+          </div>
+      )}
 
-      {isHtmlMode ? (
+      {finalIsHtmlMode ? (
         <Textarea
           id="conteudo-template-textarea" // Adicionando ID para manipulação de cursor
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          placeholder="Edite o código HTML puro aqui..."
+          placeholder={isSimpleTextMode ? "Insira o conteúdo em texto simples aqui..." : "Edite o código HTML puro aqui..."}
           readOnly={readOnly}
           className="flex-1 font-mono text-sm min-h-[300px]"
         />

@@ -309,7 +309,7 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
                                 <div 
                                     key={tag.nome_tag} 
                                     className="p-2 border rounded-md cursor-pointer hover:bg-accent/50 transition-colors"
-                                    draggable 
+                                    draggable
                                     onDragStart={(e) => handleDragStart(e, tag.nome_tag)} 
                                     onClick={() => {
                                         navigator.clipboard.writeText(tag.nome_tag);
@@ -408,7 +408,7 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
         </form>
       </Form>
       
-      <DocumentoPreviewDialog
+      <ContratoPreviewDialog
         open={previewOpen}
         onOpenChange={setPreviewOpen}
         conteudoHtml={conteudoPreview}
@@ -419,4 +419,4 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
   );
 };
 
-export default FormDocumentoSocietarioModelo;
+export default FormContratoModelo;
