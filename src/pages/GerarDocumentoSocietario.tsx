@@ -1,4 +1,4 @@
-// src/pages/GerarDocumentoSocietario.tsx
+// src/pages/GerarDocumentoSocietarios.tsx
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -266,11 +266,12 @@ const GerarDocumentoSocietario: React.FC = () => {
         
         // Se o cliente selecionado não estiver mais na lista, limpa a seleção
         if (clienteSelecionadoId && !mappedClients.some(c => c.id === clienteSelecionadoId)) {
-            setClienteSelecionadoId('');
+            // CORREÇÃO: Usando setValue do RHF para atualizar o estado
+            setValue('cliente_id', '');
         }
     }
     
-  }, [clienteSelecionadoId]);
+  }, [clienteSelecionadoId, setValue]);
 
 
   // --- FUNÇÃO PRINCIPAL DE BUSCA DE DADOS INICIAIS ---
@@ -606,7 +607,7 @@ const GerarDocumentoSocietario: React.FC = () => {
                       <FormField control={form.control} name="cliente_id" render={({ field }) => (
                           <FormItem className="space-y-2">
                               <FormLabel htmlFor="cliente">Cliente (Contratado)</FormLabel>
-                              <Select value={field.value} onValueChange={setClienteSelecionadoId} disabled={!proprietarioDocumentoId}>
+                              <Select value={field.value} onValueChange={(v) => setValue('cliente_id', v)} disabled={!proprietarioDocumentoId}>
                                   <FormControl>
                                       <SelectTrigger id="cliente">
                                           <SelectValue placeholder="Selecione o Cliente" />
