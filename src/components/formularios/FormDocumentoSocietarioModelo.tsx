@@ -123,7 +123,7 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
       // CRÍTICO: Sanitiza, pois o editor é HTML
       conteudo_template: sanitizeConteudo(values.conteudo_template),
       tipo_conteudo: 'html', // Força o tipo para 'html'
-      tipo_documento: values.tipo_documento || null,
+      tipo_documento: values.tipo_documento || null, // Garante que seja null se for string vazia
     };
 
     let error = null;
@@ -240,6 +240,12 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
       if (text) {
           handleInsertText(text);
       }
+  };
+  
+  const handleCopyAllTags = () => {
+      const tagsString = allTags.map(t => t.nome_tag).join(', ');
+      navigator.clipboard.writeText(tagsString);
+      showSuccess('Todas as tags copiadas para a área de transferência!');
   };
   
   // --- FIM FUNÇÕES DE INSERÇÃO DE TEXTO ---
