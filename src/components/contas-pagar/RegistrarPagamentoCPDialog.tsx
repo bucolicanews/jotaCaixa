@@ -251,7 +251,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
     
     setLoading(true);
 
-    const contaPagamento = mapeamentoContabil['pagamento'];
+    const contaPagamento = mapeamentoContabil['pagamento']; // Conta de Resultado (Despesa/Custo)
     const contaParcelaPagar = mapeamentoContabil['parcela_pagar'];
     
     const { data: contaSintetica, error: csError } = await supabase
@@ -270,6 +270,9 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
     const dataPagamentoISO = dataNoonUTC.toISOString();
     
     const lancamentosPayload: any[] = [];
+    
+    // CRÍTICO: Chave de vínculo para o Modelo A
+    const origemVincular = `pagamento_cp:${parcela.id}`;
 
     try {
       for (const pagamento of values.pagamentos) {
@@ -306,12 +309,12 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
             id: idAtivo,
             proprietario_id: adminId,
             data_movimentacao: dataPagamentoISO,
-            descricao: `Pagamento Parcela ${parcela.id} - ${parcela.fornecedor}`, 
+            descricao: `Pagamento Parcela ${parcela.id.substring(0, 8)} - ${parcela.fornecedor}`, 
             valor: pagamento.valor_pago,
             tipo: 'Saida' as const, // Crédito é 'Saida' no Ativo
             conta_bancaria_id: pagamento.conta_id,
             conta_contabil_id: contaContabilCaixaBanco,
-            origem: 'pagamento_manual',
+            origem: origemVincular, // MODELO A: VINCULAÇÃO PELA PARCELA
             historico_id: values.historico_id,
             conta_resultado_id: idPatrimonial, // Ativo aponta para Passivo
         };
@@ -328,7 +331,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
                 tipo: 'Entrada' as const, // Débito é 'Entrada' no Passivo
                 conta_bancaria_id: null,
                 conta_contabil_id: contaPatrimonial,
-                origem: 'pagamento_manual',
+                origem: origemVincular, // MODELO A: VINCULAÇÃO PELA PARCELA
                 historico_id: values.historico_id,
                 conta_resultado_id: idAtivo, // Passivo aponta para Ativo
             };

@@ -10,11 +10,12 @@ import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
-import { AdminParcelaPagar } from '@/types/contas-pagar';
+import { AdminParcelaPagar } from '@/types/contas-pagar'; // Reutilizando o tipo de parcela
 import { SaldoCalculado } from '@/hooks/use-saldo-conta-calculado';
-import { Historico } from '@/types/historico';
 import { Textarea } from '../ui/textarea';
 import { Separator } from "@/components/ui/separator";
+import { useSessao } from '@/hooks/use-sessao';
+import { PlanoContas } from '@/types/plano-contas';
 
 // Função local para formatar moeda (caso não exista)
 const formatCurrency = (value: number) =>
@@ -66,6 +67,9 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
     onSaveComplete,
     onClose,
 }) => {
+    const { role, usuario } = useSessao();
+    const isAdmin = role === 'Admin';
+    
     const [loading, setLoading] = useState(false);
     const [comprovanteFile, setComprovanteFile] = useState<File | null>(null);
     const [isUploading, setIsUploading] = useState(false);
@@ -73,7 +77,7 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
     const adminId = parcela.admin_id;
     const totalPago = pagamentoDetalhes.reduce((sum, p) => sum + p.valor_pago, 0);
     
-    const contaPagamento = mapeamentoContabil['pagamento']; // Conta de Ativo/Passivo (Pagamento)
+    const contaPagamento = mapeamentoContabil['pagamento']; // Conta de Pagamento (Resultado)
     const contaParcelaPagar = mapeamentoContabil['parcela_pagar'];
     
     const form = useForm<FormValues>({
@@ -139,7 +143,7 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
             const descricaoContaSintetica = contaSintetica?.descricao || 'Pagamento';
             const contaDespesaCriacao = contaSintetica?.id_conta_resultado;
             
-            const dataPagamento = values.data_pagamento;
+            const dataPagamento = dataPagamento;
             const dataNoonUTC = new Date(Date.UTC(dataPagamento.getFullYear(), dataPagamento.getMonth(), dataPagamento.getDate(), 12, 0, 0));
             const dataPagamentoISO = dataNoonUTC.toISOString();
             
@@ -163,7 +167,7 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
                         tipo: 'Saida' as const,
                         identificacao: values.identificacao || null,
                         conciliado: false, // Começa como não conciliado
-                        conta_contabil_id: contaPagamento, // Mapeia para a conta de Pagamento (Ativo/Passivo)
+                        conta_contabil_id: contaPagamento, // Mapeia para a conta de Pagamento (Resultado)
                     };
                 })
                 .filter(e => e !== null);
@@ -176,6 +180,7 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
             // 4. Continuar com o fluxo de pagamento (Registrar Pagamento e Lançamentos)
             
             const lancamentosPayload: any[] = [];
+            const origemVincular = `pagamento_cp:${parcela.id}`;
 
             for (const pagamento of pagamentoDetalhes) {
                 // 4.1. Registrar Pagamento (Histórico)
@@ -213,12 +218,12 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
                     id: idAtivo,
                     proprietario_id: adminId,
                     data_movimentacao: dataPagamentoISO,
-                    descricao: `Pagamento Parcela ${parcela.id} - ${parcela.fornecedor}`, 
+                    descricao: `Pagamento Parcela ${parcela.id.substring(0, 8)} - ${parcela.fornecedor}`, 
                     valor: pagamento.valor_pago,
                     tipo: 'Saida' as const, // Crédito é 'Saida' no Ativo
                     conta_bancaria_id: pagamento.conta_id,
                     conta_contabil_id: contaContabilCaixaBanco,
-                    origem: 'pagamento_manual',
+                    origem: origemVincular, // MODELO A: VINCULAÇÃO PELA PARCELA
                     historico_id: values.historico_id,
                     conta_resultado_id: idPatrimonial, // Ativo aponta para Passivo
                 };
@@ -235,7 +240,7 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
                         tipo: 'Entrada' as const, // Débito é 'Entrada' no Passivo
                         conta_bancaria_id: null,
                         conta_contabil_id: contaPatrimonial,
-                        origem: 'pagamento_manual',
+                        origem: origemVincular, // MODELO A: VINCULAÇÃO PELA PARCELA
                         historico_id: values.historico_id,
                         conta_resultado_id: idAtivo, // Passivo aponta para Ativo
                     };
@@ -306,7 +311,7 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
                 
                 <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2 p-3 bg-secondary rounded-md">
-                        <p className="text-sm font-medium">Conta(s) de Origem</p>
+                        <p className="text-sm font-medium">Conta de Origem</p>
                         {pagamentoDetalhes.map((p, i) => {
                             const conta = contasOrigem.find(c => c.id === p.conta_id);
                             return (
