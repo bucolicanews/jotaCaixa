@@ -293,7 +293,7 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
             <TabsTrigger value="passivo">Passivo</TabsTrigger>
             <TabsTrigger value="pl">Patrimônio Líquido</TabsTrigger>
             <TabsTrigger value="receita">Receita</TabsTrigger>
-            <TabsTrigger value="despesa">Despesa</TabsTrigger>
+            <TabsTrigger value="despesa">Despesa</Tabsgger>
         </TabsList>
         
         {/* ABA 1: COMPLETO (Ativo vs Passivo/PL) */}
@@ -323,7 +323,7 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
                     </Card>
                     
                     <Card>
-                        <CardHeader><CardTitle className="text-xl text-blue-600">Patrimônio Líquido e Resultado ({formatCurrency(totalPatrimonioLiquido + resultadoLiquido)})</CardTitle></CardHeader>
+                        <CardHeader><CardTitle className="text-xl text-blue-600">Patrimônio Líquido ({formatCurrency(totalPatrimonioLiquido)})</CardTitle></CardHeader>
                         <CardContent>
                             <Table>
                                 <TableHeader><TableRow><TableHead className="w-[150px]">Conta</TableHead><TableHead>Descrição</TableHead><TableHead className="text-right w-[150px]">Saldo</TableHead></TableRow></TableHeader>
@@ -380,6 +380,14 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
                         <TableHeader><TableRow><TableHead className="w-[150px]">Conta</TableHead><TableHead>Descrição</TableHead><TableHead className="text-right w-[150px]">Saldo</TableHead></TableRow></TableHeader>
                         <TableBody>
                             {renderContas(getContasPL())}
+                            
+                            {/* Linha do Resultado Líquido (Separada) */}
+                            <TableRow className={cn("font-bold border-t-2", resultadoLiquido >= 0 ? "bg-green-500/30" : "bg-red-500/30")}>
+                                <TableCell colSpan={2}>Resultado Líquido do Período</TableCell>
+                                <TableCell className={cn("text-right", resultadoLiquido >= 0 ? "text-green-700" : "text-red-700")}>
+                                    {formatCurrency(resultadoLiquido)}
+                                </TableCell>
+                            </TableRow>
                         </TableBody>
                     </Table>
                 </CardContent>
