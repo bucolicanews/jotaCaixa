@@ -18,6 +18,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import Balanco1ColunaPrint from './Balanco1ColunaPrint';
 import { useContabilConfig } from '@/hooks/use-contabil-config';
 import { showError } from '@/utils/toast'; // NOVO IMPORT
+import { TrendingUp, TrendingDown } from "lucide-react";
 
 interface BalancoPatrimonialDetalheProps {
   endDate: Date;
@@ -293,7 +294,7 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
             <TabsTrigger value="passivo">Passivo</TabsTrigger>
             <TabsTrigger value="pl">Patrimônio Líquido</TabsTrigger>
             <TabsTrigger value="receita">Receita</TabsTrigger>
-            <TabsTrigger value="despesa">Despesa</Tabsgger>
+            <TabsTrigger value="despesa">Despesa</TabsTrigger>
         </TabsList>
         
         {/* ABA 1: COMPLETO (Ativo vs Passivo/PL) */}
