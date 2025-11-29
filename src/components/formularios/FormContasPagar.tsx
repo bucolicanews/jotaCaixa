@@ -70,6 +70,7 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
   const [contasResultado, setContasResultado] = useState<PlanoContas[]>([]); // NOVO ESTADO
   const [loadingContas, setLoadingContas] = useState(true);
   const [isCreatingHistorico, setIsCreatingHistorico] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false); // ADICIONADO: Estado de submissão
   const isEditing = !!contaInicial;
 
   const isAdmin = role === 'Admin';
@@ -182,7 +183,7 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
     },
   });
   
-  const { isSubmitting } = form.formState;
+  // const { isSubmitting } = form.formState; // REMOVIDO: Usando o estado local
   const tipoLancamento = form.watch('tipo_lancamento');
   const novoHistoricoValue = form.watch('novo_historico');
   
@@ -232,7 +233,7 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
         return;
     }
     
-    setIsSubmitting(true); // Move para o início do try
+    setIsSubmitting(true); // USANDO O ESTADO LOCAL
     
     // CRÍTICO: Inicializa o array aqui
     const lancamentosPayload: any[] = [];
