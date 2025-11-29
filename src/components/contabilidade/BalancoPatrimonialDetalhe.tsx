@@ -110,33 +110,6 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
     return filtered;
   };
   
-  // NOVO FILTRO: Para Receita (usa o código configurado)
-  const getContasReceita = () => {
-      const receitaCode = configMap.Receita || '4'; // Usa o código configurado
-      // Contas de Receita são as contas que começam com o código de Receita E são marcadas como is_conta_resultado
-      const receitaContas = contas.filter(c => c.Conta.startsWith(receitaCode) && c.is_conta_resultado);
-      return filterAndIncludeParents(receitaContas, receitaCode);
-  };
-  
-  // NOVO FILTRO: Para Despesa (usa os códigos configurados)
-  const getContasDespesa = () => {
-      const custoCode = configMap.Custo || '5';
-      const despesaCode = configMap.Despesa || '6';
-      
-      // Contas de Despesa/Custo são as contas que começam com o código de Custo OU Despesa E são Resultado
-      const despesaContas = contas.filter(c => c.tipo_principal === 'Resultado');
-      
-      const filteredCusto = filterAndIncludeParents(despesaContas, custoCode);
-      const filteredDespesa = filterAndIncludeParents(despesaContas, despesaCode);
-      
-      // Combina e remove duplicatas (se houver sobreposição de códigos)
-      const combined = [...filteredCusto, ...filteredDespesa];
-      const uniqueMap = new Map<string, ContaBalanco>();
-      combined.forEach(c => uniqueMap.set(c.id, c));
-      
-      return Array.from(uniqueMap.values()).sort((a, b) => a.Conta.localeCompare(b.Conta));
-  };
-  
   // NOVO FILTRO: Apenas contas de PL (usa o código configurado)
   const getContasPL = () => {
       const plCode = configMap['Patrimonio Liquido'] || '3';
@@ -357,9 +330,9 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
                                 <TableBody>
                                     {renderContas(getContasPL())}
                                     
-                                    {/* Linha do Resultado Líquido */}
+                                    {/* Linha do Resultado Líquido (Separada) */}
                                     <TableRow className={cn("font-bold border-t-2", resultadoLiquido >= 0 ? "bg-green-500/30" : "bg-red-500/30")}>
-                                        <TableCell colSpan={2} className="text-xl text-yellow-600">Resultado Líquido do Período</TableCell>
+                                        <TableCell colSpan={2}>Resultado Líquido do Período</TableCell>
                                         <TableCell className={cn("text-right", resultadoLiquido >= 0 ? "text-green-700" : "text-red-700")}>
                                             {formatCurrency(resultadoLiquido)}
                                         </TableCell>
@@ -401,20 +374,12 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
         {/* NOVO ABA 4: PATRIMÔNIO LÍQUIDO */}
         <TabsContent value="pl" className="mt-4">
             <Card>
-                <CardHeader><CardTitle className="text-xl text-blue-600">Patrimônio Líquido e Resultado ({formatCurrency(totalPatrimonioLiquido + resultadoLiquido)})</CardTitle></CardHeader>
+                <CardHeader><CardTitle className="text-xl text-blue-600">Patrimônio Líquido ({formatCurrency(totalPatrimonioLiquido)})</CardTitle></CardHeader>
                 <CardContent>
                     <Table>
                         <TableHeader><TableRow><TableHead className="w-[150px]">Conta</TableHead><TableHead>Descrição</TableHead><TableHead className="text-right w-[150px]">Saldo</TableHead></TableRow></TableHeader>
                         <TableBody>
                             {renderContas(getContasPL())}
-                            
-                            {/* Linha do Resultado Líquido */}
-                            <TableRow className={cn("font-bold border-t-2", resultadoLiquido >= 0 ? "bg-green-500/30" : "bg-red-500/30")}>
-                                <TableCell colSpan={2}>Resultado Líquido do Período</TableCell>
-                                <TableCell className={cn("text-right", resultadoLiquido >= 0 ? "text-green-700" : "text-red-700")}>
-                                    {formatCurrency(resultadoLiquido)}
-                                </TableCell>
-                            </TableRow>
                         </TableBody>
                     </Table>
                 </CardContent>
@@ -428,7 +393,7 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
                 <CardContent>
                     <Table>
                         <TableHeader><TableRow><TableHead className="w-[150px]">Conta</TableHead><TableHead>Descrição</TableHead><TableHead className="text-right w-[150px]">Saldo</TableHead></TableRow></TableHeader>
-                        <TableBody>{renderContas(getContasReceita())}</TableBody>
+                        <TableBody>{renderContas(getContasPorTipo('Resultado').filter(c => c.Conta.startsWith(configMap.Receita || '4')))}</TableBody>
                     </Table>
                 </CardContent>
             </Card>
@@ -441,7 +406,7 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
                 <CardContent>
                     <Table>
                         <TableHeader><TableRow><TableHead className="w-[150px]">Conta</TableHead><TableHead>Descrição</TableHead><TableHead className="text-right w-[150px]">Saldo</TableHead></TableRow></TableHeader>
-                        <TableBody>{renderContas(getContasDespesa())}</TableBody>
+                        <TableBody>{renderContas(getContasPorTipo('Resultado').filter(c => c.Conta.startsWith(configMap.Custo || '5') || c.Conta.startsWith(configMap.Despesa || '6')))}</TableBody>
                     </Table>
                 </CardContent>
             </Card>
