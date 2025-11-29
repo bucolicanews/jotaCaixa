@@ -146,57 +146,29 @@ const FormLancamentoManual: React.FC<FormLancamentoManualProps> = ({ onSaveCompl
     setIsSubmitting(true);
     
     const dataMovimentacao = format(values.data_movimentacao, 'yyyy-MM-dd') + 'T12:00:00Z';
-    const valor = values.valor;
-    const historicoId = values.historico_id;
-    const descricaoComplementar = values.descricao_complementar;
     
-    // CRÍTICO: Gera IDs e define a referência cruzada
-    const idDebito = crypto.randomUUID();
-    const idCredito = crypto.randomUUID();
-    
-    // 1. Lançamento de Débito (Entrada)
-    const lancamentoDebito = {
-        id: idDebito,
-        proprietario_id: ownerId,
-        data_movimentacao: dataMovimentacao,
-        descricao: `D: ${contaDebito.Descricao} - ${descricaoComplementar}`,
-        valor: valor,
-        tipo: 'Entrada' as const, // Débito é sempre 'Entrada'
-        // NOVO: Vincula a conta de saldo se for Caixa/Banco
-        conta_bancaria_id: isDebitoCaixaBanco ? values.conta_saldo_debito_id : null, 
-        conta_contabil_id: values.conta_debito_id,
-        origem: 'lancamento_manual',
-        historico_id: historicoId,
-        conta_resultado_id: idCredito, // L1 aponta para L2
-    };
-    
-    // 2. Lançamento de Crédito (Saída)
-    const lancamentoCredito = {
-        id: idCredito,
-        proprietario_id: ownerId,
-        data_movimentacao: dataMovimentacao,
-        descricao: `C: ${contasAnaliticas.find(c => c.id === values.conta_credito_id)?.Descricao} - ${descricaoComplementar}`,
-        valor: valor,
-        tipo: 'Saida' as const, // Crédito é sempre 'Saída'
-        conta_bancaria_id: null,
-        conta_contabil_id: values.conta_credito_id,
-        origem: 'lancamento_manual',
-        historico_id: historicoId,
-        conta_resultado_id: idDebito, // L2 aponta para L1
-    };
-    
-    // 3. Inserir ambos os lançamentos em um único array
-    const lancamentosPayload = [lancamentoDebito, lancamentoCredito];
-
     try {
-        // Usamos uma única chamada de inserção para o array
-        const { error: insertError } = await supabase
-            .from('lancamentos')
-            .insert(lancamentosPayload);
+        // 1. Chamar a função RPC para inserção atômica
+        const { data, error: rpcError } = await supabase.rpc('insert_manual_lancamentos', {
+            p_proprietario_id: ownerId,
+            p_data_movimentacao: dataMovimentacao,
+            p_conta_debito_id: values.conta_debito_id,
+            p_conta_credito_id: values.conta_credito_id,
+            p_valor: values.valor,
+            p_historico_id: values.historico_id,
+            p_descricao_complementar: values.descricao_complementar,
+            p_conta_saldo_debito_id: isDebitoCaixaBanco ? values.conta_saldo_debito_id : null,
+        });
         
-        if (insertError) throw insertError;
+        if (rpcError) throw rpcError;
         
-        showSuccess(`Lançamento de ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor)} registrado com sucesso!`);
+        const result = data?.[0];
+        
+        if (result && !result.success) {
+            throw new Error(result.message);
+        }
+        
+        showSuccess(`Lançamento de ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(values.valor)} registrado com sucesso!`);
         
         // Resetar formulário (mantendo a data e o histórico)
         form.reset({
@@ -212,10 +184,6 @@ const FormLancamentoManual: React.FC<FormLancamentoManualProps> = ({ onSaveCompl
         onSaveComplete();
         
     } catch (error: any) {
-        // Se o erro for 409 (conflito de FK), o problema é a referência circular.
-        // A solução é usar uma RPC ou uma Edge Function para garantir a atomicidade,
-        // mas como estamos no frontend, a inserção em lote deve funcionar se a RLS permitir.
-        // Se o erro persistir, o problema é a restrição de FK no PostgREST.
         showError('Falha ao registrar lançamento: ' + error.message);
     } finally {
         setIsSubmitting(false);
