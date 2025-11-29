@@ -99,7 +99,7 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
         const contaPatrimonial = contaSintetica.id_conta_patrimonial;
         const descricaoContaSintetica = contaSintetica.descricao || 'Pagamento';
         const historicoId = contaSintetica.historico_id;
-        const contaDespesaCriacao = contaSintetica.id_conta_resultado; // CORREÇÃO: Lendo a variável aqui
+        const contaDespesaCriacao = contaSintetica.id_conta_resultado; // Conta de Despesa/Custo (DRE)
         
         // 3. Buscar todos os pagamentos associados a esta parcela
         const { data: pagamentos, error: fetchError } = await supabase
@@ -120,7 +120,7 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
         // 4. Buscar os lançamentos originais (Ativo e Passivo)
         const { data: originalLaunches, error: fetchLaunchError } = await supabase
             .from('lancamentos')
-            .select('id, conta_resultado_id')
+            .select('id, conta_resultado_id, conta_contabil_id, conta_bancaria_id, valor, tipo, descricao, historico_id')
             .eq('proprietario_id', usuario.id)
             .eq('origem', 'pagamento_manual')
             .ilike('descricao', `%Pagamento Parcela ${parcelaId.substring(0, 8)}%`);
@@ -140,7 +140,7 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
             if (markError) throw markError;
         }
         
-        // 5. Gerar Lançamentos de Estorno (Reversão do Pagamento) - D: Ativo, C: Passivo
+        // 5. Gerar Lançamentos de Estorno (Reversão do Pagamento)
         
         for (const pagamento of pagamentos) {
             // 5.1. Buscar a conta de saldo (Caixa/Banco) para obter o conta_contabil_id
@@ -196,6 +196,7 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
             }
             
             // 5.3. Lançamento 3: Estorno da Despesa/Custo (DRE) - CRÉDITO (Saída)
+            // Este lançamento neutraliza o DÉBITO de Despesa/Custo que foi criado na CRIAÇÃO da CP.
             if (contaDespesaCriacao) {
                 const idEstornoDespesa = crypto.randomUUID();
                 
