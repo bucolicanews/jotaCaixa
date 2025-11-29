@@ -91,7 +91,7 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
         // 2. Buscar a conta sintética para obter a conta patrimonial, descrição e DRE
         const { data: contaSintetica, error: csError } = await supabase
             .from('admin_contas_pagar')
-            .select('id_conta_patrimonial, descricao, historico_id, id_conta_resultado') // <-- AGORA INCLUI id_conta_resultado
+            .select('id_conta_patrimonial, descricao, historico_id, id_conta_resultado')
             .eq('id', contaPagarId)
             .single();
             
@@ -105,7 +105,7 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
         // 3. Buscar todos os pagamentos associados a esta parcela
         const { data: pagamentos, error: fetchError } = await supabase
             .from('admin_pagamentos')
-            .select('id, conta_id, valor_pago, id_conta_contabil') // id_conta_contabil é a conta de Ativo/Passivo (Pagamento)
+            .select('id, conta_id, valor_pago, id_conta_contabil')
             .eq('parcela_id', parcelaId);
             
         if (fetchError) throw fetchError;
@@ -121,24 +121,7 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
         
         // 4. Gerar Lançamentos de Estorno (Reversão do Pagamento)
         
-        // 4.1. Reverter a baixa do Passivo (Obrigação) - CRÉDITO (Saída)
-        if (contaPatrimonial) {
-            const lancamentoEstornoPassivo = {
-                proprietario_id: usuario.id,
-                data_movimentacao: dataEstornoISO,
-                descricao: `Estorno Baixa Passivo CP: ${descricaoContaSintetica} (CP ID: ${contaPagarId.substring(0, 8)})`,
-                valor: totalEstornado,
-                tipo: 'Saida' as const, // Saída (Crédito) para restaurar o Passivo (Credor)
-                conta_bancaria_id: null,
-                conta_contabil_id: contaPatrimonial,
-                origem: 'estorno_pagamento_manual',
-                historico_id: historicoId,
-            };
-            await supabase.from('lancamentos').insert(lancamentoEstornoPassivo);
-        }
-        
-        // 4.2. Reverter a Saída do Ativo (Caixa/Strip) - DÉBITO (Entrada)
-        // A conta de pagamento (id_conta_contabil) é a conta de Ativo/Passivo (Pagamento)
+        // 4.1. Reverter a Saída do Ativo (Caixa/Banco) - DÉBITO (Entrada)
         for (const pagamento of pagamentos) {
             // Buscar a conta de saldo (Caixa/Banco) para obter o conta_contabil_id
             const { data: saldoContaData } = await supabase
@@ -159,13 +142,29 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
                 data_movimentacao: dataEstornoISO,
                 descricao: `Estorno Pagamento Ativo CP: ${conta.fornecedor} (Parcela ID: ${parcelaId.substring(0, 8)})`,
                 valor: pagamento.valor_pago,
-                tipo: 'Entrada' as const, // Entrada no Ativo (Débito) para restaurar o saldo
+                tipo: 'Entrada' as const, // DÉBITO (Entrada) no Ativo para restaurar o saldo
                 conta_bancaria_id: pagamento.conta_id,
                 conta_contabil_id: contaContabilCaixaBanco, // <-- USANDO CONTA CONTÁBIL DO SALDO
                 origem: 'estorno_pagamento_manual',
                 historico_id: historicoId,
             };
             await supabase.from('lancamentos').insert(lancamentoEstornoAtivo);
+        }
+        
+        // 4.2. Reverter a baixa do Passivo (Obrigação) - CRÉDITO (Saída)
+        if (contaPatrimonial) {
+            const lancamentoEstornoPassivo = {
+                proprietario_id: usuario.id,
+                data_movimentacao: dataEstornoISO,
+                descricao: `Estorno Baixa Passivo CP: ${descricaoContaSintetica} (CP ID: ${contaPagarId.substring(0, 8)})`,
+                valor: totalEstornado,
+                tipo: 'Saida' as const, // CRÉDITO (Saída) no Passivo para restaurar a obrigação
+                conta_bancaria_id: null,
+                conta_contabil_id: contaPatrimonial,
+                origem: 'estorno_pagamento_manual',
+                historico_id: historicoId,
+            };
+            await supabase.from('lancamentos').insert(lancamentoEstornoPassivo);
         }
         
         // 4.3. Reverter o Lançamento de Despesa/Custo (DRE) - CRÉDITO (Saída)
@@ -175,7 +174,7 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
                 data_movimentacao: dataEstornoISO,
                 descricao: `Estorno Despesa/Custo CP: ${descricaoContaSintetica} (CP ID: ${contaPagarId.substring(0, 8)})`,
                 valor: totalEstornado,
-                tipo: 'Saida' as const, // Saída (Crédito) para diminuir a Despesa (Credora)
+                tipo: 'Saida' as const, // CRÉDITO (Saída) para diminuir a Despesa (Credora)
                 conta_bancaria_id: null,
                 conta_contabil_id: contaDespesaCriacao,
                 origem: 'estorno_pagamento_manual',

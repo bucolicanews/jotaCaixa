@@ -23,7 +23,7 @@ import { Historico } from '@/types/historico';
 import { Checkbox } from '../ui/checkbox';
 import { PlanoContas } from '@/types/plano-contas';
 import { useContabilConfig } from '@/hooks/use-contabil-config';
-import FormExtratoManualCP from './FormExtratoManualCP'; // NOVO IMPORT
+import FormExtratoManualCP from './FormExtratoManualCP';
 
 interface ParcelaParaPagamento extends AdminParcelaPagar {
   fornecedor: string;
@@ -369,7 +369,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
       }).eq('id', parcela.id);
       
       const { count: parcelasPendentesCount } = await supabase
-          .from(tabelaContasPagar)
+          .from(tabelaParcelas)
           .select('id', { count: 'exact', head: true })
           .eq('conta_pagar_id', parcela.conta_pagar_id)
           .in('status', ['aberta', 'parcial', 'reprogramada']);
