@@ -70,12 +70,12 @@ const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveC
 
   // Hook to fetch the paired DRE launch ID if editing
   useEffect(() => {
-    if (isEditing && lancamentoInicial?.id && !dreLaunchId && ownerId) {
+    if (isEditing && lancamentoInicial?.id && ownerId) {
         const fetchPairedLaunch = async () => {
-            // Busca o lançamento emparelhado usando a referência cruzada
+            // 1. Busca o lançamento emparelhado usando a referência cruzada
             const { data, error } = await supabase
                 .from('lancamentos')
-                .select('id')
+                .select('id, conta_contabil_id')
                 .eq('proprietario_id', ownerId)
                 .eq('origem', 'movimentacao_direta')
                 .eq('conta_resultado_id', lancamentoInicial.id) // Busca onde o ID do lançamento primário é a referência
@@ -85,10 +85,10 @@ const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveC
                 
             if (error || !data) {
                 console.error('Could not find paired DRE launch for editing:', error);
-                // Se não encontrar, tenta a busca inversa (caso o campo tenha sido salvo de forma antiga)
+                // Tenta a busca inversa (caso o campo tenha sido salvo de forma antiga)
                 const { data: oldData } = await supabase
                     .from('lancamentos')
-                    .select('id')
+                    .select('id, conta_contabil_id')
                     .eq('proprietario_id', ownerId)
                     .eq('origem', 'movimentacao_direta')
                     .eq('descricao', lancamentoInicial.descricao)
@@ -99,6 +99,7 @@ const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveC
                 
                 if (oldData) {
                     setDreLaunchId(oldData.id);
+                    form.setValue('conta_resultado_id', oldData.conta_contabil_id);
                     return;
                 }
                 
@@ -106,11 +107,13 @@ const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveC
                 throw new Error('Não foi possível encontrar o lançamento contábil de partida dobrada para edição.');
             } else {
                 setDreLaunchId(data.id);
+                // CRÍTICO: Inicializa o campo do formulário com o conta_contabil_id do lançamento de DRE
+                form.setValue('conta_resultado_id', data.conta_contabil_id);
             }
         };
         fetchPairedLaunch();
     }
-  }, [isEditing, lancamentoInicial, ownerId, dreLaunchId]);
+  }, [isEditing, lancamentoInicial, ownerId, form]);
 
 
   // Busca apenas contas de Ativo (Debito) e escopo 'bancos'
@@ -126,8 +129,8 @@ const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveC
       valor: Math.abs(lancamentoInicial?.valor || 0),
       conta_bancaria_id: lancamentoInicial?.conta_bancaria_id || undefined,
       historico_id: lancamentoInicial?.historico_id || null,
-      // CORREÇÃO AQUI: Usa conta_contabil_id do lançamento inicial (que é o ID da conta DRE)
-      conta_resultado_id: lancamentoInicial?.conta_contabil_id || undefined, 
+      // CORREÇÃO AQUI: Inicializa com undefined, pois o useEffect assíncrono irá definir o valor
+      conta_resultado_id: undefined, 
     },
   });
   
@@ -245,6 +248,7 @@ const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveC
         conta_contabil_id: contaAtivoCaixa,
         origem: 'movimentacao_direta',
         historico_id: historicoId,
+        conciliado: true, // Movimentação direta é sempre conciliada
         atualizado_em: new Date().toISOString(), // Para upsert
     };
     
@@ -269,6 +273,7 @@ const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveC
         conta_contabil_id: contaResultadoId, // Conta de Resultado (Receita/Despesa)
         origem: 'movimentacao_direta',
         historico_id: historicoId,
+        conciliado: true, // Movimentação direta é sempre conciliada
         atualizado_em: new Date().toISOString(), // Para upsert
     };
 
