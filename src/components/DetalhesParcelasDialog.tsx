@@ -208,6 +208,8 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
         // 2.2. Crédito (Caixa/Banco) - C: CAIXA/BANCO (DIMINUI O CAIXA)
         // Precisamos buscar o conta_contabil_id da conta de saldo (Caixa/Banco)
         const contaIds = recebimentos.map(r => r.conta_id);
+        
+        // CRÍTICO: Busca o conta_contabil_id da tabela saldo_contas
         const { data: saldosData } = await supabase
             .from('saldo_contas')
             .select('id, conta_contabil_id')
