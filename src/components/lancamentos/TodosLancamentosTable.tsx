@@ -57,11 +57,13 @@ const TodosLancamentosTable: React.FC = () => {
             .eq('proprietario_id', ownerId)
             .order('data_movimentacao', { ascending: false });
             
-        if (filtroOrigem !== 'todos') {
+        // Se o filtro for 'ignorado_manual', buscamos apenas os ignorados.
+        if (filtroOrigem === 'ignorado_manual') {
+            query = query.eq('origem', 'ignorado_manual');
+        } 
+        // Se o filtro for 'todos', buscamos todos, incluindo os ignorados (para a tabela)
+        else if (filtroOrigem !== 'todos') {
             query = query.eq('origem', filtroOrigem);
-        } else {
-            // Exclui lançamentos ignorados por padrão, a menos que o filtro seja 'ignorado_manual'
-            query = query.neq('origem', 'ignorado_manual');
         }
             
         if (filtroTextoDebounced) {
@@ -98,7 +100,7 @@ const TodosLancamentosTable: React.FC = () => {
             case 'movimentacao_direta': return 'Mov. Direta';
             case 'estorno_direto': return 'Estorno';
             case 'movimentacao_direta_estornada': return 'Estornada';
-            case 'ignorado_manual': return 'Ignorado'; // NOVO
+            case 'ignorado_manual': return 'Ignorado';
             default: return origem;
         }
     };
@@ -157,7 +159,7 @@ const TodosLancamentosTable: React.FC = () => {
         }
     };
     
-    // NOVO HANDLER: Ignorar/Restaurar
+    // NOVO HANDLER: Ignorar/Restaurar (Apenas altera o status, não remove da lista)
     const handleToggleIgnore = async (lancamento: LancamentoDetalhado) => {
         if (!ownerId) return;
         setLoading(true);
@@ -172,12 +174,12 @@ const TodosLancamentosTable: React.FC = () => {
         if (isIgnored) {
             // Restaurar: Usa o valor original salvo no mapa, ou 'lancamento_manual' como fallback
             newOrigem = origemMap[lancamento.id] || 'lancamento_manual';
-            successMessage = 'Lançamento restaurado e incluído nos relatórios.';
+            successMessage = 'Lançamento restaurado.';
         } else {
             // Ignorar: Salva a origem original no mapa e define a nova origem
             setOrigemMap(prev => ({ ...prev, [lancamento.id]: lancamento.origem }));
             newOrigem = 'ignorado_manual';
-            successMessage = 'Lançamento ignorado e removido dos relatórios.';
+            successMessage = 'Lançamento marcado como ignorado.';
         }
         
         try {
@@ -199,7 +201,7 @@ const TodosLancamentosTable: React.FC = () => {
             }
             
             showSuccess(successMessage);
-            fetchLancamentos();
+            fetchLancamentos(); // Re-busca para atualizar a marcação visual
             
         } catch (error: any) {
             showError('Falha ao atualizar status do lançamento: ' + error.message);
@@ -231,7 +233,7 @@ const TodosLancamentosTable: React.FC = () => {
                                 <SelectValue placeholder="Filtrar por Origem" />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="todos">Todas as Origens (Exceto Ignorados)</SelectItem>
+                                <SelectItem value="todos">Todas as Origens</SelectItem>
                                 <SelectItem value="lancamento_manual">Manual</SelectItem>
                                 <SelectItem value="conciliacao_extrato">Conciliação</SelectItem>
                                 <SelectItem value="lancamento_cr">CR (Inicial)</SelectItem>
@@ -279,7 +281,7 @@ const TodosLancamentosTable: React.FC = () => {
                                     const canDelete = l.origem === 'lancamento_manual' || l.origem === 'movimentacao_direta' || l.origem === 'ignorado_manual';
                                     
                                     // Permite ignorar/restaurar se for manual, mov. direta, CR Inicial ou CP Inicial
-                                    const canIgnore = ['lancamento_manual', 'movimentacao_direta', 'lancamento_cr', 'lancamento_cp'].includes(l.origem);
+                                    const canToggleIgnore = ['lancamento_manual', 'movimentacao_direta', 'lancamento_cr', 'lancamento_cp', 'ignorado_manual'].includes(l.origem);
                                     const isIgnored = l.origem === 'ignorado_manual';
                                     
                                     return (
@@ -299,20 +301,14 @@ const TodosLancamentosTable: React.FC = () => {
                                             <TableCell className="text-xs text-muted-foreground">{l.saldo_contas?.nome || '-'}</TableCell>
                                             <TableCell className="text-right space-x-2">
                                                 
-                                                {isIgnored ? (
-                                                    <Button variant="outline" size="icon" onClick={() => handleToggleIgnore(l)} title="Restaurar Lançamento" disabled={loading}>
-                                                        <Undo2 className="w-4 h-4" />
-                                                    </Button>
-                                                ) : canIgnore ? (
-                                                    <Button variant="outline" size="icon" onClick={() => handleToggleIgnore(l)} title="Ignorar Lançamento" disabled={loading}>
-                                                        <EyeOff className="w-4 h-4" />
-                                                    </Button>
-                                                ) : (
-                                                    <Button variant="ghost" size="icon" disabled title="Ação indisponível">
-                                                        <Edit className="w-4 h-4 opacity-50" />
+                                                {/* Botão de Ignorar/Restaurar */}
+                                                {canToggleIgnore && (
+                                                    <Button variant="outline" size="icon" onClick={() => handleToggleIgnore(l)} title={isIgnored ? "Restaurar Lançamento" : "Ignorar Lançamento"} disabled={loading}>
+                                                        {isIgnored ? <Undo2 className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
                                                     </Button>
                                                 )}
 
+                                                {/* Botão de Excluir */}
                                                 {canDelete && (
                                                     <AlertDialog>
                                                         <AlertDialogTrigger asChild>
