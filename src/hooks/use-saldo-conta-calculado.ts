@@ -203,3 +203,5 @@ const useSaldoContaCalculado = (
 
   return { contas, totalSaldo, carregando, refetch };
 };
+
+export default useSaldoContaCalculado;

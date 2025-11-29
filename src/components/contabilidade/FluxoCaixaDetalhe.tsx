@@ -313,14 +313,17 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
         
         // Lançamento 2: Estorno no Resultado (DRE)
         // O tipo do lançamento de Resultado/DRE é o oposto do tipo do lançamento de Ativo/Caixa
-        const estornoResultadoTipoCorrigido = estornoTipo === 'Entrada' ? 'Saida' : 'Entrada'; 
+        // Se o Ativo era Entrada (Débito), o Resultado era Saída (Crédito). O estorno deve ser o oposto:
+        // Estorno Ativo: Saída (Crédito)
+        // Estorno Resultado: Entrada (Débito)
+        const estornoResultadoTipo = lancamento.tipo === 'Entrada' ? 'Entrada' : 'Saida'; 
         
         const estornoResultadoPayload = {
             proprietario_id: empresaId,
             data_movimentacao: new Date().toISOString(),
             descricao: estornoDescricao,
             valor: valor,
-            tipo: estornoResultadoTipoCorrigido, // Tipo oposto ao do Ativo (Entrada -> Saida, Saida -> Entrada)
+            tipo: estornoResultadoTipo, // Tipo oposto ao do Ativo (Entrada -> Saida, Saida -> Entrada)
             conta_bancaria_id: null,
             conta_contabil_id: contaResultadoId,
             origem: 'estorno_direto',
