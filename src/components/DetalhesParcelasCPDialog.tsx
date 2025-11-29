@@ -9,7 +9,7 @@ import { showError, showSuccess } from '@/utils/toast';
 import { useSessao } from '@/hooks/use-sessao';
 import { getBadgeVariant } from '@/utils/badge-variants';
 import { Badge } from './ui/badge';
-import { DollarSign, Undo2, Loader2 } from 'lucide-react';
+import { DollarSign, Undo2, Loader2, Trash2, Edit } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import RegistrarPagamentoCPDialog from '@/components/contas-pagar/RegistrarPagamentoCPDialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
@@ -27,6 +27,7 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
   const [parcelas, setParcelas] = useState<ExtendedParcelaPagar[]>([]);
   const [loading, setLoading] = useState(false);
   const [isUndoing, setIsUndoing] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false); // NOVO ESTADO
   const [pagamentoDialog, setPagamentoDialog] = useState<{ open: boolean, parcela: (AdminParcelaPagar & { fornecedor: string }) | null }>({ open: false, parcela: null });
 
   const fetchParcelas = useCallback(async () => {
@@ -69,6 +70,40 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
     setPagamentoDialog({ open: false, parcela: null });
     fetchParcelas();
     onDataChange(); // Notifica a página pai para recarregar o sintético
+  };
+  
+  const handleDeleteParcela = async (parcelaId: string) => {
+      setIsDeleting(true);
+      try {
+          // 1. Verificar se há pagamentos associados
+          const { count, error: countError } = await supabase
+              .from('admin_pagamentos')
+              .select('id', { count: 'exact', head: true })
+              .eq('parcela_id', parcelaId);
+              
+          if (countError) throw countError;
+          
+          if (count && count > 0) {
+              showError('Não é possível excluir. Existem pagamentos registrados para esta parcela.');
+              return;
+          }
+          
+          // 2. Deletar a parcela
+          const { error } = await supabase
+              .from('admin_parcelas_pagar')
+              .delete()
+              .eq('id', parcelaId);
+              
+          if (error) throw error;
+          
+          showSuccess('Parcela excluída com sucesso.');
+          fetchParcelas();
+          onDataChange();
+      } catch (error: any) {
+          showError('Falha ao excluir parcela: ' + error.message);
+      } finally {
+          setIsDeleting(false);
+      }
   };
   
   const handleUndoPayment = async (parcelaId: string) => {
@@ -300,6 +335,7 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
                           parcelas.map((p) => {
                               const statusVariant = getBadgeVariant(p.status, p.data_vencimento);
                               const isPaga = p.status === 'paga';
+                              const canEditOrDelete = p.status === 'aberta' || p.status === 'parcial' || p.status === 'reprogramada';
                               
                               return (
                                   <TableRow key={p.id}>
@@ -314,6 +350,39 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
                                       </TableCell>
                                       <TableCell>{p.data_pagamento ? formatarData(p.data_pagamento) : '-'}</TableCell>
                                       <TableCell className="text-right space-x-2">
+                                          
+                                          {/* Botão de Edição (Apenas se não estiver paga/cancelada) */}
+                                          {canEditOrDelete && (
+                                              <Button variant="ghost" size="icon" onClick={() => alert('Edição de parcela CP não implementada.')} title="Editar Parcela" disabled>
+                                                  <Edit className="w-4 h-4" />
+                                              </Button>
+                                          )}
+                                          
+                                          {/* Botão de Excluir (Apenas se não estiver paga/cancelada) */}
+                                          {canEditOrDelete && (
+                                              <AlertDialog>
+                                                  <AlertDialogTrigger asChild>
+                                                      <Button variant="ghost" size="icon" disabled={isDeleting} title="Excluir Parcela">
+                                                          <Trash2 className="w-4 h-4 text-red-500" />
+                                                      </Button>
+                                                  </AlertDialogTrigger>
+                                                  <AlertDialogContent>
+                                                      <AlertDialogHeader>
+                                                          <AlertDialogTitle>Excluir Parcela?</AlertDialogTitle>
+                                                          <AlertDialogDescription>
+                                                              Tem certeza que deseja excluir a parcela {p.numero_parcela}? Esta ação é irreversível e só é permitida se não houver pagamentos associados.
+                                                          </AlertDialogDescription>
+                                                      </AlertDialogHeader>
+                                                      <AlertDialogFooter>
+                                                          <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
+                                                          <AlertDialogAction onClick={() => handleDeleteParcela(p.id)} disabled={isDeleting}>
+                                                              {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Excluir'}
+                                                          </AlertDialogAction>
+                                                      </AlertDialogFooter>
+                                                  </AlertDialogContent>
+                                              </AlertDialog>
+                                          )}
+                                          
                                           {isPaga ? (
                                               <AlertDialog>
                                                   <AlertDialogTrigger asChild>
@@ -331,13 +400,13 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
                                                       <AlertDialogFooter>
                                                           <AlertDialogCancel disabled={isUndoing}>Cancelar</AlertDialogCancel>
                                                           <AlertDialogAction onClick={() => handleUndoPayment(p.id)} disabled={isUndoing}>
-                                                              {isUndoing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : 'Estornar'}
+                                                              {isUndoing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : 'Estornar Recebimento'}
                                                           </AlertDialogAction>
                                                       </AlertDialogFooter>
                                                   </AlertDialogContent>
                                               </AlertDialog>
                                           ) : (
-                                              <Button size="sm" onClick={() => handleOpenPagamento(p)}>
+                                              <Button size="sm" onClick={() => handleOpenPagamento(p)} disabled={!canEditOrDelete}>
                                                   <DollarSign className="w-4 h-4" /> Pagar
                                               </Button>
                                           )}
