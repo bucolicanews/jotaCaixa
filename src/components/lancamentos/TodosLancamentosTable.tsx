@@ -57,13 +57,14 @@ const TodosLancamentosTable: React.FC = () => {
             .eq('proprietario_id', ownerId)
             .order('data_movimentacao', { ascending: false });
             
-        // Se o filtro for 'ignorado_manual', buscamos apenas os ignorados.
+        // 1. Filtro de Origem
         if (filtroOrigem === 'ignorado_manual') {
             query = query.eq('origem', 'ignorado_manual');
-        } 
-        // Se o filtro for 'todos', buscamos todos, incluindo os ignorados (para a tabela)
-        else if (filtroOrigem !== 'todos') {
+        } else if (filtroOrigem !== 'todos') {
             query = query.eq('origem', filtroOrigem);
+        } else {
+            // Se for 'todos', exclui explicitamente os ignorados
+            query = query.neq('origem', 'ignorado_manual');
         }
             
         if (filtroTextoDebounced) {
@@ -111,9 +112,17 @@ const TodosLancamentosTable: React.FC = () => {
             return;
         }
         
+        // CRÍTICO: Filtra os ignorados antes de enviar para impressão
+        const lancamentosParaImpressao = lancamentos.filter(l => l.origem !== 'ignorado_manual');
+        
+        if (lancamentosParaImpressao.length === 0) {
+            showError('Nenhum lançamento válido para impressão (todos estão ignorados).');
+            return;
+        }
+        
         const printComponent = (
             <LancamentosPrint
-                lancamentos={lancamentos}
+                lancamentos={lancamentosParaImpressao}
                 ownerName={ownerName}
                 logoUrl={logoUrl}
             />
