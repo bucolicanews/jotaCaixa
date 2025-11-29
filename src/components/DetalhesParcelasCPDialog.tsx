@@ -100,7 +100,7 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
         const contaPatrimonial = contaSintetica.id_conta_patrimonial;
         const descricaoContaSintetica = contaSintetica.descricao || 'Pagamento';
         const historicoId = contaSintetica.historico_id;
-        // const contaDespesaCriacao = contaSintetica.id_conta_resultado; // REMOVIDO: Não é mais necessário
+        const contaDespesaCriacao = contaSintetica.id_conta_resultado; // <-- DRE account
         
         // 3. Buscar todos os pagamentos associados a esta parcela
         const { data: pagamentos, error: fetchError } = await supabase
@@ -260,7 +260,7 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
                           <TableHead>Nº</TableHead>
                           <TableHead>Vencimento</TableHead>
                           <TableHead className="text-right">Valor</TableHead>
-                          <TableHead className="text-right">Pago</TableHead>
+                          <TableHead className="text-right">Pago</Tablehead>
                           <TableHead>Status</TableHead>
                           <TableHead>Data Pagamento</TableHead>
                           <TableHead className="text-right">Ações</TableHead>
