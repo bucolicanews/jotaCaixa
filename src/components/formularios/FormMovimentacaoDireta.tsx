@@ -68,6 +68,27 @@ const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveC
   
   const ownerId = usuario?.id;
 
+  // Busca apenas contas de Ativo (Debito) e escopo 'bancos'
+  const { contas: contasAtivo, carregando: loadingContas, refetch: refetchSaldos } = useSaldoContaCalculado('Debito', 'todos', '', 'bancos');
+  
+  // NOVO: Filtra as contas para mostrar apenas as marcadas como CAIXA
+  const contasCaixa = contasAtivo.filter(c => c.plano_contas?.is_caixa);
+
+  // 🚨 CORREÇÃO: useForm deve ser declarado no topo do componente
+  const form = useForm<FormValues>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      tipo_movimentacao: lancamentoInicial?.tipo || 'Entrada',
+      valor: Math.abs(lancamentoInicial?.valor || 0),
+      conta_bancaria_id: lancamentoInicial?.conta_bancaria_id || undefined,
+      historico_id: lancamentoInicial?.historico_id || null,
+      // Inicializa com undefined, o useEffect assíncrono irá definir o valor
+      conta_resultado_id: undefined, 
+    },
+  });
+  
+  const tipoMovimentacao = form.watch('tipo_movimentacao');
+
   // Hook to fetch the paired DRE launch ID if editing
   useEffect(() => {
     if (isEditing && lancamentoInicial?.id && ownerId) {
@@ -115,26 +136,6 @@ const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveC
     }
   }, [isEditing, lancamentoInicial, ownerId, form]);
 
-
-  // Busca apenas contas de Ativo (Debito) e escopo 'bancos'
-  const { contas: contasAtivo, carregando: loadingContas, refetch: refetchSaldos } = useSaldoContaCalculado('Debito', 'todos', '', 'bancos');
-  
-  // NOVO: Filtra as contas para mostrar apenas as marcadas como CAIXA
-  const contasCaixa = contasAtivo.filter(c => c.plano_contas?.is_caixa);
-
-  const form = useForm<FormValues>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
-      tipo_movimentacao: lancamentoInicial?.tipo || 'Entrada',
-      valor: Math.abs(lancamentoInicial?.valor || 0),
-      conta_bancaria_id: lancamentoInicial?.conta_bancaria_id || undefined,
-      historico_id: lancamentoInicial?.historico_id || null,
-      // CORREÇÃO AQUI: Inicializa com undefined, pois o useEffect assíncrono irá definir o valor
-      conta_resultado_id: undefined, 
-    },
-  });
-  
-  const tipoMovimentacao = form.watch('tipo_movimentacao');
 
   const fetchHistoricos = useCallback(async () => {
     if (!ownerId) return;
