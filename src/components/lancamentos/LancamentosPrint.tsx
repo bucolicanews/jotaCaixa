@@ -38,11 +38,8 @@ const getOrigemDisplay = (origem: string) => {
 
 const LancamentosPrint: React.FC<LancamentosPrintProps> = ({ lancamentos, ownerName, logoUrl }) => {
     
-    // Filtra lançamentos que não são estornados (para o cálculo de totais)
-    const lancamentosValidos = lancamentos.filter(l => l.origem !== 'movimentacao_direta_estornada');
-    
-    const totalDebito = lancamentosValidos.filter(l => l.tipo === 'Entrada' && l.origem !== 'estorno_direto').reduce((sum, l) => sum + l.valor, 0);
-    const totalCredito = lancamentosValidos.filter(l => l.tipo === 'Saida' && l.origem !== 'estorno_direto').reduce((sum, l) => sum + l.valor, 0);
+    const totalDebito = lancamentos.filter(l => l.tipo === 'Entrada' && l.origem !== 'estorno_direto').reduce((sum, l) => sum + l.valor, 0);
+    const totalCredito = lancamentos.filter(l => l.tipo === 'Saida' && l.origem !== 'estorno_direto').reduce((sum, l) => sum + l.valor, 0);
 
     return (
         <div className="print-container">
@@ -55,7 +52,7 @@ const LancamentosPrint: React.FC<LancamentosPrintProps> = ({ lancamentos, ownerN
             </div>
 
             <div className="print-section" style={{ marginBottom: '20px' }}>
-                <h2 style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '10px' }}>Resumo do Movimento (Lançamentos Válidos)</h2>
+                <h2 style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '10px' }}>Resumo do Movimento</h2>
                 <table className="print-table" style={{ width: '100%', border: 'none' }}>
                     <tbody>
                         <tr>
@@ -69,7 +66,7 @@ const LancamentosPrint: React.FC<LancamentosPrintProps> = ({ lancamentos, ownerN
             </div>
 
             <div className="print-section">
-                <h2 style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '10px' }}>Lançamentos Detalhados ({lancamentosValidos.length})</h2>
+                <h2 style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '10px' }}>Lançamentos Detalhados ({lancamentos.length})</h2>
                 <table className="print-table">
                     <thead>
                         <tr>
@@ -83,7 +80,7 @@ const LancamentosPrint: React.FC<LancamentosPrintProps> = ({ lancamentos, ownerN
                         </tr>
                     </thead>
                     <tbody>
-                        {lancamentosValidos.map((l) => {
+                        {lancamentos.map((l) => {
                             const isDebito = l.tipo === 'Entrada';
                             const contaDisplay = l.plano_contas ? `${l.plano_contas.Conta} - ${l.plano_contas.Descricao}` : 'N/A';
                             const origemDisplay = getOrigemDisplay(l.origem);

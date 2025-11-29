@@ -38,7 +38,7 @@ const TodosLancamentosTable: React.FC = () => {
     const filtroTextoDebounced = useDebounce(filtroTexto, 500);
 
     const ownerId = usuario?.id;
-    
+
     const fetchLancamentos = useCallback(async () => {
         if (!ownerId) return;
         setLoading(true);
@@ -54,7 +54,6 @@ const TodosLancamentosTable: React.FC = () => {
             .eq('proprietario_id', ownerId)
             .order('data_movimentacao', { ascending: false });
             
-        // 1. Filtro de Origem (Apenas se não for 'todos')
         if (filtroOrigem !== 'todos') {
             query = query.eq('origem', filtroOrigem);
         }
@@ -217,7 +216,6 @@ const TodosLancamentosTable: React.FC = () => {
                                     const contaDisplay = l.plano_contas ? `${l.plano_contas.Conta} - ${l.plano_contas.Descricao}` : 'N/A';
                                     const origemDisplay = getOrigemDisplay(l.origem);
                                     
-                                    // Permite deletar se for manual ou mov. direta
                                     const canDelete = l.origem === 'lancamento_manual' || l.origem === 'movimentacao_direta';
                                     
                                     return (
@@ -236,10 +234,9 @@ const TodosLancamentosTable: React.FC = () => {
                                             <TableCell className="text-xs text-muted-foreground">{origemDisplay}</TableCell>
                                             <TableCell className="text-xs text-muted-foreground">{l.saldo_contas?.nome || '-'}</TableCell>
                                             <TableCell className="text-right space-x-2">
-                                                
-                                                {/* Botão de Edição (Removido) */}
-
-                                                {/* Botão de Excluir */}
+                                                <Button variant="ghost" size="icon" onClick={() => alert('Edição não implementada.')} disabled>
+                                                    <Edit className="w-4 h-4" />
+                                                </Button>
                                                 {canDelete && (
                                                     <AlertDialog>
                                                         <AlertDialogTrigger asChild>
