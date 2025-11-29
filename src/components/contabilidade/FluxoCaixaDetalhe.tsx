@@ -60,7 +60,7 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
 
   // NOVO: Filtra as contas para o Select (apenas Caixa)
   const contasCaixa = useMemo(() => {
-      return contas.filter(c => c.plano_contas?.is_caixa === true);
+      return contas.filter(c => c.plano_contas?.is_caixa);
   }, [contas]);
 
   const fetchLancamentos = useCallback(async () => {
@@ -165,9 +165,6 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
       let saidasPeriodo = 0;
       let saldoAcumuladoAntes = contaSelecionada.saldo_inicial;
       
-      const lancamentosNoPeriodo: Lancamento[] = [];
-      
-      // 1. Busca todos os lançamentos da conta (para calcular o saldo acumulado antes do período)
       const lancamentosDaConta = lancamentos.filter(l => l.conta_bancaria_id === filtroContaId);
       
       // 2. Calcula Saldo Acumulado ANTES do período de filtro
@@ -298,8 +295,13 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
         const estornoDescricao = `Estorno: ${lancamento.descricao}`;
         const valor = Math.abs(lancamento.valor);
         
+        // NOVO: Geração de IDs para os lançamentos de estorno
+        const idEstornoAtivo = crypto.randomUUID();
+        const idEstornoResultado = crypto.randomUUID();
+        
         // Lançamento 1: Estorno no Ativo (Caixa/Banco)
         const estornoAtivoPayload = {
+            id: idEstornoAtivo, // NOVO ID
             proprietario_id: empresaId,
             data_movimentacao: new Date().toISOString(),
             descricao: estornoDescricao,
@@ -309,6 +311,7 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
             conta_contabil_id: lancamento.conta_contabil_id, // Conta Ativo/Caixa
             origem: 'estorno_direto',
             historico_id: lancamento.historico_id,
+            conta_resultado_id: idEstornoResultado, // REFERÊNCIA CRUZADA
         };
         
         // Lançamento 2: Estorno no Resultado (DRE)
@@ -319,6 +322,7 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
         const estornoResultadoTipo = lancamento.tipo === 'Entrada' ? 'Entrada' : 'Saida'; 
         
         const estornoResultadoPayload = {
+            id: idEstornoResultado, // NOVO ID
             proprietario_id: empresaId,
             data_movimentacao: new Date().toISOString(),
             descricao: estornoDescricao,
@@ -328,6 +332,7 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
             conta_contabil_id: contaResultadoId,
             origem: 'estorno_direto',
             historico_id: lancamento.historico_id,
+            conta_resultado_id: idEstornoAtivo, // REFERÊNCIA CRUZADA
         };
         
         // 5. Inserir os novos lançamentos de estorno
