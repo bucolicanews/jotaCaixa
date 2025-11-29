@@ -336,8 +336,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
         }
         
         // 3. Lançamento 3: D: Despesa/Custo (DRE) - DÉBITO (Entrada)
-        // Este lançamento é gerado APENAS na criação da conta sintética.
-        // Não deve ser gerado aqui para evitar duplicação.
+        // ESTE LANÇAMENTO É REMOVIDO DAQUI, POIS É GERADO NA CRIAÇÃO DA CP.
       }
       
       // 4. Inserir todos os lançamentos de uma vez

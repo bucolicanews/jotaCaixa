@@ -162,7 +162,7 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
                 id: idEstornoPassivo, // PERSISTINDO ID
                 proprietario_id: usuario.id,
                 data_movimentacao: dataEstornoISO,
-                descricao: `Estorno Passivo CP: ${descricaoContaSintetica} (CP ID: ${contaPagarId.substring(0, 8)})`, // DESCRIÇÃO AJUSTADA
+                descricao: `Estorno Baixa Passivo CP: ${descricaoContaSintetica} (CP ID: ${contaPagarId.substring(0, 8)})`, // DESCRIÇÃO AJUSTADA
                 valor: totalEstornado,
                 tipo: 'Saida' as const, // CRÉDITO (Saída) no Passivo para restaurar a obrigação
                 conta_bancaria_id: null,
