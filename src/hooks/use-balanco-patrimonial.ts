@@ -52,6 +52,10 @@ export const useBalancoPatrimonial = (dataFim: Date | null): BalancoPatrimonialH
     for (const lancamento of lancamentos) {
         const valor = Math.abs(parseFloat(lancamento.valor)); // GARANTINDO VALOR POSITIVO
         
+        // CRÍTICO: Ignora lançamentos de estorno e lançamentos originais estornados
+        const origem = lancamento.origem || '';
+        if (origem.includes('estorno') || origem.includes('estornada')) continue;
+        
         if (isDevedora) {
             // Contas Devedoras (Ativo): Entrada (Débito) aumenta (+), Saída (Crédito) diminui (-)
             if (lancamento.tipo === 'Entrada') {
