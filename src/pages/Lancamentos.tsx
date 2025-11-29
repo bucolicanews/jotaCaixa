@@ -6,12 +6,18 @@ import FormLancamentoManual from '@/components/formularios/FormLancamentoManual'
 import { useSessao } from '@/hooks/use-sessao';
 import { ClienteProfile } from '@/types/usuario';
 import LancamentosManuaisTable from '@/components/lancamentos/LancamentosManuaisTable';
-import TodosLancamentosTable from '@/components/lancamentos/TodosLancamentosTable'; // NOVO IMPORT
+import TodosLancamentosTable from '@/components/lancamentos/TodosLancamentosTable';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useSearchParams } from 'react-router-dom'; // Importando useSearchParams
 
 const Lancamentos: React.FC = () => {
   const { role, perfil } = useSessao();
-  const [refreshKey, setRefreshKey] = useState(0); // Estado para forçar a recarga da tabela
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [searchParams] = useSearchParams();
+  
+  // Lê o parâmetro 'tab' da URL, com fallback para 'novo'
+  const initialTab = searchParams.get('tab') || 'novo';
+  const [activeTab, setActiveTab] = useState(initialTab);
 
   const canAccess = role === 'Admin' || (role === 'Cliente' && (perfil as ClienteProfile)?.permissoes?.plano_contas === true);
 
@@ -24,7 +30,7 @@ const Lancamentos: React.FC = () => {
   }
   
   const handleSaveComplete = () => {
-    setRefreshKey(prev => prev + 1); // Força a recarga da tabela
+    setRefreshKey(prev => prev + 1);
   };
 
   return (
@@ -33,11 +39,11 @@ const Lancamentos: React.FC = () => {
         <DollarSign className="w-6 h-6 mr-2" /> Lançamentos Contábeis
       </h1>
       
-      <Tabs defaultValue="novo" className="w-full">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="novo">Novo Lançamento</TabsTrigger>
             <TabsTrigger value="historico">Histórico Manual</TabsTrigger>
-            <TabsTrigger value="todos">Todos os Lançamentos</TabsTrigger> {/* NOVA ABA */}
+            <TabsTrigger value="todos">Todos os Lançamentos</TabsTrigger>
         </TabsList>
         
         <TabsContent value="novo" className="mt-4">
@@ -58,7 +64,7 @@ const Lancamentos: React.FC = () => {
         </TabsContent>
         
         <TabsContent value="todos" className="mt-4">
-            <TodosLancamentosTable key={refreshKey + 1} /> {/* Usando uma chave diferente para forçar a recarga */}
+            <TodosLancamentosTable key={refreshKey + 1} />
         </TabsContent>
       </Tabs>
     </LayoutPrincipal>
