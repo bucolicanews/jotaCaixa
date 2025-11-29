@@ -111,7 +111,7 @@ const ExportarLancamentos: React.FC = () => {
       const startDate = format(filtroPeriodo.from, 'yyyy-MM-dd');
       const endDate = format(filtroPeriodo.to, 'yyyy-MM-dd');
 
-      // 1. Buscar TODOS os Lançamentos do Período (incluindo as partidas dobradas)
+      // 1. Buscar TODOS os Lançamentos do Período (incluindo os que foram marcados como estornados)
       const { data, error } = await supabase
         .from('lancamentos')
         .select(`
@@ -125,6 +125,7 @@ const ExportarLancamentos: React.FC = () => {
           conta_contabil_id,
           conta_bancaria_id,
           conta_resultado_id,
+          origem,
           
           conta_contabil:conta_contabil_id ( Conta, Descricao ),
           historicos:historico_id ( codigo ),
@@ -137,7 +138,7 @@ const ExportarLancamentos: React.FC = () => {
         .eq('proprietario_id', ownerId)
         .gte('data_movimentacao', startDate)
         .lte('data_movimentacao', endDate)
-        .neq('origem', 'movimentacao_direta_estornada') // Ignora lançamentos originais estornados
+        // REMOVIDO: .neq('origem', 'movimentacao_direta_estornada')
         .order('data_movimentacao', { ascending: true });
 
       if (error) throw error;
@@ -164,31 +165,11 @@ const ExportarLancamentos: React.FC = () => {
         if (processedLaunchIds.has(l.id)) continue;
 
         // Busca o par usando a referência cruzada (conta_resultado_id)
-        const par = lancamentos.find(p => p.id === l.conta_resultado_id && p.id !== l.id); // CRÍTICO: Garante que não seja o mesmo ID
+        const par = lancamentos.find(p => p.id === l.conta_resultado_id && p.id !== l.id);
         
-        // Se for um lançamento manual de partida dobrada, ele deve ter um par
-        if (l.origem === 'lancamento_manual' && !par) {
-            currentSkipped.push(`ID ${l.id.substring(0, 8)}: Lançamento manual sem par de partida dobrada encontrado.`);
-            processedLaunchIds.add(l.id);
-            continue;
-        }
-        
-        // Se for um lançamento de conciliação/pagamento/recebimento, ele deve ter um par
-        if (l.origem !== 'lancamento_manual' && !par) {
-            currentSkipped.push(`ID ${l.id.substring(0, 8)}: Lançamento de origem '${l.origem}' sem par de partida dobrada encontrado.`);
-            processedLaunchIds.add(l.id);
-            continue;
-        }
-        
-        // Se não for um par, tratamos como um lançamento único (que não deveria existir)
+        // Se não for um par, ignora e registra o erro
         if (!par) {
-            // Se não for um lançamento de origem 'movimentacao_direta' ou 'estorno_direto', pode ser um lançamento de DRE sem par de Ativo/Passivo.
-            // Se for um lançamento de DRE (que não tem conta_bancaria_id), ele deve ter um par.
-            if (!l.conta_bancaria_id && l.conta_resultado_id) {
-                currentSkipped.push(`ID ${l.id.substring(0, 8)}: Lançamento de DRE sem par de Ativo/Passivo. Ignorado.`);
-            } else {
-                currentSkipped.push(`ID ${l.id.substring(0, 8)}: Lançamento sem par de partida dobrada. Ignorado.`);
-            }
+            currentSkipped.push(`ID ${l.id.substring(0, 8)}: Lançamento sem par de partida dobrada. Ignorado.`);
             processedLaunchIds.add(l.id);
             continue;
         }
