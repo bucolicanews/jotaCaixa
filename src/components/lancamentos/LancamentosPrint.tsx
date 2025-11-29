@@ -32,15 +32,14 @@ const getOrigemDisplay = (origem: string) => {
         case 'movimentacao_direta': return 'Mov. Direta';
         case 'estorno_direto': return 'Estorno';
         case 'movimentacao_direta_estornada': return 'Estornada';
-        case 'ignorado_manual': return 'Ignorado';
         default: return origem;
     }
 };
 
 const LancamentosPrint: React.FC<LancamentosPrintProps> = ({ lancamentos, ownerName, logoUrl }) => {
     
-    // CRÍTICO: Filtra lançamentos ignorados antes de calcular totais e exibir
-    const lancamentosValidos = lancamentos.filter(l => l.origem !== 'ignorado_manual');
+    // Filtra lançamentos que não são estornados (para o cálculo de totais)
+    const lancamentosValidos = lancamentos.filter(l => l.origem !== 'movimentacao_direta_estornada');
     
     const totalDebito = lancamentosValidos.filter(l => l.tipo === 'Entrada' && l.origem !== 'estorno_direto').reduce((sum, l) => sum + l.valor, 0);
     const totalCredito = lancamentosValidos.filter(l => l.tipo === 'Saida' && l.origem !== 'estorno_direto').reduce((sum, l) => sum + l.valor, 0);
