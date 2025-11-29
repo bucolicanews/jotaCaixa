@@ -114,7 +114,6 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
             return;
         }
         
-        const totalEstornado = pagamentos.reduce((sum, p) => sum + p.valor_pago, 0);
         const dataEstornoISO = new Date().toISOString();
         
         // 4. Buscar os lançamentos originais (Ativo e Passivo)
@@ -193,6 +192,26 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
                     conta_resultado_id: idEstornoAtivo, // REFERÊNCIA CRUZADA
                 };
                 await supabase.from('lancamentos').insert(lancamentoEstornoPassivo);
+            }
+            
+            // 5.3. Lançamento 3: Estorno da Despesa/Custo (DRE) - CRÉDITO (Saída)
+            if (contaDespesaCriacao) {
+                const idEstornoDespesa = crypto.randomUUID();
+                
+                const lancamentoEstornoDespesa = {
+                    id: idEstornoDespesa,
+                    proprietario_id: usuario.id,
+                    data_movimentacao: dataEstornoISO,
+                    descricao: `Estorno Despesa/Custo CP: ${descricaoContaSintetica} (CP ID: ${contaPagarId.substring(0, 8)})`,
+                    valor: pagamento.valor_pago,
+                    tipo: 'Saida' as const, // CRÉDITO (Saída) na Despesa (Credora) para neutralizar o débito original
+                    conta_bancaria_id: null,
+                    conta_contabil_id: contaDespesaCriacao,
+                    origem: 'estorno_pagamento_manual',
+                    historico_id: historicoId,
+                    conta_resultado_id: null,
+                };
+                await supabase.from('lancamentos').insert(lancamentoEstornoDespesa);
             }
         }
         
