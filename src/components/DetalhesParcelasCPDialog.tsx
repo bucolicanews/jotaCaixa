@@ -100,7 +100,7 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
         const contaPatrimonial = contaSintetica.id_conta_patrimonial;
         const descricaoContaSintetica = contaSintetica.descricao || 'Pagamento';
         const historicoId = contaSintetica.historico_id;
-        const contaDespesaCriacao = contaSintetica.id_conta_resultado; // <-- DRE account
+        // const contaDespesaCriacao = contaSintetica.id_conta_resultado; // REMOVIDO: Não é mais necessário
         
         // 3. Buscar todos os pagamentos associados a esta parcela
         const { data: pagamentos, error: fetchError } = await supabase
@@ -167,21 +167,8 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
             await supabase.from('lancamentos').insert(lancamentoEstornoPassivo);
         }
         
-        // 4.3. Reverter o Lançamento de Despesa/Custo (DRE) - CRÉDITO (Saída)
-        if (contaDespesaCriacao) {
-            const lancamentoEstornoDespesa = {
-                proprietario_id: usuario.id,
-                data_movimentacao: dataEstornoISO,
-                descricao: `Estorno Despesa/Custo CP: ${descricaoContaSintetica} (CP ID: ${contaPagarId.substring(0, 8)})`,
-                valor: totalEstornado,
-                tipo: 'Saida' as const, // CRÉDITO (Saída) para diminuir a Despesa (Credora)
-                conta_bancaria_id: null,
-                conta_contabil_id: contaDespesaCriacao,
-                origem: 'estorno_pagamento_manual',
-                historico_id: historicoId,
-            };
-            await supabase.from('lancamentos').insert(lancamentoEstornoDespesa);
-        }
+        // 4.3. REMOVIDO: Reverter o Lançamento de Despesa/Custo (DRE) - CRÉDITO (Saída)
+        // Este lançamento não deve ser gerado, pois o DRE foi reconhecido na criação da CP.
         
         // 5. Deletar Registros de Pagamento
         const pagamentoIds = pagamentos.map(r => r.id);
