@@ -37,8 +37,11 @@ const formSchema = z.object({
   historico_id: z.string().uuid('Selecione um histórico válido.').nullable(),
   novo_historico: z.string().optional(),
   
-  // CAMPO ALTERADO: Agora é a Conta Patrimonial (Ativo/Passivo/PL)
+  // CAMPO C: Passivo/Obrigação
   conta_patrimonial_id: z.string().uuid('Selecione uma conta patrimonial válida.').nullable(),
+  
+  // NOVO CAMPO D: Despesa/Custo (Resultado)
+  conta_resultado_id: z.string().uuid('Selecione uma conta de resultado válida.').nullable(),
 
 }).superRefine((data, ctx) => {
   if (data.tipo_lancamento === 'unico' && !data.data_vencimento) {
@@ -63,8 +66,9 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
   const { configMap } = useContabilConfig();
   const [mapeamentoContabil, setMapeamentoContabil] = useState<Record<string, string | null>>({});
   const [historicos, setHistoricos] = useState<Historico[]>([]);
-  const [contasPatrimoniais, setContasPatrimoniais] = useState<PlanoContas[]>([]); // RENOMEADO
-  const [loadingContasPatrimoniais, setLoadingContasPatrimoniais] = useState(true); // RENOMEADO
+  const [contasPatrimoniais, setContasPatrimoniais] = useState<PlanoContas[]>([]);
+  const [contasResultado, setContasResultado] = useState<PlanoContas[]>([]); // NOVO ESTADO
+  const [loadingContas, setLoadingContas] = useState(true);
   const [isCreatingHistorico, setIsCreatingHistorico] = useState(false);
   const isEditing = !!contaInicial;
 
@@ -107,28 +111,49 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
     }
   }, [adminId]);
   
-  const fetchContasPatrimoniais = useCallback(async () => {
+  const fetchContasContabeis = useCallback(async () => {
     if (!adminId) return;
-    setLoadingContasPatrimoniais(true);
+    setLoadingContas(true);
     
-    // Busca contas Patrimoniais (Ativo, Passivo, PL)
-    const { data, error } = await supabase
+    // 1. Busca contas Patrimoniais (Passivo/Obrigação)
+    const { data: patrimonialData, error: pError } = await supabase
         .from('plano_contas')
         .select('id, Conta, Descricao')
         .eq('proprietario_id', adminId)
         .eq('Analitica', 'Sim')
         .eq('is_conta_patrimonial', true)
-        .eq('is_a_pagar', true) // NOVO FILTRO: Apenas contas marcadas como Contas a Pagar
+        .eq('is_a_pagar', true)
         .order('Conta');
         
-    if (error) {
-        showError('Erro ao carregar contas patrimoniais: ' + error.message);
+    if (pError) {
+        showError('Erro ao carregar contas patrimoniais: ' + pError.message);
         setContasPatrimoniais([]);
     } else {
-        setContasPatrimoniais(data as PlanoContas[]);
+        setContasPatrimoniais(patrimonialData as PlanoContas[]);
     }
-    setLoadingContasPatrimoniais(false);
-  }, [adminId]);
+    
+    // 2. Busca contas de Resultado (Despesa/Custo)
+    const custoCode = configMap.Custo || '5';
+    const despesaCode = configMap.Despesa || '6';
+    
+    const { data: resultadoData, error: rError } = await supabase
+        .from('plano_contas')
+        .select('id, Conta, Descricao')
+        .eq('proprietario_id', adminId)
+        .eq('Analitica', 'Sim')
+        .eq('is_conta_resultado', true)
+        .or(`Conta.like.${custoCode}.%,Conta.like.${despesaCode}.%`)
+        .order('Conta');
+        
+    if (rError) {
+        showError('Erro ao carregar contas de resultado: ' + rError.message);
+        setContasResultado([]);
+    } else {
+        setContasResultado(resultadoData as PlanoContas[]);
+    }
+    
+    setLoadingContas(false);
+  }, [adminId, configMap.Custo, configMap.Despesa]);
 
   useEffect(() => {
     if (isAdmin) {
@@ -136,9 +161,9 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
     }
     if (adminId) {
         fetchHistoricos();
-        fetchContasPatrimoniais(); // Chamando a nova função
+        fetchContasContabeis();
     }
-  }, [isAdmin, adminId, fetchMapeamentoContabil, fetchHistoricos, fetchContasPatrimoniais]);
+  }, [isAdmin, adminId, fetchMapeamentoContabil, fetchHistoricos, fetchContasContabeis]);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -152,7 +177,8 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
       intervalo_dias: 30,
       historico_id: contaInicial?.historico_id || null,
       novo_historico: '',
-      conta_patrimonial_id: contaInicial?.id_conta_patrimonial || null, // RENOMEADO
+      conta_patrimonial_id: contaInicial?.id_conta_patrimonial || null,
+      conta_resultado_id: contaInicial?.id_conta_resultado || null, // NOVO DEFAULT
     },
   });
   
@@ -190,16 +216,19 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
     
     // 1. Buscar a conta analítica de parcelas a pagar
     const contaParcelaPagar = isAdmin ? mapeamentoContabil['parcela_pagar'] : null;
-    // NOVO: Buscar a conta de Despesa/Custo (mapeada como 'pagamento')
-    const contaDespesa = isAdmin ? mapeamentoContabil['pagamento'] : null; 
     
     if (isAdmin && !contaParcelaPagar) {
         showError('A conta contábil para Parcelas a Pagar (Analítico) não está configurada. Verifique Configurações > Contas a Pagar.');
         return;
     }
-    // NOVO: Validação da conta de Despesa
-    if (isAdmin && !contaDespesa) {
-        showError('A conta contábil para Despesa/Custo (Pagamento) não está configurada. Verifique Configurações > Contas a Pagar.');
+    
+    if (!values.conta_patrimonial_id) {
+        showError('Selecione a Conta Patrimonial (Passivo/Obrigação).');
+        return;
+    }
+    
+    if (!values.conta_resultado_id) {
+        showError('Selecione a Conta de Resultado (Despesa/Custo).');
         return;
     }
     
@@ -232,11 +261,9 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
           data_vencimento: parcelasParaInserir[0].data_vencimento,
           status: 'pendente',
           origem: 'manual',
-          // CAMPO ALTERADO: Agora é a Conta Patrimonial
           id_conta_patrimonial: values.conta_patrimonial_id,
           historico_id: values.historico_id,
-          // NOVO CAMPO: Salva a conta de Despesa/Custo (DRE)
-          ...(isAdmin && { id_conta_resultado: contaDespesa }), 
+          id_conta_resultado: values.conta_resultado_id, // NOVO CAMPO
       };
 
       if (isEditing && contaInicial) {
@@ -268,58 +295,67 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
       const launchDescription = values.descricao;
       const contaPagarIdShort = contaPagarId.substring(0, 8);
       
-      if (values.conta_patrimonial_id) {
-          const lancamentoPatrimonialPayload = {
-              proprietario_id: adminId,
-              data_movimentacao: dataMovimentacao,
-              descricao: `Lançamento Inicial CP: ${launchDescription} (CP ID: ${contaPagarIdShort})`,
-              valor: valorTotal,
-              tipo: 'Saida' as const, // CRÉDITO (Aumenta Passivo Credor)
-              conta_bancaria_id: null,
-              conta_contabil_id: values.conta_patrimonial_id,
-              origem: 'lancamento_cp',
-              historico_id: values.historico_id,
-          };
-          
-          // Limpeza de lançamentos antigos (se edição)
-          if (isEditing) {
-              const oldLaunchDescriptionPrefix = `Lançamento Inicial CP: ${contaInicial?.descricao} (CP ID: ${contaInicial?.id.substring(0, 8)})`;
-              await supabase.from('lancamentos')
-                  .delete()
-                  .eq('origem', 'lancamento_cp')
-                  .eq('proprietario_id', adminId)
-                  .ilike('descricao', `${oldLaunchDescriptionPrefix}%`);
-          }
-          
-          await supabase.from('lancamentos').insert(lancamentoPatrimonialPayload);
+      // CRÍTICO: Geração de IDs e Referência Cruzada
+      const idPatrimonial = crypto.randomUUID();
+      const idDespesa = crypto.randomUUID();
+      
+      // Lançamento 1: C: Passivo (Obrigação a Pagar) - CRÉDITO (Saida)
+      const lancamentoPatrimonialPayload = {
+          id: idPatrimonial,
+          proprietario_id: adminId,
+          data_movimentacao: dataMovimentacao,
+          descricao: `Lançamento Inicial CP: ${launchDescription} (CP ID: ${contaPagarIdShort})`,
+          valor: valorTotal,
+          tipo: 'Saida' as const, // CRÉDITO (Aumenta Passivo Credor)
+          conta_bancaria_id: null,
+          conta_contabil_id: values.conta_patrimonial_id,
+          origem: 'lancamento_cp',
+          historico_id: values.historico_id,
+          conta_resultado_id: idDespesa, // Passivo aponta para Despesa
+      };
+      
+      // Limpeza de lançamentos antigos (se edição)
+      if (isEditing) {
+          const oldLaunchDescriptionPrefix = `Lançamento Inicial CP: ${contaInicial?.descricao} (CP ID: ${contaInicial?.id.substring(0, 8)})`;
+          await supabase.from('lancamentos')
+              .delete()
+              .eq('origem', 'lancamento_cp')
+              .eq('proprietario_id', adminId)
+              .ilike('descricao', `${oldLaunchDescriptionPrefix}%`);
       }
       
-      // 5. NOVO LANÇAMENTO: DÉBITO (Entrada) na Conta de Despesa/Custo (DRE)
-      if (isAdmin && contaDespesa) {
-          const lancamentoDespesaPayload = {
-              proprietario_id: adminId,
-              data_movimentacao: dataMovimentacao,
-              descricao: `Despesa/Custo: ${launchDescription} (CP ID: ${contaPagarIdShort})`,
-              valor: valorTotal,
-              tipo: 'Entrada' as const, // Entrada (Débito) para reconhecer a Despesa (Credora)
-              conta_bancaria_id: null,
-              conta_contabil_id: contaDespesa,
-              origem: 'lancamento_cp',
-              historico_id: values.historico_id,
-          };
-          
-          // Limpeza de lançamentos antigos (se edição)
-          if (isEditing) {
-              const oldLaunchDescriptionPrefix = `Despesa/Custo: ${contaInicial?.descricao} (CP ID: ${contaInicial?.id.substring(0, 8)})`;
-              await supabase.from('lancamentos')
-                  .delete()
-                  .eq('origem', 'lancamento_cp')
-                  .eq('proprietario_id', adminId)
-                  .ilike('descricao', `${oldLaunchDescriptionPrefix}%`);
-          }
-          
-          await supabase.from('lancamentos').insert(lancamentoDespesaPayload);
+      lancamentosPayload.push(lancamentoPatrimonialPayload);
+      
+      // 5. Lançamento 2: D: Despesa/Custo (DRE) - DÉBITO (Entrada)
+      const lancamentoDespesaPayload = {
+          id: idDespesa,
+          proprietario_id: adminId,
+          data_movimentacao: dataMovimentacao,
+          descricao: `Despesa/Custo: ${launchDescription} (CP ID: ${contaPagarIdShort})`,
+          valor: valorTotal,
+          tipo: 'Entrada' as const, // Entrada (Débito) para reconhecer a Despesa (Credora)
+          conta_bancaria_id: null,
+          conta_contabil_id: values.conta_resultado_id,
+          origem: 'lancamento_cp',
+          historico_id: values.historico_id,
+          conta_resultado_id: idPatrimonial, // Despesa aponta para Passivo
+      };
+      
+      // Limpeza de lançamentos antigos (se edição)
+      if (isEditing) {
+          const oldLaunchDescriptionPrefix = `Despesa/Custo: ${contaInicial?.descricao} (CP ID: ${contaInicial?.id.substring(0, 8)})`;
+          await supabase.from('lancamentos')
+              .delete()
+              .eq('origem', 'lancamento_cp')
+              .eq('proprietario_id', adminId)
+              .ilike('descricao', `${oldLaunchDescriptionPrefix}%`);
       }
+      
+      lancamentosPayload.push(lancamentoDespesaPayload);
+      
+      // 6. Inserir os dois lançamentos de uma vez
+      const { error: lancamentoError } = await supabase.from('lancamentos').insert(lancamentosPayload);
+      if (lancamentoError) throw lancamentoError;
 
       showSuccess(`Conta ${isEditing ? 'atualizada' : 'salva'} com sucesso!`);
       onSaveComplete();
@@ -340,17 +376,17 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
         )} />
         <Separator />
         
-        {/* CAMPO ALTERADO: Conta Patrimonial */}
+        {/* CAMPO 3: Conta Patrimonial (Passivo/Obrigação) - CRÉDITO */}
         <FormField
             control={form.control}
             name="conta_patrimonial_id"
             render={({ field }) => (
                 <FormItem>
-                    <FormLabel>3. Conta Patrimonial (Passivo/Obrigação)</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value || undefined} disabled={loadingContasPatrimoniais}>
+                    <FormLabel>3. Conta Patrimonial (Passivo/Obrigação) - CRÉDITO</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value || undefined} disabled={loadingContas}>
                         <FormControl>
                             <SelectTrigger>
-                                <SelectValue placeholder={loadingContasPatrimoniais ? "Carregando Contas..." : "Selecione a conta patrimonial"} />
+                                <SelectValue placeholder={loadingContas ? "Carregando Contas..." : `Selecione a conta de Passivo (${configMap.Passivo}.x.x)`} />
                             </SelectTrigger>
                         </FormControl>
                         <SelectContent>
@@ -363,7 +399,7 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
                         </SelectContent>
                     </Select>
                     <FormMessage />
-                    {contasPatrimoniais.length === 0 && !loadingContasPatrimoniais && (
+                    {contasPatrimoniais.length === 0 && !loadingContas && (
                         <p className="text-sm text-red-500">
                             Nenhuma conta Patrimonial marcada como Contas a Pagar no Plano de Contas.
                         </p>
@@ -373,9 +409,42 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
         />
         <Separator />
         
+        {/* NOVO CAMPO 4: Conta de Resultado (Despesa/Custo) - DÉBITO */}
+        <FormField
+            control={form.control}
+            name="conta_resultado_id"
+            render={({ field }) => (
+                <FormItem>
+                    <FormLabel>4. Conta de Resultado (Despesa/Custo) - DÉBITO</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value || undefined} disabled={loadingContas}>
+                        <FormControl>
+                            <SelectTrigger>
+                                <SelectValue placeholder={loadingContas ? "Carregando Contas..." : `Selecione a conta de Despesa/Custo (${configMap.Custo}.x.x ou ${configMap.Despesa}.x.x)`} />
+                            </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                            <SelectItem value={null as any}>Nenhum (Não Mapear)</SelectItem>
+                            {contasResultado.map(c => (
+                                <SelectItem key={c.id} value={c.id}>
+                                    {c.Conta} - {c.Descricao}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <FormMessage />
+                    {contasResultado.length === 0 && !loadingContas && (
+                        <p className="text-sm text-red-500">
+                            Nenhuma conta de Resultado (Despesa/Custo) marcada no Plano de Contas.
+                        </p>
+                    )}
+                </FormItem>
+            )}
+        />
+        <Separator />
+        
         {/* Histórico */}
         <div className="space-y-2">
-            <FormLabel>4. Histórico (Opcional)</FormLabel>
+            <FormLabel>5. Histórico (Opcional)</FormLabel>
             <div className="flex space-x-2">
                 <FormField
                     control={form.control}
@@ -422,7 +491,7 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
         <Separator />
         
         <div className="space-y-4">
-          <FormLabel>5. Detalhes do Pagamento</FormLabel>
+          <FormLabel>6. Detalhes do Pagamento</FormLabel>
           <FormField control={form.control} name="tipo_lancamento" render={({ field }) => (
             <FormItem><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex space-x-4 pt-2"><FormItem className="flex items-center space-x-2 space-y-0"><FormControl><RadioGroupItem value="unico" /></FormControl><FormLabel className="font-normal">Único</FormLabel></FormItem><FormItem className="flex items-center space-x-2 space-y-0"><FormControl><RadioGroupItem value="repetir" /></FormControl><FormLabel className="font-normal">Repetir Valor</FormLabel></FormItem><FormItem className="flex items-center space-x-2 space-y-0"><FormControl><RadioGroupItem value="parcelar" /></FormControl><FormLabel className="font-normal">Parcelar Valor</FormLabel></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>
           )} />
