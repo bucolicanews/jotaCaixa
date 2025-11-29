@@ -278,6 +278,8 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
         return;
     }
     
+    setIsSubmitting(true);
+    
     try {
       // 1. Calcular valores e parcelas
       let valorTotal: number;
@@ -345,8 +347,13 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
       const launchDescription = values.descricao;
       const contaReceberIdShort = contaReceberId.substring(0, 8);
       
+      // CRÍTICO: Geração de IDs e Referência Cruzada
+      const idPatrimonial = crypto.randomUUID();
+      const idReceita = crypto.randomUUID();
+      
       if (contaPatrimonial) {
           const lancamentoPatrimonialPayload = {
+              id: idPatrimonial, // NOVO ID
               proprietario_id: ownerId,
               data_movimentacao: dataMovimentacao,
               descricao: `Lançamento Inicial CR: ${launchDescription} (CR ID: ${contaReceberIdShort})`,
@@ -356,6 +363,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
               conta_contabil_id: contaPatrimonial,
               origem: 'lancamento_cr',
               historico_id: values.historico_id,
+              conta_resultado_id: idReceita, // REFERÊNCIA CRUZADA
           };
           
           // Limpeza de lançamentos antigos (se edição)
@@ -368,12 +376,13 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
                   .ilike('descricao', `${oldLaunchDescriptionPrefix}%`);
           }
           
-          await supabase.from('lancamentos').insert(lancamentoPatrimonialPayload);
+          lancamentosPayload.push(lancamentoPatrimonialPayload);
       }
       
       // 5. Lançamento 2: CRÉDITO (Resultado) - Aumenta a Receita (DRE)
       if (isAdmin && contaReceitaResultado) {
           const lancamentoReceitaPayload = {
+              id: idReceita, // NOVO ID
               proprietario_id: ownerId,
               data_movimentacao: dataMovimentacao,
               descricao: `Receita: ${launchDescription} (CR ID: ${contaReceberIdShort})`,
@@ -383,6 +392,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
               conta_contabil_id: contaReceitaResultado,
               origem: 'lancamento_cr',
               historico_id: values.historico_id,
+              conta_resultado_id: idPatrimonial, // REFERÊNCIA CRUZADA
           };
           
           // Limpeza de lançamentos antigos (se edição)
@@ -395,14 +405,20 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
                   .ilike('descricao', `${oldReceitaDescriptionPrefix}%`);
           }
           
-          await supabase.from('lancamentos').insert(lancamentoReceitaPayload);
+          lancamentosPayload.push(lancamentoReceitaPayload);
       }
+      
+      // 6. Inserir os lançamentos de uma vez
+      const { error: lancamentoError } = await supabase.from('lancamentos').insert(lancamentosPayload);
+      if (lancamentoError) throw lancamentoError;
 
 
       showSuccess(`Conta ${isEditing ? 'atualizada' : 'salva'} com sucesso!`);
       onSaveComplete();
     } catch (error: any) {
       showError(`Falha ao salvar: ${error.message}`);
+    } finally {
+        setIsSubmitting(false);
     }
   };
 return (
