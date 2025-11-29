@@ -329,10 +329,19 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
                                 <TableHeader><TableRow><TableHead className="w-[150px]">Conta</TableHead><TableHead>Descrição</TableHead><TableHead className="text-right w-[150px]">Saldo</TableHead></TableRow></TableHeader>
                                 <TableBody>
                                     {renderContas(getContasPL())}
-                                    
-                                    {/* Linha do Resultado Líquido (Separada) */}
-                                    <TableRow className={cn("font-bold border-t-2", resultadoLiquido >= 0 ? "bg-green-500/30" : "bg-red-500/30")}>
-                                        <TableCell colSpan={2}>Resultado Líquido do Período</TableCell>
+                                </TableBody>
+                            </Table>
+                        </CardContent>
+                    </Card>
+                    
+                    {/* NOVO: Card de Resultado Líquido (Separado) */}
+                    <Card>
+                        <CardHeader><CardTitle className="text-xl flex items-center"><TrendingUp className="w-5 h-5 mr-2" /> Resultado Líquido do Período</CardTitle></CardHeader>
+                        <CardContent>
+                            <Table>
+                                <TableBody>
+                                    <TableRow className={cn("font-bold", resultadoLiquido >= 0 ? "bg-green-500/30" : "bg-red-500/30")}>
+                                        <TableCell colSpan={2}>Resultado Líquido (Receita - Custo - Despesa)</TableCell>
                                         <TableCell className={cn("text-right", resultadoLiquido >= 0 ? "text-green-700" : "text-red-700")}>
                                             {formatCurrency(resultadoLiquido)}
                                         </TableCell>
