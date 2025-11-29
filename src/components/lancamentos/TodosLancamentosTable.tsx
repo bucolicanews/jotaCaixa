@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Filter, Search, Printer } from 'lucide-react';
+import { Loader2, Filter, Search, Printer, Trash2, Edit } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
@@ -17,6 +17,7 @@ import { usePrint } from '@/hooks/use-print';
 import ReactDOMServer from 'react-dom/server';
 import LancamentosPrint from './LancamentosPrint';
 import { useOwnerBranding } from '@/hooks/use-owner-branding';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '../ui/alert-dialog';
 
 interface LancamentoDetalhado extends Lancamento {
     plano_contas: { Conta: string, Descricao: string } | null;
@@ -31,6 +32,7 @@ const TodosLancamentosTable: React.FC = () => {
     
     const [lancamentos, setLancamentos] = useState<LancamentoDetalhado[]>([]);
     const [loading, setLoading] = useState(true);
+    const [isDeleting, setIsDeleting] = useState(false);
     const [filtroTexto, setFiltroTexto] = useState('');
     const [filtroOrigem, setFiltroOrigem] = useState('todos');
     const filtroTextoDebounced = useDebounce(filtroTexto, 500);
@@ -111,6 +113,42 @@ const TodosLancamentosTable: React.FC = () => {
         const htmlContent = ReactDOMServer.renderToStaticMarkup(printComponent);
         printContent(htmlContent, `Todos os Lançamentos - ${ownerName}`, 'landscape');
     };
+    
+    const handleDelete = async (lancamento: LancamentoDetalhado) => {
+        const origem = lancamento.origem;
+        
+        if (origem !== 'lancamento_manual' && origem !== 'movimentacao_direta') {
+            showError(`Lançamentos de origem '${getOrigemDisplay(origem)}' devem ser excluídos no módulo de origem (Ex: Contas a Receber, Conciliação).`);
+            return;
+        }
+        
+        if (!window.confirm(`Tem certeza que deseja excluir este lançamento (${getOrigemDisplay(origem)})? Isso removerá o par de partidas dobradas.`)) return;
+        
+        setIsDeleting(true);
+        try {
+            const pairedId = lancamento.conta_resultado_id;
+            
+            const idsToDelete = [lancamento.id];
+            if (pairedId) {
+                idsToDelete.push(pairedId);
+            }
+            
+            // 2. Deletar ambos os lançamentos (Débito e Crédito)
+            const { error } = await supabase
+                .from('lancamentos')
+                .delete()
+                .in('id', idsToDelete);
+                
+            if (error) throw error;
+            
+            showSuccess('Lançamento excluído com sucesso.');
+            fetchLancamentos();
+        } catch (error: any) {
+            showError('Falha ao excluir lançamento: ' + error.message);
+        } finally {
+            setIsDeleting(false);
+        }
+    };
 
     return (
         <Card>
@@ -164,18 +202,21 @@ const TodosLancamentosTable: React.FC = () => {
                                 <TableHead className="w-[150px]">Conta Contábil</TableHead>
                                 <TableHead className="w-[150px]">Origem</TableHead>
                                 <TableHead className="w-[100px]">Conta Caixa</TableHead>
+                                <TableHead className="w-[100px] text-right">Ações</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {loading ? (
-                                <TableRow><TableCell colSpan={7} className="text-center py-8"><Loader2 className="h-6 w-6 animate-spin mx-auto text-primary" /></TableCell></TableRow>
+                                <TableRow><TableCell colSpan={8} className="text-center py-8"><Loader2 className="h-6 w-6 animate-spin mx-auto text-primary" /></TableCell></TableRow>
                             ) : lancamentos.length === 0 ? (
-                                <TableRow><TableCell colSpan={7} className="text-center py-4 text-muted-foreground">Nenhum lançamento encontrado.</TableCell></TableRow>
+                                <TableRow><TableCell colSpan={8} className="text-center py-4 text-muted-foreground">Nenhum lançamento encontrado.</TableCell></TableRow>
                             ) : (
                                 lancamentos.map((l) => {
                                     const isDebito = l.tipo === 'Entrada';
                                     const contaDisplay = l.plano_contas ? `${l.plano_contas.Conta} - ${l.plano_contas.Descricao}` : 'N/A';
                                     const origemDisplay = getOrigemDisplay(l.origem);
+                                    
+                                    const canDelete = l.origem === 'lancamento_manual' || l.origem === 'movimentacao_direta';
                                     
                                     return (
                                         <TableRow key={l.id} className={cn(l.origem === 'estorno_direto' && 'bg-red-500/10', l.origem === 'movimentacao_direta_estornada' && 'opacity-50')}>
@@ -192,6 +233,34 @@ const TodosLancamentosTable: React.FC = () => {
                                             <TableCell className="text-xs text-muted-foreground">{contaDisplay}</TableCell>
                                             <TableCell className="text-xs text-muted-foreground">{origemDisplay}</TableCell>
                                             <TableCell className="text-xs text-muted-foreground">{l.saldo_contas?.nome || '-'}</TableCell>
+                                            <TableCell className="text-right space-x-2">
+                                                <Button variant="ghost" size="icon" onClick={() => alert('Edição não implementada.')} disabled>
+                                                    <Edit className="w-4 h-4" />
+                                                </Button>
+                                                {canDelete && (
+                                                    <AlertDialog>
+                                                        <AlertDialogTrigger asChild>
+                                                            <Button variant="ghost" size="icon" disabled={isDeleting}>
+                                                                <Trash2 className="w-4 h-4 text-red-500" />
+                                                            </Button>
+                                                        </AlertDialogTrigger>
+                                                        <AlertDialogContent>
+                                                            <AlertDialogHeader>
+                                                                <AlertDialogTitle>Excluir Lançamento?</AlertDialogTitle>
+                                                                <AlertDialogDescription>
+                                                                    Esta ação removerá permanentemente este lançamento e seu par de partida dobrada.
+                                                                </AlertDialogDescription>
+                                                            </AlertDialogHeader>
+                                                            <AlertDialogFooter>
+                                                                <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
+                                                                <AlertDialogAction onClick={() => handleDelete(l)} disabled={isDeleting}>
+                                                                    {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Excluir'}
+                                                                </AlertDialogAction>
+                                                            </AlertDialogFooter>
+                                                        </AlertDialogContent>
+                                                    </AlertDialog>
+                                                )}
+                                            </TableCell>
                                         </TableRow>
                                     );
                                 })
