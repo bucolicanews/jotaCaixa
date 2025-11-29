@@ -79,6 +79,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
   const [contasReceita, setContasReceita] = useState<PlanoContas[]>([]);
   const [loadingContasReceita, setLoadingContasReceita] = useState(true);
   const [isCreatingHistorico, setIsCreatingHistorico] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false); // ADICIONADO: Estado de submissão
   const isEditing = !!contaInicial;
 
   const getOwnerId = () => {
@@ -234,7 +235,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
     },
   });
 
-  const { isSubmitting } = form.formState;
+  // const { isSubmitting } = form.formState; // REMOVIDO: Usando o estado local
   const tipoLancamento = form.watch('tipo_lancamento');
   const novoHistoricoValue = form.watch('novo_historico');
   
@@ -280,6 +281,9 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
     
     setIsSubmitting(true);
     
+    // CRÍTICO: Inicializa o array de payloads de lançamentos
+    const lancamentosPayload: any[] = [];
+
     try {
       // 1. Calcular valores e parcelas
       let valorTotal: number;
