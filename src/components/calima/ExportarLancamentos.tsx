@@ -143,6 +143,11 @@ const ExportarLancamentos: React.FC = () => {
       if (error) throw error;
 
       const lancamentos = data as unknown as LancamentoCalima[];
+      
+      // NOVO LOG PARA DEPURAR
+      console.log(`[Export] Total de Lançamentos Buscados: ${lancamentos.length}`);
+      lancamentos.forEach(l => console.log(`[Export] ID: ${l.id.substring(0, 8)}, Valor: ${l.valor}, Tipo: ${l.tipo}, Origem: ${l.origem}, Par: ${l.conta_resultado_id?.substring(0, 8)}`));
+      // FIM NOVO LOG
 
       if (lancamentos.length === 0) {
         showError('Nenhum lançamento encontrado no período.');
@@ -159,7 +164,7 @@ const ExportarLancamentos: React.FC = () => {
         if (processedLaunchIds.has(l.id)) continue;
 
         // Busca o par usando a referência cruzada (conta_resultado_id)
-        const par = lancamentos.find(p => p.id === l.conta_resultado_id);
+        const par = lancamentos.find(p => p.id === l.conta_resultado_id && p.id !== l.id); // CRÍTICO: Garante que não seja o mesmo ID
         
         // Se for um lançamento manual de partida dobrada, ele deve ter um par
         if (l.origem === 'lancamento_manual' && !par) {
@@ -177,7 +182,13 @@ const ExportarLancamentos: React.FC = () => {
         
         // Se não for um par, tratamos como um lançamento único (que não deveria existir)
         if (!par) {
-            currentSkipped.push(`ID ${l.id.substring(0, 8)}: Lançamento sem par de partida dobrada. Ignorado.`);
+            // Se não for um lançamento de origem 'movimentacao_direta' ou 'estorno_direto', pode ser um lançamento de DRE sem par de Ativo/Passivo.
+            // Se for um lançamento de DRE (que não tem conta_bancaria_id), ele deve ter um par.
+            if (!l.conta_bancaria_id && l.conta_resultado_id) {
+                currentSkipped.push(`ID ${l.id.substring(0, 8)}: Lançamento de DRE sem par de Ativo/Passivo. Ignorado.`);
+            } else {
+                currentSkipped.push(`ID ${l.id.substring(0, 8)}: Lançamento sem par de partida dobrada. Ignorado.`);
+            }
             processedLaunchIds.add(l.id);
             continue;
         }
