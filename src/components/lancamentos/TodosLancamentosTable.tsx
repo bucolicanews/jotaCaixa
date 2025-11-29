@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Filter, Search, Eye } from 'lucide-react';
+import { Loader2, Filter, Search, Printer } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
-import { showError } from '@/utils/toast';
+import { showError, showSuccess } from '@/utils/toast';
 import { Lancamento } from '@/types/lancamento';
 import { formatCurrency, formatarData } from '@/utils/formatters';
 import { Input } from '@/components/ui/input';
@@ -12,6 +12,11 @@ import { useDebounce } from '@/hooks/use-debounce';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Button } from '@/components/ui/button';
+import { usePrint } from '@/hooks/use-print';
+import ReactDOMServer from 'react-dom/server';
+import LancamentosPrint from './LancamentosPrint';
+import { useOwnerBranding } from '@/hooks/use-owner-branding';
 
 interface LancamentoDetalhado extends Lancamento {
     plano_contas: { Conta: string, Descricao: string } | null;
@@ -21,6 +26,9 @@ interface LancamentoDetalhado extends Lancamento {
 
 const TodosLancamentosTable: React.FC = () => {
     const { usuario } = useSessao();
+    const { printContent } = usePrint();
+    const { logoUrl, ownerName } = useOwnerBranding();
+    
     const [lancamentos, setLancamentos] = useState<LancamentoDetalhado[]>([]);
     const [loading, setLoading] = useState(true);
     const [filtroTexto, setFiltroTexto] = useState('');
@@ -85,6 +93,24 @@ const TodosLancamentosTable: React.FC = () => {
             default: return origem;
         }
     };
+    
+    const handlePrint = () => {
+        if (lancamentos.length === 0) {
+            showError('Nenhum lançamento para imprimir.');
+            return;
+        }
+        
+        const printComponent = (
+            <LancamentosPrint
+                lancamentos={lancamentos}
+                ownerName={ownerName}
+                logoUrl={logoUrl}
+            />
+        );
+
+        const htmlContent = ReactDOMServer.renderToStaticMarkup(printComponent);
+        printContent(htmlContent, `Todos os Lançamentos - ${ownerName}`, 'landscape');
+    };
 
     return (
         <Card>
@@ -102,24 +128,29 @@ const TodosLancamentosTable: React.FC = () => {
                             className="pl-10 max-w-sm"
                         />
                     </div>
-                    <Select value={filtroOrigem} onValueChange={setFiltroOrigem}>
-                        <SelectTrigger className="w-full sm:w-[200px]">
-                            <Filter className="w-4 h-4 mr-2 text-muted-foreground" />
-                            <SelectValue placeholder="Filtrar por Origem" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="todos">Todas as Origens</SelectItem>
-                            <SelectItem value="lancamento_manual">Manual</SelectItem>
-                            <SelectItem value="conciliacao_extrato">Conciliação</SelectItem>
-                            <SelectItem value="lancamento_cr">CR (Inicial)</SelectItem>
-                            <SelectItem value="recebimento_manual">CR (Recebimento)</SelectItem>
-                            <SelectItem value="lancamento_cp">CP (Inicial)</SelectItem>
-                            <SelectItem value="pagamento_manual">CP (Pagamento)</SelectItem>
-                            <SelectItem value="assinatura_stripe">Assinatura</SelectItem>
-                            <SelectItem value="movimentacao_direta">Mov. Direta</SelectItem>
-                            <SelectItem value="estorno_direto">Estorno</SelectItem>
-                        </SelectContent>
-                    </Select>
+                    <div className="flex space-x-2 w-full sm:w-auto">
+                        <Select value={filtroOrigem} onValueChange={setFiltroOrigem}>
+                            <SelectTrigger className="w-full sm:w-[200px]">
+                                <Filter className="w-4 h-4 mr-2 text-muted-foreground" />
+                                <SelectValue placeholder="Filtrar por Origem" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="todos">Todas as Origens</SelectItem>
+                                <SelectItem value="lancamento_manual">Manual</SelectItem>
+                                <SelectItem value="conciliacao_extrato">Conciliação</SelectItem>
+                                <SelectItem value="lancamento_cr">CR (Inicial)</SelectItem>
+                                <SelectItem value="recebimento_manual">CR (Recebimento)</SelectItem>
+                                <SelectItem value="lancamento_cp">CP (Inicial)</SelectItem>
+                                <SelectItem value="pagamento_manual">CP (Pagamento)</SelectItem>
+                                <SelectItem value="assinatura_stripe">Assinatura</SelectItem>
+                                <SelectItem value="movimentacao_direta">Mov. Direta</SelectItem>
+                                <SelectItem value="estorno_direto">Estorno</SelectItem>
+                            </SelectContent>
+                        </Select>
+                        <Button onClick={handlePrint} variant="outline" disabled={lancamentos.length === 0}>
+                            <Printer className="w-4 h-4 mr-2" /> Imprimir
+                        </Button>
+                    </div>
                 </div>
                 
                 <div className="overflow-x-auto">
