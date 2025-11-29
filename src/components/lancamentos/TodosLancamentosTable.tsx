@@ -275,8 +275,11 @@ const TodosLancamentosTable: React.FC = () => {
                                     const contaDisplay = l.plano_contas ? `${l.plano_contas.Conta} - ${l.plano_contas.Descricao}` : 'N/A';
                                     const origemDisplay = getOrigemDisplay(l.origem);
                                     
+                                    // Permite deletar se for manual, mov. direta ou ignorado
                                     const canDelete = l.origem === 'lancamento_manual' || l.origem === 'movimentacao_direta' || l.origem === 'ignorado_manual';
-                                    const canIgnore = l.origem === 'lancamento_manual' || l.origem === 'movimentacao_direta';
+                                    
+                                    // Permite ignorar/restaurar se for manual, mov. direta, CR Inicial ou CP Inicial
+                                    const canIgnore = ['lancamento_manual', 'movimentacao_direta', 'lancamento_cr', 'lancamento_cp'].includes(l.origem);
                                     const isIgnored = l.origem === 'ignorado_manual';
                                     
                                     return (
