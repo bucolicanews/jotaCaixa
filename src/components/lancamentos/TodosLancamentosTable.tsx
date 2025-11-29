@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Filter, Search, Printer, Trash2, Edit } from 'lucide-react';
+import { Loader2, Filter, Search, Printer, Trash2, Edit, EyeOff, Undo2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
@@ -38,6 +38,9 @@ const TodosLancamentosTable: React.FC = () => {
     const filtroTextoDebounced = useDebounce(filtroTexto, 500);
 
     const ownerId = usuario?.id;
+    
+    // Mapeamento para restaurar a origem correta após 'ignorado_manual'
+    const [origemMap, setOrigemMap] = useState<Record<string, string>>({});
 
     const fetchLancamentos = useCallback(async () => {
         if (!ownerId) return;
@@ -56,6 +59,9 @@ const TodosLancamentosTable: React.FC = () => {
             
         if (filtroOrigem !== 'todos') {
             query = query.eq('origem', filtroOrigem);
+        } else {
+            // Exclui lançamentos ignorados por padrão, a menos que o filtro seja 'ignorado_manual'
+            query = query.neq('origem', 'ignorado_manual');
         }
             
         if (filtroTextoDebounced) {
@@ -92,6 +98,7 @@ const TodosLancamentosTable: React.FC = () => {
             case 'movimentacao_direta': return 'Mov. Direta';
             case 'estorno_direto': return 'Estorno';
             case 'movimentacao_direta_estornada': return 'Estornada';
+            case 'ignorado_manual': return 'Ignorado'; // NOVO
             default: return origem;
         }
     };
@@ -117,7 +124,7 @@ const TodosLancamentosTable: React.FC = () => {
     const handleDelete = async (lancamento: LancamentoDetalhado) => {
         const origem = lancamento.origem;
         
-        if (origem !== 'lancamento_manual' && origem !== 'movimentacao_direta') {
+        if (origem !== 'lancamento_manual' && origem !== 'movimentacao_direta' && origem !== 'ignorado_manual') {
             showError(`Lançamentos de origem '${getOrigemDisplay(origem)}' devem ser excluídos no módulo de origem (Ex: Contas a Receber, Conciliação).`);
             return;
         }
@@ -149,6 +156,57 @@ const TodosLancamentosTable: React.FC = () => {
             setIsDeleting(false);
         }
     };
+    
+    // NOVO HANDLER: Ignorar/Restaurar
+    const handleToggleIgnore = async (lancamento: LancamentoDetalhado) => {
+        if (!ownerId) return;
+        setLoading(true);
+        
+        const isIgnored = lancamento.origem === 'ignorado_manual';
+        const pairedId = lancamento.conta_resultado_id;
+        
+        // Determina a nova origem
+        let newOrigem: string;
+        let successMessage: string;
+        
+        if (isIgnored) {
+            // Restaurar: Usa o valor original salvo no mapa, ou 'lancamento_manual' como fallback
+            newOrigem = origemMap[lancamento.id] || 'lancamento_manual';
+            successMessage = 'Lançamento restaurado e incluído nos relatórios.';
+        } else {
+            // Ignorar: Salva a origem original no mapa e define a nova origem
+            setOrigemMap(prev => ({ ...prev, [lancamento.id]: lancamento.origem }));
+            newOrigem = 'ignorado_manual';
+            successMessage = 'Lançamento ignorado e removido dos relatórios.';
+        }
+        
+        try {
+            // 1. Atualiza o lançamento principal
+            const { error: updateError } = await supabase
+                .from('lancamentos')
+                .update({ origem: newOrigem })
+                .eq('id', lancamento.id);
+                
+            if (updateError) throw updateError;
+            
+            // 2. Atualiza o lançamento emparelhado (se existir)
+            if (pairedId) {
+                const { error: parError } = await supabase
+                    .from('lancamentos')
+                    .update({ origem: newOrigem })
+                    .eq('id', pairedId);
+                if (parError) throw parError;
+            }
+            
+            showSuccess(successMessage);
+            fetchLancamentos();
+            
+        } catch (error: any) {
+            showError('Falha ao atualizar status do lançamento: ' + error.message);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     return (
         <Card>
@@ -173,7 +231,7 @@ const TodosLancamentosTable: React.FC = () => {
                                 <SelectValue placeholder="Filtrar por Origem" />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="todos">Todas as Origens</SelectItem>
+                                <SelectItem value="todos">Todas as Origens (Exceto Ignorados)</SelectItem>
                                 <SelectItem value="lancamento_manual">Manual</SelectItem>
                                 <SelectItem value="conciliacao_extrato">Conciliação</SelectItem>
                                 <SelectItem value="lancamento_cr">CR (Inicial)</SelectItem>
@@ -183,6 +241,7 @@ const TodosLancamentosTable: React.FC = () => {
                                 <SelectItem value="assinatura_stripe">Assinatura</SelectItem>
                                 <SelectItem value="movimentacao_direta">Mov. Direta</SelectItem>
                                 <SelectItem value="estorno_direto">Estorno</SelectItem>
+                                <SelectItem value="ignorado_manual">Ignorados</SelectItem>
                             </SelectContent>
                         </Select>
                         <Button onClick={handlePrint} variant="outline" disabled={lancamentos.length === 0}>
@@ -216,10 +275,12 @@ const TodosLancamentosTable: React.FC = () => {
                                     const contaDisplay = l.plano_contas ? `${l.plano_contas.Conta} - ${l.plano_contas.Descricao}` : 'N/A';
                                     const origemDisplay = getOrigemDisplay(l.origem);
                                     
-                                    const canDelete = l.origem === 'lancamento_manual' || l.origem === 'movimentacao_direta';
+                                    const canDelete = l.origem === 'lancamento_manual' || l.origem === 'movimentacao_direta' || l.origem === 'ignorado_manual';
+                                    const canIgnore = l.origem === 'lancamento_manual' || l.origem === 'movimentacao_direta';
+                                    const isIgnored = l.origem === 'ignorado_manual';
                                     
                                     return (
-                                        <TableRow key={l.id} className={cn(l.origem === 'estorno_direto' && 'bg-red-500/10', l.origem === 'movimentacao_direta_estornada' && 'opacity-50')}>
+                                        <TableRow key={l.id} className={cn(l.origem === 'estorno_direto' && 'bg-red-500/10', l.origem === 'movimentacao_direta_estornada' && 'opacity-50', isIgnored && 'bg-yellow-500/10')}>
                                             <TableCell className="text-sm">{formatarData(l.data_movimentacao)}</TableCell>
                                             <TableCell>
                                                 <Badge variant={getBadgeVariant(l.tipo)}>
@@ -234,9 +295,21 @@ const TodosLancamentosTable: React.FC = () => {
                                             <TableCell className="text-xs text-muted-foreground">{origemDisplay}</TableCell>
                                             <TableCell className="text-xs text-muted-foreground">{l.saldo_contas?.nome || '-'}</TableCell>
                                             <TableCell className="text-right space-x-2">
-                                                <Button variant="ghost" size="icon" onClick={() => alert('Edição não implementada.')} disabled>
-                                                    <Edit className="w-4 h-4" />
-                                                </Button>
+                                                
+                                                {isIgnored ? (
+                                                    <Button variant="outline" size="icon" onClick={() => handleToggleIgnore(l)} title="Restaurar Lançamento" disabled={loading}>
+                                                        <Undo2 className="w-4 h-4" />
+                                                    </Button>
+                                                ) : canIgnore ? (
+                                                    <Button variant="outline" size="icon" onClick={() => handleToggleIgnore(l)} title="Ignorar Lançamento" disabled={loading}>
+                                                        <EyeOff className="w-4 h-4" />
+                                                    </Button>
+                                                ) : (
+                                                    <Button variant="ghost" size="icon" disabled title="Ação indisponível">
+                                                        <Edit className="w-4 h-4 opacity-50" />
+                                                    </Button>
+                                                )}
+
                                                 {canDelete && (
                                                     <AlertDialog>
                                                         <AlertDialogTrigger asChild>
