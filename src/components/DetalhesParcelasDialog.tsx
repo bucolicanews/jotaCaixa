@@ -170,7 +170,7 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
     const contaReceberIdShort = contaReceberId.substring(0, 8);
     
     try {
-        // 1. Buscar o registro de recebimento associado
+        // 1. Buscar todos os registros de recebimento associados
         const { data: recebimentos, error: fetchError } = await supabase
             .from(tabelaRecebimentos)
             .select('id, conta_id, valor_recebido, historico_id')
@@ -187,21 +187,21 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
         const totalEstornado = recebimentos.reduce((sum, r) => sum + r.valor_recebido, 0);
         const dataEstornoISO = new Date().toISOString();
         
-        // 2. Buscar os lançamentos originais (Ativo e Passivo)
+        // 2. Buscar TODOS os lançamentos originais vinculados a esta parcela (Ativo/Caixa e Patrimonial)
         const { data: originalLaunches, error: fetchLaunchError } = await supabase
             .from('lancamentos')
-            .select('id, conta_resultado_id')
+            .select('id, conta_resultado_id, conta_contabil_id, conta_bancaria_id, valor, tipo, descricao, historico_id')
             .eq('proprietario_id', usuario.id)
             .eq('origem', 'recebimento_manual')
-            .ilike('descricao', `%Recebimento Parcela ${parcela.id.substring(0, 8)}%`);
+            .ilike('descricao', `%Recebimento Parcela ${parcela.id.substring(0, 8)}%`); // Busca pela descrição padronizada
             
         if (fetchLaunchError) throw fetchLaunchError;
         
-        if (!originalLaunches || originalLaunches.length === 0) {
-            console.warn('Lançamentos originais de recebimento não encontrados. Prosseguindo com reset da parcela.');
-        } else {
-            // CRÍTICO: Marcar os lançamentos originais como estornados
-            const originalLaunchIds = originalLaunches.map(l => l.id);
+        const lancamentosEstornoPayload: any[] = [];
+        const originalLaunchIds = (originalLaunches || []).map(l => l.id);
+        
+        if (originalLaunchIds.length > 0) {
+            // 3. Marcar os lançamentos originais como estornados
             const { error: markError } = await supabase
                 .from('lancamentos')
                 .update({ origem: 'recebimento_manual_estornada' })
@@ -210,9 +210,9 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
             if (markError) throw markError;
         }
         
-        // 3. Gerar Lançamentos de Estorno (Reversão)
+        // 4. Gerar Lançamentos de Estorno (Reversão)
         
-        // 3.1. Débito (Clientes/Direito a Receber) - D: CLIENTES (AUMENTA O DIREITO A RECEBER)
+        // 4.1. Débito (Clientes/Direito a Receber) - D: CLIENTES (AUMENTA O DIREITO A RECEBER)
         if (conta.id_conta_patrimonial) {
             const idEstornoPatrimonial = crypto.randomUUID();
             const idEstornoAtivo = crypto.randomUUID();
@@ -230,10 +230,10 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
                 historico_id: recebimentos[0].historico_id,
                 conta_resultado_id: idEstornoAtivo, // REFERÊNCIA CRUZADA
             };
-            await supabase.from('lancamentos').insert(lancamentoEstornoPatrimonial);
+            lancamentosEstornoPayload.push(lancamentoEstornoPatrimonial);
         }
         
-        // 3.2. Crédito (Caixa/Banco) - C: CAIXA/BANCO (DIMINUI O CAIXA)
+        // 4.2. Crédito (Caixa/Banco) - C: CAIXA/BANCO (DIMINUI O CAIXA)
         const contaIds = recebimentos.map(r => r.conta_id);
         
         // CRÍTICO: Busca o conta_contabil_id da tabela saldo_contas
@@ -256,7 +256,7 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
             }
             
             const idEstornoAtivo = crypto.randomUUID();
-            const idEstornoPatrimonial = conta.id_conta_patrimonial ? lancamentos.find(l => l.conta_receber_id === contaReceberId)?.id : null; // Reusa o ID do lançamento patrimonial se existir
+            const idEstornoPatrimonial = conta.id_conta_patrimonial ? lancamentosEstornoPayload.find(l => l.conta_contabil_id === conta.id_conta_patrimonial)?.id : null;
             
             const lancamentoEstornoAtivo = {
                 id: idEstornoAtivo,
@@ -271,10 +271,14 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
                 historico_id: recebimento.historico_id,
                 conta_resultado_id: idEstornoPatrimonial, // REFERÊNCIA CRUZADA
             };
-            await supabase.from('lancamentos').insert(lancamentoEstornoAtivo);
+            lancamentosEstornoPayload.push(lancamentoEstornoAtivo);
         }
         
-        // 4. Deletar Registros de Recebimento
+        // 5. Inserir os novos lançamentos de estorno
+        const { error: insErr } = await supabase.from('lancamentos').insert(lancamentosEstornoPayload);
+        if (insErr) throw insErr;
+        
+        // 6. Deletar Registros de Recebimento
         const recebimentoIds = recebimentos.map(r => r.id);
         const { error: deleteRecebimentosError } = await supabase
             .from(tabelaRecebimentos)
@@ -283,7 +287,7 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
             
         if (deleteRecebimentosError) throw deleteRecebimentosError;
         
-        // 5. Resetar a Parcela
+        // 7. Resetar a Parcela
         const { error: resetError } = await supabase
             .from(tabelaParcelas)
             .update({
@@ -296,7 +300,7 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
             
         if (resetError) throw resetError;
         
-        // 6. Resetar o status da conta sintética para 'aberta'
+        // 8. Resetar o status da conta sintética para 'aberta'
         const { error: updateContaError } = await supabase
             .from(tabelaContasReceber)
             .update({ status: 'aberta' })
