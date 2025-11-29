@@ -323,7 +323,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
                 id: idPatrimonial,
                 proprietario_id: adminId,
                 data_movimentacao: dataPagamentoISO,
-                descricao: `Estorno Patrimonial CP: ${descricaoContaSintetica} (CP ID: ${parcela.conta_pagar_id.substring(0, 8)})`,
+                descricao: `Baixa Passivo CP: ${descricaoContaSintetica} (CP ID: ${parcela.conta_pagar_id.substring(0, 8)})`,
                 valor: pagamento.valor_pago,
                 tipo: 'Entrada' as const, // Débito é 'Entrada' no Passivo
                 conta_bancaria_id: null,
@@ -336,24 +336,8 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
         }
         
         // 3. Lançamento 3: D: Despesa/Custo (DRE) - DÉBITO (Entrada)
-        if (contaDespesaCriacao) {
-            const idDespesa = crypto.randomUUID();
-            
-            const lancamentoDespesaPayload = {
-                id: idDespesa,
-                proprietario_id: adminId,
-                data_movimentacao: dataPagamentoISO,
-                descricao: `Despesa/Custo Pagamento: ${descricaoContaSintetica} (CP ID: ${parcela.conta_pagar_id.substring(0, 8)})`,
-                valor: pagamento.valor_pago,
-                tipo: 'Entrada' as const, // Débito é 'Entrada' na Despesa (Credora)
-                conta_bancaria_id: null,
-                conta_contabil_id: contaDespesaCriacao,
-                origem: 'pagamento_manual',
-                historico_id: values.historico_id,
-                conta_resultado_id: null, // Não precisa de referência cruzada
-            };
-            lancamentosPayload.push(lancamentoDespesaPayload);
-        }
+        // Este lançamento é gerado APENAS na criação da conta sintética.
+        // Não deve ser gerado aqui para evitar duplicação.
       }
       
       // 4. Inserir todos os lançamentos de uma vez

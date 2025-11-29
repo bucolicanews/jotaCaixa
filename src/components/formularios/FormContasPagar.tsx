@@ -307,7 +307,7 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
       
       // Lançamento 1: C: Passivo (Obrigação a Pagar) - CRÉDITO (Saida)
       const lancamentoPatrimonialPayload = {
-          id: idPatrimonial,
+          id: idPatrimonial, // NOVO ID
           proprietario_id: adminId,
           data_movimentacao: dataMovimentacao,
           descricao: `Lançamento Inicial CP: ${launchDescription} (CP ID: ${contaPagarIdShort})`,
@@ -317,7 +317,7 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
           conta_contabil_id: values.conta_patrimonial_id,
           origem: 'lancamento_cp',
           historico_id: values.historico_id,
-          conta_resultado_id: idDespesa, // Passivo aponta para Despesa
+          conta_resultado_id: idDespesa, // REFERÊNCIA CRUZADA
       };
       
       // Limpeza de lançamentos antigos (se edição)
@@ -334,7 +334,7 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
       
       // 5. Lançamento 2: D: Despesa/Custo (DRE) - DÉBITO (Entrada)
       const lancamentoDespesaPayload = {
-          id: idDespesa,
+          id: idDespesa, // NOVO ID
           proprietario_id: adminId,
           data_movimentacao: dataMovimentacao,
           descricao: `Despesa/Custo: ${launchDescription} (CP ID: ${contaPagarIdShort})`,
@@ -344,7 +344,7 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
           conta_contabil_id: values.conta_resultado_id,
           origem: 'lancamento_cp',
           historico_id: values.historico_id,
-          conta_resultado_id: idPatrimonial, // Despesa aponta para Passivo
+          conta_resultado_id: idPatrimonial, // REFERÊNCIA CRUZADA
       };
       
       // Limpeza de lançamentos antigos (se edição)
