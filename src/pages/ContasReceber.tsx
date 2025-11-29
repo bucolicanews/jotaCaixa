@@ -301,7 +301,6 @@ const ContasReceber = () => {
     setParcelasDialogOpen(true);
   };
   
-  // CORREÇÃO CRÍTICA: Esta função agora recebe a parcela e abre o modal de pagamento
   const handleOpenPagamento = (parcela: any) => {
     const isMyLaunch = isAdmin;
     
@@ -311,7 +310,7 @@ const ContasReceber = () => {
         
     let clienteId: string | null = (contaReceber?.cliente_id as string | null) || null; 
         
-    const mappedParcela: any = { // Usando 'any' para simplificar a tipagem aqui
+    const mappedParcela: ParcelaParaPagamento = {
         id: parcela.id,
         conta_receber_id: parcela.conta_receber_id,
         empresa_id: ownerId!,
@@ -322,7 +321,6 @@ const ContasReceber = () => {
     
     setParcelaParaPagamento(mappedParcela);
     setPagamentoDialogOpen(true);
-    setParcelasDialogOpen(false); // Fecha o modal de detalhes de parcelas
   };
 
   const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -553,7 +551,7 @@ const ContasReceber = () => {
         conta={contaSelecionada}
         open={parcelasDialogOpen}
         onOpenChange={setParcelasDialogOpen}
-        onDataChange={handleOpenPagamento} // CORREÇÃO: Passa handleOpenPagamento para abrir o modal de pagamento
+        onDataChange={buscarDados}
       />
       
       <RegistrarPagamentoDialog

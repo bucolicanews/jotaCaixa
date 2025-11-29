@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -265,16 +265,8 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
     // Payload base para recebimentos
     let recebimentoBasePayload;
     
-    // 🚨 CORREÇÃO CRÍTICA: Garantir que o clienteIdPagador seja um ID válido na tbl_clientes ou tbl_admins
-    let clienteIdPagador = parcela.cliente_id || parcela.empresa_id;
-    
     if (isAdmin) {
-        // Se o cliente_id da parcela não for um ID de cliente do sistema, usamos o ID do Admin logado
-        const { count } = await supabase.from('tbl_clientes').select('id', { count: 'exact', head: true }).eq('id', clienteIdPagador);
-        if ((count || 0) === 0) {
-            // Se o cliente não está na tbl_clientes, usamos o ID do Admin logado (que está na tbl_admins)
-            clienteIdPagador = proprietarioDaSessao;
-        }
+        const clienteIdPagador = parcela.cliente_id || parcela.empresa_id;
         
         if (!clienteIdPagador) {
             showError('ID do cliente pagador não encontrado.'); 
@@ -285,14 +277,13 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
             parcela_id: parcela.id, 
             admin_id: proprietarioDaSessao, 
             valor_recebido: valorRecebido, 
-            cliente_id: clienteIdPagador, // USANDO O ID CORRIGIDO
+            cliente_id: clienteIdPagador,
             conta_id: values.conta_id,
             id_conta_contabil: contaRecebimento, // Conta de Ativo/Passivo (Recebimento)
             historico_id: values.historico_id,
             id_conta_resultado: contaReceitaResultado, // USANDO A CONTA DE RECEITA DA SINTÉTICA
         };
     } else {
-        // Se não for Admin, o proprietário da sessão é o cliente/empresa, e o cliente_id é o ID do cliente pagador
         recebimentoBasePayload = { 
             parcela_id: parcela.id, 
             empresa_id: proprietarioDaSessao, 
@@ -611,7 +602,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
                 <div className="space-y-4 pt-4 border-t">
                   <h3 className="font-semibold text-destructive">Saldo restante: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(saldoRestante)}</h3>
                   <FormField control={form.control} name="acao_saldo_restante" render={({ field }) => (
-                    <FormItem><FormLabel>O que fazer com o saldo restante?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex space-x-4 pt-2"><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="desconto" /></FormControl><FormLabel className="font-normal">Conceder Desconto (Perdoar)</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="reprogramar" /></FormControl><FormLabel className="font-normal">Reprogramar Saldo</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="parcelar" /></FormControl><FormLabel className="font-normal">Parcelar Saldo</FormLabel></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>O que fazer com o saldo restante?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="space-y-2"><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="desconto" /></FormControl><FormLabel className="font-normal">Conceder Desconto (Perdoar)</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="reprogramar" /></FormControl><FormLabel className="font-normal">Reprogramar Saldo</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="parcelar" /></FormControl><FormLabel className="font-normal">Parcelar Saldo</FormLabel></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>
                   )} />
                   {acaoSaldoRestante === 'reprogramar' && <FormField control={form.control} name="nova_data_vencimento" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Nova Data de Vencimento</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "PPP", { locale: ptBR }) : <span>Escolha a data</span>}<CalendarIcon className="ml-auto h-4 w-4 opacity-50" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus locale={ptBR} /></PopoverContent></Popover><FormMessage /></FormItem>)} />}
                   {acaoSaldoRestante === 'parcelar' && (
