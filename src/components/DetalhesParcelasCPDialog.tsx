@@ -78,27 +78,69 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
     const origemVincular = `pagamento_cp:${parcelaId}`;
     
     try {
-        // 1. Buscar lançamentos contábeis vinculados à parcela (Modelo A)
-        const { data: lancOriginals, error: fetchLaunchError } = await supabase
-            .from('lancamentos')
-            .select('id, tipo, valor, conta_contabil_id, conta_bancaria_id, descricao, historico_id')
-            .eq('proprietario_id', usuario.id)
-            .eq('origem', origemVincular);
-
-        if (fetchLaunchError) throw fetchLaunchError;
-
-        if (!lancOriginals || lancOriginals.length === 0) {
-            showError('Nenhum lançamento contábil encontrado para estornar.');
+        // 1. Buscar a parcela para obter o ID da conta sintética
+        const { data: parcelaData, error: parcelaError } = await supabase
+            .from('admin_parcelas_pagar')
+            .select('conta_pagar_id, id_conta_contabil')
+            .eq('id', parcelaId)
+            .single();
+            
+        if (parcelaError || !parcelaData) throw new Error('Parcela não encontrada.');
+        
+        const contaPagarId = parcelaData.conta_pagar_id; // ID DA CONTA SINTÉTICA
+        
+        // 2. Buscar a conta sintética para obter a conta patrimonial, descrição e DRE
+        const { data: contaSintetica, error: csError } = await supabase
+            .from('admin_contas_pagar')
+            .select('id_conta_patrimonial, descricao, historico_id, id_conta_resultado')
+            .eq('id', contaPagarId)
+            .single();
+            
+        if (csError || !contaSintetica) throw new Error('Conta sintética não encontrada.');
+        
+        const contaPatrimonial = contaSintetica.id_conta_patrimonial;
+        const descricaoContaSintetica = contaSintetica.descricao || 'Pagamento';
+        const historicoId = contaSintetica.historico_id;
+        const contaDespesaCriacao = contaSintetica.id_conta_resultado;
+        
+        // 3. Buscar todos os pagamentos registrados (para deletar depois)
+        const { data: pagamentos, error: fetchPayError } = await supabase
+            .from('admin_pagamentos')
+            .select('id, conta_id, valor_pago, id_conta_contabil')
+            .eq('parcela_id', parcelaId);
+            
+        if (fetchPayError) throw fetchPayError;
+        
+        if (!pagamentos || pagamentos.length === 0) {
+            showError('Nenhum pagamento encontrado para estornar.');
             setIsUndoing(false);
             return;
         }
         
         const dataEstornoISO = new Date().toISOString();
-        const lancamentosEstornoPayload: any[] = [];
-        const originalLaunchIds = lancOriginals.map(l => l.id);
+        const parcelaIdShort = parcelaId.substring(0, 8);
+        const contaPagarIdShort = contaPagarId.substring(0, 8);
+        
+        // 4. Buscar os lançamentos contábeis ORIGINAIS vinculados ao pagamento desta parcela
+        const { data: originalLaunches, error: fetchLaunchError } = await supabase
+            .from('lancamentos')
+            .select('id, conta_resultado_id, conta_contabil_id, conta_bancaria_id, valor, tipo, descricao, historico_id')
+            .eq('proprietario_id', usuario.id)
+            .eq('origem', origemVincular); // Busca pela chave de origem da parcela
+            
+        if (fetchLaunchError) throw fetchLaunchError;
 
-        // 2. Gerar Lançamentos de Estorno (Reversão)
-        for (const orig of lancOriginals) {
+        if (!originalLaunches || originalLaunches.length === 0) {
+            showError('Nenhum lançamento contábil original encontrado para estorno.');
+            setIsUndoing(false);
+            return;
+        }
+        
+        const lancamentosEstornoPayload: any[] = [];
+        const originalLaunchIds = originalLaunches.map(l => l.id);
+
+        // 5. Gerar Lançamentos de Estorno (Reversão)
+        for (const orig of originalLaunches) {
             const inverseId = crypto.randomUUID();
             const tipoInvertido = orig.tipo === 'Entrada' ? 'Saida' : 'Entrada'; // Inverte o tipo
 
@@ -119,26 +161,50 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
             lancamentosEstornoPayload.push(lancInvert);
         }
         
-        // 3. Inserir todos os lançamentos de estorno
+        // 5.3. Lançamento 3: Estorno da Despesa/Custo (DRE) - CRÉDITO (Saída)
+        // Este lançamento neutraliza o DÉBITO de Despesa/Custo que foi criado na CRIAÇÃO da CP.
+        // O valor total pago é o valor que deve ser estornado da Despesa/Custo.
+        if (contaDespesaCriacao) {
+            const idEstornoDespesa = crypto.randomUUID();
+            const totalPagoEstorno = pagamentos.reduce((sum, p) => sum + p.valor_pago, 0);
+            
+            const lancamentoEstornoDespesa = {
+                id: idEstornoDespesa,
+                proprietario_id: usuario.id,
+                data_movimentacao: dataEstornoISO,
+                descricao: `Estorno Despesa/Custo CP: ${descricaoContaSintetica} (CP ID: ${contaPagarIdShort})`,
+                valor: totalPagoEstorno,
+                tipo: 'Saida' as const, // CRÉDITO (Saída) na Despesa (Credora) para neutralizar o débito original
+                conta_bancaria_id: null,
+                conta_contabil_id: contaDespesaCriacao,
+                origem: 'estorno_pagamento_manual',
+                historico_id: historicoId,
+                conta_resultado_id: null,
+            };
+            lancamentosEstornoPayload.push(lancamentoEstornoDespesa);
+        }
+
+        // 6. Inserir todos os lançamentos de estorno
         const { error: insErr } = await supabase.from('lancamentos').insert(lancamentosEstornoPayload);
         if (insErr) throw insErr;
 
-        // 4. Marcar os lançamentos originais como estornados
+        // 7. Marcar os lançamentos originais como estornados
         const { error: markError } = await supabase
             .from('lancamentos')
             .update({ origem: 'pagamento_manual_estornada' })
             .in('id', originalLaunchIds);
         if (markError) throw markError;
         
-        // 5. Deletar Registros de Pagamento (Histórico)
+        // 8. Deletar Registros de Pagamento (Histórico)
+        const pagamentoIds = pagamentos.map(r => r.id);
         const { error: deletePagamentosError } = await supabase
             .from('admin_pagamentos')
             .delete()
-            .eq('parcela_id', parcelaId);
+            .in('id', pagamentoIds);
             
         if (deletePagamentosError) throw deletePagamentosError;
         
-        // 6. Resetar a Parcela
+        // 9. Resetar a Parcela
         const { error: resetError } = await supabase
             .from('admin_parcelas_pagar')
             .update({
@@ -151,7 +217,7 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
             
         if (resetError) throw resetError;
         
-        // 7. Resetar o status da conta sintética para 'pendente'
+        // 10. Resetar o status da conta sintética para 'pendente'
         const { error: updateContaError } = await supabase
             .from('admin_contas_pagar')
             .update({ status: 'pendente' })
