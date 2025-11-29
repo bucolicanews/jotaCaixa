@@ -249,7 +249,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
         return;
     }
     
-    setLoading(true); // <--- FIX: Use setLoading here
+    setLoading(true);
 
     const contaPagamento = mapeamentoContabil['pagamento'];
     const contaParcelaPagar = mapeamentoContabil['parcela_pagar'];
@@ -268,9 +268,12 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
     const dataPagamento = values.data_pagamento;
     const dataNoonUTC = new Date(Date.UTC(dataPagamento.getFullYear(), dataPagamento.getMonth(), dataPagamento.getDate(), 12, 0, 0));
     const dataPagamentoISO = dataNoonUTC.toISOString();
+    
+    const lancamentosPayload: any[] = [];
 
     try {
       for (const pagamento of values.pagamentos) {
+        
         // 1. Registrar Pagamento (Histórico)
         const pagamentoPayload = { 
             parcela_id: parcela.id, 
@@ -294,40 +297,70 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
         
         if (!contaContabilCaixaBanco) throw new Error('Conta de origem não possui vínculo contábil.');
         
+        // CRÍTICO: Geração de IDs e Referência Cruzada
+        const idAtivo = crypto.randomUUID();
+        const idPatrimonial = crypto.randomUUID();
+        
+        // Lançamento 1: C: Ativo (Caixa/Banco) - CRÉDITO (Saída)
         const lancamentoAtivoPayload = {
+            id: idAtivo,
             proprietario_id: adminId,
             data_movimentacao: dataPagamentoISO,
             descricao: `Pagamento Parcela ${parcela.id} - ${parcela.fornecedor}`, 
             valor: pagamento.valor_pago,
-            tipo: 'Saida' as const,
+            tipo: 'Saida' as const, // Crédito é 'Saida' no Ativo
             conta_bancaria_id: pagamento.conta_id,
             conta_contabil_id: contaContabilCaixaBanco,
             origem: 'pagamento_manual',
             historico_id: values.historico_id,
+            conta_resultado_id: idPatrimonial, // Ativo aponta para Passivo
         };
+        lancamentosPayload.push(lancamentoAtivoPayload);
         
-        const { error: lancamentoAtivoError } = await supabase.from('lancamentos').insert(lancamentoAtivoPayload);
-        if (lancamentoAtivoError) throw lancamentoAtivoError;
-      }
-
-      // 3. Lançamento de Estorno da Conta Patrimonial (Passivo) - DÉBITO (Diminui Passivo)
-      if (contaPatrimonial) {
-          const lancamentoPatrimonialPayload = {
-              proprietario_id: adminId,
-              data_movimentacao: dataPagamentoISO,
-              descricao: `Estorno Patrimonial CP: ${descricaoContaSintetica} (CP ID: ${parcela.conta_pagar_id.substring(0, 8)})`,
-              valor: totalPago,
-              tipo: 'Entrada' as const,
-              conta_bancaria_id: null,
-              conta_contabil_id: contaPatrimonial,
-              origem: 'pagamento_manual',
-              historico_id: values.historico_id,
-          };
-          
-          await supabase.from('lancamentos').insert(lancamentoPatrimonialPayload);
+        // Lançamento 2: D: Passivo (Obrigação a Pagar) - DÉBITO (Entrada)
+        if (contaPatrimonial) {
+            const lancamentoPatrimonialPayload = {
+                id: idPatrimonial,
+                proprietario_id: adminId,
+                data_movimentacao: dataPagamentoISO,
+                descricao: `Estorno Patrimonial CP: ${descricaoContaSintetica} (CP ID: ${parcela.conta_pagar_id.substring(0, 8)})`,
+                valor: pagamento.valor_pago,
+                tipo: 'Entrada' as const, // Débito é 'Entrada' no Passivo
+                conta_bancaria_id: null,
+                conta_contabil_id: contaPatrimonial,
+                origem: 'pagamento_manual',
+                historico_id: values.historico_id,
+                conta_resultado_id: idAtivo, // Passivo aponta para Ativo
+            };
+            lancamentosPayload.push(lancamentoPatrimonialPayload);
+        }
+        
+        // 3. Lançamento 3: D: Despesa/Custo (DRE) - DÉBITO (Entrada)
+        if (contaDespesaCriacao) {
+            const idDespesa = crypto.randomUUID();
+            
+            const lancamentoDespesaPayload = {
+                id: idDespesa,
+                proprietario_id: adminId,
+                data_movimentacao: dataPagamentoISO,
+                descricao: `Despesa/Custo Pagamento: ${descricaoContaSintetica} (CP ID: ${parcela.conta_pagar_id.substring(0, 8)})`,
+                valor: pagamento.valor_pago,
+                tipo: 'Entrada' as const, // Débito é 'Entrada' na Despesa (Credora)
+                conta_bancaria_id: null,
+                conta_contabil_id: contaDespesaCriacao,
+                origem: 'pagamento_manual',
+                historico_id: values.historico_id,
+                conta_resultado_id: null, // Não precisa de referência cruzada
+            };
+            lancamentosPayload.push(lancamentoDespesaPayload);
+        }
       }
       
-      // 4. Atualizar a parcela e a conta sintética
+      // 4. Inserir todos os lançamentos de uma vez
+      const { error: lancamentoError } = await supabase.from('lancamentos').insert(lancamentosPayload);
+      if (lancamentoError) throw lancamentoError;
+
+      // 5. Atualizar a parcela e a conta sintética
       await supabase.from(tabelaParcelas).update({
         status: 'paga',
         valor_pago: (parcela.valor_pago || 0) + totalPago,
@@ -345,7 +378,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
           await supabase.from(tabelaContasPagar).update({ status: 'pago' }).eq('id', parcela.conta_pagar_id);
       }
       
-      // 5. Salvar Histórico Padrão (se marcado)
+      // 6. Salvar Histórico Padrão (se marcado)
       if (isAdmin && values.salvar_como_padrao && values.historico_id) {
           await supabase.from('configuracao_historico_padrao').upsert({
               proprietario_id: adminId,

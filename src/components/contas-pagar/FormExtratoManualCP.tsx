@@ -173,6 +173,8 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
             
             // 4. Continuar com o fluxo de pagamento (Registrar Pagamento e Lançamentos)
             
+            const lancamentosPayload: any[] = [];
+
             for (const pagamento of pagamentoDetalhes) {
                 // 4.1. Registrar Pagamento (Histórico)
                 const pagamentoPayload = { 
@@ -200,40 +202,71 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
                 
                 if (!contaContabilCaixaBanco) throw new Error('Conta de origem não possui vínculo contábil.');
                 
+                // CRÍTICO: Geração de IDs e Referência Cruzada
+                const idAtivo = crypto.randomUUID();
+                const idPatrimonial = crypto.randomUUID();
+                
+                // Lançamento 1: C: Ativo (Caixa/Banco) - CRÉDITO (Saída)
                 const lancamentoAtivoPayload = {
+                    id: idAtivo,
                     proprietario_id: adminId,
                     data_movimentacao: dataPagamentoISO,
                     descricao: `Pagamento Parcela ${parcela.id} - ${parcela.fornecedor}`, 
                     valor: pagamento.valor_pago,
-                    tipo: 'Saida' as const,
+                    tipo: 'Saida' as const, // Crédito é 'Saida' no Ativo
                     conta_bancaria_id: pagamento.conta_id,
                     conta_contabil_id: contaContabilCaixaBanco,
                     origem: 'pagamento_manual',
                     historico_id: historicoId,
+                    conta_resultado_id: idPatrimonial, // Ativo aponta para Passivo
                 };
+                lancamentosPayload.push(lancamentoAtivoPayload);
                 
-                const { error: lancamentoAtivoError } = await supabase.from('lancamentos').insert(lancamentoAtivoPayload);
-                if (lancamentoAtivoError) throw lancamentoAtivoError;
+                // Lançamento 2: D: Passivo (Obrigação a Pagar) - DÉBITO (Entrada)
+                if (contaPatrimonial) {
+                    const lancamentoPatrimonialPayload = {
+                        id: idPatrimonial,
+                        proprietario_id: adminId,
+                        data_movimentacao: dataPagamentoISO,
+                        descricao: `Estorno Patrimonial CP: ${descricaoContaSintetica} (CP ID: ${parcela.conta_pagar_id.substring(0, 8)})`,
+                        valor: pagamento.valor_pago,
+                        tipo: 'Entrada' as const, // Débito é 'Entrada' no Passivo
+                        conta_bancaria_id: null,
+                        conta_contabil_id: contaPatrimonial,
+                        origem: 'pagamento_manual',
+                        historico_id: historicoId,
+                        conta_resultado_id: idAtivo, // Passivo aponta para Ativo
+                    };
+                    lancamentosPayload.push(lancamentoPatrimonialPayload);
+                }
+                
+                // 4.3. Lançamento 3: D: Despesa/Custo (DRE) - DÉBITO (Entrada)
+                if (contaDespesaCriacao) {
+                    const idDespesa = crypto.randomUUID();
+                    
+                    const lancamentoDespesaPayload = {
+                        id: idDespesa,
+                        proprietario_id: adminId,
+                        data_movimentacao: dataPagamentoISO,
+                        descricao: `Despesa/Custo Pagamento: ${descricaoContaSintetica} (CP ID: ${parcela.conta_pagar_id.substring(0, 8)})`,
+                        valor: pagamento.valor_pago,
+                        tipo: 'Entrada' as const, // Débito é 'Entrada' na Despesa (Credora)
+                        conta_bancaria_id: null,
+                        conta_contabil_id: contaDespesaCriacao,
+                        origem: 'pagamento_manual',
+                        historico_id: historicoId,
+                        conta_resultado_id: null, // Não precisa de referência cruzada
+                    };
+                    lancamentosPayload.push(lancamentoDespesaPayload);
+                }
             }
             
-            // 4.3. Lançamento de Estorno da Conta Patrimonial (Passivo) - DÉBITO (Diminui Passivo)
-            if (contaPatrimonial) {
-                const lancamentoPatrimonialPayload = {
-                    proprietario_id: adminId,
-                    data_movimentacao: dataPagamentoISO,
-                    descricao: `Estorno Patrimonial CP: ${descricaoContaSintetica} (CP ID: ${parcela.conta_pagar_id.substring(0, 8)})`,
-                    valor: totalPago,
-                    tipo: 'Entrada' as const,
-                    conta_bancaria_id: null,
-                    conta_contabil_id: contaPatrimonial,
-                    origem: 'pagamento_manual',
-                    historico_id: historicoId,
-                };
-                await supabase.from('lancamentos').insert(lancamentoPatrimonialPayload);
-            }
+            // 4.4. Inserir todos os lançamentos de uma vez
+            const { error: lancamentoError } = await supabase.from('lancamentos').insert(lancamentosPayload);
+            if (lancamentoError) throw lancamentoError;
             
-            // 4.4. Atualizar a parcela e a conta sintética
-            await supabase.from('admin_parcelas_pagar').update({
+            // 5. Atualizar a parcela e a conta sintética
+            await supabase.from(tabelaParcelas).update({
                 status: 'paga',
                 valor_pago: (parcela.valor_pago || 0) + totalPago,
                 data_pagamento: format(dataPagamento, 'yyyy-MM-dd'),
@@ -241,16 +274,16 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
             }).eq('id', parcela.id);
             
             const { count: parcelasPendentesCount } = await supabase
-                .from('admin_parcelas_pagar')
+                .from(tabelaContasPagar)
                 .select('id', { count: 'exact', head: true })
                 .eq('conta_pagar_id', parcela.conta_pagar_id)
                 .in('status', ['aberta', 'parcial', 'reprogramada']);
                 
             if (parcelasPendentesCount === 0) {
-                await supabase.from('admin_contas_pagar').update({ status: 'pago' }).eq('id', parcela.conta_pagar_id);
+                await supabase.from(tabelaContasPagar).update({ status: 'pago' }).eq('id', parcela.conta_pagar_id);
             }
 
-            // 4.5. Salvar Histórico Padrão (se marcado)
+            // 6. Salvar Histórico Padrão (se marcado)
             if (adminId && form.getValues('salvar_como_padrao') && historicoId) {
                 await supabase.from('configuracao_historico_padrao').upsert({
                     proprietario_id: adminId,
@@ -259,7 +292,7 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
                 }, { onConflict: 'proprietario_id, tipo_registro' });
             }
 
-            showSuccess('Pagamento e Extrato registrados com sucesso!');
+            showSuccess('Pagamento registrado com sucesso!');
             onSaveComplete();
             onClose();
 
