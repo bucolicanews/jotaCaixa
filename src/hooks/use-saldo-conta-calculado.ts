@@ -121,7 +121,10 @@ const useSaldoContaCalculado = (
 
       lancamentosData.forEach(l => {
         // CRÍTICO: IGNORA LANÇAMENTOS DE ESTORNO E LANÇAMENTOS ORIGINAIS ESTORNADOS
-        if (l.origem === 'movimentacao_direta_estornada' || l.origem === 'estorno_direto') return; 
+        const origem = l.origem || '';
+        
+        // Se a origem contiver 'estorno' ou 'estornada', IGNORA o lançamento no cálculo do saldo.
+        if (origem.includes('estorno') || origem.includes('estornada')) return; 
         
         let targetSaldoId: string | null = null;
         
