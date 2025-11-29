@@ -334,9 +334,6 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
             };
             lancamentosPayload.push(lancamentoPatrimonialPayload);
         }
-        
-        // 3. Lançamento 3: D: Despesa/Custo (DRE) - DÉBITO (Entrada)
-        // ESTE LANÇAMENTO É REMOVIDO DAQUI, POIS É GERADO NA CRIAÇÃO DA CP.
       }
       
       // 4. Inserir todos os lançamentos de uma vez
@@ -394,14 +391,27 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
         return;
     }
     
-    // 1. Verificar se alguma conta de origem é um BANCO
+    // 1. Validação de Saldo
+    for (const pagamento of values.pagamentos) {
+        const contaSelecionada = contasOrigem.find(c => c.id === pagamento.conta_id);
+        if (!contaSelecionada) {
+            showError(`Conta de origem com ID ${pagamento.conta_id} não encontrada.`);
+            return;
+        }
+        if (contaSelecionada.saldo_atual < pagamento.valor_pago) {
+            showError(`Saldo insuficiente na conta "${contaSelecionada.nome}". Saldo: ${formatCurrency(contaSelecionada.saldo_atual)}, Tentativa de Pagar: ${formatCurrency(pagamento.valor_pago)}`);
+            return;
+        }
+    }
+    
+    // 2. Verificar se alguma conta de origem é um BANCO
     const hasBankPayment = values.pagamentos.some(p => {
         const conta = contasOrigem.find(c => c.id === p.conta_id);
         // CRÍTICO: Verifica se a conta de saldo tem a flag is_banco = true
         return conta?.plano_contas?.is_banco === true;
     });
     
-    // 2. Se houver pagamento via Banco, abre o modal de Extrato Manual
+    // 3. Se houver pagamento via Banco, abre o modal de Extrato Manual
     if (hasBankPayment) {
         setPendingPaymentData(values);
         setExtratoManualDialog(true);
@@ -409,7 +419,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
         return;
     }
     
-    // 3. Se for apenas Caixa ou outras contas (não Banco), salva diretamente
+    // 4. Se for apenas Caixa ou outras contas (não Banco), salva diretamente
     await saveDirectPayment(values);
   };
 
@@ -434,42 +444,47 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
               
               <div className="space-y-4">
                   <FormLabel>Fontes de Pagamento (Ativo)</FormLabel>
-                  {fields.map((item, index) => (
-                      <div key={item.id} className="flex items-end space-x-2 p-2 border rounded-md">
-                          <FormField
-                              control={control}
-                              name={`pagamentos.${index}.conta_id`}
-                              render={({ field }) => (
-                                  <FormItem className="flex-1">
-                                      <Select onValueChange={field.onChange} value={field.value || undefined} disabled={loadingContas}>
-                                          <FormControl><SelectTrigger><SelectValue placeholder="Selecione a conta" /></SelectTrigger></FormControl>
-                                          <SelectContent>
-                                              {contasOrigem.map(c => (
-                                                  <SelectItem key={c.id} value={c.id}>
-                                                      {c.nome} ({formatCurrency(c.saldo_atual)})
-                                                  </SelectItem>
-                                              ))}
-                                          </SelectContent>
-                                      </Select>
-                                      <FormMessage />
-                                  </FormItem>
-                              )}
-                          />
-                          <FormField
-                              control={control}
-                              name={`pagamentos.${index}.valor_pago`}
-                              render={({ field }) => (
-                                  <FormItem className="w-1/3">
-                                      <FormControl><Input type="number" step="0.01" placeholder="Valor" {...field} /></FormControl>
-                                      <FormMessage />
-                                  </FormItem>
-                              )}
-                          />
-                          <Button type="button" variant="destructive" size="icon" onClick={() => remove(index)} disabled={fields.length <= 1}>
-                              <Trash2 className="w-4 h-4" />
-                          </Button>
-                      </div>
-                  ))}
+                  {fields.map((item, index) => {
+                      const conta = contasOrigem.find(c => c.id === item.conta_id);
+                      const isBank = conta?.plano_contas?.is_banco;
+                      
+                      return (
+                          <div key={item.id} className="flex items-end space-x-2 p-2 border rounded-md">
+                              <FormField
+                                  control={control}
+                                  name={`pagamentos.${index}.conta_id`}
+                                  render={({ field }) => (
+                                      <FormItem className="flex-1">
+                                          <Select onValueChange={field.onChange} value={field.value || undefined} disabled={loadingContas}>
+                                              <FormControl><SelectTrigger className={cn(isBank && 'border-blue-500')}><SelectValue placeholder="Selecione a conta" /></SelectTrigger></FormControl>
+                                              <SelectContent>
+                                                  {contasOrigem.map(c => (
+                                                      <SelectItem key={c.id} value={c.id}>
+                                                          {c.nome} ({formatCurrency(c.saldo_atual)})
+                                                      </SelectItem>
+                                                  ))}
+                                              </SelectContent>
+                                          </Select>
+                                          <FormMessage />
+                                      </FormItem>
+                                  )}
+                              />
+                              <FormField
+                                  control={control}
+                                  name={`pagamentos.${index}.valor_pago`}
+                                  render={({ field }) => (
+                                      <FormItem className="w-1/3">
+                                          <FormControl><Input type="number" step="0.01" placeholder="Valor" {...field} /></FormControl>
+                                          <FormMessage />
+                                      </FormItem>
+                                  )}
+                              />
+                              <Button type="button" variant="destructive" size="icon" onClick={() => remove(index)} disabled={fields.length <= 1}>
+                                  <Trash2 className="w-4 h-4" />
+                              </Button>
+                          </div>
+                      );
+                  })}
                   <Button type="button" variant="outline" size="sm" onClick={() => append({ conta_id: '', valor_pago: 0 })}>
                       <PlusCircle className="w-4 h-4 mr-2" /> Adicionar Fonte de Pagamento
                   </Button>

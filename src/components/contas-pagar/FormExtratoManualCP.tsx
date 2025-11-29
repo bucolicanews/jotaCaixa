@@ -139,7 +139,9 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
             const descricaoContaSintetica = contaSintetica?.descricao || 'Pagamento';
             const contaDespesaCriacao = contaSintetica?.id_conta_resultado;
             
-            const dataPagamentoISO = format(dataPagamento, 'yyyy-MM-dd') + 'T12:00:00Z';
+            const dataPagamento = values.data_pagamento;
+            const dataNoonUTC = new Date(Date.UTC(dataPagamento.getFullYear(), dataPagamento.getMonth(), dataPagamento.getDate(), 12, 0, 0));
+            const dataPagamentoISO = dataNoonUTC.toISOString();
             
             // 3. Inserir o registro na tabela 'extratos' (apenas para contas do tipo 'Banco')
             const extratosPayload = pagamentoDetalhes
@@ -184,7 +186,7 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
                     conta_id: pagamento.conta_id,
                     id_conta_contabil: contaPagamento,
                     data_pagamento: dataPagamentoISO,
-                    forma_pagamento: formaPagamento,
+                    forma_pagamento: values.forma_pagamento,
                     tipo_pagamento: 'total',
                     historico_id: historicoId,
                     id_conta_resultado: contaDespesaCriacao,
@@ -193,7 +195,7 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
                     anexo_url: comprovanteUrl, 
                 };
                 
-                const { error: pagamentoError } = await supabase.from('admin_pagamentos').insert(pagamentoPayload);
+                const { error: pagamentoError } = await supabase.from(tabelaPagamentos).insert(pagamentoPayload);
                 if (pagamentoError) throw pagamentoError;
                 
                 // 4.2. Registrar o Lançamento no Ativo (Caixa/Banco) - CRÉDITO (Saída)
@@ -217,7 +219,7 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
                     conta_bancaria_id: pagamento.conta_id,
                     conta_contabil_id: contaContabilCaixaBanco,
                     origem: 'pagamento_manual',
-                    historico_id: historicoId,
+                    historico_id: values.historico_id,
                     conta_resultado_id: idPatrimonial, // Ativo aponta para Passivo
                 };
                 lancamentosPayload.push(lancamentoAtivoPayload);
@@ -228,43 +230,23 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
                         id: idPatrimonial,
                         proprietario_id: adminId,
                         data_movimentacao: dataPagamentoISO,
-                        descricao: `Estorno Patrimonial CP: ${descricaoContaSintetica} (CP ID: ${parcela.conta_pagar_id.substring(0, 8)})`,
+                        descricao: `Baixa Passivo CP: ${descricaoContaSintetica} (CP ID: ${parcela.conta_pagar_id.substring(0, 8)})`,
                         valor: pagamento.valor_pago,
                         tipo: 'Entrada' as const, // Débito é 'Entrada' no Passivo
                         conta_bancaria_id: null,
                         conta_contabil_id: contaPatrimonial,
                         origem: 'pagamento_manual',
-                        historico_id: historicoId,
+                        historico_id: values.historico_id,
                         conta_resultado_id: idAtivo, // Passivo aponta para Ativo
                     };
                     lancamentosPayload.push(lancamentoPatrimonialPayload);
-                }
-                
-                // 4.3. Lançamento 3: D: Despesa/Custo (DRE) - DÉBITO (Entrada)
-                if (contaDespesaCriacao) {
-                    const idDespesa = crypto.randomUUID();
-                    
-                    const lancamentoDespesaPayload = {
-                        id: idDespesa,
-                        proprietario_id: adminId,
-                        data_movimentacao: dataPagamentoISO,
-                        descricao: `Despesa/Custo Pagamento: ${descricaoContaSintetica} (CP ID: ${parcela.conta_pagar_id.substring(0, 8)})`,
-                        valor: pagamento.valor_pago,
-                        tipo: 'Entrada' as const, // Débito é 'Entrada' na Despesa (Credora)
-                        conta_bancaria_id: null,
-                        conta_contabil_id: contaDespesaCriacao,
-                        origem: 'pagamento_manual',
-                        historico_id: historicoId,
-                        conta_resultado_id: null, // Não precisa de referência cruzada
-                    };
-                    lancamentosPayload.push(lancamentoDespesaPayload);
                 }
             }
             
             // 4.4. Inserir todos os lançamentos de uma vez
             const { error: lancamentoError } = await supabase.from('lancamentos').insert(lancamentosPayload);
             if (lancamentoError) throw lancamentoError;
-            
+
             // 5. Atualizar a parcela e a conta sintética
             await supabase.from(tabelaParcelas).update({
                 status: 'paga',
@@ -274,7 +256,7 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
             }).eq('id', parcela.id);
             
             const { count: parcelasPendentesCount } = await supabase
-                .from(tabelaContasPagar)
+                .from(tabelaParcelas)
                 .select('id', { count: 'exact', head: true })
                 .eq('conta_pagar_id', parcela.conta_pagar_id)
                 .in('status', ['aberta', 'parcial', 'reprogramada']);
@@ -282,13 +264,13 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
             if (parcelasPendentesCount === 0) {
                 await supabase.from(tabelaContasPagar).update({ status: 'pago' }).eq('id', parcela.conta_pagar_id);
             }
-
+            
             // 6. Salvar Histórico Padrão (se marcado)
-            if (adminId && form.getValues('salvar_como_padrao') && historicoId) {
+            if (isAdmin && values.salvar_como_padrao && values.historico_id) {
                 await supabase.from('configuracao_historico_padrao').upsert({
                     proprietario_id: adminId,
                     tipo_registro: 'pagamento_padrao',
-                    historico_id: historicoId,
+                    historico_id: values.historico_id,
                 }, { onConflict: 'proprietario_id, tipo_registro' });
             }
 
@@ -297,7 +279,6 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
             onClose();
 
         } catch (error: any) {
-            console.error('Erro no fluxo de pagamento/extrato:', error);
             showError(`Falha ao registrar pagamento: ${error.message}`);
         } finally {
             setLoading(false);

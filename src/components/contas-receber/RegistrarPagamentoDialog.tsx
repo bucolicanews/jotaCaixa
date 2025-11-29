@@ -57,7 +57,7 @@ type FormValues = z.infer<typeof formSchema>;
 interface RegistrarPagamentoDialogProps {
   parcela: ParcelaParaPagamento | null;
   open: boolean;
-  onOpenChange: (open: boolean) => void;
+  onOpenChange: (open: (open: boolean) => void) => void;
   onSaveComplete: () => void;
 }
 
@@ -265,6 +265,9 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
     // Payload base para recebimentos
     let recebimentoBasePayload;
     
+    // CRÍTICO: Inicializa o array de payloads de lançamentos
+    const lancamentosPayload: any[] = [];
+    
     if (isAdmin) {
         const clienteIdPagador = parcela.cliente_id || parcela.empresa_id;
         
@@ -335,7 +338,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
                   origem: 'recebimento_manual',
                   historico_id: values.historico_id,
               };
-              await supabase.from('lancamentos').insert(lancamentoDescontoPayload);
+              lancamentosPayload.push(lancamentoDescontoPayload);
           }
           
         } else if (values.acao_saldo_restante === 'reprogramar' || values.acao_saldo_restante === 'parcelar') {
@@ -387,9 +390,14 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
           throw new Error('Conta de destino não possui vínculo contábil.');
       }
       
+      // CRÍTICO: Geração de IDs e Referência Cruzada
+      const idAtivo = crypto.randomUUID();
+      const idPatrimonial = crypto.randomUUID();
+      
       // 4. Registrar o Lançamento na conta de Saldo (Movimentação de Caixa/Banco) - DÉBITO (Ativo)
       // D: CAIXA/BANCO (AUMENTA O CAIXA)
       const lancamentoAtivoPayload = {
+          id: idAtivo,
           proprietario_id: proprietarioDaSessao,
           data_movimentacao: dataPagamentoISO,
           descricao: `Recebimento Parcela ${parcela.id} - ${values.forma_pagamento}`,
@@ -399,14 +407,16 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
           conta_contabil_id: contaContabilCaixaBanco, // <-- USANDO CONTA CONTÁBIL DO SALDO
           historico_id: values.historico_id,
           origem: 'recebimento_manual',
+          conta_resultado_id: idPatrimonial, // REFERÊNCIA CRUZADA
       };
       
-      await supabase.from('lancamentos').insert(lancamentoAtivoPayload);
+      lancamentosPayload.push(lancamentoAtivoPayload);
       
       // 5. Lançamento de Estorno da Conta Patrimonial (Direito a Receber) - CRÉDITO (Passivo)
       // C: CLIENTES (DIMINUI O DIREITO A RECEBER)
       if (values.conta_patrimonial_id) {
           const lancamentoPatrimonialPayload = {
+              id: idPatrimonial,
               proprietario_id: proprietarioDaSessao,
               data_movimentacao: dataPagamentoISO,
               descricao: `Estorno Patrimonial CR: ${descricaoContaSintetica} (CR ID: ${parcela.conta_receber_id.substring(0, 8)})`,
@@ -416,13 +426,18 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
               conta_contabil_id: values.conta_patrimonial_id, // Conta Patrimonial (1.x.x)
               historico_id: values.historico_id,
               origem: 'recebimento_manual',
+              conta_resultado_id: idAtivo, // REFERÊNCIA CRUZADA
           };
-          await supabase.from('lancamentos').insert(lancamentoPatrimonialPayload);
+          lancamentosPayload.push(lancamentoPatrimonialPayload);
       } else {
           console.warn('Aviso: Conta Patrimonial (Direito a Receber) não mapeada. Balanço pode estar incompleto.');
       }
       
-      // 6. Salvar Histórico Padrão (se marcado)
+      // 6. Inserir os lançamentos de uma vez
+      const { error: lancamentoError } = await supabase.from('lancamentos').insert(lancamentosPayload);
+      if (lancamentoError) throw lancamentoError;
+      
+      // 7. Salvar Histórico Padrão (se marcado)
       if (isAdmin && values.salvar_como_padrao && values.historico_id) {
           await supabase.from('configuracao_historico_padrao').upsert({
               proprietario_id: proprietarioDaSessao,
