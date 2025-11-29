@@ -51,8 +51,10 @@ const formSchema = z.object({
   // Conta Patrimonial (Obrigação a Pagar)
   conta_patrimonial_id: z.string().uuid('Selecione a conta patrimonial.').nullable(),
 }).superRefine((data, ctx) => {
+    // Acessa o saldoDevedor do contexto de forma segura
+    const saldoDevedor = (ctx.parent as any)?.saldoDevedor || 0; 
+    
     const totalPago = data.pagamentos.reduce((sum, p) => sum + (Number(p.valor_pago) || 0), 0);
-    const saldoDevedor = (ctx.parent as any).saldoDevedor || 0; // Acessa o saldoDevedor do contexto
     const restante = saldoDevedor - totalPago;
 
     if (restante > 0.01) {
@@ -307,7 +309,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
   }, [open, loadingContas, contasOrigem, saldoDevedor, isInitialized, append, fields.length]);
 
   // --- FUNÇÃO DE SALVAMENTO DIRETO (SEM EXTRATO MANUAL) ---
-  const saveDirectPayment = async (values: FormValues) => {
+  const saveDirectPayment = async (values: FormValues, comprovanteUrl: string | null = null) => {
     if (!parcela || !adminId || !values.conta_patrimonial_id) {
         showError('Dados da parcela, administrador ou conta patrimonial estão incompletos.');
         return;
@@ -352,9 +354,10 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
             id_conta_contabil: contaPagamento,
             data_pagamento: dataPagamentoISO,
             forma_pagamento: values.forma_pagamento,
-            tipo_pagamento: quitouComPagamentoAtual ? 'total' : 'parcial', // CORRIGIDO
+            tipo_pagamento: isPagamentoParcial ? 'parcial' : 'total', // CORRIGIDO
             historico_id: values.historico_id,
             id_conta_resultado: contaDespesaCriacao,
+            anexo_url: comprovanteUrl, // Adiciona a URL do comprovante
         };
         
         const { error: pagamentoError } = await supabase.from(tabelaPagamentos).insert(pagamentoPayload);
@@ -555,6 +558,9 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
 
   const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
+  // Habilita o botão se o pagamento for total OU se for parcial e a ação de saldo restante for válida
+  const isSubmitDisabled = loading || form.formState.isSubmitting || (isPagamentoParcial && !form.formState.isValid);
+
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -743,7 +749,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
                   </div>
               </div>
 
-              <Button type="submit" className="w-full" disabled={loading || form.formState.isSubmitting || (Math.abs(restante) > 0.01 && !isPagamentoParcial)}>
+              <Button type="submit" className="w-full" disabled={isSubmitDisabled}>
                 <Loader2 className={cn("mr-2 h-4 w-4 animate-spin", (loading || form.formState.isSubmitting) && "hidden")} />
                 Confirmar Pagamento
               </Button>
