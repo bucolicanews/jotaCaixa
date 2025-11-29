@@ -202,4 +202,4 @@ const useSaldoContaCalculado = (
   const totalSaldo = contas.reduce((sum, conta) => sum + conta.saldo_atual, 0);
 
   return { contas, totalSaldo, carregando, refetch };
-};export default useSaldoContaCalculado;
+};
