@@ -232,6 +232,11 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
         return;
     }
     
+    setIsSubmitting(true); // Move para o início do try
+    
+    // CRÍTICO: Inicializa o array aqui
+    const lancamentosPayload: any[] = [];
+
     try {
       // 2. Calcular valores e parcelas
       let valorTotal: number;
@@ -361,6 +366,8 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
       onSaveComplete();
     } catch (error: any) {
       showError(`Falha ao salvar: ${error.message}`);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
