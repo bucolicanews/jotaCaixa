@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { useDebounce } from '@/hooks/use-debounce';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 
@@ -69,10 +70,20 @@ const LancamentosManuaisTable: React.FC = () => {
         
         setIsDeleting(true);
         try {
+            // 1. Encontrar o lançamento a ser deletado para obter o ID do par
+            const launchToDelete = lancamentos.find(l => l.id === id);
+            const pairedId = launchToDelete?.conta_resultado_id;
+            
+            const idsToDelete = [id];
+            if (pairedId) {
+                idsToDelete.push(pairedId);
+            }
+            
+            // 2. Deletar ambos os lançamentos (Débito e Crédito)
             const { error } = await supabase
                 .from('lancamentos')
                 .delete()
-                .eq('id', id);
+                .in('id', idsToDelete); // Deleta ambos os IDs
                 
             if (error) throw error;
             
