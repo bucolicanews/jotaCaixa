@@ -2,7 +2,7 @@ import LayoutPrincipal from '@/components/LayoutPrincipal';
 import ReportCard from '@/components/ReportCard';
 import { useSessao } from '@/hooks/use-sessao';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
-import { ArrowDownCircle, ArrowUpCircle, BarChart3, Scale, TrendingUp, FileBarChart, Users, Clock, Search, Filter, FileTextIcon, BookOpen } from 'lucide-react';
+import { ArrowDownCircle, ArrowUpCircle, BarChart3, Scale, TrendingUp, FileBarChart, Users, Clock, Search, Filter, FileTextIcon, BookOpen, DollarSign } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useState, useMemo } from 'react';
 import { Input } from '@/components/ui/input';
@@ -80,7 +80,14 @@ const REPORTS_DATA = [
     permissionKey: 'relatorios',
     permissionLabel: 'Relatórios',
   },
-  // O card Exportação Calima foi movido para a página /exportar
+  {
+    title: "Todos os Lançamentos",
+    description: "Relatório completo de todas as partidas dobradas (Débito/Crédito) do sistema.",
+    icon: DollarSign,
+    link: "/lancamentos?tab=todos",
+    permissionKey: 'plano_contas',
+    permissionLabel: 'Plano de Contas',
+  },
 ];
 
 const Relatorios = () => {
