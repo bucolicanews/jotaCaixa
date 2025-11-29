@@ -10,7 +10,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { CalendarIcon, Loader2, PlusCircle, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { format } from 'date-fns';
+import { format, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
@@ -24,6 +24,7 @@ import { Checkbox } from '../ui/checkbox';
 import { PlanoContas } from '@/types/plano-contas';
 import { useContabilConfig } from '@/hooks/use-contabil-config';
 import FormExtratoManualCP from './FormExtratoManualCP';
+import { RadioGroup, RadioGroupItem } from '../ui/radio-group'; // Importado
 
 interface ParcelaParaPagamento extends AdminParcelaPagar {
   fornecedor: string;
@@ -37,12 +38,60 @@ const formSchema = z.object({
     valor_pago: z.coerce.number().positive('O valor deve ser maior que zero.'),
   })).min(1, 'Adicione pelo menos uma forma de pagamento.'),
   
+  // Campos de Pagamento Parcial (NOVOS)
+  acao_saldo_restante: z.enum(['desconto', 'reprogramar', 'parcelar']).optional(),
+  nova_data_vencimento: z.date().optional(),
+  numero_novas_parcelas: z.coerce.number().int().min(2).optional(),
+  intervalo_dias_novas_parcelas: z.coerce.number().int().min(1).optional(),
+  
   // Campos de Histórico
   historico_id: z.string().uuid('Selecione um histórico válido.').nullable(),
   salvar_como_padrao: z.boolean().optional(),
   
-  // NOVO CAMPO: Conta Patrimonial (Obrigação a Pagar)
+  // Conta Patrimonial (Obrigação a Pagar)
   conta_patrimonial_id: z.string().uuid('Selecione a conta patrimonial.').nullable(),
+}).superRefine((data, ctx) => {
+    const totalPago = data.pagamentos.reduce((sum, p) => sum + (Number(p.valor_pago) || 0), 0);
+    const saldoDevedor = (ctx.parent as any).saldoDevedor || 0; // Acessa o saldoDevedor do contexto
+    const restante = saldoDevedor - totalPago;
+
+    if (restante > 0.01) {
+        if (!data.acao_saldo_restante) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: 'Selecione uma ação para o saldo restante.',
+                path: ['acao_saldo_restante'],
+            });
+        } else if (data.acao_saldo_restante === 'reprogramar' && !data.nova_data_vencimento) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: 'A nova data de vencimento é obrigatória.',
+                path: ['nova_data_vencimento'],
+            });
+        } else if (data.acao_saldo_restante === 'parcelar') {
+            if (!data.numero_novas_parcelas || data.numero_novas_parcelas < 2) {
+                ctx.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    message: 'O número de parcelas deve ser no mínimo 2.',
+                    path: ['numero_novas_parcelas'],
+                });
+            }
+            if (!data.nova_data_vencimento) {
+                ctx.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    message: 'A data do primeiro vencimento é obrigatória.',
+                    path: ['nova_data_vencimento'],
+                });
+            }
+            if (!data.intervalo_dias_novas_parcelas || data.intervalo_dias_novas_parcelas < 1) {
+                ctx.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    message: 'O intervalo de dias é obrigatório.',
+                    path: ['intervalo_dias_novas_parcelas'],
+                });
+            }
+        }
+    }
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -88,6 +137,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
+    context: { saldoDevedor }, // Passa o saldo devedor para o superRefine
     defaultValues: {
       data_pagamento: new Date(),
       forma_pagamento: 'Pix',
@@ -95,6 +145,12 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
       historico_id: null,
       salvar_como_padrao: false,
       conta_patrimonial_id: null,
+      
+      // Valores padrão para pagamento parcial
+      acao_saldo_restante: 'desconto',
+      nova_data_vencimento: addDays(new Date(), 30),
+      numero_novas_parcelas: 2,
+      intervalo_dias_novas_parcelas: 30,
     },
   });
   
@@ -107,6 +163,8 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
   const pagamentosArray = watch('pagamentos');
   const totalPago = pagamentosArray.reduce((sum, p) => sum + (Number(p.valor_pago) || 0), 0);
   const restante = saldoDevedor - totalPago;
+  const acaoSaldoRestante = watch('acao_saldo_restante');
+  const isPagamentoParcial = restante > 0.01; // Se o restante for maior que 1 centavo
 
   const fetchMapeamentoContabil = useCallback(async () => {
     if (!isAdmin || !adminId) return;
@@ -227,6 +285,12 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
               historico_id: defaultHistoricoId,
               salvar_como_padrao: false,
               conta_patrimonial_id: contaPatrimonialId,
+              
+              // Valores padrão para pagamento parcial
+              acao_saldo_restante: 'desconto',
+              nova_data_vencimento: addDays(new Date(), 30),
+              numero_novas_parcelas: 2,
+              intervalo_dias_novas_parcelas: 30,
           });
           
           setIsInitialized(true);
@@ -253,6 +317,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
 
     const contaPagamento = mapeamentoContabil['pagamento']; // Conta de Resultado (Despesa/Custo)
     const contaParcelaPagar = mapeamentoContabil['parcela_pagar'];
+    const contaDescontoObtido = mapeamentoContabil['desconto_obtido']; // NOVO CAMPO
     
     const { data: contaSintetica, error: csError } = await supabase
         .from(tabelaContasPagar)
@@ -270,9 +335,10 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
     const dataPagamentoISO = dataNoonUTC.toISOString();
     
     const lancamentosPayload: any[] = [];
-    
-    // CRÍTICO: Chave de vínculo para o Modelo A
     const origemVincular = `pagamento_cp:${parcela.id}`;
+    
+    const valorPagoTotal = totalPago;
+    const saldoRestanteCalculado = restante; // Saldo restante (se > 0)
 
     try {
       for (const pagamento of values.pagamentos) {
@@ -286,7 +352,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
             id_conta_contabil: contaPagamento,
             data_pagamento: dataPagamentoISO,
             forma_pagamento: values.forma_pagamento,
-            tipo_pagamento: 'total',
+            tipo_pagamento: quitouComPagamentoAtual ? 'total' : 'parcial', // CORRIGIDO
             historico_id: values.historico_id,
             id_conta_resultado: contaDespesaCriacao,
         };
@@ -314,7 +380,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
             tipo: 'Saida' as const, // Crédito é 'Saida' no Ativo
             conta_bancaria_id: pagamento.conta_id,
             conta_contabil_id: contaContabilCaixaBanco,
-            origem: origemVincular, // MODELO A: VINCULAÇÃO PELA PARCELA
+            origem: origemVincular,
             historico_id: values.historico_id,
             conta_resultado_id: idPatrimonial, // Ativo aponta para Passivo
         };
@@ -331,12 +397,74 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
                 tipo: 'Entrada' as const, // Débito é 'Entrada' no Passivo
                 conta_bancaria_id: null,
                 conta_contabil_id: contaPatrimonial,
-                origem: origemVincular, // MODELO A: VINCULAÇÃO PELA PARCELA
+                origem: origemVincular,
                 historico_id: values.historico_id,
                 conta_resultado_id: idAtivo, // Passivo aponta para Ativo
             };
             lancamentosPayload.push(lancamentoPatrimonialPayload);
         }
+      }
+      
+      // 3. Lidar com o Saldo Restante (Pagamento Parcial)
+      let finalStatus: AdminParcelaPagar['status'] = 'paga';
+      let observacaoFinal: string | null = null;
+      
+      if (isPagamentoParcial) {
+          if (values.acao_saldo_restante === 'desconto') {
+              finalStatus = 'paga';
+              observacaoFinal = `Pago R$ ${valorPagoTotal.toFixed(2)} com R$ ${saldoRestanteCalculado.toFixed(2)} de desconto.`;
+              
+              // LANÇAMENTO DE DESCONTO OBTIDO (CRÉDITO na Receita)
+              if (contaDescontoObtido) {
+                  const idDesconto = crypto.randomUUID();
+                  
+                  const lancamentoDescontoPayload = {
+                      id: idDesconto,
+                      proprietario_id: adminId,
+                      data_movimentacao: dataPagamentoISO,
+                      descricao: `Desconto Obtido: ${descricaoContaSintetica} (CP ID: ${parcela.conta_pagar_id.substring(0, 8)})`,
+                      valor: saldoRestanteCalculado,
+                      tipo: 'Saida' as const, // Saída na Receita (Crédito)
+                      conta_bancaria_id: null,
+                      conta_contabil_id: contaDescontoObtido, // Conta de Desconto Obtido (Receita)
+                      origem: 'pagamento_manual',
+                      historico_id: values.historico_id,
+                  };
+                  lancamentosPayload.push(lancamentoDescontoPayload);
+              }
+              
+          } else if (values.acao_saldo_restante === 'reprogramar' || values.acao_saldo_restante === 'parcelar') {
+              finalStatus = 'paga';
+              observacaoFinal = `Pago R$ ${valorPagoTotal.toFixed(2)}. Saldo de R$ ${saldoRestanteCalculado.toFixed(2)} ${values.acao_saldo_restante === 'reprogramar' ? 'reprogramado' : 'parcelado'}.`;
+              
+              // Cria novas parcelas pendentes
+              const baseParcelaPayload = { admin_id: adminId, id_conta_contabil: contaParcelaPagar };
+              
+              if (values.acao_saldo_restante === 'reprogramar') {
+                  await supabase.from(tabelaParcelas).insert({
+                      conta_pagar_id: parcela.conta_pagar_id,
+                      ...baseParcelaPayload,
+                      numero_parcela: 99,
+                      valor_parcela: saldoRestanteCalculado,
+                      data_vencimento: format(values.nova_data_vencimento!, 'yyyy-MM-dd'),
+                      status: 'reprogramada'
+                  });
+              } else { // Parcelar
+                  const valorNovaParcela = saldoRestanteCalculado / values.numero_novas_parcelas!;
+                  const novasParcelas = Array.from({ length: values.numero_novas_parcelas! }).map((_, i) => ({
+                      conta_pagar_id: parcela.conta_pagar_id,
+                      ...baseParcelaPayload,
+                      numero_parcela: 100 + i,
+                      valor_parcela: valorNovaParcela,
+                      data_vencimento: format(addDays(values.nova_data_vencimento!, i * values.intervalo_dias_novas_parcelas!), 'yyyy-MM-dd'),
+                      status: 'reprogramada',
+                  }));
+                  await supabase.from(tabelaParcelas).insert(novasParcelas);
+              }
+          } else {
+              // Se não escolheu ação, mantém como parcial (embora o superRefine deva impedir isso)
+              finalStatus = 'parcial';
+          }
       }
       
       // 4. Inserir todos os lançamentos de uma vez
@@ -345,10 +473,11 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
 
       // 5. Atualizar a parcela e a conta sintética
       await supabase.from(tabelaParcelas).update({
-        status: 'paga',
-        valor_pago: (parcela.valor_pago || 0) + totalPago,
+        status: finalStatus,
+        valor_pago: (parcela.valor_pago || 0) + valorPagoTotal,
         data_pagamento: format(dataPagamento, 'yyyy-MM-dd'),
         id_conta_contabil: contaParcelaPagar,
+        observacao: observacaoFinal,
       }).eq('id', parcela.id);
       
       const { count: parcelasPendentesCount } = await supabase
@@ -389,7 +518,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
         return;
     }
     
-    if (Math.abs(restante) > 0.01) {
+    if (Math.abs(restante) > 0.01 && !isPagamentoParcial) {
         showError('O valor total pago deve ser igual ao saldo devedor da parcela.');
         return;
     }
@@ -410,7 +539,6 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
     // 2. Verificar se alguma conta de origem é um BANCO
     const hasBankPayment = values.pagamentos.some(p => {
         const conta = contasOrigem.find(c => c.id === p.conta_id);
-        // CRÍTICO: Verifica se a conta de saldo tem a flag is_banco = true
         return conta?.plano_contas?.is_banco === true;
     });
     
@@ -418,7 +546,6 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
     if (hasBankPayment) {
         setPendingPaymentData(values);
         setExtratoManualDialog(true);
-        // O fluxo de salvamento será continuado no FormExtratoManualCP
         return;
     }
     
@@ -578,6 +705,35 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
                   </div>
               )}
               
+              {/* Lógica de Pagamento Parcial (NOVA) */}
+              {isPagamentoParcial && (
+                  <div className="space-y-4 pt-4 border-t">
+                      <h3 className="font-semibold text-destructive">Saldo restante: {formatCurrency(restante)}</h3>
+                      <FormField control={form.control} name="acao_saldo_restante" render={({ field }) => (
+                          <FormItem>
+                              <FormLabel>O que fazer com o saldo restante?</FormLabel>
+                              <FormControl>
+                                  <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="space-y-2">
+                                      <FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="desconto" /></FormControl><FormLabel className="font-normal">Conceder Desconto Obtido (Receita)</FormLabel></FormItem>
+                                      <FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="reprogramar" /></FormControl><FormLabel className="font-normal">Reprogramar Saldo</FormLabel></FormItem>
+                                      <FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="parcelar" /></FormControl><FormLabel className="font-normal">Parcelar Saldo</FormLabel></FormItem>
+                                  </RadioGroup>
+                              </FormControl>
+                              <FormMessage />
+                          </FormItem>
+                      )} />
+                      
+                      {acaoSaldoRestante === 'reprogramar' && <FormField control={form.control} name="nova_data_vencimento" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Nova Data de Vencimento</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "PPP", { locale: ptBR }) : <span>Escolha a data</span>}<CalendarIcon className="ml-auto h-4 w-4 opacity-50" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus locale={ptBR} /></PopoverContent></Popover><FormMessage /></FormItem>)} />}
+                      {acaoSaldoRestante === 'parcelar' && (
+                          <div className="grid grid-cols-3 gap-4 items-end">
+                              <FormField control={form.control} name="numero_novas_parcelas" render={({ field }) => (<FormItem><FormLabel>Nº Parcelas</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                              <FormField control={form.control} name="intervalo_dias_novas_parcelas" render={({ field }) => (<FormItem><FormLabel>Intervalo</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                              <FormField control={form.control} name="nova_data_vencimento" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>1º Venc.</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("w-full text-left font-normal", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "dd/MM/yy", { locale: ptBR }) : <span>Data</span>}<CalendarIcon className="ml-auto h-4 w-4 opacity-50" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus locale={ptBR} /></PopoverContent></Popover><FormMessage /></FormItem>)} />
+                          </div>
+                      )}
+                  </div>
+              )}
+              
               <div className="p-4 bg-secondary rounded-md space-y-2 text-sm">
                   <div className="flex justify-between font-medium"><p>Total Informado:</p><p>{formatCurrency(totalPago)}</p></div>
                   <Separator />
@@ -587,7 +743,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
                   </div>
               </div>
 
-              <Button type="submit" className="w-full" disabled={loading || form.formState.isSubmitting || Math.abs(restante) > 0.01}>
+              <Button type="submit" className="w-full" disabled={loading || form.formState.isSubmitting || (Math.abs(restante) > 0.01 && !isPagamentoParcial)}>
                 <Loader2 className={cn("mr-2 h-4 w-4 animate-spin", (loading || form.formState.isSubmitting) && "hidden")} />
                 Confirmar Pagamento
               </Button>
