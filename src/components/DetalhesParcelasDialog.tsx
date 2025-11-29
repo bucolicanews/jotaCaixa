@@ -319,7 +319,7 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
                   <CardContent className="p-4 space-y-3">
                       <div className="flex justify-between items-center">
                           <div className="flex items-center space-x-2">
-                              <DollarSign className="w-5 h-5 text-primary" />
+                              <DollarSign className="w-5 h-5 mr-2" />
                               <span className="font-semibold">Progresso de Recebimento</span>
                           </div>
                           <span className="text-lg font-bold text-primary">{progressoPercentual}%</span>
