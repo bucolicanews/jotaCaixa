@@ -185,15 +185,16 @@ const FormLancamentoManual: React.FC<FormLancamentoManualProps> = ({ onSaveCompl
         conta_resultado_id: idDebito, // L2 aponta para L1
     };
     
-    // 3. Inserir ambos os lançamentos
+    // 3. Inserir ambos os lançamentos em um único array
+    const lancamentosPayload = [lancamentoDebito, lancamentoCredito];
+
     try {
-        const [resDebito, resCredito] = await Promise.all([
-            supabase.from('lancamentos').insert(lancamentoDebito),
-            supabase.from('lancamentos').insert(lancamentoCredito),
-        ]);
+        // Usamos uma única chamada de inserção para o array
+        const { error: insertError } = await supabase
+            .from('lancamentos')
+            .insert(lancamentosPayload);
         
-        if (resDebito.error) throw resDebito.error;
-        if (resCredito.error) throw resCredito.error;
+        if (insertError) throw insertError;
         
         showSuccess(`Lançamento de ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor)} registrado com sucesso!`);
         
@@ -211,6 +212,10 @@ const FormLancamentoManual: React.FC<FormLancamentoManualProps> = ({ onSaveCompl
         onSaveComplete();
         
     } catch (error: any) {
+        // Se o erro for 409 (conflito de FK), o problema é a referência circular.
+        // A solução é usar uma RPC ou uma Edge Function para garantir a atomicidade,
+        // mas como estamos no frontend, a inserção em lote deve funcionar se a RLS permitir.
+        // Se o erro persistir, o problema é a restrição de FK no PostgREST.
         showError('Falha ao registrar lançamento: ' + error.message);
     } finally {
         setIsSubmitting(false);
