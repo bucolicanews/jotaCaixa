@@ -5,7 +5,8 @@ import { DollarSign, PlusCircle } from 'lucide-react';
 import FormLancamentoManual from '@/components/formularios/FormLancamentoManual';
 import { useSessao } from '@/hooks/use-sessao';
 import { ClienteProfile } from '@/types/usuario';
-import LancamentosManuaisTable from '@/components/lancamentos/LancamentosManuaisTable'; // NOVO IMPORT
+import LancamentosManuaisTable from '@/components/lancamentos/LancamentosManuaisTable';
+import TodosLancamentosTable from '@/components/lancamentos/TodosLancamentosTable'; // NOVO IMPORT
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 const Lancamentos: React.FC = () => {
@@ -33,9 +34,10 @@ const Lancamentos: React.FC = () => {
       </h1>
       
       <Tabs defaultValue="novo" className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="novo">Novo Lançamento</TabsTrigger>
             <TabsTrigger value="historico">Histórico Manual</TabsTrigger>
+            <TabsTrigger value="todos">Todos os Lançamentos</TabsTrigger> {/* NOVA ABA */}
         </TabsList>
         
         <TabsContent value="novo" className="mt-4">
@@ -53,6 +55,10 @@ const Lancamentos: React.FC = () => {
         
         <TabsContent value="historico" className="mt-4">
             <LancamentosManuaisTable key={refreshKey} />
+        </TabsContent>
+        
+        <TabsContent value="todos" className="mt-4">
+            <TodosLancamentosTable key={refreshKey + 1} /> {/* Usando uma chave diferente para forçar a recarga */}
         </TabsContent>
       </Tabs>
     </LayoutPrincipal>
