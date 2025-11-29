@@ -28,10 +28,9 @@ interface LancamentoCalima {
     descricao: string;
     proprietario_id: string;
     conta_resultado_id: string | null; // ID do lançamento emparelhado
-    origem: string; // CORRIGIDO: Adicionado origem
     
     // Relações:
-    conta_contabil: { Conta: string, Descricao: string } | null; // Conta DRE/Patrimonial
+    conta_contabil: { Conta: string, Descricao: string } | null; // NOVO: Relação direta com a conta contábil
     historicos: { codigo: string | null } | null;
     
     // Relação para conta de saldo (só existe se conta_bancaria_id não for nulo)
@@ -96,40 +95,6 @@ const ExportarLancamentos: React.FC = () => {
       fetchTotalNaoMapeados();
   }, [fetchTotalNaoMapeados]);
 
-  const fetchPar = useCallback(async (parId: string): Promise<LancamentoCalima | null> => {
-      const { data, error } = await supabase
-          .from('lancamentos')
-          .select(`
-            id,
-            data_movimentacao,
-            valor,
-            tipo,
-            documento,
-            descricao,
-            proprietario_id,
-            conta_contabil_id,
-            conta_bancaria_id,
-            conta_resultado_id,
-            origem,
-            
-            conta_contabil:conta_contabil_id ( Conta, Descricao ),
-            historicos:historico_id ( codigo ),
-            
-            conta_saldo:conta_bancaria_id ( 
-              conta_contabil_id,
-              conta_ativo:plano_contas!conta_contabil_id ( Conta )
-            )
-          `)
-          .eq('id', parId)
-          .single();
-          
-      if (error) {
-          console.error(`Erro ao buscar par ${parId}:`, error);
-          return null;
-      }
-      return data as LancamentoCalima;
-  }, []);
-
   const handleExport = useCallback(async () => {
     if (!ownerId || !filtroPeriodo?.from || !filtroPeriodo?.to) {
       showError('Selecione o período de exportação.');
@@ -146,7 +111,7 @@ const ExportarLancamentos: React.FC = () => {
       const startDate = format(filtroPeriodo.from, 'yyyy-MM-dd');
       const endDate = format(filtroPeriodo.to, 'yyyy-MM-dd');
 
-      // 1. Buscar TODOS os Lançamentos do Período
+      // 1. Buscar TODOS os Lançamentos do Período (incluindo as partidas dobradas)
       const { data, error } = await supabase
         .from('lancamentos')
         .select(`
@@ -160,7 +125,6 @@ const ExportarLancamentos: React.FC = () => {
           conta_contabil_id,
           conta_bancaria_id,
           conta_resultado_id,
-          origem,
           
           conta_contabil:conta_contabil_id ( Conta, Descricao ),
           historicos:historico_id ( codigo ),
@@ -194,37 +158,30 @@ const ExportarLancamentos: React.FC = () => {
       for (const l of lancamentos) {
         if (processedLaunchIds.has(l.id)) continue;
 
-        // Tenta encontrar o par no array local
-        let par = lancamentos.find(p => p.id === l.conta_resultado_id);
+        // Busca o par usando a referência cruzada (conta_resultado_id)
+        const par = lancamentos.find(p => p.id === l.conta_resultado_id);
         
-        // Se o par não foi encontrado localmente, busca no banco de dados (caso esteja fora do período)
-        if (!par && l.conta_resultado_id) {
-            par = await fetchPar(l.conta_resultado_id);
-        }
-        
-        // Se for um lançamento de estorno, ele não deve ter um par, pois ele é o estorno.
-        if (l.origem === 'estorno_direto') {
+        // Se for um lançamento manual de partida dobrada, ele deve ter um par
+        if (l.origem === 'lancamento_manual' && !par) {
+            currentSkipped.push(`ID ${l.id.substring(0, 8)}: Lançamento manual sem par de partida dobrada encontrado.`);
             processedLaunchIds.add(l.id);
             continue;
         }
         
-        // Se o lançamento deveria ter um par e não tem, pula.
-        if (!par && l.conta_resultado_id) {
+        // Se for um lançamento de conciliação/pagamento/recebimento, ele deve ter um par
+        if (l.origem !== 'lancamento_manual' && !par) {
             currentSkipped.push(`ID ${l.id.substring(0, 8)}: Lançamento de origem '${l.origem}' sem par de partida dobrada encontrado.`);
             processedLaunchIds.add(l.id);
             continue;
         }
         
-        // Se não tem par E não tem conta_resultado_id, é um lançamento que não faz parte de uma partida dobrada (deve ser ignorado)
-        if (!par && !l.conta_resultado_id) {
-            currentSkipped.push(`ID ${l.id.substring(0, 8)}: Lançamento sem referência de partida dobrada. Ignorado.`);
+        // Se não for um par, tratamos como um lançamento único (que não deveria existir)
+        if (!par) {
+            currentSkipped.push(`ID ${l.id.substring(0, 8)}: Lançamento sem par de partida dobrada. Ignorado.`);
             processedLaunchIds.add(l.id);
             continue;
         }
         
-        // Se chegamos aqui, temos um par (l e par)
-        if (!par) continue; 
-
         // Encontramos o par. Agora, identificamos Débito e Crédito.
         const debito = l.tipo === 'Entrada' ? l : par;
         const credito = l.tipo === 'Saida' ? l : par;
@@ -238,18 +195,21 @@ const ExportarLancamentos: React.FC = () => {
         
         // 3. Mapeamento de Contas
         
-        // Função auxiliar para obter o código da conta
-        const getContaCodigo = (lancamento: LancamentoCalima): string => {
-            // Prioridade 1: Se tem conta_bancaria_id, usa a conta contábil do saldo_contas (Ativo/Caixa)
-            if (lancamento.conta_bancaria_id && lancamento.conta_saldo?.conta_ativo?.Conta) {
-                return lancamento.conta_saldo.conta_ativo.Conta;
-            }
-            // Prioridade 2: Usa a conta contábil do próprio lançamento (DRE/Patrimonial)
-            return lancamento.conta_contabil?.Conta || '';
-        };
+        // Conta Débito: Deve ser a conta contábil do lançamento de Débito (Entrada)
+        let contaDebitoCodigo = debito.conta_contabil?.Conta || '';
         
-        const contaDebitoCodigo = getContaCodigo(debito);
-        const contaCreditoCodigo = getContaCodigo(credito);
+        // Se o Débito for uma movimentação de Caixa/Banco, a conta contábil é a conta de Ativo (conta_ativo)
+        if (debito.conta_bancaria_id) {
+            contaDebitoCodigo = debito.conta_saldo?.conta_ativo?.Conta || '';
+        }
+        
+        // Conta Crédito: Deve ser a conta contábil do lançamento de Crédito (Saída)
+        let contaCreditoCodigo = credito.conta_contabil?.Conta || '';
+        
+        // Se o Crédito for uma movimentação de Caixa/Banco, a conta contábil é a conta de Ativo (conta_ativo)
+        if (credito.conta_bancaria_id) {
+            contaCreditoCodigo = credito.conta_saldo?.conta_ativo?.Conta || '';
+        }
         
         const historicoCodigo = debito.historicos?.codigo || credito.historicos?.codigo || '';
         
@@ -310,7 +270,7 @@ const ExportarLancamentos: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [ownerId, filtroPeriodo, cnpjCpf, fetchPar]);
+  }, [ownerId, filtroPeriodo, cnpjCpf]);
   
   const handlePrintErrors = () => {
       if (skippedLaunches.length === 0 || !filtroPeriodo?.from || !filtroPeriodo?.to) {
