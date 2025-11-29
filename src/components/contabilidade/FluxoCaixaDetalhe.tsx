@@ -22,7 +22,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import FormMovimentacaoDiretaDialog, { LancamentoPrimario } from '@/components/formularios/FormMovimentacaoDiretaDialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '../ui/alert-dialog';
 
-// Interface para o lançamento primário (ligado à conta bancária)
+// Interface for the primary launch (linked to the bank account)
 interface Lancamento extends LancamentoPrimario {
   conciliado: boolean;
   origem: string;
@@ -147,8 +147,12 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
       
       // Se for geral ou sem período, não calculamos saldo inicial de conta
       if (filtroContaId === 'todos' || !filtroPeriodo?.from) {
-          const entradasGeral = lancamentos.filter(l => l.tipo === 'Entrada' && l.origem !== 'movimentacao_direta_estornada').reduce((sum, l) => sum + l.valor, 0);
-          const saidasGeral = lancamentos.filter(l => l.tipo === 'Saida' && l.origem !== 'movimentacao_direta_estornada').reduce((sum, l) => sum + l.valor, 0);
+          // Filtra lançamentos que não são estornos ou estornados
+          const lancamentosValidos = lancamentos.filter(l => l.origem !== 'movimentacao_direta_estornada' && l.origem !== 'estorno_direto');
+          
+          const entradasGeral = lancamentosValidos.filter(l => l.tipo === 'Entrada').reduce((sum, l) => sum + l.valor, 0);
+          const saidasGeral = lancamentosValidos.filter(l => l.tipo === 'Saida').reduce((sum, l) => sum + l.valor, 0);
+          
           return { totalEntradas: entradasGeral, totalSaidas: saidasGeral, saldoInicialConta: 0, lancamentosDoPeriodo: lancamentos };
       }
       
@@ -171,8 +175,8 @@ const FluxoCaixaDetalhe: React.FC<FluxoCaixaDetalheProps> = ({ empresaId, contas
           const dataLancamento = format(parseISO(l.data_movimentacao), 'yyyy-MM-dd');
           const valor = l.valor;
           
-          // CRÍTICO: Ignora lançamentos originais estornados
-          if (l.origem === 'movimentacao_direta_estornada') continue;
+          // CRÍTICO: Ignora lançamentos de estorno e lançamentos originais estornados
+          if (l.origem === 'movimentacao_direta_estornada' || l.origem === 'estorno_direto') continue;
           
           if (dataLancamento < dataInicioFiltro) {
               if (l.tipo === 'Entrada') saldoAcumuladoAntes += valor;
