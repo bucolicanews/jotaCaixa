@@ -23,8 +23,8 @@ const TIPOS_REGISTRO_CONTABIL = [
 
 // Esquema dinâmico: a_receber e parcela agora são opcionais (nullable)
 const formSchema = z.object({
-  a_receber: z.string().uuid('Conta inválida para Contas a Receber.').nullable(),
-  parcela: z.string().uuid('Conta inválida para Parcelas a Receber.').nullable(),
+  a_receber: z.string().nullable(),
+  parcela: z.string().nullable(),
   desconto_concedido: z.string().nullable(),
   estorno_desconto_concedido: z.string().nullable(), // NOVO CAMPO
   historico_padrao_id: z.string().nullable(),
@@ -115,7 +115,7 @@ const FormConfiguracoesCR: React.FC = () => {
     if (contasError) {
       showError('Erro ao carregar configurações de CR: ' + contasError.message);
     } else if (contasData) {
-      const mappedData = contasData.reduce((acc, item) => {
+      const mappedData = contasData.reduce((acc: Partial<FormValues>, item: { tipo_registro: string, conta_contabil_id: string | null }) => {
         // Mapeia apenas os campos que existem no novo esquema
         if (['a_receber', 'parcela', 'desconto_concedido', 'estorno_desconto_concedido'].includes(item.tipo_registro)) {
             acc[item.tipo_registro as keyof FormValues] = item.conta_contabil_id;
@@ -251,7 +251,7 @@ const FormConfiguracoesCR: React.FC = () => {
                             <FormItem>
                                 <FormLabel>{tipo.label} ({tipo.tipo} - {requiredAnalitica})</FormLabel>
                                 <Select 
-                                    onValueChange={field.onChange} 
+                                    onValueChange={(v) => field.onChange(v === "null" ? null : v)} 
                                     value={field.value || "null"}
                                 >
                                     <FormControl>
@@ -291,7 +291,7 @@ const FormConfiguracoesCR: React.FC = () => {
                 <FormItem>
                     <FormLabel>Histórico Padrão (Recebimento)</FormLabel>
                     <Select 
-                        onValueChange={field.onChange} 
+                        onValueChange={(v) => field.onChange(v === "null" ? null : v)} 
                         value={field.value || "null"}
                     >
                         <FormControl>
