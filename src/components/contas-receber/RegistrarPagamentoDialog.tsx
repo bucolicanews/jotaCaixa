@@ -49,7 +49,7 @@ const formSchema = z.object({
   salvar_como_padrao: z.boolean().optional(),
   
   // NOVO CAMPO: Conta Patrimonial (Direito a Receber)
-  conta_patrimonial_id: z.string().uuid('Selecione a conta patrimonial.').nullable(),
+  conta_patrimonial_id: z.string().uuid('Selecione a conta patrimonial válida.').nullable(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -77,7 +77,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
   
   // NOVO ESTADO: Modal de Extrato Manual
   const [extratoManualDialog, setExtratoManualDialog] = useState(false);
-  const [pendingPaymentData, setPendingPaymentData] = useState<FormValues | null>(null);
+  const [pendingPaymentData, setPendingPaymentData] = useState<FormValues & { isPagamentoParcial: boolean, saldoRestante: number } | null>(null);
   
   // Determina as tabelas de destino
   const tabelaRecebimentos = isAdmin ? 'admin_recebimentos' : 'recebimentos';
@@ -473,7 +473,11 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
     
     // 2. Se for pagamento via Banco, abre o modal de Extrato Manual
     if (isBankPayment) {
-        setPendingPaymentData(values);
+        setPendingPaymentData({ 
+            ...values, 
+            isPagamentoParcial: isPagamentoParcial, 
+            saldoRestante: saldoRestante 
+        });
         setExtratoManualDialog(true);
         // O fluxo de salvamento será continuado no FormExtratoManualCR
         return;
