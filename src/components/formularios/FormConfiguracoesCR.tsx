@@ -21,10 +21,10 @@ const TIPOS_REGISTRO_CONTABIL = [
   { key: 'estorno_desconto_concedido', label: 'Estorno Desconto Concedido (Receita)', tipo: 'Resultado', analitica: 'Sim' }, // NOVO CAMPO
 ];
 
-// Esquema dinâmico: a_receber e parcela são obrigatórios
+// Esquema dinâmico: a_receber e parcela agora são opcionais (nullable)
 const formSchema = z.object({
-  a_receber: z.string().min(1, 'A conta Contas a Receber (Sintético) é obrigatória.').nullable(),
-  parcela: z.string().min(1, 'A conta Parcelas a Receber (Analítico) é obrigatória.').nullable(),
+  a_receber: z.string().uuid('Conta inválida para Contas a Receber.').nullable(),
+  parcela: z.string().uuid('Conta inválida para Parcelas a Receber.').nullable(),
   desconto_concedido: z.string().nullable(),
   estorno_desconto_concedido: z.string().nullable(), // NOVO CAMPO
   historico_padrao_id: z.string().nullable(),
