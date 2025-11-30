@@ -92,6 +92,8 @@ const TodosLancamentosTable: React.FC = () => {
             case 'movimentacao_direta': return 'Mov. Direta';
             case 'estorno_direto': return 'Estorno';
             case 'movimentacao_direta_estornada': return 'Estornada';
+            case 'recebimento_manual_estornada': return 'CR (Estornada)';
+            case 'pagamento_manual_estornada': return 'CP (Estornada)';
             default: return origem;
         }
     };
@@ -183,6 +185,9 @@ const TodosLancamentosTable: React.FC = () => {
                                 <SelectItem value="assinatura_stripe">Assinatura</SelectItem>
                                 <SelectItem value="movimentacao_direta">Mov. Direta</SelectItem>
                                 <SelectItem value="estorno_direto">Estorno</SelectItem>
+                                <SelectItem value="movimentacao_direta_estornada">Estornada</SelectItem>
+                                <SelectItem value="recebimento_manual_estornada">CR (Estornada)</SelectItem>
+                                <SelectItem value="pagamento_manual_estornada">CP (Estornada)</SelectItem>
                             </SelectContent>
                         </Select>
                         <Button onClick={handlePrint} variant="outline" disabled={lancamentos.length === 0}>
@@ -219,7 +224,7 @@ const TodosLancamentosTable: React.FC = () => {
                                     const canDelete = l.origem === 'lancamento_manual' || l.origem === 'movimentacao_direta';
                                     
                                     return (
-                                        <TableRow key={l.id} className={cn(l.origem === 'estorno_direto' && 'bg-red-500/10', l.origem === 'movimentacao_direta_estornada' && 'opacity-50')}>
+                                        <TableRow key={l.id} className={cn(l.origem === 'estorno_direto' && 'bg-red-500/10', l.origem.endsWith('_estornada') && 'opacity-50')}>
                                             <TableCell className="text-sm">{formatarData(l.data_movimentacao)}</TableCell>
                                             <TableCell>
                                                 <Badge variant={getBadgeVariant(l.tipo)}>

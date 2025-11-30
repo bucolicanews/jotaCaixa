@@ -139,17 +139,18 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
         
         const contaPatrimonialId = contaSintetica.id_conta_patrimonial;
         const descricaoContaSintetica = contaSintetica.descricao || 'Pagamento';
+        const historicoId = contaSintetica.historico_id;
         const contaPagarIdShort = contaPagarId.substring(0, 8);
         
-        // 3. Buscar a conta de Estorno de Desconto Obtido (Despesa)
+        // 3. Buscar mapeamento contábil (para Desconto Obtido e Estorno Desconto Obtido)
         const { data: configData } = await supabase
             .from('configuracao_contas_pagar')
-            .select('conta_contabil_id')
+            .select('tipo_registro, conta_contabil_id')
             .eq('proprietario_id', usuario.id)
-            .in('tipo_registro', ['estorno_desconto_obtido', 'desconto_obtido']);
+            .in('tipo_registro', ['desconto_obtido', 'estorno_desconto_obtido']);
             
-        const contaEstornoDescontoId = configData?.find(c => c.tipo_registro === 'estorno_desconto_obtido')?.conta_contabil_id;
         const contaDescontoObtidoId = configData?.find(c => c.tipo_registro === 'desconto_obtido')?.conta_contabil_id;
+        const contaEstornoDescontoId = configData?.find(c => c.tipo_registro === 'estorno_desconto_obtido')?.conta_contabil_id;
         
         // 4. Buscar todos os pagamentos registrados (para deletar depois)
         const { data: pagamentos, error: fetchPayError } = await supabase
@@ -180,40 +181,33 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
         if (fetchPaymentLaunchError) throw fetchPaymentLaunchError;
 
         // Fetch 2: Discount Launches (origem: pagamento_manual)
-        const discountDescriptionPrefix = `Baixa Passivo Desconto CP: ${descricaoContaSintetica} (CP ID: ${contaPagarIdShort})`;
-        
         const { data: discountLaunches, error: fetchDiscountLaunchError } = await supabase
             .from('lancamentos')
             .select('id, conta_resultado_id, conta_contabil_id, conta_bancaria_id, valor, tipo, descricao, historico_id, origem')
             .eq('proprietario_id', usuario.id)
             .eq('origem', 'pagamento_manual')
-            .ilike('descricao', `${discountDescriptionPrefix}%`);
+            .ilike('descricao', `%Desconto Obtido: ${descricaoContaSintetica} (CP ID: ${contaPagarIdShort})%`);
 
         if (fetchDiscountLaunchError) throw fetchDiscountLaunchError;
 
         const originalLaunches = [...(paymentLaunches || []), ...(discountLaunches || [])];
-
+        
         if (originalLaunches.length === 0) {
             showError('Nenhum lançamento contábil original encontrado para estorno.');
             setIsUndoing(false);
             return;
         }
         
-        // Filtra lançamentos que pertencem a esta parcela (origemVincular) ou são lançamentos de desconto obtido
-        const filteredLaunches = originalLaunches.filter(l => {
-            if (l.origem === origemVincular) return true;
-            if (l.origem === 'pagamento_manual' && l.descricao.includes(`(CP ID: ${contaPagarIdShort})`)) return true;
-            return false;
-        });
-        
-        const originalLaunchIds = filteredLaunches.map(l => l.id);
+        const originalLaunchIds = originalLaunches.map(l => l.id);
         const lancamentosEstornoPayload: any[] = [];
 
         // 6. Gerar Lançamentos de Estorno (Reversão)
-        for (const orig of filteredLaunches) {
+        
+        // 6.1. Estorno do Pagamento (Caixa/Passivo)
+        for (const orig of originalLaunches.filter(l => l.origem === origemVincular)) {
             const inverseId = crypto.randomUUID();
             const tipoInvertido = orig.tipo === 'Entrada' ? 'Saida' : 'Entrada'; // Inverte o tipo
-
+            
             // Lançamento de Estorno
             const lancInvert = {
                 id: inverseId,
@@ -229,24 +223,20 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
                 conta_resultado_id: orig.id, // Referência cruzada para o original
             };
             lancamentosEstornoPayload.push(lancInvert);
+        }
+        
+        // 6.2. Estorno do Desconto Obtido (Despesa/Passivo)
+        if (isDiscountApplied && contaEstornoDescontoId && contaPatrimonialId && contaDescontoObtidoId) {
+            const descontoLaunch = originalLaunches.find(l => l.origem === 'pagamento_manual' && l.conta_contabil_id === contaDescontoObtidoId);
             
-            // CRÍTICO: Se for um lançamento de Desconto Obtido (Receita), precisamos de uma partida dobrada de Despesa
-            // O lançamento original do desconto obtido é: D: Passivo (Entrada), C: Receita (Saída)
-            if (orig.origem === 'pagamento_manual' && orig.tipo === 'Saida' && isDiscountApplied && orig.conta_contabil_id === contaDescontoObtidoId) {
-                
-                if (!contaEstornoDescontoId || !contaPatrimonialId) {
-                    throw new Error('Conta de Despesa para Estorno de Desconto Obtido ou Conta Patrimonial não configurada.');
-                }
-                
-                // O estorno do desconto deve ser: D: Estorno Desconto Obtido (Despesa), C: Passivo (Obrigação a Pagar)
-                
-                // Lançamento 2 do Estorno: D: Estorno Desconto Obtido (Despesa)
-                const idEstornoDespesa = crypto.randomUUID();
-                
-                // O valor do desconto é o valor do lançamento de Receita (orig.valor)
-                const valorDesconto = orig.valor; 
+            if (descontoLaunch) {
+                const valorDesconto = descontoLaunch.valor;
                 
                 // Lançamento 1 do Estorno do Desconto: D: Estorno Desconto Obtido (Despesa)
+                const idEstornoDespesa = crypto.randomUUID();
+                const idEstornoPassivo = crypto.randomUUID();
+                
+                // D: Estorno Desconto Obtido (Despesa) - ENTRADA
                 const lancamentoEstornoDespesa = {
                     id: idEstornoDespesa,
                     proprietario_id: usuario.id,
@@ -257,10 +247,26 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
                     conta_bancaria_id: null,
                     conta_contabil_id: contaEstornoDescontoId, // Conta de Estorno Desconto Obtido (Despesa)
                     origem: 'estorno_pagamento_manual',
-                    historico_id: orig.historico_id,
-                    conta_resultado_id: inverseId, // Referência cruzada para o estorno do Passivo
+                    historico_id: historicoId,
+                    conta_resultado_id: idEstornoPassivo, // Referência cruzada
                 };
                 lancamentosEstornoPayload.push(lancamentoEstornoDespesa);
+                
+                // Lançamento 2 do Estorno do Desconto: C: Passivo (Obrigação a Pagar) - SAÍDA
+                const lancamentoEstornoPassivo = {
+                    id: idEstornoPassivo,
+                    proprietario_id: usuario.id,
+                    data_movimentacao: dataEstornoISO,
+                    descricao: `ESTORNO PASSIVO DESCONTO: ${descricaoContaSintetica} (CP ID: ${contaPagarIdShort})`,
+                    valor: valorDesconto,
+                    tipo: 'Saida' as const, // Crédito no Passivo (Credora)
+                    conta_bancaria_id: null,
+                    conta_contabil_id: contaPatrimonialId, // Conta Patrimonial (Passivo)
+                    origem: 'estorno_pagamento_manual',
+                    historico_id: historicoId,
+                    conta_resultado_id: idEstornoDespesa, // Referência cruzada
+                };
+                lancamentosEstornoPayload.push(lancamentoEstornoPassivo);
             }
         }
 
@@ -380,6 +386,7 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
                           parcelas.map((p) => {
                               const statusVariant = getBadgeVariant(p.status, p.data_vencimento);
                               const isPaga = p.status === 'paga';
+                              const isCanceled = p.status === 'cancelada' || p.status === 'bloqueada';
                               const canEditOrDelete = p.status === 'aberta' || p.status === 'parcial' || p.status === 'reprogramada';
                               
                               return (

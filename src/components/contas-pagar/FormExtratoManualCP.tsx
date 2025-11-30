@@ -77,8 +77,9 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
     const adminId = parcela.admin_id;
     const totalPago = pagamentoDetalhes.reduce((sum, p) => sum + p.valor_pago, 0);
     
-    const contaPagamento = mapeamentoContabil['pagamento']; // Conta de Pagamento (Resultado)
+    const contaPagamento = mapeamentoContabil['pagamento']; // Conta de Resultado (Despesa/Custo)
     const contaParcelaPagar = mapeamentoContabil['parcela_pagar'];
+    const contaDescontoObtido = mapeamentoContabil['desconto_obtido']; // NOVO
     
     const form = useForm<FormValues>({
         resolver: zodResolver(formSchema),
@@ -123,6 +124,18 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
     const onSubmit = async (values: FormValues) => {
         setLoading(true);
 
+        const tabelaPagamentos = 'admin_pagamentos';
+        const tabelaParcelas = 'admin_parcelas_pagar';
+        const tabelaContasPagar = 'admin_contas_pagar';
+        
+        const valorPagoTotal = totalPago;
+        const saldoRestanteCalculado = parcela.valor_parcela - (parcela.valor_pago || 0) - valorPagoTotal;
+        const isPagamentoParcial = saldoRestanteCalculado > 0.01;
+        
+        // Lógica de Pagamento Parcial (lida no componente pai)
+        const parentValues = (form.getValues() as any).parentValues as FormValues;
+        const acaoSaldoRestante = parentValues?.acao_saldo_restante;
+        
         try {
             let comprovanteUrl: string | null = values.comprovante_url || null;
 
@@ -131,9 +144,9 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
                 comprovanteUrl = await uploadComprovante(comprovanteFile, parcela.id);
             }
             
-            // 2. Buscar a Conta Sintética para obter a conta de Despesa/Custo (DRE)
+            // 2. Buscar a Conta Sintética para obter a descrição e contas contábeis
             const { data: contaSintetica, error: csError } = await supabase
-                .from('admin_contas_pagar')
+                .from(tabelaContasPagar)
                 .select('id_conta_patrimonial, descricao, id_conta_resultado')
                 .eq('id', parcela.conta_pagar_id)
                 .single();
@@ -143,7 +156,7 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
             const descricaoContaSintetica = contaSintetica?.descricao || 'Pagamento';
             const contaDespesaCriacao = contaSintetica?.id_conta_resultado;
             
-            const dataPagamento = dataPagamento;
+            const dataPagamento = parentValues.data_pagamento;
             const dataNoonUTC = new Date(Date.UTC(dataPagamento.getFullYear(), dataPagamento.getMonth(), dataPagamento.getDate(), 12, 0, 0));
             const dataPagamentoISO = dataNoonUTC.toISOString();
             
@@ -152,11 +165,14 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
                 .map(p => {
                     const contaOrigem = contasOrigem.find(c => c.id === p.conta_id);
                     
-                    // CRÍTICO: Apenas se for uma conta de BANCO
                     if (!contaOrigem?.plano_contas?.is_banco) return null; 
                     
-                    // O valor no extrato é sempre o valor real (negativo para Saída)
                     const valorExtrato = -Math.abs(p.valor_pago); 
+                    
+                    // Busca a conta contábil de pagamento (se for Admin)
+                    const contaContabilPagamento = isAdmin 
+                        ? mapeamentoContabil['pagamento'] 
+                        : null;
                     
                     return {
                         empresa_id: adminId,
@@ -167,7 +183,7 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
                         tipo: 'Saida' as const,
                         identificacao: values.identificacao || null,
                         conciliado: false, // Começa como não conciliado
-                        conta_contabil_id: contaPagamento, // Mapeia para a conta de Pagamento (Resultado)
+                        conta_contabil_id: contaContabilPagamento, // Mapeia para a conta de Pagamento (Resultado)
                     };
                 })
                 .filter(e => e !== null);
@@ -183,6 +199,7 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
             const origemVincular = `pagamento_cp:${parcela.id}`;
 
             for (const pagamento of pagamentoDetalhes) {
+                
                 // 4.1. Registrar Pagamento (Histórico)
                 const pagamentoPayload = { 
                     parcela_id: parcela.id, 
@@ -191,13 +208,12 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
                     conta_id: pagamento.conta_id,
                     id_conta_contabil: contaPagamento,
                     data_pagamento: dataPagamentoISO,
-                    forma_pagamento: values.forma_pagamento,
-                    tipo_pagamento: 'total',
-                    historico_id: historicoId,
+                    forma_pagamento: parentValues.forma_pagamento,
+                    tipo_pagamento: isPagamentoParcial ? 'parcial' : 'total',
+                    historico_id: parentValues.historico_id,
                     id_conta_resultado: contaDespesaCriacao,
+                    anexo_url: comprovanteUrl,
                     observacao: values.observacao || null,
-                    // Adiciona a URL do comprovante ao registro de pagamento
-                    anexo_url: comprovanteUrl, 
                 };
                 
                 const { error: pagamentoError } = await supabase.from(tabelaPagamentos).insert(pagamentoPayload);
@@ -223,8 +239,8 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
                     tipo: 'Saida' as const, // Crédito é 'Saida' no Ativo
                     conta_bancaria_id: pagamento.conta_id,
                     conta_contabil_id: contaContabilCaixaBanco,
-                    origem: origemVincular, // MODELO A: VINCULAÇÃO PELA PARCELA
-                    historico_id: values.historico_id,
+                    origem: origemVincular,
+                    historico_id: parentValues.historico_id,
                     conta_resultado_id: idPatrimonial, // Ativo aponta para Passivo
                 };
                 lancamentosPayload.push(lancamentoAtivoPayload);
@@ -240,24 +256,105 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
                         tipo: 'Entrada' as const, // Débito é 'Entrada' no Passivo
                         conta_bancaria_id: null,
                         conta_contabil_id: contaPatrimonial,
-                        origem: origemVincular, // MODELO A: VINCULAÇÃO PELA PARCELA
-                        historico_id: values.historico_id,
+                        origem: origemVincular,
+                        historico_id: parentValues.historico_id,
                         conta_resultado_id: idAtivo, // Passivo aponta para Ativo
                     };
                     lancamentosPayload.push(lancamentoPatrimonialPayload);
                 }
             }
             
-            // 4.4. Inserir todos os lançamentos de uma vez
+            // 5. Lidar com o Saldo Restante (Pagamento Parcial)
+            let finalStatus: AdminParcelaPagar['status'] = 'paga';
+            let observacaoFinal: string | null = values.observacao || null;
+            
+            if (isPagamentoParcial) {
+                if (acaoSaldoRestante === 'desconto') {
+                    finalStatus = 'paga';
+                    observacaoFinal = `Pago R$ ${valorPagoTotal.toFixed(2)} com R$ ${saldoRestanteCalculado.toFixed(2)} de desconto. ${values.observacao || ''}`;
+                    
+                    // LANÇAMENTO DE DESCONTO OBTIDO (CRÉDITO na Receita)
+                    if (contaDescontoObtido && contaPatrimonial) {
+                        const idDescontoReceita = crypto.randomUUID();
+                        const idDescontoPassivo = crypto.randomUUID();
+
+                        // Lançamento 3: D: Passivo (Obrigação a Pagar) - DÉBITO (Entrada) - Para zerar o saldo restante
+                        const lancamentoDescontoPassivoPayload = {
+                            id: idDescontoPassivo,
+                            proprietario_id: adminId,
+                            data_movimentacao: dataPagamentoISO,
+                            descricao: `Baixa Passivo Desconto CP: ${descricaoContaSintetica} (CP ID: ${parcela.conta_pagar_id.substring(0, 8)})`,
+                            valor: saldoRestanteCalculado,
+                            tipo: 'Entrada' as const, // Débito no Passivo (Credora)
+                            conta_bancaria_id: null,
+                            conta_contabil_id: contaPatrimonial, // Conta Patrimonial (Passivo)
+                            origem: 'pagamento_manual',
+                            historico_id: parentValues.historico_id,
+                            conta_resultado_id: idDescontoReceita, // Referência cruzada
+                        };
+                        lancamentosPayload.push(lancamentoDescontoPassivoPayload);
+
+                        // Lançamento 4: C: Receita (Desconto Obtido) - CRÉDITO (Saída) - Para reconhecer o ganho
+                        const lancamentoDescontoReceitaPayload = {
+                            id: idDescontoReceita,
+                            proprietario_id: adminId,
+                            data_movimentacao: dataPagamentoISO,
+                            descricao: `Desconto Obtido: ${descricaoContaSintetica} (CP ID: ${parcela.conta_pagar_id.substring(0, 8)})`,
+                            valor: saldoRestanteCalculado,
+                            tipo: 'Saida' as const, // Crédito na Receita (Credora)
+                            conta_bancaria_id: null,
+                            conta_contabil_id: contaDescontoObtido, // Conta de Desconto Obtido (Receita)
+                            origem: 'pagamento_manual',
+                            historico_id: parentValues.historico_id,
+                            conta_resultado_id: idDescontoPassivo, // Referência cruzada
+                        };
+                        lancamentosPayload.push(lancamentoDescontoReceitaPayload);
+                    }
+                    
+                } else if (acaoSaldoRestante === 'reprogramar' || acaoSaldoRestante === 'parcelar') {
+                    finalStatus = 'paga';
+                    observacaoFinal = `Pago R$ ${valorPagoTotal.toFixed(2)} com R$ ${saldoRestanteCalculado.toFixed(2)} ${acaoSaldoRestante === 'reprogramar' ? 'reprogramado' : 'parcelado'}. ${values.observacao || ''}`;
+                    
+                    // Cria novas parcelas pendentes
+                    const baseParcelaPayload = { admin_id: adminId, id_conta_contabil: contaParcelaPagar };
+                    
+                    if (acaoSaldoRestante === 'reprogramar') {
+                        await supabase.from(tabelaParcelas).insert({
+                            conta_pagar_id: parcela.conta_pagar_id,
+                            ...baseParcelaPayload,
+                            numero_parcela: 99,
+                            valor_parcela: saldoRestanteCalculado,
+                            data_vencimento: format(parentValues.nova_data_vencimento!, 'yyyy-MM-dd'),
+                            status: 'reprogramada'
+                        });
+                    } else { // Parcelar
+                        const valorNovaParcela = saldoRestanteCalculado / parentValues.numero_novas_parcelas!;
+                        const novasParcelas = Array.from({ length: parentValues.numero_novas_parcelas! }).map((_, i) => ({
+                            conta_pagar_id: parcela.conta_pagar_id,
+                            ...baseParcelaPayload,
+                            numero_parcela: 100 + i,
+                            valor_parcela: valorNovaParcela,
+                            data_vencimento: format(addDays(parentValues.nova_data_vencimento!, i * parentValues.intervalo_dias_novas_parcelas!), 'yyyy-MM-dd'),
+                            status: 'reprogramada',
+                        }));
+                        await supabase.from(tabelaParcelas).insert(novasParcelas);
+                    }
+                } else {
+                    finalStatus = 'parcial';
+                }
+            }
+            
+            // 6. Inserir todos os lançamentos de uma vez
             const { error: lancamentoError } = await supabase.from('lancamentos').insert(lancamentosPayload);
             if (lancamentoError) throw lancamentoError;
 
-            // 5. Atualizar a parcela e a conta sintética
+            // 7. Atualizar a parcela e a conta sintética
             await supabase.from(tabelaParcelas).update({
-                status: 'paga',
-                valor_pago: (parcela.valor_pago || 0) + totalPago,
+                status: finalStatus,
+                valor_pago: (parcela.valor_pago || 0) + valorPagoTotal,
                 data_pagamento: format(dataPagamento, 'yyyy-MM-dd'),
                 id_conta_contabil: contaParcelaPagar,
+                observacao: observacaoFinal,
             }).eq('id', parcela.id);
             
             const { count: parcelasPendentesCount } = await supabase
@@ -270,12 +367,12 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
                 await supabase.from(tabelaContasPagar).update({ status: 'pago' }).eq('id', parcela.conta_pagar_id);
             }
             
-            // 6. Salvar Histórico Padrão (se marcado)
-            if (isAdmin && values.salvar_como_padrao && values.historico_id) {
+            // 8. Salvar Histórico Padrão (se marcado)
+            if (isAdmin && parentValues.salvar_como_padrao && parentValues.historico_id) {
                 await supabase.from('configuracao_historico_padrao').upsert({
                     proprietario_id: adminId,
                     tipo_registro: 'pagamento_padrao',
-                    historico_id: values.historico_id,
+                    historico_id: parentValues.historico_id,
                 }, { onConflict: 'proprietario_id, tipo_registro' });
             }
 
