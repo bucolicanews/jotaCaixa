@@ -114,7 +114,7 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
     const tabelaParcelas = 'admin_parcelas_pagar';
     
     try {
-        // 1. Buscar a parcela para obter o ID da conta sintética e o valor pago
+        // 1. Buscar a parcela para obter o ID da conta sintética
         const { data: parcelaData, error: parcelaError } = await supabase
             .from(tabelaParcelas)
             .select('conta_pagar_id, id_conta_contabil, valor_parcela, valor_pago, observacao')
@@ -124,7 +124,6 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
         if (parcelaError || !parcelaData) throw new Error('Parcela não encontrada.');
         
         const contaPagarId = parcelaData.conta_pagar_id;
-        const valorPagoOriginal = parcelaData.valor_pago || 0;
         const isDiscountApplied = parcelaData.observacao?.includes('desconto');
         
         // 2. Buscar a conta sintética para obter a descrição e contas contábeis
@@ -198,10 +197,11 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
             return;
         }
         
-        // Filtra lançamentos que pertencem a esta parcela (origemVincular) ou são lançamentos de desconto obtido
         const filteredLaunches = originalLaunches.filter(l => {
             if (l.origem === origemVincular) return true;
-            if (l.origem === 'pagamento_manual' && l.descricao.includes(`(CP ID: ${contaPagarIdShort})`)) return true;
+            if (l.origem === 'pagamento_manual') {
+                return l.descricao.includes(`(CP ID: ${contaPagarIdShort})`);
+            }
             return false;
         });
         
@@ -233,19 +233,19 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
             // O lançamento original do desconto obtido é: D: Passivo (Entrada), C: Receita (Saída)
             if (orig.origem === 'pagamento_manual' && orig.tipo === 'Saida' && isDiscountApplied) {
                 
-                if (!contaEstornoDescontoId) {
-                    throw new Error('Conta de Despesa para Estorno de Desconto Obtido não configurada.');
+                if (!contaEstornoDescontoId || !contaPatrimonialId) {
+                    throw new Error('Conta de Despesa para Estorno de Desconto Obtido ou Conta Patrimonial não configurada.');
                 }
                 
-                // O estorno deve ser: D: Despesa (Estorno), C: Passivo
+                // O estorno deve ser: D: Estorno Desconto Obtido (Despesa), C: Passivo (Obrigação a Pagar)
                 
-                // Lançamento 2 do Estorno: D: Despesa (Estorno Desconto Obtido)
+                // Lançamento 2 do Estorno: D: Estorno Desconto Obtido (Despesa)
                 const idEstornoDespesa = crypto.randomUUID();
                 
                 // O valor do desconto é o valor do lançamento de Receita (orig.valor)
                 const valorDesconto = orig.valor; 
                 
-                // Lançamento 1 do Estorno do Desconto: D: Despesa (Estorno Desconto Obtido)
+                // Lançamento 1 do Estorno do Desconto: D: Estorno Desconto Obtido (Despesa)
                 const lancamentoEstornoDespesa = {
                     id: idEstornoDespesa,
                     proprietario_id: usuario.id,

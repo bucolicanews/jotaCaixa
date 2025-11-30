@@ -319,7 +319,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
 
     const contaPagamento = mapeamentoContabil['pagamento']; // Conta de Resultado (Despesa/Custo)
     const contaParcelaPagar = mapeamentoContabil['parcela_pagar'];
-    const contaDescontoObtido = mapeamentoContabil['desconto_obtido']; // NOVO CAMPO
+    const contaDescontoObtido = mapeamentoContabil['desconto_obtido'];
     
     const { data: contaSintetica, error: csError } = await supabase
         .from(tabelaContasPagar)
@@ -418,7 +418,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
               observacaoFinal = `Pago R$ ${valorPagoTotal.toFixed(2)} com R$ ${saldoRestanteCalculado.toFixed(2)} de desconto.`;
               
               // LANÇAMENTO DE DESCONTO OBTIDO (CRÉDITO na Receita)
-              if (contaDescontoObtido && contaPatrimonial) { // CRÍTICO: Verifica se ambas as contas existem
+              if (contaDescontoObtido && contaPatrimonial) {
                   const idDescontoReceita = crypto.randomUUID();
                   const idDescontoPassivo = crypto.randomUUID();
 
