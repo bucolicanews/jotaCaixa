@@ -208,10 +208,15 @@ const FormConfiguracoesCR: React.FC = () => {
           .filter(c => {
               const analiticaMatch = c.Analitica === requiredAnalitica;
               
-              // Filtra pelo booleano correto
-              const tipoMatch = tipo === 'Patrimonial' ? c.is_conta_patrimonial : c.is_conta_resultado;
-              
-              return analiticaMatch && tipoMatch;
+              // Lógica de filtro ajustada:
+              if (tipo === 'Patrimonial') {
+                  // Para Patrimonial, queremos contas marcadas como Patrimonial E/OU Contas a Receber
+                  return analiticaMatch && (c.is_conta_patrimonial || c.is_a_receber);
+              } else if (tipo === 'Resultado') {
+                  // Para Resultado, queremos contas marcadas como Resultado
+                  return analiticaMatch && c.is_conta_resultado;
+              }
+              return false;
           })
           .map(c => ({
               id: c.id,
