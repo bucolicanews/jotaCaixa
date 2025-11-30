@@ -60,7 +60,7 @@ const FormConfiguracoesCR: React.FC = () => {
     // Busca TODAS as contas (Analíticas e Sintéticas) do Admin
     const { data, error } = await supabase
         .from('plano_contas')
-        .select('id, Conta, Descricao, Analitica, is_conta_patrimonial, is_conta_resultado') // Incluindo booleanos
+        .select('id, Conta, Descricao, Analitica, is_conta_patrimonial, is_conta_resultado, is_a_receber') // Incluindo booleanos
         .eq('proprietario_id', adminId)
         .order('Conta');
         
@@ -210,7 +210,11 @@ const FormConfiguracoesCR: React.FC = () => {
               
               // Lógica de filtro ajustada:
               if (tipo === 'Patrimonial') {
-                  // Para Patrimonial, queremos contas marcadas como Patrimonial E/OU Contas a Receber
+                  // Sintética: Apenas contas sintéticas que NÃO são de resultado
+                  if (requiredAnalitica === 'Não') {
+                      return c.Analitica === 'Não' && c.is_conta_resultado === false;
+                  }
+                  // Analítica: Contas marcadas como Patrimonial OU A Receber
                   return analiticaMatch && (c.is_conta_patrimonial || c.is_a_receber);
               } else if (tipo === 'Resultado') {
                   // Para Resultado, queremos contas marcadas como Resultado
