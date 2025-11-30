@@ -45,9 +45,17 @@ const SECOES_MENU: MenuSection[] = [
         titulo: 'Financeiro',
         perfis: ['Admin', 'Cliente', 'Usuario'],
         itens: [
-            { nome: 'Bancos / Caixas', caminho: '/bancos', icone: Banknote, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'bancos' },
             { nome: 'Contas a Pagar', caminho: '/contas-pagar', icone: ArrowDownCircle, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'contas_pagar' },
             { nome: 'Contas a Receber', caminho: '/contas-receber', icone: ArrowUpCircle, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'contas_receber' },
+        ]
+    },
+    {
+        titulo: 'Banco',
+        perfis: ['Admin', 'Cliente', 'Usuario'],
+        itens: [
+            { nome: 'Bancos / Caixas', caminho: '/bancos', icone: Banknote, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'bancos' },
+            { nome: 'Conciliação', caminho: '/conciliacao', icone: Check, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'conciliacao' },
+            { nome: 'Extratos Salvos', caminho: '/extratos', icone: Eye, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'bancos' },
         ]
     },
     {
@@ -55,8 +63,6 @@ const SECOES_MENU: MenuSection[] = [
         perfis: ['Admin', 'Cliente', 'Usuario'],
         itens: [
             { nome: 'Novo Lançamento', caminho: '/lancamentos', icone: DollarSign, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'plano_contas' },
-            { nome: 'Conciliação', caminho: '/conciliacao', icone: Check, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'conciliacao' },
-            { nome: 'Extratos Salvos', caminho: '/extratos', icone: Eye, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'bancos' },
         ]
     },
     {
