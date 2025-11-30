@@ -60,9 +60,10 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
   const [isUndoing, setIsUndoing] = useState(false);
 
   // Determina a tabela correta com base na role
-  const tabelaParcelas = role === 'Admin' ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
-  const tabelaRecebimentos = role === 'Admin' ? 'admin_recebimentos' : 'recebimentos';
-  const tabelaContasReceber = role === 'Admin' ? 'admin_contas_receber' : 'contas_receber';
+  const isAdmin = role === 'Admin'; // DEFINIÇÃO AQUI
+  const tabelaParcelas = isAdmin ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
+  const tabelaRecebimentos = isAdmin ? 'admin_recebimentos' : 'recebimentos';
+  const tabelaContasReceber = isAdmin ? 'admin_contas_receber' : 'contas_receber';
 
   const fetchParcelas = useCallback(async () => {
     if (!conta) return;
@@ -130,7 +131,7 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
       setIsDeleting(true);
       try {
           // 1. Verificar se há recebimentos associados (apenas Admin)
-          if (role === 'Admin') {
+          if (isAdmin) {
               const { count, error: countError } = await supabase
                   .from('admin_recebimentos')
                   .select('id', { count: 'exact', head: true })
