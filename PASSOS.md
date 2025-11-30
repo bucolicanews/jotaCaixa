@@ -14,3 +14,4 @@
 14- ARQUITETURA FINANCEIRA: Documentação completa da lógica contábil e RPCs em FINANCEIRO_ARQUITETURA.md. ok
 15- DOCUMENTOS SOCIETÁRIOS: Lógica, scripts, relações e componentes (Gerenciar Blocos, Gerenciar Modelos, Documentos Gerados) implementados. ok
 16- Plano de Contas ok
+17 - erstorino dfe contas as pagar correto
