@@ -116,14 +116,18 @@ const FormConfiguracoesCR: React.FC = () => {
       showError('Erro ao carregar configurações de CR: ' + contasError.message);
     } else if (contasData) {
       const mappedData = contasData.reduce((acc: Partial<FormValues>, item: { tipo_registro: string, conta_contabil_id: string | null }) => {
-        // Mapeia apenas os campos que existem no novo esquema
+        
+        // Mapeia os campos existentes
         if (['a_receber', 'parcela', 'desconto_concedido', 'estorno_desconto_concedido'].includes(item.tipo_registro)) {
             acc[item.tipo_registro as keyof FormValues] = item.conta_contabil_id;
         }
+        
         // Mapeamento de compatibilidade: 'desconto' antigo -> 'desconto_concedido'
-        if (item.tipo_registro === 'desconto') {
+        // CRÍTICO: Só aplica se 'desconto_concedido' ainda não tiver um valor (prioriza o novo campo)
+        if (item.tipo_registro === 'desconto' && !acc['desconto_concedido']) {
             acc['desconto_concedido'] = item.conta_contabil_id;
         }
+        
         return acc;
       }, {} as Partial<FormValues>);
       
