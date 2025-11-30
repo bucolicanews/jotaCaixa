@@ -114,7 +114,7 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
     const tabelaParcelas = 'admin_parcelas_pagar';
     
     try {
-        // 1. Buscar a parcela para obter o ID da conta sintética
+        // 1. Buscar a parcela para obter o ID da conta sintética e o valor pago
         const { data: parcelaData, error: parcelaError } = await supabase
             .from(tabelaParcelas)
             .select('conta_pagar_id, id_conta_contabil, valor_parcela, valor_pago, observacao')
@@ -124,7 +124,9 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
         if (parcelaError || !parcelaData) throw new Error('Parcela não encontrada.');
         
         const contaPagarId = parcelaData.conta_pagar_id;
+        const valorPagoOriginal = parcelaData.valor_pago || 0;
         const isDiscountApplied = parcelaData.observacao?.includes('desconto');
+        const saldoRestanteDesconto = isDiscountApplied ? parseFloat(parcelaData.observacao.match(/R\$ ([\d\.,]+) de desconto/)?.[1].replace(',', '.') || '0') : 0;
         
         // 2. Buscar a conta sintética para obter a descrição e contas contábeis
         const { data: contaSintetica, error: csError } = await supabase
@@ -144,10 +146,10 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
             .from('configuracao_contas_pagar')
             .select('conta_contabil_id')
             .eq('proprietario_id', usuario.id)
-            .eq('tipo_registro', 'estorno_desconto_obtido')
-            .single();
+            .in('tipo_registro', ['estorno_desconto_obtido', 'desconto_obtido']);
             
-        const contaEstornoDescontoId = configData?.conta_contabil_id;
+        const contaEstornoDescontoId = configData?.find(c => c.tipo_registro === 'estorno_desconto_obtido')?.conta_contabil_id;
+        const contaDescontoObtidoId = configData?.find(c => c.tipo_registro === 'desconto_obtido')?.conta_contabil_id;
         
         // 4. Buscar todos os pagamentos registrados (para deletar depois)
         const { data: pagamentos, error: fetchPayError } = await supabase
@@ -197,11 +199,10 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
             return;
         }
         
+        // Filtra lançamentos que pertencem a esta parcela (origemVincular) ou são lançamentos de desconto obtido
         const filteredLaunches = originalLaunches.filter(l => {
             if (l.origem === origemVincular) return true;
-            if (l.origem === 'pagamento_manual') {
-                return l.descricao.includes(`(CP ID: ${contaPagarIdShort})`);
-            }
+            if (l.origem === 'pagamento_manual' && l.descricao.includes(`(CP ID: ${contaPagarIdShort})`)) return true;
             return false;
         });
         
@@ -231,13 +232,13 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
             
             // CRÍTICO: Se for um lançamento de Desconto Obtido (Receita), precisamos de uma partida dobrada de Despesa
             // O lançamento original do desconto obtido é: D: Passivo (Entrada), C: Receita (Saída)
-            if (orig.origem === 'pagamento_manual' && orig.tipo === 'Saida' && isDiscountApplied) {
+            if (orig.origem === 'pagamento_manual' && orig.tipo === 'Saida' && isDiscountApplied && orig.conta_contabil_id === contaDescontoObtidoId) {
                 
                 if (!contaEstornoDescontoId || !contaPatrimonialId) {
                     throw new Error('Conta de Despesa para Estorno de Desconto Obtido ou Conta Patrimonial não configurada.');
                 }
                 
-                // O estorno deve ser: D: Estorno Desconto Obtido (Despesa), C: Passivo (Obrigação a Pagar)
+                // O estorno do desconto deve ser: D: Estorno Desconto Obtido (Despesa), C: Passivo (Obrigação a Pagar)
                 
                 // Lançamento 2 do Estorno: D: Estorno Desconto Obtido (Despesa)
                 const idEstornoDespesa = crypto.randomUUID();
@@ -254,7 +255,7 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
                     valor: valorDesconto,
                     tipo: 'Entrada' as const, // Débito na Despesa (Credora)
                     conta_bancaria_id: null,
-                    conta_contabil_id: contaEstornoDescontoId, // Conta de Despesa/Custo
+                    conta_contabil_id: contaEstornoDescontoId, // Conta de Estorno Desconto Obtido (Despesa)
                     origem: 'estorno_pagamento_manual',
                     historico_id: orig.historico_id,
                     conta_resultado_id: inverseId, // Referência cruzada para o estorno do Passivo
