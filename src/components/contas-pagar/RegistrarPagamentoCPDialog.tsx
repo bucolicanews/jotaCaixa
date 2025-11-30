@@ -24,7 +24,7 @@ import { Checkbox } from '../ui/checkbox';
 import { PlanoContas } from '@/types/plano-contas';
 import { useContabilConfig } from '@/hooks/use-contabil-config';
 import FormExtratoManualCP from './FormExtratoManualCP';
-import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
+import { RadioGroup, RadioGroupItem } from '../ui/radio-group'; // Importado
 
 interface ParcelaParaPagamento extends AdminParcelaPagar {
   fornecedor: string;
@@ -418,46 +418,27 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
               observacaoFinal = `Pago R$ ${valorPagoTotal.toFixed(2)} com R$ ${saldoRestanteCalculado.toFixed(2)} de desconto.`;
               
               // LANÇAMENTO DE DESCONTO OBTIDO (CRÉDITO na Receita)
-              if (contaDescontoObtido && contaPatrimonial) { // CRÍTICO: Verifica se ambas as contas existem
-                  const idDescontoReceita = crypto.randomUUID();
-                  const idDescontoPassivo = crypto.randomUUID();
-
-                  // Lançamento 3: D: Passivo (Obrigação a Pagar) - DÉBITO (Entrada) - Para zerar o saldo restante
-                  const lancamentoDescontoPassivoPayload = {
-                      id: idDescontoPassivo,
-                      proprietario_id: adminId,
-                      data_movimentacao: dataPagamentoISO,
-                      descricao: `Baixa Passivo Desconto CP: ${descricaoContaSintetica} (CP ID: ${parcela.conta_pagar_id.substring(0, 8)})`,
-                      valor: saldoRestanteCalculado,
-                      tipo: 'Entrada' as const, // Débito no Passivo (Credora)
-                      conta_bancaria_id: null,
-                      conta_contabil_id: contaPatrimonial, // Conta Patrimonial (Passivo)
-                      origem: 'pagamento_manual',
-                      historico_id: values.historico_id,
-                      conta_resultado_id: idDescontoReceita, // Referência cruzada
-                  };
-                  lancamentosPayload.push(lancamentoDescontoPassivoPayload);
-
-                  // Lançamento 4: C: Receita (Desconto Obtido) - CRÉDITO (Saída) - Para reconhecer o ganho
-                  const lancamentoDescontoReceitaPayload = {
-                      id: idDescontoReceita,
+              if (contaDescontoObtido) {
+                  const idDesconto = crypto.randomUUID();
+                  
+                  const lancamentoDescontoPayload = {
+                      id: idDesconto,
                       proprietario_id: adminId,
                       data_movimentacao: dataPagamentoISO,
                       descricao: `Desconto Obtido: ${descricaoContaSintetica} (CP ID: ${parcela.conta_pagar_id.substring(0, 8)})`,
                       valor: saldoRestanteCalculado,
-                      tipo: 'Saida' as const, // Crédito na Receita (Credora)
+                      tipo: 'Saida' as const, // Saída na Receita (Crédito)
                       conta_bancaria_id: null,
                       conta_contabil_id: contaDescontoObtido, // Conta de Desconto Obtido (Receita)
                       origem: 'pagamento_manual',
                       historico_id: values.historico_id,
-                      conta_resultado_id: idDescontoPassivo, // Referência cruzada
                   };
-                  lancamentosPayload.push(lancamentoDescontoReceitaPayload);
+                  lancamentosPayload.push(lancamentoDescontoPayload);
               }
               
           } else if (values.acao_saldo_restante === 'reprogramar' || values.acao_saldo_restante === 'parcelar') {
               finalStatus = 'paga';
-              observacaoFinal = `Pago R$ ${valorPagoTotal.toFixed(2)} com R$ ${saldoRestanteCalculado.toFixed(2)} ${values.acao_saldo_restante === 'reprogramar' ? 'reprogramado' : 'parcelado'}.`;
+              observacaoFinal = `Pago R$ ${valorPagoTotal.toFixed(2)}. Saldo de R$ ${saldoRestanteCalculado.toFixed(2)} ${values.acao_saldo_restante === 'reprogramar' ? 'reprogramado' : 'parcelado'}.`;
               
               // Cria novas parcelas pendentes
               const baseParcelaPayload = { admin_id: adminId, id_conta_contabil: contaParcelaPagar };
@@ -531,6 +512,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
       setLoading(false);
     }
   };
+  // --- FIM FUNÇÃO DE SALVAMENTO DIRETO ---
 
 
   const onSubmit = async (values: FormValues) => {
