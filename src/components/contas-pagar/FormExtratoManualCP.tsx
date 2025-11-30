@@ -9,7 +9,7 @@ import { Loader2, Save, Upload, FileText, XCircle, CheckCircle2 } from 'lucide-r
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { cn } from '@/lib/utils';
-import { format } from 'date-fns';
+import { format, addDays } from 'date-fns';
 import { AdminParcelaPagar } from '@/types/contas-pagar'; // Reutilizando o tipo de parcela
 import { SaldoCalculado } from '@/hooks/use-saldo-conta-calculado';
 import { Textarea } from '../ui/textarea';
@@ -128,12 +128,13 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
         const tabelaParcelas = 'admin_parcelas_pagar';
         const tabelaContasPagar = 'admin_contas_pagar';
         
-        const valorPagoTotal = totalPago;
-        const saldoRestanteCalculado = parcela.valor_parcela - (parcela.valor_pago || 0) - valorPagoTotal;
+        const valorPagoAnterior = parcela.valor_pago || 0;
+        const novoValorPagoTotal = valorPagoAnterior + totalPago;
+        const saldoRestanteCalculado = parcela.valor_parcela - novoValorPagoTotal;
         const isPagamentoParcial = saldoRestanteCalculado > 0.01;
         
         // Lógica de Pagamento Parcial (lida no componente pai)
-        const parentValues = (form.getValues() as any).parentValues as FormValues;
+        const parentValues = (form.getValues() as any).parentValues as any; // Usando 'any' para acessar campos do form pai
         const acaoSaldoRestante = parentValues?.acao_saldo_restante;
         
         try {

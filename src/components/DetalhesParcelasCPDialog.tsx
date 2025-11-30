@@ -180,13 +180,12 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
 
         if (fetchPaymentLaunchError) throw fetchPaymentLaunchError;
 
-        // Fetch 2: Discount Launches (origem: pagamento_manual)
+        // Fetch 2: Discount Launches (origem: desconto_cp:ID)
         const { data: discountLaunches, error: fetchDiscountLaunchError } = await supabase
             .from('lancamentos')
             .select('id, conta_resultado_id, conta_contabil_id, conta_bancaria_id, valor, tipo, descricao, historico_id, origem')
             .eq('proprietario_id', usuario.id)
-            .eq('origem', 'pagamento_manual')
-            .ilike('descricao', `%Desconto Obtido: ${descricaoContaSintetica} (CP ID: ${contaPagarIdShort})%`);
+            .eq('origem', `desconto_cp:${parcelaId}`); // Busca pela origem correta
 
         if (fetchDiscountLaunchError) throw fetchDiscountLaunchError;
 
@@ -227,7 +226,7 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
         
         // 6.2. Estorno do Desconto Obtido (Despesa/Passivo)
         if (isDiscountApplied && contaEstornoDescontoId && contaPatrimonialId && contaDescontoObtidoId) {
-            const descontoLaunch = originalLaunches.find(l => l.origem === 'pagamento_manual' && l.conta_contabil_id === contaDescontoObtidoId);
+            const descontoLaunch = originalLaunches.find(l => l.origem === `desconto_cp:${parcelaId}` && l.conta_contabil_id === contaDescontoObtidoId);
             
             if (descontoLaunch) {
                 const valorDesconto = descontoLaunch.valor;
