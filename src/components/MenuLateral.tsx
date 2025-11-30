@@ -1,6 +1,6 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
-import { LayoutDashboard, DollarSign, ArrowUpCircle, ArrowDownCircle, Banknote, FileText, Upload, Settings, BookOpen, Users, Building2, Clock, Contact, CalendarCheck, User, FileSignature, Tag, FileTextIcon, Package, History, FileDown, MessageSquare, Loader2, Scale, TrendingUp, Eye } from 'lucide-react';
+import { LayoutDashboard, DollarSign, ArrowUpCircle, ArrowDownCircle, Banknote, FileText, Upload, Settings, BookOpen, Users, Building2, Clock, Contact, CalendarCheck, User, FileSignature, Tag, FileTextIcon, Package, History, FileDown, MessageSquare, Loader2, Scale, TrendingUp, Eye, Check } from 'lucide-react';
 import React, { useMemo, useCallback, useState, useEffect } from 'react';
 import { useSessao } from '@/hooks/use-sessao';
 import { ClienteProfile, UsuarioProfile, AdminProfile, AdminUsuarioProfile } from '@/types/usuario';
@@ -37,42 +37,39 @@ const SECOES_MENU: MenuSection[] = [
         perfis: ['Admin', 'Cliente', 'Usuario'],
         itens: [
             { nome: 'Bater Ponto', caminho: '/ponto-eletronico', icone: Clock, perfis: ['Usuario'], permissionKey: 'ponto_eletronico' },
-            // CORREÇÃO: Mudar para /folha-ponto com parâmetro de modo
             { nome: 'Meu Ponto', caminho: '/folha-ponto?mode=self', icone: User, perfis: ['Usuario'], permissionKey: 'visualizar_proprio_ponto' },
             { nome: 'Acompanhar Ponto', caminho: '/folha-ponto', icone: CalendarCheck, perfis: ['Admin', 'Cliente'], permissionKey: 'folha_ponto' },
         ]
     },
-    // NOVO: SEÇÃO FINANCEIRO (Apenas Fluxo de Caixa, CP, CR)
     {
         titulo: 'Financeiro',
         perfis: ['Admin', 'Cliente', 'Usuario'],
         itens: [
-            // ITEM MOVIDO E RENOMEADO
-            { nome: 'Saldos das Contas', caminho: '/bancos', icone: Banknote, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'bancos' },
-            { nome: 'Fluxo de Caixa', caminho: '/relatorios/fluxo-caixa', icone: TrendingUp, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'bancos' },
+            { nome: 'Bancos / Caixas', caminho: '/bancos', icone: Banknote, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'bancos' },
             { nome: 'Contas a Pagar', caminho: '/contas-pagar', icone: ArrowDownCircle, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'contas_pagar' },
             { nome: 'Contas a Receber', caminho: '/contas-receber', icone: ArrowUpCircle, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'contas_receber' },
         ]
     },
-    // NOVO: SEÇÃO LANÇAMENTOS
     {
         titulo: 'Lançamentos',
         perfis: ['Admin', 'Cliente', 'Usuario'],
         itens: [
-            { nome: 'Lançamento Manual', caminho: '/lancamentos', icone: DollarSign, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'plano_contas' },
+            { nome: 'Novo Lançamento', caminho: '/lancamentos', icone: DollarSign, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'plano_contas' },
+            { nome: 'Conciliação', caminho: '/conciliacao', icone: Check, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'conciliacao' },
+            { nome: 'Extratos Salvos', caminho: '/extratos', icone: Eye, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'bancos' },
         ]
     },
-    // NOVO: SEÇÃO CONTABILIDADE
     {
         titulo: 'Contabilidade',
         perfis: ['Admin', 'Cliente', 'Usuario'],
         itens: [
-            { nome: 'Contas Patrimoniais', caminho: '/contas-patrimoniais', icone: Scale, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'bancos' },
-            { nome: 'Balanço Patrimonial', caminho: '/relatorios/balanco', icone: Scale, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'relatorios' },
-            { nome: 'DRE', caminho: '/relatorios/dre', icone: TrendingUp, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'relatorios' },
-            { nome: 'Balancete', caminho: '/relatorios/balancete', icone: FileTextIcon, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'relatorios' }, // NOVO ITEM
-            { nome: 'Razão', caminho: '/relatorios/razao', icone: BookOpen, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'relatorios' }, // NOVO ITEM
             { nome: 'Plano de Contas', caminho: '/plano-contas', icone: BookOpen, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'plano_contas' },
+            { nome: 'Contas Patrimoniais', caminho: '/contas-patrimoniais', icone: Scale, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'bancos' },
+            { nome: 'Fluxo de Caixa', caminho: '/relatorios/fluxo-caixa', icone: TrendingUp, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'bancos' },
+            { nome: 'Balanço Patrimonial', caminho: '/relatorios/balanco', icone: Scale, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'relatorios' },
+            { nome: 'DRE', caminho: '/relatorios/dre', icone: BarChart3, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'relatorios' },
+            { nome: 'Balancete', caminho: '/relatorios/balancete', icone: FileTextIcon, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'relatorios' },
+            { nome: 'Razão', caminho: '/relatorios/razao', icone: BookOpen, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'relatorios' },
             { nome: 'Gerenciar Históricos', caminho: '/historicos', icone: History, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'configuracoes' },
         ]
     },
@@ -95,12 +92,10 @@ const SECOES_MENU: MenuSection[] = [
         ]
     },
     {
-        titulo: 'Suporte', // NOVA SEÇÃO
+        titulo: 'Suporte',
         perfis: ['Admin', 'Cliente', 'Usuario'],
         itens: [
-            // Visível apenas para Cliente
             { nome: 'Meus Tickets', caminho: '/suporte', icone: MessageSquare, perfis: ['Cliente'] },
-            // Visível para Admin e Usuário (com permissão)
             { nome: 'Gestão de Tickets', caminho: '/admin/suporte', icone: MessageSquare, perfis: ['Admin', 'Usuario'], permissionKey: 'gestao_suporte' },
         ]
     },
@@ -109,7 +104,7 @@ const SECOES_MENU: MenuSection[] = [
         perfis: ['Admin', 'Cliente', 'Usuario'],
         itens: [
             { nome: 'Minha Assinatura', caminho: '/minha-assinatura', icone: DollarSign, perfis: ['Cliente'] },
-            { nome: 'Clientes', caminho: '/clientes', icone: Building2, perfis: ['Admin', 'Cliente'], permissionKey: 'contas_receber' }, // ITEM RESTAURADO
+            { nome: 'Clientes', caminho: '/clientes', icone: Building2, perfis: ['Admin', 'Cliente'], permissionKey: 'contas_receber' },
             { nome: 'Gerenciar Usuários', caminho: '/gerenciar-usuarios', icone: Users, perfis: ['Admin', 'Cliente'], permissionKey: 'cadastrar_usuarios' },
             { nome: 'Gerenciar Planos', caminho: '/planos', icone: Package, perfis: ['Admin'] }, 
             { nome: 'Relatórios', caminho: '/relatorios', icone: FileText, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'relatorios' },
