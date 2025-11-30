@@ -19,6 +19,7 @@ const TIPOS_REGISTRO_CONTABIL = [
   { key: 'parcela_pagar', label: 'Parcelas a Pagar (Analítico)', tipo: 'Patrimonial' }, // NOVO TIPO
   { key: 'pagamento', label: 'Pagamentos (Saída)', tipo: 'Resultado' }, // NOVO TIPO
   { key: 'desconto_obtido', label: 'Descontos Obtidos (Receita)', tipo: 'Resultado' }, // NOVO TIPO
+  { key: 'estorno_desconto_obtido', label: 'Estorno Desconto Obtido (Despesa)', tipo: 'Resultado' }, // NOVO CAMPO CRÍTICO
 ];
 
 // Esquema dinâmico para garantir que todos os campos estejam presentes
@@ -27,6 +28,7 @@ const formSchema = z.object({
   parcela_pagar: z.string().uuid('Conta inválida para Parcelas a Pagar.').nullable(),
   pagamento: z.string().uuid('Conta inválida para Pagamentos.').nullable(),
   desconto_obtido: z.string().uuid('Conta inválida para Descontos Obtidos.').nullable(),
+  estorno_desconto_obtido: z.string().uuid('Conta inválida para Estorno de Desconto.').nullable(), // NOVO CAMPO
   historico_padrao_id: z.string().uuid('Histórico inválido.').nullable(),
 });
 
@@ -49,6 +51,7 @@ const FormConfiguracoesCP: React.FC = () => {
       parcela_pagar: null,
       pagamento: null,
       desconto_obtido: null,
+      estorno_desconto_obtido: null, // NOVO DEFAULT
       historico_padrao_id: null,
     },
   });
@@ -221,7 +224,7 @@ const FormConfiguracoesCP: React.FC = () => {
                                     </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
-                                    <SelectItem value={null as any}>Nenhum (Não Mapear)</SelectItem>
+                                    <SelectItem value={null as any}>Nenhum</SelectItem>
                                     {getContasDisponiveis(tipo.tipo as 'Patrimonial' | 'Resultado').map(c => (
                                         <SelectItem key={c.id} value={c.id}>
                                             {c.display}
