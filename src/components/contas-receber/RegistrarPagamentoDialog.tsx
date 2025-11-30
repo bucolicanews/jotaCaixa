@@ -23,7 +23,7 @@ import { Historico } from '@/types/historico';
 import { Checkbox } from '../ui/checkbox';
 import { PlanoContas } from '@/types/plano-contas';
 import { useContabilConfig } from '@/hooks/use-contabil-config';
-import FormExtratoManualCR from './FormExtratoManualCR'; // NOVO IMPORT
+import FormExtratoManualCR from './FormExtratoManualCR';
 
 interface ParcelaParaPagamento {
   id: string;
@@ -86,7 +86,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
   
   // O ID do proprietário da conta (Admin ID ou Empresa ID)
   const ownerId = isAdmin ? usuario?.id : parcela?.empresa_id;
-  // CORREÇÃO: ID do proprietário da sessão (para RLS e Configurações)
+  // ID do proprietário da sessão (para RLS e Configurações)
   const proprietarioDaSessao = isAdmin ? usuario?.id : (perfil as any)?.cliente_id || (perfil as any)?.id;
 
 
@@ -244,7 +244,8 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
     // Contas Contábeis Mapeadas (apenas Admin)
     const contaRecebimento = isAdmin ? (await supabase.from('configuracao_contas_receber').select('conta_contabil_id').eq('proprietario_id', proprietarioDaSessao).eq('tipo_registro', 'recebimento').single()).data?.conta_contabil_id : null;
     const contaParcela = isAdmin ? (await supabase.from('configuracao_contas_receber').select('conta_contabil_id').eq('proprietario_id', proprietarioDaSessao).eq('tipo_registro', 'parcela').single()).data?.conta_contabil_id : null;
-    const contaDesconto = isAdmin ? (await supabase.from('configuracao_contas_receber').select('conta_contabil_id').eq('proprietario_id', proprietarioDaSessao).eq('tipo_registro', 'desconto').single()).data?.conta_contabil_id : null;
+    // CORREÇÃO: Usando o novo nome da chave
+    const contaDesconto = isAdmin ? (await supabase.from('configuracao_contas_receber').select('conta_contabil_id').eq('proprietario_id', proprietarioDaSessao).eq('tipo_registro', 'desconto_concedido').single()).data?.conta_contabil_id : null;
     
     // 0. Buscar a descrição da Conta Sintética
     const { data: contaSintetica, error: csError } = await supabase
@@ -326,19 +327,43 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
           }).eq('id', parcela.id);
           
           // LANÇAMENTO DE DESCONTO (DÉBITO na Despesa/Custo)
-          if (contaDesconto) {
+          if (contaDesconto && values.conta_patrimonial_id) {
+              
+              // CRÍTICO: Geração de IDs e Referência Cruzada
+              const idDescontoDespesa = crypto.randomUUID();
+              const idDescontoPatrimonial = crypto.randomUUID();
+              
+              // Lançamento 1: D: Despesa (Desconto Concedido) - ENTRADA
               const lancamentoDescontoPayload = {
+                  id: idDescontoDespesa,
                   proprietario_id: proprietarioDaSessao,
                   data_movimentacao: dataPagamentoISO,
                   descricao: `Desconto Concedido: ${descricaoContaSintetica} (CR ID: ${parcela.conta_receber_id.substring(0, 8)})`,
                   valor: saldoRestanteCalculado,
-                  tipo: 'Entrada' as const, // Entrada na Despesa (Débito)
+                  tipo: 'Entrada' as const, // Entrada na Despesa (Credora)
                   conta_bancaria_id: null,
                   conta_contabil_id: contaDesconto, // Conta de Desconto (Despesa)
                   origem: 'recebimento_manual',
                   historico_id: values.historico_id,
+                  conta_resultado_id: idDescontoPatrimonial, // REFERÊNCIA CRUZADA
               };
               lancamentosPayload.push(lancamentoDescontoPayload);
+              
+              // Lançamento 2: C: Ativo (Direito a Receber) - SAÍDA
+              const lancamentoPatrimonialPayload = {
+                  id: idDescontoPatrimonial,
+                  proprietario_id: proprietarioDaSessao,
+                  data_movimentacao: dataPagamentoISO,
+                  descricao: `Estorno Patrimonial Desconto CR: ${descricaoContaSintetica} (CR ID: ${parcela.conta_receber_id.substring(0, 8)})`,
+                  valor: saldoRestanteCalculado,
+                  tipo: 'Saida' as const, // Saída do Ativo (Débito)
+                  conta_bancaria_id: null,
+                  conta_contabil_id: values.conta_patrimonial_id, // Conta Patrimonial (1.x.x)
+                  historico_id: values.historico_id,
+                  origem: 'recebimento_manual',
+                  conta_resultado_id: idDescontoDespesa, // REFERÊNCIA CRUZADA
+              };
+              lancamentosPayload.push(lancamentoPatrimonialPayload);
           }
           
         } else if (values.acao_saldo_restante === 'reprogramar' || values.acao_saldo_restante === 'parcelar') {
@@ -621,7 +646,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
                 <div className="space-y-4 pt-4 border-t">
                   <h3 className="font-semibold text-destructive">Saldo restante: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(saldoRestante)}</h3>
                   <FormField control={form.control} name="acao_saldo_restante" render={({ field }) => (
-                    <FormItem><FormLabel>O que fazer com o saldo restante?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="space-y-2"><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="desconto" /></FormControl><FormLabel className="font-normal">Conceder Desconto (Perdoar)</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="reprogramar" /></FormControl><FormLabel className="font-normal">Reprogramar Saldo</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="parcelar" /></FormControl><FormLabel className="font-normal">Parcelar Saldo</FormLabel></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>O que fazer com o saldo restante?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="space-y-2"><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="desconto" /></FormControl><FormLabel className="font-normal">Conceder Desconto (Perdoar)</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="reprogramar" /></FormControl><FormLabel className="font-normal">Reprogramar Saldo</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="parcelar" /></FormControl><FormLabel className="font-normal">Parcelar Saldo</FormItem></RadioGroup></FormControl><FormMessage /></FormItem>
                   )} />
                   {acaoSaldoRestante === 'reprogramar' && <FormField control={form.control} name="nova_data_vencimento" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Nova Data de Vencimento</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "PPP", { locale: ptBR }) : <span>Escolha a data</span>}<CalendarIcon className="ml-auto h-4 w-4 opacity-50" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus locale={ptBR} /></PopoverContent></Popover><FormMessage /></FormItem>)} />}
                   {acaoSaldoRestante === 'parcelar' && (
@@ -657,6 +682,8 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
                       historicoId={pendingPaymentData.historico_id}
                       contaPatrimonialId={pendingPaymentData.conta_patrimonial_id}
                       contasDestino={contasDestino}
+                      isPagamentoParcial={pendingPaymentData.isPagamentoParcial}
+                      saldoRestante={pendingPaymentData.saldoRestante}
                       onSaveComplete={onSaveComplete}
                       onClose={() => setExtratoManualDialog(false)}
                   />

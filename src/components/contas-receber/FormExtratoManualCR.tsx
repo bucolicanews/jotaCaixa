@@ -19,6 +19,7 @@ import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Calendar } from '../ui/calendar';
 import { ptBR } from 'date-fns/locale';
+import { useContabilConfig } from '@/hooks/use-contabil-config';
 
 // Função local para formatar moeda
 const formatCurrency = (value: number) =>
@@ -81,12 +82,13 @@ const FormExtratoManualCR: React.FC<FormExtratoManualCRProps> = ({
     historicoId,
     contaPatrimonialId,
     contasDestino,
-    isPagamentoParcial, // NOVO PROP
-    saldoRestante, // NOVO PROP
+    isPagamentoParcial,
+    saldoRestante,
     onSaveComplete,
     onClose,
 }) => {
     const { role, usuario, perfil } = useSessao();
+    const { configMap } = useContabilConfig();
     const isAdmin = role === 'Admin';
     
     const [loading, setLoading] = useState(false);
@@ -94,7 +96,6 @@ const FormExtratoManualCR: React.FC<FormExtratoManualCRProps> = ({
     const [isUploading, setIsUploading] = useState(false);
     
     // CORREÇÃO: O ownerId para RLS é o ID do usuário logado (Admin/Cliente) ou o cliente_id (Usuário)
-    const ownerId = usuario?.id;
     const proprietarioDaSessao = isAdmin ? usuario?.id : (perfil as any)?.cliente_id || (perfil as any)?.id;
 
     const valorRecebido = recebimentoDetalhes.valor_recebido;
@@ -122,7 +123,7 @@ const FormExtratoManualCR: React.FC<FormExtratoManualCRProps> = ({
         setIsUploading(true);
         
         const fileExt = file.name.split('.').pop();
-        const fileName = `${ownerId}/${parcelaId}/comprovantes-cr/${Date.now()}.${fileExt}`;
+        const fileName = `${proprietarioDaSessao}/${parcelaId}/comprovantes-cr/${Date.now()}.${fileExt}`;
         
         try {
             const { data, error: uploadError } = await supabase.storage
@@ -148,8 +149,8 @@ const FormExtratoManualCR: React.FC<FormExtratoManualCRProps> = ({
     };
 
     const onSubmit = async (values: FormValues) => {
-        if (!proprietarioDaSessao) {
-            showError('ID do proprietário da sessão não encontrado.');
+        if (!proprietarioDaSessao || !parcela) {
+            showError('Dados da parcela ou administrador estão incompletos.');
             return;
         }
         
@@ -171,7 +172,7 @@ const FormExtratoManualCR: React.FC<FormExtratoManualCRProps> = ({
                 comprovanteUrl = await uploadComprovante(comprovanteFile, parcela.id);
             }
             
-            // 2. Buscar a Conta Sintética para obter a conta de Receita (DRE)
+            // 2. Buscar a Conta Sintética para obter a descrição e conta de Receita (DRE)
             const { data: contaSintetica, error: csError } = await supabase
                 .from(tabelaContasReceber)
                 .select('descricao, id_conta_resultado')
@@ -224,8 +225,9 @@ const FormExtratoManualCR: React.FC<FormExtratoManualCRProps> = ({
             const contaParcela = isAdmin 
                 ? (await supabase.from('configuracao_contas_receber').select('conta_contabil_id').eq('proprietario_id', proprietarioDaSessao).eq('tipo_registro', 'parcela').single()).data?.conta_contabil_id 
                 : null;
+            // CORREÇÃO: Usando o novo nome da chave
             const contaDesconto = isAdmin 
-                ? (await supabase.from('configuracao_contas_receber').select('conta_contabil_id').eq('proprietario_id', proprietarioDaSessao).eq('tipo_registro', 'desconto').single()).data?.conta_contabil_id 
+                ? (await supabase.from('configuracao_contas_receber').select('conta_contabil_id').eq('proprietario_id', proprietarioDaSessao).eq('tipo_registro', 'desconto_concedido').single()).data?.conta_contabil_id 
                 : null;
             
             // CRÍTICO: Inicializa o array de payloads de lançamentos
@@ -285,19 +287,43 @@ const FormExtratoManualCR: React.FC<FormExtratoManualCRProps> = ({
                     observacaoFinal = `Recebido R$ ${valorRecebido.toFixed(2)} com R$ ${saldoRestante.toFixed(2)} de desconto. ${values.observacao || ''}`;
                     
                     // LANÇAMENTO DE DESCONTO (DÉBITO na Despesa/Custo)
-                    if (contaDesconto) {
+                    if (contaDesconto && contaPatrimonialId) {
+                        
+                        // CRÍTICO: Geração de IDs e Referência Cruzada
+                        const idDescontoDespesa = crypto.randomUUID();
+                        const idDescontoPatrimonial = crypto.randomUUID();
+                        
+                        // Lançamento 1: D: Despesa (Desconto Concedido) - ENTRADA
                         const lancamentoDescontoPayload = {
+                            id: idDescontoDespesa,
                             proprietario_id: proprietarioDaSessao,
                             data_movimentacao: dataPagamentoISO,
                             descricao: `Desconto Concedido: ${descricaoContaSintetica} (CR ID: ${parcela.conta_receber_id.substring(0, 8)})`,
                             valor: saldoRestante,
-                            tipo: 'Entrada' as const, // Entrada na Despesa (Débito)
+                            tipo: 'Entrada' as const, // Entrada na Despesa (Credora)
                             conta_bancaria_id: null,
                             conta_contabil_id: contaDesconto, // Conta de Desconto (Despesa)
                             origem: 'recebimento_manual',
                             historico_id: historicoId,
+                            conta_resultado_id: idDescontoPatrimonial, // REFERÊNCIA CRUZADA
                         };
                         lancamentosPayload.push(lancamentoDescontoPayload);
+                        
+                        // Lançamento 2: C: Ativo (Direito a Receber) - SAÍDA
+                        const lancamentoPatrimonialPayload = {
+                            id: idDescontoPatrimonial,
+                            proprietario_id: proprietarioDaSessao,
+                            data_movimentacao: dataPagamentoISO,
+                            descricao: `Estorno Patrimonial Desconto CR: ${descricaoContaSintetica} (CR ID: ${parcela.conta_receber_id.substring(0, 8)})`,
+                            valor: saldoRestante,
+                            tipo: 'Saida' as const, // Saída do Ativo (Débito)
+                            conta_bancaria_id: null,
+                            conta_contabil_id: contaPatrimonialId, // Conta Patrimonial (1.x.x)
+                            historico_id: historicoId,
+                            origem: 'recebimento_manual',
+                            conta_resultado_id: idDescontoDespesa, // REFERÊNCIA CRUZADA
+                        };
+                        lancamentosPayload.push(lancamentoPatrimonialPayload);
                     }
                     
                 } else if (values.acao_saldo_restante === 'reprogramar' || values.acao_saldo_restante === 'parcelar') {
@@ -356,10 +382,10 @@ const FormExtratoManualCR: React.FC<FormExtratoManualCRProps> = ({
                 valor: valorRecebido,
                 tipo: 'Entrada' as const, // Entrada no Ativo (Débito) - CORRECT
                 conta_bancaria_id: contaDestinoId,
-                conta_contabil_id: contaContabilCaixaBanco,
+                conta_contabil_id: contaContabilCaixaBanco, // <-- USANDO CONTA CONTÁBIL DO SALDO
                 historico_id: historicoId,
                 origem: 'recebimento_manual',
-                conta_resultado_id: idPatrimonial,
+                conta_resultado_id: idPatrimonial, // REFERÊNCIA CRUZADA
             };
             
             lancamentosPayload.push(lancamentoAtivoPayload);
@@ -374,10 +400,10 @@ const FormExtratoManualCR: React.FC<FormExtratoManualCRProps> = ({
                     valor: valorRecebido,
                     tipo: 'Saida' as const, // Saída do Ativo (Crédito) - CORRECT
                     conta_bancaria_id: null,
-                    conta_contabil_id: contaPatrimonialId,
+                    conta_contabil_id: contaPatrimonialId, // Conta Patrimonial (1.x.x)
                     historico_id: historicoId,
                     origem: 'recebimento_manual',
-                    conta_resultado_id: idAtivo,
+                    conta_resultado_id: idAtivo, // REFERÊNCIA CRUZADA
                 };
                 lancamentosPayload.push(lancamentoPatrimonialPayload);
             } else {
@@ -396,6 +422,7 @@ const FormExtratoManualCR: React.FC<FormExtratoManualCRProps> = ({
                     historico_id: historicoId,
                 }, { onConflict: 'proprietario_id, tipo_registro' });
             }
+
 
             showSuccess('Recebimento e Extrato registrados com sucesso!');
             onSaveComplete();

@@ -17,15 +17,16 @@ import { Historico } from '@/types/historico';
 const TIPOS_REGISTRO_CONTABIL = [
   { key: 'a_receber', label: 'Contas a Receber (Sintético)', tipo: 'Patrimonial', analitica: 'Não' }, // Sintética
   { key: 'parcela', label: 'Parcelas a Receber (Analítico)', tipo: 'Patrimonial', analitica: 'Sim' }, // Analítica
-  // REMOVIDOS: recebimento, recebimento_resultado, desconto
-  { key: 'desconto', label: 'Descontos Concedidos (Despesa)', tipo: 'Resultado', analitica: 'Sim' }, // Despesa (DRE)
+  { key: 'desconto_concedido', label: 'Descontos Concedidos (Despesa)', tipo: 'Resultado', analitica: 'Sim' }, // Despesa (DRE)
+  { key: 'estorno_desconto_concedido', label: 'Estorno Desconto Concedido (Receita)', tipo: 'Resultado', analitica: 'Sim' }, // NOVO CAMPO
 ];
 
 // Esquema dinâmico: a_receber e parcela são obrigatórios
 const formSchema = z.object({
   a_receber: z.string().min(1, 'A conta Contas a Receber (Sintético) é obrigatória.').nullable(),
   parcela: z.string().min(1, 'A conta Parcelas a Receber (Analítico) é obrigatória.').nullable(),
-  desconto: z.string().nullable(),
+  desconto_concedido: z.string().nullable(),
+  estorno_desconto_concedido: z.string().nullable(), // NOVO CAMPO
   historico_padrao_id: z.string().nullable(),
 });
 
@@ -46,7 +47,8 @@ const FormConfiguracoesCR: React.FC = () => {
     defaultValues: {
       a_receber: null,
       parcela: null,
-      desconto: null,
+      desconto_concedido: null,
+      estorno_desconto_concedido: null, // NOVO DEFAULT
       historico_padrao_id: null,
     },
   });
@@ -115,8 +117,12 @@ const FormConfiguracoesCR: React.FC = () => {
     } else if (contasData) {
       const mappedData = contasData.reduce((acc, item) => {
         // Mapeia apenas os campos que existem no novo esquema
-        if (['a_receber', 'parcela', 'desconto'].includes(item.tipo_registro)) {
+        if (['a_receber', 'parcela', 'desconto_concedido', 'estorno_desconto_concedido'].includes(item.tipo_registro)) {
             acc[item.tipo_registro as keyof FormValues] = item.conta_contabil_id;
+        }
+        // Mapeamento de compatibilidade: 'desconto' antigo -> 'desconto_concedido'
+        if (item.tipo_registro === 'desconto') {
+            acc['desconto_concedido'] = item.conta_contabil_id;
         }
         return acc;
       }, {} as Partial<FormValues>);
@@ -148,12 +154,11 @@ const FormConfiguracoesCR: React.FC = () => {
         proprietario_id: adminId,
         tipo_registro: tipo.key,
         // Usa o valor diretamente (null ou string UUID)
-        conta_contabil_id: values[tipo.key as keyof FormValues], 
+        conta_contabil_id: values[tipo.key as keyof FormValues] || null, 
     }));
     
-    // Adiciona os campos removidos (recebimento e recebimento_resultado) com valor NULL
-    // para garantir que eles sejam limpos no banco de dados se existirem.
-    const fieldsToRemove = ['recebimento', 'recebimento_resultado'];
+    // Adiciona os campos removidos (recebimento, recebimento_resultado, desconto) com valor NULL
+    const fieldsToRemove = ['recebimento', 'recebimento_resultado', 'desconto'];
     fieldsToRemove.forEach(key => {
         dataToUpsertContabil.push({
             proprietario_id: adminId,
@@ -165,7 +170,7 @@ const FormConfiguracoesCR: React.FC = () => {
     const historicoPadraoPayload = {
         proprietario_id: adminId,
         tipo_registro: 'recebimento_padrao',
-        historico_id: values.historico_padrao_id,
+        historico_id: values.historico_padrao_id || null,
     };
 
     try {
@@ -225,7 +230,6 @@ const FormConfiguracoesCR: React.FC = () => {
         
         <div className="space-y-4">
             {TIPOS_REGISTRO_CONTABIL.map(tipo => {
-                // Determina se o campo é o Sintético de CR
                 const requiredAnalitica = tipo.analitica;
                 const contasDisponiveis = getContasDisponiveis(tipo.tipo as 'Patrimonial' | 'Resultado', requiredAnalitica as 'Sim' | 'Não');
                 
@@ -239,7 +243,7 @@ const FormConfiguracoesCR: React.FC = () => {
                                 <FormLabel>{tipo.label} ({tipo.tipo} - {requiredAnalitica})</FormLabel>
                                 <Select 
                                     onValueChange={field.onChange} 
-                                    value={field.value || "null"} // Usa "null" como string para a opção "Nenhum"
+                                    value={field.value || "null"}
                                 >
                                     <FormControl>
                                         <SelectTrigger>
@@ -247,8 +251,7 @@ const FormConfiguracoesCR: React.FC = () => {
                                         </SelectTrigger>
                                     </FormControl>
                                     <SelectContent>
-                                        {/* CORREÇÃO: Usando "null" como string para a opção "Nenhum" */}
-                                        <SelectItem value="null">Nenhum (Não Mapear)</SelectItem>
+                                        <SelectItem value="null">Nenhum</SelectItem>
                                         {contasDisponiveis.map(c => (
                                             <SelectItem key={c.id} value={c.id}>
                                                 {c.display}
@@ -280,7 +283,7 @@ const FormConfiguracoesCR: React.FC = () => {
                     <FormLabel>Histórico Padrão (Recebimento)</FormLabel>
                     <Select 
                         onValueChange={field.onChange} 
-                        value={field.value || "null"} // Usa "null" como string para a opção "Nenhum"
+                        value={field.value || "null"}
                     >
                         <FormControl>
                             <SelectTrigger>
@@ -288,7 +291,6 @@ const FormConfiguracoesCR: React.FC = () => {
                             </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                            {/* CORREÇÃO: Usando "null" como string para a opção "Nenhum" */}
                             <SelectItem value="null">Nenhum (Não Mapear)</SelectItem>
                             {historicos.map(h => (
                                 <SelectItem key={h.id} value={h.id}>
