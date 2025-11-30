@@ -354,7 +354,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
             id_conta_contabil: contaPagamento,
             data_pagamento: dataPagamentoISO,
             forma_pagamento: values.forma_pagamento,
-            tipo_pagamento: isPagamentoParcial ? 'parcial' : 'total',
+            tipo_pagamento: isPagamentoParcial ? 'parcial' : 'total', // CORRIGIDO
             historico_id: values.historico_id,
             id_conta_resultado: contaDespesaCriacao,
             anexo_url: comprovanteUrl, // Adiciona a URL do comprovante
@@ -417,16 +417,12 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
               finalStatus = 'paga';
               observacaoFinal = `Pago R$ ${valorPagoTotal.toFixed(2)} com R$ ${saldoRestanteCalculado.toFixed(2)} de desconto.`;
               
-              // --- INÍCIO CORREÇÃO: LANÇAMENTOS DE DESCONTO ---
-              if (contaDescontoObtido && contaPatrimonial) {
+              // LANÇAMENTO DE DESCONTO OBTIDO (CRÉDITO na Receita)
+              if (contaDescontoObtido) {
+                  const idDesconto = crypto.randomUUID();
                   
-                  // Geração de IDs e Referência Cruzada para o Desconto
-                  const idDescontoResultado = crypto.randomUUID();
-                  const idDescontoPatrimonial = crypto.randomUUID();
-
-                  // Lançamento 3: C: Receita (Desconto Obtido) - CRÉDITO (Saída)
-                  const lancamentoDescontoResultadoPayload = {
-                      id: idDescontoResultado,
+                  const lancamentoDescontoPayload = {
+                      id: idDesconto,
                       proprietario_id: adminId,
                       data_movimentacao: dataPagamentoISO,
                       descricao: `Desconto Obtido: ${descricaoContaSintetica} (CP ID: ${parcela.conta_pagar_id.substring(0, 8)})`,
@@ -436,27 +432,9 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
                       conta_contabil_id: contaDescontoObtido, // Conta de Desconto Obtido (Receita)
                       origem: 'pagamento_manual',
                       historico_id: values.historico_id,
-                      conta_resultado_id: idDescontoPatrimonial, // Link para o débito no Passivo
                   };
-                  lancamentosPayload.push(lancamentoDescontoResultadoPayload);
-                  
-                  // Lançamento 4: D: Passivo (Obrigação a Pagar) - DÉBITO (Entrada) para o valor do DESCONTO
-                  const lancamentoDescontoPatrimonialPayload = {
-                      id: idDescontoPatrimonial,
-                      proprietario_id: adminId,
-                      data_movimentacao: dataPagamentoISO,
-                      descricao: `Baixa Passivo CP (Desconto): ${descricaoContaSintetica} (CP ID: ${parcela.conta_pagar_id.substring(0, 8)})`,
-                      valor: saldoRestanteCalculado,
-                      tipo: 'Entrada' as const, // Débito é 'Entrada' no Passivo
-                      conta_bancaria_id: null,
-                      conta_contabil_id: contaPatrimonial,
-                      origem: 'pagamento_manual',
-                      historico_id: values.historico_id,
-                      conta_resultado_id: idDescontoResultado, // Link para o crédito na Receita
-                  };
-                  lancamentosPayload.push(lancamentoDescontoPatrimonialPayload);
+                  lancamentosPayload.push(lancamentoDescontoPayload);
               }
-              // --- FIM CORREÇÃO: LANÇAMENTOS DE DESCONTO ---
               
           } else if (values.acao_saldo_restante === 'reprogramar' || values.acao_saldo_restante === 'parcelar') {
               finalStatus = 'paga';
@@ -534,9 +512,10 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
       setLoading(false);
     }
   };
+  // --- FIM FUNÇÃO DE SALVAMENTO DIRETO ---
 
 
-  const onSubmitPagamento = async (values: FormValues) => {
+  const onSubmit = async (values: FormValues) => {
     if (!parcela || !adminId) {
         showError('Dados da parcela ou administrador estão incompletos.');
         return;
@@ -591,7 +570,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
             <DialogDescription>Saldo devedor da parcela: {formatCurrency(saldoDevedor)}</DialogDescription>
           </DialogHeader>
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmitPagamento)} className="space-y-4">
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <FormField control={form.control} name="data_pagamento" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Data do Pagamento</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "dd/MM/yy", { locale: ptBR }) : <span>Data</span>}<CalendarIcon className="ml-auto h-4 w-4 opacity-50" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus locale={ptBR} /></PopoverContent></Popover><FormMessage /></FormItem>)} />
                 <FormField control={form.control} name="forma_pagamento" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Forma de Pagamento</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
@@ -753,9 +732,9 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
                       {acaoSaldoRestante === 'reprogramar' && <FormField control={form.control} name="nova_data_vencimento" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Nova Data de Vencimento</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "PPP", { locale: ptBR }) : <span>Escolha a data</span>}<CalendarIcon className="ml-auto h-4 w-4 opacity-50" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus locale={ptBR} /></PopoverContent></Popover><FormMessage /></FormItem>)} />}
                       {acaoSaldoRestante === 'parcelar' && (
                           <div className="grid grid-cols-3 gap-4 items-end">
-                              <FormField control={control} name="numero_novas_parcelas" render={({ field }) => (<FormItem><FormLabel>Nº Parcelas</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                              <FormField control={control} name="intervalo_dias_novas_parcelas" render={({ field }) => (<FormItem><FormLabel>Intervalo</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                              <FormField control={control} name="nova_data_vencimento" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>1º Venc.</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("w-full text-left font-normal", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "dd/MM/yy", { locale: ptBR }) : <span>Data</span>}<CalendarIcon className="ml-auto h-4 w-4 opacity-50" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus locale={ptBR} /></PopoverContent></Popover><FormMessage /></FormItem>)} />
+                              <FormField control={form.control} name="numero_novas_parcelas" render={({ field }) => (<FormItem><FormLabel>Nº Parcelas</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                              <FormField control={form.control} name="intervalo_dias_novas_parcelas" render={({ field }) => (<FormItem><FormLabel>Intervalo</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                              <FormField control={form.control} name="nova_data_vencimento" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>1º Venc.</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("w-full text-left font-normal", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "dd/MM/yy", { locale: ptBR }) : <span>Data</span>}<CalendarIcon className="ml-auto h-4 w-4 opacity-50" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus locale={ptBR} /></PopoverContent></Popover><FormMessage /></FormItem>)} />
                           </div>
                       )}
                   </div>
