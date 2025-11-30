@@ -114,20 +114,18 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
     const tabelaParcelas = 'admin_parcelas_pagar';
     
     try {
-        // 1. Buscar a parcela para obter o ID da conta sintética e o valor pago
+        // 1. Buscar a parcela para obter o ID da conta sintética
         const { data: parcelaData, error: parcelaError } = await supabase
             .from(tabelaParcelas)
-            .select('conta_pagar_id, id_conta_contabil, valor_parcela, valor_pago, observacao')
+            .select('conta_pagar_id, id_conta_contabil')
             .eq('id', parcelaId)
             .single();
             
         if (parcelaError || !parcelaData) throw new Error('Parcela não encontrada.');
         
         const contaPagarId = parcelaData.conta_pagar_id;
-        const valorPagoOriginal = parcelaData.valor_pago || 0;
-        const isDiscountApplied = parcelaData.observacao?.includes('desconto');
         
-        // 2. Buscar a conta sintética para obter a descrição e contas contábeis
+        // 2. Buscar a conta sintética para obter a descrição
         const { data: contaSintetica, error: csError } = await supabase
             .from(tabelaContasPagar)
             .select('id_conta_patrimonial, descricao, historico_id, id_conta_resultado')
@@ -139,17 +137,7 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
         const descricaoContaSintetica = contaSintetica.descricao || 'Pagamento';
         const contaPagarIdShort = contaPagarId.substring(0, 8);
         
-        // 3. Buscar a conta de Estorno de Desconto Obtido (Despesa)
-        const { data: configData } = await supabase
-            .from('configuracao_contas_pagar')
-            .select('conta_contabil_id')
-            .eq('proprietario_id', usuario.id)
-            .eq('tipo_registro', 'estorno_desconto_obtido')
-            .single();
-            
-        const contaEstornoDescontoId = configData?.conta_contabil_id;
-        
-        // 4. Buscar todos os pagamentos registrados (para deletar depois)
+        // 3. Buscar todos os pagamentos registrados (para deletar depois)
         const { data: pagamentos, error: fetchPayError } = await supabase
             .from('admin_pagamentos')
             .select('id, conta_id, valor_pago, id_conta_contabil, historico_id')
@@ -166,7 +154,7 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
         const dataEstornoISO = new Date().toISOString();
         const origemVincular = `pagamento_cp:${parcelaId}`;
         
-        // 5. Buscar TODOS os lançamentos ORIGINAIS (Pagamento e Desconto Obtido)
+        // 4. Buscar TODOS os lançamentos ORIGINAIS (Pagamento e Desconto Obtido)
         
         // Fetch 1: Payment Launches (origem: pagamento_cp:ID)
         const { data: paymentLaunches, error: fetchPaymentLaunchError } = await supabase
@@ -200,7 +188,9 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
         const filteredLaunches = originalLaunches.filter(l => {
             // Filtra lançamentos que pertencem a esta parcela (origemVincular) ou são lançamentos de desconto obtido
             if (l.origem === origemVincular) return true;
-            if (l.origem === 'pagamento_manual' && l.descricao.includes(`(CP ID: ${contaPagarIdShort})`)) return true;
+            if (l.origem === 'pagamento_manual') {
+                return l.descricao.includes(`(CP ID: ${contaPagarIdShort})`);
+            }
             return false;
         });
         
@@ -229,7 +219,7 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
             lancamentosEstornoPayload.push(lancInvert);
             
             // CRÍTICO: Se for um lançamento de Desconto Obtido (Receita), precisamos de uma partida dobrada de Despesa
-            if (orig.origem === 'pagamento_manual' && orig.tipo === 'Saida' && isDiscountApplied) {
+            if (orig.origem === 'pagamento_manual' && orig.tipo === 'Saida' && contaSintetica.id_conta_patrimonial) {
                 
                 if (!contaEstornoDescontoId) {
                     throw new Error('Conta de Despesa para Estorno de Desconto Obtido não configurada.');
