@@ -36,6 +36,7 @@ interface Parcela {
   data_pagamento: string | null; // ADICIONADO
   status: 'aberta' | 'parcial' | 'paga' | 'reprogramada' | 'cancelada' | 'bloqueada';
   id_conta_contabil: string | null; // Adicionado para estorno
+  observacao: string | null; // Adicionado para estorno
 }
 
 interface DetalhesParcelasDialogProps {
@@ -187,98 +188,126 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
         const totalEstornado = recebimentos.reduce((sum, r) => sum + r.valor_recebido, 0);
         const dataEstornoISO = new Date().toISOString();
         
-        // 2. Buscar TODOS os lançamentos originais vinculados a esta parcela (Ativo/Caixa e Patrimonial)
+        // 2. Buscar mapeamento contábil (apenas Admin)
+        let contaDescontoConcedidoId: string | null = null;
+        let contaEstornoDescontoId: string | null = null;
+        
+        if (isAdmin) {
+            const { data: configData } = await supabase
+                .from('configuracao_contas_receber')
+                .select('tipo_registro, conta_contabil_id')
+                .eq('proprietario_id', usuario.id)
+                .in('tipo_registro', ['desconto_concedido', 'estorno_desconto_concedido']);
+                
+            contaDescontoConcedidoId = configData?.find(c => c.tipo_registro === 'desconto_concedido')?.conta_contabil_id || null;
+            contaEstornoDescontoId = configData?.find(c => c.tipo_registro === 'estorno_desconto_concedido')?.conta_contabil_id || null;
+        }
+        
+        // 3. Buscar TODOS os lançamentos originais vinculados a esta parcela (Ativo/Caixa, Patrimonial e Desconto)
+        
+        // Busca por: 'recebimento_manual' e 'recebimento_manual_estornada' (para pegar o ID do par)
         const { data: originalLaunches, error: fetchLaunchError } = await supabase
             .from('lancamentos')
-            .select('id, conta_resultado_id, conta_contabil_id, conta_bancaria_id, valor, tipo, descricao, historico_id')
+            .select('id, conta_resultado_id, conta_contabil_id, conta_bancaria_id, valor, tipo, descricao, historico_id, origem')
             .eq('proprietario_id', usuario.id)
-            .eq('origem', 'recebimento_manual')
-            .ilike('descricao', `%Recebimento Parcela ${parcela.id.substring(0, 8)}%`); // Busca pela descrição padronizada
+            .or('origem.eq.recebimento_manual,origem.eq.recebimento_manual_estornada')
+            .ilike('descricao', `%Parcela ${parcela.id.substring(0, 8)}%`); // Busca pela descrição padronizada
             
         if (fetchLaunchError) throw fetchLaunchError;
         
         const lancamentosEstornoPayload: any[] = [];
         const originalLaunchIds = (originalLaunches || []).map(l => l.id);
         
-        if (originalLaunchIds.length > 0) {
-            // 3. Marcar os lançamentos originais como estornados
-            const { error: markError } = await supabase
-                .from('lancamentos')
-                .update({ origem: 'recebimento_manual_estornada' })
-                .in('id', originalLaunchIds);
+        if (originalLaunchIds.length === 0) {
+            showError('Nenhum lançamento contábil original encontrado para estorno.');
+            setIsUndoing(false);
+            return;
+        }
+        
+        // 4. Marcar os lançamentos originais como estornados
+        const { error: markError } = await supabase
+            .from('lancamentos')
+            .update({ origem: 'recebimento_manual_estornada' })
+            .in('id', originalLaunchIds);
+            
+        if (markError) throw markError;
+        
+        // 5. Gerar Lançamentos de Estorno (Reversão)
+        
+        // 5.1. Estorno do Recebimento (Caixa/Clientes)
+        for (const orig of originalLaunches.filter(l => l.origem === 'recebimento_manual')) {
+            const inverseId = crypto.randomUUID();
+            const tipoInvertido = orig.tipo === 'Entrada' ? 'Saida' : 'Entrada'; // Inverte o tipo
+            
+            // Lançamento de Estorno
+            const lancInvert = {
+                id: inverseId,
+                proprietario_id: usuario.id,
+                data_movimentacao: dataEstornoISO,
+                descricao: `ESTORNO: ${orig.descricao}`,
+                valor: orig.valor,
+                tipo: tipoInvertido,
+                conta_bancaria_id: orig.conta_bancaria_id,
+                conta_contabil_id: orig.conta_contabil_id,
+                origem: 'estorno_recebimento_manual',
+                historico_id: orig.historico_id,
+                conta_resultado_id: orig.id, // Referência cruzada para o original
+            };
+            lancamentosEstornoPayload.push(lancInvert);
+        }
+        
+        // 5.2. Estorno do Desconto Concedido (Se houver)
+        const isDiscountApplied = parcela.observacao?.includes('desconto');
+        
+        if (isDiscountApplied && isAdmin && contaDescontoConcedidoId && contaEstornoDescontoId && conta.id_conta_patrimonial) {
+            const valorDesconto = totalEstornado - (parcela.valor_pago || 0); // Valor do desconto
+            
+            if (valorDesconto > 0.01) {
                 
-            if (markError) throw markError;
-        }
-        
-        // 4. Gerar Lançamentos de Estorno (Reversão)
-        
-        // 4.1. Débito (Clientes/Direito a Receber) - D: CLIENTES (AUMENTA O DIREITO A RECEBER)
-        if (conta.id_conta_patrimonial) {
-            const idEstornoPatrimonial = crypto.randomUUID();
-            const idEstornoAtivo = crypto.randomUUID();
-            
-            const lancamentoEstornoPatrimonial = {
-                id: idEstornoPatrimonial,
-                proprietario_id: ownerId,
-                data_movimentacao: dataEstornoISO,
-                descricao: `Estorno Recebimento CR: ${conta.descricao} (CR ID: ${contaReceberIdShort})`,
-                valor: totalEstornado,
-                tipo: 'Entrada' as const, // Entrada no Ativo (Débito) para restaurar o direito - CORRECT
-                conta_bancaria_id: null,
-                conta_contabil_id: conta.id_conta_patrimonial,
-                origem: 'estorno_recebimento_manual',
-                historico_id: recebimentos[0].historico_id,
-                conta_resultado_id: idEstornoAtivo, // REFERÊNCIA CRUZADA
-            };
-            lancamentosEstornoPayload.push(lancamentoEstornoPatrimonial);
-        }
-        
-        // 4.2. Crédito (Caixa/Banco) - C: CAIXA/BANCO (DIMINUI O CAIXA)
-        const contaIds = recebimentos.map(r => r.conta_id);
-        
-        // CRÍTICO: Busca o conta_contabil_id da tabela saldo_contas
-        const { data: saldosData } = await supabase
-            .from('saldo_contas')
-            .select('id, conta_contabil_id')
-            .in('id', contaIds);
-            
-        const saldoContaMap = (saldosData || []).reduce((acc, s) => {
-            if (s.conta_contabil_id) acc[s.id] = s.conta_contabil_id;
-            return acc;
-        }, {} as Record<string, string | null>);
-        
-        for (const recebimento of recebimentos) {
-            const contaContabilCaixaBanco = saldoContaMap[recebimento.conta_id];
-            
-            if (!contaContabilCaixaBanco) {
-                console.warn(`Aviso: Conta de saldo ${recebimento.conta_id} sem vínculo contábil para estorno.`);
-                continue;
+                // Lançamento 1 do Estorno do Desconto: D: Clientes a Receber (Ativo)
+                const idEstornoPatrimonial = crypto.randomUUID();
+                const idEstornoReceita = crypto.randomUUID();
+                
+                // D: Clientes a Receber (Ativo) - ENTRADA (Aumenta o direito a receber)
+                const lancamentoEstornoPatrimonial = {
+                    id: idEstornoPatrimonial,
+                    proprietario_id: ownerId,
+                    data_movimentacao: dataEstornoISO,
+                    descricao: `ESTORNO DESCONTO CR: ${conta.descricao} (CR ID: ${contaReceberIdShort})`,
+                    valor: valorDesconto,
+                    tipo: 'Entrada' as const, // Débito no Ativo (Devedora)
+                    conta_bancaria_id: null,
+                    conta_contabil_id: conta.id_conta_patrimonial, // Conta Patrimonial (Ativo)
+                    origem: 'estorno_recebimento_manual',
+                    historico_id: recebimentos[0].historico_id,
+                    conta_resultado_id: idEstornoReceita, // Referência cruzada
+                };
+                lancamentosEstornoPayload.push(lancamentoEstornoPatrimonial);
+                
+                // Lançamento 2 do Estorno do Desconto: C: Estorno Desconto Concedido (Receita)
+                // C: Estorno Desconto Concedido (Receita) - SAÍDA (Diminui a Receita)
+                const lancamentoEstornoReceita = {
+                    id: idEstornoReceita,
+                    proprietario_id: ownerId,
+                    data_movimentacao: dataEstornoISO,
+                    descricao: `ESTORNO RECEITA DESCONTO: ${conta.descricao} (CR ID: ${contaReceberIdShort})`,
+                    valor: valorDesconto,
+                    tipo: 'Saida' as const, // Crédito na Receita (Credora)
+                    conta_bancaria_id: null,
+                    conta_contabil_id: contaEstornoDescontoId, // Conta de Estorno Desconto (Receita)
+                    origem: 'estorno_recebimento_manual',
+                    historico_id: recebimentos[0].historico_id,
+                    conta_resultado_id: idEstornoPatrimonial, // Referência cruzada
+                };
+                lancamentosEstornoPayload.push(lancamentoEstornoReceita);
             }
-            
-            const idEstornoAtivo = crypto.randomUUID();
-            const idEstornoPatrimonial = conta.id_conta_patrimonial ? lancamentosEstornoPayload.find(l => l.conta_contabil_id === conta.id_conta_patrimonial)?.id : null;
-            
-            const lancamentoEstornoAtivo = {
-                id: idEstornoAtivo,
-                proprietario_id: ownerId,
-                data_movimentacao: dataEstornoISO,
-                descricao: `Estorno Recebimento Ativo CR: ${conta.clientes?.nome || 'N/A'} (Parcela ID: ${parcela.id.substring(0, 8)})`,
-                valor: recebimento.valor_recebido,
-                tipo: 'Saida' as const, // Saída do Ativo (Crédito) para diminuir o saldo - CORRECT
-                conta_bancaria_id: recebimento.conta_id,
-                conta_contabil_id: contaContabilCaixaBanco, // <-- USANDO CONTA CONTÁBIL DO SALDO
-                origem: 'estorno_recebimento_manual',
-                historico_id: recebimento.historico_id,
-                conta_resultado_id: idEstornoPatrimonial, // REFERÊNCIA CRUZADA
-            };
-            lancamentosEstornoPayload.push(lancamentoEstornoAtivo);
         }
-        
-        // 5. Inserir os novos lançamentos de estorno
+
+        // 6. Inserir todos os lançamentos de estorno
         const { error: insErr } = await supabase.from('lancamentos').insert(lancamentosEstornoPayload);
         if (insErr) throw insErr;
         
-        // 6. Deletar Registros de Recebimento
+        // 7. Deletar Registros de Recebimento
         const recebimentoIds = recebimentos.map(r => r.id);
         const { error: deleteRecebimentosError } = await supabase
             .from(tabelaRecebimentos)
@@ -287,7 +316,7 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
             
         if (deleteRecebimentosError) throw deleteRecebimentosError;
         
-        // 7. Resetar a Parcela
+        // 8. Resetar a Parcela
         const { error: resetError } = await supabase
             .from(tabelaParcelas)
             .update({
@@ -300,7 +329,7 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
             
         if (resetError) throw resetError;
         
-        // 8. Resetar o status da conta sintética para 'aberta'
+        // 9. Resetar o status da conta sintética para 'aberta'
         const { error: updateContaError } = await supabase
             .from(tabelaContasReceber)
             .update({ status: 'aberta' })
