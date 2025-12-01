@@ -1,20 +1,19 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Button } from '@/components/ui/button';
-import { formatCurrency, formatarData } from '@/utils/formatters';
+import { Loader2, BadgeDollarSign, DollarSign, Edit, Trash2, Undo2 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 import { ContaReceber } from '@/types/contas-receber';
 import { showError, showSuccess } from '@/utils/toast';
-import { supabase } from '@/integrations/supabase/client';
+import { Button } from './ui/button';
+import { Badge } from './ui/badge';
+import RegistrarPagamentoDialog from '@/components/contas-receber/RegistrarPagamentoDialog';
 import { useSessao } from '@/hooks/use-sessao';
 import { cn } from '@/lib/utils';
 import { Card, CardContent } from './ui/card';
 import { Progress } from './ui/progress';
 import FormParcelaReceberDialog from './formularios/FormParcelaReceberDialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
-import { Loader2, BadgeDollarSign, DollarSign, Edit, Trash2, Undo2 } from 'lucide-react';
-import RegistrarPagamentoDialog from '@/components/contas-receber/RegistrarPagamentoDialog';
-import { Badge } from '@/components/ui/badge'; // IMPORTAÇÃO CORRIGIDA
 
 // Interface ParcelaParaPagamento copiada de RegistrarPagamentoDialog.tsx
 interface ParcelaParaPagamento {
@@ -37,7 +36,6 @@ interface Parcela {
   data_pagamento: string | null; // ADICIONADO
   status: 'aberta' | 'parcial' | 'paga' | 'reprogramada' | 'cancelada' | 'bloqueada';
   id_conta_contabil: string | null; // Adicionado para estorno
-  observacao: string | null; // Adicionado para estorno
 }
 
 interface DetalhesParcelasDialogProps {
@@ -61,10 +59,9 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
   const [isUndoing, setIsUndoing] = useState(false);
 
   // Determina a tabela correta com base na role
-  const isAdmin = role === 'Admin'; // DEFINIÇÃO AQUI
-  const tabelaParcelas = isAdmin ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
-  const tabelaRecebimentos = isAdmin ? 'admin_recebimentos' : 'recebimentos';
-  const tabelaContasReceber = isAdmin ? 'admin_contas_receber' : 'contas_receber';
+  const tabelaParcelas = role === 'Admin' ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
+  const tabelaRecebimentos = role === 'Admin' ? 'admin_recebimentos' : 'recebimentos';
+  const tabelaContasReceber = role === 'Admin' ? 'admin_contas_receber' : 'contas_receber';
 
   const fetchParcelas = useCallback(async () => {
     if (!conta) return;
@@ -132,7 +129,7 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
       setIsDeleting(true);
       try {
           // 1. Verificar se há recebimentos associados (apenas Admin)
-          if (isAdmin) {
+          if (role === 'Admin') {
               const { count, error: countError } = await supabase
                   .from('admin_recebimentos')
                   .select('id', { count: 'exact', head: true })
@@ -187,126 +184,101 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
             return;
         }
         
+        const totalEstornado = recebimentos.reduce((sum, r) => sum + r.valor_recebido, 0);
         const dataEstornoISO = new Date().toISOString();
         
-        // 2. Buscar mapeamento contábil (apenas Admin)
-        let contaDescontoConcedidoId: string | null = null;
-        let contaEstornoDescontoId: string | null = null;
-        
-        if (isAdmin) {
-            const { data: configData } = await supabase
-                .from('configuracao_contas_receber')
-                .select('tipo_registro, conta_contabil_id')
-                .eq('proprietario_id', usuario.id)
-                .in('tipo_registro', ['desconto_concedido', 'estorno_desconto_concedido']);
-                
-            contaDescontoConcedidoId = configData?.find(c => c.tipo_registro === 'desconto_concedido')?.conta_contabil_id || null;
-            contaEstornoDescontoId = configData?.find(c => c.tipo_registro === 'estorno_desconto_concedido')?.conta_contabil_id || null;
-        }
-        
-        // 3. Buscar TODOS os lançamentos originais vinculados a esta parcela
+        // 2. Buscar TODOS os lançamentos originais vinculados a esta parcela (Ativo/Caixa e Patrimonial)
         const { data: originalLaunches, error: fetchLaunchError } = await supabase
             .from('lancamentos')
-            .select('id, conta_resultado_id, conta_contabil_id, conta_bancaria_id, valor, tipo, descricao, historico_id, origem')
+            .select('id, conta_resultado_id, conta_contabil_id, conta_bancaria_id, valor, tipo, descricao, historico_id')
             .eq('proprietario_id', usuario.id)
-            .or('origem.eq.recebimento_manual,origem.eq.recebimento_manual_estornada')
-            .ilike('descricao', `%Parcela ${parcela.id.substring(0, 8)}%`);
+            .eq('origem', 'recebimento_manual')
+            .ilike('descricao', `%Recebimento Parcela ${parcela.id.substring(0, 8)}%`); // Busca pela descrição padronizada
             
         if (fetchLaunchError) throw fetchLaunchError;
         
         const lancamentosEstornoPayload: any[] = [];
         const originalLaunchIds = (originalLaunches || []).map(l => l.id);
         
-        if (originalLaunchIds.length === 0) {
-            showError('Nenhum lançamento contábil original encontrado para estorno.');
-            setIsUndoing(false);
-            return;
+        if (originalLaunchIds.length > 0) {
+            // 3. Marcar os lançamentos originais como estornados
+            const { error: markError } = await supabase
+                .from('lancamentos')
+                .update({ origem: 'recebimento_manual_estornada' })
+                .in('id', originalLaunchIds);
+                
+            if (markError) throw markError;
         }
         
-        // 4. Marcar os lançamentos originais como estornados
-        const { error: markError } = await supabase
-            .from('lancamentos')
-            .update({ origem: 'recebimento_manual_estornada' })
-            .in('id', originalLaunchIds);
-            
-        if (markError) throw markError;
+        // 4. Gerar Lançamentos de Estorno (Reversão)
         
-        // 5. Gerar Lançamentos de Estorno (Reversão)
-        
-        // 5.1. Estorno do Recebimento (Caixa/Clientes)
-        for (const orig of originalLaunches.filter(l => l.origem === 'recebimento_manual')) {
-            const inverseId = crypto.randomUUID();
-            const tipoInvertido = orig.tipo === 'Entrada' ? 'Saida' : 'Entrada';
-            
-            // Lançamento de Estorno
-            const lancInvert = {
-                id: inverseId,
-                proprietario_id: usuario.id,
-                data_movimentacao: dataEstornoISO,
-                descricao: `ESTORNO: ${orig.descricao}`,
-                valor: orig.valor,
-                tipo: tipoInvertido,
-                conta_bancaria_id: orig.conta_bancaria_id,
-                conta_contabil_id: orig.conta_contabil_id,
-                origem: 'estorno_recebimento_manual',
-                historico_id: orig.historico_id,
-                conta_resultado_id: orig.id,
-            };
-            lancamentosEstornoPayload.push(lancInvert);
-        }
-        
-        // 5.2. Estorno do Desconto Concedido (Se houver) - O QUE O USUÁRIO PEDIU
-        const isDiscountApplied = parcela.observacao?.includes('desconto');
-        const valorDesconto = isDiscountApplied ? (parcela.valor_parcela - (parcela.valor_pago || 0)) : 0;
-
-        if (isDiscountApplied && isAdmin && contaDescontoConcedidoId && conta.id_conta_patrimonial && valorDesconto > 0.01) {
-            
-            // Lançamento 1: D: Ativo (Direito a Receber) - ENTRADA (Aumenta Ativo)
+        // 4.1. Débito (Clientes/Direito a Receber) - D: CLIENTES (AUMENTA O DIREITO A RECEBER)
+        if (conta.id_conta_patrimonial) {
+            const idEstornoPatrimonial = crypto.randomUUID();
             const idEstornoAtivo = crypto.randomUUID();
-            const idEstornoResultado = crypto.randomUUID();
-
-            // D: Clientes a Receber (Ativo) - ENTRADA (Aumenta Ativo Devedor)
+            
             const lancamentoEstornoPatrimonial = {
-                id: idEstornoAtivo,
-                proprietario_id: usuario.id,
+                id: idEstornoPatrimonial,
+                proprietario_id: ownerId,
                 data_movimentacao: dataEstornoISO,
-                descricao: `ESTORNO DESCONTO CR: ${conta.descricao} (CR ID: ${contaReceberIdShort})`,
-                valor: valorDesconto,
-                tipo: 'Entrada' as const, // DÉBITO (Aumenta Ativo Devedor)
+                descricao: `Estorno Recebimento CR: ${conta.descricao} (CR ID: ${contaReceberIdShort})`,
+                valor: totalEstornado,
+                tipo: 'Entrada' as const, // Entrada no Ativo (Débito) para restaurar o direito - CORRECT
                 conta_bancaria_id: null,
-                conta_contabil_id: conta.id_conta_patrimonial, // Conta Patrimonial (Ativo)
+                conta_contabil_id: conta.id_conta_patrimonial,
                 origem: 'estorno_recebimento_manual',
                 historico_id: recebimentos[0].historico_id,
-                conta_resultado_id: idEstornoResultado, // Referência cruzada
+                conta_resultado_id: idEstornoAtivo, // REFERÊNCIA CRUZADA
             };
             lancamentosEstornoPayload.push(lancamentoEstornoPatrimonial);
-
-            // Lançamento 2: C: Despesa (Desconto Concedido) - DÉBITO (Diminui Despesa Credora)
-            if (contaDescontoConcedidoId) {
-                const lancamentoEstornoDespesa = {
-                    id: idEstornoResultado,
-                    proprietario_id: usuario.id,
-                    data_movimentacao: dataEstornoISO,
-                    descricao: `ESTORNO DESCONTO CONCEDIDO: ${conta.descricao} (CR ID: ${contaReceberIdShort})`,
-                    valor: valorDesconto,
-                    tipo: 'Entrada' as const, // <<< CORREÇÃO AQUI: DÉBITO (Entrada) diminui Despesa Credora
-                    conta_bancaria_id: null,
-                    conta_contabil_id: contaDescontoConcedidoId, // Conta de Desconto Concedido (Despesa)
-                    origem: 'estorno_recebimento_manual',
-                    historico_id: recebimentos[0].historico_id,
-                    conta_resultado_id: idEstornoAtivo, // Referência cruzada
-                };
-                lancamentosEstornoPayload.push(lancamentoEstornoDespesa);
-            } else {
-                console.warn('Aviso: Conta de Estorno Desconto Concedido não mapeada. Estorno incompleto.');
-            }
         }
         
-        // 6. Inserir todos os lançamentos de estorno
+        // 4.2. Crédito (Caixa/Banco) - C: CAIXA/BANCO (DIMINUI O CAIXA)
+        const contaIds = recebimentos.map(r => r.conta_id);
+        
+        // CRÍTICO: Busca o conta_contabil_id da tabela saldo_contas
+        const { data: saldosData } = await supabase
+            .from('saldo_contas')
+            .select('id, conta_contabil_id')
+            .in('id', contaIds);
+            
+        const saldoContaMap = (saldosData || []).reduce((acc, s) => {
+            if (s.conta_contabil_id) acc[s.id] = s.conta_contabil_id;
+            return acc;
+        }, {} as Record<string, string | null>);
+        
+        for (const recebimento of recebimentos) {
+            const contaContabilCaixaBanco = saldoContaMap[recebimento.conta_id];
+            
+            if (!contaContabilCaixaBanco) {
+                console.warn(`Aviso: Conta de saldo ${recebimento.conta_id} sem vínculo contábil para estorno.`);
+                continue;
+            }
+            
+            const idEstornoAtivo = crypto.randomUUID();
+            const idEstornoPatrimonial = conta.id_conta_patrimonial ? lancamentosEstornoPayload.find(l => l.conta_contabil_id === conta.id_conta_patrimonial)?.id : null;
+            
+            const lancamentoEstornoAtivo = {
+                id: idEstornoAtivo,
+                proprietario_id: ownerId,
+                data_movimentacao: dataEstornoISO,
+                descricao: `Estorno Recebimento Ativo CR: ${conta.clientes?.nome || 'N/A'} (Parcela ID: ${parcela.id.substring(0, 8)})`,
+                valor: recebimento.valor_recebido,
+                tipo: 'Saida' as const, // Saída do Ativo (Crédito) para diminuir o saldo - CORRECT
+                conta_bancaria_id: recebimento.conta_id,
+                conta_contabil_id: contaContabilCaixaBanco, // <-- USANDO CONTA CONTÁBIL DO SALDO
+                origem: 'estorno_recebimento_manual',
+                historico_id: recebimento.historico_id,
+                conta_resultado_id: idEstornoPatrimonial, // REFERÊNCIA CRUZADA
+            };
+            lancamentosEstornoPayload.push(lancamentoEstornoAtivo);
+        }
+        
+        // 5. Inserir os novos lançamentos de estorno
         const { error: insErr } = await supabase.from('lancamentos').insert(lancamentosEstornoPayload);
         if (insErr) throw insErr;
         
-        // 7. Deletar Registros de Recebimento
+        // 6. Deletar Registros de Recebimento
         const recebimentoIds = recebimentos.map(r => r.id);
         const { error: deleteRecebimentosError } = await supabase
             .from(tabelaRecebimentos)
@@ -315,7 +287,7 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
             
         if (deleteRecebimentosError) throw deleteRecebimentosError;
         
-        // 8. Resetar a Parcela
+        // 7. Resetar a Parcela
         const { error: resetError } = await supabase
             .from(tabelaParcelas)
             .update({
@@ -328,7 +300,7 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
             
         if (resetError) throw resetError;
         
-        // 9. Resetar o status da conta sintética para 'aberta'
+        // 8. Resetar o status da conta sintética para 'aberta'
         const { error: updateContaError } = await supabase
             .from(tabelaContasReceber)
             .update({ status: 'aberta' })

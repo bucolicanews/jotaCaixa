@@ -302,9 +302,9 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
     setLoading(true);
 
     // Mapas vindos de configurações
-    const contaPagamento = mapeamentoContabil['pagamento']; // Conta de Resultado (Despesa/Custo)
+    const contaPagamento = mapeamentoContabil['pagamento']; // conta de resultado/despesa
     const contaParcelaPagar = mapeamentoContabil['parcela_pagar'];
-    const contaDescontoObtido = mapeamentoContabil['desconto_obtido']; // Conta Receita de Desconto Obtido
+    const contaDescontoObtido = mapeamentoContabil['desconto_obtido']; // conta receita de desconto obtido
 
     const { data: contaSintetica, error: csError } = await supabase
       .from(tabelaContasPagar)
@@ -368,15 +368,15 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
           data_movimentacao: dataPagamentoISO,
           descricao: `Pagamento Parcela ${parcela.id.substring(0, 8)} - ${parcela.fornecedor}`,
           valor: pagamento.valor_pago,
-          tipo: 'Saida' as const, // Crédito é 'Saida' no Ativo (Diminui Ativo)
+          tipo: 'Saida' as const,
           conta_bancaria_id: pagamento.conta_id,
           conta_contabil_id: contaContabilCaixaBanco,
           origem: origemVincular,
           historico_id: values.historico_id,
-          conta_resultado_id: idPatrimonial, // Ativo aponta para Passivo
+          conta_resultado_id: idPatrimonial,
         });
 
-        // Lançamento Passivo: FORNECEDOR — DÉBITO (Saida) (reduz obrigação)
+        // Lançamento Passivo: FORNECEDOR — DÉBITO (Entrada) (reduz obrigação)
         if (contaPatrimonial) {
           lancamentosPayload.push({
             id: idPatrimonial,
@@ -384,12 +384,12 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
             data_movimentacao: dataPagamentoISO,
             descricao: `Baixa Passivo CP: ${descricaoContaSintetica} (CP ID: ${parcela.conta_pagar_id.substring(0, 8)})`,
             valor: pagamento.valor_pago,
-            tipo: 'Saida' as const, // <<< CORREÇÃO AQUI: DÉBITO é 'Saida' no Passivo (Diminui Passivo Credora)
+            tipo: 'Entrada' as const,
             conta_bancaria_id: null,
             conta_contabil_id: contaPatrimonial,
             origem: origemVincular,
             historico_id: values.historico_id,
-            conta_resultado_id: idAtivo, // Passivo aponta para Ativo
+            conta_resultado_id: idAtivo,
           });
         }
       }
@@ -400,14 +400,14 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
         const idDescontoResultado = crypto.randomUUID();
         const idDescontoPatrimonial = crypto.randomUUID();
 
-        // Lançamento na Receita (Descontos Obtidos) — DÉBITO (Entrada)
+        // Lançamento na Receita (Descontos Obtidos) — CRÉDITO (Saida)
         lancamentosPayload.push({
           id: idDescontoResultado,
           proprietario_id: adminId,
           data_movimentacao: dataPagamentoISO,
           descricao: `Desconto Obtido: ${descricaoContaSintetica} (CP ID: ${parcela.conta_pagar_id.substring(0, 8)})`,
           valor: saldoRestanteCalculado,
-          tipo: 'Entrada' as const, // <<< CORREÇÃO AQUI: CRÉDITO é 'Entrada' na Receita Credora (Aumenta Receita)
+          tipo: 'Saida' as const,
           conta_bancaria_id: null,
           conta_contabil_id: contaDescontoObtido,
           origem: `desconto_cp:${parcela.id}`,
@@ -415,14 +415,14 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
           conta_resultado_id: idDescontoPatrimonial,
         });
 
-        // Lançamento no Passivo (reduz obrigação do fornecedor) — DÉBITO (Saida)
+        // Lançamento no Passivo (reduz obrigação do fornecedor) — DÉBITO (Entrada)
         lancamentosPayload.push({
           id: idDescontoPatrimonial,
           proprietario_id: adminId,
           data_movimentacao: dataPagamentoISO,
           descricao: `Baixa Passivo Desconto CP: ${descricaoContaSintetica} (CP ID: ${parcela.conta_pagar_id.substring(0, 8)})`,
           valor: saldoRestanteCalculado,
-          tipo: 'Saida' as const, // <<< CORREÇÃO AQUI: DÉBITO é 'Saida' no Passivo (Diminui Passivo Credora)
+          tipo: 'Entrada' as const,
           conta_bancaria_id: null,
           conta_contabil_id: contaPatrimonial,
           origem: `desconto_cp:${parcela.id}`,
@@ -439,7 +439,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
       const finalStatus: AdminParcelaPagar['status'] = isPagamentoParcial ? (values.acao_saldo_restante ? 'paga' : 'parcial') : 'paga';
       const observacaoFinal = isPagamentoParcial
         ? (values.acao_saldo_restante === 'desconto'
-          ? `Pago R$ ${valorPagoTotal.toFixed(2)} com R$ ${saldoRestanteCalculado.toFixed(2)} de desconto. ${values.observacao || ''}`
+          ? `Pago R$ ${valorPagoTotal.toFixed(2)} com R$ ${saldoRestanteCalculado.toFixed(2)} de desconto.`
           : `Pago R$ ${valorPagoTotal.toFixed(2)}. Saldo de R$ ${saldoRestanteCalculado.toFixed(2)} ${values.acao_saldo_restante === 'reprogramar' ? 'reprogramado' : 'parcelado'}.`)
         : null;
 
@@ -549,7 +549,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
 
   const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
-  const isSubmitDisabled = loading || form.formState.isSubmitting || (Math.abs(restante) > 0.01 && !isPagamentoParcial) || (isPagamentoParcial && !acaoSaldoRestante);
+  const isSubmitDisabled = loading || form.formState.isSubmitting || (isPagamentoParcial && !form.formState.isValid);
 
   return (
     <>
@@ -730,9 +730,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
                             </Button>
                           </FormControl>
                         </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0">
-                          <Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus locale={ptBR} />
-                        </PopoverContent>
+                        <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus locale={ptBR} /></PopoverContent>
                       </Popover>
                       <FormMessage />
                     </FormItem>
