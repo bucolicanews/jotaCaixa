@@ -40,10 +40,11 @@ const Painel = () => {
         isClientApproved = false;
     }
     
+    // CRÍTICO: Garante que as permissões sejam lidas corretamente do perfil
     const permissoes = usuarioProfile?.permissoes || {};
     
     // Permissões Financeiras
-    hasFinancePermissions = permissoes.contas_pagar || permissoes.contas_receber || permissoes.bancos || permissoes.conciliacao || permissoes.plano_contas;
+    hasFinancePermissions = permissoes.contas_pagar || permissoes.contas_receber || permissoes.bancos || permissoes.conciliacao || permissoes.plano_contas || permissoes.importar || permissoes.relatorios;
     
     // Permissões de RH
     hasPontoPermission = permissoes.folha_ponto || permissoes.visualizar_proprio_ponto;
@@ -68,7 +69,7 @@ const Painel = () => {
           return;
       }
       
-      // 3. Prioridade Terciária: Ponto Eletrônico (Se tiver apenas permissão de ponto)
+      // 3. Prioridade Terciária: Ponto Eletrônico (Se não for financeiro nem suporte, mas tiver ponto)
       if (hasPontoPermission) {
           navigate('/folha-ponto?mode=self', { replace: true });
           return;
