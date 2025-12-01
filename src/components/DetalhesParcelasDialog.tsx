@@ -205,12 +205,12 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
         }
         
         // 3. Buscar TODOS os lançamentos originais vinculados a esta parcela
-        // Busca por: origem = 'recebimento_manual' E descrição ILIKE %Parcela ID%
+        // Busca por: origem = 'recebimento_manual' E origem = 'desconto_cp:ID'
         const { data: originalLaunches, error: fetchLaunchError } = await supabase
             .from('lancamentos')
             .select('id, conta_resultado_id, conta_contabil_id, conta_bancaria_id, valor, tipo, descricao, historico_id, origem')
             .eq('proprietario_id', usuario.id)
-            .or('origem.eq.recebimento_manual,origem.like.desconto_cp%'); // Inclui lançamentos de desconto
+            .or(`origem.eq.recebimento_manual,origem.like.desconto_cp:${parcela.id}%`); // Filtra pelo ID da parcela no desconto
             
         if (fetchLaunchError) throw fetchLaunchError;
         
@@ -255,7 +255,7 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
             lancamentosEstornoPayload.push(lancInvert);
         }
         
-        // 5.2. Estorno do Desconto Concedido (Se houver) - SEGUINDO A REGRA 4.2 (D: Ativo / C: Receita Estorno)
+        // 5.2. Estorno do Desconto Concedido (Se houver) - D: Ativo / C: Receita Estorno
         const isDiscountApplied = parcela.observacao?.includes('desconto');
         const valorDesconto = isDiscountApplied ? (parcela.valor_parcela - (parcela.valor_pago || 0)) : 0;
 
