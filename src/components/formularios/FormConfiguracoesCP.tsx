@@ -34,6 +34,10 @@ const formSchema = z.object({
 
 type FormValues = z.infer<typeof formSchema>;
 
+interface FormConfiguracoesCPProps {
+  // ... (props)
+}
+
 const FormConfiguracoesCP: React.FC = () => {
   const { role, usuario, carregando: carregandoSessao } = useSessao();
   const [loadingData, setLoadingData] = useState(true);
@@ -60,7 +64,7 @@ const FormConfiguracoesCP: React.FC = () => {
     if (!adminId) return;
     setLoadingContas(true);
     
-    // Busca TODAS as contas (Analíticas e Sintéticas) do Admin
+    // 1. Busca TODAS as contas (Analíticas e Sintéticas) do Admin
     const { data, error } = await supabase
         .from('plano_contas')
         .select('id, Conta, Descricao, Analitica, is_conta_patrimonial, is_conta_resultado') // Incluindo booleanos
@@ -119,7 +123,12 @@ const FormConfiguracoesCP: React.FC = () => {
       showError('Erro ao carregar configurações de CP: ' + contasError.message);
     } else if (contasData) {
       const mappedData = contasData.reduce((acc: Partial<FormValues>, item: { tipo_registro: string, conta_contabil_id: string | null }) => {
-        acc[item.tipo_registro as keyof FormValues] = item.conta_contabil_id;
+        
+        // Mapeia os campos existentes
+        if (TIPOS_REGISTRO_CONTABIL.some(t => t.key === item.tipo_registro)) {
+            acc[item.tipo_registro as keyof FormValues] = item.conta_contabil_id;
+        }
+        
         return acc;
       }, {} as Partial<FormValues>);
       
@@ -148,6 +157,7 @@ const FormConfiguracoesCP: React.FC = () => {
     const dataToUpsertContabil = TIPOS_REGISTRO_CONTABIL.map(tipo => ({
         proprietario_id: adminId,
         tipo_registro: tipo.key,
+        // Usa o valor diretamente (null ou string UUID)
         conta_contabil_id: values[tipo.key as keyof FormValues] || null,
     }));
     

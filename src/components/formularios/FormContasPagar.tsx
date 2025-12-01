@@ -296,7 +296,7 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
       const { error: parcelError } = await supabase.from(tabelaParcelasPagar).insert(parcelasComId);
       if (parcelError) throw parcelError;
       
-      // 4. Lançamento Inicial na Conta Patrimonial (CRÉDITO - Aumenta Passivo)
+      // 4. Lançamento 1: C: Passivo (Obrigação a Pagar) - CRÉDITO (Saida)
       const dataMovimentacao = format(new Date(), 'yyyy-MM-dd') + 'T12:00:00Z';
       const launchDescription = values.descricao;
       const contaPagarIdShort = contaPagarId.substring(0, 8);
@@ -349,12 +349,12 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
       
       // Limpeza de lançamentos antigos (se edição)
       if (isEditing) {
-          const oldLaunchDescriptionPrefix = `Despesa/Custo: ${contaInicial?.descricao} (CP ID: ${contaInicial?.id.substring(0, 8)})`;
+          const oldReceitaDescriptionPrefix = `Despesa/Custo: ${contaInicial?.descricao} (CP ID: ${contaInicial?.id.substring(0, 8)})`;
           await supabase.from('lancamentos')
               .delete()
               .eq('origem', 'lancamento_cp')
               .eq('proprietario_id', adminId)
-              .ilike('descricao', `${oldLaunchDescriptionPrefix}%`);
+              .ilike('descricao', `${oldReceitaDescriptionPrefix}%`);
       }
       
       lancamentosPayload.push(lancamentoDespesaPayload);
