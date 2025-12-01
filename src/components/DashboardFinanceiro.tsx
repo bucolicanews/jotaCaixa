@@ -11,7 +11,7 @@ import { startOfMonth, endOfMonth, format, addDays } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useNavigate } from 'react-router-dom';
-import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
+import { ClienteProfile, UsuarioProfile, AdminUsuarioProfile } from '@/types/usuario';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'; // IMPORT CORRIGIDO
 import { Button } from '@/components/ui/button'; // IMPORT CORRIGIDO
 
@@ -62,7 +62,12 @@ const DashboardFinanceiro: React.FC = () => {
     const getOwnerId = () => {
         if (isAdmin) return usuario?.id || null;
         if (role === 'Cliente') return (perfil as ClienteProfile)?.id || null;
-        if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id || null; // FIX: proprietario_id -> cliente_id
+        if (role === 'Usuario') {
+            const user = perfil as UsuarioProfile | AdminUsuarioProfile;
+            // Se for funcionário do Admin, usa o admin_id. Se for funcionário do Cliente, usa o cliente_id.
+            if ('admin_id' in user && user.admin_id) return user.admin_id;
+            if ('cliente_id' in user && user.cliente_id) return user.cliente_id;
+        }
         return null;
     };
     
@@ -314,6 +319,13 @@ const DashboardFinanceiro: React.FC = () => {
         }));
     }, [lancamentosDetalhes]);
 
+    // NOVO LOG DE DEBBUG
+    useEffect(() => {
+        if (!loading) {
+            console.log(`[DashboardFinanceiro] Final State: ownerId=${ownerId}, TotalSaldo=${totalSaldo}, ContasCount=${contas.length}`);
+        }
+    }, [loading, ownerId, totalSaldo, contas.length]);
+    // FIM NOVO LOG
 
     if (loading) {
         return (
