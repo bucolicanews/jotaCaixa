@@ -5,7 +5,7 @@ import { Loader2, TrendingUp, PlusCircle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import useSaldoContaCalculado from '@/hooks/use-saldo-conta-calculado';
 import FluxoCaixaDetalhe from '@/components/contabilidade/FluxoCaixaDetalhe';
-import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
+import { ClienteProfile, UsuarioProfile, AdminUsuarioProfile } from '@/types/usuario';
 import { useOwnerBranding } from '@/hooks/use-owner-branding';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from '@/components/ui/dialog';
@@ -19,7 +19,12 @@ const FluxoCaixa: React.FC = () => {
   const getEmpresaId = () => {
     if (role === 'Admin') return usuario?.id || null;
     if (role === 'Cliente') return (perfil as ClienteProfile)?.id || null;
-    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id || null;
+    if (role === 'Usuario') {
+        const user = perfil as UsuarioProfile | AdminUsuarioProfile;
+        // Se for funcionário do Admin, usa o admin_id. Se for funcionário do Cliente, usa o cliente_id.
+        if ('admin_id' in user && user.admin_id) return user.admin_id;
+        if ('cliente_id' in user && user.cliente_id) return user.cliente_id;
+    }
     return null;
   };
   

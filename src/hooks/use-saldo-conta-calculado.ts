@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { showError } from '@/utils/toast';
 import { SaldoContaDetalhada } from '@/types/saldo-conta';
 import { useSessao } from './use-sessao';
-import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
+import { ClienteProfile, UsuarioProfile, AdminUsuarioProfile } from '@/types/usuario';
 
 interface SaldoCalculado extends SaldoContaDetalhada {
   saldo_atual: number;
@@ -33,7 +33,12 @@ const useSaldoContaCalculado = (
   const getEmpresaId = () => {
     if (role === 'Admin') return usuario?.id || null;
     if (role === 'Cliente') return (perfil as ClienteProfile)?.id || null;
-    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id || null; // FIX: proprietario_id -> cliente_id
+    if (role === 'Usuario') {
+        const user = perfil as UsuarioProfile | AdminUsuarioProfile;
+        // Se for funcionário do Admin, usa o admin_id. Se for funcionário do Cliente, usa o cliente_id.
+        if ('admin_id' in user && user.admin_id) return user.admin_id;
+        if ('cliente_id' in user && user.cliente_id) return user.cliente_id;
+    }
     return null;
   };
   
@@ -193,7 +198,7 @@ const useSaldoContaCalculado = (
     } finally {
       setCarregando(false);
     }
-  }, [empresaId, carregandoSessao, filtroNomeDebounced, fetchContasAndLancamentos, scope, isBancoOnly]);
+  }, [empresaId, carregandoSessao, filtroNomeDebounced, fetchContasAndLancamentos, scope, isBancoOnly, filtroTipoSaldo, filtroContaContabilId]);
 
   useEffect(() => {
     buscarContas();
