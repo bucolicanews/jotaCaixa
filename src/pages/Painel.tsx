@@ -56,15 +56,15 @@ const Painel = () => {
   useEffect(() => {
       if (carregando || !isClientApproved || !isUsuario) return;
       
-      // 1. Prioridade Máxima: Gestão de Suporte
-      if (hasSuportePermission) {
-          navigate('/admin/suporte', { replace: true });
+      // 1. Prioridade Máxima: Financeiro (Se tiver permissão financeira, fica no painel)
+      if (hasFinancePermissions) {
+          // Fica no Painel para ver o DashboardFinanceiro
           return;
       }
       
-      // 2. Prioridade Secundária: Financeiro (Se tiver permissão financeira, fica no painel)
-      if (hasFinancePermissions) {
-          // Fica no Painel para ver o DashboardFinanceiro
+      // 2. Prioridade Secundária: Gestão de Suporte (Se não for financeiro, mas tiver suporte)
+      if (hasSuportePermission) {
+          navigate('/admin/suporte', { replace: true });
           return;
       }
       
@@ -74,8 +74,7 @@ const Painel = () => {
           return;
       }
       
-      // 4. Se não tiver nenhuma permissão relevante, fica no painel vazio (ou redireciona para o perfil)
-      // Mantemos no painel para exibir a mensagem de acesso restrito.
+      // 4. Se não tiver nenhuma permissão relevante, fica no painel vazio.
       
   }, [carregando, isUsuario, isClientApproved, hasSuportePermission, hasFinancePermissions, hasPontoPermission, navigate]);
   // ------------------------------------------------------
@@ -92,7 +91,8 @@ const Painel = () => {
   }
   
   // Se for usuário e estiver carregando a lógica de redirecionamento, mostra o loader
-  if (isUsuario && isClientApproved && (hasSuportePermission || hasPontoPermission)) {
+  // A condição de carregamento agora é mais restrita, pois o usuário pode ficar no painel
+  if (isUsuario && isClientApproved && !hasFinancePermissions && (hasSuportePermission || hasPontoPermission)) {
       return (
         <LayoutPrincipal>
             <div className="flex justify-center items-center h-64">
