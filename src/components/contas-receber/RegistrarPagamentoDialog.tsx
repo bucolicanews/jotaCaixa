@@ -433,11 +433,32 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
           console.warn('Aviso: Conta Patrimonial (Direito a Receber) não mapeada. Balanço pode estar incompleto.');
       }
       
-      // 6. Inserir os lançamentos de uma vez
+      // 6. Lançamento de Desconto (se houver)
+      if (isPagamentoParcial && values.acao_saldo_restante === 'desconto' && contaDesconto) {
+          const idDesconto = crypto.randomUUID();
+          
+          // Lançamento 3: D: Despesa (Desconto Concedido) - DÉBITO (Entrada)
+          const lancamentoDescontoPayload = {
+              id: idDesconto,
+              proprietario_id: proprietarioDaSessao,
+              data_movimentacao: dataPagamentoISO,
+              descricao: `Desconto Concedido: ${descricaoContaSintetica} (CR ID: ${parcela.conta_receber_id.substring(0, 8)})`,
+              valor: saldoRestanteCalculado,
+              tipo: 'Entrada' as const, // Entrada na Despesa (Débito)
+              conta_bancaria_id: null,
+              conta_contabil_id: contaDesconto, // Conta de Desconto (Despesa)
+              origem: 'recebimento_manual',
+              historico_id: values.historico_id,
+              // Não precisa de conta_resultado_id, pois é um lançamento de resultado puro (DRE)
+          };
+          lancamentosPayload.push(lancamentoDescontoPayload);
+      }
+      
+      // 7. Inserir os lançamentos de uma vez
       const { error: lancamentoError } = await supabase.from('lancamentos').insert(lancamentosPayload);
       if (lancamentoError) throw lancamentoError;
       
-      // 7. Salvar Histórico Padrão (se marcado)
+      // 8. Salvar Histórico Padrão (se marcado)
       if (isAdmin && values.salvar_como_padrao && values.historico_id) {
           await supabase.from('configuracao_historico_padrao').upsert({
               proprietario_id: proprietarioDaSessao,
@@ -617,7 +638,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
                 <div className="space-y-4 pt-4 border-t">
                   <h3 className="font-semibold text-destructive">Saldo restante: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(saldoRestante)}</h3>
                   <FormField control={form.control} name="acao_saldo_restante" render={({ field }) => (
-                    <FormItem><FormLabel>O que fazer com o saldo restante?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="space-y-2"><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="desconto" /></FormControl><FormLabel className="font-normal">Conceder Desconto (Perdoar)</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="reprogramar" /></FormControl><FormLabel className="font-normal">Reprogramar Saldo</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="parcelar" /></FormControl><FormLabel className="font-normal">Parcelar Saldo</FormLabel></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>O que fazer com o saldo restante?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="space-y-2"><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="desconto" /></FormControl><FormLabel className="font-normal">Conceder Desconto (Perdoar)</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="reprogramar" /></FormControl><FormLabel className="font-normal">Reprogramar Saldo</FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="parcelar" /></FormControl><FormLabel className="font-normal">Parcelar Saldo</FormLabel></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>
                   )} />
                   {acaoSaldoRestante === 'reprogramar' && <FormField control={form.control} name="nova_data_vencimento" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Nova Data de Vencimento</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "PPP", { locale: ptBR }) : <span>Escolha a data</span>}<CalendarIcon className="ml-auto h-4 w-4 opacity-50" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus locale={ptBR} /></PopoverContent></Popover><FormMessage /></FormItem>)} />}
                   {acaoSaldoRestante === 'parcelar' && (
