@@ -281,7 +281,7 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
             };
             lancamentosEstornoPayload.push(lancamentoEstornoPatrimonial);
 
-            // Lançamento 2: C: Despesa (Desconto Concedido) - SAÍDA (Diminui Despesa Credora)
+            // Lançamento 2: C: Despesa (Desconto Concedido) - DÉBITO (Diminui Despesa Credora)
             if (contaDescontoConcedidoId) {
                 const lancamentoEstornoDespesa = {
                     id: idEstornoResultado,
@@ -289,7 +289,7 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
                     data_movimentacao: dataEstornoISO,
                     descricao: `ESTORNO DESCONTO CONCEDIDO: ${conta.descricao} (CR ID: ${contaReceberIdShort})`,
                     valor: valorDesconto,
-                    tipo: 'Saida' as const, // CRÉDITO (Diminui Despesa Credora)
+                    tipo: 'Entrada' as const, // <<< CORREÇÃO AQUI: DÉBITO (Entrada) diminui Despesa Credora
                     conta_bancaria_id: null,
                     conta_contabil_id: contaDescontoConcedidoId, // Conta de Desconto Concedido (Despesa)
                     origem: 'estorno_recebimento_manual',
