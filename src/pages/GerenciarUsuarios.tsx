@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { useSessao } from '@/hooks/use-sessao';
-import { Loader2, Plus, Search, Trash2, Edit, Filter, Users as UsersIcon } from 'lucide-react';
+import { Loader2, Plus, Search, Trash2, Edit, Filter, Users as UsersIcon, Mail } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -14,6 +14,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { BASE_URL } from '@/config/app-config';
 
 // Tipagem para o perfil de usuário com nome da empresa
 type UsuarioComEmpresa = (UsuarioProfile | AdminUsuarioProfile) & { nome_empresa?: string };
@@ -33,6 +34,7 @@ const GerenciarUsuarios: React.FC = () => {
   const [filtroEmpresaId, setFiltroEmpresaId] = useState('todos');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [perfilParaEditar, setPerfilParaEditar] = useState<AnyProfile | null>(null);
+  const [isSendingInvite, setIsSendingInvite] = useState<string | null>(null); // NOVO ESTADO
   
   const [activeTab, setActiveTab] = useState('meus_funcionarios');
 
@@ -172,8 +174,8 @@ const GerenciarUsuarios: React.FC = () => {
   };
 
   // Separação de usuários para as abas
-  const meusFuncionarios = usuarios.filter(u => (u as UsuarioProfile).cliente_id === usuario?.id || (u as AdminUsuarioProfile).admin_id === usuario?.id);
-  const funcionariosClientes = usuarios.filter(u => (u as UsuarioProfile).cliente_id !== usuario?.id && (u as AdminUsuarioProfile).admin_id !== usuario?.id);
+  const meusFuncionarios = usuarios.filter(u => (u as UsuarioProfile)?.cliente_id === usuario?.id || (u as AdminUsuarioProfile)?.admin_id === usuario?.id);
+  const funcionariosClientes = usuarios.filter(u => (u as UsuarioProfile)?.cliente_id !== usuario?.id && (u as AdminUsuarioProfile)?.admin_id !== usuario?.id);
 
   const filterUsers = (userList: UsuarioComEmpresa[], currentTab: string) => {
     const termoBusca = filtro.toLowerCase();
@@ -241,6 +243,37 @@ const GerenciarUsuarios: React.FC = () => {
       setIsDialogOpen(true);
   };
   
+  // NOVO HANDLER: Enviar Link de Redefinição de Senha
+  const handleResendInvite = async (user: UsuarioComEmpresa) => {
+      if (!user.email) {
+          showError('Email do usuário não encontrado.');
+          return;
+      }
+      
+      setIsSendingInvite(user.id);
+      
+      try {
+          const { data, error } = await supabase.auth.resetPasswordForEmail(user.email, {
+              redirectTo: `${BASE_URL}/atualizar-senha`,
+          });
+          
+          if (error) throw error;
+          
+          const resetLink = (data as { action_link: string | null }).action_link || `${BASE_URL}/atualizar-senha`;
+          
+          if (window.confirm(`Link de Acesso Gerado para ${user.nome}. Deseja copiar o link para enviar manualmente?`)) {
+              navigator.clipboard.writeText(resetLink);
+              showSuccess('Link copiado para a área de transferência.');
+          }
+          
+          showSuccess(`Link de redefinição de senha enviado para ${user.email}.`);
+      } catch (error: any) {
+          showError('Falha ao enviar link: ' + error.message);
+      } finally {
+          setIsSendingInvite(null);
+      }
+  };
+  
   // O targetRole é sempre 'Usuario' nesta página
   const targetRole: UserRole = 'Usuario';
   const title = 'Gerenciar Funcionários'; 
@@ -269,6 +302,7 @@ const GerenciarUsuarios: React.FC = () => {
                     {profiles.map((userProfile) => {
                         const id = userProfile.id;
                         const nome = userProfile.nome;
+                        const isSending = isSendingInvite === id;
                         
                         return (
                             <TableRow key={id}>
@@ -282,7 +316,19 @@ const GerenciarUsuarios: React.FC = () => {
                                         ? format(new Date(userProfile.data_inicio_contrato!), 'dd/MM/yyyy', { locale: ptBR })
                                         : 'N/A'}
                                 </TableCell>
-                                <TableCell className="text-right space-x-2">
+                                <TableCell className="text-right space-x-2 min-w-[150px]">
+                                    
+                                    {/* NOVO BOTÃO: Enviar Link de Redefinição */}
+                                    <Button 
+                                        variant="outline" 
+                                        size="icon" 
+                                        onClick={() => handleResendInvite(userProfile)}
+                                        title="Enviar Link de Redefinição de Senha"
+                                        disabled={isSending || carregandoDados}
+                                    >
+                                        {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
+                                    </Button>
+                                    
                                     <Button 
                                         variant="outline" 
                                         size="icon" 
