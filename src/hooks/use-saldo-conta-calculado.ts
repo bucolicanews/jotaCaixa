@@ -35,8 +35,9 @@ const useSaldoContaCalculado = (
     if (role === 'Cliente') return (perfil as ClienteProfile)?.id || null;
     if (role === 'Usuario') {
         const user = perfil as UsuarioProfile | AdminUsuarioProfile;
-        // Se for funcionário do Admin, usa o admin_id. Se for funcionário do Cliente, usa o cliente_id.
+        // Se for funcionário do Admin, usa o admin_id.
         if ('admin_id' in user && user.admin_id) return user.admin_id;
+        // Se for funcionário do Cliente, usa o cliente_id.
         if ('cliente_id' in user && user.cliente_id) return user.cliente_id;
     }
     return null;
