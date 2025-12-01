@@ -292,7 +292,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
     }
   }, [open, loadingContas, contasOrigem, saldoDevedor, isInitialized, append, fields.length]);
 
-  // --- FUNÇÃO DE SALVAMENTO DIRETO (SEM ESTORNOS AUTOMÁTICOS) ---
+  // --- FUNÇÃO DE SALVAMENTO DIRETO (COM LÓGICA CONTÁBIL CORRIGIDA) ---
   const saveDirectPayment = async (values: FormValues, comprovanteUrl: string | null = null) => {
     if (!parcela || !adminId || !values.conta_patrimonial_id) {
       showError('Dados da parcela, administrador ou conta patrimonial estão incompletos.');
@@ -361,14 +361,14 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
         const idAtivo = crypto.randomUUID();
         const idPatrimonial = crypto.randomUUID();
 
-        // Lançamento Ativo: CAIXA/BANCO — CRÉDITO (Saida)
+        // Lançamento 1: C: Ativo (Caixa/Banco) — CRÉDITO (Saida)
         lancamentosPayload.push({
           id: idAtivo,
           proprietario_id: adminId,
           data_movimentacao: dataPagamentoISO,
           descricao: `Pagamento Parcela ${parcela.id.substring(0, 8)} - ${parcela.fornecedor}`,
           valor: pagamento.valor_pago,
-          tipo: 'Saida' as const, // Crédito é 'Saida' no Ativo
+          tipo: 'Saida' as const, // CRÉDITO (Saida) no Ativo (Devedor)
           conta_bancaria_id: pagamento.conta_id,
           conta_contabil_id: contaContabilCaixaBanco,
           origem: origemVincular,
@@ -376,7 +376,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
           conta_resultado_id: idPatrimonial,
         });
 
-        // Lançamento Passivo: FORNECEDOR — DÉBITO (Saida) (reduz obrigação)
+        // Lançamento 2: D: Passivo (Obrigação a Pagar) — DÉBITO (Entrada) (reduz obrigação)
         if (contaPatrimonial) {
           lancamentosPayload.push({
             id: idPatrimonial,
@@ -384,7 +384,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
             data_movimentacao: dataPagamentoISO,
             descricao: `Baixa Passivo CP: ${descricaoContaSintetica} (CP ID: ${parcela.conta_pagar_id.substring(0, 8)})`,
             valor: pagamento.valor_pago,
-            tipo: 'Saida' as const, // <<< CORRIGIDO: DÉBITO é 'Saida' no Passivo Credor
+            tipo: 'Entrada' as const, // <<< CORRIGIDO: DÉBITO é 'Entrada' no Passivo Credor
             conta_bancaria_id: null,
             conta_contabil_id: contaPatrimonial,
             origem: origemVincular,
@@ -394,20 +394,20 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
         }
       }
 
-      // 2) Tratar desconto (se houver) — mantém lógica contábil correta
+      // 2) Tratar desconto (se houver)
       if (isPagamentoParcial && values.acao_saldo_restante === 'desconto' && contaDescontoObtido && contaPatrimonial) {
         // ids para cross-ref
         const idDescontoResultado = crypto.randomUUID();
         const idDescontoPatrimonial = crypto.randomUUID();
 
-        // Lançamento na Receita (Descontos Obtidos) — CRÉDITO (Entrada)
+        // Lançamento 3: Receita (Descontos Obtidos) — CRÉDITO (Saida)
         lancamentosPayload.push({
           id: idDescontoResultado,
           proprietario_id: adminId,
           data_movimentacao: dataPagamentoISO,
           descricao: `Desconto Obtido: ${descricaoContaSintetica} (CP ID: ${parcela.conta_pagar_id.substring(0, 8)})`,
           valor: saldoRestanteCalculado,
-          tipo: 'Entrada' as const, // <<< CORRIGIDO: CRÉDITO é 'Entrada' na Receita Credora
+          tipo: 'Saida' as const, // <<< CORRIGIDO: CRÉDITO é 'Saida' na Receita Credora
           conta_bancaria_id: null,
           conta_contabil_id: contaDescontoObtido,
           origem: `desconto_cp:${parcela.id}`,
@@ -415,14 +415,14 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
           conta_resultado_id: idDescontoPatrimonial,
         });
 
-        // Lançamento no Passivo (reduz obrigação do fornecedor) — DÉBITO (Saida)
+        // Lançamento 4: Passivo (reduz obrigação do fornecedor) — DÉBITO (Entrada)
         lancamentosPayload.push({
           id: idDescontoPatrimonial,
           proprietario_id: adminId,
           data_movimentacao: dataPagamentoISO,
           descricao: `Baixa Passivo Desconto CP: ${descricaoContaSintetica} (CP ID: ${parcela.conta_pagar_id.substring(0, 8)})`,
           valor: saldoRestanteCalculado,
-          tipo: 'Saida' as const,  // <<< CORRIGIDO: DÉBITO é 'Saida' no Passivo Credor
+          tipo: 'Entrada' as const,  // <<< CORRIGIDO: DÉBITO é 'Entrada' no Passivo Credor
           conta_bancaria_id: null,
           conta_contabil_id: contaPatrimonial,
           origem: `desconto_cp:${parcela.id}`,
