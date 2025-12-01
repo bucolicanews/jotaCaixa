@@ -287,22 +287,26 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
                 };
                 lancamentosEstornoPayload.push(lancamentoEstornoPatrimonial);
                 
-                // Lançamento 2 do Estorno do Desconto: C: Desconto Concedido (Despesa)
-                // C: Desconto Concedido (Despesa) - SAÍDA (Diminui a Despesa Credora)
-                const lancamentoEstornoDespesa = {
-                    id: idEstornoDespesa,
-                    proprietario_id: ownerId,
-                    data_movimentacao: dataEstornoISO,
-                    descricao: `ESTORNO DESCONTO CONCEDIDO: ${conta.descricao} (CR ID: ${contaReceberIdShort})`,
-                    valor: valorDesconto,
-                    tipo: 'Saida' as const, // CRÉDITO (Diminui Despesa Credora)
-                    conta_bancaria_id: null,
-                    conta_contabil_id: contaDescontoConcedidoId, // Conta de Desconto Concedido (Despesa)
-                    origem: 'estorno_recebimento_manual',
-                    historico_id: recebimentos[0].historico_id,
-                    conta_resultado_id: idEstornoPatrimonial, // Referência cruzada
-                };
-                lancamentosEstornoPayload.push(lancamentoEstornoDespesa);
+                // Lançamento 2 do Estorno do Desconto: C: Estorno Desconto Concedido (Receita)
+                // C: Estorno Desconto Concedido (Receita) - SAÍDA (Aumenta Receita Credora)
+                if (contaEstornoDescontoId) {
+                    const lancamentoEstornoReceita = {
+                        id: idEstornoDespesa,
+                        proprietario_id: ownerId,
+                        data_movimentacao: dataEstornoISO,
+                        descricao: `ESTORNO DESCONTO CONCEDIDO: ${conta.descricao} (CR ID: ${contaReceberIdShort})`,
+                        valor: valorDesconto,
+                        tipo: 'Saida' as const, // CRÉDITO (Aumenta Receita Credora)
+                        conta_bancaria_id: null,
+                        conta_contabil_id: contaEstornoDescontoId, // Conta de Estorno Desconto Concedido (Receita)
+                        origem: 'estorno_recebimento_manual',
+                        historico_id: recebimentos[0].historico_id,
+                        conta_resultado_id: idEstornoPatrimonial, // Referência cruzada
+                    };
+                    lancamentosEstornoPayload.push(lancamentoEstornoReceita);
+                } else {
+                    console.warn('Aviso: Conta de Estorno Desconto Concedido não mapeada. Estorno incompleto.');
+                }
             }
         }
         
