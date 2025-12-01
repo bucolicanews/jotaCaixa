@@ -92,60 +92,60 @@ const DashboardFinanceiro: React.FC = () => {
         const contaSelecionada = contas.find(c => c.id === contaId);
         const saldoInicialConta = contaSelecionada?.saldo_inicial || 0;
 
-        // 1. Buscar Lançamentos do Mês Atual
-        const { data: lancamentosData, error: lError } = await supabase
-            .from('lancamentos')
-            .select('valor, tipo, origem')
-            .eq('proprietario_id', ownerId)
-            .eq('conta_bancaria_id', contaId)
-            .gte('data_movimentacao', startOfMonthISO)
-            .lte('data_movimentacao', endOfMonthISO);
+        try {
+            // 1. Buscar Lançamentos do Mês Atual
+            const { data: lancamentosData, error: lError } = await supabase
+                .from('lancamentos')
+                .select('valor, tipo, origem')
+                .eq('proprietario_id', ownerId)
+                .eq('conta_bancaria_id', contaId)
+                .gte('data_movimentacao', startOfMonthISO)
+                .lte('data_movimentacao', endOfMonthISO);
+                
+            if (lError) throw lError;
             
-        if (lError) {
-            showError('Erro ao buscar lançamentos mensais: ' + lError.message);
-            setContaMensalData(null);
-            setLoadingFluxo(false);
-            return;
-        }
-        
-        const safeLancamentos = lancamentosData || [];
-        
-        const entradas = safeLancamentos.filter(l => l.tipo === 'Entrada').reduce((sum, l) => sum + l.valor, 0);
-        const saidas = safeLancamentos.filter(l => l.tipo === 'Saida').reduce((sum, l) => sum + l.valor, 0);
-        
-        // 2. Calcular Saldo Inicial (antes do mês atual)
-        const { data: lancamentosAnteriores, error: laError } = await supabase
-            .from('lancamentos')
-            .select('valor, tipo')
-            .eq('proprietario_id', ownerId)
-            .eq('conta_bancaria_id', contaId)
-            .lt('data_movimentacao', startOfMonthISO);
+            const safeLancamentos = lancamentosData || [];
             
-        if (laError) {
-            console.error('Erro ao buscar lançamentos anteriores:', laError);
-        }
-        
-        const safeLancamentosAnteriores = lancamentosAnteriores || [];
-        
-        const entradasAnteriores = safeLancamentosAnteriores.filter(l => l.tipo === 'Entrada').reduce((sum, l) => sum + l.valor, 0);
-        const saidasAnteriores = safeLancamentosAnteriores.filter(l => l.tipo === 'Saida').reduce((sum, l) => sum + l.valor, 0);
-        
-        const saldoInicialCalculado = saldoInicialConta + entradasAnteriores - saidasAnteriores;
-        const saldoFinal = saldoInicialCalculado + entradas - saidas;
+            const entradas = safeLancamentos.filter(l => l.tipo === 'Entrada').reduce((sum, l) => sum + l.valor, 0);
+            const saidas = safeLancamentos.filter(l => l.tipo === 'Saida').reduce((sum, l) => sum + l.valor, 0);
+            
+            // 2. Calcular Saldo Inicial (antes do mês atual)
+            const { data: lancamentosAnteriores, error: laError } = await supabase
+                .from('lancamentos')
+                .select('valor, tipo')
+                .eq('proprietario_id', ownerId)
+                .eq('conta_bancaria_id', contaId)
+                .lt('data_movimentacao', startOfMonthISO);
+                
+            if (laError) console.error('Erro ao buscar lançamentos anteriores:', laError);
+            
+            const safeLancamentosAnteriores = lancamentosAnteriores || [];
+            
+            const entradasAnteriores = safeLancamentosAnteriores.filter(l => l.tipo === 'Entrada').reduce((sum, l) => sum + l.valor, 0);
+            const saidasAnteriores = safeLancamentosAnteriores.filter(l => l.tipo === 'Saida').reduce((sum, l) => sum + l.valor, 0);
+            
+            const saldoInicialCalculado = saldoInicialConta + entradasAnteriores - saidasAnteriores;
+            const saldoFinal = saldoInicialCalculado + entradas - saidas;
 
-        setContaMensalData({
-            saldoInicial: saldoInicialCalculado,
-            entradas: entradas,
-            saidas: saidas,
-            saldoFinal: saldoFinal,
-        });
-        
-        // Atualiza o fluxo de caixa para o gráfico (Entradas vs Saídas do mês)
-        setFluxoData({ receber: entradas, pagar: saidas, isGeral: false });
-        setTotalEntradasRealizadas(entradas);
-        setTotalSaidasRealizadas(saidas);
-        setLancamentosDetalhes(safeLancamentos as LancamentoDetalhe[]);
-        setLoadingFluxo(false);
+            setContaMensalData({
+                saldoInicial: saldoInicialCalculado,
+                entradas: entradas,
+                saidas: saidas,
+                saldoFinal: saldoFinal,
+            });
+            
+            // Atualiza o fluxo de caixa para o gráfico (Entradas vs Saídas do mês)
+            setFluxoData({ receber: entradas, pagar: saidas, isGeral: false });
+            setTotalEntradasRealizadas(entradas);
+            setTotalSaidasRealizadas(saidas);
+            setLancamentosDetalhes(safeLancamentos as LancamentoDetalhe[]);
+        } catch (e: any) {
+            console.error('❌ DASHBOARD ERROR (fetchContaMensalData):', e);
+            setContaMensalData(null);
+            showError('Falha ao carregar dados mensais: ' + e.message);
+        } finally {
+            setLoadingFluxo(false);
+        }
 
     }, [ownerId, contas]);
 
@@ -163,64 +163,70 @@ const DashboardFinanceiro: React.FC = () => {
         const ownerKeyCR = isAdmin ? 'admin_id' : 'empresa_id';
         const ownerKeyCP = isAdmin ? 'admin_id' : 'empresa_id';
         
-        // 1. Fetch Realized Movements (Entradas / Saídas - Current Month)
-        
-        // CRÍTICO: Filtra apenas lançamentos que têm conta_bancaria_id (movimentação de caixa/banco)
-        const contaIds = contas.map(c => c.id);
-        
-        let lancamentosData: any[] | null = null;
-        
-        if (contaIds.length > 0) {
-            let query = supabase
-                .from('lancamentos')
-                .select('valor, tipo, origem')
-                .eq('proprietario_id', ownerId)
-                .gte('data_movimentacao', start)
-                .lte('data_movimentacao', end)
-                .in('conta_bancaria_id', contaIds); // FILTRO CRÍTICO
-                
-            const { data, error: lError } = await query;
+        try {
+            // 1. Fetch Realized Movements (Entradas / Saídas - Current Month)
             
-            if (lError) {
-                console.error('Erro ao buscar lançamentos mensais:', lError);
+            // CRÍTICO: Filtra apenas lançamentos que têm conta_bancaria_id (movimentação de caixa/banco)
+            const contaIds = contas.map(c => c.id);
+            
+            let lancamentosData: any[] | null = null;
+            
+            if (contaIds.length > 0) {
+                let query = supabase
+                    .from('lancamentos')
+                    .select('valor, tipo, origem')
+                    .eq('proprietario_id', ownerId)
+                    .gte('data_movimentacao', start)
+                    .lte('data_movimentacao', end)
+                    .in('conta_bancaria_id', contaIds); // FILTRO CRÍTICO
+                    
+                const { data, error: lError } = await query;
+                
+                if (lError) {
+                    console.error('Erro ao buscar lançamentos mensais:', lError);
+                }
+                lancamentosData = data;
             }
-            lancamentosData = data;
+            
+            const safeLancamentos = lancamentosData || [];
+            
+            const entradasRealizadas = safeLancamentos.filter(l => l.tipo === 'Entrada').reduce((sum, l) => sum + l.valor, 0);
+            const saidasRealizadas = safeLancamentos.filter(l => l.tipo === 'Saida').reduce((sum, l) => sum + l.valor, 0);
+            
+            setTotalEntradasRealizadas(entradasRealizadas);
+            setTotalSaidasRealizadas(saidasRealizadas);
+            setLancamentosDetalhes(safeLancamentos as LancamentoDetalhe[]); // SALVA DETALHES
+
+            // 2. Fetch Future Obligations (A Receber / A Pagar - Current Month)
+            const { data: crData, error: crError } = await supabase
+                .from(tabelaParcelasReceber)
+                .select('valor_parcela, status')
+                .eq(ownerKeyCR, ownerId)
+                .gte('data_vencimento', start)
+                .lte('data_vencimento', end)
+                .in('status', ['aberta', 'parcial', 'reprogramada']); // Apenas pendentes
+
+            if (crError) { console.error('Erro ao buscar CR:', crError); }
+            const totalReceber = (crData || []).reduce((sum, p) => sum + p.valor_parcela, 0);
+            
+            const { data: cpData, error: cpError } = await supabase
+                .from(tabelaParcelasPagar)
+                .select('valor_parcela, status')
+                .eq(ownerKeyCP, ownerId)
+                .gte('data_vencimento', start)
+                .lte('data_vencimento', end)
+                .in('status', ['aberta', 'parcial', 'reprogramada']); // Apenas pendentes
+
+            if (cpError) { console.error('Erro ao buscar CP:', cpError); }
+            const totalPagar = (cpData || []).reduce((sum, p) => sum + p.valor_parcela, 0);
+            
+            setFluxoData({ receber: totalReceber, pagar: totalPagar, isGeral: true });
+        } catch (e: any) {
+            console.error('❌ DASHBOARD ERROR (fetchFluxoDataGeral):', e);
+            showError('Falha ao carregar dados gerais: ' + e.message);
+        } finally {
+            setLoadingFluxo(false);
         }
-        
-        const safeLancamentos = lancamentosData || [];
-        
-        const entradasRealizadas = safeLancamentos.filter(l => l.tipo === 'Entrada').reduce((sum, l) => sum + l.valor, 0);
-        const saidasRealizadas = safeLancamentos.filter(l => l.tipo === 'Saida').reduce((sum, l) => sum + l.valor, 0);
-        
-        setTotalEntradasRealizadas(entradasRealizadas);
-        setTotalSaidasRealizadas(saidasRealizadas);
-        setLancamentosDetalhes(safeLancamentos as LancamentoDetalhe[]); // SALVA DETALHES
-
-        // 2. Fetch Future Obligations (A Receber / A Pagar - Current Month)
-        const { data: crData, error: crError } = await supabase
-            .from(tabelaParcelasReceber)
-            .select('valor_parcela, status')
-            .eq(ownerKeyCR, ownerId)
-            .gte('data_vencimento', start)
-            .lte('data_vencimento', end)
-            .in('status', ['aberta', 'parcial', 'reprogramada']); // Apenas pendentes
-
-        if (crError) { console.error('Erro ao buscar CR:', crError); }
-        const totalReceber = (crData || []).reduce((sum, p) => sum + p.valor_parcela, 0);
-        
-        const { data: cpData, error: cpError } = await supabase
-            .from(tabelaParcelasPagar)
-            .select('valor_parcela, status')
-            .eq(ownerKeyCP, ownerId)
-            .gte('data_vencimento', start)
-            .lte('data_vencimento', end)
-            .in('status', ['aberta', 'parcial', 'reprogramada']); // Apenas pendentes
-
-        if (cpError) { console.error('Erro ao buscar CP:', cpError); }
-        const totalPagar = (cpData || []).reduce((sum, p) => sum + p.valor_parcela, 0);
-        
-        setFluxoData({ receber: totalReceber, pagar: totalPagar, isGeral: true });
-        setLoadingFluxo(false);
     }, [ownerId, isAdmin, contas]);
     
     const fetchKPIs = useCallback(async () => {
@@ -234,32 +240,35 @@ const DashboardFinanceiro: React.FC = () => {
         const ownerKeyCR = isAdmin ? 'admin_id' : 'empresa_id';
         const ownerKeyCP = isAdmin ? 'admin_id' : 'empresa_id';
         
-        // Total a Receber (próximos 30 dias)
-        const { data: cr30, error: cr30Error } = await supabase
-            .from(tabelaParcelasReceber)
-            .select('valor_parcela')
-            .eq(ownerKeyCR, ownerId)
-            .in('status', ['aberta', 'parcial', 'reprogramada'])
-            .gte('data_vencimento', today)
-            .lte('data_vencimento', thirtyDaysLater);
+        try {
+            // Total a Receber (próximos 30 dias)
+            const { data: cr30, error: cr30Error } = await supabase
+                .from(tabelaParcelasReceber)
+                .select('valor_parcela')
+                .eq(ownerKeyCR, ownerId)
+                .in('status', ['aberta', 'parcial', 'reprogramada'])
+                .gte('data_vencimento', today)
+                .lte('data_vencimento', thirtyDaysLater);
+                
+            if (cr30Error) console.error('Erro ao buscar CR 30 dias:', cr30Error);
+            const totalCR = (cr30 || []).reduce((sum, p) => sum + p.valor_parcela, 0);
+            setTotalAReceber30Dias(totalCR);
             
-        if (cr30Error) console.error('Erro ao buscar CR 30 dias:', cr30Error);
-        const totalCR = (cr30 || []).reduce((sum, p) => sum + p.valor_parcela, 0);
-        setTotalAReceber30Dias(totalCR);
-        
-        // Total a Pagar (próximos 30 dias)
-        const { data: cp30, error: cp30Error } = await supabase
-            .from(tabelaParcelasPagar)
-            .select('valor_parcela')
-            .eq(ownerKeyCP, ownerId)
-            .in('status', ['aberta', 'parcial', 'reprogramada'])
-            .gte('data_vencimento', today)
-            .lte('data_vencimento', thirtyDaysLater);
-            
-        if (cp30Error) console.error('Erro ao buscar CP 30 dias:', cp30Error);
-        const totalCP = (cp30 || []).reduce((sum, p) => sum + p.valor_parcela, 0);
-        setTotalAPagar30Dias(totalCP);
-        
+            // Total a Pagar (próximos 30 dias)
+            const { data: cp30, error: cp30Error } = await supabase
+                .from(tabelaParcelasPagar)
+                .select('valor_parcela')
+                .eq(ownerKeyCP, ownerId)
+                .in('status', ['aberta', 'parcial', 'reprogramada'])
+                .gte('data_vencimento', today)
+                .lte('data_vencimento', thirtyDaysLater);
+                
+            if (cp30Error) console.error('Erro ao buscar CP 30 dias:', cp30Error);
+            const totalCP = (cp30 || []).reduce((sum, p) => sum + p.valor_parcela, 0);
+            setTotalAPagar30Dias(totalCP);
+        } catch (e) {
+            console.error('❌ DASHBOARD ERROR (fetchKPIs):', e);
+        }
     }, [ownerId, isAdmin]);
 
     useEffect(() => {
