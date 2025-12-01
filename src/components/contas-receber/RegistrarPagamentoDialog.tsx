@@ -102,7 +102,7 @@ export async function saveRecebimentoAndLancamentos({
     
     const contaRecebimento = configMap['recebimento'];
     const contaParcela = configMap['parcela'];
-    const contaDesconto = configMap['desconto_concedido'];
+    const contaDesconto = configMap['desconto_concedido']; // Conta de Desconto Concedido (Despesa)
     
     // 0. Buscar a descrição da Conta Sintética
     const { data: contaSintetica, error: csError } = await supabase

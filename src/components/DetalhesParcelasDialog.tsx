@@ -205,11 +205,12 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
         }
         
         // 3. Buscar TODOS os lançamentos originais vinculados a esta parcela
+        // Busca por: origem = 'recebimento_manual' E descrição ILIKE %Parcela ID%
         const { data: originalLaunches, error: fetchLaunchError } = await supabase
             .from('lancamentos')
             .select('id, conta_resultado_id, conta_contabil_id, conta_bancaria_id, valor, tipo, descricao, historico_id, origem')
             .eq('proprietario_id', usuario.id)
-            .or('origem.eq.recebimento_manual,origem.eq.recebimento_manual_estornada')
+            .or('origem.eq.recebimento_manual,origem.like.desconto_cp%') // Inclui lançamentos de desconto
             .ilike('descricao', `%Parcela ${parcela.id.substring(0, 8)}%`);
             
         if (fetchLaunchError) throw fetchLaunchError;
@@ -255,17 +256,17 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
             lancamentosEstornoPayload.push(lancInvert);
         }
         
-        // 5.2. Estorno do Desconto Concedido (Se houver) - O QUE O USUÁRIO PEDIU
+        // 5.2. Estorno do Desconto Concedido (Se houver) - SEGUINDO A REGRA 4.2 (D: Ativo / C: Receita Estorno)
         const isDiscountApplied = parcela.observacao?.includes('desconto');
         const valorDesconto = isDiscountApplied ? (parcela.valor_parcela - (parcela.valor_pago || 0)) : 0;
 
-        if (isDiscountApplied && isAdmin && contaDescontoConcedidoId && conta.id_conta_patrimonial && valorDesconto > 0.01) {
+        if (isDiscountApplied && isAdmin && contaEstornoDescontoId && conta.id_conta_patrimonial && valorDesconto > 0.01) {
             
-            // Lançamento 1: D: Ativo (Direito a Receber) - ENTRADA (Aumenta Ativo)
+            // Lançamento 1: D: Clientes a Receber (Ativo) - ENTRADA (Aumenta Ativo Devedor)
             const idEstornoAtivo = crypto.randomUUID();
-            const idEstornoResultado = crypto.randomUUID();
+            const idEstornoReceita = crypto.randomUUID();
 
-            // D: Clientes a Receber (Ativo) - ENTRADA (Aumenta Ativo Devedor)
+            // D: Clientes a Receber Avulso (Ativo) - ENTRADA (Aumenta Ativo Devedor)
             const lancamentoEstornoPatrimonial = {
                 id: idEstornoAtivo,
                 proprietario_id: usuario.id,
@@ -274,31 +275,31 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
                 valor: valorDesconto,
                 tipo: 'Entrada' as const, // DÉBITO (Aumenta Ativo Devedor)
                 conta_bancaria_id: null,
-                conta_contabil_id: conta.id_conta_patrimonial, // Conta Patrimonial (Ativo)
+                conta_contabil_id: conta.id_conta_patrimonial, // Conta Patrimonial (1.x.x)
                 origem: 'estorno_recebimento_manual',
                 historico_id: recebimentos[0].historico_id,
-                conta_resultado_id: idEstornoResultado, // Referência cruzada
+                conta_resultado_id: idEstornoReceita, // Referência cruzada
             };
             lancamentosEstornoPayload.push(lancamentoEstornoPatrimonial);
 
-            // Lançamento 2: C: Despesa (Desconto Concedido) - DÉBITO (Diminui Despesa Credora)
-            if (contaDescontoConcedidoId) {
-                const lancamentoEstornoDespesa = {
-                    id: idEstornoResultado,
+            // Lançamento 2: C: Receita Estorno do Desconto (Resultado) - CRÉDITO (Saída)
+            if (contaEstornoDescontoId) {
+                const lancamentoEstornoReceita = {
+                    id: idEstornoReceita,
                     proprietario_id: usuario.id,
                     data_movimentacao: dataEstornoISO,
-                    descricao: `ESTORNO DESCONTO CONCEDIDO: ${conta.descricao} (CR ID: ${contaReceberIdShort})`,
+                    descricao: `RECEITA ESTORNO DESCONTO: ${conta.descricao} (CR ID: ${contaReceberIdShort})`,
                     valor: valorDesconto,
-                    tipo: 'Entrada' as const, // <<< CORREÇÃO AQUI: DÉBITO (Entrada) diminui Despesa Credora
+                    tipo: 'Saida' as const, // CRÉDITO (Saída) na Receita Credora
                     conta_bancaria_id: null,
-                    conta_contabil_id: contaDescontoConcedidoId, // Conta de Desconto Concedido (Despesa)
+                    conta_contabil_id: contaEstornoDescontoId, // Conta de Estorno Desconto Concedido (Receita)
                     origem: 'estorno_recebimento_manual',
                     historico_id: recebimentos[0].historico_id,
                     conta_resultado_id: idEstornoAtivo, // Referência cruzada
                 };
-                lancamentosEstornoPayload.push(lancamentoEstornoDespesa);
+                lancamentosEstornoPayload.push(lancamentoEstornoReceita);
             } else {
-                console.warn('Aviso: Conta de Estorno Desconto Concedido não mapeada. Estorno incompleto.');
+                console.warn('Aviso: Conta de Estorno Desconto Concedido (Receita) não mapeada. Estorno incompleto.');
             }
         }
         
