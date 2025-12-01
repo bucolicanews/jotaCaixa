@@ -292,7 +292,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
     }
   }, [open, loadingContas, contasOrigem, saldoDevedor, isInitialized, append, fields.length]);
 
-  // --- FUNÇÃO DE SALVAMENTO DIRETO (COM LÓGICA CONTÁBIL CORRIGIDA) ---
+  // --- FUNÇÃO DE SALVAMENTO DIRETO (SEM ESTORNOS AUTOMÁTICOS) ---
   const saveDirectPayment = async (values: FormValues, comprovanteUrl: string | null = null) => {
     if (!parcela || !adminId || !values.conta_patrimonial_id) {
       showError('Dados da parcela, administrador ou conta patrimonial estão incompletos.');
@@ -302,9 +302,9 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
     setLoading(true);
 
     // Mapas vindos de configurações
-    const contaPagamento = mapeamentoContabil['pagamento']; // conta de resultado/despesa
+    const contaPagamento = mapeamentoContabil['pagamento']; // Conta de Resultado (Despesa/Custo)
     const contaParcelaPagar = mapeamentoContabil['parcela_pagar'];
-    const contaDescontoObtido = mapeamentoContabil['desconto_obtido']; // conta receita de desconto obtido
+    const contaDescontoObtido = mapeamentoContabil['desconto_obtido']; // Conta Receita de Desconto Obtido
 
     const { data: contaSintetica, error: csError } = await supabase
       .from(tabelaContasPagar)
@@ -361,22 +361,22 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
         const idAtivo = crypto.randomUUID();
         const idPatrimonial = crypto.randomUUID();
 
-        // Lançamento 1: C: Ativo (Caixa/Banco) — CRÉDITO (Saida)
+        // Lançamento Ativo: CAIXA/BANCO — CRÉDITO (Saida)
         lancamentosPayload.push({
           id: idAtivo,
           proprietario_id: adminId,
           data_movimentacao: dataPagamentoISO,
           descricao: `Pagamento Parcela ${parcela.id.substring(0, 8)} - ${parcela.fornecedor}`,
           valor: pagamento.valor_pago,
-          tipo: 'Saida' as const, // CRÉDITO (Saida) no Ativo (Devedor)
+          tipo: 'Saida' as const, // Crédito é 'Saida' no Ativo (Diminui Ativo)
           conta_bancaria_id: pagamento.conta_id,
           conta_contabil_id: contaContabilCaixaBanco,
           origem: origemVincular,
           historico_id: values.historico_id,
-          conta_resultado_id: idPatrimonial,
+          conta_resultado_id: idPatrimonial, // Ativo aponta para Passivo
         });
 
-        // Lançamento 2: D: Passivo (Obrigação a Pagar) — DÉBITO (Entrada) (reduz obrigação)
+        // Lançamento Passivo: FORNECEDOR — DÉBITO (Saida) (reduz obrigação)
         if (contaPatrimonial) {
           lancamentosPayload.push({
             id: idPatrimonial,
@@ -384,30 +384,30 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
             data_movimentacao: dataPagamentoISO,
             descricao: `Baixa Passivo CP: ${descricaoContaSintetica} (CP ID: ${parcela.conta_pagar_id.substring(0, 8)})`,
             valor: pagamento.valor_pago,
-            tipo: 'Entrada' as const, // <<< CORRIGIDO: DÉBITO é 'Entrada' no Passivo Credor
+            tipo: 'Saida' as const, // <<< CORREÇÃO AQUI: DÉBITO é 'Saida' no Passivo (Diminui Passivo Credora)
             conta_bancaria_id: null,
             conta_contabil_id: contaPatrimonial,
             origem: origemVincular,
             historico_id: values.historico_id,
-            conta_resultado_id: idAtivo,
+            conta_resultado_id: idAtivo, // Passivo aponta para Ativo
           });
         }
       }
 
-      // 2) Tratar desconto (se houver)
+      // 2) Tratar desconto (se houver) — mantém lógica contábil correta
       if (isPagamentoParcial && values.acao_saldo_restante === 'desconto' && contaDescontoObtido && contaPatrimonial) {
         // ids para cross-ref
         const idDescontoResultado = crypto.randomUUID();
         const idDescontoPatrimonial = crypto.randomUUID();
 
-        // Lançamento 3: Receita (Descontos Obtidos) — CRÉDITO (Saida)
+        // Lançamento na Receita (Descontos Obtidos) — DÉBITO (Entrada)
         lancamentosPayload.push({
           id: idDescontoResultado,
           proprietario_id: adminId,
           data_movimentacao: dataPagamentoISO,
           descricao: `Desconto Obtido: ${descricaoContaSintetica} (CP ID: ${parcela.conta_pagar_id.substring(0, 8)})`,
           valor: saldoRestanteCalculado,
-          tipo: 'Saida' as const, // <<< CORRIGIDO: CRÉDITO é 'Saida' na Receita Credora
+          tipo: 'Entrada' as const, // <<< CORREÇÃO AQUI: CRÉDITO é 'Entrada' na Receita Credora (Aumenta Receita)
           conta_bancaria_id: null,
           conta_contabil_id: contaDescontoObtido,
           origem: `desconto_cp:${parcela.id}`,
@@ -415,14 +415,14 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
           conta_resultado_id: idDescontoPatrimonial,
         });
 
-        // Lançamento 4: Passivo (reduz obrigação do fornecedor) — DÉBITO (Entrada)
+        // Lançamento no Passivo (reduz obrigação do fornecedor) — DÉBITO (Saida)
         lancamentosPayload.push({
           id: idDescontoPatrimonial,
           proprietario_id: adminId,
           data_movimentacao: dataPagamentoISO,
           descricao: `Baixa Passivo Desconto CP: ${descricaoContaSintetica} (CP ID: ${parcela.conta_pagar_id.substring(0, 8)})`,
           valor: saldoRestanteCalculado,
-          tipo: 'Entrada' as const,  // <<< CORRIGIDO: DÉBITO é 'Entrada' no Passivo Credor
+          tipo: 'Saida' as const, // <<< CORREÇÃO AQUI: DÉBITO é 'Saida' no Passivo (Diminui Passivo Credora)
           conta_bancaria_id: null,
           conta_contabil_id: contaPatrimonial,
           origem: `desconto_cp:${parcela.id}`,
@@ -439,7 +439,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
       const finalStatus: AdminParcelaPagar['status'] = isPagamentoParcial ? (values.acao_saldo_restante ? 'paga' : 'parcial') : 'paga';
       const observacaoFinal = isPagamentoParcial
         ? (values.acao_saldo_restante === 'desconto'
-          ? `Pago R$ ${valorPagoTotal.toFixed(2)} com R$ ${saldoRestanteCalculado.toFixed(2)} de desconto.`
+          ? `Pago R$ ${valorPagoTotal.toFixed(2)} com R$ ${saldoRestanteCalculado.toFixed(2)} de desconto. ${values.observacao || ''}`
           : `Pago R$ ${valorPagoTotal.toFixed(2)}. Saldo de R$ ${saldoRestanteCalculado.toFixed(2)} ${values.acao_saldo_restante === 'reprogramar' ? 'reprogramado' : 'parcelado'}.`)
         : null;
 
@@ -549,7 +549,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
 
   const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
-  const isSubmitDisabled = loading || form.formState.isSubmitting || (Math.abs(restante) > 0.01 && !isPagamentoParcial) || (isPagamentoParcial && !form.formState.isValid);
+  const isSubmitDisabled = loading || form.formState.isSubmitting || (Math.abs(restante) > 0.01 && !isPagamentoParcial) || (isPagamentoParcial && !acaoSaldoRestante);
 
   return (
     <>
@@ -730,7 +730,9 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
                             </Button>
                           </FormControl>
                         </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus locale={ptBR} /></PopoverContent>
+                        <PopoverContent className="w-auto p-0">
+                          <Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus locale={ptBR} />
+                        </PopoverContent>
                       </Popover>
                       <FormMessage />
                     </FormItem>

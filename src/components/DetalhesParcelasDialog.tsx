@@ -14,7 +14,7 @@ import FormParcelaReceberDialog from './formularios/FormParcelaReceberDialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
 import { Loader2, BadgeDollarSign, DollarSign, Edit, Trash2, Undo2 } from 'lucide-react';
 import RegistrarPagamentoDialog from '@/components/contas-receber/RegistrarPagamentoDialog';
-import { Badge } from '@/components/ui/badge';
+import { Badge } from '@/components/ui/badge'; // IMPORTAÇÃO CORRIGIDA
 
 // Interface ParcelaParaPagamento copiada de RegistrarPagamentoDialog.tsx
 interface ParcelaParaPagamento {
@@ -38,18 +38,6 @@ interface Parcela {
   status: 'aberta' | 'parcial' | 'paga' | 'reprogramada' | 'cancelada' | 'bloqueada';
   id_conta_contabil: string | null; // Adicionado para estorno
   observacao: string | null; // Adicionado para estorno
-}
-
-interface LancamentoDetalhe {
-    id: string;
-    conta_resultado_id: string | null;
-    origem: string;
-    tipo: 'Entrada' | 'Saida';
-    valor: number;
-    descricao: string;
-    conta_bancaria_id: string | null;
-    conta_contabil_id: string | null;
-    historico_id: string | null;
 }
 
 interface DetalhesParcelasDialogProps {
@@ -101,7 +89,7 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
     if (open) {
       fetchParcelas();
     }
-  }, [open, fetchParcelas]);
+  }, [conta, open, fetchParcelas]);
 
   const handleOpenPagamento = (parcela: Parcela) => {
     if (!conta) return;
@@ -203,19 +191,20 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
         
         // 2. Buscar mapeamento contábil (apenas Admin)
         let contaDescontoConcedidoId: string | null = null;
+        let contaEstornoDescontoId: string | null = null;
         
         if (isAdmin) {
             const { data: configData } = await supabase
                 .from('configuracao_contas_receber')
                 .select('tipo_registro, conta_contabil_id')
                 .eq('proprietario_id', usuario.id)
-                .in('tipo_registro', ['desconto']);
+                .in('tipo_registro', ['desconto_concedido', 'estorno_desconto_concedido']);
                 
-            contaDescontoConcedidoId = configData?.find(c => c.tipo_registro === 'desconto')?.conta_contabil_id || null;
+            contaDescontoConcedidoId = configData?.find(c => c.tipo_registro === 'desconto_concedido')?.conta_contabil_id || null;
+            contaEstornoDescontoId = configData?.find(c => c.tipo_registro === 'estorno_desconto_concedido')?.conta_contabil_id || null;
         }
         
         // 3. Buscar TODOS os lançamentos originais vinculados a esta parcela
-        // Busca por: origem = 'recebimento_manual' E descrição contendo o ID da parcela
         const { data: originalLaunches, error: fetchLaunchError } = await supabase
             .from('lancamentos')
             .select('id, conta_resultado_id, conta_contabil_id, conta_bancaria_id, valor, tipo, descricao, historico_id, origem')
@@ -228,22 +217,26 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
         const lancamentosEstornoPayload: any[] = [];
         const originalLaunchIds = (originalLaunches || []).map(l => l.id);
         
-        if (originalLaunchIds.length > 0) {
-            // 4. Marcar os lançamentos originais como estornados
-            const { error: markError } = await supabase
-                .from('lancamentos')
-                .update({ origem: 'recebimento_manual_estornada' })
-                .in('id', originalLaunchIds);
-                
-            if (markError) throw markError;
+        if (originalLaunchIds.length === 0) {
+            showError('Nenhum lançamento contábil original encontrado para estorno.');
+            setIsUndoing(false);
+            return;
         }
+        
+        // 4. Marcar os lançamentos originais como estornados
+        const { error: markError } = await supabase
+            .from('lancamentos')
+            .update({ origem: 'recebimento_manual_estornada' })
+            .in('id', originalLaunchIds);
+            
+        if (markError) throw markError;
         
         // 5. Gerar Lançamentos de Estorno (Reversão)
         
         // 5.1. Estorno do Recebimento (Caixa/Clientes)
         for (const orig of originalLaunches.filter(l => l.origem === 'recebimento_manual')) {
             const inverseId = crypto.randomUUID();
-            const tipoInvertido = orig.tipo === 'Entrada' ? 'Saida' : 'Entrada'; // Inverte o tipo
+            const tipoInvertido = orig.tipo === 'Entrada' ? 'Saida' : 'Entrada';
             
             // Lançamento de Estorno
             const lancInvert = {
@@ -262,7 +255,7 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
             lancamentosEstornoPayload.push(lancInvert);
         }
         
-        // 5.2. Estorno do Desconto Concedido (Se houver)
+        // 5.2. Estorno do Desconto Concedido (Se houver) - O QUE O USUÁRIO PEDIU
         const isDiscountApplied = parcela.observacao?.includes('desconto');
         const valorDesconto = isDiscountApplied ? (parcela.valor_parcela - (parcela.valor_pago || 0)) : 0;
 
@@ -288,7 +281,7 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
             };
             lancamentosEstornoPayload.push(lancamentoEstornoPatrimonial);
 
-            // Lançamento 2: C: Despesa (Desconto Concedido) - ENTRADA (Diminui Despesa Credora)
+            // Lançamento 2: C: Despesa (Desconto Concedido) - DÉBITO (Diminui Despesa Credora)
             if (contaDescontoConcedidoId) {
                 const lancamentoEstornoDespesa = {
                     id: idEstornoResultado,
@@ -296,7 +289,7 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
                     data_movimentacao: dataEstornoISO,
                     descricao: `ESTORNO DESCONTO CONCEDIDO: ${conta.descricao} (CR ID: ${contaReceberIdShort})`,
                     valor: valorDesconto,
-                    tipo: 'Entrada' as const, // ENTRADA (Débito) para diminuir a Despesa Credora
+                    tipo: 'Entrada' as const, // <<< CORREÇÃO AQUI: DÉBITO (Entrada) diminui Despesa Credora
                     conta_bancaria_id: null,
                     conta_contabil_id: contaDescontoConcedidoId, // Conta de Desconto Concedido (Despesa)
                     origem: 'estorno_recebimento_manual',
@@ -392,7 +385,7 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
                   <CardContent className="p-4 space-y-3">
                       <div className="flex justify-between items-center">
                           <div className="flex items-center space-x-2">
-                              <DollarSign className="w-5 h-5 text-primary" />
+                              <DollarSign className="w-5 h-5 mr-2" />
                               <span className="font-semibold">Progresso de Recebimento</span>
                           </div>
                           <span className="text-lg font-bold text-primary">{progressoPercentual}%</span>
