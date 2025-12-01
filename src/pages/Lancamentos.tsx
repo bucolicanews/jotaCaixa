@@ -9,7 +9,8 @@ import LancamentosManuaisTable from '@/components/lancamentos/LancamentosManuais
 import TodosLancamentosTable from '@/components/lancamentos/TodosLancamentosTable';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useSearchParams } from 'react-router-dom';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'; // Importando Dialog
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button'; // Importação corrigida
 
 const Lancamentos: React.FC = () => {
   const { role, perfil } = useSessao();
