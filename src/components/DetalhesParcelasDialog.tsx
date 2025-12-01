@@ -210,8 +210,7 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
             .from('lancamentos')
             .select('id, conta_resultado_id, conta_contabil_id, conta_bancaria_id, valor, tipo, descricao, historico_id, origem')
             .eq('proprietario_id', usuario.id)
-            .or('origem.eq.recebimento_manual,origem.like.desconto_cp%') // Inclui lançamentos de desconto
-            .ilike('descricao', `%Parcela ${parcela.id.substring(0, 8)}%`);
+            .or('origem.eq.recebimento_manual,origem.like.desconto_cp%'); // Inclui lançamentos de desconto
             
         if (fetchLaunchError) throw fetchLaunchError;
         
