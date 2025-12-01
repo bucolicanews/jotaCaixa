@@ -277,7 +277,7 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
                     data_movimentacao: dataEstornoISO,
                     descricao: `ESTORNO DESCONTO CR: ${conta.descricao} (CR ID: ${contaReceberIdShort})`,
                     valor: valorDesconto,
-                    tipo: 'Entrada' as const, // Débito no Ativo (Devedora)
+                    tipo: 'Entrada' as const, // DÉBITO (Aumenta Ativo Devedor)
                     conta_bancaria_id: null,
                     conta_contabil_id: conta.id_conta_patrimonial, // Conta Patrimonial (Ativo)
                     origem: 'estorno_recebimento_manual',
@@ -294,7 +294,7 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
                     data_movimentacao: dataEstornoISO,
                     descricao: `ESTORNO DESCONTO CONCEDIDO: ${conta.descricao} (CR ID: ${contaReceberIdShort})`,
                     valor: valorDesconto,
-                    tipo: 'Saida' as const, // Crédito na Despesa (Credora)
+                    tipo: 'Saida' as const, // CRÉDITO (Diminui Despesa Credora)
                     conta_bancaria_id: null,
                     conta_contabil_id: contaDescontoConcedidoId, // Conta de Desconto Concedido (Despesa)
                     origem: 'estorno_recebimento_manual',

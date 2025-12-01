@@ -138,7 +138,7 @@ export async function saveRecebimentoAndLancamentos({
         
         recebimentoBasePayload = { 
             parcela_id: parcela.id, 
-            admin_id: proprietarioDaSessao, 
+            [ownerKeyRecebimento]: proprietarioDaSessao, // USANDO ownerKeyRecebimento
             valor_recebido: valorRecebido, 
             cliente_id: clienteIdPagador,
             conta_id: values.conta_id,
@@ -151,7 +151,7 @@ export async function saveRecebimentoAndLancamentos({
     } else {
         recebimentoBasePayload = { 
             parcela_id: parcela.id, 
-            empresa_id: proprietarioDaSessao, 
+            [ownerKeyRecebimento]: proprietarioDaSessao, // USANDO ownerKeyRecebimento
             valor_recebido: valorRecebido,
             conta_id: values.conta_id,
             id_conta_resultado: contaReceitaResultado, // USANDO A CONTA DE RECEITA DA SINTÉTICA
@@ -197,14 +197,14 @@ export async function saveRecebimentoAndLancamentos({
               const idDescontoDespesa = crypto.randomUUID();
               const idDescontoPatrimonial = crypto.randomUUID();
               
-              // Lançamento 1: D: Despesa (Desconto Concedido) - ENTRADA
+              // Lançamento 1: D: Despesa (Desconto Concedido) - ENTRADA (Aumenta Despesa Credora)
               const lancamentoDescontoPayload = {
                   id: idDescontoDespesa,
                   proprietario_id: proprietarioDaSessao,
                   data_movimentacao: dataPagamentoISO,
                   descricao: `Desconto Concedido: ${descricaoContaSintetica} (CR ID: ${parcela.conta_receber_id.substring(0, 8)})`,
                   valor: saldoRestanteCalculado,
-                  tipo: 'Entrada' as const, // Entrada na Despesa (Credora)
+                  tipo: 'Entrada' as const, // DÉBITO (Aumenta Despesa Credora)
                   conta_bancaria_id: null,
                   conta_contabil_id: contaDesconto, // Conta de Desconto (Despesa)
                   origem: 'recebimento_manual',
@@ -213,14 +213,14 @@ export async function saveRecebimentoAndLancamentos({
               };
               lancamentosPayload.push(lancamentoDescontoPayload);
               
-              // Lançamento 2: C: Ativo (Direito a Receber) - SAÍDA
+              // Lançamento 2: C: Ativo (Direito a Receber) - SAÍDA (Diminui Ativo Devedor)
               const lancamentoPatrimonialPayload = {
                   id: idDescontoPatrimonial,
                   proprietario_id: proprietarioDaSessao,
                   data_movimentacao: dataPagamentoISO,
                   descricao: `Estorno Patrimonial Desconto CR: ${descricaoContaSintetica} (CR ID: ${parcela.conta_receber_id.substring(0, 8)})`,
                   valor: saldoRestanteCalculado,
-                  tipo: 'Saida' as const, // Saída do Ativo (Débito)
+                  tipo: 'Saida' as const, // CRÉDITO (Diminui Ativo Devedor)
                   conta_bancaria_id: null,
                   conta_contabil_id: values.conta_patrimonial_id, // Conta Patrimonial (1.x.x)
                   historico_id: values.historico_id,
