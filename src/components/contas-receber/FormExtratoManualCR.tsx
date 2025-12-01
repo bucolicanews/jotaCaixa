@@ -95,7 +95,7 @@ const FormExtratoManualCR: React.FC<FormExtratoManualCRProps> = ({
     const [comprovanteFile, setComprovanteFile] = useState<File | null>(null);
     const [isUploading, setIsUploading] = useState(false);
     
-    // CORREÇÃO: O ownerId para RLS é o ID do usuário logado (Admin/Cliente) ou o cliente_id (Usuário)
+    // CORREÇÃO: O proprietarioDaSessao é o ID do Admin/Cliente logado
     const proprietarioDaSessao = isAdmin ? usuario?.id : (perfil as any)?.cliente_id || (perfil as any)?.id;
 
     const valorRecebido = recebimentoDetalhes.valor_recebido;
