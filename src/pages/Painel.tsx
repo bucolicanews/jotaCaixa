@@ -51,6 +51,9 @@ const Painel = () => {
     
     // Permissões de Suporte
     hasSuportePermission = permissoes.gestao_suporte === true;
+
+    // LOG DE DEBBUG
+    console.log("DEBUG PAINEL: Role:", role, "Aprovado:", isClientApproved, "Permissões Financeiras:", hasFinancePermissions, "Permissões:", permissoes);
   }
   
   // --- Lógica de Roteamento Condicional para Usuários ---
