@@ -47,8 +47,16 @@ const AtualizarSenha = () => {
     const { error: updateError } = await supabase.auth.updateUser({ password });
 
     if (updateError) {
-      showError('Não foi possível atualizar sua senha. Por favor, tente novamente.');
       console.error('Password update error:', updateError);
+      
+      let errorMessage = 'Não foi possível atualizar sua senha. Por favor, tente novamente.';
+      
+      // Captura o erro específico de senha duplicada
+      if (updateError.message.includes('New password should be different from the old password')) {
+        errorMessage = 'A nova senha deve ser diferente da senha anterior. Por favor, escolha uma senha que você nunca usou neste sistema.';
+      }
+      
+      showError(errorMessage);
       setLoading(false);
     } else {
       showSuccess('Senha atualizada com sucesso! Você será redirecionado para o login.');
