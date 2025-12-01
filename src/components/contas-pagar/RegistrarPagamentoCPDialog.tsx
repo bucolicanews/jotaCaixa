@@ -368,7 +368,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
           data_movimentacao: dataPagamentoISO,
           descricao: `Pagamento Parcela ${parcela.id.substring(0, 8)} - ${parcela.fornecedor}`,
           valor: pagamento.valor_pago,
-          tipo: 'Saida' as const,
+          tipo: 'Saida' as const, // Crédito é 'Saida' no Ativo
           conta_bancaria_id: pagamento.conta_id,
           conta_contabil_id: contaContabilCaixaBanco,
           origem: origemVincular,
@@ -376,7 +376,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
           conta_resultado_id: idPatrimonial,
         });
 
-        // Lançamento Passivo: FORNECEDOR — DÉBITO (Entrada) (reduz obrigação)
+        // Lançamento Passivo: FORNECEDOR — DÉBITO (Saida) (reduz obrigação)
         if (contaPatrimonial) {
           lancamentosPayload.push({
             id: idPatrimonial,
@@ -384,7 +384,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
             data_movimentacao: dataPagamentoISO,
             descricao: `Baixa Passivo CP: ${descricaoContaSintetica} (CP ID: ${parcela.conta_pagar_id.substring(0, 8)})`,
             valor: pagamento.valor_pago,
-            tipo: 'Entrada' as const,
+            tipo: 'Saida' as const, // <<< CORRIGIDO: DÉBITO é 'Saida' no Passivo Credor
             conta_bancaria_id: null,
             conta_contabil_id: contaPatrimonial,
             origem: origemVincular,
@@ -400,14 +400,14 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
         const idDescontoResultado = crypto.randomUUID();
         const idDescontoPatrimonial = crypto.randomUUID();
 
-        // Lançamento na Receita (Descontos Obtidos) — CRÉDITO (Saida)
+        // Lançamento na Receita (Descontos Obtidos) — CRÉDITO (Entrada)
         lancamentosPayload.push({
           id: idDescontoResultado,
           proprietario_id: adminId,
           data_movimentacao: dataPagamentoISO,
           descricao: `Desconto Obtido: ${descricaoContaSintetica} (CP ID: ${parcela.conta_pagar_id.substring(0, 8)})`,
           valor: saldoRestanteCalculado,
-          tipo: 'Saida' as const,
+          tipo: 'Entrada' as const, // <<< CORRIGIDO: CRÉDITO é 'Entrada' na Receita Credora
           conta_bancaria_id: null,
           conta_contabil_id: contaDescontoObtido,
           origem: `desconto_cp:${parcela.id}`,
@@ -415,14 +415,14 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
           conta_resultado_id: idDescontoPatrimonial,
         });
 
-        // Lançamento no Passivo (reduz obrigação do fornecedor) — DÉBITO (Entrada)
+        // Lançamento no Passivo (reduz obrigação do fornecedor) — DÉBITO (Saida)
         lancamentosPayload.push({
           id: idDescontoPatrimonial,
           proprietario_id: adminId,
           data_movimentacao: dataPagamentoISO,
           descricao: `Baixa Passivo Desconto CP: ${descricaoContaSintetica} (CP ID: ${parcela.conta_pagar_id.substring(0, 8)})`,
           valor: saldoRestanteCalculado,
-          tipo: 'Entrada' as const,
+          tipo: 'Saida' as const,  // <<< CORRIGIDO: DÉBITO é 'Saida' no Passivo Credor
           conta_bancaria_id: null,
           conta_contabil_id: contaPatrimonial,
           origem: `desconto_cp:${parcela.id}`,
@@ -549,7 +549,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
 
   const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
-  const isSubmitDisabled = loading || form.formState.isSubmitting || (isPagamentoParcial && !form.formState.isValid);
+  const isSubmitDisabled = loading || form.formState.isSubmitting || (Math.abs(restante) > 0.01 && !isPagamentoParcial) || (isPagamentoParcial && !form.formState.isValid);
 
   return (
     <>
