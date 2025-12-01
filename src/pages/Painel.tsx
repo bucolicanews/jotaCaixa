@@ -1,3 +1,4 @@
+Suporte > Ponto Eletrônico.">
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { useSessao } from '@/hooks/use-sessao';
 import { ClienteProfile, UsuarioProfile, AdminUsuarioProfile } from '@/types/usuario';
@@ -6,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Link, useNavigate } from 'react-router-dom';
 import { Package, Loader2 } from 'lucide-react';
 import DashboardFinanceiro from '@/components/DashboardFinanceiro';
-import React, { useEffect } from 'react'; // Importando useEffect
+import React, { useEffect } from 'react';
 
 const Painel = () => {
   const { role, perfil, carregando } = useSessao();
