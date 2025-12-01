@@ -186,7 +186,7 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
             return;
         }
         
-        const totalEstornado = recebimentos.reduce((sum, r) => sum + r.valor_recebido, 0);
+        const totalRecebido = recebimentos.reduce((sum, r) => sum + r.valor_recebido, 0);
         const dataEstornoISO = new Date().toISOString();
         
         // 2. Buscar mapeamento contábil (apenas Admin)
@@ -260,14 +260,15 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
         // 5.2. Estorno do Desconto Concedido (Se houver)
         const isDiscountApplied = parcela.observacao?.includes('desconto');
         
-        if (isDiscountApplied && isAdmin && contaDescontoConcedidoId && contaEstornoDescontoId && conta.id_conta_patrimonial) {
-            const valorDesconto = totalEstornado - (parcela.valor_pago || 0); // Valor do desconto
+        if (isDiscountApplied && isAdmin && contaDescontoConcedidoId && conta.id_conta_patrimonial) {
+            // O valor do desconto é o valor da parcela - o valor pago
+            const valorDesconto = parcela.valor_parcela - (parcela.valor_pago || 0); 
             
             if (valorDesconto > 0.01) {
                 
                 // Lançamento 1 do Estorno do Desconto: D: Clientes a Receber (Ativo)
                 const idEstornoPatrimonial = crypto.randomUUID();
-                const idEstornoReceita = crypto.randomUUID();
+                const idEstornoDespesa = crypto.randomUUID(); // ID para o lançamento de Despesa (Desconto Concedido)
                 
                 // D: Clientes a Receber (Ativo) - ENTRADA (Aumenta o direito a receber)
                 const lancamentoEstornoPatrimonial = {
@@ -281,26 +282,26 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
                     conta_contabil_id: conta.id_conta_patrimonial, // Conta Patrimonial (Ativo)
                     origem: 'estorno_recebimento_manual',
                     historico_id: recebimentos[0].historico_id,
-                    conta_resultado_id: idEstornoReceita, // Referência cruzada
+                    conta_resultado_id: idEstornoDespesa, // Referência cruzada
                 };
                 lancamentosEstornoPayload.push(lancamentoEstornoPatrimonial);
                 
-                // Lançamento 2 do Estorno do Desconto: C: Estorno Desconto Concedido (Receita)
-                // C: Estorno Desconto Concedido (Receita) - SAÍDA (Diminui a Receita)
-                const lancamentoEstornoReceita = {
-                    id: idEstornoReceita,
+                // Lançamento 2 do Estorno do Desconto: C: Desconto Concedido (Despesa)
+                // C: Desconto Concedido (Despesa) - SAÍDA (Diminui a Despesa Credora)
+                const lancamentoEstornoDespesa = {
+                    id: idEstornoDespesa,
                     proprietario_id: ownerId,
                     data_movimentacao: dataEstornoISO,
-                    descricao: `ESTORNO RECEITA DESCONTO: ${conta.descricao} (CR ID: ${contaReceberIdShort})`,
+                    descricao: `ESTORNO DESCONTO CONCEDIDO: ${conta.descricao} (CR ID: ${contaReceberIdShort})`,
                     valor: valorDesconto,
-                    tipo: 'Saida' as const, // Crédito na Receita (Credora)
+                    tipo: 'Saida' as const, // Crédito na Despesa (Credora)
                     conta_bancaria_id: null,
-                    conta_contabil_id: contaEstornoDescontoId, // Conta de Estorno Desconto (Receita)
+                    conta_contabil_id: contaDescontoConcedidoId, // Conta de Desconto Concedido (Despesa)
                     origem: 'estorno_recebimento_manual',
                     historico_id: recebimentos[0].historico_id,
                     conta_resultado_id: idEstornoPatrimonial, // Referência cruzada
                 };
-                lancamentosEstornoPayload.push(lancamentoEstornoReceita);
+                lancamentosEstornoPayload.push(lancamentoEstornoDespesa);
             }
         }
 
