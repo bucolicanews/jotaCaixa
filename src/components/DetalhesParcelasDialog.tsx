@@ -544,4 +544,3 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
 };
 
 export default DetalhesParcelasDialog;
-</dyad-file>
