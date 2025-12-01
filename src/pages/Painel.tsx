@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Link, useNavigate } from 'react-router-dom';
 import { Package, Loader2 } from 'lucide-react';
 import DashboardFinanceiro from '@/components/DashboardFinanceiro';
+import DashboardUsuario from '@/components/DashboardUsuario'; // IMPORTADO
 import React, { useEffect } from 'react';
 
 const Painel = () => {
@@ -28,7 +29,7 @@ const Painel = () => {
     isClientApproved = clienteProfile?.aprovado ?? false;
     if (isClientApproved) {
       const permissoes = clienteProfile?.permissoes || {};
-      hasFinancePermissions = permissoes.contas_pagar || permissoes.contas_receber || permissoes.bancos || permissoes.conciliacao || permissoes.plano_contas;
+      hasFinancePermissions = permissoes.contas_pagar || permissoes.contas_receber || permissoes.bancos || permissoes.conciliacao || permissoes.plano_contas || permissoes.importar || permissoes.relatorios;
     }
   } else if (isUsuario) {
     const usuarioProfile = perfil as UsuarioProfile | AdminUsuarioProfile;
@@ -95,7 +96,6 @@ const Painel = () => {
   }
   
   // Se for usuário e estiver carregando a lógica de redirecionamento, mostra o loader
-  // A condição de carregamento agora é mais restrita, pois o usuário pode ficar no painel
   if (isUsuario && isClientApproved && !hasFinancePermissions && (hasSuportePermission || hasPontoPermission)) {
       return (
         <LayoutPrincipal>
@@ -105,6 +105,8 @@ const Painel = () => {
         </LayoutPrincipal>
       );
   }
+
+  const welcomeMessage = isAdmin ? 'Painel Administrativo' : 'Fluxo de Caixa';
 
   return (
     <LayoutPrincipal>
@@ -123,12 +125,15 @@ const Painel = () => {
       {isClientApproved ? (
         <>
           <p className="text-lg text-muted-foreground mb-8">
-            Bem-vindo ao {isAdmin ? 'Painel Administrativo' : 'Fluxo de Caixa'}.
+            Bem-vindo ao {welcomeMessage}.
           </p>
 
-          {/* Renderiza o DashboardFinanceiro se for Admin OU se tiver permissões financeiras */}
-          {isAdmin || hasFinancePermissions ? (
+          {/* Renderiza o DashboardFinanceiro se for Admin ou Cliente */}
+          {isAdmin || isClient ? (
             <DashboardFinanceiro />
+          ) : hasFinancePermissions ? (
+            // Se for Usuário com permissões financeiras, mostra o dashboard simplificado
+            <DashboardUsuario />
           ) : (
             <Card className="mt-8">
               <CardHeader>
