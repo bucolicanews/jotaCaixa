@@ -192,6 +192,7 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
         // 2. Buscar mapeamento contábil (apenas Admin)
         let contaDescontoConcedidoId: string | null = null;
         let contaEstornoDescontoId: string | null = null;
+        let contaReceitaResultadoId: string | null = conta.id_conta_resultado || null; // NOVO: Pega da conta sintética
         
         if (isAdmin) {
             const { data: configData } = await supabase
@@ -303,6 +304,58 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
                 };
                 lancamentosEstornoPayload.push(lancamentoEstornoDespesa);
             }
+        }
+        
+        // 5.3. Estorno do Lançamento Inicial de Receita (Se for Admin)
+        if (isAdmin && contaReceitaResultadoId && conta.id_conta_patrimonial) {
+            // O valor total do CR é o valor da conta sintética
+            const valorTotalCR = conta.valor_total;
+            
+            // Lançamento 1 do Estorno Inicial: D: Receita (Resultado)
+            const idEstornoReceita = crypto.randomUUID();
+            const idEstornoPatrimonialInicial = crypto.randomUUID();
+            
+            // D: Receita (Resultado) - ENTRADA (Diminui Receita Credora)
+            const lancamentoEstornoReceita = {
+                id: idEstornoReceita,
+                proprietario_id: ownerId,
+                data_movimentacao: dataEstornoISO,
+                descricao: `ESTORNO RECEITA INICIAL CR: ${conta.descricao} (CR ID: ${contaReceberIdShort})`,
+                valor: valorTotalCR,
+                tipo: 'Entrada' as const, // DÉBITO (Diminui Receita Credora)
+                conta_bancaria_id: null,
+                conta_contabil_id: contaReceitaResultadoId, // Conta de Receita (Resultado)
+                origem: 'estorno_recebimento_manual',
+                historico_id: recebimentos[0].historico_id,
+                conta_resultado_id: idEstornoPatrimonialInicial, // Referência cruzada
+            };
+            lancamentosEstornoPayload.push(lancamentoEstornoReceita);
+            
+            // Lançamento 2 do Estorno Inicial: C: Clientes a Receber (Ativo)
+            // C: Clientes a Receber (Ativo) - SAÍDA (Diminui Ativo Devedor)
+            const lancamentoEstornoPatrimonialInicial = {
+                id: idEstornoPatrimonialInicial,
+                proprietario_id: ownerId,
+                data_movimentacao: dataEstornoISO,
+                descricao: `ESTORNO ATIVO INICIAL CR: ${conta.descricao} (CR ID: ${contaReceberIdShort})`,
+                valor: valorTotalCR,
+                tipo: 'Saida' as const, // CRÉDITO (Diminui Ativo Devedor)
+                conta_bancaria_id: null,
+                conta_contabil_id: conta.id_conta_patrimonial, // Conta Patrimonial (Ativo)
+                origem: 'estorno_recebimento_manual',
+                historico_id: recebimentos[0].historico_id,
+                conta_resultado_id: idEstornoReceita, // Referência cruzada
+            };
+            lancamentosEstornoPayload.push(lancamentoEstornoPatrimonialInicial);
+            
+            // CRÍTICO: Marcar os lançamentos iniciais (origem: lancamento_cr) como estornados
+            const oldLaunchDescriptionPrefix = `Lançamento Inicial CR: Contrato: ${conta.descricao} (CR ID: ${contaReceberIdShort})`;
+            const oldReceitaDescriptionPrefix = `Receita: Contrato: ${conta.descricao} (CR ID: ${contaReceberIdShort})`;
+            
+            await supabase.from('lancamentos')
+                .update({ origem: 'recebimento_manual_estornada' })
+                .eq('proprietario_id', ownerId)
+                .or(`descricao.ilike.${oldLaunchDescriptionPrefix}%`, `descricao.ilike.${oldReceitaDescriptionPrefix}%`);
         }
 
         // 6. Inserir todos os lançamentos de estorno
