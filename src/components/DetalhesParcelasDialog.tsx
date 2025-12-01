@@ -14,6 +14,7 @@ import FormParcelaReceberDialog from './formularios/FormParcelaReceberDialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
 import { Loader2, BadgeDollarSign, DollarSign, Edit, Trash2, Undo2 } from 'lucide-react';
 import RegistrarPagamentoDialog from '@/components/contas-receber/RegistrarPagamentoDialog';
+import { Badge } from '@/components/ui/badge'; // IMPORTAÇÃO CORRIGIDA
 
 // Interface ParcelaParaPagamento copiada de RegistrarPagamentoDialog.tsx
 interface ParcelaParaPagamento {
