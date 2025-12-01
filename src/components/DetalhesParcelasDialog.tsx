@@ -40,6 +40,18 @@ interface Parcela {
   observacao: string | null; // Adicionado para estorno
 }
 
+interface LancamentoDetalhe {
+    id: string;
+    conta_resultado_id: string | null;
+    origem: string;
+    tipo: 'Entrada' | 'Saida';
+    valor: number;
+    descricao: string;
+    conta_bancaria_id: string | null;
+    conta_contabil_id: string | null;
+    historico_id: string | null;
+}
+
 interface DetalhesParcelasDialogProps {
   conta: ContaReceber | null;
   open: boolean;
@@ -203,11 +215,12 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
         }
         
         // 3. Buscar TODOS os lançamentos originais vinculados a esta parcela
+        // Busca por: origem = 'recebimento_manual' E descrição contendo o ID da parcela
         const { data: originalLaunches, error: fetchLaunchError } = await supabase
             .from('lancamentos')
             .select('id, conta_resultado_id, conta_contabil_id, conta_bancaria_id, valor, tipo, descricao, historico_id, origem')
             .eq('proprietario_id', usuario.id)
-            .or('origem.eq.recebimento_manual,origem.eq.lancamento_cr,origem.eq.recebimento_manual_estornada')
+            .or('origem.eq.recebimento_manual,origem.eq.recebimento_manual_estornada')
             .ilike('descricao', `%Parcela ${parcela.id.substring(0, 8)}%`);
             
         if (fetchLaunchError) throw fetchLaunchError;
@@ -230,7 +243,7 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
         // 5.1. Estorno do Recebimento (Caixa/Clientes)
         for (const orig of originalLaunches.filter(l => l.origem === 'recebimento_manual')) {
             const inverseId = crypto.randomUUID();
-            const tipoInvertido = orig.tipo === 'Entrada' ? 'Saida' : 'Entrada';
+            const tipoInvertido = orig.tipo === 'Entrada' ? 'Saida' : 'Entrada'; // Inverte o tipo
             
             // Lançamento de Estorno
             const lancInvert = {
@@ -249,7 +262,7 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
             lancamentosEstornoPayload.push(lancInvert);
         }
         
-        // 5.2. Estorno do Desconto Concedido (Se houver) - O QUE O USUÁRIO PEDIU
+        // 5.2. Estorno do Desconto Concedido (Se houver)
         const isDiscountApplied = parcela.observacao?.includes('desconto');
         const valorDesconto = isDiscountApplied ? (parcela.valor_parcela - (parcela.valor_pago || 0)) : 0;
 
@@ -283,7 +296,7 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
                     data_movimentacao: dataEstornoISO,
                     descricao: `ESTORNO DESCONTO CONCEDIDO: ${conta.descricao} (CR ID: ${contaReceberIdShort})`,
                     valor: valorDesconto,
-                    tipo: 'Entrada' as const, // <<< CORREÇÃO APLICADA: ENTRADA (Débito) para diminuir a Despesa Credora
+                    tipo: 'Entrada' as const, // ENTRADA (Débito) para diminuir a Despesa Credora
                     conta_bancaria_id: null,
                     conta_contabil_id: contaDescontoConcedidoId, // Conta de Desconto Concedido (Despesa)
                     origem: 'estorno_recebimento_manual',
@@ -379,7 +392,7 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
                   <CardContent className="p-4 space-y-3">
                       <div className="flex justify-between items-center">
                           <div className="flex items-center space-x-2">
-                              <DollarSign className="w-5 h-5 mr-2" />
+                              <DollarSign className="w-5 h-5 text-primary" />
                               <span className="font-semibold">Progresso de Recebimento</span>
                           </div>
                           <span className="text-lg font-bold text-primary">{progressoPercentual}%</span>
@@ -531,3 +544,4 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
 };
 
 export default DetalhesParcelasDialog;
+</dyad-file>
