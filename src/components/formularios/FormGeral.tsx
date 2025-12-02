@@ -11,7 +11,7 @@ interface FormGeralProps {
   isSubmitting: boolean;
   permissoesVisiveis: Permissao[];
   handleSelectAll: (select: boolean) => void;
-  isReadOnly: boolean; // FIX: Garantido que isReadOnly está na interface
+  isReadOnly: boolean;
 }
 
 const FormGeral: React.FC<FormGeralProps> = ({
@@ -36,7 +36,7 @@ const FormGeral: React.FC<FormGeralProps> = ({
               {...field} 
               value={field.value === undefined || field.value === null ? '' : String(field.value)}
               onChange={(e) => field.onChange(e.target.value === '' ? undefined : Number(e.target.value))}
-              disabled={disabled || isReadOnly} // Bloqueado se isReadOnly
+              disabled={disabled || isReadOnly}
             />
           </FormControl>
           <FormMessage />
