@@ -34,7 +34,7 @@ const GerenciarUsuarios: React.FC = () => {
   const [filtroEmpresaId, setFiltroEmpresaId] = useState('todos');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [perfilParaEditar, setPerfilParaEditar] = useState<AnyProfile | null>(null);
-  const [isSendingInvite, setIsSendingInvite] = useState<string | null>(null); // NOVO ESTADO
+  const [isSendingInvite, setIsSendingInvite] = useState<string | null>(null);
   
   const [activeTab, setActiveTab] = useState('meus_funcionarios');
 
@@ -105,17 +105,15 @@ const GerenciarUsuarios: React.FC = () => {
       const clientIds = fetchedClientes.filter(c => c.id !== usuario.id).map(c => c.id);
       
       if (clientIds.length > 0) {
-          // CORREÇÃO CRÍTICA: Usar o filtro 'in' apenas se houver IDs válidos
           const { data: clientUsersData, error: clienteUsersError } = await supabase
             .from('tbl_usuarios')
-            .select('*, admin_id')
+            .select('*, admin_id') // Incluindo admin_id para consistência
             .in('cliente_id', clientIds) // Filtrando por cliente_id
             .order('nome', { ascending: true });
             
           if (clienteUsersError) console.error('Erro ao carregar usuários dos Clientes:', clienteUsersError);
           
           const clientUsers = (clientUsersData || []).map(item => {
-            // CORREÇÃO: Usa fetchedClientes (que está no escopo)
             const nomeEmpresa = fetchedClientes.find(c => c.id === (item as UsuarioProfile).cliente_id)?.nome || 'N/A';
             return { ...item, cliente_nome: nomeEmpresa, is_admin_user: false } as UsuarioComEmpresa;
           });
@@ -157,7 +155,7 @@ const GerenciarUsuarios: React.FC = () => {
 
     setUsuarios(filteredUsers);
     setCarregandoDados(false);
-  }, [usuario, role, isAdmin, isCliente, perfil, filtroEmpresaId]); // Adicionado filtroEmpresaId para re-fetch
+  }, [usuario, role, isAdmin, isCliente, perfil, filtroEmpresaId]);
 
   useEffect(() => {
     if (!carregando) {
@@ -398,7 +396,6 @@ const GerenciarUsuarios: React.FC = () => {
 
       {isAdmin ? (
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full mb-6">
-          {/* Ajuste: Usando grid-cols-2 para quebrar as abas em mobile */}
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="meus_funcionarios" className="flex items-center"><UsersIcon className="w-4 h-4 mr-2" /> Meus Funcionários</TabsTrigger>
             <TabsTrigger value="funcionarios_clientes" className="flex items-center"><UsersIcon className="w-4 h-4 mr-2" /> Funcionários dos Clientes</TabsTrigger>

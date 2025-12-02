@@ -16,7 +16,8 @@ import { useBulkTagManager } from '@/hooks/use-bulk-tag-manager';
 import { format } from 'date-fns';
 import { BASE_URL } from '@/config/app-config';
 import { Separator } from '../ui/separator';
-import FormGeral from '../formularios/FormGeral';
+
+import FormGeral from '../formularios/FormGeral'; // <<< IMPORT ADICIONADO
 import FormFolgas from '../formularios/FormFolgas';
 import FormDocumentos from '../usuario-forms/FormDocumentos';
 import FormDadosContratuais from '../usuario-forms/FormDadosContratuais';
@@ -26,6 +27,7 @@ import { Checkbox } from '../ui/checkbox'; // IMPORT CORRIGIDO
 import FormIdentificacao from '../cliente-forms/FormIdentificacao'; // NOVO IMPORT
 import FormContato from '../cliente-forms/FormContato'; // NOVO IMPORT
 import FormEndereco from '../cliente-forms/FormEndereco'; // NOVO IMPORT
+
 
 const textOptional = z.string().optional().or(z.literal(''));
 const urlSchema = z.string().url('URL inválida.').optional().or(z.literal(''));
