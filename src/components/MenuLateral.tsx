@@ -131,19 +131,24 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick, adminBranding, l
   const localizacao = useLocation();
   const { role, perfil, carregando } = useSessao();
   
-  // --- CORREÇÃO: Definições seguras de perfil e permissões ---
-  const clientProfile = role === 'Cliente' ? perfil as ClienteProfile : null;
-  const userProfile = (role === 'UsuarioDoCliente' || role === 'UsuarioDoAdmin') ? perfil as UsuarioProfile | AdminUsuarioProfile : null;
+  // --- CORREÇÃO: Definições seguras de perfil e roles no escopo do componente ---
+  const isAdmin = role === 'Admin';
+  const isClient = role === 'Cliente';
+  const isUsuarioDoAdminRole = role === 'UsuarioDoAdmin';
+  const isUsuarioDoClienteRole = role === 'UsuarioDoCliente';
   
-  const isUnassignedUser = role === 'UsuarioDoCliente' && userProfile && !userProfile.cliente_id;
-  const isPendingClient = role === 'Cliente' && clientProfile && !clientProfile.aprovado;
+  const clientProfile = isClient ? perfil as ClienteProfile : null;
+  const userProfile = (isUsuarioDoClienteRole || isUsuarioDoAdminRole) ? perfil as UsuarioProfile | AdminUsuarioProfile : null;
   
-  const isAccessExpired = role === 'Cliente' && clientProfile?.data_fim_acesso && isPast(parseISO(clientProfile.data_fim_acesso));
+  const isUnassignedUser = isUsuarioDoClienteRole && userProfile && !userProfile.cliente_id;
+  const isPendingClient = isClient && clientProfile && !clientProfile.aprovado;
+  
+  const isAccessExpired = isClient && clientProfile?.data_fim_acesso && isPast(parseISO(clientProfile.data_fim_acesso));
   
   const getPermissoes = () => {
-      if (role === 'Admin') return {}; // Admin tem acesso total, não precisa de permissões explícitas
+      if (isAdmin) return {}; // Admin tem acesso total, não precisa de permissões explícitas
       if (isClient) return clientProfile?.permissoes || {};
-      if (isUsuarioDoAdmin || isUsuarioDoCliente) return userProfile?.permissoes || {};
+      if (isUsuarioDoAdminRole || isUsuarioDoClienteRole) return userProfile?.permissoes || {};
       return {};
   };
   
@@ -151,11 +156,6 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick, adminBranding, l
   // -----------------------------------------------
   
   const isPreAuthFlow = localizacao.pathname === '/selecao-perfil';
-  
-  const isAdmin = role === 'Admin';
-  const isClient = role === 'Cliente';
-  const isUsuarioDoAdminRole = role === 'UsuarioDoAdmin';
-  const isUsuarioDoClienteRole = role === 'UsuarioDoCliente';
   
   // Lógica para a URL da Logo e Título (usando adminBranding que agora vem do useOwnerBranding)
   let finalLogoUrl = adminBranding?.logoUrl;
