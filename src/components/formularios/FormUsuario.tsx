@@ -17,7 +17,7 @@ import { format } from 'date-fns';
 import { BASE_URL } from '@/config/app-config';
 import { Separator } from '../ui/separator';
 
-import FormGeral from '../formularios/FormGeral'; // <<< IMPORT ADICIONADO
+import FormGeral from '../formularios/FormGeral';
 import FormFolgas from '../formularios/FormFolgas';
 import FormDocumentos from '../usuario-forms/FormDocumentos';
 import FormDadosContratuais from '../usuario-forms/FormDadosContratuais';

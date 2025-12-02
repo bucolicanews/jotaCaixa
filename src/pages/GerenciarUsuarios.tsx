@@ -107,7 +107,7 @@ const GerenciarUsuarios: React.FC = () => {
       if (clientIds.length > 0) {
           const { data: clientUsersData, error: clienteUsersError } = await supabase
             .from('tbl_usuarios')
-            .select('*, admin_id') // Incluindo admin_id para consistência
+            .select('*') // REMOVIDO admin_id
             .in('cliente_id', clientIds) // Filtrando por cliente_id
             .order('nome', { ascending: true });
             
