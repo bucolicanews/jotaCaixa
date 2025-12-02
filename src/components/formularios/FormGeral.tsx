@@ -22,7 +22,6 @@ const FormGeral: React.FC<FormGeralProps> = ({
   isReadOnly,
 }) => {
   
-  // Função auxiliar que retorna JSX (usando retorno implícito)
   const renderNumberField = (fieldName: string, label: string, placeholder: string, disabled: boolean = false) => (
     <FormField
       control={control}
@@ -55,8 +54,6 @@ const FormGeral: React.FC<FormGeralProps> = ({
         <FormItem><FormLabel>{nomeLabel}</FormLabel><FormControl><Input placeholder="Nome completo" {...field} disabled={!isNameEditable} /></FormControl><FormMessage /></FormItem>
       )} />
       
-      {/* Email e Senha foram movidos para a TAB GERAL no FormUsuario */}
-      
       <h4 className="font-semibold mt-6 border-t pt-4">Remuneração e Jornada</h4>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {renderNumberField('salario', 'Salário Mensal (R$)', '0', isSubmitting)}
@@ -64,7 +61,6 @@ const FormGeral: React.FC<FormGeralProps> = ({
         {renderNumberField('horas_mensais', 'Horas Mensais', '220', isSubmitting)}
       </div>
       
-      {/* Permissões */}
       <div className="space-y-2 pt-4 border-t">
         <div className="flex justify-between items-center mb-1">
           <FormLabel>Permissões de Acesso</FormLabel>
