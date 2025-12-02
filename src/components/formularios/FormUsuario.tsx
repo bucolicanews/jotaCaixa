@@ -547,12 +547,46 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
   const shouldShowSaveButton = !isReadOnly && (!isSelfEditUsuario || activeTab === 'cadastrais');
   
   // Se for Cliente Profile, remove as abas de RH
+  if (isNewClient) {
+      return (
+        <FormProvider {...form}>
+            <Form {...form}>
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                    <h3 className="font-semibold text-lg">Dados de Acesso e Empresa</h3>
+                    <FormField control={form.control} name="nome" render={({ field }) => (
+                        <FormItem><FormLabel>Nome da Empresa / Pessoa</FormLabel><FormControl><Input placeholder="Nome Fantasia ou Nome Completo" {...field} disabled={isSubmitting} /></FormControl><FormMessage /></FormItem>
+                    )} />
+                    <FormField control={form.control} name="email" render={({ field }) => (
+                        <FormItem><FormLabel>Email (Login)</FormLabel><FormControl><Input type="email" placeholder="email@empresa.com" {...field} disabled={isSubmitting} /></FormControl><FormMessage /></FormItem>
+                    )} />
+                    <FormField control={form.control} name="senha" render={({ field }) => (
+                        <FormItem><FormLabel>Criar Senha</FormLabel><FormControl><Input type="password" placeholder="••••••••" {...field} disabled={isSubmitting} /></FormControl><FormMessage /></FormItem>
+                    )} />
+                    
+                    <Separator />
+                    <h3 className="font-semibold text-lg">Documentos (Opcional)</h3>
+                    <FormField control={form.control} name="documento" render={({ field }) => (
+                        <FormItem><FormLabel>CPF/CNPJ</FormLabel><FormControl><Input placeholder="00.000.000/0000-00" {...field} disabled={isSubmitting} /></FormControl><FormMessage /></FormItem>
+                    )} />
+                    <FormField control={form.control} name="razao_social" render={({ field }) => (
+                        <FormItem><FormLabel>Razão Social</FormLabel><FormControl><Input placeholder="Razão Social" {...field} disabled={isSubmitting} /></FormControl><FormMessage /></FormItem>
+                    )} />
+
+                    <Button type="submit" className="w-full" disabled={isSubmitting}>
+                        {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Convidar Cliente'}
+                    </Button>
+                </form>
+            </Form>
+        </FormProvider>
+      );
+  }
+  
   if (isEditingClientProfile) {
       const clientTabs = [
-          { value: 'pessoal', label: 'Geral', component: FormGeral },
-          { value: 'identificacao', label: 'Identificação', component: FormIdentificacao },
-          { value: 'contato', label: 'Contato', component: FormContato },
-          { value: 'endereco', label: 'Endereço', component: FormEndereco },
+          { value: 'pessoal', label: 'Geral' },
+          { value: 'identificacao', label: 'Identificação' },
+          { value: 'contato', label: 'Contato' },
+          { value: 'endereco', label: 'Endereço' },
       ];
       
       return (
