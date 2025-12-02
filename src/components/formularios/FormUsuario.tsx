@@ -17,7 +17,7 @@ import { format } from 'date-fns';
 import { BASE_URL } from '@/config/app-config';
 import { Separator } from '../ui/separator';
 
-// import FormGeral from '../formularios/FormGeral'; 
+import FormGeral from '../formularios/FormGeral'; // IMPORT CORRIGIDO
 import FormFolgas from '../formularios/FormFolgas';
 import FormDocumentos from '../usuario-forms/FormDocumentos';
 import FormDadosContratuais from '../usuario-forms/FormDadosContratuais';
@@ -544,10 +544,10 @@ const shouldShowSaveButton = !isReadOnly && (!isSelfEditUsuario || activeTab ===
 
 // --- DECLARA AS ABAS DO CLIENTE (FORA DO IF) ---
 const clientTabs = [
-    { value: 'pessoal', label: 'Geral', component: FormGeral },
-    { value: 'identificacao', label: 'Identificação', component: FormIdentificacao },
-    { value: 'contato', label: 'Contato', component: FormContato },
-    { value: 'endereco', label: 'Endereço', component: FormEndereco },
+    { value: 'pessoal', label: 'Geral' },
+    { value: 'identificacao', label: 'Identificação' },
+    { value: 'contato', label: 'Contato' },
+    { value: 'endereco', label: 'Endereço' },
 ];
 
 // --- RENDERIZAÇÃO PARA CRIAÇÃO DE NOVO CLIENTE ---
