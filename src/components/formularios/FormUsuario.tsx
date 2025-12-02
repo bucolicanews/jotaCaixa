@@ -3,7 +3,7 @@ import { useForm, FormProvider, Control } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from '@/components/ui/button';
-import { Loader2, Tag, FileSignature } from 'lucide-react';
+import { Loader2, Tag } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { AnyProfile, ClienteProfile, UsuarioProfile, UserRole, AdminUsuarioProfile } from '@/types/usuario';
@@ -21,11 +21,7 @@ import FormFolgas from '../formularios/FormFolgas';
 import FormDocumentos from '../usuario-forms/FormDocumentos';
 import FormDadosContratuais from '../usuario-forms/FormDadosContratuais';
 import FormFerias from '@/components/usuario-forms/FormFerias';
-import LogoUpload from '../LogoUpload'; // Importado para Cliente Profile
-import { Checkbox } from '../ui/checkbox'; // IMPORT CORRIGIDO
-import FormIdentificacao from '../cliente-forms/FormIdentificacao'; // NOVO IMPORT
-import FormContato from '../cliente-forms/FormContato'; // NOVO IMPORT
-import FormEndereco from '../cliente-forms/FormEndereco'; // NOVO IMPORT
+
 
 const textOptional = z.string().optional().or(z.literal(''));
 const urlSchema = z.string().url('URL inválida.').optional().or(z.literal(''));
@@ -59,16 +55,12 @@ const formSchema = z.object({
   cidade: textOptional,
   estado: textOptional,
   
-  // NOVOS CAMPOS DE CLIENTE (Apenas para isNewClient ou Cliente Profile)
+  // NOVOS CAMPOS DE CLIENTE (Apenas para isNewClient)
   razao_social: textOptional,
   nome_fantasia: textOptional,
   documento: textOptional,
   cnpj: textOptional,
-  
-  // NOVOS CAMPOS DE ASSINATURA (Apenas para Cliente Profile)
-  assinatura_proprietario_nome: textOptional,
-  assinatura_proprietario_url: textOptional,
-  
+
   // Dados Contratuais (Apenas para UsuarioProfile)
   data_inicio_contrato: z.date().optional().nullable(),
   data_fim_contrato: z.date().optional().nullable(),
@@ -108,17 +100,12 @@ interface FormUsuarioProps {
 
 // Type guard para verificar se o perfil é UsuarioProfile
 const isUsuarioProfile = (profile: AnyProfile): profile is UsuarioProfile => {
-    return !!profile && 'cliente_id' in profile && profile.cliente_id !== null;
+    return !!profile && 'cliente_id' in profile;
 };
 
 // Type guard para verificar se o perfil é AdminUsuarioProfile
 const isAdminUsuarioProfile = (profile: AnyProfile): profile is AdminUsuarioProfile => {
-    return !!profile && 'admin_id' in profile && profile.admin_id !== null;
-};
-
-// Type guard para verificar se o perfil é ClienteProfile
-const isClienteProfile = (profile: AnyProfile): profile is ClienteProfile => {
-    return !!profile && 'limite_usuarios' in profile;
+    return !!profile && 'admin_id' in profile;
 };
 
 const FormUsuario: React.FC<FormUsuarioProps> = ({
@@ -133,11 +120,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
   
   const profileToEdit = isNewClient ? (criadorPerfil as ClienteProfile) : usuarioInicial;
   
-  const isEditingClientProfile = isEditing && isClienteProfile(profileToEdit);
-  const isEditingUser = isEditing && (isUsuarioProfile(profileToEdit) || isAdminUsuarioProfile(profileToEdit));
-  
-  const userProfile: UsuarioProfile | AdminUsuarioProfile | null = isEditingUser ? profileToEdit as UsuarioProfile | AdminUsuarioProfile : null;
-  const clientProfile: ClienteProfile | null = isEditingClientProfile ? profileToEdit as ClienteProfile : null;
+  const userProfile: UsuarioProfile | AdminUsuarioProfile | null = isUsuarioProfile(profileToEdit as AnyProfile) || isAdminUsuarioProfile(profileToEdit as AnyProfile) ? profileToEdit as UsuarioProfile | AdminUsuarioProfile : null;
   
   const [activeTab, setActiveTab] = useState('pessoal');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -154,8 +137,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
   const permissoesVisiveis = useMemo(() => {
       return PERMISSOES_DISPONIVEIS.filter((p: Permissao) => {
           if (criadorRole === 'Admin') return true;
-          // Se for Cliente, permite gerenciar as permissões de RH e a nova de Suporte
-          return p.key === 'ponto_eletronico' || p.key === 'visualizar_proprio_ponto' || p.key === 'folha_ponto' || p.key === 'cadastrar_usuarios' || p.key === 'gestao_suporte';
+          return p.key === 'ponto_eletronico' || p.key === 'visualizar_proprio_ponto' || p.key === 'folha_ponto' || p.key === 'cadastrar_usuarios';
       });
   }, [criadorRole]);
 
@@ -168,82 +150,22 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
         permissoes: {},
     },
   });
-  
-  const { watch, setValue } = form;
-  const cepValue = watch('cep');
-  const isAddressLoading = watch('endereco') === 'Buscando...';
-  
-  const handleCepLookup = useCallback(async (cep: string) => {
-    const cleanCep = cep.replace(/\D/g, '');
-
-    if (cleanCep.length !== 8) {
-      return;
-    }
-    
-    // Bloqueia a edição dos campos enquanto busca
-    setValue('endereco', 'Buscando...');
-    setValue('bairro', 'Buscando...');
-    setValue('cidade', 'Buscando...');
-    setValue('estado', 'Buscando...');
-    
-    try {
-      const response = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
-      const data = await response.json();
-
-      if (data.erro) {
-        showError('CEP não encontrado.');
-        setValue('endereco', '');
-        setValue('bairro', '');
-        setValue('cidade', '');
-        setValue('estado', '');
-        return;
-      }
-
-      // Preenche os campos
-      setValue('endereco', data.logradouro || '');
-      setValue('bairro', data.bairro || '');
-      setValue('cidade', data.localidade || '');
-      setValue('estado', data.uf || '');
-      
-    } catch (error) {
-      console.error('Erro ao consultar ViaCEP:', error);
-      showError('Falha ao consultar o CEP.');
-      setValue('endereco', '');
-      setValue('bairro', '');
-      setValue('cidade', '');
-      setValue('estado', '');
-    }
-  }, [setValue]);
-  
-  // Monitora a mudança do CEP para buscar o endereço
-  useEffect(() => {
-    const cleanCep = cepValue?.replace(/\D/g, '');
-    
-    if (cleanCep && cleanCep.length === 8) {
-      handleCepLookup(cleanCep);
-    } else if (cleanCep && cleanCep.length > 0 && cleanCep.length < 8) {
-      // Limpa os campos de endereço se o CEP estiver incompleto
-      setValue('endereco', '');
-      setValue('bairro', '');
-      setValue('cidade', '');
-      setValue('estado', '');
-    }
-  }, [cepValue, handleCepLookup, setValue]);
-
 
   useEffect(() => {
     if (!profileToEdit) return;
 
     const defaultPermissoes = permissoesVisiveis.reduce((acc: Record<string, boolean>, p: Permissao) => {
         if (profileToEdit && 'permissoes' in profileToEdit && (profileToEdit as any).permissoes) {
-            // Se for edição, usa as permissões existentes
+            // Se for EDIÇÃO, usa as permissões existentes
             acc[p.key] = (profileToEdit as any).permissoes[p.key] !== false;
         } else {
-            // SE FOR CRIAÇÃO DE NOVO USUÁRIO: Apenas Ponto Eletrônico e Visualizar Próprio Ponto são true
+            // Se for CRIAÇÃO, define apenas as permissões essenciais de Ponto como true, o resto como false
             acc[p.key] = p.key === 'ponto_eletronico' || p.key === 'visualizar_proprio_ponto';
         }
         return acc;
     }, {} as Record<string, boolean>);
+    
+    const clientProfile = profileToEdit && 'limite_usuarios' in profileToEdit ? profileToEdit as ClienteProfile : null;
     
     const resetValues: Partial<FormValues> = {
         nome: profileToEdit?.nome || '',
@@ -251,27 +173,16 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
         senha: '',
         permissoes: defaultPermissoes,
         
-        // Dados de Cliente Profile
-        limite_usuarios: clientProfile?.limite_usuarios || 5,
-        razao_social: clientProfile?.razao_social || '',
-        nome_fantasia: clientProfile?.nome_fantasia || '',
-        documento: clientProfile?.documento || '',
-        cnpj: clientProfile?.cnpj || '',
-        assinatura_proprietario_nome: clientProfile?.assinatura_proprietario_nome || clientProfile?.nome || '',
-        assinatura_proprietario_url: clientProfile?.assinatura_proprietario_url || clientProfile?.logo_url || '',
-        
-        // Dados de Usuário Profile
+        // Dados de Folga (Apenas Usuário)
         dias_folga_fixos: userProfile?.dias_folga_fixos || ['Saturday', 'Sunday'],
         folga_domingo_obrigatoria: userProfile?.folga_domingo_obrigatoria ?? true,
+        
+        // Dados de Salário/Jornada
         salario: userProfile?.salario || 0,
         horas_semanais: userProfile?.horas_semanais || 44,
         horas_mensais: userProfile?.horas_mensais || 220,
-        data_inicio_contrato: parseDate(userProfile?.data_inicio_contrato),
-        data_fim_contrato: parseDate(userProfile?.data_fim_contrato),
-        data_inicio_aviso: parseDate(userProfile?.data_inicio_aviso),
-        tipo_aviso: (userProfile?.tipo_aviso || 'Nenhum') as FormValues['tipo_aviso'],
         
-        // Dados Cadastrais (Comum)
+        // Dados Cadastrais
         cpf: userProfile?.cpf || clientProfile?.cpf || '',
         rg: userProfile?.rg || clientProfile?.rg || '',
         nome_mae: userProfile?.nome_mae || '',
@@ -284,6 +195,18 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
         bairro: userProfile?.bairro || clientProfile?.bairro || '',
         cidade: userProfile?.cidade || clientProfile?.cidade || '',
         estado: userProfile?.estado || clientProfile?.estado || '',
+        
+        // Campos de Cliente (Apenas para isNewClient)
+        razao_social: clientProfile?.razao_social || '',
+        nome_fantasia: clientProfile?.nome_fantasia || '',
+        documento: clientProfile?.documento || '',
+        cnpj: clientProfile?.cnpj || '',
+
+        // Dados Contratuais (Apenas Usuário)
+        data_inicio_contrato: parseDate(userProfile?.data_inicio_contrato),
+        data_fim_contrato: parseDate(userProfile?.data_fim_contrato),
+        data_inicio_aviso: parseDate(userProfile?.data_inicio_aviso),
+        tipo_aviso: (userProfile?.tipo_aviso || 'Nenhum') as FormValues['tipo_aviso'],
         
         // Documentos (URLs)
         rg_url: userProfile?.rg_url || '',
@@ -314,21 +237,6 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
   const handleTagToggle = useCallback(() => {
       refetchStatus();
   }, [refetchStatus]);
-  
-  // NOVO HANDLER: Sincroniza a URL da Logo com o campo de assinatura
-  const handleLogoUploadComplete = useCallback(async (url: string | null) => {
-      // Atualiza o campo de URL da assinatura com a nova URL da logo
-      form.setValue('assinatura_proprietario_url', url || '');
-      // Se for Cliente Profile, atualiza o logo_url também
-      if (isEditingClientProfile) {
-          await supabase.from('tbl_clientes').update({ logo_url: url || null }).eq('id', clientProfile!.id);
-      }
-  }, [form, isEditingClientProfile, clientProfile]);
-  
-  // NOVO HANDLER: Sincroniza a URL da Logo com o campo de assinatura (usado pelo checkbox)
-  const handleSyncUrl = useCallback((url: string | null) => {
-      form.setValue('assinatura_proprietario_url', url || '');
-  }, [form]);
   
   const isContractEditable = criadorRole === 'Admin' || criadorRole === 'Cliente';
 
@@ -394,44 +302,25 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
 
         // 2. Prepare Data Payload (tbl_usuarios OU tbl_clientes OU admin_usuarios)
         
-        if (isEditingClientProfile || isNewClient) {
-            // Edição de Cliente Profile (tbl_clientes)
+        if (isNewClient) {
             const dataToUpdate: Partial<ClienteProfile> = {
                 nome: values.nome,
                 email: values.email,
                 admin_id: criadorRole === 'Admin' ? proprietarioId : (criadorPerfil as ClienteProfile)?.admin_id,
-                aprovado: isEditingClientProfile ? clientProfile!.aprovado : false,
-                limite_usuarios: values.limite_usuarios,
-                permissoes: values.permissoes,
+                aprovado: false,
+                limite_usuarios: 5,
+                permissoes: {},
                 
                 razao_social: values.razao_social || null,
                 nome_fantasia: values.nome_fantasia || null,
                 documento: values.documento || null,
                 cnpj: values.cnpj || null,
-                
-                // Dados Cadastrais
-                cpf: values.cpf || null,
-                rg: values.rg || null,
-                telefone: values.telefone || null,
-                cep: values.cep || null,
-                endereco: values.endereco || null,
-                numero: values.numero || null,
-                complemento: values.complemento || null,
-                bairro: values.bairro || null,
-                cidade: values.cidade || null,
-                estado: values.estado || null,
-                
-                // Assinatura e Branding
-                assinatura_proprietario_nome: values.assinatura_proprietario_nome || null,
-                assinatura_proprietario_url: values.assinatura_proprietario_url || null,
-                logo_url: values.assinatura_proprietario_url || null,
             };
             
             const { error } = await supabase.from('tbl_clientes').upsert({ ...dataToUpdate, id: userId }, { onConflict: 'id' });
             if (error) throw error;
             
-        } else if (isEditingUser || isNewAuthUser) {
-            // Edição de Usuário (tbl_usuarios ou admin_usuarios)
+        } else {
             const tabelaDestino = criadorRole === 'Admin' ? 'admin_usuarios' : 'tbl_usuarios';
             
             const dataToUpdate: any = { 
@@ -524,7 +413,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
   // Read-Only status para os componentes filhos
   const isChildFormReadOnly = (tabValue: string) => {
       // 1. Se o modo read-only global (passado pelo gestor) estiver ativo, todos os filhos são read-only.
-      if (isReadOnly) return true; 
+      if (isReadOnly) return true;
       
       // 2. Se for edição de perfil de funcionário por ele mesmo
       if (isSelfEditUsuario) {
@@ -538,122 +427,33 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
   // 3. Controla a visibilidade do botão de salvar
   const shouldShowSaveButton = !isReadOnly && (!isSelfEditUsuario || activeTab === 'cadastrais');
   
-  // Se for Cliente Profile, remove as abas de RH
-  if (isEditingClientProfile) {
-      const clientTabs = [
-          { value: 'pessoal', label: 'Geral', component: FormGeral },
-          { value: 'identificacao', label: 'Identificação', component: FormIdentificacao },
-          { value: 'contato', label: 'Contato', component: FormContato },
-          { value: 'endereco', label: 'Endereço', component: FormEndereco },
-      ];
-      
+  if (isNewClient) {
       return (
         <FormProvider {...form}>
             <Form {...form}>
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                    <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-                        <TabsList className="flex flex-wrap justify-start w-full h-auto p-1">
-                            {clientTabs.map(tab => (
-                                <TabsTrigger key={tab.value} value={tab.value} className="flex-1 md:flex-none md:w-1/4">{tab.label}</TabsTrigger>
-                            ))}
-                        </TabsList>
-                        
-                        {/* TAB 1: GERAL (CLIENTE PROFILE) */}
-                        <TabsContent value="pessoal" className="mt-4 space-y-4 p-4">
-                            <FormField control={form.control} name="nome" render={({ field }) => (
-                                <FormItem><FormLabel>Nome Completo</FormLabel><FormControl><Input placeholder="Nome completo" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
-                            )} />
-                            <FormField control={form.control} name="email" render={({ field }) => (
-                                <FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" placeholder="email@exemplo.com" {...field} disabled /></FormControl><FormMessage /></FormItem>
-                            )} />
-                            <FormField control={form.control} name="senha" render={({ field }) => (
-                                <FormItem><FormLabel>Alterar Senha (Opcional)</FormLabel><FormControl><Input type="password" placeholder="••••••••" {...field} disabled={isReadOnly || isEditingClientProfile} /></FormControl><FormMessage /></FormItem>
-                            )} />
-                            
-                            <Separator />
-                            <h3 className="font-semibold text-lg flex items-center"><FileSignature className="w-4 h-4 mr-2" /> Assinatura e Branding</h3>
-                            
-                            <FormField control={form.control} name="assinatura_proprietario_nome" render={({ field }) => (
-                                <FormItem><FormLabel>Nome da Empresa/Pessoa para Assinatura</FormLabel><FormControl><Input placeholder="Ex: Minha Empresa LTDA" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
-                            )} />
-                            
-                            <FormField control={form.control} name="assinatura_proprietario_url" render={({ field }) => (
-                                <FormItem><FormLabel>URL da Imagem de Assinatura (Logo)</FormLabel><FormControl><Input placeholder="URL da imagem de assinatura" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
-                            )} />
-                            
-                            <LogoUpload 
-                                ownerId={clientProfile!.id}
-                                tableName={'tbl_clientes'}
-                                initialLogoUrl={form.watch('assinatura_proprietario_url')}
-                                onUploadComplete={handleLogoUploadComplete}
-                                onSyncUrl={handleSyncUrl} // NOVO PROP
-                                isReadOnly={isSubmitting || isReadOnly}
-                            />
-                            
-                            <Separator />
-                            <h3 className="font-semibold text-lg">Configurações da Empresa</h3>
-                            <FormField control={form.control} name="limite_usuarios" render={({ field }) => (
-                                <FormItem><FormLabel>Limite de Usuários</FormLabel><FormControl><Input type="number" placeholder="5" {...field} disabled={isReadOnly || isEditingClientProfile} /></FormControl><FormMessage /></FormItem>
-                            )} />
-                            
-                            <div className="space-y-2 pt-4">
-                                <div className="flex justify-between items-center mb-1">
-                                    <FormLabel>Permissões de Acesso</FormLabel>
-                                    <div className="space-x-2">
-                                        <Button type="button" variant="link" size="sm" onClick={() => handleSelectAll(true)} className="p-0 h-auto" disabled={isSubmitting || isReadOnly || isEditingClientProfile}>Selecionar Todos</Button>
-                                        <Button type="button" variant="link" size="sm" onClick={() => handleSelectAll(false)} className="p-0 h-auto text-destructive" disabled={isSubmitting || isReadOnly || isEditingClientProfile}>Desmarcar Todos</Button>
-                                    </div>
-                                </div>
-                                <div className="grid grid-cols-2 gap-4 rounded-lg border p-4">
-                                    {PERMISSOES_DISPONIVEIS.filter((p: Permissao) => p.key !== 'ponto_eletronico' && p.key !== 'visualizar_proprio_ponto').map((p: Permissao) => (
-                                        <FormField key={p.key} control={form.control} name={`permissoes.${p.key}`} render={({ field }) => (
-                                            <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                                                <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} disabled={isSubmitting || isReadOnly || isEditingClientProfile} /></FormControl>
-                                                <FormLabel className="font-normal">{p.label}</FormLabel>
-                                            </FormItem>
-                                        )} />
-                                    ))}
-                                </div>
-                            </div>
-                        </TabsContent>
-                        
-                        {/* TAB 2: IDENTIFICAÇÃO (CLIENTE PROFILE) */}
-                        <TabsContent value="identificacao" className="mt-4 space-y-6 p-4">
-                            <FormIdentificacao
-                                control={form.control as unknown as Control<any>}
-                                clienteId={clientProfile?.id}
-                                isSubmitting={isSubmitting}
-                                tagRefreshKey={refreshKey}
-                                onTagToggle={handleTagToggle}
-                            />
-                        </TabsContent>
-                        
-                        {/* TAB 3: CONTATO (CLIENTE PROFILE) */}
-                        <TabsContent value="contato" className="mt-4 space-y-6 p-4">
-                            <FormContato
-                                control={form.control as unknown as Control<any>}
-                                clienteId={clientProfile?.id}
-                                isSubmitting={isSubmitting}
-                                tagRefreshKey={refreshKey}
-                                onTagToggle={handleTagToggle}
-                            />
-                        </TabsContent>
-                        
-                        {/* TAB 4: ENDEREÇO (CLIENTE PROFILE) */}
-                        <TabsContent value="endereco" className="mt-4 space-y-6 p-4">
-                            <FormEndereco
-                                control={form.control as unknown as Control<any>}
-                                clienteId={clientProfile?.id}
-                                isSubmitting={isSubmitting}
-                                tagRefreshKey={refreshKey}
-                                onTagToggle={handleTagToggle}
-                            />
-                        </TabsContent>
-                    </Tabs>
+                    <h3 className="font-semibold text-lg">Dados de Acesso e Empresa</h3>
+                    <FormField control={form.control} name="nome" render={({ field }) => (
+                        <FormItem><FormLabel>Nome da Empresa / Pessoa</FormLabel><FormControl><Input placeholder="Nome Fantasia ou Nome Completo" {...field} disabled={isSubmitting} /></FormControl><FormMessage /></FormItem>
+                    )} />
+                    <FormField control={form.control} name="email" render={({ field }) => (
+                        <FormItem><FormLabel>Email (Login)</FormLabel><FormControl><Input type="email" placeholder="email@empresa.com" {...field} disabled={isSubmitting} /></FormControl><FormMessage /></FormItem>
+                    )} />
+                    <FormField control={form.control} name="senha" render={({ field }) => (
+                        <FormItem><FormLabel>Criar Senha</FormLabel><FormControl><Input type="password" placeholder="••••••••" {...field} disabled={isSubmitting} /></FormControl><FormMessage /></FormItem>
+                    )} />
                     
-                    <Button type="submit" className="w-full" disabled={isSubmitting || isReadOnly}>
-                        {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        Salvar Alterações
+                    <Separator />
+                    <h3 className="font-semibold text-lg">Documentos (Opcional)</h3>
+                    <FormField control={form.control} name="documento" render={({ field }) => (
+                        <FormItem><FormLabel>CPF/CNPJ</FormLabel><FormControl><Input placeholder="00.000.000/0000-00" {...field} disabled={isSubmitting} /></FormControl><FormMessage /></FormItem>
+                    )} />
+                    <FormField control={form.control} name="razao_social" render={({ field }) => (
+                        <FormItem><FormLabel>Razão Social</FormLabel><FormControl><Input placeholder="Razão Social" {...field} disabled={isSubmitting} /></FormControl><FormMessage /></FormItem>
+                    )} />
+
+                    <Button type="submit" className="w-full" disabled={isSubmitting}>
+                        {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Convidar Cliente'}
                     </Button>
                 </form>
             </Form>
@@ -661,7 +461,6 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
       );
   }
 
-  // --- RENDERIZAÇÃO PARA USUÁRIO (FUNCIONÁRIO) ---
   return (
     <FormProvider {...form}>
       <Form {...form}>
@@ -732,8 +531,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                     tagRefreshKey={refreshKey}
                     onTagToggle={handleTagToggle}
                     isReadOnly={isChildFormReadOnly('cadastrais')}
-                    isClientScope={false} // Escopo de Usuário
-                    isAddressLoading={isAddressLoading} // Passa o estado de carregamento
+                    isAddressLoading={false}
                 />
             </TabsContent>
             
