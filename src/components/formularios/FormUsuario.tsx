@@ -240,10 +240,13 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
             acc[p.key] = (profileToEdit as any).permissoes[p.key] !== false;
         } else {
             // SE FOR CRIAÇÃO DE NOVO USUÁRIO: Apenas Ponto Eletrônico e Visualizar Próprio Ponto são true
+            // CORREÇÃO CRÍTICA: Apenas Ponto Eletrônico e Visualizar Próprio Ponto devem ser TRUE por padrão.
             acc[p.key] = p.key === 'ponto_eletronico' || p.key === 'visualizar_proprio_ponto';
         }
         return acc;
     }, {} as Record<string, boolean>);
+    
+    const clientProfile = profileToEdit && 'limite_usuarios' in profileToEdit ? profileToEdit as ClienteProfile : null;
     
     const resetValues: Partial<FormValues> = {
         nome: profileToEdit?.nome || '',
@@ -611,7 +614,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                                                 <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} disabled={isSubmitting || isReadOnly || isEditingClientProfile} /></FormControl>
                                                 <FormLabel className="font-normal">{p.label}</FormLabel>
                                             </FormItem>
-                                        )} />
+                                        ))} />
                                     ))}
                                 </div>
                             </div>
