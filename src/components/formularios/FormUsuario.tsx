@@ -61,12 +61,12 @@ const formSchema = z.object({
   cidade: textOptional,
   estado: textOptional,
   
-  // NOVOS CAMPOS DE CLIENTE (Apenas para isNewClient ou Cliente Profile)
+  // NOVOS CAMPOS DE CLIENTE (Apenas para isNewClient)
   razao_social: textOptional,
   nome_fantasia: textOptional,
   documento: textOptional,
   cnpj: textOptional,
-  
+
   // NOVOS CAMPOS DE ASSINATURA (Apenas para Cliente Profile)
   assinatura_proprietario_nome: textOptional,
   assinatura_proprietario_url: textOptional,
