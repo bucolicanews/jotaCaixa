@@ -47,6 +47,8 @@ const FormGeral: React.FC<FormGeralProps> = ({
   
   const nomeLabel = 'Nome Completo do Usuário';
   const isNameEditable = !isReadOnly;
+  
+  console.log("LOG: FormGeral está sendo renderizado."); // LOG DE DEBBUG
 
   return (
     <div className="space-y-4">
