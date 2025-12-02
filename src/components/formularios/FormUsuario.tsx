@@ -21,7 +21,6 @@ import FormFolgas from '../formularios/FormFolgas';
 import FormDocumentos from '../usuario-forms/FormDocumentos';
 import FormDadosContratuais from '../usuario-forms/FormDadosContratuais';
 import FormFerias from '@/components/usuario-forms/FormFerias';
-import FormClientCompany from './FormClientCompany'; // NOVO IMPORT
 
 const textOptional = z.string().optional().or(z.literal(''));
 const urlSchema = z.string().url('URL inválida.').optional().or(z.literal(''));
@@ -85,7 +84,6 @@ interface FormUsuarioProps {
   criadorPerfil: AnyProfile;
   usuarioInicial?: AnyProfile | null;
   onSaveComplete: () => void;
-  isNewClient?: boolean;
   isReadOnly?: boolean;
 }
 
@@ -99,28 +97,21 @@ const isAdminUsuarioProfile = (profile: AnyProfile): profile is AdminUsuarioProf
     return !!profile && 'admin_id' in profile && profile.admin_id !== null;
 };
 
-// Type guard para verificar se o perfil é ClienteProfile
-const isClienteProfile = (profile: AnyProfile): profile is ClienteProfile => {
-    return !!profile && 'limite_usuarios' in profile;
-};
-
 const FormUsuario: React.FC<FormUsuarioProps> = ({
   criadorRole,
   criadorPerfil,
   usuarioInicial,
   onSaveComplete,
-  isNewClient = false,
   isReadOnly = false,
 }) => {
   const isEditing = !!usuarioInicial;
   
-  const profileToEdit = isNewClient ? (criadorPerfil as ClienteProfile) : usuarioInicial;
+  // O perfil a ser editado DEVE ser um perfil de usuário/funcionário
+  const profileToEdit = usuarioInicial;
   
-  const isEditingClientProfile = isEditing && isClienteProfile(profileToEdit);
   const isEditingUser = isEditing && (isUsuarioProfile(profileToEdit) || isAdminUsuarioProfile(profileToEdit));
   
   const userProfile: UsuarioProfile | AdminUsuarioProfile | null = isEditingUser ? profileToEdit as UsuarioProfile | AdminUsuarioProfile : null;
-  const clientProfile: ClienteProfile | null = isEditingClientProfile ? profileToEdit as ClienteProfile : null;
   
   const [activeTab, setActiveTab] = useState('pessoal');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -284,7 +275,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
     };
 
     form.reset(resetValues);
-  }, [profileToEdit, isNewClient, permissoesVisiveis]);
+  }, [profileToEdit, permissoesVisiveis, isEditing, criadorRole, userProfile]);
 
   const handleSelectAll = (select: boolean) => {
     permissoesVisiveis.forEach((p: Permissao) => {
@@ -465,15 +456,12 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
   
   // Se for criação de novo cliente OU edição de perfil de cliente, usa o FormClientCompany
   if (isNewClient || isEditingClientProfile) {
+      // Se a lógica de cliente foi removida, este bloco deve ser removido ou adaptado.
+      // Como o usuário pediu para remover a lógica de cliente, vamos lançar um erro se este bloco for atingido.
       return (
-          <FormClientCompany
-              criadorRole={criadorRole}
-              criadorPerfil={criadorPerfil}
-              clientProfile={clientProfile}
-              isNewClient={isNewClient}
-              isReadOnly={isReadOnly}
-              onSaveComplete={onSaveComplete}
-          />
+          <div className="p-4 text-red-500">
+              Erro: A lógica de criação/edição de Cliente foi removida deste componente.
+          </div>
       );
   }
 
@@ -495,7 +483,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
             {/* TAB 1: GERAL */}
             <TabsContent value="pessoal" className="mt-4 space-y-4 p-4">
               <FormGeral
-                  control={form.control}
+                  control={form.control as unknown as Control<any>}
                   isSubmitting={isSubmitting}
                   permissoesVisiveis={permissoesVisiveis}
                   handleSelectAll={handleSelectAll}
@@ -537,7 +525,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
             {/* TAB 4: DADOS CADASTRAIS (EDITÁVEL) */}
             <TabsContent value="cadastrais" className="mt-4 space-y-6 p-4">
                 <div className="flex justify-between items-center">
-                    <h3 className="font-semibold text-lg flex items-center"><Tag className="w-5 h-5 mr-2" /> Tags de Contrato</h3>
+                    <h3 className="font-semibold text-lg flex items-center"><Tag className="w-5 h-5 mr-2" /> Dados Cadastrais e Tags</h3>
                 </div>
                 <p className="text-sm text-muted-foreground mb-4">Dados pessoais e de contato do funcionário.</p>
                 
