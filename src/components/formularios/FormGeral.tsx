@@ -22,6 +22,7 @@ const FormGeral: React.FC<FormGeralProps> = ({
   isReadOnly,
 }) => {
   
+  // Função auxiliar que retorna JSX (usando retorno implícito)
   const renderNumberField = (fieldName: string, label: string, placeholder: string, disabled: boolean = false) => (
     <FormField
       control={control}
@@ -47,46 +48,45 @@ const FormGeral: React.FC<FormGeralProps> = ({
   
   const nomeLabel = 'Nome Completo do Usuário';
   const isNameEditable = !isReadOnly;
-  
-  console.log("LOG: FormGeral está sendo renderizado.");
 
   return (
-    <React.Fragment>
-      <div className="space-y-4">
-        <FormField control={control} name="nome" render={({ field }) => (
-          <FormItem><FormLabel>{nomeLabel}</FormLabel><FormControl><Input placeholder="Nome completo" {...field} disabled={!isNameEditable} /></FormControl><FormMessage /></FormItem>
-        )} />
-        
-        <h4 className="font-semibold mt-6 border-t pt-4">Remuneração e Jornada</h4>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {renderNumberField('salario', 'Salário Mensal (R$)', '0', isSubmitting)}
-          {renderNumberField('horas_semanais', 'Horas Semanais', '44', isSubmitting)}
-          {renderNumberField('horas_mensais', 'Horas Mensais', '220', isSubmitting)}
+    <div className="space-y-4">
+      <FormField control={control} name="nome" render={({ field }) => (
+        <FormItem><FormLabel>{nomeLabel}</FormLabel><FormControl><Input placeholder="Nome completo" {...field} disabled={!isNameEditable} /></FormControl><FormMessage /></FormItem>
+      )} />
+      
+      {/* Email e Senha foram movidos para a TAB GERAL no FormUsuario */}
+      
+      <h4 className="font-semibold mt-6 border-t pt-4">Remuneração e Jornada</h4>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {renderNumberField('salario', 'Salário Mensal (R$)', '0', isSubmitting)}
+        {renderNumberField('horas_semanais', 'Horas Semanais', '44', isSubmitting)}
+        {renderNumberField('horas_mensais', 'Horas Mensais', '220', isSubmitting)}
+      </div>
+      
+      {/* Permissões */}
+      <div className="space-y-2 pt-4 border-t">
+        <div className="flex justify-between items-center mb-1">
+          <FormLabel>Permissões de Acesso</FormLabel>
+          <div className="space-x-2">
+            <Button type="button" variant="link" size="sm" onClick={() => handleSelectAll(true)} className="p-0 h-auto" disabled={isSubmitting || isReadOnly}>Selecionar Todos</Button>
+            <Button type="button" variant="link" size="sm" onClick={() => handleSelectAll(false)} className="p-0 h-auto text-destructive" disabled={isSubmitting || isReadOnly}>Desmarcar Todos</Button>
+          </div>
         </div>
-        
-        <div className="space-y-2 pt-4 border-t">
-          <div className="flex justify-between items-center mb-1">
-            <FormLabel>Permissões de Acesso</FormLabel>
-            <div className="space-x-2">
-              <Button type="button" variant="link" size="sm" onClick={() => handleSelectAll(true)} className="p-0 h-auto" disabled={isSubmitting || isReadOnly}>Selecionar Todos</Button>
-              <Button type="button" variant="link" size="sm" onClick={() => handleSelectAll(false)} className="p-0 h-auto text-destructive" disabled={isSubmitting || isReadOnly}>Desmarcar Todos</Button>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-4 rounded-lg border p-4">
-            {permissoesVisiveis.map((p: Permissao) => (
-              <FormField key={p.key} control={control} name={`permissoes.${p.key}`} render={({ field }) => (
-                <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                  <FormControl>
-                    <Checkbox checked={field.value} onCheckedChange={field.onChange} disabled={isSubmitting || isReadOnly} />
-                  </FormControl>
-                  <FormLabel className="font-normal">{p.label}</FormLabel>
-                </FormItem>
-              ))} />
-            ))}
-          </div>
+        <div className="grid grid-cols-2 gap-4 rounded-lg border p-4">
+          {permissoesVisiveis.map((p: Permissao) => (
+            <FormField key={p.key} control={control} name={`permissoes.${p.key}`} render={({ field }) => (
+              <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                <FormControl>
+                  <Checkbox checked={field.value} onCheckedChange={field.onChange} disabled={isSubmitting || isReadOnly} />
+                </FormControl>
+                <FormLabel className="font-normal">{p.label}</FormLabel>
+              </FormItem>
+            ))} />
+          ))}
         </div>
       </div>
-    </React.Fragment>
+    </div>
   );
 };
 

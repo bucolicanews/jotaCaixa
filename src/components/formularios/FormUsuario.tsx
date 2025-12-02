@@ -17,13 +17,13 @@ import { format } from 'date-fns';
 import { BASE_URL } from '@/config/app-config';
 import { Separator } from '../ui/separator';
 
-import FormGeral from './FormGeral'; // CORRIGIDO: Caminho de importação
+// import FormGeral from '../formularios/FormGeral'; 
 import FormFolgas from '../formularios/FormFolgas';
 import FormDocumentos from '../usuario-forms/FormDocumentos';
 import FormDadosContratuais from '../usuario-forms/FormDadosContratuais';
 import FormFerias from '@/components/usuario-forms/FormFerias';
 import LogoUpload from '../LogoUpload'; // Importado para Cliente Profile
-import { Checkbox } from '../ui/checkbox'; // Importado para Cliente Profile
+import { Checkbox } from '../ui/checkbox'; // IMPORT CORRIGIDO
 import FormIdentificacao from '../cliente-forms/FormIdentificacao'; // NOVO IMPORT
 import FormContato from '../cliente-forms/FormContato'; // NOVO IMPORT
 import FormEndereco from '../cliente-forms/FormEndereco'; // NOVO IMPORT
@@ -61,12 +61,12 @@ const formSchema = z.object({
   cidade: textOptional,
   estado: textOptional,
   
-  // NOVOS CAMPOS DE CLIENTE (Apenas para isNewClient)
+  // NOVOS CAMPOS DE CLIENTE (Apenas para isNewClient ou Cliente Profile)
   razao_social: textOptional,
   nome_fantasia: textOptional,
   documento: textOptional,
   cnpj: textOptional,
-
+  
   // NOVOS CAMPOS DE ASSINATURA (Apenas para Cliente Profile)
   assinatura_proprietario_nome: textOptional,
   assinatura_proprietario_url: textOptional,
@@ -544,10 +544,10 @@ const shouldShowSaveButton = !isReadOnly && (!isSelfEditUsuario || activeTab ===
 
 // --- DECLARA AS ABAS DO CLIENTE (FORA DO IF) ---
 const clientTabs = [
-    { value: 'pessoal', label: 'Geral' },
-    { value: 'identificacao', label: 'Identificação' },
-    { value: 'contato', label: 'Contato' },
-    { value: 'endereco', label: 'Endereço' },
+    { value: 'pessoal', label: 'Geral', component: FormGeral },
+    { value: 'identificacao', label: 'Identificação', component: FormIdentificacao },
+    { value: 'contato', label: 'Contato', component: FormContato },
+    { value: 'endereco', label: 'Endereço', component: FormEndereco },
 ];
 
 // --- RENDERIZAÇÃO PARA CRIAÇÃO DE NOVO CLIENTE ---
