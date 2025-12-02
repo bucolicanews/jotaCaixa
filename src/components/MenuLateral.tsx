@@ -131,7 +131,7 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick, adminBranding, l
   const localizacao = useLocation();
   const { role, perfil, carregando } = useSessao();
   
-  // --- CORREÇÃO: Definições seguras de perfil e roles no escopo do componente ---
+  // --- Definições seguras de perfil e roles ---
   const isAdmin = role === 'Admin';
   const isClient = role === 'Cliente';
   const isUsuarioDoAdminRole = role === 'UsuarioDoAdmin';
@@ -145,19 +145,22 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick, adminBranding, l
   
   const isAccessExpired = isClient && clientProfile?.data_fim_acesso && isPast(parseISO(clientProfile.data_fim_acesso));
   
-  const getPermissoes = () => {
-      if (isAdmin) return {}; // Admin tem acesso total, não precisa de permissões explícitas
-      if (isClient) return clientProfile?.permissoes || {};
-      if (isUsuarioDoAdminRole || isUsuarioDoClienteRole) return userProfile?.permissoes || {};
+  const getPermissoes = useCallback(() => {
+      if (isAdmin) return {}; // Admin tem acesso total
+      
+      // Perfis que possuem o campo 'permissoes'
+      if (clientProfile) return clientProfile.permissoes || {};
+      if (userProfile && 'permissoes' in userProfile) return userProfile.permissoes || {};
+      
       return {};
-  };
+  }, [isAdmin, clientProfile, userProfile]);
   
   const userPermissions = getPermissoes();
   // -----------------------------------------------
   
   const isPreAuthFlow = localizacao.pathname === '/selecao-perfil';
   
-  // Lógica para a URL da Logo e Título (usando adminBranding que agora vem do useOwnerBranding)
+  // Lógica para a URL da Logo e Título
   let finalLogoUrl = adminBranding?.logoUrl;
   let textTitle = adminBranding?.nome || 'Fluxo de Caixa';
   let profileDescription = '';
@@ -176,6 +179,7 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick, adminBranding, l
   }
   
   const shouldShowSuporte = isAdmin || isClient || isUsuarioDoAdminRole || isUsuarioDoClienteRole;
+  const { mensagensParaResponder } = useTicketNotifications();
 
 
   const checkPermission = (item: ItemMenu) => {
@@ -189,36 +193,19 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick, adminBranding, l
         return item.caminho === '/painel';
     }
 
-    // 1. Admin e Usuário do Admin têm acesso total (se o item estiver na lista de perfis)
-    if (isAdmin || isUsuarioDoAdminRole) {
-        // Se o item tiver uma chave de permissão, verifica se ela está liberada no perfil do UsuarioDoAdmin
-        if (isUsuarioDoAdminRole && item.permissionKey) {
-            return userPermissions[item.permissionKey] === true;
-        }
-        return true; // Admin tem acesso total
-    }
-
-    // 2. Cliente e Usuário do Cliente
-    if (isClient || isUsuarioDoClienteRole) {
-        if (isPendingClient) {
-            return item.caminho === '/painel';
-        }
-        
-        // Usuário do Cliente não pode ver a gestão de ponto (apenas o próprio)
-        if (isUsuarioDoClienteRole && item.caminho === '/folha-ponto' && item.permissionKey === 'folha_ponto') {
-            return false;
-        }
-        
-        // Verifica a permissão explícita
-        if (item.permissionKey) {
-            return userPermissions[item.permissionKey] === true;
-        }
-        
-        // Itens sem permissionKey (ex: Minha Assinatura, Suporte)
+    // 1. Admin tem acesso total
+    if (isAdmin) {
         return true;
     }
+
+    // 2. Usuário do Admin, Cliente, Usuário do Cliente: Verifica a permissão explícita
+    if (item.permissionKey) {
+        // Se a chave de permissão existir e for true no perfil, permite o acesso
+        return userPermissions[item.permissionKey] === true;
+    }
     
-    return false;
+    // 3. Itens sem permissionKey (ex: Minha Assinatura, Suporte)
+    return true;
   };
 
   return (
