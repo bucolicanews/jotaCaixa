@@ -60,9 +60,21 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
         } else {
           // 4. Buscar Usuário (Funcionário do Admin)
           const adminUsuarioData = await fetchProfile('admin_usuarios');
+          
+          // 🚨 DEBUG E CORREÇÃO DE MAPEAMENTO
+          console.log("DEBUG → admin_usuarios retornado do banco:", adminUsuarioData);
+          
           if (adminUsuarioData) {
-            // Mapeia para o tipo AdminUsuarioProfile
-            perfil = { ...adminUsuarioData, cliente_id: null } as AdminUsuarioProfile;
+            // Mapeia para o tipo AdminUsuarioProfile, garantindo que admin_id seja mapeado corretamente
+            perfil = { 
+                ...adminUsuarioData, 
+                cliente_id: null,
+                // Tenta admin_id, depois adm_id, depois admin (para robustez)
+                admin_id: adminUsuarioData.admin_id ?? adminUsuarioData.adm_id ?? adminUsuarioData.admin ?? null
+            } as AdminUsuarioProfile;
+            
+            console.log("DEBUG → Perfil final mapeado:", perfil);
+            
             role = 'Usuario';
           }
         }
