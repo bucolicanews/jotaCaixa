@@ -22,6 +22,7 @@ const FormGeral: React.FC<FormGeralProps> = ({
   isReadOnly,
 }) => {
   
+  // Função auxiliar que retorna JSX (usando retorno implícito)
   const renderNumberField = (fieldName: string, label: string, placeholder: string, disabled: boolean = false) => (
     <FormField
       control={control}
