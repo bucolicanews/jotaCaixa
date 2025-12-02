@@ -224,13 +224,13 @@ const PaymentRenewalHandler = () => {
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
-      <SessionProvider>
-        <BrowserRouter
-          future={{
-            v7_startTransition: true,
-            v7_relativeSplatPath: true
-          }}
-        >
+      <BrowserRouter
+        future={{
+          v7_startTransition: true,
+          v7_relativeSplatPath: true
+        }}
+      >
+        <SessionProvider>
           <PaymentSuccessHandler />
           <PaymentRenewalHandler />
           <Toaster />
@@ -303,8 +303,8 @@ const App = () => (
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
-        </BrowserRouter>
-      </SessionProvider>
+        </SessionProvider>
+      </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
 );
