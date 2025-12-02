@@ -614,7 +614,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                                                 <FormLabel className="font-normal">{p.label}</FormLabel>
                                             </FormItem>
                                         ))} />
-                                    ))}
+                                    )}
                                 </div>
                             </div>
                         </TabsContent>
