@@ -24,8 +24,9 @@ const FormDocumentos: React.FC<FormDocumentosProps> = ({ control, isSubmitting, 
   const isSaving = isSubmitting || uploading;
   
   const isUserScope = role === 'Usuario';
-  const bucketName = isUserScope ? 'documentos-admissao' : 'documentos-empresa';
-  const folderName = isUserScope ? 'documentos' : 'empresa';
+  // O bucket de documentos de admissão é usado para usuários (funcionários)
+  const bucketName = 'documentos-admissao'; 
+  const folderName = 'documentos';
 
   const handleFileUpload = async (file: File, fieldName: string) => {
     if (!resourceId) {
@@ -206,9 +207,12 @@ const FormDocumentos: React.FC<FormDocumentosProps> = ({ control, isSubmitting, 
   }
   
   // Se for escopo de Cliente (Empresa) ou Admin
+  // REMOVIDO: A seção de documentos da empresa (CNPJ, Contrato Social, Alvará)
   return (
     <div className="space-y-6">
-        <p className="text-sm text-muted-foreground">Anexos de documentos da empresa (CNPJ, Contrato Social, etc.).</p>
+        <p className="text-sm text-muted-foreground">
+            Esta seção é para documentos pessoais do funcionário. Documentos da empresa (CNPJ, Contrato Social) são gerenciados no perfil do Cliente/Admin.
+        </p>
         
         {uploading && (
             <div className="flex items-center justify-center p-4 bg-secondary rounded-md">
@@ -217,17 +221,14 @@ const FormDocumentos: React.FC<FormDocumentosProps> = ({ control, isSubmitting, 
             </div>
         )}
         
-        <Accordion type="multiple" className="w-full" defaultValue={['documentos_empresa']}>
-            <AccordionItem value="documentos_empresa">
-                <AccordionTrigger className="font-semibold">Documentos da Empresa</AccordionTrigger>
-                <AccordionContent className="space-y-4 p-2">
-                    {renderDocumentField('documento_cnpj_url', 'Cópia do CNPJ', false)}
-                    {renderDocumentField('contrato_social_url', 'Contrato Social/Estatuto', false)}
-                    {renderDocumentField('alvara_funcionamento_url', 'Alvará de Funcionamento', false)}
-                    {/* Adicione mais campos conforme necessário para a empresa */}
-                </AccordionContent>
-            </AccordionItem>
-        </Accordion>
+        <Card>
+            <CardHeader><CardTitle className="text-lg">Documentos Pessoais (Funcionário)</CardTitle></CardHeader>
+            <CardContent className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                    Selecione o funcionário na aba "Geral" para gerenciar seus documentos pessoais.
+                </p>
+            </CardContent>
+        </Card>
     </div>
   );
 };
