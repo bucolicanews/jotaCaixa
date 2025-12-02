@@ -1,6 +1,7 @@
 import LayoutPrincipal from '@/components/LayoutPrincipal';
+import RegistroPonto from '@/components/ponto/RegistroPonto';
 import { useSessao } from '@/hooks/use-sessao';
-import { ClienteProfile, UsuarioProfile, AdminUsuarioProfile } from '@/types/usuario';
+import { UsuarioProfile, ClienteProfile, AdminUsuarioProfile } from '@/types/usuario';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Link, useNavigate } from 'react-router-dom';

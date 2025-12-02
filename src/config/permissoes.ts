@@ -10,8 +10,8 @@ export const PERMISSOES_DISPONIVEIS: Permissao[] = [
   { key: 'bancos', label: 'Bancos / Caixas', path: '/bancos' },
   { key: 'plano_contas', label: 'Plano de Contas', path: '/plano-contas' },
   { key: 'conciliacao', label: 'Conciliação', path: '/conciliacao' },
-  { key: 'importar', label: 'Importar', path: '/importar' },
-  { key: 'relatorios', label: 'Relatórios', path: '/relatorios' },
+  { key: 'importar', label: 'Importar Dados', path: '/importar' },
+  { key: 'relatorios', label: 'Relatórios (Geral)', path: '/relatorios' },
   { key: 'configuracoes', label: 'Configurações', path: '/configuracoes' },
   { key: 'ponto_eletronico', label: 'Ponto Eletrônico (Bater Ponto)', path: '/ponto-eletronico' },
   { key: 'folha_ponto', label: 'Acompanhar Ponto (Gestor)', path: '/folha-ponto' },
@@ -19,34 +19,26 @@ export const PERMISSOES_DISPONIVEIS: Permissao[] = [
   { key: 'cadastrar_usuarios', label: 'Cadastrar Usuários', path: '/gerenciar-usuarios' },
   { key: 'contratos', label: 'Contratos (Gerenciamento)', path: '/contratos' },
   { key: 'gestao_suporte', label: 'Gestão de Suporte (Atendimento)', path: '/admin/suporte' },
+  
+  // NOVAS PERMISSÕES DETALHADAS (Contabilidade/Financeiro)
+  { key: 'lancamentos_manuais', label: 'Novo Lançamento (Partida Dobrada)', path: '/lancamentos' },
+  { key: 'contas_patrimoniais', label: 'Contas Patrimoniais', path: '/contas-patrimoniais' },
+  { key: 'balanco_patrimonial', label: 'Balanço Patrimonial', path: '/relatorios/balanco' },
+  { key: 'dre', label: 'DRE', path: '/relatorios/dre' },
+  { key: 'balancete', label: 'Balancete', path: '/relatorios/balancete' },
+  { key: 'razao', label: 'Livro Razão', path: '/relatorios/razao' },
+  { key: 'gerenciar_historicos', label: 'Gerenciar Históricos', path: '/historicos' },
+  { key: 'documentos_societarios', label: 'Documentos Societários', path: '/documentos-societarios' },
 ];
 
 /**
  * Permissões de acesso total para Admin Usuários (Funcionários do Admin).
  * Baseado nos requisitos do usuário.
  */
-export const PERMISSOES_ADMIN_USUARIO_TOTAL: Record<string, boolean> = {
-    // Financeiro
-    contas_pagar: true,
-    contas_receber: true,
-    bancos: true,
-    conciliacao: true,
-    'bancos': true, // Extratos
-    
-    // Contabilidade
-    plano_contas: true,
-    'bancos': true, // Contas Patrimoniais
-    relatorios: true, // Balanço, DRE, Balancete, Razão
-    configuracoes: true, // Gerenciar Histórico, Configurações
-    importar: true,
-    
-    // RH / Folha
-    ponto_eletronico: true,
-    visualizar_proprio_ponto: true,
-    folha_ponto: true,
-    cadastrar_usuarios: true,
-    
-    // Geral
-    contratos: true,
-    gestao_suporte: true,
-};
+export const PERMISSOES_ADMIN_USUARIO_TOTAL: Record<string, boolean> = PERMISSOES_DISPONIVEIS.reduce((acc, p) => {
+    // Exclui apenas a permissão de gerenciar planos (que é exclusiva do Admin)
+    if (p.key !== 'planos') {
+        acc[p.key] = true;
+    }
+    return acc;
+}, {} as Record<string, boolean>);
