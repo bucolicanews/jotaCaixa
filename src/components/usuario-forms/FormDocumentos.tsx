@@ -10,6 +10,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { cn } from '@/lib/utils';
 import { useSessao } from '@/hooks/use-sessao';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 interface FormDocumentosProps {
   control: Control<any>;
@@ -207,7 +208,6 @@ const FormDocumentos: React.FC<FormDocumentosProps> = ({ control, isSubmitting, 
   }
   
   // Se for escopo de Cliente (Empresa) ou Admin
-  // REMOVIDO: A seção de documentos da empresa (CNPJ, Contrato Social, Alvará)
   return (
     <div className="space-y-6">
         <p className="text-sm text-muted-foreground">
