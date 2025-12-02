@@ -17,13 +17,13 @@ import { format } from 'date-fns';
 import { BASE_URL } from '@/config/app-config';
 import { Separator } from '../ui/separator';
 
-import FormGeral from '../formularios/FormGeral'; // IMPORT CORRIGIDO
+import FormGeral from './FormGeral'; // CORRIGIDO: Caminho de importação
 import FormFolgas from '../formularios/FormFolgas';
 import FormDocumentos from '../usuario-forms/FormDocumentos';
 import FormDadosContratuais from '../usuario-forms/FormDadosContratuais';
 import FormFerias from '@/components/usuario-forms/FormFerias';
 import LogoUpload from '../LogoUpload'; // Importado para Cliente Profile
-import { Checkbox } from '../ui/checkbox'; // IMPORT CORRIGIDO
+import { Checkbox } from '../ui/checkbox'; // Importado para Cliente Profile
 import FormIdentificacao from '../cliente-forms/FormIdentificacao'; // NOVO IMPORT
 import FormContato from '../cliente-forms/FormContato'; // NOVO IMPORT
 import FormEndereco from '../cliente-forms/FormEndereco'; // NOVO IMPORT
