@@ -90,29 +90,16 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return () => subscription.unsubscribe();
   }, [buscarDadosAdicionais, navigate]);
   
-  // Lógica de Redirecionamento Pós-Login
+  // Lógica de Redirecionamento Pós-Login (Simplificada para evitar conflitos)
   useEffect(() => {
       if (!estado.carregando && estado.usuario) {
-          // Se for Cliente (aprovado ou pendente) ou Admin, redireciona para o painel.
-          if (estado.role === 'Cliente' || estado.role === 'Admin') {
-              if (window.location.pathname === '/login' || window.location.pathname === '/') {
-                  navigate('/painel', { replace: true });
-              }
-          }
-          // Usuários (Funcionários) são redirecionados para o painel se estiverem vinculados.
-          // Verifica cliente_id (Cliente) ou admin_id (AdminUsuarioProfile)
-          const isUsuarioVinculado = estado.role === 'Usuario' && (
-              (estado.perfil as UsuarioProfile)?.cliente_id || 
-              (estado.perfil as AdminUsuarioProfile)?.admin_id
-          );
-          
-          if (isUsuarioVinculado) {
-              if (window.location.pathname === '/login' || window.location.pathname === '/') {
-                  navigate('/painel', { replace: true });
-              }
+          // Redireciona qualquer usuário autenticado para /painel se estiver em / ou /login.
+          // O Painel.tsx fará o roteamento condicional final.
+          if (window.location.pathname === '/login' || window.location.pathname === '/') {
+              navigate('/painel', { replace: true });
           }
       }
-  }, [estado, navigate]);
+  }, [estado.carregando, estado.usuario, navigate]);
 
 
   return (

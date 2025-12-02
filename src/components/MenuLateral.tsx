@@ -9,6 +9,7 @@ import { ptBR } from 'date-fns/locale';
 import { useTicketNotifications } from '@/hooks/use-ticket-notifications';
 import { useOwnerBranding } from '@/hooks/use-owner-branding';
 import { useTheme } from '@/contexts/ThemeProvider';
+import { isPast } from 'date-fns';
 
 interface ItemMenu {
   nome: string;
