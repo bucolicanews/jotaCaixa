@@ -11,7 +11,7 @@ interface FormGeralProps {
   isSubmitting: boolean;
   permissoesVisiveis: Permissao[];
   handleSelectAll: (select: boolean) => void;
-  isReadOnly: boolean;
+  isReadOnly: boolean; // FIX: Garantido que isReadOnly está na interface
 }
 
 const FormGeral: React.FC<FormGeralProps> = ({
@@ -22,7 +22,6 @@ const FormGeral: React.FC<FormGeralProps> = ({
   isReadOnly,
 }) => {
   
-  // Função auxiliar que retorna JSX (usando retorno implícito)
   const renderNumberField = (fieldName: string, label: string, placeholder: string, disabled: boolean = false) => (
     <FormField
       control={control}
@@ -37,7 +36,7 @@ const FormGeral: React.FC<FormGeralProps> = ({
               {...field} 
               value={field.value === undefined || field.value === null ? '' : String(field.value)}
               onChange={(e) => field.onChange(e.target.value === '' ? undefined : Number(e.target.value))}
-              disabled={disabled || isReadOnly}
+              disabled={disabled || isReadOnly} // Bloqueado se isReadOnly
             />
           </FormControl>
           <FormMessage />
@@ -80,9 +79,10 @@ const FormGeral: React.FC<FormGeralProps> = ({
                 <FormControl>
                   <Checkbox checked={field.value} onCheckedChange={field.onChange} disabled={isSubmitting || isReadOnly} />
                 </FormControl>
+                {/* CORREÇÃO: Removendo a classe text-destructive da label */}
                 <FormLabel className="font-normal">{p.label}</FormLabel>
               </FormItem>
-            ))} />
+            )} />
           ))}
         </div>
       </div>
