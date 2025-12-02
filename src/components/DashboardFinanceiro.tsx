@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, ArrowUpCircle, ArrowDownCircle, Banknote, TrendingUp, Scale, Filter, Wallet, Landmark, Eye, EyeOff } from 'lucide-react';
+import { Loader2, ArrowUpCircle, ArrowDownCircle, Banknote, TrendingUp, Scale, Filter, Wallet, Landmark, Eye, EyeOff, PlusCircle } from 'lucide-react';
 import { useSessao } from '@/hooks/use-sessao';
 import { supabase } from '@/integrations/supabase/client';
 import { showError } from '@/utils/toast';
@@ -10,10 +10,10 @@ import useSaldoContaCalculado from '@/hooks/use-saldo-conta-calculado';
 import { startOfMonth, endOfMonth, format, addDays } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { ClienteProfile, UsuarioProfile, AdminUsuarioProfile } from '@/types/usuario';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'; // IMPORT CORRIGIDO
-import { Button } from '@/components/ui/button'; // IMPORT CORRIGIDO
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Button } from '@/components/ui/button';
 
 interface FluxoData {
     receber: number;
@@ -287,8 +287,9 @@ const DashboardFinanceiro: React.FC = () => {
     const resultadoRealizado = totalEntradasRealizadas - totalSaidasRealizadas; // NEW CALCULATION
 
     // Dados para o gráfico de Saldo por Conta
-    const saldoData = contasFiltradas
-        .filter(c => c.saldo_atual !== 0)
+    const contasComSaldo = contasFiltradas.filter(c => Math.abs(c.saldo_atual) > 0.01);
+    
+    const saldoData = contasComSaldo
         .map(c => ({
             name: c.nome,
             saldo: c.saldo_atual,
@@ -345,6 +346,25 @@ const DashboardFinanceiro: React.FC = () => {
     }
     
     const isContaFiltrada = filtroContaId !== 'todos';
+    
+    // NOVO: Se não houver contas cadastradas, exibe o CTA
+    if (contas.length === 0) {
+        return (
+            <Card className="mt-8 p-8 text-center">
+                <CardTitle className="text-2xl mb-4">Nenhuma Conta de Caixa/Banco Cadastrada</CardTitle>
+                <CardContent>
+                    <p className="text-lg text-muted-foreground mb-6">
+                        Para visualizar o Dashboard Financeiro e o Fluxo de Caixa, você precisa cadastrar pelo menos uma conta de Caixa ou Banco.
+                    </p>
+                    <Link to="/bancos">
+                        <Button size="lg">
+                            <PlusCircle className="w-5 h-5 mr-2" /> Cadastrar Primeira Conta
+                        </Button>
+                    </Link>
+                </CardContent>
+            </Card>
+        );
+    }
 
     return (
         <div className="space-y-6">
