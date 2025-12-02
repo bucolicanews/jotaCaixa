@@ -21,11 +21,11 @@ import FormFolgas from '../formularios/FormFolgas';
 import FormDocumentos from '../usuario-forms/FormDocumentos';
 import FormDadosContratuais from '../usuario-forms/FormDadosContratuais';
 import FormFerias from '@/components/usuario-forms/FormFerias';
-import LogoUpload from '../LogoUpload'; // Importado para Cliente Profile
-import { Checkbox } from '../ui/checkbox'; // IMPORT CORRIGIDO
-import FormIdentificacao from '../cliente-forms/FormIdentificacao'; // NOVO IMPORT
-import FormContato from '../cliente-forms/FormContato'; // NOVO IMPORT
-import FormEndereco from '../cliente-forms/FormEndereco'; // NOVO IMPORT
+import LogoUpload from '../LogoUpload';
+import { Checkbox } from '../ui/checkbox';
+import FormIdentificacao from '../cliente-forms/FormIdentificacao';
+import FormContato from '../cliente-forms/FormContato';
+import FormEndereco from '../cliente-forms/FormEndereco';
 
 const textOptional = z.string().optional().or(z.literal(''));
 const urlSchema = z.string().url('URL inválida.').optional().or(z.literal(''));
@@ -594,7 +594,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                                 tableName={'tbl_clientes'}
                                 initialLogoUrl={form.watch('assinatura_proprietario_url')}
                                 onUploadComplete={handleLogoUploadComplete}
-                                onSyncUrl={handleSyncUrl} // NOVO PROP
+                                onSyncUrl={handleSyncUrl}
                                 isReadOnly={isSubmitting || isReadOnly}
                             />
                             
@@ -619,7 +619,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                                                 <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} disabled={isSubmitting || isReadOnly || isEditingClientProfile} /></FormControl>
                                                 <FormLabel className="font-normal">{p.label}</FormLabel>
                                             </FormItem>
-                                        )} />
+                                        ))} />
                                     ))}
                                 </div>
                             </div>
@@ -740,8 +740,8 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                     tagRefreshKey={refreshKey}
                     onTagToggle={handleTagToggle}
                     isReadOnly={isChildFormReadOnly('cadastrais')}
-                    isClientScope={false} // Escopo de Usuário
-                    isAddressLoading={isAddressLoading} // Passa o estado de carregamento
+                    isClientScope={false}
+                    isAddressLoading={isAddressLoading}
                 />
             </TabsContent>
             
