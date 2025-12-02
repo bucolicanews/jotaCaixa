@@ -17,16 +17,15 @@ import { format } from 'date-fns';
 import { BASE_URL } from '@/config/app-config';
 import { Separator } from '../ui/separator';
 
-// import FormGeral from './FormGeral'; // Importação removida conforme solicitado
 import FormFolgas from '../formularios/FormFolgas';
 import FormDocumentos from '../usuario-forms/FormDocumentos';
 import FormDadosContratuais from '../usuario-forms/FormDadosContratuais';
 import FormFerias from '@/components/usuario-forms/FormFerias';
-import LogoUpload from '../LogoUpload'; // Importado para Cliente Profile
-import { Checkbox } from '../ui/checkbox'; // IMPORT CORRIGIDO
-import FormIdentificacao from '../cliente-forms/FormIdentificacao'; // NOVO IMPORT
-import FormContato from '../cliente-forms/FormContato'; // NOVO IMPORT
-import FormEndereco from '../cliente-forms/FormEndereco'; // NOVO IMPORT
+import LogoUpload from '../LogoUpload';
+import { Checkbox } from '../ui/checkbox';
+import FormIdentificacao from '../cliente-forms/FormIdentificacao';
+import FormContato from '../cliente-forms/FormContato';
+import FormEndereco from '../cliente-forms/FormEndereco';
 
 
 const textOptional = z.string().optional().or(z.literal(''));
