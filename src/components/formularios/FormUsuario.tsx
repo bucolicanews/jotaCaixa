@@ -435,25 +435,27 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
             if (error) throw error;
             
         } else if (isEditingUser || isNewAuthUser) {
-            // Edição de Usuário (tbl_usuarios ou admin_usuarios)
-            const tabelaDestino = criadorRole === 'Admin' ? 'admin_usuarios' : 'tbl_usuarios';
-            
-            const dataToUpdate: any = { 
+            // Edição de Usuário (Cliente ou Admin)
+            const tabelaDestino =
+                criadorRole === 'Admin' || isAdminUsuarioProfile(profileToEdit)
+                    ? 'admin_usuarios'
+                    : 'tbl_usuarios';
+
+            const dataToUpdate: Record<string, any> = {
                 nome: values.nome,
-                permissoes: values.permissoes,
-                
-                // Dados de RH/Contrato
-                dias_folga_fixos: values.dias_folga_fixos || [],
-                folga_domingo_obrigatoria: values.folga_domingo_obrigatoria,
-                salario: values.salario,
-                horas_semanais: values.horas_semanais,
-                horas_mensais: values.horas_mensais,
-                data_inicio_contrato: values.data_inicio_contrato ? format(values.data_inicio_contrato, 'yyyy-MM-dd') : null,
-                data_fim_contrato: values.data_fim_contrato ? format(values.data_fim_contrato, 'yyyy-MM-dd') : null,
-                data_inicio_aviso: values.data_inicio_aviso ? format(values.data_inicio_aviso, 'yyyy-MM-dd') : null,
-                tipo_aviso: values.tipo_aviso === 'Nenhum' ? null : values.tipo_aviso,
-                
-                // Dados Cadastrais e Documentos
+                email: values.email,
+                permissoes: values.permissoes || {},
+
+                // Folgas
+                dias_folga_fixos: values.dias_folga_fixos || ['Saturday', 'Sunday'],
+                folga_domingo_obrigatoria: values.folga_domingo_obrigatoria ?? true,
+
+                // Jornada / Pagamento
+                salario: values.salario ?? 0,
+                horas_semanais: values.horas_semanais ?? 44,
+                horas_mensais: values.horas_mensais ?? 220,
+
+                // Dados Cadastrais
                 cpf: values.cpf || null,
                 rg: values.rg || null,
                 nome_mae: values.nome_mae || null,
@@ -466,6 +468,8 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                 bairro: values.bairro || null,
                 cidade: values.cidade || null,
                 estado: values.estado || null,
+
+                // Documentos URL
                 rg_url: values.rg_url || null,
                 cpf_url: values.cpf_url || null,
                 titulo_eleitor_url: values.titulo_eleitor_url || null,
@@ -479,25 +483,48 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                 foto_3x4_url: values.foto_3x4_url || null,
                 cnh_url: values.cnh_url || null,
                 cartao_pis_url: values.cartao_pis_url || null,
-                ja_admitido_anteriormente: values.ja_admitido_anteriormente,
-                
-                // Vinculação (apenas se for novo)
-                ...(isNewAuthUser && tabelaDestino === 'tbl_usuarios' && { cliente_id: proprietarioId }),
-                ...(isNewAuthUser && tabelaDestino === 'admin_usuarios' && { admin_id: proprietarioId }),
-                
-                // Se for edição de AdminUsuario, garante que o admin_id seja mantido no payload
-                ...(isEditing && tabelaDestino === 'admin_usuarios' && { admin_id: (usuarioInicial as AdminUsuarioProfile)?.admin_id }),
+                ja_admitido_anteriormente: values.ja_admitido_anteriormente ?? false,
+
+                // Contrato
+                data_inicio_contrato: values.data_inicio_contrato ? format(values.data_inicio_contrato, 'yyyy-MM-dd') : null,
+                data_fim_contrato: values.data_fim_contrato ? format(values.data_fim_contrato, 'yyyy-MM-dd') : null,
+                data_inicio_aviso: values.data_inicio_aviso ? format(values.data_inicio_aviso, 'yyyy-MM-dd') : null,
+                tipo_aviso: values.tipo_aviso || 'Nenhum',
+
+                // Acesso
+                data_fim_acesso: values.data_fim_acesso || null,
             };
-            
-            const { error } = await supabase.from(tabelaDestino).upsert({ ...dataToUpdate, id: userId, email: values.email }, { onConflict: 'id' });
-            if (error) throw error;
-            
-            if (isEditing && values.senha) {
-                const { error: authError } = await supabase.auth.updateUser({ password: values.senha });
-                if (authError) throw authError;
+
+            // Se é novo usuário, vincular corretamente o proprietário
+            if (isNewAuthUser) {
+                if (tabelaDestino === 'tbl_usuarios') {
+                    dataToUpdate.cliente_id = proprietarioId;
+                } else {
+                    dataToUpdate.admin_id = proprietarioId;
+                }
             }
+
+            const { error } = await supabase
+                .from(tabelaDestino)
+                .upsert({ ...dataToUpdate, id: userId }, { onConflict: 'id' });
+
+            if (error) throw error;
         }
 
+        /** ----------------------------------------------------
+         * 3. Atualizar senha, se fornecida (usuário existente)
+         * ---------------------------------------------------- */
+        if (isEditing && values.senha && values.senha.length >= 6) {
+            const { data: pwData, error: pwError } = await supabase.auth.updateUser({
+                password: values.senha,
+            });
+
+            if (pwError) throw pwError;
+        }
+
+        /** ----------------------------------------------------
+         * 4. FINALIZAR
+         * ---------------------------------------------------- */
         showSuccess(`${isNewClient ? 'Cliente' : 'Usuário'} ${isEditing ? 'atualizado' : 'criado'} com sucesso!`);
         
         if (isNewAuthUser) {
@@ -511,11 +538,12 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
         refetchStatus();
         onSaveComplete();
     } catch (error: any) {
-        showError(`Falha ao salvar: ${error.message}`);
+        console.error('Erro ao salvar:', error);
+        showError(error.message || 'Erro ao salvar usuário.');
     } finally {
         setIsSubmitting(false);
     }
-  };
+};
   
   // --- Lógica de Read-Only para Tabs ---
   const isSelfEditUsuario = criadorRole === 'Usuario';
@@ -544,10 +572,10 @@ const shouldShowSaveButton = !isReadOnly && (!isSelfEditUsuario || activeTab ===
 
 // --- DECLARA AS ABAS DO CLIENTE (FORA DO IF) ---
 const clientTabs = [
-    { value: 'pessoal', label: 'Geral', component: FormGeral },
-    { value: 'identificacao', label: 'Identificação', component: FormIdentificacao },
-    { value: 'contato', label: 'Contato', component: FormContato },
-    { value: 'endereco', label: 'Endereço', component: FormEndereco },
+    { value: 'pessoal', label: 'Geral' },
+    { value: 'identificacao', label: 'Identificação' },
+    { value: 'contato', label: 'Contato' },
+    { value: 'endereco', label: 'Endereço' },
 ];
 
 // --- RENDERIZAÇÃO PARA CRIAÇÃO DE NOVO CLIENTE ---
