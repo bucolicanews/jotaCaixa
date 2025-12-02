@@ -4,7 +4,7 @@ import { LayoutDashboard, DollarSign, ArrowUpCircle, ArrowDownCircle, Banknote, 
 import React, { useMemo, useCallback, useState, useEffect } from 'react';
 import { useSessao } from '@/hooks/use-sessao';
 import { ClienteProfile, UsuarioProfile, AdminProfile, AdminUsuarioProfile } from '@/types/usuario';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, isPast } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useTicketNotifications } from '@/hooks/use-ticket-notifications';
 import { useOwnerBranding } from '@/hooks/use-owner-branding';
@@ -14,109 +14,109 @@ interface ItemMenu {
   nome: string;
   caminho: string;
   icone: React.ElementType;
-  perfis: ('Admin' | 'Cliente' | 'Usuario')[];
+  perfis: ('Admin' | 'Cliente' | 'UsuarioDoAdmin' | 'UsuarioDoCliente')[]; // TIPAGEM ATUALIZADA
   permissionKey?: string;
 }
 
 interface MenuSection {
     titulo: string;
     itens: ItemMenu[];
-    perfis: ('Admin' | 'Cliente' | 'Usuario')[];
+    perfis: ('Admin' | 'Cliente' | 'UsuarioDoAdmin' | 'UsuarioDoCliente')[]; // TIPAGEM ATUALIZADA
 }
 
 const SECOES_MENU: MenuSection[] = [
     {
         titulo: 'Geral',
-        perfis: ['Admin', 'Cliente', 'Usuario'],
+        perfis: ['Admin', 'Cliente', 'UsuarioDoAdmin', 'UsuarioDoCliente'],
         itens: [
-            { nome: 'Painel', caminho: '/painel', icone: LayoutDashboard, perfis: ['Admin', 'Cliente', 'Usuario'] },
+            { nome: 'Painel', caminho: '/painel', icone: LayoutDashboard, perfis: ['Admin', 'Cliente', 'UsuarioDoAdmin', 'UsuarioDoCliente'] },
         ]
     },
     {
         titulo: 'Ponto Eletrônico',
-        perfis: ['Admin', 'Cliente', 'Usuario'],
+        perfis: ['Admin', 'Cliente', 'UsuarioDoAdmin', 'UsuarioDoCliente'],
         itens: [
-            { nome: 'Bater Ponto', caminho: '/ponto-eletronico', icone: Clock, perfis: ['Usuario'], permissionKey: 'ponto_eletronico' },
-            { nome: 'Meu Ponto', caminho: '/folha-ponto?mode=self', icone: User, perfis: ['Usuario'], permissionKey: 'visualizar_proprio_ponto' },
-            { nome: 'Acompanhar Ponto', caminho: '/folha-ponto', icone: CalendarCheck, perfis: ['Admin', 'Cliente'], permissionKey: 'folha_ponto' },
+            { nome: 'Bater Ponto', caminho: '/ponto-eletronico', icone: Clock, perfis: ['UsuarioDoAdmin', 'UsuarioDoCliente'], permissionKey: 'ponto_eletronico' },
+            { nome: 'Meu Ponto', caminho: '/folha-ponto?mode=self', icone: User, perfis: ['UsuarioDoAdmin', 'UsuarioDoCliente'], permissionKey: 'visualizar_proprio_ponto' },
+            { nome: 'Acompanhar Ponto', caminho: '/folha-ponto', icone: CalendarCheck, perfis: ['Admin', 'Cliente', 'UsuarioDoAdmin'], permissionKey: 'folha_ponto' },
         ]
     },
     {
         titulo: 'Financeiro',
-        perfis: ['Admin', 'Cliente', 'Usuario'],
+        perfis: ['Admin', 'Cliente', 'UsuarioDoAdmin', 'UsuarioDoCliente'],
         itens: [
-            { nome: 'Contas a Pagar', caminho: '/contas-pagar', icone: ArrowDownCircle, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'contas_pagar' },
-            { nome: 'Contas a Receber', caminho: '/contas-receber', icone: ArrowUpCircle, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'contas_receber' },
-            { nome: 'Fluxo de Caixa', caminho: '/relatorios/fluxo-caixa', icone: TrendingUp, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'bancos' },
+            { nome: 'Contas a Pagar', caminho: '/contas-pagar', icone: ArrowDownCircle, perfis: ['Admin', 'Cliente', 'UsuarioDoAdmin', 'UsuarioDoCliente'], permissionKey: 'contas_pagar' },
+            { nome: 'Contas a Receber', caminho: '/contas-receber', icone: ArrowUpCircle, perfis: ['Admin', 'Cliente', 'UsuarioDoAdmin', 'UsuarioDoCliente'], permissionKey: 'contas_receber' },
+            { nome: 'Fluxo de Caixa', caminho: '/relatorios/fluxo-caixa', icone: TrendingUp, perfis: ['Admin', 'Cliente', 'UsuarioDoAdmin', 'UsuarioDoCliente'], permissionKey: 'bancos' },
         ]
     },
     {
         titulo: 'Banco',
-        perfis: ['Admin', 'Cliente', 'Usuario'],
+        perfis: ['Admin', 'Cliente', 'UsuarioDoAdmin', 'UsuarioDoCliente'],
         itens: [
-            { nome: 'Bancos / Caixas', caminho: '/bancos', icone: Banknote, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'bancos' },
-            { nome: 'Conciliação', caminho: '/conciliacao', icone: Check, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'conciliacao' },
-            { nome: 'Extratos Salvos', caminho: '/extratos', icone: Eye, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'bancos' },
+            { nome: 'Bancos / Caixas', caminho: '/bancos', icone: Banknote, perfis: ['Admin', 'Cliente', 'UsuarioDoAdmin', 'UsuarioDoCliente'], permissionKey: 'bancos' },
+            { nome: 'Conciliação', caminho: '/conciliacao', icone: Check, perfis: ['Admin', 'Cliente', 'UsuarioDoAdmin', 'UsuarioDoCliente'], permissionKey: 'conciliacao' },
+            { nome: 'Extratos Salvos', caminho: '/extratos', icone: Eye, perfis: ['Admin', 'Cliente', 'UsuarioDoAdmin', 'UsuarioDoCliente'], permissionKey: 'bancos' },
         ]
     },
     {
         titulo: 'Lançamentos',
-        perfis: ['Admin', 'Cliente', 'Usuario'],
+        perfis: ['Admin', 'Cliente', 'UsuarioDoAdmin', 'UsuarioDoCliente'],
         itens: [
-            { nome: 'Novo Lançamento', caminho: '/lancamentos', icone: DollarSign, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'plano_contas' },
+            { nome: 'Novo Lançamento', caminho: '/lancamentos', icone: DollarSign, perfis: ['Admin', 'Cliente', 'UsuarioDoAdmin', 'UsuarioDoCliente'], permissionKey: 'plano_contas' },
         ]
     },
     {
         titulo: 'Contabilidade',
-        perfis: ['Admin', 'Cliente', 'Usuario'],
+        perfis: ['Admin', 'Cliente', 'UsuarioDoAdmin', 'UsuarioDoCliente'],
         itens: [
-            { nome: 'Plano de Contas', caminho: '/plano-contas', icone: BookOpen, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'plano_contas' },
-            { nome: 'Contas Patrimoniais', caminho: '/contas-patrimoniais', icone: Scale, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'bancos' },
-            { nome: 'Balanço Patrimonial', caminho: '/relatorios/balanco', icone: Scale, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'relatorios' },
-            { nome: 'DRE', caminho: '/relatorios/dre', icone: BarChart3, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'relatorios' },
-            { nome: 'Balancete', caminho: '/relatorios/balancete', icone: FileTextIcon, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'relatorios' },
-            { nome: 'Razão', caminho: '/relatorios/razao', icone: BookOpen, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'relatorios' },
-            { nome: 'Gerenciar Históricos', caminho: '/historicos', icone: History, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'configuracoes' },
+            { nome: 'Plano de Contas', caminho: '/plano-contas', icone: BookOpen, perfis: ['Admin', 'Cliente', 'UsuarioDoAdmin', 'UsuarioDoCliente'], permissionKey: 'plano_contas' },
+            { nome: 'Contas Patrimoniais', caminho: '/contas-patrimoniais', icone: Scale, perfis: ['Admin', 'Cliente', 'UsuarioDoAdmin', 'UsuarioDoCliente'], permissionKey: 'bancos' },
+            { nome: 'Balanço Patrimonial', caminho: '/relatorios/balanco', icone: Scale, perfis: ['Admin', 'Cliente', 'UsuarioDoAdmin', 'UsuarioDoCliente'], permissionKey: 'relatorios' },
+            { nome: 'DRE', caminho: '/relatorios/dre', icone: BarChart3, perfis: ['Admin', 'Cliente', 'UsuarioDoAdmin', 'UsuarioDoCliente'], permissionKey: 'relatorios' },
+            { nome: 'Balancete', caminho: '/relatorios/balancete', icone: FileTextIcon, perfis: ['Admin', 'Cliente', 'UsuarioDoAdmin', 'UsuarioDoCliente'], permissionKey: 'relatorios' },
+            { nome: 'Razão', caminho: '/relatorios/razao', icone: BookOpen, perfis: ['Admin', 'Cliente', 'UsuarioDoAdmin', 'UsuarioDoCliente'], permissionKey: 'relatorios' },
+            { nome: 'Gerenciar Históricos', caminho: '/historicos', icone: History, perfis: ['Admin', 'Cliente', 'UsuarioDoAdmin', 'UsuarioDoCliente'], permissionKey: 'configuracoes' },
         ]
     },
     {
         titulo: 'Contratos',
-        perfis: ['Admin', 'Cliente'],
+        perfis: ['Admin', 'Cliente', 'UsuarioDoAdmin', 'UsuarioDoCliente'],
         itens: [
-            { nome: 'Gerenciar Contratos', caminho: '/contratos', icone: FileSignature, perfis: ['Admin', 'Cliente'], permissionKey: 'contratos' },
-            { nome: 'Cadastrar Tags', caminho: '/contratos/tags', icone: Tag, perfis: ['Admin', 'Cliente'], permissionKey: 'contratos' },
-            { nome: 'Cadastrar Modelos', caminho: '/contratos/modelos', icone: FileTextIcon, perfis: ['Admin', 'Cliente'], permissionKey: 'contratos' },
+            { nome: 'Gerenciar Contratos', caminho: '/contratos', icone: FileSignature, perfis: ['Admin', 'Cliente', 'UsuarioDoAdmin', 'UsuarioDoCliente'], permissionKey: 'contratos' },
+            { nome: 'Cadastrar Tags', caminho: '/contratos/tags', icone: Tag, perfis: ['Admin', 'Cliente', 'UsuarioDoAdmin', 'UsuarioDoCliente'], permissionKey: 'contratos' },
+            { nome: 'Cadastrar Modelos', caminho: '/contratos/modelos', icone: FileTextIcon, perfis: ['Admin', 'Cliente', 'UsuarioDoAdmin', 'UsuarioDoCliente'], permissionKey: 'contratos' },
         ]
     },
     {
         titulo: 'Documentos Societários',
-        perfis: ['Admin', 'Cliente'],
+        perfis: ['Admin', 'Cliente', 'UsuarioDoAdmin', 'UsuarioDoCliente'],
         itens: [
-            { nome: 'Documentos Gerados', caminho: '/documentos-societarios', icone: FileText, perfis: ['Admin', 'Cliente'], permissionKey: 'contratos' },
-            { nome: 'Gerenciar Modelos', caminho: '/documentos-societarios/modelos', icone: FileTextIcon, perfis: ['Admin', 'Cliente'], permissionKey: 'contratos' },
-            { nome: 'Gerenciar Blocos', caminho: '/documentos-societarios/blocos', icone: Tag, perfis: ['Admin', 'Cliente'], permissionKey: 'contratos' },
+            { nome: 'Documentos Gerados', caminho: '/documentos-societarios', icone: FileText, perfis: ['Admin', 'Cliente', 'UsuarioDoAdmin', 'UsuarioDoCliente'], permissionKey: 'contratos' },
+            { nome: 'Gerenciar Modelos', caminho: '/documentos-societarios/modelos', icone: FileTextIcon, perfis: ['Admin', 'Cliente', 'UsuarioDoAdmin', 'UsuarioDoCliente'], permissionKey: 'contratos' },
+            { nome: 'Gerenciar Blocos', caminho: '/documentos-societarios/blocos', icone: Tag, perfis: ['Admin', 'Cliente', 'UsuarioDoAdmin', 'UsuarioDoCliente'], permissionKey: 'contratos' },
         ]
     },
     {
         titulo: 'Suporte',
-        perfis: ['Admin', 'Cliente', 'Usuario'],
+        perfis: ['Admin', 'Cliente', 'UsuarioDoAdmin', 'UsuarioDoCliente'],
         itens: [
-            { nome: 'Meus Tickets', caminho: '/suporte', icone: MessageSquare, perfis: ['Cliente'] },
-            { nome: 'Gestão de Tickets', caminho: '/admin/suporte', icone: MessageSquare, perfis: ['Admin', 'Usuario'], permissionKey: 'gestao_suporte' },
+            { nome: 'Meus Tickets', caminho: '/suporte', icone: MessageSquare, perfis: ['Cliente', 'UsuarioDoCliente'] },
+            { nome: 'Gestão de Tickets', caminho: '/admin/suporte', icone: MessageSquare, perfis: ['Admin', 'UsuarioDoAdmin'], permissionKey: 'gestao_suporte' },
         ]
     },
     {
         titulo: 'Administração',
-        perfis: ['Admin', 'Cliente', 'Usuario'],
+        perfis: ['Admin', 'Cliente', 'UsuarioDoAdmin', 'UsuarioDoCliente'],
         itens: [
             { nome: 'Minha Assinatura', caminho: '/minha-assinatura', icone: DollarSign, perfis: ['Cliente'] },
-            { nome: 'Clientes', caminho: '/clientes', icone: Building2, perfis: ['Admin', 'Cliente'], permissionKey: 'contas_receber' },
-            { nome: 'Gerenciar Usuários', caminho: '/gerenciar-usuarios', icone: Users, perfis: ['Admin', 'Cliente'], permissionKey: 'cadastrar_usuarios' },
-            { nome: 'Gerenciar Planos', caminho: '/planos', icone: Package, perfis: ['Admin'] }, 
-            { nome: 'Relatórios', caminho: '/relatorios', icone: FileText, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'relatorios' },
-            { nome: 'Importar Dados', caminho: '/importar', icone: Upload, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'importar' },
-            { nome: 'Exportar Dados', caminho: '/exportar', icone: FileDown, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'relatorios' },
-            { nome: 'Configurações', caminho: '/configuracoes', icone: Settings, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'configuracoes' },
+            { nome: 'Clientes', caminho: '/clientes', icone: Building2, perfis: ['Admin', 'Cliente', 'UsuarioDoAdmin'], permissionKey: 'contas_receber' },
+            { nome: 'Gerenciar Usuários', caminho: '/gerenciar-usuarios', icone: Users, perfis: ['Admin', 'Cliente', 'UsuarioDoAdmin'], permissionKey: 'cadastrar_usuarios' },
+            { nome: 'Gerenciar Planos', caminho: '/planos', icone: Package, perfis: ['Admin', 'UsuarioDoAdmin'] }, 
+            { nome: 'Relatórios', caminho: '/relatorios', icone: FileText, perfis: ['Admin', 'Cliente', 'UsuarioDoAdmin', 'UsuarioDoCliente'], permissionKey: 'relatorios' },
+            { nome: 'Importar Dados', caminho: '/importar', icone: Upload, perfis: ['Admin', 'Cliente', 'UsuarioDoAdmin', 'UsuarioDoCliente'], permissionKey: 'importar' },
+            { nome: 'Exportar Dados', caminho: '/exportar', icone: FileDown, perfis: ['Admin', 'Cliente', 'UsuarioDoAdmin', 'UsuarioDoCliente'], permissionKey: 'relatorios' },
+            { nome: 'Configurações', caminho: '/configuracoes', icone: Settings, perfis: ['Admin', 'Cliente', 'UsuarioDoAdmin', 'UsuarioDoCliente'], permissionKey: 'configuracoes' },
         ]
     }
 ];
@@ -131,25 +131,31 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick, adminBranding, l
   const localizacao = useLocation();
   const { role, perfil, carregando } = useSessao();
   
-  // Usando useTicketNotifications para o badge
-  const { mensagensParaResponder, carregando: carregandoNotificacoes } = useTicketNotifications();
-
-  // --- CORREÇÃO: Definições seguras de perfil ---
+  // --- CORREÇÃO: Definições seguras de perfil e permissões ---
   const clientProfile = role === 'Cliente' ? perfil as ClienteProfile : null;
-  const userProfile = role === 'Usuario' ? perfil as UsuarioProfile | AdminUsuarioProfile : null;
+  const userProfile = (role === 'UsuarioDoCliente' || role === 'UsuarioDoAdmin') ? perfil as UsuarioProfile | AdminUsuarioProfile : null;
   
-  const isUnassignedUser = role === 'Usuario' && userProfile && !userProfile.cliente_id && !('admin_id' in userProfile && userProfile.admin_id);
+  const isUnassignedUser = role === 'UsuarioDoCliente' && userProfile && !userProfile.cliente_id;
   const isPendingClient = role === 'Cliente' && clientProfile && !clientProfile.aprovado;
   
   const isAccessExpired = role === 'Cliente' && clientProfile?.data_fim_acesso && isPast(parseISO(clientProfile.data_fim_acesso));
+  
+  const getPermissoes = () => {
+      if (role === 'Admin') return {}; // Admin tem acesso total, não precisa de permissões explícitas
+      if (isClient) return clientProfile?.permissoes || {};
+      if (isUsuarioDoAdmin || isUsuarioDoCliente) return userProfile?.permissoes || {};
+      return {};
+  };
+  
+  const userPermissions = getPermissoes();
   // -----------------------------------------------
   
   const isPreAuthFlow = localizacao.pathname === '/selecao-perfil';
   
   const isAdmin = role === 'Admin';
   const isClient = role === 'Cliente';
-  const isUserOfClient = role === 'Usuario' && userProfile && 'cliente_id' in userProfile && !!userProfile.cliente_id;
-  const isUserOfAdmin = role === 'Usuario' && userProfile && 'admin_id' in userProfile && !!userProfile.admin_id;
+  const isUsuarioDoAdminRole = role === 'UsuarioDoAdmin';
+  const isUsuarioDoClienteRole = role === 'UsuarioDoCliente';
   
   // Lógica para a URL da Logo e Título (usando adminBranding que agora vem do useOwnerBranding)
   let finalLogoUrl = adminBranding?.logoUrl;
@@ -159,21 +165,21 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick, adminBranding, l
   // LÓGICA DE DESCRIÇÃO AJUSTADA
   if (isAdmin) {
       profileDescription = 'Administrador do Sistema';
+  } else if (isUsuarioDoAdminRole) {
+      profileDescription = 'Usuário Administrativo';
   } else if (isClient) {
       profileDescription = 'Cliente Principal';
-  } else if (role === 'Usuario') {
-      // Se for funcionário, a descrição é o nome do funcionário
+  } else if (isUsuarioDoClienteRole) {
       profileDescription = `Funcionário: ${perfil?.nome || 'N/A'}`;
   } else if (perfil?.nome) {
-      // Fallback para perfis não mapeados
       profileDescription = perfil.nome;
   }
   
-  const shouldShowSuporte = isAdmin || isClient || (role === 'Usuario' && !isUnassignedUser);
+  const shouldShowSuporte = isAdmin || isClient || isUsuarioDoAdminRole || isUsuarioDoClienteRole;
 
 
   const checkPermission = (item: ItemMenu) => {
-    if (!item.permissionKey) return true;
+    if (!role || !item.perfis.includes(role as any)) return false;
 
     if (isAccessExpired) {
         return item.caminho === '/painel' || item.caminho === '/minha-assinatura';
@@ -183,39 +189,35 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick, adminBranding, l
         return item.caminho === '/painel';
     }
 
-    if (role === 'Admin') {
-        return true;
+    // 1. Admin e Usuário do Admin têm acesso total (se o item estiver na lista de perfis)
+    if (isAdmin || isUsuarioDoAdminRole) {
+        // Se o item tiver uma chave de permissão, verifica se ela está liberada no perfil do UsuarioDoAdmin
+        if (isUsuarioDoAdminRole && item.permissionKey) {
+            return userPermissions[item.permissionKey] === true;
+        }
+        return true; // Admin tem acesso total
     }
 
-    if (role === 'Cliente' && clientProfile) {
+    // 2. Cliente e Usuário do Cliente
+    if (isClient || isUsuarioDoClienteRole) {
         if (isPendingClient) {
             return item.caminho === '/painel';
         }
-        if (item.caminho.includes('/folha-ponto?mode=self')) {
-            return false;
-        }
-        return clientProfile.permissoes?.[item.permissionKey] === true;
-    }
-
-    if (role === 'Usuario' && userProfile) {
-        if (isUnassignedUser) {
-            return item.caminho === '/painel' || item.caminho === '/cadastrar-empresa';
-        }
         
-        if (item.caminho === '/folha-ponto') {
+        // Usuário do Cliente não pode ver a gestão de ponto (apenas o próprio)
+        if (isUsuarioDoClienteRole && item.caminho === '/folha-ponto' && item.permissionKey === 'folha_ponto') {
             return false;
         }
         
-        // NOVO: Verifica a permissão de gestão de suporte
-        if (item.permissionKey === 'gestao_suporte') {
-            return userProfile.permissoes?.gestao_suporte === true;
-        }
-        
+        // Verifica a permissão explícita
         if (item.permissionKey) {
-            return userProfile.permissoes?.[item.permissionKey] === true;
+            return userPermissions[item.permissionKey] === true;
         }
-        return false;
+        
+        // Itens sem permissionKey (ex: Minha Assinatura, Suporte)
+        return true;
     }
+    
     return false;
   };
 
@@ -262,14 +264,14 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick, adminBranding, l
         )}
         
         {SECOES_MENU.map(secao => {
-            if (!role || !secao.perfis.includes(role)) return null;
+            if (!role || !secao.perfis.includes(role as any)) return null;
             
             if (secao.titulo === 'Suporte' && !shouldShowSuporte) {
                 return null;
             }
             
             const itensVisiveis = secao.itens.filter(item => 
-                item.perfis.includes(role) && 
+                item.perfis.includes(role as any) && 
                 checkPermission(item)
             );
 
@@ -286,18 +288,25 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick, adminBranding, l
                         
                         // Lógica de Notificação para Suporte
                         let notificationBadge = null;
-                        if (item.caminho === '/suporte' && mensagensParaResponder > 0 && !isAdmin) {
-                            notificationBadge = (
-                                <span className="ml-auto h-5 w-5 rounded-full bg-red-500 flex items-center justify-center text-white text-xs font-bold">
-                                    {mensagensParaResponder > 9 ? '9+' : mensagensParaResponder}
-                                </span>
-                            );
-                        } else if (item.caminho === '/admin/suporte' && mensagensParaResponder > 0 && (isAdmin || userProfile?.permissoes?.gestao_suporte)) {
-                            notificationBadge = (
-                                <span className="ml-auto h-5 w-5 rounded-full bg-red-500 flex items-center justify-center text-white text-xs font-bold">
-                                    {mensagensParaResponder > 9 ? '9+' : mensagensParaResponder}
-                                </span>
-                            );
+                        const isSuporteItem = item.caminho === '/suporte' || item.caminho === '/admin/suporte';
+                        
+                        if (isSuporteItem && mensagensParaResponder > 0) {
+                            // Se for Cliente/UsuarioDoCliente, mostra no /suporte
+                            if (item.caminho === '/suporte' && (isClient || isUsuarioDoClienteRole)) {
+                                notificationBadge = (
+                                    <span className="ml-auto h-5 w-5 rounded-full bg-red-500 flex items-center justify-center text-white text-xs font-bold">
+                                        {mensagensParaResponder > 9 ? '9+' : mensagensParaResponder}
+                                    </span>
+                                );
+                            }
+                            // Se for Admin/UsuarioDoAdmin, mostra no /admin/suporte
+                            if (item.caminho === '/admin/suporte' && (isAdmin || isUsuarioDoAdminRole)) {
+                                notificationBadge = (
+                                    <span className="ml-auto h-5 w-5 rounded-full bg-red-500 flex items-center justify-center text-white text-xs font-bold">
+                                        {mensagensParaResponder > 9 ? '9+' : mensagensParaResponder}
+                                    </span>
+                                );
+                            }
                         }
 
                         return (
