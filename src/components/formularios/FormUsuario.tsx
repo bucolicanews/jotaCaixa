@@ -239,9 +239,8 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
             // Se for edição, usa as permissões existentes
             acc[p.key] = (profileToEdit as any).permissoes[p.key] !== false;
         } else {
-            // SE FOR CRIAÇÃO DE NOVO USUÁRIO: Apenas Ponto Eletrônico e Visualizar Próprio Ponto são true
-            // CORREÇÃO CRÍTICA: Apenas Ponto Eletrônico e Visualizar Próprio Ponto devem ser TRUE por padrão.
-            acc[p.key] = p.key === 'ponto_eletronico' || p.key === 'visualizar_proprio_ponto';
+            // SE FOR CRIAÇÃO DE NOVO USUÁRIO: TODAS AS PERMISSÕES SÃO FALSE
+            acc[p.key] = false;
         }
         return acc;
     }, {} as Record<string, boolean>);
