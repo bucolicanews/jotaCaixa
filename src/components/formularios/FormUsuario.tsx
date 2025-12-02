@@ -3,7 +3,7 @@ import { useForm, FormProvider, Control } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from '@/components/ui/button';
-import { Loader2, Tag, FileSignature } from 'lucide-react';
+import { Loader2, Tag } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { AnyProfile, ClienteProfile, UsuarioProfile, UserRole, AdminUsuarioProfile } from '@/types/usuario';
@@ -21,11 +21,7 @@ import FormFolgas from '../formularios/FormFolgas';
 import FormDocumentos from '../usuario-forms/FormDocumentos';
 import FormDadosContratuais from '../usuario-forms/FormDadosContratuais';
 import FormFerias from '@/components/usuario-forms/FormFerias';
-import LogoUpload from '../LogoUpload';
-import { Checkbox } from '../ui/checkbox';
-import FormIdentificacao from '../cliente-forms/FormIdentificacao';
-import FormContato from '../cliente-forms/FormContato';
-import FormEndereco from '../cliente-forms/FormEndereco';
+import FormClientCompany from './FormClientCompany'; // NOVO IMPORT
 
 const textOptional = z.string().optional().or(z.literal(''));
 const urlSchema = z.string().url('URL inválida.').optional().or(z.literal(''));
@@ -59,16 +55,6 @@ const formSchema = z.object({
   cidade: textOptional,
   estado: textOptional,
   
-  // NOVOS CAMPOS DE CLIENTE (Apenas para isNewClient ou Cliente Profile)
-  razao_social: textOptional,
-  nome_fantasia: textOptional,
-  documento: textOptional,
-  cnpj: textOptional,
-  
-  // NOVOS CAMPOS DE ASSINATURA (Apenas para Cliente Profile)
-  assinatura_proprietario_nome: textOptional,
-  assinatura_proprietario_url: textOptional,
-  
   // Dados Contratuais (Apenas para UsuarioProfile)
   data_inicio_contrato: z.date().optional().nullable(),
   data_fim_contrato: z.date().optional().nullable(),
@@ -90,9 +76,6 @@ const formSchema = z.object({
   cnh_url: urlSchema,
   cartao_pis_url: urlSchema,
   ja_admitido_anteriormente: z.boolean().optional(),
-  
-  // NOVO CAMPO DE ACESSO
-  data_fim_acesso: z.date().optional().nullable(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -258,15 +241,6 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
         senha: '',
         permissoes: defaultPermissoes,
         
-        // Dados de Cliente Profile
-        limite_usuarios: clientProfile?.limite_usuarios || 5,
-        razao_social: clientProfile?.razao_social || '',
-        nome_fantasia: clientProfile?.nome_fantasia || '',
-        documento: clientProfile?.documento || '',
-        cnpj: clientProfile?.cnpj || '',
-        assinatura_proprietario_nome: clientProfile?.assinatura_proprietario_nome || clientProfile?.nome || '',
-        assinatura_proprietario_url: clientProfile?.assinatura_proprietario_url || clientProfile?.logo_url || '',
-        
         // Dados de Usuário Profile
         dias_folga_fixos: userProfile?.dias_folga_fixos || ['Saturday', 'Sunday'],
         folga_domingo_obrigatoria: userProfile?.folga_domingo_obrigatoria ?? true,
@@ -279,18 +253,18 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
         tipo_aviso: (userProfile?.tipo_aviso || 'Nenhum') as FormValues['tipo_aviso'],
         
         // Dados Cadastrais (Comum)
-        cpf: userProfile?.cpf || clientProfile?.cpf || '',
-        rg: userProfile?.rg || clientProfile?.rg || '',
+        cpf: userProfile?.cpf || '',
+        rg: userProfile?.rg || '',
         nome_mae: userProfile?.nome_mae || '',
         nome_pai: userProfile?.nome_pai || '',
-        telefone: userProfile?.telefone || clientProfile?.telefone || '',
-        cep: userProfile?.cep || clientProfile?.cep || '',
-        endereco: userProfile?.endereco || clientProfile?.endereco || '',
-        numero: userProfile?.numero || clientProfile?.numero || '',
-        complemento: userProfile?.complemento || clientProfile?.complemento || '',
-        bairro: userProfile?.bairro || clientProfile?.bairro || '',
-        cidade: userProfile?.cidade || clientProfile?.cidade || '',
-        estado: userProfile?.estado || clientProfile?.estado || '',
+        telefone: userProfile?.telefone || '',
+        cep: userProfile?.cep || '',
+        endereco: userProfile?.endereco || '',
+        numero: userProfile?.numero || '',
+        complemento: userProfile?.complemento || '',
+        bairro: userProfile?.bairro || '',
+        cidade: userProfile?.cidade || '',
+        estado: userProfile?.estado || '',
         
         // Documentos (URLs)
         rg_url: userProfile?.rg_url || '',
@@ -322,21 +296,6 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
       refetchStatus();
   }, [refetchStatus]);
   
-  // NOVO HANDLER: Sincroniza a URL da Logo com o campo de assinatura
-  const handleLogoUploadComplete = useCallback(async (url: string | null) => {
-      // Atualiza o campo de URL da assinatura com a nova URL da logo
-      form.setValue('assinatura_proprietario_url', url || '');
-      // Se for Cliente Profile, atualiza o logo_url também
-      if (isEditingClientProfile) {
-          await supabase.from('tbl_clientes').update({ logo_url: url || null }).eq('id', clientProfile!.id);
-      }
-  }, [form, isEditingClientProfile, clientProfile]);
-  
-  // NOVO HANDLER: Sincroniza a URL da Logo com o campo de assinatura (usado pelo checkbox)
-  const handleSyncUrl = useCallback((url: string | null) => {
-      form.setValue('assinatura_proprietario_url', url || '');
-  }, [form]);
-  
   const isContractEditable = criadorRole === 'Admin' || criadorRole === 'Cliente';
 
   const onSubmit = async (values: FormValues) => {
@@ -366,21 +325,17 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                 return;
             }
             
-            const targetRole = isNewClient ? 'Cliente' : 'Usuario';
+            const targetRole = 'Usuario';
             const metadata: Record<string, any> = { 
                 role: targetRole, 
                 nome: values.nome, 
             };
             
-            if (targetRole === 'Usuario') {
-                // CRÍTICO: Se o criador for Admin, o proprietario_id é o admin_id.
-                if (criadorRole === 'Admin') {
-                    metadata.proprietario_id = proprietarioId; // admin_id
-                } else {
-                    metadata.proprietario_id = proprietarioId; // cliente_id
-                }
-            } else if (targetRole === 'Cliente') {
-                metadata.aprovado = false;
+            // CRÍTICO: Se o criador for Admin, o proprietario_id é o admin_id.
+            if (criadorRole === 'Admin') {
+                metadata.proprietario_id = proprietarioId; // admin_id
+            } else {
+                metadata.proprietario_id = proprietarioId; // cliente_id
             }
             
             const { data, error: invokeError } = await supabase.functions.invoke('create-user-admin', {
@@ -400,109 +355,69 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
         
         if (!userId) throw new Error('Falha ao obter ID do usuário.');
 
-        // 2. Prepare Data Payload (tbl_usuarios OU tbl_clientes OU admin_usuarios)
+        // 2. Prepare Data Payload (tbl_usuarios ou admin_usuarios)
+        const tabelaDestino = criadorRole === 'Admin' ? 'admin_usuarios' : 'tbl_usuarios';
         
-        if (isEditingClientProfile || isNewClient) {
-            // Edição de Cliente Profile (tbl_clientes)
-            const dataToUpdate: Partial<ClienteProfile> = {
-                nome: values.nome,
-                email: values.email,
-                admin_id: criadorRole === 'Admin' ? proprietarioId : (criadorPerfil as ClienteProfile)?.admin_id,
-                aprovado: isEditingClientProfile ? clientProfile!.aprovado : false,
-                limite_usuarios: values.limite_usuarios,
-                permissoes: values.permissoes,
-                
-                razao_social: values.razao_social || null,
-                nome_fantasia: values.nome_fantasia || null,
-                documento: values.documento || null,
-                cnpj: values.cnpj || null,
-                
-                // Dados Cadastrais
-                cpf: values.cpf || null,
-                rg: values.rg || null,
-                telefone: values.telefone || null,
-                cep: values.cep || null,
-                endereco: values.endereco || null,
-                numero: values.numero || null,
-                complemento: values.complemento || null,
-                bairro: values.bairro || null,
-                cidade: values.cidade || null,
-                estado: values.estado || null,
-                
-                // Assinatura e Branding
-                assinatura_proprietario_nome: values.assinatura_proprietario_nome || null,
-                assinatura_proprietario_url: values.assinatura_proprietario_url || null,
-                logo_url: values.assinatura_proprietario_url || null,
-            };
+        const dataToUpdate: any = { 
+            nome: values.nome,
+            permissoes: values.permissoes,
             
-            const { error } = await supabase.from('tbl_clientes').upsert({ ...dataToUpdate, id: userId }, { onConflict: 'id' });
-            if (error) throw error;
+            // Dados de RH/Contrato
+            dias_folga_fixos: values.dias_folga_fixos || [],
+            folga_domingo_obrigatoria: values.folga_domingo_obrigatoria,
+            salario: values.salario,
+            horas_semanais: values.horas_semanais,
+            horas_mensais: values.horas_mensais,
+            data_inicio_contrato: values.data_inicio_contrato ? format(values.data_inicio_contrato, 'yyyy-MM-dd') : null,
+            data_fim_contrato: values.data_fim_contrato ? format(values.data_fim_contrato, 'yyyy-MM-dd') : null,
+            data_inicio_aviso: values.data_inicio_aviso ? format(values.data_inicio_aviso, 'yyyy-MM-dd') : null,
+            tipo_aviso: values.tipo_aviso === 'Nenhum' ? null : values.tipo_aviso,
             
-        } else if (isEditingUser || isNewAuthUser) {
-            // Edição de Usuário (tbl_usuarios ou admin_usuarios)
-            const tabelaDestino = criadorRole === 'Admin' ? 'admin_usuarios' : 'tbl_usuarios';
+            // Dados Cadastrais e Documentos
+            cpf: values.cpf || null,
+            rg: values.rg || null,
+            nome_mae: values.nome_mae || null,
+            nome_pai: values.nome_pai || null,
+            telefone: values.telefone || null,
+            cep: values.cep || null,
+            endereco: values.endereco || null,
+            numero: values.numero || null,
+            complemento: values.complemento || null,
+            bairro: values.bairro || null,
+            cidade: values.cidade || null,
+            estado: values.estado || null,
+            rg_url: values.rg_url || null,
+            cpf_url: values.cpf_url || null,
+            titulo_eleitor_url: values.titulo_eleitor_url || null,
+            reservista_url: values.reservista_url || null,
+            ctps_url: values.ctps_url || null,
+            certidao_nascimento_url: values.certidao_nascimento_url || null,
+            certidao_casamento_url: values.certidao_casamento_url || null,
+            comprovante_residencia_url: values.comprovante_residencia_url || null,
+            comprovante_escolaridade_url: values.comprovante_escolaridade_url || null,
+            exame_admissional_url: values.exame_admissional_url || null,
+            foto_3x4_url: values.foto_3x4_url || null,
+            cnh_url: values.cnh_url || null,
+            cartao_pis_url: values.cartao_pis_url || null,
+            ja_admitido_anteriormente: values.ja_admitido_anteriormente,
             
-            const dataToUpdate: any = { 
-                nome: values.nome,
-                permissoes: values.permissoes,
-                
-                // Dados de RH/Contrato
-                dias_folga_fixos: values.dias_folga_fixos || [],
-                folga_domingo_obrigatoria: values.folga_domingo_obrigatoria,
-                salario: values.salario,
-                horas_semanais: values.horas_semanais,
-                horas_mensais: values.horas_mensais,
-                data_inicio_contrato: values.data_inicio_contrato ? format(values.data_inicio_contrato, 'yyyy-MM-dd') : null,
-                data_fim_contrato: values.data_fim_contrato ? format(values.data_fim_contrato, 'yyyy-MM-dd') : null,
-                data_inicio_aviso: values.data_inicio_aviso ? format(values.data_inicio_aviso, 'yyyy-MM-dd') : null,
-                tipo_aviso: values.tipo_aviso === 'Nenhum' ? null : values.tipo_aviso,
-                
-                // Dados Cadastrais e Documentos
-                cpf: values.cpf || null,
-                rg: values.rg || null,
-                nome_mae: values.nome_mae || null,
-                nome_pai: values.nome_pai || null,
-                telefone: values.telefone || null,
-                cep: values.cep || null,
-                endereco: values.endereco || null,
-                numero: values.numero || null,
-                complemento: values.complemento || null,
-                bairro: values.bairro || null,
-                cidade: values.cidade || null,
-                estado: values.estado || null,
-                rg_url: values.rg_url || null,
-                cpf_url: values.cpf_url || null,
-                titulo_eleitor_url: values.titulo_eleitor_url || null,
-                reservista_url: values.reservista_url || null,
-                ctps_url: values.ctps_url || null,
-                certidao_nascimento_url: values.certidao_nascimento_url || null,
-                certidao_casamento_url: values.certidao_casamento_url || null,
-                comprovante_residencia_url: values.comprovante_residencia_url || null,
-                comprovante_escolaridade_url: values.comprovante_escolaridade_url || null,
-                exame_admissional_url: values.exame_admissional_url || null,
-                foto_3x4_url: values.foto_3x4_url || null,
-                cnh_url: values.cnh_url || null,
-                cartao_pis_url: values.cartao_pis_url || null,
-                ja_admitido_anteriormente: values.ja_admitido_anteriormente,
-                
-                // Vinculação (apenas se for novo)
-                ...(isNewAuthUser && tabelaDestino === 'tbl_usuarios' && { cliente_id: proprietarioId }),
-                ...(isNewAuthUser && tabelaDestino === 'admin_usuarios' && { admin_id: proprietarioId }),
-                
-                // Se for edição de AdminUsuario, garante que o admin_id seja mantido no payload
-                ...(isEditing && tabelaDestino === 'admin_usuarios' && { admin_id: (usuarioInicial as AdminUsuarioProfile)?.admin_id }),
-            };
+            // Vinculação (apenas se for novo)
+            ...(isNewAuthUser && tabelaDestino === 'tbl_usuarios' && { cliente_id: proprietarioId }),
+            ...(isNewAuthUser && tabelaDestino === 'admin_usuarios' && { admin_id: proprietarioId }),
             
-            const { error } = await supabase.from(tabelaDestino).upsert({ ...dataToUpdate, id: userId, email: values.email }, { onConflict: 'id' });
-            if (error) throw error;
-            
-            if (isEditing && values.senha) {
-                const { error: authError } = await supabase.auth.updateUser({ password: values.senha });
-                if (authError) throw authError;
-            }
+            // Se for edição de AdminUsuario, garante que o admin_id seja mantido no payload
+            ...(isEditing && tabelaDestino === 'admin_usuarios' && { admin_id: (usuarioInicial as AdminUsuarioProfile)?.admin_id }),
+        };
+        
+        const { error } = await supabase.from(tabelaDestino).upsert({ ...dataToUpdate, id: userId, email: values.email }, { onConflict: 'id' });
+        if (error) throw error;
+        
+        if (isEditing && values.senha) {
+            const { error: authError } = await supabase.auth.updateUser({ password: values.senha });
+            if (authError) throw authError;
         }
 
-        showSuccess(`${isNewClient ? 'Cliente' : 'Usuário'} ${isEditing ? 'atualizado' : 'criado'} com sucesso!`);
+        showSuccess(`Usuário ${isEditing ? 'atualizado' : 'criado'} com sucesso!`);
         
         if (isNewAuthUser) {
             const { error: resetError } = await supabase.auth.resetPasswordForEmail(values.email, {
@@ -546,160 +461,19 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
   // 3. Controla a visibilidade do botão de salvar
   const shouldShowSaveButton = !isReadOnly && (!isSelfEditUsuario || activeTab === 'cadastrais');
   
-  // Se for Cliente Profile, remove as abas de RH
-  if (isNewClient) {
-      return (
-        <FormProvider {...form}>
-            <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                    <h3 className="font-semibold text-lg">Dados de Acesso e Empresa</h3>
-                    <FormField control={form.control} name="nome" render={({ field }) => (
-                        <FormItem><FormLabel>Nome da Empresa / Pessoa</FormLabel><FormControl><Input placeholder="Nome Fantasia ou Nome Completo" {...field} disabled={isSubmitting} /></FormControl><FormMessage /></FormItem>
-                    )} />
-                    <FormField control={form.control} name="email" render={({ field }) => (
-                        <FormItem><FormLabel>Email (Login)</FormLabel><FormControl><Input type="email" placeholder="email@empresa.com" {...field} disabled={isSubmitting} /></FormControl><FormMessage /></FormItem>
-                    )} />
-                    <FormField control={form.control} name="senha" render={({ field }) => (
-                        <FormItem><FormLabel>Criar Senha</FormLabel><FormControl><Input type="password" placeholder="••••••••" {...field} disabled={isSubmitting} /></FormControl><FormMessage /></FormItem>
-                    )} />
-                    
-                    <Separator />
-                    <h3 className="font-semibold text-lg">Documentos (Opcional)</h3>
-                    <FormField control={form.control} name="documento" render={({ field }) => (
-                        <FormItem><FormLabel>CPF/CNPJ</FormLabel><FormControl><Input placeholder="00.000.000/0000-00" {...field} disabled={isSubmitting} /></FormControl><FormMessage /></FormItem>
-                    )} />
-                    <FormField control={form.control} name="razao_social" render={({ field }) => (
-                        <FormItem><FormLabel>Razão Social</FormLabel><FormControl><Input placeholder="Razão Social" {...field} disabled={isSubmitting} /></FormControl><FormMessage /></FormItem>
-                    )} />
-
-                    <Button type="submit" className="w-full" disabled={isSubmitting}>
-                        {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Convidar Cliente'}
-                    </Button>
-                </form>
-            </Form>
-        </FormProvider>
-      );
-  }
+  // --- ROTEAMENTO PRINCIPAL ---
   
-  if (isEditingClientProfile) {
-      const clientTabs = [
-          { value: 'pessoal', label: 'Geral' },
-          { value: 'identificacao', label: 'Identificação' },
-          { value: 'contato', label: 'Contato' },
-          { value: 'endereco', label: 'Endereço' },
-      ];
-      
+  // Se for criação de novo cliente OU edição de perfil de cliente, usa o FormClientCompany
+  if (isNewClient || isEditingClientProfile) {
       return (
-        <FormProvider {...form}>
-            <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                    <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-                        <TabsList className="flex flex-wrap justify-start w-full h-auto p-1">
-                            {clientTabs.map(tab => (
-                                <TabsTrigger key={tab.value} value={tab.value} className="flex-1 md:flex-none md:w-1/4">{tab.label}</TabsTrigger>
-                            ))}
-                        </TabsList>
-                        
-                        {/* TAB 1: GERAL (CLIENTE PROFILE) */}
-                        <TabsContent value="pessoal" className="mt-4 space-y-4 p-4">
-                            <FormField control={form.control} name="nome" render={({ field }) => (
-                                <FormItem><FormLabel>Nome Completo</FormLabel><FormControl><Input placeholder="Nome completo" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
-                            )} />
-                            <FormField control={form.control} name="email" render={({ field }) => (
-                                <FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" placeholder="email@exemplo.com" {...field} disabled /></FormControl><FormMessage /></FormItem>
-                            )} />
-                            <FormField control={form.control} name="senha" render={({ field }) => (
-                                <FormItem><FormLabel>Alterar Senha (Opcional)</FormLabel><FormControl><Input type="password" placeholder="••••••••" {...field} disabled={isReadOnly || isEditingClientProfile} /></FormControl><FormMessage /></FormItem>
-                            )} />
-                            
-                            <Separator />
-                            <h3 className="font-semibold text-lg flex items-center"><FileSignature className="w-4 h-4 mr-2" /> Assinatura e Branding</h3>
-                            
-                            <FormField control={form.control} name="assinatura_proprietario_nome" render={({ field }) => (
-                                <FormItem><FormLabel>Nome da Empresa/Pessoa para Assinatura</FormLabel><FormControl><Input placeholder="Ex: Minha Empresa LTDA" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
-                            )} />
-                            
-                            <FormField control={form.control} name="assinatura_proprietario_url" render={({ field }) => (
-                                <FormItem><FormLabel>URL da Imagem de Assinatura (Logo)</FormLabel><FormControl><Input placeholder="URL da imagem de assinatura" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
-                            )} />
-                            
-                            <LogoUpload 
-                                ownerId={clientProfile!.id}
-                                tableName={'tbl_clientes'}
-                                initialLogoUrl={form.watch('assinatura_proprietario_url')}
-                                onUploadComplete={handleLogoUploadComplete}
-                                onSyncUrl={handleSyncUrl}
-                                isReadOnly={isSubmitting || isReadOnly}
-                            />
-                            
-                            <Separator />
-                            <h3 className="font-semibold text-lg">Configurações da Empresa</h3>
-                            <FormField control={form.control} name="limite_usuarios" render={({ field }) => (
-                                <FormItem><FormLabel>Limite de Usuários</FormLabel><FormControl><Input type="number" placeholder="5" {...field} disabled={isReadOnly || isEditingClientProfile} /></FormControl><FormMessage /></FormItem>
-                            )} />
-                            
-                            <div className="space-y-2 pt-4">
-                                <div className="flex justify-between items-center mb-1">
-                                    <FormLabel>Permissões de Acesso</FormLabel>
-                                    <div className="space-x-2">
-                                        <Button type="button" variant="link" size="sm" onClick={() => handleSelectAll(true)} className="p-0 h-auto" disabled={isSubmitting || isReadOnly || isEditingClientProfile}>Selecionar Todos</Button>
-                                        <Button type="button" variant="link" size="sm" onClick={() => handleSelectAll(false)} className="p-0 h-auto text-destructive" disabled={isSubmitting || isReadOnly || isEditingClientProfile}>Desmarcar Todos</Button>
-                                    </div>
-                                </div>
-                                <div className="grid grid-cols-2 gap-4 rounded-lg border p-4">
-                                    {PERMISSOES_DISPONIVEIS.filter((p: Permissao) => p.key !== 'ponto_eletronico' && p.key !== 'visualizar_proprio_ponto').map((p: Permissao) => (
-                                        <FormField key={p.key} control={form.control} name={`permissoes.${p.key}`} render={({ field }) => (
-                                            <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                                                <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} disabled={isSubmitting || isReadOnly || isEditingClientProfile} /></FormControl>
-                                                <FormLabel className="font-normal">{p.label}</FormLabel>
-                                            </FormItem>
-                                        ))} />
-                                    ))}
-                                </div>
-                            </div>
-                        </TabsContent>
-                        
-                        {/* TAB 2: IDENTIFICAÇÃO (CLIENTE PROFILE) */}
-                        <TabsContent value="identificacao" className="mt-4 space-y-6 p-4">
-                            <FormIdentificacao
-                                control={form.control as unknown as Control<any>}
-                                clienteId={clientProfile?.id}
-                                isSubmitting={isSubmitting}
-                                tagRefreshKey={refreshKey}
-                                onTagToggle={handleTagToggle}
-                            />
-                        </TabsContent>
-                        
-                        {/* TAB 3: CONTATO (CLIENTE PROFILE) */}
-                        <TabsContent value="contato" className="mt-4 space-y-6 p-4">
-                            <FormContato
-                                control={form.control as unknown as Control<any>}
-                                clienteId={clientProfile?.id}
-                                isSubmitting={isSubmitting}
-                                tagRefreshKey={refreshKey}
-                                onTagToggle={handleTagToggle}
-                            />
-                        </TabsContent>
-                        
-                        {/* TAB 4: ENDEREÇO (CLIENTE PROFILE) */}
-                        <TabsContent value="endereco" className="mt-4 space-y-6 p-4">
-                            <FormEndereco
-                                control={form.control as unknown as Control<any>}
-                                clienteId={clientProfile?.id}
-                                isSubmitting={isSubmitting}
-                                tagRefreshKey={refreshKey}
-                                onTagToggle={handleTagToggle}
-                            />
-                        </TabsContent>
-                    </Tabs>
-                    
-                    <Button type="submit" className="w-full" disabled={isSubmitting || isReadOnly}>
-                        {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        Salvar Alterações
-                    </Button>
-                </form>
-            </Form>
-        </FormProvider>
+          <FormClientCompany
+              criadorRole={criadorRole}
+              criadorPerfil={criadorPerfil}
+              clientProfile={clientProfile}
+              isNewClient={isNewClient}
+              isReadOnly={isReadOnly}
+              onSaveComplete={onSaveComplete}
+          />
       );
   }
 
