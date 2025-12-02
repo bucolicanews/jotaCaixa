@@ -17,7 +17,7 @@ import { format } from 'date-fns';
 import { BASE_URL } from '@/config/app-config';
 import { Separator } from '../ui/separator';
 
-import FormGeral from './FormGeral'; // <<< CORREÇÃO AQUI: Caminho relativo correto
+import FormGeral from './FormGeral'; // Importação correta: FormGeral está no mesmo diretório
 import FormFolgas from '../formularios/FormFolgas';
 import FormDocumentos from '../usuario-forms/FormDocumentos';
 import FormDadosContratuais from '../usuario-forms/FormDadosContratuais';
@@ -606,15 +606,13 @@ if (isEditingClientProfile) {
 
                         {/* TAB 1: GERAL */}
                         <TabsContent value="pessoal" className="mt-4 space-y-4 p-4">
-                            <FormField control={form.control} name="nome" render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Nome Completo</FormLabel>
-                                    <FormControl>
-                                        <Input placeholder="Nome completo" {...field} disabled={isReadOnly} />
-                                    </FormControl>
-                                    <FormMessage />
-                                </FormItem>
-                            )} />
+                            <FormGeral
+                                control={form.control}
+                                isSubmitting={isSubmitting}
+                                permissoesVisiveis={permissoesVisiveis}
+                                handleSelectAll={handleSelectAll}
+                                isReadOnly={isChildFormReadOnly('pessoal')}
+                            />
                             <FormField control={form.control} name="email" render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Email</FormLabel>
