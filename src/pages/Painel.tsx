@@ -12,98 +12,96 @@ const Painel = () => {
   const { role, perfil, carregando } = useSessao();
   const navigate = useNavigate();
 
-  // flags de permissões
   let hasFinancePermissions = false;
   let hasPontoPermission = false;
   let hasSuportePermission = false;
   let isClientApproved = true;
-
-  // roles definidos no SessionContext
-  const isAdmin = role === 'Admin';
-  const isUsuarioDoAdmin = role === 'UsuarioDoAdmin';
-  const isClient = role === 'Cliente';
-  const isUsuarioDoCliente = role === 'UsuarioDoCliente';
   
-  // Helper para garantir que as permissões sejam um objeto
-  const getPermissoesFromPerfil = (p: any) => {
-    if (!p) return {};
-    if (p.permissoes && typeof p.permissoes === 'object') return p.permissoes;
-    try {
-      return JSON.parse(p.permissoes || '{}');
-    } catch {
-      return {};
-    }
-  };
+  const isClient = role === 'Cliente';
+  const isAdmin = role === 'Admin';
+  const isUsuario = role === 'Usuario';
 
-  // Caso Admin → acesso total
-  if (isAdmin) {
+  // 🔥 NOVO: Diferenciação de Usuário (Funcionário)
+  const isUsuarioDoAdmin = 
+    isUsuario && 
+    perfil && 
+    ('admin_id' in perfil) && 
+    perfil.admin_id !== null;
+
+  const isUsuarioDeCliente = 
+    isUsuario &&
+    perfil &&
+    ('cliente_id' in perfil) &&
+    perfil.cliente_id !== null;
+  // FIM NOVO
+
+  if (isAdmin || isUsuarioDoAdmin) { // 🔥 TRATA USUÁRIO DO ADMIN COMO ADMIN
     hasFinancePermissions = true;
     hasPontoPermission = true;
     hasSuportePermission = true;
     isClientApproved = true;
-  }
-
-  // Usuário do Admin → obedece permissões do próprio registro admin_usuarios (visão herdada do admin)
-  if (isUsuarioDoAdmin) {
-    const perfilAdminUsuario = perfil as AdminUsuarioProfile;
-    const permissoes = getPermissoesFromPerfil(perfilAdminUsuario);
-    // Se o admin_usuario tiver permissoes explícitas, aplicamos
-    hasFinancePermissions = !!(permissoes.contas_pagar || permissoes.contas_receber || permissoes.bancos || permissoes.conciliacao || permissoes.plano_contas || permissoes.importar || permissoes.relatorios);
-    hasPontoPermission = !!(permissoes.folha_ponto || permissoes.visualizar_proprio_ponto || permissoes.ponto_eletronico);
-    hasSuportePermission = !!permissoes.gestao_suporte;
-    isClientApproved = true; // funcionário válido
-    console.log('Painel: usuario do admin - permissoes:', permissoes);
-  }
-
-  // Cliente → suas permissões (tbl_clientes)
-  if (isClient) {
+    if (isUsuarioDoAdmin) {
+        console.log("Usuário do Admin detectado → Acesso total ao painel administrativo");
+    }
+  } else if (isClient) {
     const clienteProfile = perfil as ClienteProfile;
     isClientApproved = clienteProfile?.aprovado ?? false;
     if (isClientApproved) {
-      const permissoes = getPermissoesFromPerfil(clienteProfile);
-      hasFinancePermissions = !!(permissoes.contas_pagar || permissoes.contas_receber || permissoes.bancos || permissoes.conciliacao || permissoes.plano_contas || permissoes.importar || permissoes.relatorios);
-      hasPontoPermission = !!(permissoes.folha_ponto || permissoes.visualizar_proprio_ponto || permissoes.ponto_eletronico);
-      hasSuportePermission = !!permissoes.gestao_suporte;
+      const permissoes = clienteProfile?.permissoes || {};
+      hasFinancePermissions = permissoes.contas_pagar || permissoes.contas_receber || permissoes.bancos || permissoes.conciliacao || permissoes.plano_contas || permissoes.importar || permissoes.relatorios;
     }
-  }
-
-  // Usuario do Cliente → usa permissoes do seu perfil (tbl_usuarios)
-  if (isUsuarioDoCliente) {
+  } else if (isUsuarioDeCliente) { // 🔥 APENAS USUÁRIO DE CLIENTE
     const usuarioProfile = perfil as UsuarioProfile;
-    const permissoes = getPermissoesFromPerfil(usuarioProfile);
-    isClientApproved = true;
-    hasFinancePermissions = !!(permissoes.contas_pagar || permissoes.contas_receber || permissoes.bancos || permissoes.conciliacao || permissoes.plano_contas || permissoes.importar || permissoes.relatorios);
-    hasPontoPermission = !!(permissoes.folha_ponto || permissoes.visualizar_proprio_ponto || permissoes.ponto_eletronico);
-    hasSuportePermission = !!permissoes.gestao_suporte;
-    console.log('Painel: usuario do cliente - permissoes:', permissoes);
+    
+    // Verifica se o usuário está vinculado (tratado como aprovado se vinculado)
+    isClientApproved = true; 
+    
+    // CRÍTICO: Garante que as permissões sejam lidas corretamente do perfil
+    const permissoes = usuarioProfile?.permissoes || {};
+    
+    // Permissões Financeiras
+    hasFinancePermissions = permissoes.contas_pagar || permissoes.contas_receber || permissoes.bancos || permissoes.conciliacao || permissoes.plano_contas || permissoes.importar || permissoes.relatorios;
+    
+    // Permissões de RH
+    hasPontoPermission = permissoes.folha_ponto || permissoes.visualizar_proprio_ponto;
+    
+    // Permissões de Suporte
+    hasSuportePermission = permissoes.gestao_suporte === true;
+
+    // LOG DE DEBBUG
+    console.log("DEBUG PAINEL: Role:", role, "Aprovado:", isClientApproved, "Permissões Financeiras:", hasFinancePermissions, "Permissões:", permissoes);
   }
-
-  // Roteamento condicional
+  
+  // --- Lógica de Roteamento Condicional para Usuários ---
   useEffect(() => {
-    if (carregando) return;
-    // Usuários não vinculados não devem ser redirecionados
-    if (!isClientApproved) return;
-
-    // Admins e UsuárioDoAdmin ficam no painel administrativo se tiverem acesso
-    if (isAdmin || isUsuarioDoAdmin) {
-      // ficam no painel (acesso ao DashboardFinanceiro se for finance)
-      return;
-    }
-
-    // UsuárioDoCliente: lógica de prioridades
-    if (isUsuarioDoCliente) {
-      if (hasFinancePermissions) return; // mantém no painel com dashboard financeiro
+      if (carregando || !isClientApproved || !isUsuario) return;
+      
+      // Se for Usuário do Admin, ele já tem acesso total e fica no painel
+      if (isUsuarioDoAdmin) return;
+      
+      // 1. Prioridade Máxima: Financeiro (Se tiver permissão financeira, fica no painel)
+      if (hasFinancePermissions) {
+          // Fica no Painel para ver o DashboardFinanceiro
+          return;
+      }
+      
+      // 2. Prioridade Secundária: Gestão de Suporte (Se não for financeiro, mas tiver suporte)
       if (hasSuportePermission) {
-        navigate('/admin/suporte', { replace: true });
-        return;
+          navigate('/admin/suporte', { replace: true });
+          return;
       }
+      
+      // 3. Prioridade Terciária: Ponto Eletrônico (Se não for financeiro nem suporte, mas tiver ponto)
       if (hasPontoPermission) {
-        navigate('/folha-ponto?mode=self', { replace: true });
-        return;
+          navigate('/folha-ponto?mode=self', { replace: true });
+          return;
       }
-      // sem permissões: fica no painel com mensagem de acesso restrito
-    }
-  }, [carregando, isAdmin, isUsuarioDoAdmin, isUsuarioDoCliente, isClientApproved, hasFinancePermissions, hasSuportePermission, hasPontoPermission, navigate]);
+      
+      // 4. Se não tiver nenhuma permissão relevante, fica no painel vazio.
+      
+  }, [carregando, isUsuario, isClientApproved, isUsuarioDoAdmin, hasSuportePermission, hasFinancePermissions, hasPontoPermission, navigate]);
+  // ------------------------------------------------------
+
 
   if (carregando) {
     return (
@@ -114,8 +112,19 @@ const Painel = () => {
       </LayoutPrincipal>
     );
   }
+  
+  // Se for usuário e estiver carregando a lógica de redirecionamento, mostra o loader
+  if (isUsuario && isClientApproved && !hasFinancePermissions && (hasSuportePermission || hasPontoPermission)) {
+      return (
+        <LayoutPrincipal>
+            <div className="flex justify-center items-center h-64">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+        </LayoutPrincipal>
+      );
+  }
 
-  const welcomeMessage = (isAdmin || isUsuarioDoAdmin) ? 'Painel Administrativo' : 'Fluxo de Caixa';
+  const welcomeMessage = isAdmin || isUsuarioDoAdmin ? 'Painel Administrativo' : 'Fluxo de Caixa';
 
   return (
     <LayoutPrincipal>
@@ -130,14 +139,15 @@ const Painel = () => {
           </Link>
         )}
       </div>
-
+      
       {isClientApproved ? (
         <>
           <p className="text-lg text-muted-foreground mb-8">
             Bem-vindo ao {welcomeMessage}.
           </p>
 
-          {(isAdmin || isUsuarioDoAdmin || hasFinancePermissions) ? (
+          {/* Renderiza o DashboardFinanceiro se for Admin OU Usuário do Admin OU se tiver permissões financeiras */}
+          {isAdmin || isUsuarioDoAdmin || hasFinancePermissions ? (
             <DashboardFinanceiro />
           ) : (
             <Card className="mt-8">
@@ -151,6 +161,7 @@ const Painel = () => {
           )}
         </>
       ) : (
+        // Este caso só deve ser alcançado por um Cliente Pendente (que é tratado no LayoutPrincipal)
         <p className="text-lg text-muted-foreground">Aguardando aprovação da empresa.</p>
       )}
     </LayoutPrincipal>
