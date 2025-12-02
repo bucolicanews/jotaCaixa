@@ -21,10 +21,10 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useSearchParams } from 'react-router-dom';
 import { usePrint } from '@/hooks/use-print';
-import * as ReactDOMServer from 'react-dom/server'; // CORREÇÃO: Importação como namespace
+import * as ReactDOMServer from 'react-dom/server';
 import FolhaPontoPrint from '@/components/ponto/FolhaPontoPrint';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { useOwnerBranding } from '@/hooks/use-owner-branding'; // NOVO IMPORT
+import { useOwnerBranding } from '@/hooks/use-owner-branding';
 
 // Tipo simplificado para o usuário que estamos buscando
 interface UsuarioPonto extends UsuarioProfile {
@@ -38,7 +38,7 @@ const FolhaPonto: React.FC = () => {
   const [searchParams] = useSearchParams();
   const mode = searchParams.get('mode');
   const { printContent } = usePrint();
-  const { logoUrl, ownerName } = useOwnerBranding(); // USANDO HOOK DE BRANDING
+  const { logoUrl, ownerName } = useOwnerBranding();
   
   const [usuarios, setUsuarios] = useState<UsuarioPonto[]>([]);
   const [carregandoDados, setCarregandoDados] = useState(true);
@@ -113,7 +113,7 @@ const FolhaPonto: React.FC = () => {
 
     if (isAdmin) {
         
-        // Busca usuários do Admin
+        // Busca usuários do Admin (admin_usuarios)
         const { data: adminUsersData } = await supabase
             .from('admin_usuarios')
             .select('*')
@@ -128,8 +128,9 @@ const FolhaPonto: React.FC = () => {
         })) as UsuarioPonto[];
         fetchedUsers.push(...adminUsers);
 
-        // Busca usuários dos Clientes
+        // Busca usuários dos Clientes (tbl_usuarios)
         const clientIds = clientList.filter(c => c.id !== usuario?.id).map(c => c.id);
+        
         if (clientIds.length > 0) {
             const { data: clientUsersData } = await supabase
                 .from('tbl_usuarios')
@@ -145,7 +146,7 @@ const FolhaPonto: React.FC = () => {
         }
         
     } else if (ownerId) {
-        // Cliente: Busca apenas seus próprios usuários
+        // Cliente: Busca apenas seus próprios usuários (tbl_usuarios)
         const { data: usersData } = await supabase
             .from('tbl_usuarios')
             .select('*')
@@ -159,42 +160,6 @@ const FolhaPonto: React.FC = () => {
     setCarregandoDados(false);
   }, [ownerId, isAdmin, usuario?.id, perfil]);
 
-  // 1. Fetch Clients (Admin only)
-  useEffect(() => {
-    if (!carregandoSessao && isAdmin) {
-        fetchClientes();
-    }
-  }, [carregandoSessao, fetchClientes, isAdmin]);
-  
-  // 2. Fetch Subordinate Users (Management Mode)
-  useEffect(() => {
-      if (!carregandoSessao && !isSelfMode && ownerId) {
-          // If Admin, wait for clientsDisponiveis. If Client, run immediately.
-          if (isAdmin && clientesDisponiveis.length === 0) return; 
-          
-          buscarUsuarios(clientesDisponiveis);
-      } else if (!carregandoSessao && !isSelfMode && !ownerId) {
-          // If not admin/client/user, stop loading
-          setCarregandoDados(false);
-      }
-  }, [carregandoSessao, isSelfMode, ownerId, isAdmin, clientesDisponiveis, buscarUsuarios]);
-
-  // 3. Handle Self Mode Initialization (sets selected user and stops loading)
-  useEffect(() => {
-      if (isSelfMode && !carregandoSessao && usuario && perfil) {
-          const selfUser = perfil as UsuarioProfile | AdminUsuarioProfile;
-          const isFuncionarioAdmin = 'admin_id' in selfUser && !!(selfUser as AdminUsuarioProfile).admin_id;
-          
-          setFuncionarioSelecionado({
-              ...selfUser,
-              is_admin_user: isFuncionarioAdmin,
-              cliente_nome: isFuncionarioAdmin ? 'Meus Usuários (Admin)' : (perfil as ClienteProfile)?.nome || 'Minha Empresa',
-          } as UsuarioPonto);
-          
-          setCarregandoDados(false);
-      }
-  }, [isSelfMode, carregandoSessao, usuario, perfil]);
-  
   const fetchRegistrosFuncionario = useCallback(async (user: UsuarioPonto, data: Date) => {
     const isFuncionarioAdmin = user.is_admin_user;
     const tabelaRegistros = isFuncionarioAdmin ? 'admin_registros_ponto' : 'registros_ponto';
@@ -218,6 +183,7 @@ const FolhaPonto: React.FC = () => {
     } else {
       const mappedRegistros = (registros as any[]).map(r => ({
           ...r,
+          // O ID do proprietário é o admin_id (se existir) OU o empresa_id
           empresa_id: r.admin_id || r.empresa_id,
       })) as RegistroPonto[];
       setRegistrosDoFuncionario(mappedRegistros);
@@ -239,6 +205,40 @@ const FolhaPonto: React.FC = () => {
     }
   }, []);
 
+  // 1. Fetch Clients (Admin only)
+  useEffect(() => {
+    if (!carregandoSessao && isAdmin) {
+        fetchClientes();
+    }
+  }, [carregandoSessao, fetchClientes, isAdmin]);
+  
+  // 2. Fetch Subordinate Users (Management Mode)
+  useEffect(() => {
+      if (!carregandoSessao && !isSelfMode && ownerId) {
+          if (isAdmin && clientesDisponiveis.length === 0) return; 
+          
+          buscarUsuarios(clientesDisponiveis);
+      } else if (!carregandoSessao && !isSelfMode && !ownerId) {
+          setCarregandoDados(false);
+      }
+  }, [carregandoSessao, isSelfMode, ownerId, isAdmin, clientesDisponiveis, buscarUsuarios]);
+
+  // 3. Handle Self Mode Initialization (sets selected user and stops loading)
+  useEffect(() => {
+      if (isSelfMode && !carregandoSessao && usuario && perfil) {
+          const selfUser = perfil as UsuarioProfile | AdminUsuarioProfile;
+          const isFuncionarioAdmin = 'admin_id' in selfUser && !!(selfUser as AdminUsuarioProfile).admin_id;
+          
+          setFuncionarioSelecionado({
+              ...selfUser,
+              is_admin_user: isFuncionarioAdmin,
+              cliente_nome: isFuncionarioAdmin ? 'Meus Usuários (Admin)' : (perfil as ClienteProfile)?.nome || 'Minha Empresa',
+          } as UsuarioPonto);
+          
+          setCarregandoDados(false);
+      }
+  }, [isSelfMode, carregandoSessao, usuario, perfil]);
+  
   useEffect(() => {
     if (funcionarioSelecionado) {
         fetchRegistrosFuncionario(funcionarioSelecionado, dataSelecionada);
@@ -306,28 +306,6 @@ const FolhaPonto: React.FC = () => {
   }, [usuarios, filtroNomeDebounced, filtroClienteId]);
 
 
-  // --- LÓGICA DE MODO SELF (MEU PONTO) ---
-  useEffect(() => {
-      if (isSelfMode && usuario && !carregandoDados && !funcionarioSelecionado) {
-          // Encontra o próprio perfil do usuário logado na lista de usuários
-          const selfProfile = usuarios.find(u => u.id === usuario.id);
-          if (selfProfile) {
-              setFuncionarioSelecionado(selfProfile);
-          } else if (role === 'Usuario') {
-              // Se for usuário mas não estiver na lista (ex: recém-criado), usa o perfil da sessão
-              const selfUser = perfil as UsuarioProfile | AdminUsuarioProfile;
-              const isFuncionarioAdmin = 'admin_id' in selfUser && !!(selfUser as AdminUsuarioProfile).admin_id;
-              
-              setFuncionarioSelecionado({
-                  ...selfUser,
-                  is_admin_user: isFuncionarioAdmin,
-                  cliente_nome: isFuncionarioAdmin ? 'Meus Usuários (Admin)' : (perfil as ClienteProfile)?.nome || 'Minha Empresa',
-              } as UsuarioPonto);
-          }
-      }
-  }, [isSelfMode, usuario, carregandoDados, usuarios, funcionarioSelecionado, role, perfil]);
-  
-  
   // Verifica se o usuário tem permissão para acessar a página de gestão
   const canAccessManagement = isAdmin || (role === 'Cliente' && (perfil as ClienteProfile)?.permissoes?.folha_ponto === true);
   
@@ -361,8 +339,8 @@ const FolhaPonto: React.FC = () => {
                   data_inicio_contrato: funcionarioSelecionado.data_inicio_contrato,
               }}
               mes={dataSelecionada}
-              logoUrl={logoUrl} // PASSANDO LOGO
-              ownerName={ownerName} // PASSANDO NOME
+              logoUrl={logoUrl}
+              ownerName={ownerName}
           />
       );
 
@@ -556,3 +534,216 @@ const FolhaPonto: React.FC = () => {
 };
 
 export default FolhaPonto;
+</dyad-file>
+</dyad-command>
+
+### Alterações no `src/hooks/use-ferias-clt.ts`
+
+Vou garantir que o `useFeriasCLT` use a tabela correta (`admin_ferias_user` ou `ferias`) e a tabela de registros de ponto correta (`admin_registros_ponto` ou `registros_ponto`).
+
+<dyad-write path="src/hooks/use-ferias-clt.ts" description="Ajustando o hook CLT para rotear a busca de registros de ponto e férias para as tabelas corretas (admin_usuarios vs tbl_usuarios).">
+import { useState, useEffect, useCallback } from 'react';
+import { FeriasCLTData, PeriodoAquisitivo } from '@/types/ferias';
+import { supabase } from '@/integrations/supabase/client';
+import { parseISO, addYears, isBefore, startOfDay, endOfDay, isSameDay, isWithinInterval } from 'date-fns';
+import { RegistroPonto } from '@/types/ponto';
+
+// Constantes CLT
+const DIAS_DIREITO_MAX = 30;
+const FALTAS_DIREITO_MAP: Record<number, number> = {
+    5: 24, // 6 a 14 faltas = 24 dias
+    15: 18, // 15 a 23 faltas = 18 dias
+    24: 12, // 24 a 32 faltas = 12 dias
+    33: 0,  // Acima de 32 faltas = 0 dias
+};
+
+/**
+ * Função para calcular os dias de direito com base nas faltas injustificadas.
+ */
+const calcularDiasDireito = (faltas: number): number => {
+    if (faltas <= 5) return DIAS_DIREITO_MAX;
+    if (faltas <= 14) return FALTAS_DIREITO_MAP[5];
+    if (faltas <= 23) return FALTAS_DIREITO_MAP[15];
+    return FALTAS_DIREITO_MAP[33];
+};
+
+/**
+ * Função principal para calcular todos os períodos aquisitivos e o status atual.
+ */
+const calcularPeriodos = (
+    dataInicioContrato: string,
+    mesReferencia: Date,
+    registros: RegistroPonto[],
+    feriasGozadas: any[]
+): { periodos: PeriodoAquisitivo[], periodoAtual: PeriodoAquisitivo | null, ultimaFeriasFim: Date | null, diasDeFeriasDireito: number, faltasInjustificadasAcumuladas: number } => {
+    
+    const inicioContrato = startOfDay(parseISO(dataInicioContrato));
+    const hoje = startOfDay(mesReferencia);
+    
+    let currentInicio = inicioContrato;
+    let periodos: PeriodoAquisitivo[] = [];
+    let ultimaFeriasFim: Date | null = null;
+    
+    // 1. Determinar a última férias gozada
+    const gozadas = feriasGozadas.map(f => ({
+        inicio: startOfDay(parseISO(f.data_inicio)),
+        fim: endOfDay(parseISO(f.data_fim)),
+    })).sort((a, b) => b.fim.getTime() - a.fim.getTime());
+    
+    if (gozadas.length > 0) {
+        ultimaFeriasFim = gozadas[0].fim;
+    }
+
+    // 2. Iterar e calcular períodos aquisitivos
+    while (isBefore(currentInicio, hoje) || isSameDay(currentInicio, hoje)) {
+        const fimAquisitivo = addYears(currentInicio, 1);
+        const limiteConcessivo = addYears(fimAquisitivo, 1);
+        
+        // Filtra registros de falta injustificada dentro do período aquisitivo
+        const faltasInjustificadas = registros.filter(r => {
+            const dataRegistro = startOfDay(parseISO(r.horario_registro));
+            // Falta é injustificada se for 'Falta' E não tiver atestado
+            const isFaltaInjustificada = r.tipo === 'Falta' && !r.atestado_url;
+            
+            return isFaltaInjustificada && isWithinInterval(dataRegistro, { start: currentInicio, end: fimAquisitivo });
+        }).length;
+        
+        const diasDireito = calcularDiasDireito(faltasInjustificadas);
+        
+        let status: PeriodoAquisitivo['status'] = 'Em Andamento';
+        
+        // Verifica se o período já foi gozado
+        const foiGozada = gozadas.some(f => 
+            isWithinInterval(f.inicio, { start: currentInicio, end: fimAquisitivo })
+        );
+        
+        if (foiGozada) {
+            status = 'Gozada';
+        } else if (isBefore(limiteConcessivo, hoje)) {
+            // Vencido em dobro (se o limite concessivo passou)
+            status = 'Vencida em Dobro';
+        } else if (isBefore(fimAquisitivo, hoje)) {
+            // Período aquisitivo completo, mas ainda dentro do concessivo
+            status = 'Em Aberto';
+        }
+        
+        const periodo: PeriodoAquisitivo = {
+            inicio_aquisitivo: currentInicio,
+            fim_aquisitivo: fimAquisitivo,
+            limite_concessivo: limiteConcessivo,
+            dias_direito: diasDireito,
+            faltas_injustificadas: faltasInjustificadas,
+            status: status,
+        };
+        
+        periodos.push(periodo);
+        
+        // Se o período aquisitivo finalizou no passado, avança para o próximo
+        if (isBefore(fimAquisitivo, hoje)) {
+            currentInicio = fimAquisitivo;
+        } else {
+            break; // Se o período atual ainda não terminou, para o loop
+        }
+    }
+    
+    // O período atual é o último período calculado
+    const periodoAtual = periodos[periodos.length - 1] || null;
+    
+    // Faltas acumuladas (apenas do período atual, se estiver em andamento)
+    const faltasAcumuladas = periodoAtual?.status === 'Em Andamento' ? periodoAtual.faltas_injustificadas : 0;
+
+    return {
+        periodos,
+        periodoAtual,
+        ultimaFeriasFim,
+        diasDeFeriasDireito: periodoAtual?.dias_direito || 0,
+        faltasInjustificadasAcumuladas: faltasAcumuladas,
+    };
+};
+
+/**
+ * Função para buscar todos os registros de ponto (faltas/abonos) desde o início do contrato.
+ */
+const fetchAllAbsenceRecords = async (userId: string, dataInicioContrato: string, isFuncionarioAdmin: boolean): Promise<{ registros: RegistroPonto[], feriasGozadas: any[] }> => {
+    const tabelaRegistros = isFuncionarioAdmin ? 'admin_registros_ponto' : 'registros_ponto';
+    const tabelaFerias = isFuncionarioAdmin ? 'admin_ferias_user' : 'ferias';
+    
+    // Busca todos os registros de ponto (Falta/Abono) desde o início do contrato
+    const { data: registros, error: regError } = await supabase
+        .from(tabelaRegistros)
+        .select('id, horario_registro, tipo, atestado_url')
+        .eq('funcionario_id', userId)
+        .in('tipo', ['Falta', 'Abono'])
+        .gte('horario_registro', dataInicioContrato);
+
+    if (regError) {
+        console.error('Erro ao buscar registros de ponto para CLT:', regError);
+        return { registros: [], feriasGozadas: [] };
+    }
+    
+    // Busca todos os registros de férias gozadas
+    const { data: feriasGozadas, error: feriasError } = await supabase
+        .from(tabelaFerias)
+        .select('data_inicio, data_fim')
+        .eq('funcionario_id', userId);
+        
+    if (feriasError) {
+        console.error('Erro ao buscar férias gozadas:', feriasError);
+    }
+
+    return { registros: registros as RegistroPonto[], feriasGozadas: feriasGozadas || [] };
+};
+
+
+export const useFeriasCLT = (
+    userId: string,
+    dataInicioContrato: string | null | undefined,
+    mesReferencia: Date,
+    isFuncionarioAdmin: boolean // NOVO PARÂMETRO
+): FeriasCLTData => {
+    const [data, setData] = useState<Omit<FeriasCLTData, 'carregando'>>({
+        periodos: [],
+        periodoAtual: null,
+        ultimaFeriasFim: null,
+        diasDeFeriasDireito: 0,
+        faltasInjustificadasAcumuladas: 0,
+    });
+    const [carregando, setCarregando] = useState(true);
+
+    const loadData = useCallback(async () => {
+        if (!userId || !dataInicioContrato) {
+            setCarregando(false);
+            return;
+        }
+
+        setCarregando(true);
+        try {
+            // Passa a flag isFuncionarioAdmin para a função de fetch
+            const { registros, feriasGozadas } = await fetchAllAbsenceRecords(userId, dataInicioContrato, isFuncionarioAdmin);
+            
+            const calculated = calcularPeriodos(dataInicioContrato, mesReferencia, registros, feriasGozadas);
+            
+            setData(calculated);
+        } catch (error) {
+            console.error('Erro ao carregar dados de férias CLT:', error);
+            setData({
+                periodos: [],
+                periodoAtual: null,
+                ultimaFeriasFim: null,
+                diasDeFeriasDireito: 0,
+                faltasInjustificadasAcumuladas: 0,
+            });
+        } finally {
+            setCarregando(false);
+        }
+    }, [userId, dataInicioContrato, mesReferencia, isFuncionarioAdmin]);
+
+    useEffect(() => {
+        loadData();
+    }, [loadData]);
+
+    return {
+        ...data,
+        carregando,
+    };
+};
