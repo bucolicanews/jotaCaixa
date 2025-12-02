@@ -21,8 +21,28 @@ const Painel = () => {
   const isAdmin = role === 'Admin';
   const isUsuario = role === 'Usuario';
 
-  if (isAdmin) {
+  // 🔥 NOVO: Diferenciação de Usuário (Funcionário)
+  const isUsuarioDoAdmin = 
+    isUsuario && 
+    perfil && 
+    ('admin_id' in perfil) && 
+    perfil.admin_id !== null;
+
+  const isUsuarioDeCliente = 
+    isUsuario &&
+    perfil &&
+    ('cliente_id' in perfil) &&
+    perfil.cliente_id !== null;
+  // FIM NOVO
+
+  if (isAdmin || isUsuarioDoAdmin) { // 🔥 TRATA USUÁRIO DO ADMIN COMO ADMIN
     hasFinancePermissions = true;
+    hasPontoPermission = true;
+    hasSuportePermission = true;
+    isClientApproved = true;
+    if (isUsuarioDoAdmin) {
+        console.log("Usuário do Admin detectado → Acesso total ao painel administrativo");
+    }
   } else if (isClient) {
     const clienteProfile = perfil as ClienteProfile;
     isClientApproved = clienteProfile?.aprovado ?? false;
@@ -30,15 +50,11 @@ const Painel = () => {
       const permissoes = clienteProfile?.permissoes || {};
       hasFinancePermissions = permissoes.contas_pagar || permissoes.contas_receber || permissoes.bancos || permissoes.conciliacao || permissoes.plano_contas || permissoes.importar || permissoes.relatorios;
     }
-  } else if (isUsuario) {
-    const usuarioProfile = perfil as UsuarioProfile | AdminUsuarioProfile;
+  } else if (isUsuarioDeCliente) { // 🔥 APENAS USUÁRIO DE CLIENTE
+    const usuarioProfile = perfil as UsuarioProfile;
     
     // Verifica se o usuário está vinculado (tratado como aprovado se vinculado)
-    if (('admin_id' in usuarioProfile && usuarioProfile.admin_id) || ('cliente_id' in usuarioProfile && usuarioProfile.cliente_id)) {
-        isClientApproved = true; 
-    } else {
-        isClientApproved = false;
-    }
+    isClientApproved = true; 
     
     // CRÍTICO: Garante que as permissões sejam lidas corretamente do perfil
     const permissoes = usuarioProfile?.permissoes || {};
@@ -60,6 +76,9 @@ const Painel = () => {
   useEffect(() => {
       if (carregando || !isClientApproved || !isUsuario) return;
       
+      // Se for Usuário do Admin, ele já tem acesso total e fica no painel
+      if (isUsuarioDoAdmin) return;
+      
       // 1. Prioridade Máxima: Financeiro (Se tiver permissão financeira, fica no painel)
       if (hasFinancePermissions) {
           // Fica no Painel para ver o DashboardFinanceiro
@@ -80,7 +99,7 @@ const Painel = () => {
       
       // 4. Se não tiver nenhuma permissão relevante, fica no painel vazio.
       
-  }, [carregando, isUsuario, isClientApproved, hasSuportePermission, hasFinancePermissions, hasPontoPermission, navigate]);
+  }, [carregando, isUsuario, isClientApproved, isUsuarioDoAdmin, hasSuportePermission, hasFinancePermissions, hasPontoPermission, navigate]);
   // ------------------------------------------------------
 
 
@@ -105,7 +124,7 @@ const Painel = () => {
       );
   }
 
-  const welcomeMessage = isAdmin ? 'Painel Administrativo' : 'Fluxo de Caixa';
+  const welcomeMessage = isAdmin || isUsuarioDoAdmin ? 'Painel Administrativo' : 'Fluxo de Caixa';
 
   return (
     <LayoutPrincipal>
@@ -127,8 +146,8 @@ const Painel = () => {
             Bem-vindo ao {welcomeMessage}.
           </p>
 
-          {/* Renderiza o DashboardFinanceiro se for Admin OU se tiver permissões financeiras */}
-          {isAdmin || hasFinancePermissions ? (
+          {/* Renderiza o DashboardFinanceiro se for Admin OU Usuário do Admin OU se tiver permissões financeiras */}
+          {isAdmin || isUsuarioDoAdmin || hasFinancePermissions ? (
             <DashboardFinanceiro />
           ) : (
             <Card className="mt-8">
