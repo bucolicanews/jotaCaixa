@@ -7,7 +7,7 @@ import { Loader2, Tag, FileSignature } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { AnyProfile, ClienteProfile, UsuarioProfile, UserRole, AdminUsuarioProfile } from '@/types/usuario';
-import { PERMISSOES_DISPONIVEIS, Permissao } from '@/config/permissoes';
+import { PERMISSOES_DISPONIVEIS, Permissao, PERMISSOES_ADMIN_USUARIO_TOTAL } from '@/config/permissoes';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import FormDadosCadastrais from '../usuario-forms/FormDadosCadastrais';
 import { Input } from '../ui/input';
@@ -235,11 +235,18 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
     if (!profileToEdit) return;
 
     const defaultPermissoes = permissoesVisiveis.reduce((acc: Record<string, boolean>, p: Permissao) => {
+        
+        // NOVO: Se for criação de usuário por Admin, aplica PERMISSOES_ADMIN_USUARIO_TOTAL
+        if (!isEditing && criadorRole === 'Admin') {
+            acc[p.key] = PERMISSOES_ADMIN_USUARIO_TOTAL[p.key] === true;
+            return acc;
+        }
+        
         if (profileToEdit && 'permissoes' in profileToEdit && (profileToEdit as any).permissoes) {
             // Se for edição, usa as permissões existentes
             acc[p.key] = (profileToEdit as any).permissoes[p.key] !== false;
         } else {
-            // SE FOR CRIAÇÃO DE NOVO USUÁRIO: Apenas Ponto Eletrônico e Visualizar Próprio Ponto são true
+            // SE FOR CRIAÇÃO DE NOVO USUÁRIO (por Cliente): Apenas Ponto Eletrônico e Visualizar Próprio Ponto são true
             acc[p.key] = p.key === 'ponto_eletronico' || p.key === 'visualizar_proprio_ponto';
         }
         return acc;
@@ -366,10 +373,11 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
             };
             
             if (targetRole === 'Usuario') {
+                // CRÍTICO: Se o criador for Admin, o proprietario_id é o admin_id.
                 if (criadorRole === 'Admin') {
-                    metadata.proprietario_id = proprietarioId;
+                    metadata.proprietario_id = proprietarioId; // admin_id
                 } else {
-                    metadata.proprietario_id = proprietarioId;
+                    metadata.proprietario_id = proprietarioId; // cliente_id
                 }
             } else if (targetRole === 'Cliente') {
                 metadata.aprovado = false;

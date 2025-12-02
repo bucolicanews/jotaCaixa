@@ -20,3 +20,33 @@ export const PERMISSOES_DISPONIVEIS: Permissao[] = [
   { key: 'contratos', label: 'Contratos (Gerenciamento)', path: '/contratos' },
   { key: 'gestao_suporte', label: 'Gestão de Suporte (Atendimento)', path: '/admin/suporte' },
 ];
+
+/**
+ * Permissões de acesso total para Admin Usuários (Funcionários do Admin).
+ * Baseado nos requisitos do usuário.
+ */
+export const PERMISSOES_ADMIN_USUARIO_TOTAL: Record<string, boolean> = {
+    // Financeiro
+    contas_pagar: true,
+    contas_receber: true,
+    bancos: true,
+    conciliacao: true,
+    'bancos': true, // Extratos
+    
+    // Contabilidade
+    plano_contas: true,
+    'bancos': true, // Contas Patrimoniais
+    relatorios: true, // Balanço, DRE, Balancete, Razão
+    configuracoes: true, // Gerenciar Histórico, Configurações
+    importar: true,
+    
+    // RH / Folha
+    ponto_eletronico: true,
+    visualizar_proprio_ponto: true,
+    folha_ponto: true,
+    cadastrar_usuarios: true,
+    
+    // Geral
+    contratos: true,
+    gestao_suporte: true,
+};
