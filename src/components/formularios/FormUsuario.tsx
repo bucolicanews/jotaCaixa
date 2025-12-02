@@ -17,7 +17,7 @@ import { format } from 'date-fns';
 import { BASE_URL } from '@/config/app-config';
 import { Separator } from '../ui/separator';
 
-import FormGeral from './FormGeral'; // Importação correta: FormGeral está no mesmo diretório
+// import FormGeral from './FormGeral'; // Importação removida conforme solicitado
 import FormFolgas from '../formularios/FormFolgas';
 import FormDocumentos from '../usuario-forms/FormDocumentos';
 import FormDadosContratuais from '../usuario-forms/FormDadosContratuais';
@@ -606,13 +606,49 @@ if (isEditingClientProfile) {
 
                         {/* TAB 1: GERAL */}
                         <TabsContent value="pessoal" className="mt-4 space-y-4 p-4">
-                            <FormGeral
-                                control={form.control}
-                                isSubmitting={isSubmitting}
-                                permissoesVisiveis={permissoesVisiveis}
-                                handleSelectAll={handleSelectAll}
-                                isReadOnly={isChildFormReadOnly('pessoal')}
-                            />
+                            {/* Definição local do FormGeral para evitar importação */}
+                            <div className="space-y-4">
+                                <FormField control={form.control} name="nome" render={({ field }) => (
+                                    <FormItem><FormLabel>Nome Completo</FormLabel><FormControl><Input placeholder="Nome completo" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
+                                )} />
+                                
+                                <h4 className="font-semibold mt-6 border-t pt-4">Remuneração e Jornada</h4>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    {/* Renderiza campos de número localmente */}
+                                    <FormField control={form.control} name="salario" render={({ field }) => (
+                                        <FormItem><FormLabel>Salário Mensal (R$)</FormLabel><FormControl><Input type="number" placeholder="0" {...field} value={field.value === undefined || field.value === null ? '' : String(field.value)} onChange={(e) => field.onChange(e.target.value === '' ? undefined : Number(e.target.value))} disabled={isSubmitting || isReadOnly} /></FormControl><FormMessage /></FormItem>
+                                    )} />
+                                    <FormField control={form.control} name="horas_semanais" render={({ field }) => (
+                                        <FormItem><FormLabel>Horas Semanais</FormLabel><FormControl><Input type="number" placeholder="44" {...field} value={field.value === undefined || field.value === null ? '' : String(field.value)} onChange={(e) => field.onChange(e.target.value === '' ? undefined : Number(e.target.value))} disabled={isSubmitting || isReadOnly} /></FormControl><FormMessage /></FormItem>
+                                    )} />
+                                    <FormField control={form.control} name="horas_mensais" render={({ field }) => (
+                                        <FormItem><FormLabel>Horas Mensais</FormLabel><FormControl><Input type="number" placeholder="220" {...field} value={field.value === undefined || field.value === null ? '' : String(field.value)} onChange={(e) => field.onChange(e.target.value === '' ? undefined : Number(e.target.value))} disabled={isSubmitting || isReadOnly} /></FormControl><FormMessage /></FormItem>
+                                    )} />
+                                </div>
+                                
+                                {/* Permissões */}
+                                <div className="space-y-2 pt-4 border-t">
+                                    <div className="flex justify-between items-center mb-1">
+                                        <FormLabel>Permissões de Acesso</FormLabel>
+                                        <div className="space-x-2">
+                                            <Button type="button" variant="link" size="sm" onClick={() => handleSelectAll(true)} className="p-0 h-auto" disabled={isSubmitting || isReadOnly}>Selecionar Todos</Button>
+                                            <Button type="button" variant="link" size="sm" onClick={() => handleSelectAll(false)} className="p-0 h-auto text-destructive" disabled={isSubmitting || isReadOnly}>Desmarcar Todos</Button>
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4 rounded-lg border p-4">
+                                        {permissoesVisiveis.map((p: Permissao) => (
+                                            <FormField key={p.key} control={form.control} name={`permissoes.${p.key}`} render={({ field }) => (
+                                                <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                                                    <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} disabled={isSubmitting || isReadOnly} /></FormControl>
+                                                    <FormLabel className="font-normal">{p.label}</FormLabel>
+                                                </FormItem>
+                                            ))} />
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                            {/* Fim Definição local do FormGeral */}
+                            
                             <FormField control={form.control} name="email" render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Email</FormLabel>
@@ -799,13 +835,48 @@ return (
             
             {/* TAB 1: GERAL */}
             <TabsContent value="pessoal" className="mt-4 space-y-4 p-4">
-              <FormGeral
-                  control={form.control}
-                  isSubmitting={isSubmitting}
-                  permissoesVisiveis={permissoesVisiveis}
-                  handleSelectAll={handleSelectAll}
-                  isReadOnly={isChildFormReadOnly('pessoal')}
-              />
+              {/* Definição local do FormGeral para evitar importação */}
+              <div className="space-y-4">
+                <FormField control={form.control} name="nome" render={({ field }) => (
+                    <FormItem><FormLabel>Nome Completo</FormLabel><FormControl><Input placeholder="Nome completo" {...field} disabled={isChildFormReadOnly('pessoal')} /></FormControl><FormMessage /></FormItem>
+                )} />
+                
+                <h4 className="font-semibold mt-6 border-t pt-4">Remuneração e Jornada</h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {/* Renderiza campos de número localmente */}
+                    <FormField control={form.control} name="salario" render={({ field }) => (
+                        <FormItem><FormLabel>Salário Mensal (R$)</FormLabel><FormControl><Input type="number" placeholder="0" {...field} value={field.value === undefined || field.value === null ? '' : String(field.value)} onChange={(e) => field.onChange(e.target.value === '' ? undefined : Number(e.target.value))} disabled={isSubmitting || isChildFormReadOnly('pessoal')} /></FormControl><FormMessage /></FormItem>
+                    )} />
+                    <FormField control={form.control} name="horas_semanais" render={({ field }) => (
+                        <FormItem><FormLabel>Horas Semanais</FormLabel><FormControl><Input type="number" placeholder="44" {...field} value={field.value === undefined || field.value === null ? '' : String(field.value)} onChange={(e) => field.onChange(e.target.value === '' ? undefined : Number(e.target.value))} disabled={isSubmitting || isChildFormReadOnly('pessoal')} /></FormControl><FormMessage /></FormItem>
+                    )} />
+                    <FormField control={form.control} name="horas_mensais" render={({ field }) => (
+                        <FormItem><FormLabel>Horas Mensais</FormLabel><FormControl><Input type="number" placeholder="220" {...field} value={field.value === undefined || field.value === null ? '' : String(field.value)} onChange={(e) => field.onChange(e.target.value === '' ? undefined : Number(e.target.value))} disabled={isSubmitting || isChildFormReadOnly('pessoal')} /></FormControl><FormMessage /></FormItem>
+                    )} />
+                </div>
+                
+                {/* Permissões */}
+                <div className="space-y-2 pt-4 border-t">
+                    <div className="flex justify-between items-center mb-1">
+                        <FormLabel>Permissões de Acesso</FormLabel>
+                        <div className="space-x-2">
+                            <Button type="button" variant="link" size="sm" onClick={() => handleSelectAll(true)} className="p-0 h-auto" disabled={isSubmitting || isChildFormReadOnly('pessoal')}>Selecionar Todos</Button>
+                            <Button type="button" variant="link" size="sm" onClick={() => handleSelectAll(false)} className="p-0 h-auto text-destructive" disabled={isSubmitting || isChildFormReadOnly('pessoal')}>Desmarcar Todos</Button>
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4 rounded-lg border p-4">
+                        {permissoesVisiveis.map((p: Permissao) => (
+                            <FormField key={p.key} control={form.control} name={`permissoes.${p.key}`} render={({ field }) => (
+                                <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                                    <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} disabled={isSubmitting || isChildFormReadOnly('pessoal')} /></FormControl>
+                                    <FormLabel className="font-normal">{p.label}</FormLabel>
+                                </FormItem>
+                            ))} />
+                        ))}
+                    </div>
+                </div>
+              </div>
+              {/* Fim Definição local do FormGeral */}
               
               {/* Campos de Login (Apenas para criação ou alteração de senha) */}
               <Separator />
