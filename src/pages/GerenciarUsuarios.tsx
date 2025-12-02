@@ -180,7 +180,7 @@ const GerenciarUsuarios: React.FC = () => {
   const filterUsers = (userList: UsuarioComEmpresa[], currentTab: string) => {
     const termoBusca = filtro.toLowerCase();
     return userList.filter(u => {
-        const nomeEmpresa = u.cliente_nome || '';
+        const nomeEmpresa = u.nome_empresa || '';
         
         const textMatch = u.nome.toLowerCase().includes(termoBusca) ||
                u.email.toLowerCase().includes(termoBusca) ||
