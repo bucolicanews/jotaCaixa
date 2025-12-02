@@ -283,7 +283,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
     };
 
     reset(resetValues);
-  }, [profileToEdit, isNewClient, permissoesVisiveis, reset, userProfile]);
+  }, [profileToEdit, isNewClient, permissoesVisiveis, parseDate, reset, userProfile]);
 
   const handleSelectAll = (select: boolean) => {
     permissoesVisiveis.forEach((p: Permissao) => {
