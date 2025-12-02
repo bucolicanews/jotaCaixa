@@ -27,6 +27,7 @@ const usePontoStatus = (funcionarioId: string | undefined): PontoStatus => {
   const [carregando, setCarregando] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
 
+  // Determina a tabela de destino com base na role
   const isFuncionarioAdmin = role === 'Usuario' && (perfil as AdminUsuarioProfile)?.admin_id;
   const tabelaRegistros = isFuncionarioAdmin ? 'admin_registros_ponto' : 'registros_ponto';
 
@@ -47,7 +48,7 @@ const usePontoStatus = (funcionarioId: string | undefined): PontoStatus => {
       const today = format(new Date(), 'yyyy-MM-dd');
       
       const { data, error } = await supabase
-        .from(tabelaRegistros) // ROTEAMENTO AQUI
+        .from(tabelaRegistros) // USANDO A TABELA CORRETA
         .select('id, horario_registro, tipo')
         .eq('funcionario_id', funcionarioId)
         .gte('horario_registro', today)

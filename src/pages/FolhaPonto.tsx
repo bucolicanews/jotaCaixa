@@ -407,6 +407,7 @@ const FolhaPonto: React.FC = () => {
                     folga_domingo_obrigatoria: funcionarioSelecionado.folga_domingo_obrigatoria ?? true,
                     ferias: feriasDoFuncionario,
                     data_inicio_contrato: funcionarioSelecionado.data_inicio_contrato,
+                    is_admin_user: isFuncionarioAdmin, // PASSANDO A FLAG
                 }}
                 mes={dataSelecionada}
                 onEditRegistro={handleOpenAjustarPonto}
