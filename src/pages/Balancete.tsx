@@ -24,7 +24,9 @@ const Balancete: React.FC = () => {
   
   const [filtroSomenteComSaldo, setFiltroSomenteComSaldo] = useState(true);
   
-  const canAccessPage = role === 'Admin' || (role === 'Cliente' && (perfil as ClienteProfile)?.permissoes?.relatorios === true);
+  const canAccessPage = role === 'Admin' || 
+    (role === 'Cliente' && (perfil as ClienteProfile)?.permissoes?.relatorios === true) ||
+    (role === 'Usuario' && (perfil as any)?.permissoes?.balancete === true);
 
   if (carregandoSessao) {
     return (

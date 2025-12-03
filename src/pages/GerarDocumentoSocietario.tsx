@@ -10,7 +10,7 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ClienteProfile, UsuarioProfile, AdminProfile } from '@/types/usuario';
+import { ClienteProfile, UsuarioProfile, AdminProfile, AdminUsuarioProfile } from '@/types/usuario';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import DocumentoPreviewDialog from '@/components/documentos-societarios/DocumentoPreviewDialog';
 import { useSessao } from '@/hooks/use-sessao';
@@ -97,7 +97,11 @@ const GerarDocumentoSocietario: React.FC = () => {
   const getOwnerIdLogado = () => {
     if (isAdmin) return usuario?.id || null;
     if (isClient) return (perfil as ClienteProfile)?.id;
-    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id;
+    if (role === 'Usuario') {
+      const user = perfil as UsuarioProfile | AdminUsuarioProfile;
+      if ('admin_id' in user && user.admin_id) return user.admin_id;
+      if ('cliente_id' in user && user.cliente_id) return user.cliente_id;
+    }
     return null;
   };
   

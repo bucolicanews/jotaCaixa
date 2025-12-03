@@ -7,7 +7,7 @@ import { DateRangePicker } from '@/components/DateRangePicker';
 import { DateRange } from 'react-day-picker';
 import DREDetalhe from '@/components/contabilidade/DREDetalhe';
 import { startOfMonth, endOfMonth } from 'date-fns';
-import { ClienteProfile } from '@/types/usuario';
+import { ClienteProfile, UsuarioProfile, AdminUsuarioProfile } from '@/types/usuario';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useOwnerBranding } from '@/hooks/use-owner-branding'; // NOVO IMPORT
@@ -25,7 +25,12 @@ const DRE: React.FC = () => {
   // NOVO ESTADO: Filtro para mostrar apenas contas com saldo diferente de zero
   const [filtroSomenteComSaldo, setFiltroSomenteComSaldo] = useState(true);
   
-  const canAccessPage = role === 'Admin' || (role === 'Cliente' && (perfil as ClienteProfile)?.permissoes?.relatorios === true);
+  const canAccessPage = role === 'Admin' || 
+    (role === 'Cliente' && (perfil as ClienteProfile)?.permissoes?.relatorios === true) ||
+    (role === 'Usuario' && (
+      (perfil as UsuarioProfile)?.permissoes?.dre === true ||
+      (perfil as AdminUsuarioProfile)?.permissoes?.dre === true
+    ));
 
   if (carregandoSessao) {
     return (

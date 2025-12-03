@@ -1,107 +1,120 @@
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { useSessao } from '@/hooks/use-sessao';
 import { ClienteProfile, UsuarioProfile, AdminUsuarioProfile } from '@/types/usuario';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Link, useNavigate } from 'react-router-dom';
-import { Package, Loader2 } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Package, Loader2, Scale, Clock, Users, FileText, MessageSquare, PlusCircle } from 'lucide-react';
 import DashboardFinanceiro from '@/components/DashboardFinanceiro';
-import React, { useEffect } from 'react';
+import React from 'react';
+
+type DashboardType = 'financeiro' | 'contabilidade' | 'folha' | 'rh' | 'suporte' | 'documentos' | 'restrito';
 
 const Painel = () => {
   const { role, perfil, carregando } = useSessao();
-  const navigate = useNavigate();
 
-  let hasFinancePermissions = false;
-  let hasPontoPermission = false;
-  let hasSuportePermission = false;
-  let isClientApproved = true;
-  
   const isClient = role === 'Cliente';
   const isAdmin = role === 'Admin';
   const isUsuario = role === 'Usuario';
 
-  // 🔥 NOVO: Diferenciação de Usuário (Funcionário)
   const isUsuarioDoAdmin = 
     isUsuario && 
     perfil && 
     ('admin_id' in perfil) && 
-    perfil.admin_id !== null;
+    (perfil as AdminUsuarioProfile).admin_id !== null;
 
-  const isUsuarioDeCliente = 
-    isUsuario &&
-    perfil &&
-    ('cliente_id' in perfil) &&
-    perfil.cliente_id !== null;
-  // FIM NOVO
-
-  if (isAdmin || isUsuarioDoAdmin) { // 🔥 TRATA USUÁRIO DO ADMIN COMO ADMIN
-    hasFinancePermissions = true;
-    hasPontoPermission = true;
-    hasSuportePermission = true;
-    isClientApproved = true;
+  const getPermissoes = (): Record<string, boolean> => {
+    if (isAdmin) return {};
     if (isUsuarioDoAdmin) {
-        console.log("Usuário do Admin detectado → Acesso total ao painel administrativo");
+      return (perfil as AdminUsuarioProfile)?.permissoes || {};
     }
-  } else if (isClient) {
-    const clienteProfile = perfil as ClienteProfile;
-    isClientApproved = clienteProfile?.aprovado ?? false;
-    if (isClientApproved) {
-      const permissoes = clienteProfile?.permissoes || {};
-      hasFinancePermissions = permissoes.contas_pagar || permissoes.contas_receber || permissoes.bancos || permissoes.conciliacao || permissoes.plano_contas || permissoes.importar || permissoes.relatorios;
+    if (isClient) {
+      return (perfil as ClienteProfile)?.permissoes || {};
     }
-  } else if (isUsuarioDeCliente) { // 🔥 APENAS USUÁRIO DE CLIENTE
-    const usuarioProfile = perfil as UsuarioProfile;
-    
-    // Verifica se o usuário está vinculado (tratado como aprovado se vinculado)
-    isClientApproved = true; 
-    
-    // CRÍTICO: Garante que as permissões sejam lidas corretamente do perfil
-    const permissoes = usuarioProfile?.permissoes || {};
-    
-    // Permissões Financeiras
-    hasFinancePermissions = permissoes.contas_pagar || permissoes.contas_receber || permissoes.bancos || permissoes.conciliacao || permissoes.plano_contas || permissoes.importar || permissoes.relatorios;
-    
-    // Permissões de RH
-    hasPontoPermission = permissoes.folha_ponto || permissoes.visualizar_proprio_ponto;
-    
-    // Permissões de Suporte
-    hasSuportePermission = permissoes.gestao_suporte === true;
+    if (isUsuario) {
+      return (perfil as UsuarioProfile)?.permissoes || {};
+    }
+    return {};
+  };
 
-    // LOG DE DEBBUG
-    console.log("DEBUG PAINEL: Role:", role, "Aprovado:", isClientApproved, "Permissões Financeiras:", hasFinancePermissions, "Permissões:", permissoes);
-  }
-  
-  // --- Lógica de Roteamento Condicional para Usuários ---
-  useEffect(() => {
-      if (carregando || !isClientApproved || !isUsuario) return;
-      
-      // Se for Usuário do Admin, ele já tem acesso total e fica no painel
-      if (isUsuarioDoAdmin) return;
-      
-      // 1. Prioridade Máxima: Financeiro (Se tiver permissão financeira, fica no painel)
-      if (hasFinancePermissions) {
-          // Fica no Painel para ver o DashboardFinanceiro
-          return;
-      }
-      
-      // 2. Prioridade Secundária: Gestão de Suporte (Se não for financeiro, mas tiver suporte)
-      if (hasSuportePermission) {
-          navigate('/admin/suporte', { replace: true });
-          return;
-      }
-      
-      // 3. Prioridade Terciária: Ponto Eletrônico (Se não for financeiro nem suporte, mas tiver ponto)
-      if (hasPontoPermission) {
-          navigate('/folha-ponto?mode=self', { replace: true });
-          return;
-      }
-      
-      // 4. Se não tiver nenhuma permissão relevante, fica no painel vazio.
-      
-  }, [carregando, isUsuario, isClientApproved, isUsuarioDoAdmin, hasSuportePermission, hasFinancePermissions, hasPontoPermission, navigate]);
-  // ------------------------------------------------------
+  const permissoes = getPermissoes();
 
+  const hasFinanceiroPermission = 
+    permissoes.contas_pagar === true || 
+    permissoes.contas_receber === true;
+
+  const hasContabilidadePermission = 
+    permissoes.lancamentos === true ||
+    permissoes.balanco === true || 
+    permissoes.contas_patrimoniais === true || 
+    permissoes.dre === true || 
+    permissoes.balancete === true || 
+    permissoes.razao === true || 
+    permissoes.historicos === true ||
+    permissoes.plano_contas === true ||
+    permissoes.configuracoes === true ||
+    permissoes.exportar === true ||
+    permissoes.importar === true ||
+    permissoes.relatorios === true;
+
+  const hasFolhaPermission = 
+    permissoes.ponto_eletronico === true || 
+    permissoes.visualizar_proprio_ponto === true;
+
+  const hasRHPermission = 
+    permissoes.cadastrar_usuarios === true || 
+    permissoes.folha_ponto === true;
+
+  const hasSuportePermission = permissoes.gestao_suporte === true;
+
+  const hasDocumentosPermission = permissoes.documentos_societarios === true;
+
+  const getDashboardType = (): DashboardType => {
+    if (isAdmin) return 'financeiro';
+    
+    if (isClient) {
+      const clienteProfile = perfil as ClienteProfile;
+      if (!clienteProfile?.aprovado) return 'restrito';
+      return 'financeiro';
+    }
+    
+    if (hasFinanceiroPermission) return 'financeiro';
+    if (hasContabilidadePermission) return 'contabilidade';
+    if (hasRHPermission) return 'rh';
+    if (hasFolhaPermission) return 'folha';
+    if (hasSuportePermission) return 'suporte';
+    if (hasDocumentosPermission) return 'documentos';
+    
+    return 'restrito';
+  };
+
+  const dashboardType = getDashboardType();
+
+  console.log('DEBUG PAINEL:', {
+    role,
+    isAdmin,
+    isUsuarioDoAdmin,
+    permissoes,
+    hasFinanceiroPermission,
+    hasContabilidadePermission,
+    hasFolhaPermission,
+    hasRHPermission,
+    hasSuportePermission,
+    hasDocumentosPermission,
+    dashboardType,
+  });
+
+  const getWelcomeMessage = (): string => {
+    switch (dashboardType) {
+      case 'financeiro': return 'Painel Financeiro';
+      case 'contabilidade': return 'Painel Contabil';
+      case 'folha': return 'Meu Ponto';
+      case 'rh': return 'Gestao de RH';
+      case 'suporte': return 'Gestao de Suporte';
+      case 'documentos': return 'Documentos Societarios';
+      default: return 'Painel de Controle';
+    }
+  };
 
   if (carregando) {
     return (
@@ -112,19 +125,206 @@ const Painel = () => {
       </LayoutPrincipal>
     );
   }
-  
-  // Se for usuário e estiver carregando a lógica de redirecionamento, mostra o loader
-  if (isUsuario && isClientApproved && !hasFinancePermissions && (hasSuportePermission || hasPontoPermission)) {
-      return (
-        <LayoutPrincipal>
-            <div className="flex justify-center items-center h-64">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            </div>
-        </LayoutPrincipal>
-      );
-  }
 
-  const welcomeMessage = isAdmin || isUsuarioDoAdmin ? 'Painel Administrativo' : 'Fluxo de Caixa';
+  const renderDashboard = () => {
+    switch (dashboardType) {
+      case 'financeiro':
+        return <DashboardFinanceiro />;
+        
+      case 'contabilidade':
+        return (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <Link to="/relatorios/balanco">
+              <Card className="hover:shadow-lg transition-shadow cursor-pointer border-l-4 border-blue-500">
+                <CardHeader>
+                  <CardTitle className="flex items-center">
+                    <Scale className="w-5 h-5 mr-2" />
+                    Balanco Patrimonial
+                  </CardTitle>
+                  <CardDescription>Visualize a posicao patrimonial</CardDescription>
+                </CardHeader>
+              </Card>
+            </Link>
+            <Link to="/relatorios/dre">
+              <Card className="hover:shadow-lg transition-shadow cursor-pointer border-l-4 border-green-500">
+                <CardHeader>
+                  <CardTitle className="flex items-center">
+                    <Scale className="w-5 h-5 mr-2" />
+                    DRE
+                  </CardTitle>
+                  <CardDescription>Demonstracao do Resultado</CardDescription>
+                </CardHeader>
+              </Card>
+            </Link>
+            <Link to="/relatorios/balancete">
+              <Card className="hover:shadow-lg transition-shadow cursor-pointer border-l-4 border-purple-500">
+                <CardHeader>
+                  <CardTitle className="flex items-center">
+                    <FileText className="w-5 h-5 mr-2" />
+                    Balancete
+                  </CardTitle>
+                  <CardDescription>Balancete de verificacao</CardDescription>
+                </CardHeader>
+              </Card>
+            </Link>
+            <Link to="/relatorios/razao">
+              <Card className="hover:shadow-lg transition-shadow cursor-pointer border-l-4 border-orange-500">
+                <CardHeader>
+                  <CardTitle className="flex items-center">
+                    <FileText className="w-5 h-5 mr-2" />
+                    Razao
+                  </CardTitle>
+                  <CardDescription>Livro Razao por conta</CardDescription>
+                </CardHeader>
+              </Card>
+            </Link>
+            <Link to="/lancamentos">
+              <Card className="hover:shadow-lg transition-shadow cursor-pointer border-l-4 border-teal-500">
+                <CardHeader>
+                  <CardTitle className="flex items-center">
+                    <PlusCircle className="w-5 h-5 mr-2" />
+                    Novo Lancamento
+                  </CardTitle>
+                  <CardDescription>Registrar lancamento manual</CardDescription>
+                </CardHeader>
+              </Card>
+            </Link>
+          </div>
+        );
+        
+      case 'folha':
+        return (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {permissoes.ponto_eletronico && (
+              <Link to="/ponto-eletronico">
+                <Card className="hover:shadow-lg transition-shadow cursor-pointer border-l-4 border-green-500">
+                  <CardHeader>
+                    <CardTitle className="flex items-center">
+                      <Clock className="w-5 h-5 mr-2" />
+                      Bater Ponto
+                    </CardTitle>
+                    <CardDescription>Registre sua entrada e saida</CardDescription>
+                  </CardHeader>
+                </Card>
+              </Link>
+            )}
+            {permissoes.visualizar_proprio_ponto && (
+              <Link to="/folha-ponto?mode=self">
+                <Card className="hover:shadow-lg transition-shadow cursor-pointer border-l-4 border-blue-500">
+                  <CardHeader>
+                    <CardTitle className="flex items-center">
+                      <Clock className="w-5 h-5 mr-2" />
+                      Acompanhar Meu Ponto
+                    </CardTitle>
+                    <CardDescription>Visualize seus registros de ponto</CardDescription>
+                  </CardHeader>
+                </Card>
+              </Link>
+            )}
+          </div>
+        );
+        
+      case 'rh':
+        return (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {permissoes.folha_ponto && (
+              <Link to="/folha-ponto">
+                <Card className="hover:shadow-lg transition-shadow cursor-pointer border-l-4 border-blue-500">
+                  <CardHeader>
+                    <CardTitle className="flex items-center">
+                      <Clock className="w-5 h-5 mr-2" />
+                      Acompanhar Ponto (Gestor)
+                    </CardTitle>
+                    <CardDescription>Gerencie o ponto dos funcionarios</CardDescription>
+                  </CardHeader>
+                </Card>
+              </Link>
+            )}
+            {permissoes.cadastrar_usuarios && (
+              <Link to="/gerenciar-usuarios">
+                <Card className="hover:shadow-lg transition-shadow cursor-pointer border-l-4 border-purple-500">
+                  <CardHeader>
+                    <CardTitle className="flex items-center">
+                      <Users className="w-5 h-5 mr-2" />
+                      Gerenciar Usuarios
+                    </CardTitle>
+                    <CardDescription>Cadastre e gerencie funcionarios</CardDescription>
+                  </CardHeader>
+                </Card>
+              </Link>
+            )}
+          </div>
+        );
+        
+      case 'suporte':
+        return (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <Link to="/admin/suporte">
+              <Card className="hover:shadow-lg transition-shadow cursor-pointer border-l-4 border-orange-500">
+                <CardHeader>
+                  <CardTitle className="flex items-center">
+                    <MessageSquare className="w-5 h-5 mr-2" />
+                    Gestao de Tickets
+                  </CardTitle>
+                  <CardDescription>Atenda os tickets de suporte</CardDescription>
+                </CardHeader>
+              </Card>
+            </Link>
+          </div>
+        );
+        
+      case 'documentos':
+        return (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <Link to="/documentos-societarios">
+              <Card className="hover:shadow-lg transition-shadow cursor-pointer border-l-4 border-indigo-500">
+                <CardHeader>
+                  <CardTitle className="flex items-center">
+                    <FileText className="w-5 h-5 mr-2" />
+                    Documentos Gerados
+                  </CardTitle>
+                  <CardDescription>Visualize documentos gerados</CardDescription>
+                </CardHeader>
+              </Card>
+            </Link>
+            <Link to="/documentos-societarios/modelos">
+              <Card className="hover:shadow-lg transition-shadow cursor-pointer border-l-4 border-pink-500">
+                <CardHeader>
+                  <CardTitle className="flex items-center">
+                    <FileText className="w-5 h-5 mr-2" />
+                    Gerenciar Modelos
+                  </CardTitle>
+                  <CardDescription>Crie e edite modelos de documentos</CardDescription>
+                </CardHeader>
+              </Card>
+            </Link>
+            <Link to="/documentos-societarios/blocos">
+              <Card className="hover:shadow-lg transition-shadow cursor-pointer border-l-4 border-cyan-500">
+                <CardHeader>
+                  <CardTitle className="flex items-center">
+                    <FileText className="w-5 h-5 mr-2" />
+                    Gerenciar Blocos
+                  </CardTitle>
+                  <CardDescription>Crie blocos reutilizaveis</CardDescription>
+                </CardHeader>
+              </Card>
+            </Link>
+          </div>
+        );
+        
+      default:
+        return (
+          <Card className="mt-8">
+            <CardHeader>
+              <CardTitle>Acesso Restrito</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-muted-foreground">Voce nao possui permissoes ativas. Entre em contato com o administrador.</p>
+            </CardContent>
+          </Card>
+        );
+    }
+  };
 
   return (
     <LayoutPrincipal>
@@ -140,30 +340,11 @@ const Painel = () => {
         )}
       </div>
       
-      {isClientApproved ? (
-        <>
-          <p className="text-lg text-muted-foreground mb-8">
-            Bem-vindo ao {welcomeMessage}.
-          </p>
+      <p className="text-lg text-muted-foreground mb-8">
+        Bem-vindo ao {getWelcomeMessage()}.
+      </p>
 
-          {/* Renderiza o DashboardFinanceiro se for Admin OU Usuário do Admin OU se tiver permissões financeiras */}
-          {isAdmin || isUsuarioDoAdmin || hasFinancePermissions ? (
-            <DashboardFinanceiro />
-          ) : (
-            <Card className="mt-8">
-              <CardHeader>
-                <CardTitle>Acesso Restrito</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground">Você não possui permissões ativas para visualizar dados financeiros ou de gestão.</p>
-              </CardContent>
-            </Card>
-          )}
-        </>
-      ) : (
-        // Este caso só deve ser alcançado por um Cliente Pendente (que é tratado no LayoutPrincipal)
-        <p className="text-lg text-muted-foreground">Aguardando aprovação da empresa.</p>
-      )}
+      {renderDashboard()}
     </LayoutPrincipal>
   );
 };

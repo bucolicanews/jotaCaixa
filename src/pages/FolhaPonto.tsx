@@ -61,9 +61,14 @@ const FolhaPonto: React.FC = () => {
   const isAdmin = role === 'Admin';
   const isSelfMode = mode === 'self';
   
+  // Verifica se é admin_usuario (funcionário do Admin)
+  const isAdminUsuario = role === 'Usuario' && !!(perfil as AdminUsuarioProfile)?.admin_id;
+  const adminIdDoUsuario = isAdminUsuario ? (perfil as AdminUsuarioProfile)?.admin_id : null;
+  
   const getOwnerId = () => {
     if (isAdmin) return usuario?.id || null;
     if (role === 'Cliente') return (perfil as ClienteProfile)?.id || null;
+    if (isAdminUsuario) return adminIdDoUsuario;
     return null;
   };
   
@@ -146,19 +151,36 @@ const FolhaPonto: React.FC = () => {
         }
         
     } else if (ownerId) {
-        // Cliente: Busca apenas seus próprios usuários (tbl_usuarios)
-        const { data: usersData } = await supabase
-            .from('tbl_usuarios')
-            .select('*')
-            .eq('cliente_id', ownerId)
-            .order('nome');
-            
-        fetchedUsers = (usersData || []).map(u => ({ ...u, cliente_nome: (perfil as ClienteProfile)?.nome || 'Minha Empresa' })) as UsuarioPonto[];
+        // Cliente ou Admin_Usuario: Busca usuários do proprietário
+        if (isAdminUsuario && adminIdDoUsuario) {
+            // Admin_Usuario: Busca usuários do Admin (admin_usuarios)
+            const { data: adminUsersData } = await supabase
+                .from('admin_usuarios')
+                .select('*')
+                .eq('admin_id', adminIdDoUsuario)
+                .order('nome');
+                
+            fetchedUsers = (adminUsersData || []).map(u => ({ 
+                ...u, 
+                cliente_id: null, 
+                is_admin_user: true,
+                cliente_nome: 'Funcionários do Admin' 
+            })) as UsuarioPonto[];
+        } else {
+            // Cliente: Busca apenas seus próprios usuários (tbl_usuarios)
+            const { data: usersData } = await supabase
+                .from('tbl_usuarios')
+                .select('*')
+                .eq('cliente_id', ownerId)
+                .order('nome');
+                
+            fetchedUsers = (usersData || []).map(u => ({ ...u, cliente_nome: (perfil as ClienteProfile)?.nome || 'Minha Empresa' })) as UsuarioPonto[];
+        }
     }
     
     setUsuarios(fetchedUsers);
     setCarregandoDados(false);
-  }, [ownerId, isAdmin, usuario?.id, perfil]);
+  }, [ownerId, isAdmin, isAdminUsuario, adminIdDoUsuario, usuario?.id, perfil]);
 
   const fetchRegistrosFuncionario = useCallback(async (user: UsuarioPonto, data: Date) => {
     const isFuncionarioAdmin = user.is_admin_user;
@@ -309,7 +331,9 @@ const FolhaPonto: React.FC = () => {
 
 
   // Verifica se o usuário tem permissão para acessar a página de gestão
-  const canAccessManagement = isAdmin || (role === 'Cliente' && (perfil as ClienteProfile)?.permissoes?.folha_ponto === true);
+  const canAccessManagement = isAdmin || 
+    (role === 'Cliente' && (perfil as ClienteProfile)?.permissoes?.folha_ponto === true) ||
+    (role === 'Usuario' && (perfil as AdminUsuarioProfile)?.permissoes?.folha_ponto === true);
   
   if (!isSelfMode && !canAccessManagement) {
       return (

@@ -10,7 +10,11 @@ const Importar = () => {
   
   const getOwnerId = () => {
     if (role === 'Admin' || role === 'Cliente') return (perfil as any)?.id;
-    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id; // FIX: proprietario_id -> cliente_id
+    if (role === 'Usuario') {
+      const user = perfil as any;
+      if (user?.admin_id) return user.admin_id;
+      if (user?.cliente_id) return user.cliente_id;
+    }
     return null;
   };
   

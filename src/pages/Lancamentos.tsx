@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DollarSign, PlusCircle } from 'lucide-react';
 import FormLancamentoManual from '@/components/formularios/FormLancamentoManual';
 import { useSessao } from '@/hooks/use-sessao';
-import { ClienteProfile } from '@/types/usuario';
+import { ClienteProfile, UsuarioProfile, AdminUsuarioProfile } from '@/types/usuario';
 import LancamentosManuaisTable from '@/components/lancamentos/LancamentosManuaisTable';
 import TodosLancamentosTable from '@/components/lancamentos/TodosLancamentosTable';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -22,7 +22,12 @@ const Lancamentos: React.FC = () => {
   const initialTab = searchParams.get('tab') || 'novo';
   const [activeTab, setActiveTab] = useState(initialTab);
 
-  const canAccess = role === 'Admin' || (role === 'Cliente' && (perfil as ClienteProfile)?.permissoes?.plano_contas === true);
+  const canAccess = role === 'Admin' || 
+    (role === 'Cliente' && (perfil as ClienteProfile)?.permissoes?.plano_contas === true) ||
+    (role === 'Usuario' && (
+      (perfil as UsuarioProfile)?.permissoes?.lancamentos === true ||
+      (perfil as AdminUsuarioProfile)?.permissoes?.lancamentos === true
+    ));
 
   if (!canAccess) {
     return (

@@ -11,7 +11,9 @@ import ExportarPlanoContasCard from '@/components/calima/ExportarPlanoContasCard
 const Exportar: React.FC = () => {
   const { role, perfil, carregando } = useSessao();
   
-  const canAccessPage = role === 'Admin' || (role === 'Cliente' && (perfil as ClienteProfile)?.permissoes?.relatorios === true);
+  const canAccessPage = role === 'Admin' || 
+    (role === 'Cliente' && (perfil as ClienteProfile)?.permissoes?.relatorios === true) ||
+    (role === 'Usuario' && (perfil as any)?.permissoes?.exportar === true);
 
   if (carregando) {
     return <LayoutPrincipal><div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div></LayoutPrincipal>;

@@ -192,7 +192,12 @@ const PlanoContasPage = () => {
       } else if (role === 'Cliente') {
           ownerId = (perfil as ClienteProfile)?.id || null;
       } else if (role === 'Usuario') {
-          ownerId = (perfil as UsuarioProfile)?.cliente_id || null;
+          const user = perfil as any;
+          if (user?.admin_id) {
+            ownerId = user.admin_id;
+          } else if (user?.cliente_id) {
+            ownerId = user.cliente_id;
+          }
       }
       
       if (ownerId) {

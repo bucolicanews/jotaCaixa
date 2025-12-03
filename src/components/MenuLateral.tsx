@@ -39,7 +39,7 @@ const SECOES_MENU: MenuSection[] = [
         itens: [
             { nome: 'Bater Ponto', caminho: '/ponto-eletronico', icone: Clock, perfis: ['Usuario'], permissionKey: 'ponto_eletronico' },
             { nome: 'Meu Ponto', caminho: '/folha-ponto?mode=self', icone: User, perfis: ['Usuario'], permissionKey: 'visualizar_proprio_ponto' },
-            { nome: 'Acompanhar Ponto', caminho: '/folha-ponto', icone: CalendarCheck, perfis: ['Admin', 'Cliente'], permissionKey: 'folha_ponto' },
+            { nome: 'Acompanhar Ponto', caminho: '/folha-ponto', icone: CalendarCheck, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'folha_ponto' },
         ]
     },
     {
@@ -82,20 +82,20 @@ const SECOES_MENU: MenuSection[] = [
     },
     {
         titulo: 'Contratos',
-        perfis: ['Admin', 'Cliente'],
+        perfis: ['Admin', 'Cliente', 'Usuario'],
         itens: [
-            { nome: 'Gerenciar Contratos', caminho: '/contratos', icone: FileSignature, perfis: ['Admin', 'Cliente'], permissionKey: 'contratos' },
-            { nome: 'Cadastrar Tags', caminho: '/contratos/tags', icone: Tag, perfis: ['Admin', 'Cliente'], permissionKey: 'contratos' },
-            { nome: 'Cadastrar Modelos', caminho: '/contratos/modelos', icone: FileTextIcon, perfis: ['Admin', 'Cliente'], permissionKey: 'contratos' },
+            { nome: 'Gerenciar Contratos', caminho: '/contratos', icone: FileSignature, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'contratos' },
+            { nome: 'Cadastrar Tags', caminho: '/contratos/tags', icone: Tag, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'contratos' },
+            { nome: 'Cadastrar Modelos', caminho: '/contratos/modelos', icone: FileTextIcon, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'contratos' },
         ]
     },
     {
-        titulo: 'Documentos Societários',
-        perfis: ['Admin', 'Cliente'],
+        titulo: 'Documentos Societarios',
+        perfis: ['Admin', 'Cliente', 'Usuario'],
         itens: [
-            { nome: 'Documentos Gerados', caminho: '/documentos-societarios', icone: FileText, perfis: ['Admin', 'Cliente'], permissionKey: 'contratos' },
-            { nome: 'Gerenciar Modelos', caminho: '/documentos-societarios/modelos', icone: FileTextIcon, perfis: ['Admin', 'Cliente'], permissionKey: 'contratos' },
-            { nome: 'Gerenciar Blocos', caminho: '/documentos-societarios/blocos', icone: Tag, perfis: ['Admin', 'Cliente'], permissionKey: 'contratos' },
+            { nome: 'Documentos Gerados', caminho: '/documentos-societarios', icone: FileText, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'documentos_societarios' },
+            { nome: 'Gerenciar Modelos', caminho: '/documentos-societarios/modelos', icone: FileTextIcon, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'documentos_societarios' },
+            { nome: 'Gerenciar Blocos', caminho: '/documentos-societarios/blocos', icone: Tag, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'documentos_societarios' },
         ]
     },
     {
@@ -112,7 +112,7 @@ const SECOES_MENU: MenuSection[] = [
         itens: [
             { nome: 'Minha Assinatura', caminho: '/minha-assinatura', icone: DollarSign, perfis: ['Cliente'] },
             { nome: 'Clientes', caminho: '/clientes', icone: Building2, perfis: ['Admin', 'Cliente'], permissionKey: 'contas_receber' },
-            { nome: 'Gerenciar Usuários', caminho: '/gerenciar-usuarios', icone: Users, perfis: ['Admin', 'Cliente'], permissionKey: 'cadastrar_usuarios' },
+            { nome: 'Gerenciar Usuários', caminho: '/gerenciar-usuarios', icone: Users, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'cadastrar_usuarios' },
             { nome: 'Gerenciar Planos', caminho: '/planos', icone: Package, perfis: ['Admin'] }, 
             { nome: 'Relatórios', caminho: '/relatorios', icone: FileText, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'relatorios' },
             { nome: 'Importar Dados', caminho: '/importar', icone: Upload, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'importar' },
@@ -201,10 +201,6 @@ const MenuLateral: React.FC<MenuLateralProps> = ({ onLinkClick, adminBranding, l
     if (role === 'Usuario' && userProfile) {
         if (isUnassignedUser) {
             return item.caminho === '/painel' || item.caminho === '/cadastrar-empresa';
-        }
-        
-        if (item.caminho === '/folha-ponto') {
-            return false;
         }
         
         // NOVO: Verifica a permissão de gestão de suporte

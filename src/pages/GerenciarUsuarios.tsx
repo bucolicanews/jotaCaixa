@@ -40,6 +40,11 @@ const GerenciarUsuarios: React.FC = () => {
 
   const isAdmin = role === 'Admin';
   const isCliente = role === 'Cliente';
+  const isUsuario = role === 'Usuario';
+  
+  // Determina se o usuário é funcionário do Admin (admin_usuario)
+  const isAdminUsuario = isUsuario && !!(perfil as AdminUsuarioProfile)?.admin_id;
+  const adminIdDoUsuario = isAdminUsuario ? (perfil as AdminUsuarioProfile)?.admin_id : null;
 
   // Efeito para definir a aba ativa inicial
   useEffect(() => {
@@ -139,6 +144,26 @@ const GerenciarUsuarios: React.FC = () => {
       }
       
       fetchedUsers = (usuariosData || []).map(u => ({ ...u, cliente_nome: (perfil as ClienteProfile)?.nome || 'Minha Empresa' })) as UsuarioComEmpresa[];
+    } else if (isAdminUsuario && adminIdDoUsuario) {
+      // ADMIN_USUARIO (Funcionário do Admin com permissão de RH): Busca usuários do Admin
+      const { data: adminUsersData, error: adminUsersError } = await supabase
+        .from('admin_usuarios')
+        .select('*, admin_id')
+        .eq('admin_id', adminIdDoUsuario)
+        .order('nome', { ascending: true });
+        
+      if (adminUsersError) {
+        showError('Erro ao carregar usuários: ' + adminUsersError.message);
+        setCarregandoDados(false);
+        return;
+      }
+      
+      fetchedUsers = (adminUsersData || []).map(u => ({ 
+          ...u, 
+          cliente_id: null,
+          is_admin_user: true,
+          cliente_nome: 'Funcionários do Admin' 
+      })) as UsuarioComEmpresa[];
     }
     
     // NOVO PASSO: Buscar todos os IDs de Clientes (tbl_clientes) e Admin (tbl_admins) para exclusão
@@ -157,7 +182,7 @@ const GerenciarUsuarios: React.FC = () => {
 
     setUsuarios(filteredUsers);
     setCarregandoDados(false);
-  }, [usuario, role, isAdmin, isCliente, perfil, filtroEmpresaId]); // Adicionado filtroEmpresaId para re-fetch
+  }, [usuario, role, isAdmin, isCliente, isAdminUsuario, adminIdDoUsuario, perfil, filtroEmpresaId]);
 
   useEffect(() => {
     if (!carregando) {
@@ -174,8 +199,10 @@ const GerenciarUsuarios: React.FC = () => {
   };
 
   // Separação de usuários para as abas
-  const meusFuncionarios = usuarios.filter(u => (u as UsuarioProfile)?.cliente_id === usuario?.id || (u as AdminUsuarioProfile)?.admin_id === usuario?.id);
-  const funcionariosClientes = usuarios.filter(u => (u as UsuarioProfile)?.cliente_id !== usuario?.id && (u as AdminUsuarioProfile)?.admin_id !== usuario?.id);
+  // Para admin_usuario, considera o admin_id do Admin como "seu" proprietário
+  const meuProprietarioId = isAdminUsuario ? adminIdDoUsuario : usuario?.id;
+  const meusFuncionarios = usuarios.filter(u => (u as UsuarioProfile)?.cliente_id === meuProprietarioId || (u as AdminUsuarioProfile)?.admin_id === meuProprietarioId);
+  const funcionariosClientes = usuarios.filter(u => (u as UsuarioProfile)?.cliente_id !== meuProprietarioId && (u as AdminUsuarioProfile)?.admin_id !== meuProprietarioId);
 
   const filterUsers = (userList: UsuarioComEmpresa[], currentTab: string) => {
     const termoBusca = filtro.toLowerCase();

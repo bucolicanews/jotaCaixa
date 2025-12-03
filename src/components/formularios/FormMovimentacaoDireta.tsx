@@ -20,6 +20,7 @@ import { DialogDescription } from '@/components/ui/dialog';
 import { formatCurrency } from '@/utils/formatters';
 import { format } from 'date-fns';
 import { useSessao } from '@/hooks/use-sessao'; // IMPORT CORRIGIDO
+import { v4 as uuidv4 } from 'uuid';
 
 // Interface for the primary launch (linked to the bank account)
 interface LancamentoPrimario {
@@ -53,7 +54,7 @@ interface FormMovimentacaoDiretaProps {
 }
 
 const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveComplete, lancamentoInicial }) => {
-  const { usuario, role } = useSessao();
+  const { usuario, role, perfil } = useSessao();
   const { configMap } = useContabilConfig();
   
   const isEditing = !!lancamentoInicial; // Determine editing mode
@@ -66,7 +67,18 @@ const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveC
   // NOVO ESTADO: ID do lançamento de DRE emparelhado (para edição)
   const [dreLaunchId, setDreLaunchId] = useState<string | null>(lancamentoInicial?.conta_resultado_id || null); 
   
-  const ownerId = usuario?.id;
+  const getOwnerId = () => {
+    if (role === 'Admin') return usuario?.id || null;
+    if (role === 'Cliente') return (perfil as any)?.id || null;
+    if (role === 'Usuario') {
+      const user = perfil as any;
+      if (user?.admin_id) return user.admin_id;
+      if (user?.cliente_id) return user.cliente_id;
+    }
+    return null;
+  };
+  
+  const ownerId = getOwnerId();
 
   // Busca apenas contas de Ativo (Debito) e escopo 'bancos'
   const { contas: contasAtivo, carregando: loadingContas, refetch: refetchSaldos } = useSaldoContaCalculado('Debito', 'todos', '', 'bancos');
@@ -306,8 +318,8 @@ const FormMovimentacaoDireta: React.FC<FormMovimentacaoDiretaProps> = ({ onSaveC
       } else {
           // Criação (INSERT)
           // 3. CRÍTICO: Gera IDs e define a referência cruzada
-          const idAtivo = crypto.randomUUID();
-          const idResultado = crypto.randomUUID();
+          const idAtivo = uuidv4();
+          const idResultado = uuidv4();
           
           lancamentoAtivoPayload.id = idAtivo;
           lancamentoAtivoPayload.conta_resultado_id = idResultado;

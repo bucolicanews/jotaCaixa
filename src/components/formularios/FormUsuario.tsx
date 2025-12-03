@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useForm, FormProvider, Control } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -151,14 +151,6 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
     return isNaN(date.getTime()) ? undefined : date;
   };
 
-  const permissoesVisiveis = useMemo(() => {
-      return PERMISSOES_DISPONIVEIS.filter((p: Permissao) => {
-          if (criadorRole === 'Admin') return true;
-          // Se for Cliente, permite gerenciar as permissões de RH e a nova de Suporte
-          return p.key === 'ponto_eletronico' || p.key === 'visualizar_proprio_ponto' || p.key === 'folha_ponto' || p.key === 'cadastrar_usuarios' || p.key === 'gestao_suporte';
-      });
-  }, [criadorRole]);
-
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -234,12 +226,10 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
   useEffect(() => {
     if (!profileToEdit) return;
 
-    const defaultPermissoes = permissoesVisiveis.reduce((acc: Record<string, boolean>, p: Permissao) => {
+    const defaultPermissoes = PERMISSOES_DISPONIVEIS.reduce((acc: Record<string, boolean>, p: Permissao) => {
         if (profileToEdit && 'permissoes' in profileToEdit && (profileToEdit as any).permissoes) {
-            // Se for edição, usa as permissões existentes
-            acc[p.key] = (profileToEdit as any).permissoes[p.key] !== false;
+            acc[p.key] = (profileToEdit as any).permissoes[p.key] === true;
         } else {
-            // SE FOR CRIAÇÃO DE NOVO USUÁRIO: Apenas Ponto Eletrônico e Visualizar Próprio Ponto são true
             acc[p.key] = p.key === 'ponto_eletronico' || p.key === 'visualizar_proprio_ponto';
         }
         return acc;
@@ -303,10 +293,10 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
     };
 
     form.reset(resetValues);
-  }, [profileToEdit, isNewClient, permissoesVisiveis]);
+  }, [profileToEdit, isNewClient]);
 
   const handleSelectAll = (select: boolean) => {
-    permissoesVisiveis.forEach((p: Permissao) => {
+    PERMISSOES_DISPONIVEIS.forEach((p: Permissao) => {
       form.setValue(`permissoes.${p.key}`, select, { shouldDirty: true });
     });
   };
@@ -330,7 +320,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
       form.setValue('assinatura_proprietario_url', url || '');
   }, [form]);
   
-  const isContractEditable = criadorRole === 'Admin' || criadorRole === 'Cliente';
+  const isContractEditable = criadorRole === 'Admin' || criadorRole === 'Cliente' || criadorRole === 'Usuario';
 
   const onSubmit = async (values: FormValues) => {
     if (isReadOnly) {
@@ -340,7 +330,27 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
     
     setIsSubmitting(true);
     
-    const proprietarioId = criadorRole === 'Admin' ? criadorPerfil?.id : (criadorPerfil as ClienteProfile)?.id;
+    // Determina o proprietarioId baseado no role do criador
+    let proprietarioId: string | null = null;
+    let isAdminContext = false; // Flag para saber se estamos no contexto de Admin
+    
+    if (criadorRole === 'Admin') {
+        proprietarioId = criadorPerfil?.id || null;
+        isAdminContext = true;
+    } else if (criadorRole === 'Cliente') {
+        proprietarioId = (criadorPerfil as ClienteProfile)?.id || null;
+        isAdminContext = false;
+    } else if (criadorRole === 'Usuario') {
+        // Funcionário do Admin ou Cliente
+        const userPerfil = criadorPerfil as UsuarioProfile | AdminUsuarioProfile;
+        if ('admin_id' in userPerfil && userPerfil.admin_id) {
+            proprietarioId = userPerfil.admin_id;
+            isAdminContext = true;
+        } else if ('cliente_id' in userPerfil && userPerfil.cliente_id) {
+            proprietarioId = userPerfil.cliente_id;
+            isAdminContext = false;
+        }
+    }
     
     if (!proprietarioId) {
         showError('ID do proprietário não pôde ser determinado.');
@@ -399,7 +409,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
             const dataToUpdate: Partial<ClienteProfile> = {
                 nome: values.nome,
                 email: values.email,
-                admin_id: criadorRole === 'Admin' ? proprietarioId : (criadorPerfil as ClienteProfile)?.admin_id,
+                admin_id: isAdminContext ? proprietarioId : (criadorPerfil as ClienteProfile)?.admin_id,
                 aprovado: isEditingClientProfile ? clientProfile!.aprovado : false,
                 limite_usuarios: values.limite_usuarios,
                 permissoes: values.permissoes,
@@ -432,7 +442,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
             
         } else if (isEditingUser || isNewAuthUser) {
             // Edição de Usuário (tbl_usuarios ou admin_usuarios)
-            const tabelaDestino = criadorRole === 'Admin' ? 'admin_usuarios' : 'tbl_usuarios';
+            const tabelaDestino = isAdminContext ? 'admin_usuarios' : 'tbl_usuarios';
             
             const dataToUpdate: any = { 
                 nome: values.nome,
@@ -507,14 +517,24 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
         refetchStatus();
         onSaveComplete();
     } catch (error: any) {
-        showError(`Falha ao salvar: ${error.message}`);
+        const msg = error.message?.toLowerCase() || '';
+        if (msg.includes('already registered') || msg.includes('already exists') || msg.includes('duplicate')) {
+            showError('Este email já está cadastrado. Utilize outro email ou redefina a senha do usuário existente.');
+        } else if (msg.includes('password') && msg.includes('6')) {
+            showError('A senha deve ter no mínimo 6 caracteres.');
+        } else if (msg.includes('invalid email')) {
+            showError('O formato do email é inválido.');
+        } else {
+            showError(`Falha ao salvar: ${error.message}`);
+        }
     } finally {
         setIsSubmitting(false);
     }
   };
   
   // --- Lógica de Read-Only para Tabs ---
-  const isSelfEditUsuario = criadorRole === 'Usuario';
+  // isSelfEditUsuario: Quando um funcionário está editando seu PRÓPRIO perfil (não criando/editando outro)
+  const isSelfEditUsuario = criadorRole === 'Usuario' && isEditing && usuarioInicial?.id === criadorPerfil?.id;
   
   // NOVO HANDLER: Intercepta a mudança de aba para bloquear se estiver desabilitada
   const handleTabChange = (newTab: string) => {
@@ -681,7 +701,6 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
               <FormGeral
                   control={form.control}
                   isSubmitting={isSubmitting}
-                  permissoesVisiveis={permissoesVisiveis}
                   handleSelectAll={handleSelectAll}
                   isReadOnly={isChildFormReadOnly('pessoal')}
               />

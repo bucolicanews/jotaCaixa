@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useForm, FormProvider, Control } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -134,13 +134,6 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
     return isNaN(date.getTime()) ? undefined : date;
   };
 
-  const permissoesVisiveis = useMemo(() => {
-      return PERMISSOES_DISPONIVEIS.filter((p: Permissao) => {
-          if (criadorRole === 'Admin') return true;
-          return p.key === 'ponto_eletronico' || p.key === 'visualizar_proprio_ponto' || p.key === 'folha_ponto' || p.key === 'cadastrar_usuarios';
-      });
-  }, [criadorRole]);
-
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -154,9 +147,9 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
   useEffect(() => {
     if (!profileToEdit) return;
 
-    const defaultPermissoes = permissoesVisiveis.reduce((acc: Record<string, boolean>, p: Permissao) => {
+    const defaultPermissoes = PERMISSOES_DISPONIVEIS.reduce((acc: Record<string, boolean>, p: Permissao) => {
         if (profileToEdit && 'permissoes' in profileToEdit && (profileToEdit as any).permissoes) {
-            acc[p.key] = (profileToEdit as any).permissoes[p.key] !== false;
+            acc[p.key] = (profileToEdit as any).permissoes[p.key] === true;
         } else {
             acc[p.key] = p.key === 'ponto_eletronico' || p.key === 'visualizar_proprio_ponto';
         }
@@ -224,10 +217,10 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
     };
 
     form.reset(resetValues);
-  }, [profileToEdit, isNewClient, permissoesVisiveis]);
+  }, [profileToEdit, isNewClient]);
 
   const handleSelectAll = (select: boolean) => {
-    permissoesVisiveis.forEach((p: Permissao) => {
+    PERMISSOES_DISPONIVEIS.forEach((p: Permissao) => {
       form.setValue(`permissoes.${p.key}`, select, { shouldDirty: true });
     });
   };
@@ -479,9 +472,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
               <FormGeral
                   control={form.control}
                   isSubmitting={isSubmitting}
-                  permissoesVisiveis={permissoesVisiveis}
                   handleSelectAll={handleSelectAll}
-                  isReadOnly={isChildFormReadOnly('pessoal')}
               />
               
               {/* Campos de Login (Apenas para criação ou alteração de senha) */}

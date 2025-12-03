@@ -8,7 +8,7 @@ import { showError, showSuccess } from '@/utils/toast';
 import { DocumentoSocietarioGerado } from '@/types/documentos-societarios';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { UsuarioProfile, ClienteProfile } from '@/types/usuario';
+import { UsuarioProfile, ClienteProfile, AdminUsuarioProfile } from '@/types/usuario';
 import { Link, useNavigate } from 'react-router-dom';
 import { format, parseISO } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
@@ -34,7 +34,11 @@ const DocumentosSocietarios: React.FC = () => {
 
   const getOwnerId = () => {
     if (role === 'Admin' || role === 'Cliente') return (perfil as any)?.id;
-    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id;
+    if (role === 'Usuario') {
+      const user = perfil as UsuarioProfile | AdminUsuarioProfile;
+      if ('admin_id' in user && user.admin_id) return user.admin_id;
+      if ('cliente_id' in user && user.cliente_id) return user.cliente_id;
+    }
     return null;
   };
   

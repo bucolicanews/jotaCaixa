@@ -6,7 +6,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
 import { DocumentoSocietarioModelo } from '@/types/documentos-societarios';
-import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
+import { ClienteProfile, UsuarioProfile, AdminUsuarioProfile } from '@/types/usuario';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import FormDocumentoSocietarioModelo from '@/components/formularios/FormDocumentoSocietarioModelo';
@@ -33,7 +33,11 @@ const GerenciarModelosSocietarios: React.FC = () => {
   const getOwnerId = () => {
     if (isAdmin) return usuario?.id || null;
     if (isCliente) return (perfil as ClienteProfile)?.id;
-    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id;
+    if (role === 'Usuario') {
+      const user = perfil as UsuarioProfile | AdminUsuarioProfile;
+      if ('admin_id' in user && user.admin_id) return user.admin_id;
+      if ('cliente_id' in user && user.cliente_id) return user.cliente_id;
+    }
     return null;
   };
   

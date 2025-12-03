@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DateRangePicker } from '@/components/DateRangePicker';
 import { DateRange } from 'react-day-picker';
 import { startOfMonth, endOfMonth } from 'date-fns';
-import { ClienteProfile } from '@/types/usuario';
+import { ClienteProfile, UsuarioProfile, AdminUsuarioProfile } from '@/types/usuario';
 import RazaoDetalhe from '@/components/contabilidade/RazaoDetalhe'; // Componente a ser criado
 
 const Razao: React.FC = () => {
@@ -18,7 +18,12 @@ const Razao: React.FC = () => {
     to: endOfMonth(new Date()),
   });
   
-  const canAccessPage = role === 'Admin' || (role === 'Cliente' && (perfil as ClienteProfile)?.permissoes?.relatorios === true);
+  const canAccessPage = role === 'Admin' || 
+    (role === 'Cliente' && (perfil as ClienteProfile)?.permissoes?.relatorios === true) ||
+    (role === 'Usuario' && (
+      (perfil as UsuarioProfile)?.permissoes?.razao === true ||
+      (perfil as AdminUsuarioProfile)?.permissoes?.razao === true
+    ));
 
   if (carregandoSessao) {
     return (
