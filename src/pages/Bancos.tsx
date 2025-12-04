@@ -51,6 +51,8 @@ const Bancos = () => {
   
   const empresaId = getEmpresaId();
   
+  console.log('[Bancos] DEBUG:', { role, 'perfil?.id': (perfil as any)?.id, 'perfil?.email': (perfil as any)?.email, empresaId });
+  
   const { contas, totalSaldo, carregando: carregandoSaldos, refetch: refetchSaldos } = useSaldoContaCalculado(
       filtroTipoSaldo, 
       filtroContaContabilId, 

@@ -86,7 +86,7 @@ const ContasReceber = () => {
     // --- 1. Buscar Contas Sintéticas ---
     let contasQuery = supabase
         .from(tabelaContasReceber)
-        .select(`*, clientes(nome)`)
+        .select(`*, clientes:cliente_id(nome)`)
         .eq(ownerKey, ownerId)
         .order('data_vencimento', { ascending: true });
         
@@ -117,7 +117,7 @@ const ContasReceber = () => {
             id,
             descricao,
             cliente_id,
-            clientes ( nome ),
+            clientes:cliente_id ( nome ),
             origem
           )
         `)
@@ -145,6 +145,30 @@ const ContasReceber = () => {
     else {
         let fetchedContas = contasRes.data as ContaReceberComProgresso[];
         let fetchedParcelas = parcelasRes.data as unknown as ExtendedParcelaDetalhada[];
+        
+        // --- Buscar nomes dos clientes da tabela 'clientes' ---
+        const clienteIds = fetchedContas.map(c => c.cliente_id).filter(Boolean);
+        if (clienteIds.length > 0) {
+            const { data: clientesData } = await supabase
+                .from('clientes')
+                .select('id, nome')
+                .in('id', clienteIds);
+                
+            if (clientesData) {
+                const clienteMap = clientesData.reduce((acc, c) => {
+                    acc[c.id] = c.nome;
+                    return acc;
+                }, {} as Record<string, string>);
+                
+                // Merge dos nomes dos clientes nas contas
+                fetchedContas = fetchedContas.map(conta => ({
+                    ...conta,
+                    clientes: conta.cliente_id && clienteMap[conta.cliente_id] 
+                        ? { nome: clienteMap[conta.cliente_id] } 
+                        : conta.clientes
+                }));
+            }
+        }
         
         // --- Lógica para calcular progresso de pagamento ---
         const parcelasPorConta = fetchedParcelas.reduce((acc, p) => {

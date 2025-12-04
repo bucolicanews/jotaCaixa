@@ -140,6 +140,18 @@ const CheckoutPlano: React.FC<CheckoutPlanoProps> = ({ plano, isUpgrade = false,
     setIsSubmitting(true);
 
     try {
+      const { data: emailDisponivel, error: emailError } = await supabase.rpc('email_disponivel', { p_email: email });
+      if (emailError) {
+        showError('Erro ao verificar email: ' + emailError.message);
+        setIsSubmitting(false);
+        return;
+      }
+      if (!emailDisponivel) {
+        showError('Este email já está cadastrado no sistema. Utilize outro email ou faça login.');
+        setIsSubmitting(false);
+        return;
+      }
+
       // 1. Cadastrar o novo cliente no Supabase Auth (Simulação de Trial de 30 dias)
       const dataFimAcesso = addDays(new Date(), 30).toISOString();
       

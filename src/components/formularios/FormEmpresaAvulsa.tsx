@@ -80,6 +80,18 @@ const FormEmpresaAvulsa: React.FC<FormEmpresaAvulsaProps> = ({ onSaveComplete })
     
     setIsSubmitting(true);
     
+    const { data: emailDisponivel, error: emailError } = await supabase.rpc('email_disponivel', { p_email: values.email });
+    if (emailError) {
+      showError('Erro ao verificar email: ' + emailError.message);
+      setIsSubmitting(false);
+      return;
+    }
+    if (!emailDisponivel) {
+      showError('Este email já está cadastrado no sistema. Utilize outro email.');
+      setIsSubmitting(false);
+      return;
+    }
+    
     const planoSelecionado = planos.find(p => p.id === values.plano_id);
     if (!planoSelecionado) {
         showError('Plano não encontrado.');

@@ -200,33 +200,21 @@ const PreencherContrato: React.FC = () => {
         setTagsCustomizadas(tagsData as ContratoTag[]);
     }
     
-    // 2. Buscar Clientes (Contratados) - AGORA BUSCA NA TABELA 'tbl_clientes' (Clientes do Sistema)
-    let queryClients = supabase
-        .from('tbl_clientes') // ALTERADO: Usando a tabela 'tbl_clientes'
-        .select('id, nome, razao_social, nome_fantasia, documento, email, telefone, cep, endereco, numero, complemento, bairro, cidade, estado, cpf, cnpj, rg') // Seleciona campos relevantes
-        .eq('admin_id', targetEmpresaId) // Filtra pelos clientes do Admin/Cliente
-        .eq('aprovado', true) // Filtra apenas clientes aprovados
-        .neq('id', targetEmpresaId) // GARANTE QUE O PROPRIETÁRIO NÃO ESTEJA NA LISTA DE CLIENTES CONTRATADOS
+    // 2. Buscar Clientes (Contratados) - Busca na tabela 'clientes' (Clientes CR do proprietário)
+    const { data: clientesCRData, error: errorCR } = await supabase
+        .from('clientes')
+        .select('id, proprietario_id, nome, razao_social, nome_fantasia, documento, email, telefone, telefone_fixo, cep, endereco, numero, complemento, bairro, cidade, estado, cpf, cnpj, rg, data_nascimento')
+        .eq('proprietario_id', targetEmpresaId)
         .order('nome');
         
-    const { data: clientesCRData, error: errorCR } = await queryClients;
-        
     if (errorCR) {
-        showError('Erro ao carregar clientes do sistema: ' + errorCR.message);
+        showError('Erro ao carregar clientes: ' + errorCR.message);
         setClientesCR([]);
     } else {
-        // Mapeia os dados para o formato ClienteCRCompleto (que é mais genérico)
-        const mappedClients = (clientesCRData as any[]).map(c => ({
-            ...c,
-            proprietario_id: targetEmpresaId, // Adiciona o proprietário para consistência
-            telefone_fixo: null, // Não existe em tbl_clientes
-            data_nascimento: null, // Não existe em tbl_clientes
-        })) as ClienteCRCompleto[];
-        
-        setClientesCR(mappedClients);
+        setClientesCR(clientesCRData as ClienteCRCompleto[]);
         
         // Se o cliente selecionado não estiver mais na lista, limpa a seleção
-        if (clienteSelecionadoId && !mappedClients.some(c => c.id === clienteSelecionadoId)) {
+        if (clienteSelecionadoId && !clientesCRData?.some(c => c.id === clienteSelecionadoId)) {
             setClienteSelecionadoId('');
         }
     }
@@ -674,44 +662,40 @@ const PreencherContrato: React.FC = () => {
             const tabelaParcelasReceber = isContractOwnerAdmin ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
             const ownerKey = isContractOwnerAdmin ? 'admin_id' : 'empresa_id';
             
-            // Buscar mapeamento contábil (apenas se for Admin)
+            // Buscar mapeamento contábil (Admin e Cliente)
             let contaAReceberId: string | null = null;
             let contaParcelaId: string | null = null;
             let contaReceitaResultado: string | null = null;
             
-            if (isAdmin) {
-                const [crConfig, parcelaConfig, receitaConfig, contratoConfig] = await Promise.all([
-                    supabase.from('configuracao_contas_receber').select('conta_contabil_id').eq('proprietario_id', ownerIdLogado).eq('tipo_registro', 'a_receber').single(),
-                    supabase.from('configuracao_contas_receber').select('conta_contabil_id').eq('proprietario_id', ownerIdLogado).eq('tipo_registro', 'parcela').single(),
-                    supabase.from('configuracao_contas_receber').select('conta_contabil_id').eq('proprietario_id', ownerIdLogado).eq('tipo_registro', 'recebimento_resultado').single(),
-                    // NOVO: Busca as contas configuradas no módulo de Contratos
-                    supabase.from('configuracao_contratos').select('id_conta_clientes_receber, id_conta_receita_contrato').eq('proprietario_id', ownerIdLogado).single(),
-                ]);
-                
-                // Prioriza as contas configuradas no módulo de Contratos
-                contaAReceberId = contratoConfig.data?.id_conta_clientes_receber || crConfig.data?.conta_contabil_id || null;
-                contaReceitaResultado = contratoConfig.data?.id_conta_receita_contrato || receitaConfig.data?.conta_contabil_id || null;
-                
-                contaParcelaId = parcelaConfig.data?.conta_contabil_id || null;
-                
-                if (!contaAReceberId || !contaReceitaResultado) {
-                    throw new Error('As contas contábeis de Clientes a Receber (Ativo) e Receita (Resultado) não estão configuradas no módulo de Contratos.');
-                }
-            }
+            // Busca configurações contábeis para Admin e Cliente
+            const [crConfig, parcelaConfig, receitaConfig, contratoConfig] = await Promise.all([
+                supabase.from('configuracao_contas_receber').select('conta_contabil_id').eq('proprietario_id', proprietarioContratoId).eq('tipo_registro', 'a_receber').maybeSingle(),
+                supabase.from('configuracao_contas_receber').select('conta_contabil_id').eq('proprietario_id', proprietarioContratoId).eq('tipo_registro', 'parcela').maybeSingle(),
+                supabase.from('configuracao_contas_receber').select('conta_contabil_id').eq('proprietario_id', proprietarioContratoId).eq('tipo_registro', 'recebimento_resultado').maybeSingle(),
+                supabase.from('configuracao_contratos').select('id_conta_clientes_receber, id_conta_receita_contrato').eq('proprietario_id', proprietarioContratoId).maybeSingle(),
+            ]);
+            
+            // Prioriza as contas configuradas no módulo de Contratos
+            contaAReceberId = contratoConfig.data?.id_conta_clientes_receber || crConfig.data?.conta_contabil_id || null;
+            contaReceitaResultado = contratoConfig.data?.id_conta_receita_contrato || receitaConfig.data?.conta_contabil_id || null;
+            contaParcelaId = parcelaConfig.data?.conta_contabil_id || null;
+            
+            // Se não tiver configurações contábeis, apenas avisa mas não bloqueia
+            const temConfigContabil = contaAReceberId && contaReceitaResultado;
             
             // 3.1. Criar Conta Sintética
             const contaReceberPayload = {
                 [ownerKey]: proprietarioContratoId,
-                cliente_id: clienteSelecionadoId, // Referencia tbl_clientes(id)
+                cliente_id: clienteSelecionadoId,
                 descricao: `Contrato: ${tituloDocumento}`,
-                valor_total: valorTotalCalculado, // USANDO VALOR TOTAL CALCULADO
+                valor_total: valorTotalCalculado,
                 data_emissao: format(new Date(), 'yyyy-MM-dd'),
                 data_vencimento: dataInicio,
                 status: 'aberta',
                 tipo_receita: tipoLancamento === 'unico' ? 'única' : 'recorrente',
                 contrato_gerado_id: contratoGeradoId,
-                ...(isAdmin && { id_conta_patrimonial: contaAReceberId }),
-                ...(isAdmin && { id_conta_resultado: contaReceitaResultado }), // NOVO CAMPO
+                ...(temConfigContabil && { id_conta_patrimonial: contaAReceberId }),
+                ...(temConfigContabil && { id_conta_resultado: contaReceitaResultado }),
             };
             
             const { data: newConta, error: crError } = await supabase
@@ -739,7 +723,7 @@ const PreencherContrato: React.FC = () => {
                     valor_parcela: valorParcela,
                     data_vencimento: format(vencimento, 'yyyy-MM-dd'),
                     status: 'aberta',
-                    ...(isAdmin && { id_conta_contabil: contaParcelaId }),
+                    ...(temConfigContabil && { id_conta_contabil: contaParcelaId }),
                 });
             }
             
@@ -749,15 +733,15 @@ const PreencherContrato: React.FC = () => {
             // 4. Lançamento 1: DÉBITO (Ativo) - Aumenta o direito a receber
             const dataMovimentacao = format(new Date(), 'yyyy-MM-dd') + 'T12:00:00Z';
             const launchDescription = `Contrato: ${tituloDocumento}`;
-            const contaReceberIdShort = newContaReceberId.substring(0, 8); // USANDO O ID DA CONTA RECEBER
+            const contaReceberIdShort = newContaReceberId.substring(0, 8);
             
-            if (isAdmin && contaAReceberId) {
+            if (temConfigContabil && contaAReceberId) {
                 const lancamentoPatrimonialPayload = {
-                    proprietario_id: ownerIdLogado,
+                    proprietario_id: proprietarioContratoId,
                     data_movimentacao: dataMovimentacao,
-                    descricao: `Lançamento Inicial CR: ${launchDescription} (CR ID: ${contaReceberIdShort})`, // CORRIGIDO
-                    valor: valorTotalCalculado, // USANDO VALOR TOTAL CALCULADO
-                    tipo: 'Entrada' as const, // Entrada no Ativo (Débito)
+                    descricao: `Lançamento Inicial CR: ${launchDescription} (CR ID: ${contaReceberIdShort})`,
+                    valor: valorTotalCalculado,
+                    tipo: 'Entrada' as const,
                     conta_bancaria_id: null,
                     conta_contabil_id: contaAReceberId,
                     origem: 'lancamento_cr',
@@ -767,13 +751,13 @@ const PreencherContrato: React.FC = () => {
             }
             
             // 5. Lançamento 2: CRÉDITO (Resultado) - Aumenta a Receita (DRE)
-            if (isAdmin && contaReceitaResultado) {
+            if (temConfigContabil && contaReceitaResultado) {
                 const lancamentoReceitaPayload = {
-                    proprietario_id: ownerIdLogado,
+                    proprietario_id: proprietarioContratoId,
                     data_movimentacao: dataMovimentacao,
-                    descricao: `Receita: ${launchDescription} (CR ID: ${contaReceberIdShort})`, // CORRIGIDO
-                    valor: valorTotalCalculado, // USANDO VALOR TOTAL CALCULADO
-                    tipo: 'Saida' as const, // Saída (Crédito) na Receita
+                    descricao: `Receita: ${launchDescription} (CR ID: ${contaReceberIdShort})`,
+                    valor: valorTotalCalculado,
+                    tipo: 'Saida' as const,
                     conta_bancaria_id: null,
                     conta_contabil_id: contaReceitaResultado,
                     origem: 'lancamento_cr',

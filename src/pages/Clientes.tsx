@@ -76,6 +76,12 @@ const ClientesPage = () => {
   const [dialogAvulsaAberto, setDialogAvulsaAberto] = useState(false); // Novo estado para dialog avulsa
   const [dialogConviteAberto, setDialogConviteAberto] = useState(false); // NOVO ESTADO
   
+  // Estados para formulário de convite simples
+  const [conviteNome, setConviteNome] = useState('');
+  const [conviteEmail, setConviteEmail] = useState('');
+  const [conviteTelefone, setConviteTelefone] = useState('');
+  const [enviandoConvite, setEnviandoConvite] = useState(false);
+  
   // NOVO ESTADO
   const [planosMap, setPlanosMap] = useState<Record<string, string>>({});
   
@@ -595,6 +601,79 @@ const ClientesPage = () => {
         showError('Falha ao enviar convite: ' + error.message);
     } finally {
         setCarregandoDados(false);
+    }
+  };
+  
+  // HANDLER: Enviar Convite Simples (formulário do diálogo)
+  const handleEnviarConviteSimples = async () => {
+    if (!conviteEmail || !conviteNome) {
+      showError('Nome e Email são obrigatórios.');
+      return;
+    }
+    
+    setEnviandoConvite(true);
+    
+    try {
+      const { data: emailDisponivel, error: emailError } = await supabase.rpc('email_disponivel', { p_email: conviteEmail });
+      if (emailError) {
+        showError('Erro ao verificar email: ' + emailError.message);
+        setEnviandoConvite(false);
+        return;
+      }
+      if (!emailDisponivel) {
+        showError('Este email já está cadastrado no sistema.');
+        setEnviandoConvite(false);
+        return;
+      }
+      
+      const { error: signUpError } = await supabase.auth.signUp({
+        email: conviteEmail,
+        password: Math.random().toString(36).substring(2, 15),
+        options: {
+          emailRedirectTo: `${BASE_URL}/atualizar-senha`,
+          data: { 
+            role: 'Cliente', 
+            nome: conviteNome, 
+            aprovado: false,
+          }
+        }
+      });
+      
+      if (signUpError && !signUpError.message.includes('already registered')) {
+        throw signUpError;
+      }
+      
+      const { data, error: resetError } = await supabase.auth.resetPasswordForEmail(conviteEmail, {
+        redirectTo: `${BASE_URL}/atualizar-senha`, 
+      });
+      
+      if (resetError) throw resetError;
+      
+      const resetLink = (data as { action_link: string | null }).action_link || `${BASE_URL}/atualizar-senha`;
+      
+      showSuccess('Convite enviado com sucesso!');
+      
+      const whatsappTemplate = `Olá ${conviteNome}! Seu convite de acesso ao sistema está pronto. Clique no link abaixo para definir sua senha e acessar:\n\n${resetLink}`;
+      
+      if (window.confirm(`Link gerado! Deseja copiar para enviar manualmente?`)) {
+        navigator.clipboard.writeText(resetLink);
+        showSuccess('Link copiado!');
+      }
+      
+      if (conviteTelefone) {
+        window.open(`https://wa.me/${conviteTelefone.replace(/\D/g, '')}?text=${encodeURIComponent(whatsappTemplate)}`, '_blank');
+      }
+      
+      setConviteNome('');
+      setConviteEmail('');
+      setConviteTelefone('');
+      setDialogConviteAberto(false);
+      buscarDados();
+      
+    } catch (error: any) {
+      showError('Falha ao enviar convite: ' + error.message);
+    } finally {
+      setEnviandoConvite(false);
     }
   };
   
@@ -1136,51 +1215,109 @@ const ClientesPage = () => {
                     </DropdownMenuItem>
                 </DropdownMenuContent>
             </DropdownMenu>
-            {/* Botão para Novo Cliente CR (Agora cria um cliente avulso na tbl_clientes) */}
-            <Dialog open={dialogAvulsaAberto} onOpenChange={setDialogAvulsaAberto}>
-              <DialogTrigger asChild>
-                <Button onClick={handleNewCR} className="w-full sm:w-auto bg-orange-500 hover:bg-orange-600">
-                  <PlusCircle className="w-4 h-4 mr-2" />
-                  Cliente Direto
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
-                  <DialogHeader>
-                      <DialogTitle>Cadastrar Cliente Direto (Avulso)</DialogTitle>
-                      <p className="text-sm text-muted-foreground">
-                          Cria um perfil de cliente na base de usuários para ser usado em Contas a Receber e Contratos.
-                      </p>
-                  </DialogHeader>
-                  <FormEmpresaAvulsa onSaveComplete={handleSaveComplete} />
-              </DialogContent>
-            </Dialog>
+            {/* Botão para Novo Cliente CR - Admin usa FormEmpresaAvulsa, Cliente/Usuario usa FormCliente */}
+            {isAdmin ? (
+              <Dialog open={dialogAvulsaAberto} onOpenChange={setDialogAvulsaAberto}>
+                <DialogTrigger asChild>
+                  <Button onClick={handleNewCR} className="w-full sm:w-auto bg-orange-500 hover:bg-orange-600">
+                    <PlusCircle className="w-4 h-4 mr-2" />
+                    Cliente Direto
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle>Cadastrar Cliente Direto (Avulso)</DialogTitle>
+                        <p className="text-sm text-muted-foreground">
+                            Cria um perfil de cliente na base de usuários para ser usado em Contas a Receber e Contratos.
+                        </p>
+                    </DialogHeader>
+                    <FormEmpresaAvulsa onSaveComplete={handleSaveComplete} />
+                </DialogContent>
+              </Dialog>
+            ) : (
+              <Dialog open={dialogAvulsaAberto} onOpenChange={setDialogAvulsaAberto}>
+                <DialogTrigger asChild>
+                  <Button onClick={handleNewCR} className="w-full sm:w-auto bg-orange-500 hover:bg-orange-600">
+                    <PlusCircle className="w-4 h-4 mr-2" />
+                    Cliente Direto
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle>Cadastrar Novo Cliente</DialogTitle>
+                        <p className="text-sm text-muted-foreground">
+                            Cria um cliente para uso em Contas a Receber e Contratos.
+                        </p>
+                    </DialogHeader>
+                    <FormCliente onSaveComplete={handleSaveComplete} />
+                </DialogContent>
+              </Dialog>
+            )}
             
             {/* Botão para Nova Empresa Avulsa (Apenas Admin) - REMOVIDO, AGORA É O NOVO CLIENTE CR */}
             
             {/* NOVO BOTÃO: Convidar Cliente (Apenas Admin) */}
             {isAdmin && (
-                <Dialog open={dialogConviteAberto} onOpenChange={setDialogConviteAberto}>
+                <Dialog open={dialogConviteAberto} onOpenChange={(open) => {
+                  setDialogConviteAberto(open);
+                  if (!open) {
+                    setConviteNome('');
+                    setConviteEmail('');
+                    setConviteTelefone('');
+                  }
+                }}>
                     <DialogTrigger asChild>
                         <Button variant="secondary" onClick={() => setDialogConviteAberto(true)} className="w-full sm:w-auto">
                             <Mail className="w-4 h-4 mr-2" />
                             Convidar Cliente
                         </Button>
                     </DialogTrigger>
-                    <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+                    <DialogContent className="sm:max-w-[400px]">
                         <DialogHeader>
-                            <DialogTitle>Convidar Novo Cliente do Sistema</DialogTitle>
+                            <DialogTitle>Convidar Novo Cliente</DialogTitle>
                             <p className="text-sm text-muted-foreground">
-                                Envia um link de cadastro para que o cliente defina a senha e inicie o processo de aprovação.
+                                Envia um link para o cliente definir sua senha e acessar o sistema.
                             </p>
                         </DialogHeader>
-                        {/* Usando FormUsuario no modo de criação de novo cliente (isNewClient) */}
-                        <FormUsuario 
-                            criadorRole={role!}
-                            criadorPerfil={perfil!}
-                            usuarioInicial={null}
-                            onSaveComplete={handleSaveComplete}
-                            isNewClient={true} // NOVO PROP PARA MUDAR O COMPORTAMENTO
-                        />
+                        <div className="space-y-4 pt-4">
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium">Nome da Empresa / Pessoa *</label>
+                                <Input
+                                    placeholder="Nome completo ou razão social"
+                                    value={conviteNome}
+                                    onChange={(e) => setConviteNome(e.target.value)}
+                                    disabled={enviandoConvite}
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium">Email *</label>
+                                <Input
+                                    type="email"
+                                    placeholder="email@empresa.com"
+                                    value={conviteEmail}
+                                    onChange={(e) => setConviteEmail(e.target.value)}
+                                    disabled={enviandoConvite}
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium">Telefone / WhatsApp (opcional)</label>
+                                <Input
+                                    placeholder="(11) 99999-9999"
+                                    value={conviteTelefone}
+                                    onChange={(e) => setConviteTelefone(e.target.value)}
+                                    disabled={enviandoConvite}
+                                />
+                            </div>
+                            <Button 
+                                onClick={handleEnviarConviteSimples} 
+                                className="w-full" 
+                                disabled={enviandoConvite || !conviteNome || !conviteEmail}
+                            >
+                                {enviandoConvite && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                <Mail className="w-4 h-4 mr-2" />
+                                Enviar Convite
+                            </Button>
+                        </div>
                     </DialogContent>
                 </Dialog>
             )}

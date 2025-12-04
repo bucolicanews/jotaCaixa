@@ -45,12 +45,14 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (adminData) {
       perfil = adminData;
       role = 'Admin';
+      console.log('[SessionContext] Perfil Admin carregado:', { id: adminData.id, email: adminData.email });
     } else {
       // 2. Buscar Cliente
       const clienteData = await fetchProfile('tbl_clientes');
       if (clienteData) {
         perfil = clienteData;
         role = 'Cliente';
+        console.log('[SessionContext] Perfil Cliente carregado:', { id: clienteData.id, email: clienteData.email, admin_id: clienteData.admin_id });
       } else {
         // 3. Buscar Usuário (Funcionário do Cliente)
         const usuarioData = await fetchProfile('tbl_usuarios');

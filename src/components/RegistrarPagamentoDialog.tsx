@@ -111,15 +111,14 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
   }, [ownerId]);
   
   const fetchHistoricoPadrao = useCallback(async () => {
-    if (!isAdmin || !ownerId) return;
+    if (!ownerId) return;
     
     const { data, error } = await supabase
         .from('configuracao_contas_receber')
         .select('conta_contabil_id')
         .eq('proprietario_id', ownerId)
-        .eq('tipo_registro', 'recebimento_historico_padrao') // NOVO TIPO DE REGISTRO
-        .limit(1)
-        .single();
+        .eq('tipo_registro', 'recebimento_historico_padrao')
+        .maybeSingle();
         
     if (error && error.code !== 'PGRST116') {
         console.error('Erro ao buscar histórico padrão:', error);
@@ -128,7 +127,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
     const id = data?.conta_contabil_id || null;
     setHistoricoPadraoId(id);
     form.setValue('historico_id', id);
-  }, [isAdmin, ownerId, form]);
+  }, [ownerId, form]);
 
   useEffect(() => {
       if (open) {
@@ -164,9 +163,14 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
     const saldoRestanteCalculado = parcela.valor_parcela - novoValorPagoTotal;
     const quitouComPagamentoAtual = novoValorPagoTotal >= parcela.valor_parcela;
     
-    // Contas Contábeis Mapeadas
-    const contaRecebimento = isAdmin ? (await supabase.from('configuracao_contas_receber').select('conta_contabil_id').eq('proprietario_id', ownerId).eq('tipo_registro', 'recebimento').single()).data?.conta_contabil_id : null;
-    const contaParcela = isAdmin ? (await supabase.from('configuracao_contas_receber').select('conta_contabil_id').eq('proprietario_id', ownerId).eq('tipo_registro', 'parcela').single()).data?.conta_contabil_id : null;
+    // Contas Contábeis Mapeadas (para Admin e Cliente)
+    const [contaRecebimentoRes, contaParcelaRes] = await Promise.all([
+        supabase.from('configuracao_contas_receber').select('conta_contabil_id').eq('proprietario_id', ownerId).eq('tipo_registro', 'recebimento').maybeSingle(),
+        supabase.from('configuracao_contas_receber').select('conta_contabil_id').eq('proprietario_id', ownerId).eq('tipo_registro', 'parcela').maybeSingle()
+    ]);
+    const contaRecebimento = contaRecebimentoRes.data?.conta_contabil_id || null;
+    const contaParcela = contaParcelaRes.data?.conta_contabil_id || null;
+    const temConfigContabil = !!contaRecebimento;
     
     // Payload base para recebimentos
     let recebimentoBasePayload;
@@ -185,8 +189,8 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
             valor_recebido: valorRecebido, 
             cliente_id: clienteIdPagador,
             conta_id: values.conta_id,
-            id_conta_contabil: contaRecebimento,
-            historico_id: values.historico_id, // NOVO CAMPO
+            ...(temConfigContabil && { id_conta_contabil: contaRecebimento }),
+            historico_id: values.historico_id,
         };
     } else {
         recebimentoBasePayload = { 
@@ -194,7 +198,8 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
             empresa_id: ownerId, 
             valor_recebido: valorRecebido,
             conta_id: values.conta_id,
-            // historico_id não é necessário para Cliente/Usuário
+            ...(temConfigContabil && { id_conta_contabil: contaRecebimento }),
+            historico_id: values.historico_id,
         };
     }
 
@@ -215,7 +220,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
           status: 'paga',
           valor_pago: novoValorPagoTotal,
           data_pagamento: values.data_pagamento.toISOString(),
-          ...(isAdmin && { id_conta_contabil: contaParcela })
+          ...(temConfigContabil && { id_conta_contabil: contaParcela })
         }).eq('id', parcela.id);
       } else { // Pagamento parcial
         if (values.acao_saldo_restante === 'desconto') {
@@ -224,7 +229,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
             valor_pago: novoValorPagoTotal,
             data_pagamento: values.data_pagamento.toISOString(),
             observacao: `Recebido R$ ${valorRecebido.toFixed(2)} com R$ ${saldoRestanteCalculado.toFixed(2)} de desconto.`,
-            ...(isAdmin && { id_conta_contabil: contaParcela })
+            ...(temConfigContabil && { id_conta_contabil: contaParcela })
           }).eq('id', parcela.id);
           
         } else if (values.acao_saldo_restante === 'reprogramar' || values.acao_saldo_restante === 'parcelar') {
@@ -233,15 +238,16 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
             valor_pago: novoValorPagoTotal,
             data_pagamento: values.data_pagamento.toISOString(),
             observacao: `Recebido R$ ${valorRecebido.toFixed(2)}. Saldo de R$ ${saldoRestanteCalculado.toFixed(2)} ${values.acao_saldo_restante === 'reprogramar' ? 'reprogramado' : 'parcelado'}.`,
-            ...(isAdmin && { id_conta_contabil: contaParcela })
+            ...(temConfigContabil && { id_conta_contabil: contaParcela })
           }).eq('id', parcela.id);
 
-          const baseParcelaPayload = isAdmin ? { admin_id: ownerId, id_conta_contabil: contaParcela } : { empresa_id: ownerId };
+          const baseParcelaPayload = isAdmin ? { admin_id: ownerId } : { empresa_id: ownerId };
+          const parcelaPayloadWithConfig = { ...baseParcelaPayload, ...(temConfigContabil && { id_conta_contabil: contaParcela }) };
           
           if (values.acao_saldo_restante === 'reprogramar') {
             await supabase.from(tabelaParcelas).insert({
               conta_receber_id: parcela.conta_receber_id,
-              ...baseParcelaPayload,
+              ...parcelaPayloadWithConfig,
               numero_parcela: 99,
               valor_parcela: saldoRestanteCalculado,
               data_vencimento: format(values.nova_data_vencimento!, 'yyyy-MM-dd'),
@@ -251,7 +257,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
             const valorNovaParcela = saldoRestanteCalculado / values.numero_novas_parcelas!;
             const novasParcelas = Array.from({ length: values.numero_novas_parcelas! }).map((_, i) => ({
               conta_receber_id: parcela.conta_receber_id,
-              ...baseParcelaPayload,
+              ...parcelaPayloadWithConfig,
               numero_parcela: 100 + i,
               valor_parcela: valorNovaParcela,
               data_vencimento: format(addDays(values.nova_data_vencimento!, i * values.intervalo_dias_novas_parcelas!), 'yyyy-MM-dd'),
@@ -263,7 +269,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
             await supabase.from(tabelaParcelas).update({
                 status: 'parcial',
                 valor_pago: novoValorPagoTotal,
-                ...(isAdmin && { id_conta_contabil: contaParcela })
+                ...(temConfigContabil && { id_conta_contabil: contaParcela })
             }).eq('id', parcela.id);
         }
       }
@@ -283,7 +289,7 @@ const RegistrarPagamentoDialog: React.FC<RegistrarPagamentoDialogProps> = ({ par
       await supabase.from('lancamentos').insert(lancamentoPayload);
       
       // 4. Salvar Histórico Padrão (se marcado)
-      if (isAdmin && values.salvar_como_padrao && values.historico_id) {
+      if (values.salvar_como_padrao && values.historico_id) {
           await supabase.from('configuracao_contas_receber').upsert({
               proprietario_id: ownerId,
               tipo_registro: 'recebimento_historico_padrao',

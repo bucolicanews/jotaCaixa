@@ -369,6 +369,18 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                 return;
             }
             
+            const { data: emailDisponivel, error: emailError } = await supabase.rpc('email_disponivel', { p_email: values.email });
+            if (emailError) {
+                showError('Erro ao verificar email: ' + emailError.message);
+                setIsSubmitting(false);
+                return;
+            }
+            if (!emailDisponivel) {
+                showError('Este email já está cadastrado no sistema. Utilize outro email.');
+                setIsSubmitting(false);
+                return;
+            }
+            
             const targetRole = isNewClient ? 'Cliente' : 'Usuario';
             const metadata: Record<string, any> = { 
                 role: targetRole, 
@@ -613,22 +625,22 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                             <Separator />
                             <h3 className="font-semibold text-lg">Configurações da Empresa</h3>
                             <FormField control={form.control} name="limite_usuarios" render={({ field }) => (
-                                <FormItem><FormLabel>Limite de Usuários</FormLabel><FormControl><Input type="number" placeholder="5" {...field} disabled={isReadOnly || isEditingClientProfile} /></FormControl><FormMessage /></FormItem>
+                                <FormItem><FormLabel>Limite de Usuários</FormLabel><FormControl><Input type="number" placeholder="5" {...field} disabled={isReadOnly || (isEditingClientProfile && criadorRole !== 'Admin')} /></FormControl><FormMessage /></FormItem>
                             )} />
                             
                             <div className="space-y-2 pt-4">
                                 <div className="flex justify-between items-center mb-1">
                                     <FormLabel>Permissões de Acesso</FormLabel>
                                     <div className="space-x-2">
-                                        <Button type="button" variant="link" size="sm" onClick={() => handleSelectAll(true)} className="p-0 h-auto" disabled={isSubmitting || isReadOnly || isEditingClientProfile}>Selecionar Todos</Button>
-                                        <Button type="button" variant="link" size="sm" onClick={() => handleSelectAll(false)} className="p-0 h-auto text-destructive" disabled={isSubmitting || isReadOnly || isEditingClientProfile}>Desmarcar Todos</Button>
+                                        <Button type="button" variant="link" size="sm" onClick={() => handleSelectAll(true)} className="p-0 h-auto" disabled={isSubmitting || isReadOnly || (isEditingClientProfile && criadorRole !== 'Admin')}>Selecionar Todos</Button>
+                                        <Button type="button" variant="link" size="sm" onClick={() => handleSelectAll(false)} className="p-0 h-auto text-destructive" disabled={isSubmitting || isReadOnly || (isEditingClientProfile && criadorRole !== 'Admin')}>Desmarcar Todos</Button>
                                     </div>
                                 </div>
                                 <div className="grid grid-cols-2 gap-4 rounded-lg border p-4">
                                     {PERMISSOES_DISPONIVEIS.filter((p: Permissao) => p.key !== 'ponto_eletronico' && p.key !== 'visualizar_proprio_ponto').map((p: Permissao) => (
                                         <FormField key={p.key} control={form.control} name={`permissoes.${p.key}`} render={({ field }) => (
                                             <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                                                <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} disabled={isSubmitting || isReadOnly || isEditingClientProfile} /></FormControl>
+                                                <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} disabled={isSubmitting || isReadOnly || (isEditingClientProfile && criadorRole !== 'Admin')} /></FormControl>
                                                 <FormLabel className="font-normal">{p.label}</FormLabel>
                                             </FormItem>
                                         )} />

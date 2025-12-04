@@ -35,15 +35,15 @@ const useSaldoContaCalculado = (
     if (role === 'Cliente') return (perfil as ClienteProfile)?.id || null;
     if (role === 'Usuario') {
         const user = perfil as UsuarioProfile | AdminUsuarioProfile;
-        // Se for funcionário do Admin, usa o admin_id.
         if ('admin_id' in user && user.admin_id) return user.admin_id;
-        // Se for funcionário do Cliente, usa o cliente_id.
         if ('cliente_id' in user && user.cliente_id) return user.cliente_id;
     }
     return null;
   };
   
   const empresaId = getEmpresaId();
+  
+  console.log('[useSaldoContaCalculado] DEBUG:', { role, empresaId, 'perfil?.id': (perfil as any)?.id });
 
   const refetch = useCallback(() => {
     setRefreshKey(prev => prev + 1);
@@ -168,11 +168,15 @@ const useSaldoContaCalculado = (
       let filteredContas = contasCalculadas;
       
       if (scope === 'bancos') {
-          // Filtra apenas contas marcadas como Caixa/Banco
-          filteredContas = filteredContas.filter(c => c.plano_contas?.is_conta_caixa_banco);
+          // Filtra contas marcadas como Caixa OU Banco
+          filteredContas = filteredContas.filter(c => c.plano_contas?.is_caixa || c.plano_contas?.is_banco);
       } else if (scope === 'patrimonial') {
-          // Filtra apenas contas marcadas como Patrimonial
-          filteredContas = filteredContas.filter(c => c.plano_contas?.is_conta_patrimonial);
+          // Filtra apenas contas marcadas como Patrimonial, EXCLUINDO Caixa e Banco
+          filteredContas = filteredContas.filter(c => 
+              c.plano_contas?.is_conta_patrimonial && 
+              !c.plano_contas?.is_caixa && 
+              !c.plano_contas?.is_banco
+          );
       }
       
       // NOVO FILTRO: Apenas contas marcadas como Banco (para Conciliação)

@@ -37,14 +37,16 @@ interface FormConfiguracoesCRProps {
 }
 
 const FormConfiguracoesCR: React.FC = () => {
-  const { role, usuario, carregando: carregandoSessao } = useSessao();
+  const { role, usuario, perfil, carregando: carregandoSessao } = useSessao();
   const [loadingData, setLoadingData] = useState(true);
   const [contasContabeis, setContasContabeis] = useState<PlanoContas[]>([]);
   const [historicos, setHistoricos] = useState<Historico[]>([]);
   const [loadingContas, setLoadingContas] = useState(true);
   
   const isAdmin = role === 'Admin';
-  const adminId = usuario?.id;
+  const isCliente = role === 'Cliente';
+  const canAccess = isAdmin || isCliente;
+  const proprietarioId = isAdmin ? usuario?.id : (perfil as any)?.id;
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -58,14 +60,13 @@ const FormConfiguracoesCR: React.FC = () => {
   });
   
   const fetchContasContabeis = useCallback(async () => {
-    if (!adminId) return;
+    if (!proprietarioId) return;
     setLoadingContas(true);
     
-    // Busca TODAS as contas (Analíticas e Sintéticas) do Admin
     const { data, error } = await supabase
         .from('plano_contas')
-        .select('id, Conta, Descricao, Analitica, is_conta_patrimonial, is_conta_resultado, is_a_receber') // Incluindo booleanos
-        .eq('proprietario_id', adminId)
+        .select('id, Conta, Descricao, Analitica, is_conta_patrimonial, is_conta_resultado, is_a_receber')
+        .eq('proprietario_id', proprietarioId)
         .order('Conta');
         
     if (error) {
@@ -75,14 +76,14 @@ const FormConfiguracoesCR: React.FC = () => {
         setContasContabeis(data as PlanoContas[]);
     }
     setLoadingContas(false);
-  }, [adminId]);
+  }, [proprietarioId]);
   
   const fetchHistoricos = useCallback(async () => {
-    if (!adminId) return;
+    if (!proprietarioId) return;
     const { data, error } = await supabase
         .from('historicos')
         .select('id, descricao, codigo')
-        .eq('proprietario_id', adminId)
+        .eq('proprietario_id', proprietarioId)
         .order('descricao');
         
     if (error) {
@@ -91,30 +92,27 @@ const FormConfiguracoesCR: React.FC = () => {
     } else {
         setHistoricos(data as Historico[]);
     }
-  }, [adminId]);
+  }, [proprietarioId]);
 
   const fetchConfig = useCallback(async () => {
-    if (!isAdmin || !adminId) {
+    if (!canAccess || !proprietarioId) {
       setLoadingData(false);
       return;
     }
     
     setLoadingData(true);
     
-    // 1. Buscar Mapeamento Contábil
     const { data: contasData, error: contasError } = await supabase
       .from('configuracao_contas_receber')
       .select('tipo_registro, conta_contabil_id')
-      .eq('proprietario_id', adminId);
+      .eq('proprietario_id', proprietarioId);
       
-    // 2. Buscar Histórico Padrão (da nova tabela)
     const { data: historicoData } = await supabase
         .from('configuracao_historico_padrao')
         .select('historico_id')
-        .eq('proprietario_id', adminId)
+        .eq('proprietario_id', proprietarioId)
         .eq('tipo_registro', 'recebimento_padrao')
-        .limit(1)
-        .single();
+        .maybeSingle();
 
     if (contasError) {
       showError('Erro ao carregar configurações de CR: ' + contasError.message);
@@ -141,42 +139,39 @@ const FormConfiguracoesCR: React.FC = () => {
       form.reset(mappedData);
     }
     setLoadingData(false);
-  }, [isAdmin, adminId, form]);
+  }, [canAccess, proprietarioId, form]);
 
   useEffect(() => {
-    if (!carregandoSessao && isAdmin) {
+    if (!carregandoSessao && canAccess) {
       fetchContasContabeis();
       fetchHistoricos();
       fetchConfig();
     }
-  }, [carregandoSessao, isAdmin, fetchConfig, fetchContasContabeis, fetchHistoricos]);
+  }, [carregandoSessao, canAccess, fetchConfig, fetchContasContabeis, fetchHistoricos]);
 
   const onSubmit = async (values: FormValues) => {
-    if (!isAdmin || !adminId) {
-      showError('Apenas administradores podem salvar esta configuração.');
+    if (!canAccess || !proprietarioId) {
+      showError('Você não tem permissão para salvar esta configuração.');
       return;
     }
     
-    // Filtra apenas os campos que existem no TIPOS_REGISTRO_CONTABIL
     const dataToUpsertContabil = TIPOS_REGISTRO_CONTABIL.map(tipo => ({
-        proprietario_id: adminId,
+        proprietario_id: proprietarioId,
         tipo_registro: tipo.key,
-        // Usa o valor diretamente (null ou string UUID)
         conta_contabil_id: values[tipo.key as keyof FormValues] || null, 
     }));
     
-    // Adiciona os campos removidos (recebimento, recebimento_resultado, desconto) com valor NULL
     const fieldsToRemove = ['recebimento', 'recebimento_resultado', 'desconto'];
     fieldsToRemove.forEach(key => {
         dataToUpsertContabil.push({
-            proprietario_id: adminId,
+            proprietario_id: proprietarioId,
             tipo_registro: key,
             conta_contabil_id: null,
         });
     });
     
     const historicoPadraoPayload = {
-        proprietario_id: adminId,
+        proprietario_id: proprietarioId,
         tipo_registro: 'recebimento_padrao',
         historico_id: values.historico_padrao_id || null,
     };
@@ -203,8 +198,8 @@ const FormConfiguracoesCR: React.FC = () => {
     }
   };
 
-  if (!isAdmin) {
-    return <p className="text-red-500">Acesso negado. Apenas administradores podem gerenciar esta configuração.</p>;
+  if (!canAccess) {
+    return <p className="text-red-500">Acesso negado. Você não tem permissão para gerenciar esta configuração.</p>;
   }
 
   if (loadingData || loadingContas) {

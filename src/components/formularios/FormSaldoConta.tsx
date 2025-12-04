@@ -40,11 +40,13 @@ const FormSaldoConta: React.FC<FormSaldoContaProps> = ({ contaInicial, onSaveCom
   const getEmpresaId = () => {
     if (role === 'Admin') return usuario?.id || null;
     if (role === 'Cliente') return (perfil as ClienteProfile)?.id || null;
-    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id || null; // FIX: proprietario_id -> cliente_id
+    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id || null;
     return null;
   };
   
   const empresaId = getEmpresaId();
+  
+  console.log('[FormSaldoConta] DEBUG:', { role, 'usuario?.id': usuario?.id, 'perfil?.id': (perfil as any)?.id, empresaId });
 
   const fetchContasContabeis = useCallback(async () => {
     if (!empresaId) return;

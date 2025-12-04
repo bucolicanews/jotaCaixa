@@ -93,7 +93,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
   const isAdmin = role === 'Admin';
 
   const fetchMapeamentoContabil = useCallback(async () => {
-    if (!isAdmin || !ownerId) return;
+    if (!ownerId) return;
     
     const { data, error } = await supabase
         .from('configuracao_contas_receber')
@@ -110,7 +110,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
         }, {} as Record<string, string | null>);
         setMapeamentoContabil(map);
     }
-  }, [isAdmin, ownerId]);
+  }, [ownerId]);
   
   const fetchHistoricos = useCallback(async () => {
     if (!ownerId) return;
@@ -212,9 +212,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
     fetchHistoricos();
     fetchContasPatrimoniais();
     fetchContasReceita();
-    if (isAdmin) {
-        fetchMapeamentoContabil();
-    }
+    fetchMapeamentoContabil();
   }, [perfil, role, ownerId, isAdmin, fetchMapeamentoContabil, fetchHistoricos, fetchContasPatrimoniais, fetchContasReceita]);
 
   const form = useForm<FormValues>({
@@ -269,15 +267,13 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
     if (!ownerId) { showError('ID da empresa/admin não pôde ser determinado.'); return; }
     
     const contaPatrimonial = values.conta_patrimonial_id;
-    const contaReceitaResultado = isAdmin ? values.conta_receita_id : null;
+    const contaReceitaResultado = values.conta_receita_id || null;
     
-    // A conta de parcela é lida da configuração, mas não é mais obrigatória para salvar
-    const contaParcela = isAdmin ? mapeamentoContabil['parcela'] : null;
+    // A conta de parcela é lida da configuração
+    const contaParcela = mapeamentoContabil['parcela'] || null;
     
-    if (isAdmin && !contaReceitaResultado) {
-        showError('A conta contábil para Receita (Resultado DRE) é obrigatória. Selecione uma conta de Receita.');
-        return;
-    }
+    // Verifica se tem configuração contábil (não bloqueia, apenas não cria lançamentos)
+    const temConfigContabil = contaPatrimonial && contaReceitaResultado;
     
     setIsSubmitting(true);
     
@@ -319,8 +315,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
           origem: 'manual',
           id_conta_patrimonial: contaPatrimonial, 
           historico_id: values.historico_id,
-          // NOVO CAMPO: Salva a conta de resultado na conta sintética
-          ...(isAdmin && { id_conta_resultado: contaReceitaResultado }), 
+          ...(temConfigContabil && { id_conta_resultado: contaReceitaResultado }), 
       };
 
       if (isEditing) {
@@ -340,7 +335,8 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
       const parcelasComId = parcelasParaInserir.map(p => ({ 
           ...p, 
           conta_receber_id: contaReceberId, 
-          ...(isAdmin ? { admin_id: ownerId, id_conta_contabil: contaParcela } : { empresa_id: ownerId })
+          ...(isAdmin ? { admin_id: ownerId } : { empresa_id: ownerId }),
+          ...(temConfigContabil && { id_conta_contabil: contaParcela })
       }));
       
       const { error: parcelError } = await supabase.from(tabelaParcelasReceber).insert(parcelasComId);
@@ -384,7 +380,7 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
       }
       
       // 5. Lançamento 2: CRÉDITO (Resultado) - Aumenta a Receita (DRE)
-      if (isAdmin && contaReceitaResultado) {
+      if (temConfigContabil && contaReceitaResultado) {
           const lancamentoReceitaPayload = {
               id: idReceita, // NOVO ID
               proprietario_id: ownerId,
@@ -522,47 +518,45 @@ return (
 
 
       {/* CONTA DE RECEITA */}
-      {isAdmin && (
-        <FormField
-          control={form.control}
-          name="conta_receita_id"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>4. Conta de Receita (Resultado DRE)</FormLabel>
+      <FormField
+        control={form.control}
+        name="conta_receita_id"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>4. Conta de Receita (Resultado DRE)</FormLabel>
 
-              <Select
-                value={field.value ? String(field.value) : "0"}
-                onValueChange={(v) => field.onChange(v === "0" ? null : v)}
-                disabled={loadingContasReceita}
-              >
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder={loadingContasReceita ? "Carregando Contas..." : `Selecione a conta de Receita (${configMap.Receita}.x.x)`} />
-                  </SelectTrigger>
-                </FormControl>
+            <Select
+              value={field.value ? String(field.value) : "0"}
+              onValueChange={(v) => field.onChange(v === "0" ? null : v)}
+              disabled={loadingContasReceita}
+            >
+              <FormControl>
+                <SelectTrigger>
+                  <SelectValue placeholder={loadingContasReceita ? "Carregando Contas..." : `Selecione a conta de Receita (${configMap.Receita}.x.x)`} />
+                </SelectTrigger>
+              </FormControl>
 
-                <SelectContent>
-                  <SelectItem value="0">Nenhum (Não Mapear)</SelectItem>
+              <SelectContent>
+                <SelectItem value="0">Nenhum (Não Mapear)</SelectItem>
 
-                  {contasReceita.map(c => (
-                    <SelectItem key={c.id} value={String(c.id)}>
-                      {c.Conta} - {c.Descricao}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                {contasReceita.map(c => (
+                  <SelectItem key={c.id} value={String(c.id)}>
+                    {c.Conta} - {c.Descricao}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
-              <FormMessage />
+            <FormMessage />
 
-              {contasReceita.length === 0 && !loadingContasReceita && (
-                <p className="text-sm text-red-500">
-                  Nenhuma conta de Receita ({configMap.Receita}.x.x) marcada como "Conta de Resultado".
-                </p>
-              )}
-            </FormItem>
-          )}
-        />
-      )}
+            {contasReceita.length === 0 && !loadingContasReceita && (
+              <p className="text-sm text-red-500">
+                Nenhuma conta de Receita ({configMap.Receita}.x.x) marcada como "Conta de Resultado".
+              </p>
+            )}
+          </FormItem>
+        )}
+      />
 
       <Separator />
 

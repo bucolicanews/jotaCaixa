@@ -14,6 +14,7 @@ import { Separator } from '../ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { PlanoContas } from '@/types/plano-contas';
 import { useContabilConfig } from '@/hooks/use-contabil-config';
+import { ClienteProfile } from '@/types/usuario';
 
 const formSchema = z.object({
   url_base_assinatura: z.string().url('URL base inválida. Deve incluir http:// ou https://.'),
@@ -28,7 +29,7 @@ const formSchema = z.object({
 type FormValues = z.infer<typeof formSchema>;
 
 const FormConfiguracoesContrato: React.FC = () => {
-  const { role, usuario, carregando: carregandoSessao } = useSessao();
+  const { role, usuario, perfil, carregando: carregandoSessao } = useSessao();
   const { configMap } = useContabilConfig();
   const [loadingData, setLoadingData] = useState(true);
   const [existingId, setExistingId] = useState<string | null>(null);
@@ -37,7 +38,9 @@ const FormConfiguracoesContrato: React.FC = () => {
   const [loadingContas, setLoadingContas] = useState(true);
   
   const isAdmin = role === 'Admin';
-  const ownerId = usuario?.id;
+  const isCliente = role === 'Cliente';
+  const canAccess = isAdmin || isCliente;
+  const proprietarioId = isAdmin ? usuario?.id : (perfil as ClienteProfile)?.id;
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -51,7 +54,7 @@ const FormConfiguracoesContrato: React.FC = () => {
   });
 
   const fetchContas = useCallback(async () => {
-    if (!ownerId) return;
+    if (!proprietarioId) return;
     setLoadingContas(true);
     
     const ativoCode = configMap.Ativo || '1';
@@ -61,7 +64,7 @@ const FormConfiguracoesContrato: React.FC = () => {
     const { data: patrimonialData } = await supabase
         .from('plano_contas')
         .select('id, Conta, Descricao')
-        .eq('proprietario_id', ownerId)
+        .eq('proprietario_id', proprietarioId)
         .eq('Analitica', 'Sim')
         .eq('is_conta_patrimonial', true)
         .like('Conta', `${ativoCode}.%`)
@@ -73,7 +76,7 @@ const FormConfiguracoesContrato: React.FC = () => {
     const { data: receitaData } = await supabase
         .from('plano_contas')
         .select('id, Conta, Descricao')
-        .eq('proprietario_id', ownerId)
+        .eq('proprietario_id', proprietarioId)
         .eq('Analitica', 'Sim')
         .eq('is_conta_resultado', true)
         .like('Conta', `${receitaCode}.%`)
@@ -81,10 +84,10 @@ const FormConfiguracoesContrato: React.FC = () => {
         
     setContasReceita(receitaData || []);
     setLoadingContas(false);
-  }, [ownerId, configMap.Ativo, configMap.Receita]);
+  }, [proprietarioId, configMap.Ativo, configMap.Receita]);
 
   const fetchConfig = useCallback(async () => {
-    if (!ownerId) {
+    if (!proprietarioId) {
       setLoadingData(false);
       return;
     }
@@ -94,7 +97,7 @@ const FormConfiguracoesContrato: React.FC = () => {
     const { data, error } = await supabase
       .from('configuracao_contratos')
       .select('*')
-      .eq('proprietario_id', ownerId)
+      .eq('proprietario_id', proprietarioId)
       .limit(1)
       .single();
 
@@ -111,23 +114,23 @@ const FormConfiguracoesContrato: React.FC = () => {
       });
     }
     setLoadingData(false);
-  }, [ownerId, form]);
+  }, [proprietarioId, form]);
 
   useEffect(() => {
-    if (!carregandoSessao && isAdmin) {
+    if (!carregandoSessao && canAccess) {
       fetchContas();
       fetchConfig();
     }
-  }, [carregandoSessao, isAdmin, fetchConfig, fetchContas]);
+  }, [carregandoSessao, canAccess, fetchConfig, fetchContas]);
 
   const onSubmit = async (values: FormValues) => {
-    if (!isAdmin || !ownerId) {
-      showError('Apenas administradores podem salvar esta configuração.');
+    if (!canAccess || !proprietarioId) {
+      showError('Você não tem permissão para salvar esta configuração.');
       return;
     }
     
     const dataToSave = {
-      proprietario_id: ownerId,
+      proprietario_id: proprietarioId,
       url_base_assinatura: values.url_base_assinatura,
       template_whatsapp: values.template_whatsapp,
       template_email: values.template_email,
@@ -160,8 +163,8 @@ const FormConfiguracoesContrato: React.FC = () => {
     }
   };
 
-  if (!isAdmin) {
-    return <p className="text-red-500">Acesso negado. Apenas administradores podem gerenciar esta configuração.</p>;
+  if (!canAccess) {
+    return <p className="text-red-500">Acesso negado. Você não tem permissão para gerenciar esta configuração.</p>;
   }
 
   if (loadingData || loadingContas) {

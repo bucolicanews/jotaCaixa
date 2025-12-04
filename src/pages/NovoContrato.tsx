@@ -77,7 +77,7 @@ const NovoContrato: React.FC = () => {
     );
   }
   
-  if (!isAdmin && !isClient) {
+  if (!isAdmin && !isCliente) {
     return <LayoutPrincipal><Card><CardHeader><CardTitle>Acesso Negado</CardTitle></CardHeader><CardContent><p>Apenas administradores e clientes podem criar contratos.</p></CardContent></Card></LayoutPrincipal>;
   }
 

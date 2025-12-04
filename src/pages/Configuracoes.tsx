@@ -7,15 +7,18 @@ import FormConfiguracoesCR from '@/components/formularios/FormConfiguracoesCR';
 import FormConfiguracoesCP from '@/components/formularios/FormConfiguracoesCP';
 import FormConfiguracoesContrato from '@/components/formularios/FormConfiguracoesContrato';
 import FormConfiguracaoPlanoContas from '@/components/formularios/FormConfiguracaoPlanoContas';
-import FormConfiguracaoContabil from '@/components/formularios/FormConfiguracaoContabil'; // NOVO IMPORT
+import FormConfiguracaoContabil from '@/components/formularios/FormConfiguracaoContabil';
 import { Key, Settings, DollarSign, ArrowDownCircle, FileSignature, BookOpen, Scale } from 'lucide-react';
+import { ClienteProfile } from '@/types/usuario';
 
 const Configuracoes = () => {
-  const { role, usuario } = useSessao();
+  const { role, usuario, perfil } = useSessao();
   const isAdmin = role === 'Admin';
+  const isCliente = role === 'Cliente';
+  const canAccessContabil = isAdmin || isCliente;
   
-  // O ID do proprietário é o ID do Admin logado
-  const proprietarioId = usuario?.id || '';
+  // O ID do proprietário é o ID do Admin ou Cliente logado
+  const proprietarioId = isAdmin ? (usuario?.id || '') : ((perfil as ClienteProfile)?.id || '');
   
   return (
     <LayoutPrincipal>
@@ -23,15 +26,14 @@ const Configuracoes = () => {
         <Settings className="w-6 h-6 mr-2" /> Configurações
       </h1>
       
-      <Tabs defaultValue={isAdmin ? "contabil" : "geral"} className="w-full">
-        {/* Ajuste: Usando flex-wrap e definindo a largura dos itens para quebrar em várias linhas em telas pequenas */}
+      <Tabs defaultValue={canAccessContabil ? "contabil" : "geral"} className="w-full">
         <TabsList className="flex flex-wrap h-auto justify-start w-full">
           <TabsTrigger value="geral" className="flex-1 sm:flex-auto">Geral</TabsTrigger>
-          {isAdmin && <TabsTrigger value="contabil" className="flex-1 sm:flex-auto flex items-center"><Scale className="w-4 h-4 mr-1" /> Contábil</TabsTrigger>} {/* NOVA ABA */}
-          {isAdmin && <TabsTrigger value="plano_contas" className="flex-1 sm:flex-auto flex items-center"><BookOpen className="w-4 h-4 mr-1" /> Plano de Contas</TabsTrigger>}
-          {isAdmin && <TabsTrigger value="cr" className="flex-1 sm:flex-auto flex items-center"><DollarSign className="w-4 h-4 mr-1" /> Contas a Receber</TabsTrigger>}
-          {isAdmin && <TabsTrigger value="cp" className="flex-1 sm:flex-auto flex items-center"><ArrowDownCircle className="w-4 h-4 mr-1" /> Contas a Pagar</TabsTrigger>}
-          {isAdmin && <TabsTrigger value="contratos" className="flex-1 sm:flex-auto flex items-center"><FileSignature className="w-4 h-4 mr-1" /> Contratos</TabsTrigger>}
+          {canAccessContabil && <TabsTrigger value="contabil" className="flex-1 sm:flex-auto flex items-center"><Scale className="w-4 h-4 mr-1" /> Contábil</TabsTrigger>}
+          {canAccessContabil && <TabsTrigger value="plano_contas" className="flex-1 sm:flex-auto flex items-center"><BookOpen className="w-4 h-4 mr-1" /> Plano de Contas</TabsTrigger>}
+          {canAccessContabil && <TabsTrigger value="cr" className="flex-1 sm:flex-auto flex items-center"><DollarSign className="w-4 h-4 mr-1" /> Contas a Receber</TabsTrigger>}
+          {canAccessContabil && <TabsTrigger value="cp" className="flex-1 sm:flex-auto flex items-center"><ArrowDownCircle className="w-4 h-4 mr-1" /> Contas a Pagar</TabsTrigger>}
+          {canAccessContabil && <TabsTrigger value="contratos" className="flex-1 sm:flex-auto flex items-center"><FileSignature className="w-4 h-4 mr-1" /> Contratos</TabsTrigger>}
           {isAdmin && <TabsTrigger value="stripe" className="flex-1 sm:flex-auto flex items-center"><Key className="w-4 h-4 mr-1" /> Stripe</TabsTrigger>}
           <TabsTrigger value="usuarios" className="flex-1 sm:flex-auto">Usuários</TabsTrigger>
           <TabsTrigger value="tributarias" className="flex-1 sm:flex-auto">Tributárias</TabsTrigger>
@@ -44,12 +46,11 @@ const Configuracoes = () => {
               <p className="text-lg text-gray-600 dark:text-gray-400">
                 Gerencie informações básicas da empresa, como nome, endereço e dados de contato.
               </p>
-              {/* TODO: Implementar formulário de configuração geral */}
             </CardContent>
           </Card>
         </TabsContent>
         
-        {isAdmin && (
+        {canAccessContabil && (
           <TabsContent value="contabil" className="mt-4">
             <Card>
               <CardHeader><CardTitle>Mapeamento de Níveis Contábeis</CardTitle></CardHeader>
@@ -60,7 +61,7 @@ const Configuracoes = () => {
           </TabsContent>
         )}
         
-        {isAdmin && (
+        {canAccessContabil && (
           <TabsContent value="plano_contas" className="mt-4">
             <Card>
               <CardHeader><CardTitle>Máscara de Código Contábil</CardTitle></CardHeader>
@@ -71,7 +72,7 @@ const Configuracoes = () => {
           </TabsContent>
         )}
         
-        {isAdmin && (
+        {canAccessContabil && (
           <TabsContent value="cr" className="mt-4">
             <Card>
               <CardHeader><CardTitle>Mapeamento Contábil de Contas a Receber</CardTitle></CardHeader>
@@ -82,7 +83,7 @@ const Configuracoes = () => {
           </TabsContent>
         )}
         
-        {isAdmin && (
+        {canAccessContabil && (
           <TabsContent value="cp" className="mt-4">
             <Card>
               <CardHeader><CardTitle>Mapeamento Contábil de Contas a Pagar</CardTitle></CardHeader>
@@ -93,7 +94,7 @@ const Configuracoes = () => {
           </TabsContent>
         )}
         
-        {isAdmin && (
+        {canAccessContabil && (
           <TabsContent value="contratos" className="mt-4">
             <Card>
               <CardHeader><CardTitle>Configurações de Contratos e Links</CardTitle></CardHeader>
@@ -122,7 +123,6 @@ const Configuracoes = () => {
               <p className="text-lg text-gray-600 dark:text-gray-400">
                 Gerencie usuários, perfis de importação e regras tributárias.
               </p>
-              {/* TODO: Implementar link para GerenciarUsuarios */}
             </CardContent>
           </Card>
         </TabsContent>
@@ -134,7 +134,6 @@ const Configuracoes = () => {
               <p className="text-lg text-gray-600 dark:text-gray-400">
                 Configure mapeamentos para exportação Calima e regras tributárias.
               </p>
-              {/* TODO: Implementar configurações tributárias */}
             </CardContent>
           </Card>
         </TabsContent>
