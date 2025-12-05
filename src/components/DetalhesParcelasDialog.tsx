@@ -173,21 +173,7 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
     const contaReceberIdShort = contaReceberId.substring(0, 8);
     
     try {
-        // 0. VALIDAÇÃO: Verificar se há outras parcelas na conta a receber
-        const { data: todasParcelas, error: parcelasError } = await supabase
-            .from(tabelaParcelas)
-            .select('id')
-            .eq('conta_receber_id', contaReceberId);
-            
-        if (parcelasError) throw parcelasError;
-        
-        if (todasParcelas && todasParcelas.length > 1) {
-            showError('Não é possível estornar o recebimento enquanto houver outras parcelas. Delete as demais parcelas primeiro.');
-            setIsUndoing(false);
-            return;
-        }
-        
-        // 0.1. VALIDAÇÃO: Verificar se há lançamento no extrato bancário
+        // VALIDAÇÃO: Verificar se há lançamento no extrato bancário
         // Busca recebimentos para obter valor, data e conta de destino
         const { data: recebimentosCheck, error: recebimentosCheckError } = await supabase
             .from(tabelaRecebimentos)

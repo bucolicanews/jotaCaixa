@@ -300,20 +300,31 @@ const ContasReceber = () => {
   };
 
   const handleDelete = async (contaId: string) => {
-    if (!window.confirm('Tem certeza que deseja excluir esta conta a receber e todas as suas parcelas?')) return;
-    
     setCarregandoDados(true);
     const tabelaContasReceber = isAdmin ? 'admin_contas_receber' : 'contas_receber';
+    const tabelaParcelasReceber = isAdmin ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
     
     try {
-      // 1. Buscar a descrição da conta sintética antes de deletar
+      // 1. Verificar se existem parcelas vinculadas
+      const { count: parcelasCount, error: countError } = await supabase
+          .from(tabelaParcelasReceber)
+          .select('*', { count: 'exact', head: true })
+          .eq('conta_receber_id', contaId);
+          
+      if (countError) throw countError;
+      
+      if (parcelasCount && parcelasCount > 0) {
+        showError(`Não é possível excluir. Existem ${parcelasCount} parcela(s) vinculada(s) a esta conta. Exclua as parcelas individualmente primeiro.`);
+        setCarregandoDados(false);
+        return;
+      }
+      
+      // 2. Buscar a descrição da conta sintética antes de deletar
       const contaToDelete = contas.find(c => c.id === contaId);
       const descricaoBusca = contaToDelete?.descricao || '';
       
-      // 2. Deletar todos os Lançamentos (Entrada/Saída) relacionados a esta conta sintética
+      // 3. Deletar todos os Lançamentos (Entrada/Saída) relacionados a esta conta sintética
       if (descricaoBusca) {
-          // Deletar Lançamentos de Recebimento (que foram criados via Recebimentos)
-          // Busca por: 'Lançamento Inicial CR: [descricao]', 'Receita: [descricao]', 'Estorno Patrimonial CR: [descricao]'
           const { error: deleteLancamentosError } = await supabase
               .from('lancamentos')
               .delete()
@@ -323,7 +334,7 @@ const ContasReceber = () => {
           if (deleteLancamentosError) console.warn('Aviso: Falha ao deletar lançamentos associados:', deleteLancamentosError);
       }
       
-      // 3. Deletar a conta sintética (cascades to parcels and receipts)
+      // 4. Deletar a conta sintética
       const { error } = await supabase.from(tabelaContasReceber).delete().eq('id', contaId);
       
       if (error) throw error;

@@ -11,6 +11,10 @@ import FormContasPagarDialog from '@/components/formularios/FormContasPagarDialo
 import DetalhesParcelasCPDialog from '@/components/DetalhesParcelasCPDialog';
 import RegistrarPagamentoCPDialog from '@/components/contas-pagar/RegistrarPagamentoCPDialog';
 import { formatCurrency, formatarData } from '@/utils/formatters';
+import ContasFuturasDialog from '@/components/ContasFuturasDialog';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { AlertCircle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 // Componentes Modulares
 import ContasPagarHeader from '@/components/contas-pagar/ContasPagarHeader';
@@ -45,6 +49,8 @@ const ContasPagar: React.FC = () => {
   const [formDialog, setFormDialog] = useState<{ open: boolean, conta: ContaPagarComProgresso | null }>({ open: false, conta: null });
   const [detalhesDialog, setDetalhesDialog] = useState<{ open: boolean, conta: ContaPagarComProgresso | null }>({ open: false, conta: null });
   const [pagamentoDialog, setPagamentoDialog] = useState<{ open: boolean, parcela: (AdminParcelaPagar & { fornecedor: string }) | null }>({ open: false, parcela: null });
+  const [contasFuturasOpen, setContasFuturasOpen] = useState(false);
+  const [temContasFuturas, setTemContasFuturas] = useState(false);
 
   const fetchContas = useCallback(async () => {
     if (!proprietarioId) return;
@@ -175,15 +181,17 @@ const ContasPagar: React.FC = () => {
     if (!proprietarioId) return;
     setLoading(true);
     
-    const tabelaPagamentosCP = isAdmin ? 'admin_pagamentos' : 'pagamentos_contas_pagar';
+    const tabelaPagamentosCP = isAdmin ? 'admin_pagamentos' : 'pagamentos';
     const tabelaParcelasCP = isAdmin ? 'admin_parcelas_pagar' : 'parcelas_contas_pagar';
     const tabelaContasCP = isAdmin ? 'admin_contas_pagar' : 'contas_pagar';
     const ownerKey = isAdmin ? 'admin_id' : 'empresa_id';
+    const fkParcela = isAdmin ? 'parcela_pagar_id' : 'parcela_id';
+    const fkSaldoConta = isAdmin ? 'saldo_conta_id' : 'conta_id';
     
     let query = supabase.from(tabelaPagamentosCP).select(`
         *,
-        saldo_contas ( nome ),
-        ${tabelaParcelasCP} (
+        saldo_contas!${fkSaldoConta} ( nome ),
+        ${tabelaParcelasCP}!${fkParcela} (
             numero_parcela,
             ${tabelaContasCP} ( id, ${isAdmin ? 'descricao' : 'Descricao'}, origem, fornecedor )
         )
@@ -241,6 +249,50 @@ const ContasPagar: React.FC = () => {
     }
   }, [activeTab, fetchContas, fetchParcelas, fetchPagamentos]);
 
+  // Verificar contas futuras ao carregar (apenas para Cliente)
+  const verificarContasFuturas = useCallback(async () => {
+    if (!proprietarioId || isAdmin) {
+      setTemContasFuturas(false);
+      return;
+    }
+
+    try {
+      const { data: contas, error: contasError } = await supabase
+        .from('admin_contas_receber')
+        .select('id')
+        .eq('cliente_id', proprietarioId);
+
+      if (contasError || !contas || contas.length === 0) {
+        setTemContasFuturas(false);
+        return;
+      }
+
+      for (const conta of contas) {
+        const { count, error: parcelasError } = await supabase
+          .from('admin_parcelas_receber')
+          .select('id', { count: 'exact', head: true })
+          .eq('conta_receber_id', conta.id)
+          .in('status', ['aberta', 'parcial', 'reprogramada']);
+
+        if (!parcelasError && count && count > 0) {
+          setTemContasFuturas(true);
+          setContasFuturasOpen(true);
+          return;
+        }
+      }
+      setTemContasFuturas(false);
+    } catch (error) {
+      console.error('Erro ao verificar contas futuras:', error);
+      setTemContasFuturas(false);
+    }
+  }, [proprietarioId, isAdmin]);
+
+  useEffect(() => {
+    if (proprietarioId && !isAdmin) {
+      verificarContasFuturas();
+    }
+  }, [proprietarioId, isAdmin, verificarContasFuturas]);
+
   // --- Filtro de Frontend para a aba Sintético ---
   const contas = useMemo(() => {
       let filtered = contasRaw;
@@ -296,10 +348,24 @@ const ContasPagar: React.FC = () => {
     if (!proprietarioId) return;
     
     const tabela = isAdmin ? 'admin_contas_pagar' : 'contas_pagar';
+    const tabelaParcelas = isAdmin ? 'admin_parcelas_pagar' : 'parcelas_contas_pagar';
     const campoDescricao = isAdmin ? 'descricao' : 'Descricao';
     
     try {
-      // 1. Buscar a descrição da conta sintética antes de deletar
+      // 1. Verificar se existem parcelas vinculadas
+      const { count: parcelasCount, error: countError } = await supabase
+          .from(tabelaParcelas)
+          .select('*', { count: 'exact', head: true })
+          .eq('conta_pagar_id', id);
+          
+      if (countError) throw countError;
+      
+      if (parcelasCount && parcelasCount > 0) {
+        showError(`Não é possível excluir. Existem ${parcelasCount} parcela(s) vinculada(s) a esta conta. Exclua as parcelas individualmente primeiro.`);
+        return;
+      }
+      
+      // 2. Buscar a descrição da conta sintética antes de deletar
       const { data: contaToDelete, error: fetchError } = await supabase
           .from(tabela)
           .select(campoDescricao)
@@ -309,10 +375,8 @@ const ContasPagar: React.FC = () => {
       if (fetchError) throw fetchError;
       const descricaoBusca = (contaToDelete as any)?.[campoDescricao] || '';
       
-      // 2. Deletar todos os Lançamentos (Entrada/Saída) relacionados a esta conta sintética
+      // 3. Deletar todos os Lançamentos (Entrada/Saída) relacionados a esta conta sintética
       if (descricaoBusca) {
-          // Deletar Lançamentos de Pagamento (que foram criados via Pagamentos)
-          // Busca por: 'Lançamento Inicial CP: [descricao]', 'Despesa/Custo: [descricao]', 'Estorno Patrimonial CP: [descricao]'
           const { error: deleteLancamentosError } = await supabase
               .from('lancamentos')
               .delete()
@@ -322,7 +386,7 @@ const ContasPagar: React.FC = () => {
           if (deleteLancamentosError) console.warn('Aviso: Falha ao deletar lançamentos associados:', deleteLancamentosError);
       }
       
-      // 3. Deletar a conta sintética (cascades to parcels and payments)
+      // 4. Deletar a conta sintética
       const { error } = await supabase.from(tabela).delete().eq('id', id);
       
       if (error) throw error;
@@ -360,15 +424,33 @@ const ContasPagar: React.FC = () => {
       <div className="space-y-6">
         <h1 className="text-3xl font-bold">Contas a Pagar {isAdmin && '(Admin)'}</h1>
 
+        {temContasFuturas && !contasFuturasOpen && (
+          <Alert className="border-amber-500 bg-amber-50 dark:bg-amber-900/20">
+            <AlertCircle className="h-4 w-4 text-amber-600" />
+            <AlertTitle className="text-amber-800 dark:text-amber-200">Contas Futuras Pendentes</AlertTitle>
+            <AlertDescription className="text-amber-700 dark:text-amber-300 flex items-center justify-between">
+              <span>Existem lançamentos do Admin aguardando para serem adicionados às suas contas a pagar.</span>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="ml-4 border-amber-500 text-amber-700 hover:bg-amber-100"
+                onClick={() => setContasFuturasOpen(true)}
+              >
+                Ver Contas Futuras
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
+
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
           <TabsList>
             <TabsTrigger value="sintetico">Sintético</TabsTrigger>
-            {isAdmin && <TabsTrigger value="parcelas">Parcelas</TabsTrigger>}
-            {isAdmin && <TabsTrigger value="pagamentos">Pagamentos</TabsTrigger>}
+            <TabsTrigger value="parcelas">Parcelas</TabsTrigger>
+            <TabsTrigger value="pagamentos">Pagamentos</TabsTrigger>
           </TabsList>
 
           <ContasPagarHeader
-              isAdmin={isAdmin}
+              isSupervisao={isAdmin}
               filtroOrigem={filtroOrigem}
               setFiltroOrigem={setFiltroOrigem}
               filtroStatus={filtroStatus}
@@ -389,42 +471,38 @@ const ContasPagar: React.FC = () => {
               <SinteticoTab
                   loading={loading}
                   contas={contas}
-                  isAdmin={isAdmin}
+                  isSupervisao={isAdmin}
                   handleOpenDetalhes={handleOpenDetalhes}
                   handleOpenForm={handleOpenForm}
                   handleDelete={handleDelete}
                   formatarData={formatarData}
                   formatCurrency={formatCurrency}
-                  getBadgeVariant={getBadgeVariant as any} // Cast necessário devido à tipagem expandida localmente
+                  getBadgeVariant={getBadgeVariant as any}
               />
           </TabsContent>
 
-          {isAdmin && (
-              <TabsContent value="parcelas" className="space-y-4">
-                  <ParcelasTab
-                      loading={loading}
-                      parcelas={parcelas}
-                      totalParcelas={totalParcelas}
-                      handleOpenPagamento={handleOpenPagamento}
-                      formatarData={formatarData}
-                      formatCurrency={formatCurrency}
-                      formatarOrigem={formatarOrigem}
-                      getBadgeVariant={getBadgeVariant as any} // Cast necessário
-                  />
-              </TabsContent>
-          )}
+          <TabsContent value="parcelas" className="space-y-4">
+              <ParcelasTab
+                  loading={loading}
+                  parcelas={parcelas}
+                  totalParcelas={totalParcelas}
+                  handleOpenPagamento={handleOpenPagamento}
+                  formatarData={formatarData}
+                  formatCurrency={formatCurrency}
+                  formatarOrigem={formatarOrigem}
+                  getBadgeVariant={getBadgeVariant as any}
+              />
+          </TabsContent>
           
-          {isAdmin && (
-              <TabsContent value="pagamentos" className="space-y-4">
-                  <PagamentosTab
-                      loading={loading}
-                      pagamentos={pagamentos}
-                      totalPagamentos={totalPagamentos}
-                      formatarData={formatarData}
-                      formatCurrency={formatCurrency}
-                  />
-              </TabsContent>
-          )}
+          <TabsContent value="pagamentos" className="space-y-4">
+              <PagamentosTab
+                  loading={loading}
+                  pagamentos={pagamentos}
+                  totalPagamentos={totalPagamentos}
+                  formatarData={formatarData}
+                  formatCurrency={formatCurrency}
+              />
+          </TabsContent>
         </Tabs>
 
         <FormContasPagarDialog 
@@ -453,6 +531,14 @@ const ContasPagar: React.FC = () => {
                 fetchParcelas(); 
                 fetchPagamentos(); 
               }}
+          />
+        )}
+        
+        {proprietarioId && !isAdmin && (
+          <ContasFuturasDialog
+            clienteId={proprietarioId}
+            open={contasFuturasOpen}
+            onOpenChange={setContasFuturasOpen}
           />
         )}
       </div>

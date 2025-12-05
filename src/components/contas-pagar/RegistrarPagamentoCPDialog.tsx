@@ -119,7 +119,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
   const [extratoManualDialog, setExtratoManualDialog] = useState(false);
   const [pendingPaymentData, setPendingPaymentData] = useState<FormValues | null>(null);
 
-  const tabelaPagamentos = isAdmin ? 'admin_pagamentos' : 'pagamentos_contas_pagar';
+  const tabelaPagamentos = isAdmin ? 'admin_pagamentos' : 'pagamentos';
   const tabelaParcelas = isAdmin ? 'admin_parcelas_pagar' : 'parcelas_contas_pagar';
   const tabelaContasPagar = isAdmin ? 'admin_contas_pagar' : 'contas_pagar';
   const ownerKey = isAdmin ? 'admin_id' : 'empresa_id';
@@ -223,10 +223,10 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
     if (!proprietarioId) return null;
 
     const { data, error } = await supabase
-      .from('configuracao_historico_padrao')
-      .select('historico_id')
+      .from('configuracao_contas_pagar')
+      .select('conta_contabil_id')
       .eq('proprietario_id', proprietarioId)
-      .eq('tipo_registro', 'pagamento_padrao')
+      .eq('tipo_registro', 'pagamento_historico_padrao')
       .limit(1)
       .single();
 
@@ -234,7 +234,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
       console.error('Erro ao buscar histórico padrão CP:', error);
     }
 
-    return data?.historico_id || null;
+    return data?.conta_contabil_id || null;
   }, [proprietarioId]);
 
   useEffect(() => {
@@ -307,7 +307,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
 
     const { data: contaSintetica, error: csError } = await supabase
       .from(tabelaContasPagar)
-      .select('id_conta_patrimonial, descricao, id_conta_resultado')
+      .select(`id_conta_patrimonial, ${isAdmin ? 'descricao' : 'Descricao'}, id_conta_resultado`)
       .eq('id', parcela.conta_pagar_id)
       .single();
 
@@ -318,7 +318,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
     }
 
     const contaPatrimonial = contaSintetica?.id_conta_patrimonial;
-    const descricaoContaSintetica = contaSintetica?.descricao || 'Pagamento';
+    const descricaoContaSintetica = contaSintetica?.[isAdmin ? 'descricao' : 'Descricao'] || 'Pagamento';
     const contaDespesaCriacao = contaSintetica?.id_conta_resultado;
 
     const dataPagamento = values.data_pagamento;
@@ -365,7 +365,7 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
       // 1) Para cada fonte de pagamento: criar 2 lançamentos (Ativo - Saida / Passivo - Entrada)
       for (const pagamento of values.pagamentos) {
         
-        // 1.1. Registrar Pagamento (Histórico)
+        // 1.1. Registrar Pagamento (Histórico) - mesma estrutura para Admin e Cliente
         const pagamentoPayload = { 
             parcela_id: parcela.id, 
             [ownerKey]: proprietarioId, 

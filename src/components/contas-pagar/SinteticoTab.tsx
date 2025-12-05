@@ -75,11 +75,9 @@ const SinteticoTab: React.FC<SinteticoTabProps> = ({
                                             </Badge>
                                         </TableCell>
                                         <TableCell className="text-right space-x-2">
-                                            {isSupervisao && (
-                                                <Button variant="outline" size="sm" onClick={() => handleOpenDetalhes(conta as ContaPagarComProgresso)}>
-                                                    <Eye className="w-4 h-4" />
-                                                </Button>
-                                            )}
+                                            <Button variant="outline" size="sm" onClick={() => handleOpenDetalhes(conta as ContaPagarComProgresso)}>
+                                                <Eye className="w-4 h-4" />
+                                            </Button>
                                             <Button variant="outline" size="sm" onClick={() => handleOpenForm(conta as ContaPagarComProgresso)}>
                                                 <Edit className="w-4 h-4" />
                                             </Button>

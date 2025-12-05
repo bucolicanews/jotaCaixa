@@ -1,6 +1,6 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
-import { LayoutDashboard, DollarSign, ArrowUpCircle, ArrowDownCircle, Banknote, FileText, Upload, Settings, BookOpen, Users, Building2, Clock, Contact, CalendarCheck, User, FileSignature, Tag, FileTextIcon, Package, History, FileDown, MessageSquare, Loader2, Scale, TrendingUp, Eye, Check, BarChart3 } from 'lucide-react';
+import { LayoutDashboard, DollarSign, ArrowUpCircle, ArrowDownCircle, Banknote, FileText, Upload, Settings, BookOpen, Users, Building2, Clock, Contact, CalendarCheck, User, FileSignature, Tag, FileTextIcon, Package, History, FileDown, MessageSquare, Loader2, Scale, TrendingUp, Eye, Check, BarChart3, Hash } from 'lucide-react';
 import React, { useMemo, useCallback, useState, useEffect } from 'react';
 import { useSessao } from '@/hooks/use-sessao';
 import { ClienteProfile, UsuarioProfile, AdminProfile, AdminUsuarioProfile } from '@/types/usuario';
@@ -58,6 +58,8 @@ const SECOES_MENU: MenuSection[] = [
             { nome: 'Bancos / Caixas', caminho: '/bancos', icone: Banknote, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'bancos' },
             { nome: 'Conciliação', caminho: '/conciliacao', icone: Check, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'conciliacao' },
             { nome: 'Extratos Salvos', caminho: '/extratos', icone: Eye, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'bancos' },
+            { nome: 'Descrições', caminho: '/banco/descricoes', icone: FileText, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'bancos' },
+            { nome: 'Identificadores', caminho: '/banco/identificadores', icone: Hash, perfis: ['Admin', 'Cliente', 'Usuario'], permissionKey: 'bancos' },
         ]
     },
     {

@@ -33,18 +33,20 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
   const isAdmin = role === 'Admin';
   const tabelaContasPagar = isAdmin ? 'admin_contas_pagar' : 'contas_pagar';
   const tabelaParcelas = isAdmin ? 'admin_parcelas_pagar' : 'parcelas_contas_pagar';
-  const tabelaPagamentos = isAdmin ? 'admin_pagamentos' : 'pagamentos_contas_pagar';
+  const tabelaPagamentos = isAdmin ? 'admin_pagamentos' : 'pagamentos';
   const joinTable = isAdmin ? 'admin_contas_pagar' : 'contas_pagar';
 
   const fetchParcelas = useCallback(async () => {
     if (!usuario?.id) return;
     setLoading(true);
     
+    const campoDescricao = isAdmin ? 'descricao' : 'Descricao';
+    
     const { data, error } = await supabase
         .from(tabelaParcelas)
         .select(`
             *,
-            ${joinTable} ( fornecedor, descricao, origem )
+            ${joinTable} ( fornecedor, ${campoDescricao}, origem )
         `)
         .eq('conta_pagar_id', conta.id)
         .order('numero_parcela', { ascending: true });
@@ -55,12 +57,15 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
     } else {
         const mappedData = (data || []).map((p: any) => ({
             ...p,
-            admin_contas_pagar: p[joinTable] || p.admin_contas_pagar,
+            admin_contas_pagar: {
+                ...p[joinTable],
+                descricao: p[joinTable]?.descricao || p[joinTable]?.Descricao,
+            },
         }));
         setParcelas(mappedData as ExtendedParcelaPagar[]);
     }
     setLoading(false);
-  }, [conta.id, usuario?.id, tabelaParcelas, joinTable]);
+  }, [conta.id, usuario?.id, tabelaParcelas, joinTable, isAdmin]);
   
   useEffect(() => {
     if (open) {

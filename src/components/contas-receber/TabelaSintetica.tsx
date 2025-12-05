@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { ListChecks, Edit, Trash2 } from 'lucide-react';
 import { isToday, isPast, parseISO } from 'date-fns';
 import { ContaReceberComProgresso } from '@/types/contas-receber';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 
 // Tipos importados do ContasReceber.tsx
 // Removido: type ParcelaStatus = 'aberta' | 'parcial' | 'paga' | 'reprogramada' | 'cancelada' | 'bloqueada';
@@ -94,7 +95,23 @@ const TabelaSintetica: React.FC<TabelaSinteticaProps> = ({
                                                 <div className="flex space-x-1">
                                                     <Button variant="ghost" size="icon" onClick={() => handleOpenParcelas(conta)} title="Ver Parcelas"><ListChecks className="h-4 w-4" /></Button>
                                                     <Button variant="ghost" size="icon" onClick={() => handleEdit(conta)} title="Editar Lançamento"><Edit className="h-4 w-4" /></Button>
-                                                    <Button variant="ghost" size="icon" onClick={() => handleDelete(conta.id)} title="Excluir Lançamento"><Trash2 className="w-4 h-4 text-red-500" /></Button>
+                                                    <AlertDialog>
+                                                        <AlertDialogTrigger asChild>
+                                                            <Button variant="ghost" size="icon" title="Excluir Lançamento"><Trash2 className="w-4 h-4 text-red-500" /></Button>
+                                                        </AlertDialogTrigger>
+                                                        <AlertDialogContent>
+                                                            <AlertDialogHeader>
+                                                                <AlertDialogTitle>Tem certeza?</AlertDialogTitle>
+                                                                <AlertDialogDescription>
+                                                                    Esta ação não pode ser desfeita. Isso excluirá permanentemente esta conta a receber.
+                                                                </AlertDialogDescription>
+                                                            </AlertDialogHeader>
+                                                            <AlertDialogFooter>
+                                                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                                <AlertDialogAction onClick={() => handleDelete(conta.id)}>Excluir</AlertDialogAction>
+                                                            </AlertDialogFooter>
+                                                        </AlertDialogContent>
+                                                    </AlertDialog>
                                                 </div>
                                             </TableCell>
                                             <TableCell className="font-mono text-xs text-muted-foreground truncate max-w-[100px]" title={conta.id}>{conta.id.substring(0, 8)}...</TableCell>

@@ -74,29 +74,36 @@ const ContasPagarHeader: React.FC<ContasPagarHeaderProps> = ({
             }));
         } else if (activeTab === 'parcelas') {
             headers = ['ID Parcela', 'ID Conta', 'Fornecedor', 'Descrição', 'Nº Parcela', 'Vencimento', 'Valor Parcela', 'Vlr Pago', 'Status', 'Origem'];
-            data = parcelas.map(p => ({
-                'ID Parcela': p.id,
-                'ID Conta': p.admin_contas_pagar?.id || 'N/A',
-                'Fornecedor': p.admin_contas_pagar?.fornecedor || 'N/A',
-                'Descrição': p.admin_contas_pagar?.descricao || 'N/A',
-                'Nº Parcela': p.numero_parcela,
-                'Vencimento': formatDateFns(new Date(p.data_vencimento + 'T00:00:00'), 'dd/MM/yyyy'),
-                'Valor Parcela': p.valor_parcela,
-                'Vlr Pago': p.valor_pago || 0,
-                'Status': p.status,
-                'Origem': p.admin_contas_pagar?.origem || 'manual',
-            }));
+            data = parcelas.map(p => {
+                const contaCP = p.admin_contas_pagar || (p as any).contas_pagar;
+                return {
+                    'ID Parcela': p.id,
+                    'ID Conta': contaCP?.id || 'N/A',
+                    'Fornecedor': contaCP?.fornecedor || 'N/A',
+                    'Descrição': contaCP?.descricao || contaCP?.Descricao || 'N/A',
+                    'Nº Parcela': p.numero_parcela,
+                    'Vencimento': formatDateFns(new Date(p.data_vencimento + 'T00:00:00'), 'dd/MM/yyyy'),
+                    'Valor Parcela': p.valor_parcela,
+                    'Vlr Pago': p.valor_pago || 0,
+                    'Status': p.status,
+                    'Origem': contaCP?.origem || 'manual',
+                };
+            });
         } else if (activeTab === 'pagamentos') {
             headers = ['ID Pagamento', 'Data Pagamento', 'ID Conta', 'Fornecedor', 'Descrição', 'Valor Pago', 'Conta Origem'];
-            data = pagamentos.map(p => ({
-                'ID Pagamento': p.id,
-                'Data Pagamento': formatDateFns(new Date(p.data_pagamento), 'dd/MM/yyyy HH:mm'),
-                'ID Conta': p.admin_parcelas_pagar?.admin_contas_pagar?.id || 'N/A',
-                'Fornecedor': p.admin_parcelas_pagar?.admin_contas_pagar?.fornecedor || 'N/A',
-                'Descrição': p.admin_parcelas_pagar?.admin_contas_pagar?.descricao || 'N/A',
-                'Valor Pago': p.valor_pago,
-                'Conta Origem': p.saldo_contas?.nome || 'N/A',
-            }));
+            data = pagamentos.map(p => {
+                const parcelaCP = p.admin_parcelas_pagar || p.parcelas_contas_pagar;
+                const contaCP = parcelaCP?.admin_contas_pagar || parcelaCP?.contas_pagar;
+                return {
+                    'ID Pagamento': p.id,
+                    'Data Pagamento': formatDateFns(new Date(p.data_pagamento), 'dd/MM/yyyy HH:mm'),
+                    'ID Conta': contaCP?.id || 'N/A',
+                    'Fornecedor': contaCP?.fornecedor || 'N/A',
+                    'Descrição': contaCP?.descricao || contaCP?.Descricao || 'N/A',
+                    'Valor Pago': p.valor_pago,
+                    'Conta Origem': p.saldo_contas?.nome || 'N/A',
+                };
+            });
         }
         return { data, headers };
     };

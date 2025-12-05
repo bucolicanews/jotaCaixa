@@ -4,7 +4,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 
 interface PagamentosTabProps {
     loading: boolean;
-    pagamentos: any[]; // Usando 'any' conforme o tipo definido no ContasPagar.tsx
+    pagamentos: any[];
     totalPagamentos: number;
     formatarData: (date: string) => string;
     formatCurrency: (value: number) => string;
@@ -47,15 +47,21 @@ const PagamentosTab: React.FC<PagamentosTabProps> = ({
                                 ) : pagamentos.length === 0 ? (
                                     <TableRow><TableCell colSpan={5} className="text-center">Nenhum pagamento encontrado no período.</TableCell></TableRow>
                                 ) : (
-                                    pagamentos.map((p) => (
-                                        <TableRow key={p.id}>
-                                            <TableCell>{formatarData(p.data_pagamento)}</TableCell>
-                                            <TableCell className="font-semibold text-destructive">{formatCurrency(p.valor_pago)}</TableCell>
-                                            <TableCell>{p.saldo_contas?.nome || 'N/A'}</TableCell>
-                                            <TableCell>{p.admin_parcelas_pagar?.admin_contas_pagar?.descricao || 'N/A'}</TableCell>
-                                            <TableCell>{p.admin_parcelas_pagar?.numero_parcela || 'N/A'}</TableCell>
-                                        </TableRow>
-                                    ))
+                                    pagamentos.map((p) => {
+                                        const parcelaCP = p.admin_parcelas_pagar || p.parcelas_contas_pagar;
+                                        const contaCP = parcelaCP?.admin_contas_pagar || parcelaCP?.contas_pagar;
+                                        const descricao = contaCP?.descricao || contaCP?.Descricao || 'N/A';
+                                        
+                                        return (
+                                            <TableRow key={p.id}>
+                                                <TableCell>{formatarData(p.data_pagamento)}</TableCell>
+                                                <TableCell className="font-semibold text-destructive">{formatCurrency(p.valor_pago)}</TableCell>
+                                                <TableCell>{p.saldo_contas?.nome || 'N/A'}</TableCell>
+                                                <TableCell>{descricao}</TableCell>
+                                                <TableCell>{parcelaCP?.numero_parcela || 'N/A'}</TableCell>
+                                            </TableRow>
+                                        );
+                                    })
                                 )}
                             </TableBody>
                         </Table>

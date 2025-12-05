@@ -91,38 +91,53 @@ const MinhaAssinatura: React.FC = () => {
     const fetchedAdminId = ultimoRegistro?.admin_id;
 
 
-    // 3️⃣ Buscar histórico de pagamentos (admin_recebimentos)
-    const { data: recebimentos, error: crError } = await supabase
-      .from('admin_recebimentos')
-      .select(`
-        id,
-        data_recebimento,
-        valor_recebido,
-        forma_pagamento,
-        conta_id,
-        admin_parcelas_receber (
-          admin_contas_receber ( descricao )
-        ),
-        saldo_contas ( nome )
-      `)
-      .eq('cliente_id', clienteId) // Filtra pelo ID do cliente que pagou
-      .order('data_recebimento', { ascending: false });
+    // 3️⃣ Buscar histórico de pagamentos (admin_recebimentos) - APENAS da assinatura
+    if (contaRecorrenciaId && fetchedAdminId) {
+      const { data: recebimentos, error: crError } = await supabase
+        .from('admin_recebimentos')
+        .select(`
+          id,
+          data_recebimento,
+          valor_recebido,
+          forma_pagamento,
+          conta_id,
+          admin_parcelas_receber (
+            id,
+            conta_receber_id,
+            admin_contas_receber ( descricao )
+          ),
+          saldo_contas ( nome )
+        `)
+        .eq('cliente_id', clienteId)
+        .order('data_recebimento', { ascending: false });
 
-    if (crError) {
-      console.error('Erro ao buscar histórico de recebimentos:', crError);
-      setHistoricoPagamentos([]);
-    } else if (recebimentos && recebimentos.length > 0) {
-      const historico = (recebimentos as any[]).map((r) => ({
-        id: r.id,
-        data: r.data_recebimento!,
-        valor: Number(r.valor_recebido),
-        status: 'pago' as const,
-        descricao:
-          r.admin_parcelas_receber?.admin_contas_receber?.descricao ||
-          'Mensalidade Paga',
-        conta_destino: r.saldo_contas?.nome || 'N/A', // NOVO CAMPO
-      }));
-      setHistoricoPagamentos(historico);
+      if (crError) {
+        console.error('Erro ao buscar histórico de recebimentos:', crError);
+        setHistoricoPagamentos([]);
+      } else if (recebimentos && recebimentos.length > 0) {
+        // Filtrar APENAS recebimentos da assinatura (contaRecorrenciaId)
+        const recebimentosFiltrados = (recebimentos as any[]).filter(
+          (r) => r.admin_parcelas_receber?.conta_receber_id === contaRecorrenciaId
+        );
+        
+        if (recebimentosFiltrados.length > 0) {
+          const historico = recebimentosFiltrados.map((r) => ({
+            id: r.id,
+            data: r.data_recebimento!,
+            valor: Number(r.valor_recebido),
+            status: 'pago' as const,
+            descricao:
+              r.admin_parcelas_receber?.admin_contas_receber?.descricao ||
+              'Mensalidade Paga',
+            conta_destino: r.saldo_contas?.nome || 'N/A',
+          }));
+          setHistoricoPagamentos(historico);
+        } else {
+          setHistoricoPagamentos([]);
+        }
+      } else {
+        setHistoricoPagamentos([]);
+      }
     } else {
       setHistoricoPagamentos([]);
     }

@@ -56,6 +56,8 @@ import LancamentosNaoMapeados from "./pages/LancamentosNaoMapeados";
 import Balancete from "./pages/Balancete"; // NOVO IMPORT
 import Razao from "./pages/Razao"; // NOVO IMPORT
 import Lancamentos from "./pages/Lancamentos"; // NOVO IMPORT
+import GerenciarDescricoesExtrato from "./pages/GerenciarDescricoesExtrato";
+import GerenciarIdentificadoresExtrato from "./pages/GerenciarIdentificadoresExtrato";
 
 const queryClient = new QueryClient();
 
@@ -296,6 +298,8 @@ const App = () => (
             
             {/* NOVA ROTA: Extratos */}
             <Route path="/extratos" element={<Extratos />} />
+            <Route path="/banco/descricoes" element={<GerenciarDescricoesExtrato />} />
+            <Route path="/banco/identificadores" element={<GerenciarIdentificadoresExtrato />} />
             
             {/* NOVA ROTA: Lançamentos Manuais */}
             <Route path="/lancamentos" element={<Lancamentos />} />

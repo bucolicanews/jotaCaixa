@@ -67,18 +67,21 @@ const ParcelasTab: React.FC<ParcelasTabProps> = ({
                                     parcelas.map((p) => {
                                         const statusVariant = getBadgeVariant(p.status as ContaStatus, p.data_vencimento);
                                         const isPaga = p.status === 'paga';
-                                        const fornecedor = p.admin_contas_pagar?.fornecedor || 'N/A';
+                                        const contaCP = p.admin_contas_pagar || (p as any).contas_pagar;
+                                        const fornecedor = contaCP?.fornecedor || 'N/A';
+                                        const descricao = contaCP?.descricao || contaCP?.Descricao || 'N/A';
+                                        const origem = contaCP?.origem || 'manual';
                                         
                                         return (
                                             <TableRow key={p.id}>
                                                 <TableCell>{formatarData(p.data_vencimento)}</TableCell>
                                                 <TableCell>{fornecedor}</TableCell>
-                                                <TableCell>{p.admin_contas_pagar?.descricao || 'N/A'}</TableCell>
+                                                <TableCell>{descricao}</TableCell>
                                                 <TableCell className="text-right">{formatCurrency(p.valor_parcela)}</TableCell>
                                                 <TableCell className="text-right">{formatCurrency(p.valor_pago || 0)}</TableCell>
                                                 <TableCell><Badge variant={statusVariant}>{p.status}</Badge></TableCell>
                                                 <TableCell>{p.data_pagamento ? formatarData(p.data_pagamento) : '-'}</TableCell>
-                                                <TableCell>{formatarOrigem(p.admin_contas_pagar?.origem || 'manual')}</TableCell>
+                                                <TableCell>{formatarOrigem(origem)}</TableCell>
                                                 <TableCell className="text-right">
                                                     {!isPaga && (
                                                         <Button size="sm" onClick={() => handleOpenPagamento(p, fornecedor)}>

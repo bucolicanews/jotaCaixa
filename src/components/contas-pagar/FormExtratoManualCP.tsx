@@ -1,28 +1,44 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Loader2, Save, Upload, FileText, XCircle, CheckCircle2 } from 'lucide-react';
+import { Loader2, Save, Upload, FileText, XCircle, CheckCircle2, PlusCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { cn } from '@/lib/utils';
 import { format, addDays } from 'date-fns';
-import { AdminParcelaPagar } from '@/types/contas-pagar'; // Reutilizando o tipo de parcela
+import { AdminParcelaPagar } from '@/types/contas-pagar';
 import { SaldoCalculado } from '@/hooks/use-saldo-conta-calculado';
 import { Textarea } from '../ui/textarea';
 import { Separator } from "@/components/ui/separator";
 import { useSessao } from '@/hooks/use-sessao';
 import { PlanoContas } from '@/types/plano-contas';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 
-// Função local para formatar moeda (caso não exista)
 const formatCurrency = (value: number) =>
     value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-// Nome do bucket de armazenamento para comprovantes
 const COMPROVANTE_BUCKET = 'comprovantes-financeiros'; 
+
+interface DescricaoExtrato {
+    id: string;
+    descricao: string;
+    status: boolean;
+    ordem: number;
+}
+
+interface IdentificacaoExtrato {
+    id: string;
+    descricao: string;
+    status: boolean;
+    ordem: number;
+}
 
 interface ParcelaParaPagamento extends AdminParcelaPagar {
     fornecedor: string;
@@ -55,6 +71,89 @@ const formSchema = z.object({
 
 type FormValues = z.infer<typeof formSchema>;
 
+interface FormNovoItemProps {
+    tipo: 'descricao' | 'identificacao';
+    proprietarioId: string;
+    isAdmin: boolean;
+    proximaOrdem: number;
+    onSaveComplete: (novoId: string) => void;
+    onClose: () => void;
+}
+
+const FormNovoItem: React.FC<FormNovoItemProps> = ({ tipo, proprietarioId, isAdmin, proximaOrdem, onSaveComplete, onClose }) => {
+    const [descricao, setDescricao] = useState('');
+    const [status, setStatus] = useState(true);
+    const [ordem, setOrdem] = useState(proximaOrdem);
+    const [loading, setLoading] = useState(false);
+
+    const tabela = isAdmin 
+        ? (tipo === 'descricao' ? 'admin_descricao_extrato' : 'admin_identificacao_extrato')
+        : (tipo === 'descricao' ? 'descricao_extrato' : 'identificacao_extrato');
+    const campoId = isAdmin ? 'admin_id' : 'empresa_id';
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!descricao.trim()) {
+            showError('O campo é obrigatório.');
+            return;
+        }
+        setLoading(true);
+
+        const dataToSave = {
+            descricao: descricao.trim(),
+            status,
+            ordem,
+            [campoId]: proprietarioId,
+        };
+
+        const { data, error } = await supabase.from(tabela).insert(dataToSave).select('id').single();
+
+        if (error) {
+            showError(`Falha ao salvar: ${error.message}`);
+        } else {
+            showSuccess(`${tipo === 'descricao' ? 'Descrição' : 'Identificador'} salvo com sucesso!`);
+            onSaveComplete(data.id);
+        }
+        setLoading(false);
+    };
+
+    return (
+        <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+                <Label htmlFor="descricao">{tipo === 'descricao' ? 'Descrição' : 'Identificador'}</Label>
+                <Input
+                    id="descricao"
+                    placeholder={tipo === 'descricao' ? "Ex: Pagamento Fornecedor X" : "Ex: PIX, TED, DOC, Boleto"}
+                    value={descricao}
+                    onChange={(e) => setDescricao(e.target.value)}
+                    disabled={loading}
+                    autoFocus
+                />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                    <Label htmlFor="ordem">Ordem</Label>
+                    <Input
+                        id="ordem"
+                        type="number"
+                        min={0}
+                        value={ordem}
+                        onChange={(e) => setOrdem(parseInt(e.target.value) || 0)}
+                        disabled={loading}
+                    />
+                </div>
+                <div className="flex items-center space-x-2 pt-6">
+                    <Switch id="status" checked={status} onCheckedChange={setStatus} disabled={loading} />
+                    <Label htmlFor="status">Ativo</Label>
+                </div>
+            </div>
+            <Button type="submit" className="w-full" disabled={loading}>
+                {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Salvar'}
+            </Button>
+        </form>
+    );
+};
+
 const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
     parcela,
     pagamentoDetalhes,
@@ -67,52 +166,106 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
     onSaveComplete,
     onClose,
 }) => {
-    const { role, usuario } = useSessao();
+    const { role, usuario, perfil } = useSessao();
     const isAdmin = role === 'Admin';
     
     const [loading, setLoading] = useState(false);
     const [comprovanteFile, setComprovanteFile] = useState<File | null>(null);
     const [isUploading, setIsUploading] = useState(false);
     
+    const [descricoes, setDescricoes] = useState<DescricaoExtrato[]>([]);
+    const [identificadores, setIdentificadores] = useState<IdentificacaoExtrato[]>([]);
+    const [loadingDescricoes, setLoadingDescricoes] = useState(true);
+    const [loadingIdentificadores, setLoadingIdentificadores] = useState(true);
+    
+    const [dialogNovaDescricao, setDialogNovaDescricao] = useState(false);
+    const [dialogNovoIdentificador, setDialogNovoIdentificador] = useState(false);
+    
     const adminId = parcela.admin_id;
+    const proprietarioDaSessao = isAdmin ? usuario?.id : (perfil as any)?.cliente_id || (perfil as any)?.id;
     const totalPago = pagamentoDetalhes.reduce((sum, p) => sum + p.valor_pago, 0);
     
-    const contaPagamento = mapeamentoContabil['pagamento']; // Conta de Resultado (Despesa/Custo)
+    const contaPagamento = mapeamentoContabil['pagamento'];
     const contaParcelaPagar = mapeamentoContabil['parcela_pagar'];
-    const contaDescontoObtido = mapeamentoContabil['desconto_obtido']; // NOVO
+    const contaDescontoObtido = mapeamentoContabil['desconto_obtido'];
+    
+    const tabelaDescricao = isAdmin ? 'admin_descricao_extrato' : 'descricao_extrato';
+    const tabelaIdentificacao = isAdmin ? 'admin_identificacao_extrato' : 'identificacao_extrato';
+    const campoId = isAdmin ? 'admin_id' : 'empresa_id';
     
     const form = useForm<FormValues>({
         resolver: zodResolver(formSchema),
         defaultValues: {
-            descricao_extrato: `Pagamento CP: ${parcela.fornecedor} - ${parcela.descricao}`,
-            identificacao: parcela.documento || '',
+            descricao_extrato: '',
+            identificacao: '',
             observacao: '',
             comprovante_url: '',
         },
     });
     
+    const carregarDescricoes = useCallback(async () => {
+        if (!proprietarioDaSessao) return;
+        setLoadingDescricoes(true);
+        const { data, error } = await supabase
+            .from(tabelaDescricao)
+            .select('*')
+            .eq(campoId, proprietarioDaSessao)
+            .eq('status', true)
+            .order('ordem', { ascending: true });
+        if (!error) setDescricoes(data || []);
+        setLoadingDescricoes(false);
+    }, [proprietarioDaSessao, tabelaDescricao, campoId]);
+    
+    const carregarIdentificadores = useCallback(async () => {
+        if (!proprietarioDaSessao) return;
+        setLoadingIdentificadores(true);
+        const { data, error } = await supabase
+            .from(tabelaIdentificacao)
+            .select('*')
+            .eq(campoId, proprietarioDaSessao)
+            .eq('status', true)
+            .order('ordem', { ascending: true });
+        if (!error) setIdentificadores(data || []);
+        setLoadingIdentificadores(false);
+    }, [proprietarioDaSessao, tabelaIdentificacao, campoId]);
+    
+    useEffect(() => {
+        carregarDescricoes();
+        carregarIdentificadores();
+    }, [carregarDescricoes, carregarIdentificadores]);
+    
+    const handleNovaDescricaoSalva = (novoId: string) => {
+        setDialogNovaDescricao(false);
+        carregarDescricoes();
+        setTimeout(() => {
+            supabase.from(tabelaDescricao).select('descricao').eq('id', novoId).single().then(({ data }) => {
+                if (data) form.setValue('descricao_extrato', data.descricao);
+            });
+        }, 100);
+    };
+    
+    const handleNovoIdentificadorSalvo = (novoId: string) => {
+        setDialogNovoIdentificador(false);
+        carregarIdentificadores();
+        setTimeout(() => {
+            supabase.from(tabelaIdentificacao).select('descricao').eq('id', novoId).single().then(({ data }) => {
+                if (data) form.setValue('identificacao', data.descricao);
+            });
+        }, 100);
+    };
+    
     const uploadComprovante = async (file: File, parcelaId: string): Promise<string> => {
         setIsUploading(true);
-        
         const fileExt = file.name.split('.').pop();
-        // Usando uma subpasta 'comprovantes-cp' dentro do bucket
         const fileName = `${adminId}/${parcelaId}/comprovantes-cp/${Date.now()}.${fileExt}`;
-        
         try {
             const { data, error: uploadError } = await supabase.storage
                 .from(COMPROVANTE_BUCKET)
-                .upload(fileName, file, {
-                    cacheControl: '3600',
-                    upsert: false,
-                });
-
+                .upload(fileName, file, { cacheControl: '3600', upsert: false });
             if (uploadError) throw new Error(uploadError.message);
-            
             const { data: publicUrlData } = supabase.storage.from(COMPROVANTE_BUCKET).getPublicUrl(data.path);
-            
             showSuccess('Comprovante enviado com sucesso!');
             return publicUrlData.publicUrl;
-            
         } catch (error: any) {
             showError('Falha ao fazer upload do comprovante: ' + error.message);
             throw error;
@@ -122,6 +275,11 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
     };
 
     const onSubmit = async (values: FormValues) => {
+        if (!values.descricao_extrato) {
+            showError('Selecione uma descrição para o extrato.');
+            return;
+        }
+        
         setLoading(true);
 
         const tabelaPagamentos = 'admin_pagamentos';
@@ -133,58 +291,47 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
         const saldoRestanteCalculado = parcela.valor_parcela - novoValorPagoTotal;
         const isPagamentoParcial = saldoRestanteCalculado > 0.01;
         
-        // Lógica de Pagamento Parcial (lida no componente pai)
-        const parentValues = (form.getValues() as any).parentValues as any; // Usando 'any' para acessar campos do form pai
+        const parentValues = (form.getValues() as any).parentValues as any;
         const acaoSaldoRestante = parentValues?.acao_saldo_restante;
         
         try {
             let comprovanteUrl: string | null = values.comprovante_url || null;
 
-            // 1. Upload do comprovante (se houver arquivo)
             if (comprovanteFile) {
                 comprovanteUrl = await uploadComprovante(comprovanteFile, parcela.id);
             }
             
-            // 2. Buscar a Conta Sintética para obter a descrição e contas contábeis
             const { data: contaSintetica, error: csError } = await supabase
                 .from(tabelaContasPagar)
-                .select('id_conta_patrimonial, descricao, id_conta_resultado')
+                .select(`id_conta_patrimonial, ${isAdmin ? 'descricao' : 'Descricao'}, id_conta_resultado`)
                 .eq('id', parcela.conta_pagar_id)
                 .single();
                 
             if (csError) throw csError;
             const contaPatrimonial = contaSintetica?.id_conta_patrimonial;
-            const descricaoContaSintetica = contaSintetica?.descricao || 'Pagamento';
+            const descricaoContaSintetica = contaSintetica?.[isAdmin ? 'descricao' : 'Descricao'] || 'Pagamento';
             const contaDespesaCriacao = contaSintetica?.id_conta_resultado;
             
-            const dataPagamento = parentValues.data_pagamento;
-            const dataNoonUTC = new Date(Date.UTC(dataPagamento.getFullYear(), dataPagamento.getMonth(), dataPagamento.getDate(), 12, 0, 0));
+            const dataPagamentoLocal = parentValues.data_pagamento;
+            const dataNoonUTC = new Date(Date.UTC(dataPagamentoLocal.getFullYear(), dataPagamentoLocal.getMonth(), dataPagamentoLocal.getDate(), 12, 0, 0));
             const dataPagamentoISO = dataNoonUTC.toISOString();
             
-            // 3. Inserir o registro na tabela 'extratos' (apenas para contas do tipo 'Banco')
             const extratosPayload = pagamentoDetalhes
                 .map(p => {
                     const contaOrigem = contasOrigem.find(c => c.id === p.conta_id);
-                    
                     if (!contaOrigem?.plano_contas?.is_banco) return null; 
-                    
                     const valorExtrato = -Math.abs(p.valor_pago); 
-                    
-                    // Busca a conta contábil de pagamento (se for Admin)
-                    const contaContabilPagamento = isAdmin 
-                        ? mapeamentoContabil['pagamento'] 
-                        : null;
-                    
+                    const contaContabilPagamento = isAdmin ? mapeamentoContabil['pagamento'] : null;
                     return {
                         empresa_id: adminId,
                         id_saldo_contas: p.conta_id,
-                        data: format(dataPagamento, 'yyyy-MM-dd'),
+                        data: format(dataPagamentoLocal, 'yyyy-MM-dd'),
                         descricao: values.descricao_extrato,
                         valor: valorExtrato,
                         tipo: 'Saida' as const,
-                        identificacao: values.identificacao || null,
-                        conciliado: false, // Começa como não conciliado
-                        conta_contabil_id: contaContabilPagamento, // Mapeia para a conta de Pagamento (Resultado)
+                        identificacao: (values.identificacao && values.identificacao !== '__nenhum__') ? values.identificacao : null,
+                        conciliado: false,
+                        conta_contabil_id: contaContabilPagamento,
                     };
                 })
                 .filter(e => e !== null);
@@ -194,14 +341,10 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
                 if (extratoError) throw extratoError;
             }
             
-            // 4. Continuar com o fluxo de pagamento (Registrar Pagamento e Lançamentos)
-            
             const lancamentosPayload: any[] = [];
             const origemVincular = `pagamento_cp:${parcela.id}`;
 
             for (const pagamento of pagamentoDetalhes) {
-                
-                // 4.1. Registrar Pagamento (Histórico)
                 const pagamentoPayload = { 
                     parcela_id: parcela.id, 
                     admin_id: adminId, 
@@ -220,33 +363,29 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
                 const { error: pagamentoError } = await supabase.from(tabelaPagamentos).insert(pagamentoPayload);
                 if (pagamentoError) throw pagamentoError;
                 
-                // 4.2. Registrar o Lançamento no Ativo (Caixa/Banco) - CRÉDITO (Saída)
                 const contaDestinoDetalhe = contasOrigem.find(c => c.id === pagamento.conta_id);
                 const contaContabilCaixaBanco = contaDestinoDetalhe?.plano_contas?.id;
                 
                 if (!contaContabilCaixaBanco) throw new Error('Conta de origem não possui vínculo contábil.');
                 
-                // CRÍTICO: Geração de IDs e Referência Cruzada
                 const idAtivo = crypto.randomUUID();
                 const idPatrimonial = crypto.randomUUID();
                 
-                // Lançamento 1: C: Ativo (Caixa/Banco) - CRÉDITO (Saída)
                 const lancamentoAtivoPayload = {
                     id: idAtivo,
                     proprietario_id: adminId,
                     data_movimentacao: dataPagamentoISO,
                     descricao: `Pagamento Parcela ${parcela.id.substring(0, 8)} - ${parcela.fornecedor}`, 
                     valor: pagamento.valor_pago,
-                    tipo: 'Saida' as const, // Crédito é 'Saida' no Ativo
+                    tipo: 'Saida' as const,
                     conta_bancaria_id: pagamento.conta_id,
                     conta_contabil_id: contaContabilCaixaBanco,
                     origem: origemVincular,
                     historico_id: parentValues.historico_id,
-                    conta_resultado_id: idPatrimonial, // Ativo aponta para Passivo
+                    conta_resultado_id: idPatrimonial,
                 };
                 lancamentosPayload.push(lancamentoAtivoPayload);
                 
-                // Lançamento 2: D: Passivo (Obrigação a Pagar) - DÉBITO (Entrada)
                 if (contaPatrimonial) {
                     const lancamentoPatrimonialPayload = {
                         id: idPatrimonial,
@@ -254,69 +393,64 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
                         data_movimentacao: dataPagamentoISO,
                         descricao: `Baixa Passivo CP: ${descricaoContaSintetica} (CP ID: ${parcela.conta_pagar_id.substring(0, 8)})`,
                         valor: pagamento.valor_pago,
-                        tipo: 'Entrada' as const, // Débito é 'Entrada' no Passivo
+                        tipo: 'Entrada' as const,
                         conta_bancaria_id: null,
                         conta_contabil_id: contaPatrimonial,
                         origem: origemVincular,
                         historico_id: parentValues.historico_id,
-                        conta_resultado_id: idAtivo, // Passivo aponta para Ativo
+                        conta_resultado_id: idAtivo,
                     };
                     lancamentosPayload.push(lancamentoPatrimonialPayload);
                 }
             }
             
-            // 5. Lidar com o Saldo Restante (Pagamento Parcial)
             let finalStatus: AdminParcelaPagar['status'] = 'paga';
             let observacaoFinal: string | null = values.observacao || null;
             
             if (isPagamentoParcial) {
                 if (acaoSaldoRestante === 'desconto') {
                     finalStatus = 'paga';
-                    observacaoFinal = `Pago R$ ${valorPagoTotal.toFixed(2)} com R$ ${saldoRestanteCalculado.toFixed(2)} de desconto. ${values.observacao || ''}`;
+                    observacaoFinal = `Pago R$ ${novoValorPagoTotal.toFixed(2)} com R$ ${saldoRestanteCalculado.toFixed(2)} de desconto. ${values.observacao || ''}`;
                     
-                    // LANÇAMENTO DE DESCONTO OBTIDO (CRÉDITO na Receita)
                     if (contaDescontoObtido && contaPatrimonial) {
                         const idDescontoReceita = crypto.randomUUID();
                         const idDescontoPassivo = crypto.randomUUID();
 
-                        // Lançamento 3: D: Passivo (Obrigação a Pagar) - DÉBITO (Entrada) - Para zerar o saldo restante
                         const lancamentoDescontoPassivoPayload = {
                             id: idDescontoPassivo,
                             proprietario_id: adminId,
                             data_movimentacao: dataPagamentoISO,
                             descricao: `Baixa Passivo Desconto CP: ${descricaoContaSintetica} (CP ID: ${parcela.conta_pagar_id.substring(0, 8)})`,
                             valor: saldoRestanteCalculado,
-                            tipo: 'Entrada' as const, // Débito no Passivo (Credora)
+                            tipo: 'Entrada' as const,
                             conta_bancaria_id: null,
-                            conta_contabil_id: contaPatrimonial, // Conta Patrimonial (Passivo)
+                            conta_contabil_id: contaPatrimonial,
                             origem: 'pagamento_manual',
                             historico_id: parentValues.historico_id,
-                            conta_resultado_id: idDescontoReceita, // Referência cruzada
+                            conta_resultado_id: idDescontoReceita,
                         };
                         lancamentosPayload.push(lancamentoDescontoPassivoPayload);
 
-                        // Lançamento 4: C: Receita (Desconto Obtido) - CRÉDITO (Saída) - Para reconhecer o ganho
                         const lancamentoDescontoReceitaPayload = {
                             id: idDescontoReceita,
                             proprietario_id: adminId,
                             data_movimentacao: dataPagamentoISO,
                             descricao: `Desconto Obtido: ${descricaoContaSintetica} (CP ID: ${parcela.conta_pagar_id.substring(0, 8)})`,
                             valor: saldoRestanteCalculado,
-                            tipo: 'Saida' as const, // Crédito na Receita (Credora)
+                            tipo: 'Saida' as const,
                             conta_bancaria_id: null,
-                            conta_contabil_id: contaDescontoObtido, // Conta de Desconto Obtido (Receita)
+                            conta_contabil_id: contaDescontoObtido,
                             origem: 'pagamento_manual',
                             historico_id: parentValues.historico_id,
-                            conta_resultado_id: idDescontoPassivo, // Referência cruzada
+                            conta_resultado_id: idDescontoPassivo,
                         };
                         lancamentosPayload.push(lancamentoDescontoReceitaPayload);
                     }
                     
                 } else if (acaoSaldoRestante === 'reprogramar' || acaoSaldoRestante === 'parcelar') {
                     finalStatus = 'paga';
-                    observacaoFinal = `Pago R$ ${valorPagoTotal.toFixed(2)} com R$ ${saldoRestanteCalculado.toFixed(2)} ${acaoSaldoRestante === 'reprogramar' ? 'reprogramado' : 'parcelado'}. ${values.observacao || ''}`;
+                    observacaoFinal = `Pago R$ ${novoValorPagoTotal.toFixed(2)} com R$ ${saldoRestanteCalculado.toFixed(2)} ${acaoSaldoRestante === 'reprogramar' ? 'reprogramado' : 'parcelado'}. ${values.observacao || ''}`;
                     
-                    // Cria novas parcelas pendentes
                     const baseParcelaPayload = { admin_id: adminId, id_conta_contabil: contaParcelaPagar };
                     
                     if (acaoSaldoRestante === 'reprogramar') {
@@ -328,7 +462,7 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
                             data_vencimento: format(parentValues.nova_data_vencimento!, 'yyyy-MM-dd'),
                             status: 'reprogramada'
                         });
-                    } else { // Parcelar
+                    } else {
                         const valorNovaParcela = saldoRestanteCalculado / parentValues.numero_novas_parcelas!;
                         const novasParcelas = Array.from({ length: parentValues.numero_novas_parcelas! }).map((_, i) => ({
                             conta_pagar_id: parcela.conta_pagar_id,
@@ -345,15 +479,13 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
                 }
             }
             
-            // 6. Inserir todos os lançamentos de uma vez
             const { error: lancamentoError } = await supabase.from('lancamentos').insert(lancamentosPayload);
             if (lancamentoError) throw lancamentoError;
 
-            // 7. Atualizar a parcela e a conta sintética
             await supabase.from(tabelaParcelas).update({
                 status: finalStatus,
-                valor_pago: (parcela.valor_pago || 0) + valorPagoTotal,
-                data_pagamento: format(dataPagamento, 'yyyy-MM-dd'),
+                valor_pago: (parcela.valor_pago || 0) + totalPago,
+                data_pagamento: format(dataPagamentoLocal, 'yyyy-MM-dd'),
                 id_conta_contabil: contaParcelaPagar,
                 observacao: observacaoFinal,
             }).eq('id', parcela.id);
@@ -368,7 +500,6 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
                 await supabase.from(tabelaContasPagar).update({ status: 'pago' }).eq('id', parcela.conta_pagar_id);
             }
             
-            // 8. Salvar Histórico Padrão (se marcado) - Delete + Insert para evitar conflito
             if (parentValues.salvar_como_padrao && parentValues.historico_id) {
                 await supabase
                     .from('configuracao_historico_padrao')
@@ -404,72 +535,144 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
     };
     
     const isSubmitting = loading || isUploading;
+    const proximaOrdemDescricao = descricoes.length > 0 ? Math.max(...descricoes.map(d => d.ordem)) + 1 : 0;
+    const proximaOrdemIdentificador = identificadores.length > 0 ? Math.max(...identificadores.map(i => i.ordem)) + 1 : 0;
 
     return (
-        <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                <h3 className="text-lg font-semibold">Detalhes do Extrato Bancário</h3>
-                <p className="text-sm text-muted-foreground">
-                    Confirme os dados que serão registrados na tabela `extratos` para evitar duplicidade na conciliação.
-                </p>
-                
-                <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2 p-3 bg-secondary rounded-md">
-                        <p className="text-sm font-medium">Conta de Origem</p>
-                        {pagamentoDetalhes.map((p, i) => {
-                            const conta = contasOrigem.find(c => c.id === p.conta_id);
-                            return (
-                                <p key={i} className="text-xs font-mono">
-                                    {conta?.nome}: {formatCurrency(p.valor_pago)}
-                                </p>
-                            );
-                        })}
-                    </div>
-                    <div className="space-y-2 p-3 bg-secondary rounded-md">
-                        <p className="text-sm font-medium">Data / Valor Total</p>
-                        <p className="text-xs font-mono">{format(dataPagamento, 'dd/MM/yyyy')}</p>
-                        <p className="text-lg font-bold text-red-600">{formatCurrency(totalPago)}</p>
-                    </div>
-                </div>
-                
-                <FormField control={form.control} name="descricao_extrato" render={({ field }) => (
-                    <FormItem><FormLabel>Descrição no Extrato</FormLabel><FormControl><Input placeholder="Ex: Pagamento Fornecedor X" {...field} disabled={isSubmitting} /></FormControl><FormMessage /></FormItem>
-                )} />
-                
-                <FormField control={form.control} name="identificacao" render={({ field }) => (
-                    <FormItem><FormLabel>Identificação / Documento (Opcional)</FormLabel><FormControl><Input placeholder="Ex: DOC 12345" {...field} disabled={isSubmitting} /></FormControl><FormMessage /></FormItem>
-                )} />
-                
-                <FormField control={form.control} name="observacao" render={({ field }) => (
-                    <FormItem><FormLabel>Observação (Opcional)</FormLabel><FormControl><Textarea rows={2} placeholder="Observações sobre o pagamento..." {...field} disabled={isSubmitting} /></FormControl><FormMessage /></FormItem>
-                )} />
-                
-                <Separator />
-                
-                <h3 className="text-lg font-semibold flex items-center"><FileText className="w-5 h-5 mr-2" /> Comprovante (Opcional)</h3>
-                <div className="space-y-2">
-                    <Input 
-                        type="file" 
-                        accept="image/*, application/pdf" 
-                        onChange={handleFileChange} 
-                        disabled={isSubmitting}
-                    />
-                    {comprovanteFile && (
-                        <div className="flex justify-between items-center text-sm">
-                            <span className="text-green-600 flex items-center"><CheckCircle2 className="w-4 h-4 mr-1" /> {comprovanteFile.name}</span>
-                            <Button variant="link" size="sm" onClick={handleRemoveFile} disabled={isSubmitting}>
-                                <XCircle className="w-4 h-4 mr-1" /> Remover
-                            </Button>
+        <>
+            <Form {...form}>
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                    <h3 className="text-lg font-semibold">Detalhes do Extrato Bancário</h3>
+                    <p className="text-sm text-muted-foreground">
+                        Confirme os dados que serão registrados na tabela `extratos` para evitar duplicidade na conciliação.
+                    </p>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2 p-3 bg-secondary rounded-md">
+                            <p className="text-sm font-medium">Conta de Origem</p>
+                            {pagamentoDetalhes.map((p, i) => {
+                                const conta = contasOrigem.find(c => c.id === p.conta_id);
+                                return (
+                                    <p key={i} className="text-xs font-mono">
+                                        {conta?.nome}: {formatCurrency(p.valor_pago)}
+                                    </p>
+                                );
+                            })}
                         </div>
-                    )}
-                </div>
+                        <div className="space-y-2 p-3 bg-secondary rounded-md">
+                            <p className="text-sm font-medium">Data / Valor Total</p>
+                            <p className="text-xs font-mono">{format(dataPagamento, 'dd/MM/yyyy')}</p>
+                            <p className="text-lg font-bold text-red-600">{formatCurrency(totalPago)}</p>
+                        </div>
+                    </div>
+                    
+                    <FormField control={form.control} name="descricao_extrato" render={({ field }) => (
+                        <FormItem>
+                            <FormLabel>Descrição no Extrato</FormLabel>
+                            <div className="flex gap-2">
+                                <Select onValueChange={field.onChange} value={field.value} disabled={isSubmitting || loadingDescricoes}>
+                                    <FormControl>
+                                        <SelectTrigger className="flex-1">
+                                            <SelectValue placeholder={loadingDescricoes ? "Carregando..." : "Selecione uma descrição"} />
+                                        </SelectTrigger>
+                                    </FormControl>
+                                    <SelectContent>
+                                        {descricoes.map(d => (
+                                            <SelectItem key={d.id} value={d.descricao}>{d.descricao}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                <Button type="button" variant="outline" size="icon" onClick={() => setDialogNovaDescricao(true)} disabled={isSubmitting}>
+                                    <PlusCircle className="h-4 w-4" />
+                                </Button>
+                            </div>
+                            <FormMessage />
+                        </FormItem>
+                    )} />
+                    
+                    <FormField control={form.control} name="identificacao" render={({ field }) => (
+                        <FormItem>
+                            <FormLabel>Identificação / Documento (Opcional)</FormLabel>
+                            <div className="flex gap-2">
+                                <Select onValueChange={field.onChange} value={field.value || undefined} disabled={isSubmitting || loadingIdentificadores}>
+                                    <FormControl>
+                                        <SelectTrigger className="flex-1">
+                                            <SelectValue placeholder={loadingIdentificadores ? "Carregando..." : "Selecione um identificador (opcional)"} />
+                                        </SelectTrigger>
+                                    </FormControl>
+                                    <SelectContent>
+                                        <SelectItem value="__nenhum__">Nenhum</SelectItem>
+                                        {identificadores.map(i => (
+                                            <SelectItem key={i.id} value={i.descricao}>{i.descricao}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                <Button type="button" variant="outline" size="icon" onClick={() => setDialogNovoIdentificador(true)} disabled={isSubmitting}>
+                                    <PlusCircle className="h-4 w-4" />
+                                </Button>
+                            </div>
+                            <FormMessage />
+                        </FormItem>
+                    )} />
+                    
+                    <FormField control={form.control} name="observacao" render={({ field }) => (
+                        <FormItem><FormLabel>Observação (Opcional)</FormLabel><FormControl><Textarea rows={2} placeholder="Observações sobre o pagamento..." {...field} disabled={isSubmitting} /></FormControl><FormMessage /></FormItem>
+                    )} />
+                    
+                    <Separator />
+                    
+                    <h3 className="text-lg font-semibold flex items-center"><FileText className="w-5 h-5 mr-2" /> Comprovante (Opcional)</h3>
+                    <div className="space-y-2">
+                        <Input type="file" accept="image/*, application/pdf" onChange={handleFileChange} disabled={isSubmitting} />
+                        {comprovanteFile && (
+                            <div className="flex justify-between items-center text-sm">
+                                <span className="text-green-600 flex items-center"><CheckCircle2 className="w-4 h-4 mr-1" /> {comprovanteFile.name}</span>
+                                <Button variant="link" size="sm" onClick={handleRemoveFile} disabled={isSubmitting}>
+                                    <XCircle className="w-4 h-4 mr-1" /> Remover
+                                </Button>
+                            </div>
+                        )}
+                    </div>
 
-                <Button type="submit" className="w-full" disabled={isSubmitting}>
-                    {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    <Save className="mr-2 h-4 w-4" /> Confirmar Pagamento e Extrato
-                </Button>
-            </form>
-        </Form>
+                    <Button type="submit" className="w-full" disabled={isSubmitting}>
+                        {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        <Save className="mr-2 h-4 w-4" /> Confirmar Pagamento e Extrato
+                    </Button>
+                </form>
+            </Form>
+            
+            <Dialog open={dialogNovaDescricao} onOpenChange={setDialogNovaDescricao}>
+                <DialogContent>
+                    <DialogHeader><DialogTitle>Nova Descrição</DialogTitle></DialogHeader>
+                    {proprietarioDaSessao && (
+                        <FormNovoItem
+                            tipo="descricao"
+                            proprietarioId={proprietarioDaSessao}
+                            isAdmin={isAdmin}
+                            proximaOrdem={proximaOrdemDescricao}
+                            onSaveComplete={handleNovaDescricaoSalva}
+                            onClose={() => setDialogNovaDescricao(false)}
+                        />
+                    )}
+                </DialogContent>
+            </Dialog>
+            
+            <Dialog open={dialogNovoIdentificador} onOpenChange={setDialogNovoIdentificador}>
+                <DialogContent>
+                    <DialogHeader><DialogTitle>Novo Identificador</DialogTitle></DialogHeader>
+                    {proprietarioDaSessao && (
+                        <FormNovoItem
+                            tipo="identificacao"
+                            proprietarioId={proprietarioDaSessao}
+                            isAdmin={isAdmin}
+                            proximaOrdem={proximaOrdemIdentificador}
+                            onSaveComplete={handleNovoIdentificadorSalvo}
+                            onClose={() => setDialogNovoIdentificador(false)}
+                        />
+                    )}
+                </DialogContent>
+            </Dialog>
+        </>
     );
 };
 
