@@ -250,7 +250,7 @@ const ContasPagar: React.FC = () => {
   }, [activeTab, fetchContas, fetchParcelas, fetchPagamentos]);
 
   // Verificar contas futuras ao carregar (apenas para Cliente)
-  const verificarContasFuturas = useCallback(async () => {
+  const verificarContasFuturas = useCallback(async (abrirModalSeHouver: boolean = true) => {
     if (!proprietarioId || isAdmin) {
       setTemContasFuturas(false);
       return;
@@ -272,11 +272,14 @@ const ContasPagar: React.FC = () => {
           .from('admin_parcelas_receber')
           .select('id', { count: 'exact', head: true })
           .eq('conta_receber_id', conta.id)
-          .in('status', ['aberta', 'parcial', 'reprogramada']);
+          .in('status', ['aberta', 'parcial', 'reprogramada'])
+          .or('ciente_cliente.is.null,ciente_cliente.eq.false');
 
         if (!parcelasError && count && count > 0) {
           setTemContasFuturas(true);
-          setContasFuturasOpen(true);
+          if (abrirModalSeHouver) {
+            setContasFuturasOpen(true);
+          }
           return;
         }
       }
@@ -539,6 +542,10 @@ const ContasPagar: React.FC = () => {
             clienteId={proprietarioId}
             open={contasFuturasOpen}
             onOpenChange={setContasFuturasOpen}
+            onLancamentoComplete={() => {
+              verificarContasFuturas(false);
+              fetchContas();
+            }}
           />
         )}
       </div>

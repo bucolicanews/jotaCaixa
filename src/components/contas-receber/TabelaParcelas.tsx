@@ -18,6 +18,7 @@ interface ExtendedParcelaDetalhada {
     data_vencimento: string;
     data_pagamento?: string | null;
     status: ParcelaStatus;
+    ciente_cliente?: boolean | null;
     contas_receber: {
         id: string;
         descricao: string;
@@ -58,11 +59,12 @@ const TabelaParcelas: React.FC<TabelaParcelasProps> = ({
                                 <TableHead>Vlr Pago</TableHead>
                                 <TableHead>Data Recebimento</TableHead>
                                 <TableHead>Status</TableHead>
+                                <TableHead>Ciente Cliente</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {parcelasFiltradas.length === 0 ? (
-                                <TableRow><TableCell colSpan={10} className="text-center h-24">Nenhuma parcela encontrada no período.</TableCell></TableRow>
+                                <TableRow><TableCell colSpan={11} className="text-center h-24">Nenhuma parcela encontrada no período.</TableCell></TableRow>
                             ) : (
                                 parcelasFiltradas.map((p) => {
                                     const statusVariant = getBadgeVariant(p.status, p.data_vencimento);
@@ -93,6 +95,11 @@ const TabelaParcelas: React.FC<TabelaParcelasProps> = ({
                                             <TableCell>{p.data_pagamento ? formatDate(p.data_pagamento) : '-'}</TableCell>
                                             <TableCell>
                                                 <Badge variant={statusVariant}>{p.status === 'paga' ? 'recebida' : p.status}</Badge>
+                                            </TableCell>
+                                            <TableCell className="text-center">
+                                                <Badge variant={p.ciente_cliente ? 'success' : 'secondary'}>
+                                                    {p.ciente_cliente ? 'Sim' : 'Não'}
+                                                </Badge>
                                             </TableCell>
                                         </TableRow>
                                     );
