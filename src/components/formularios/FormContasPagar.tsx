@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { CalendarIcon, Loader2, PlusCircle } from 'lucide-react';
+import { CalendarIcon, Loader2, PlusCircle, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -21,6 +21,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Historico } from '@/types/historico';
 import { PlanoContas } from '@/types/plano-contas';
 import { useContabilConfig } from '@/hooks/use-contabil-config';
+import { useCapitalSocial } from '@/hooks/use-capital-social';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 const formSchema = z.object({
   fornecedor: z.string().min(1, 'O nome do fornecedor é obrigatório.'),
@@ -64,25 +66,31 @@ interface FormContasPagarProps {
 const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveComplete }) => {
   const { usuario, role } = useSessao();
   const { configMap } = useContabilConfig();
+  const { temCapitalSocial, carregando: carregandoCapital } = useCapitalSocial();
   const [mapeamentoContabil, setMapeamentoContabil] = useState<Record<string, string | null>>({});
   const [historicos, setHistoricos] = useState<Historico[]>([]);
   const [contasPatrimoniais, setContasPatrimoniais] = useState<PlanoContas[]>([]);
-  const [contasResultado, setContasResultado] = useState<PlanoContas[]>([]); // NOVO ESTADO
+  const [contasResultado, setContasResultado] = useState<PlanoContas[]>([]);
   const [loadingContas, setLoadingContas] = useState(true);
   const [isCreatingHistorico, setIsCreatingHistorico] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false); // ADICIONADO: Estado de submissão
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const isEditing = !!contaInicial;
 
   const isAdmin = role === 'Admin';
-  const adminId = usuario?.id;
+  const isCliente = role === 'Cliente';
+  const proprietarioId = usuario?.id;
+  
+  const tabelaContasPagar = isAdmin ? 'admin_contas_pagar' : 'contas_pagar';
+  const tabelaParcelasPagar = isAdmin ? 'admin_parcelas_pagar' : 'parcelas_contas_pagar';
+  const ownerKey = isAdmin ? 'admin_id' : 'empresa_id';
 
   const fetchMapeamentoContabil = useCallback(async () => {
-    if (!isAdmin || !adminId) return;
+    if (!proprietarioId) return;
     
     const { data, error } = await supabase
         .from('configuracao_contas_pagar')
         .select('tipo_registro, conta_contabil_id')
-        .eq('proprietario_id', adminId);
+        .eq('proprietario_id', proprietarioId);
         
     if (error) {
         console.error('Erro ao buscar mapeamento contábil CP:', error);
@@ -94,14 +102,14 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
         }, {} as Record<string, string | null>);
         setMapeamentoContabil(map);
     }
-  }, [isAdmin, adminId]);
+  }, [proprietarioId]);
   
   const fetchHistoricos = useCallback(async () => {
-    if (!adminId) return;
+    if (!proprietarioId) return;
     const { data, error } = await supabase
         .from('historicos')
         .select('id, descricao, codigo')
-        .eq('proprietario_id', adminId)
+        .eq('proprietario_id', proprietarioId)
         .order('descricao');
         
     if (error) {
@@ -110,17 +118,16 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
     } else {
         setHistoricos(data as Historico[]);
     }
-  }, [adminId]);
+  }, [proprietarioId]);
   
   const fetchContasContabeis = useCallback(async () => {
-    if (!adminId) return;
+    if (!proprietarioId) return;
     setLoadingContas(true);
     
-    // 1. Busca contas Patrimoniais (Passivo/Obrigação)
     const { data: patrimonialData, error: pError } = await supabase
         .from('plano_contas')
         .select('id, Conta, Descricao')
-        .eq('proprietario_id', adminId)
+        .eq('proprietario_id', proprietarioId)
         .eq('Analitica', 'Sim')
         .eq('is_conta_patrimonial', true)
         .eq('is_a_pagar', true)
@@ -133,14 +140,13 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
         setContasPatrimoniais(patrimonialData as PlanoContas[]);
     }
     
-    // 2. Busca contas de Resultado (Despesa/Custo)
     const custoCode = configMap.Custo || '5';
     const despesaCode = configMap.Despesa || '6';
     
     const { data: resultadoData, error: rError } = await supabase
         .from('plano_contas')
         .select('id, Conta, Descricao')
-        .eq('proprietario_id', adminId)
+        .eq('proprietario_id', proprietarioId)
         .eq('Analitica', 'Sim')
         .eq('is_conta_resultado', true)
         .or(`Conta.like.${custoCode}.%,Conta.like.${despesaCode}.%`)
@@ -154,17 +160,15 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
     }
     
     setLoadingContas(false);
-  }, [adminId, configMap.Custo, configMap.Despesa]);
+  }, [proprietarioId, configMap.Custo, configMap.Despesa]);
 
   useEffect(() => {
-    if (isAdmin) {
+    if (proprietarioId) {
         fetchMapeamentoContabil();
-    }
-    if (adminId) {
         fetchHistoricos();
         fetchContasContabeis();
     }
-  }, [isAdmin, adminId, fetchMapeamentoContabil, fetchHistoricos, fetchContasContabeis]);
+  }, [proprietarioId, fetchMapeamentoContabil, fetchHistoricos, fetchContasContabeis]);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -188,13 +192,13 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
   const novoHistoricoValue = form.watch('novo_historico');
   
   const handleCreateHistorico = async () => {
-    if (!novoHistoricoValue || !adminId) return;
+    if (!novoHistoricoValue || !proprietarioId) return;
     
     setIsCreatingHistorico(true);
     try {
         const { data, error } = await supabase
             .from('historicos')
-            .insert({ proprietario_id: adminId, descricao: novoHistoricoValue })
+            .insert({ proprietario_id: proprietarioId, descricao: novoHistoricoValue })
             .select('id, descricao, codigo')
             .single();
             
@@ -213,12 +217,16 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
   };
 
   const onSubmit = async (values: FormValues) => {
-    if (!adminId) { showError('ID do administrador não pôde ser determinado.'); return; }
+    if (!temCapitalSocial) {
+      showError('É necessário fazer o lançamento inicial do Capital Social antes de realizar lançamentos de Contas a Pagar.');
+      return;
+    }
     
-    // 1. Buscar a conta analítica de parcelas a pagar
-    const contaParcelaPagar = isAdmin ? mapeamentoContabil['parcela_pagar'] : null;
+    if (!proprietarioId) { showError('ID do proprietário não pôde ser determinado.'); return; }
     
-    if (isAdmin && !contaParcelaPagar) {
+    const contaParcelaPagar = mapeamentoContabil['parcela_pagar'] || null;
+    
+    if (!contaParcelaPagar) {
         showError('A conta contábil para Parcelas a Pagar (Analítico) não está configurada. Verifique Configurações > Contas a Pagar.');
         return;
     }
@@ -233,13 +241,11 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
         return;
     }
     
-    setIsSubmitting(true); // USANDO O ESTADO LOCAL
+    setIsSubmitting(true);
     
-    // CRÍTICO: Inicializa o array aqui
     const lancamentosPayload: any[] = [];
 
     try {
-      // 2. Calcular valores e parcelas
       let valorTotal: number;
       let parcelasParaInserir = [];
 
@@ -256,11 +262,9 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
       }
       
       let contaPagarId: string;
-      const tabelaContasPagar = 'admin_contas_pagar';
-      const tabelaParcelasPagar = 'admin_parcelas_pagar';
       
-      const contaPagarPayload = {
-          admin_id: adminId,
+      const contaPagarPayload = isAdmin ? {
+          admin_id: proprietarioId,
           fornecedor: values.fornecedor,
           descricao: values.descricao,
           valor_total: valorTotal,
@@ -269,7 +273,18 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
           origem: 'manual',
           id_conta_patrimonial: values.conta_patrimonial_id,
           historico_id: values.historico_id,
-          id_conta_resultado: values.conta_resultado_id, // NOVO CAMPO
+          id_conta_resultado: values.conta_resultado_id,
+      } : {
+          empresa_id: proprietarioId,
+          fornecedor: values.fornecedor,
+          Descricao: values.descricao,
+          valor_total: valorTotal,
+          data_vencimento: parcelasParaInserir[0].data_vencimento,
+          status: 'pendente',
+          origem: 'manual',
+          id_conta_patrimonial: values.conta_patrimonial_id,
+          historico_id: values.historico_id,
+          id_conta_resultado: values.conta_resultado_id,
       };
 
       if (isEditing && contaInicial) {
@@ -285,81 +300,73 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
         contaPagarId = data.id;
       }
 
-      // 3. Inserir Parcelas (com o id_conta_contabil da parcela_pagar)
       const parcelasComId = parcelasParaInserir.map(p => ({ 
           ...p, 
           conta_pagar_id: contaPagarId, 
-          admin_id: adminId,
-          id_conta_contabil: contaParcelaPagar, // PERSISTINDO A CONTA ANALÍTICA DE PARCELAS A PAGAR
+          [ownerKey]: proprietarioId,
+          id_conta_contabil: contaParcelaPagar,
       }));
       
       const { error: parcelError } = await supabase.from(tabelaParcelasPagar).insert(parcelasComId);
       if (parcelError) throw parcelError;
       
-      // 4. Lançamento 1: C: Passivo (Obrigação a Pagar) - CRÉDITO (Saida)
       const dataMovimentacao = format(new Date(), 'yyyy-MM-dd') + 'T12:00:00Z';
       const launchDescription = values.descricao;
       const contaPagarIdShort = contaPagarId.substring(0, 8);
       
-      // CRÍTICO: Geração de IDs e Referência Cruzada
       const idPatrimonial = crypto.randomUUID();
       const idDespesa = crypto.randomUUID();
       
-      // Lançamento 1: C: Passivo (Obrigação a Pagar) - CRÉDITO (Saida)
       const lancamentoPatrimonialPayload = {
-          id: idPatrimonial, // NOVO ID
-          proprietario_id: adminId,
+          id: idPatrimonial,
+          proprietario_id: proprietarioId,
           data_movimentacao: dataMovimentacao,
           descricao: `Lançamento Inicial CP: ${launchDescription} (CP ID: ${contaPagarIdShort})`,
           valor: valorTotal,
-          tipo: 'Saida' as const, // CRÉDITO (Aumenta Passivo Credor)
+          tipo: 'Saida' as const,
           conta_bancaria_id: null,
           conta_contabil_id: values.conta_patrimonial_id,
           origem: 'lancamento_cp',
           historico_id: values.historico_id,
-          conta_resultado_id: idDespesa, // REFERÊNCIA CRUZADA
+          conta_resultado_id: idDespesa,
       };
       
-      // Limpeza de lançamentos antigos (se edição)
       if (isEditing) {
           const oldLaunchDescriptionPrefix = `Lançamento Inicial CP: ${contaInicial?.descricao} (CP ID: ${contaInicial?.id.substring(0, 8)})`;
           await supabase.from('lancamentos')
               .delete()
               .eq('origem', 'lancamento_cp')
-              .eq('proprietario_id', adminId)
+              .eq('proprietario_id', proprietarioId)
               .ilike('descricao', `${oldLaunchDescriptionPrefix}%`);
       }
       
       lancamentosPayload.push(lancamentoPatrimonialPayload);
       
-      // 5. Lançamento 2: D: Despesa/Custo (DRE) - DÉBITO (Entrada)
       const lancamentoDespesaPayload = {
-          id: idDespesa, // NOVO ID
-          proprietario_id: adminId,
+          id: idDespesa,
+          proprietario_id: proprietarioId,
           data_movimentacao: dataMovimentacao,
           descricao: `Despesa/Custo: ${launchDescription} (CP ID: ${contaPagarIdShort})`,
           valor: valorTotal,
-          tipo: 'Entrada' as const, // Entrada (Débito) para reconhecer a Despesa (Credora)
+          tipo: 'Entrada' as const,
           conta_bancaria_id: null,
           conta_contabil_id: values.conta_resultado_id,
           origem: 'lancamento_cp',
           historico_id: values.historico_id,
-          conta_resultado_id: idPatrimonial, // REFERÊNCIA CRUZADA
+          conta_resultado_id: idPatrimonial,
       };
       
-      // Limpeza de lançamentos antigos (se edição)
       if (isEditing) {
           const oldReceitaDescriptionPrefix = `Despesa/Custo: ${contaInicial?.descricao} (CP ID: ${contaInicial?.id.substring(0, 8)})`;
           await supabase.from('lancamentos')
               .delete()
               .eq('origem', 'lancamento_cp')
-              .eq('proprietario_id', adminId)
+              .eq('proprietario_id', proprietarioId)
               .ilike('descricao', `${oldReceitaDescriptionPrefix}%`);
       }
       
       lancamentosPayload.push(lancamentoDespesaPayload);
       
-      // 6. Inserir os dois lançamentos de uma vez
       const { error: lancamentoError } = await supabase.from('lancamentos').insert(lancamentosPayload);
       if (lancamentoError) throw lancamentoError;
 
@@ -375,6 +382,15 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        {!carregandoCapital && !temCapitalSocial && (
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertTitle>Lançamento Inicial Obrigatório</AlertTitle>
+            <AlertDescription>
+              Antes de realizar lançamentos de Contas a Pagar, é necessário fazer o lançamento inicial do Capital Social (com Caixa ou Banco) através do Fluxo de Caixa.
+            </AlertDescription>
+          </Alert>
+        )}
         <FormField control={form.control} name="fornecedor" render={({ field }) => (
           <FormItem><FormLabel>1. Fornecedor</FormLabel><FormControl><Input placeholder="Ex: Fornecedor X" {...field} /></FormControl><FormMessage /></FormItem>
         )} />

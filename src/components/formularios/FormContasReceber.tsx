@@ -8,7 +8,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { CalendarIcon, Loader2, PlusCircle } from 'lucide-react';
+import { CalendarIcon, Loader2, PlusCircle, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format, addDays, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -22,6 +22,8 @@ import { Historico } from '@/types/historico';
 import { PlanoContas } from '@/types/plano-contas';
 import { useContabilConfig } from '@/hooks/use-contabil-config';
 import { ContaReceber } from '@/types/contas-receber';
+import { useCapitalSocial } from '@/hooks/use-capital-social';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 const formSchema = z.object({
   cliente_id: z.string({ required_error: 'Selecione um cliente.' }).uuid('Cliente inválido.'),
@@ -70,6 +72,7 @@ interface ClienteCRSimples {
 const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onSaveComplete }) => {
   const { perfil, role, usuario } = useSessao();
   const { configMap } = useContabilConfig();
+  const { temCapitalSocial, carregando: carregandoCapital } = useCapitalSocial();
   const [clientes, setClientes] = useState<ClienteCRSimples[]>([]);
   const [loadingClientes, setLoadingClientes] = useState(true);
   const [mapeamentoContabil, setMapeamentoContabil] = useState<Record<string, string | null>>({});
@@ -79,12 +82,12 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
   const [contasReceita, setContasReceita] = useState<PlanoContas[]>([]);
   const [loadingContasReceita, setLoadingContasReceita] = useState(true);
   const [isCreatingHistorico, setIsCreatingHistorico] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false); // ADICIONADO: Estado de submissão
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const isEditing = !!contaInicial;
 
   const getOwnerId = () => {
     if (role === 'Admin') return usuario?.id || null;
-    if (role === 'Cliente') return (perfil as any)?.id;
+    if (role === 'Cliente') return usuario?.id || null;
     if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id;
     return null;
   };
@@ -187,24 +190,36 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
       }
       setLoadingClientes(true);
       
-      let queryClients = supabase
-          .from('tbl_clientes')
-          .select('id, nome, documento, email')
-          .eq('aprovado', true)
-          .order('nome');
-          
-      const { data: dataClients, error: errorClients } = await queryClients;
+      let fetchedClients: ClienteCRSimples[] = [];
       
-      if (errorClients) {
-          showError('Erro ao carregar clientes: ' + errorClients.message);
-          setClientes([]);
+      if (isAdmin) {
+        const { data: dataClients, error: errorClients } = await supabase
+            .from('tbl_clientes')
+            .select('id, nome, documento, email')
+            .eq('aprovado', true)
+            .order('nome');
+            
+        if (errorClients) {
+            showError('Erro ao carregar clientes: ' + errorClients.message);
+        } else {
+            fetchedClients = (dataClients as ClienteCRSimples[])
+                .filter(c => c.id !== ownerId);
+        }
       } else {
-          const fetchedClients = (dataClients as ClienteCRSimples[])
-              .filter(c => c.id !== ownerId);
-              
-          setClientes(fetchedClients);
+        const { data: dataClients, error: errorClients } = await supabase
+            .from('clientes')
+            .select('id, nome, documento, email')
+            .eq('proprietario_id', ownerId)
+            .order('nome');
+            
+        if (errorClients) {
+            showError('Erro ao carregar clientes: ' + errorClients.message);
+        } else {
+            fetchedClients = dataClients as ClienteCRSimples[];
+        }
       }
       
+      setClientes(fetchedClients);
       setLoadingClientes(false);
     };
     
@@ -263,6 +278,11 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
   };
 
   const onSubmit = async (values: FormValues) => {
+    if (!temCapitalSocial) {
+      showError('É necessário fazer o lançamento inicial do Capital Social antes de realizar lançamentos de Contas a Receber.');
+      return;
+    }
+    
     const ownerId = getOwnerId();
     if (!ownerId) { showError('ID da empresa/admin não pôde ser determinado.'); return; }
     
@@ -424,6 +444,15 @@ const FormContasReceber: React.FC<FormContasReceberProps> = ({ contaInicial, onS
 return (
   <Form {...form}>
     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+      {!carregandoCapital && !temCapitalSocial && (
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Lançamento Inicial Obrigatório</AlertTitle>
+          <AlertDescription>
+            Antes de realizar lançamentos de Contas a Receber, é necessário fazer o lançamento inicial do Capital Social (com Caixa ou Banco) através do Fluxo de Caixa.
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* CLIENTE */}
       <FormField control={form.control} name="cliente_id" render={({ field }) => (

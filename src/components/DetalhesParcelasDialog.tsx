@@ -173,6 +173,57 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
     const contaReceberIdShort = contaReceberId.substring(0, 8);
     
     try {
+        // 0. VALIDAÇÃO: Verificar se há outras parcelas na conta a receber
+        const { data: todasParcelas, error: parcelasError } = await supabase
+            .from(tabelaParcelas)
+            .select('id')
+            .eq('conta_receber_id', contaReceberId);
+            
+        if (parcelasError) throw parcelasError;
+        
+        if (todasParcelas && todasParcelas.length > 1) {
+            showError('Não é possível estornar o recebimento enquanto houver outras parcelas. Delete as demais parcelas primeiro.');
+            setIsUndoing(false);
+            return;
+        }
+        
+        // 0.1. VALIDAÇÃO: Verificar se há lançamento no extrato bancário
+        // Busca recebimentos para obter valor, data e conta de destino
+        const { data: recebimentosCheck, error: recebimentosCheckError } = await supabase
+            .from(tabelaRecebimentos)
+            .select('id, conta_id, valor_recebido, data_recebimento')
+            .eq('parcela_id', parcela.id);
+            
+        if (recebimentosCheckError) throw recebimentosCheckError;
+        
+        if (recebimentosCheck && recebimentosCheck.length > 0) {
+            for (const receb of recebimentosCheck) {
+                if (receb.conta_id) {
+                    const dataRecebimento = receb.data_recebimento 
+                        ? receb.data_recebimento.substring(0, 10) 
+                        : null;
+                    
+                    const { data: extratoExistente, error: extratoError } = await supabase
+                        .from('extratos')
+                        .select('id')
+                        .eq('empresa_id', ownerId)
+                        .eq('id_saldo_contas', receb.conta_id)
+                        .eq('valor', Math.abs(receb.valor_recebido))
+                        .eq('tipo', 'Entrada');
+                    
+                    if (extratoError) {
+                        console.warn('Aviso: Erro ao verificar extrato:', extratoError);
+                    }
+                    
+                    if (extratoExistente && extratoExistente.length > 0) {
+                        showError('Não é possível estornar. Esta conta possui lançamento no extrato bancário. Delete o lançamento do extrato primeiro e depois estorne a conta recebida.');
+                        setIsUndoing(false);
+                        return;
+                    }
+                }
+            }
+        }
+        
         // 1. Buscar todos os registros de recebimento associados
         const { data: recebimentos, error: fetchError } = await supabase
             .from(tabelaRecebimentos)
@@ -189,20 +240,18 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
         
         const dataEstornoISO = new Date().toISOString();
         
-        // 2. Buscar mapeamento contábil (apenas Admin)
+        // 2. Buscar mapeamento contábil (Admin e Cliente)
         let contaDescontoConcedidoId: string | null = null;
         let contaEstornoDescontoId: string | null = null;
         
-        if (isAdmin) {
-            const { data: configData } = await supabase
-                .from('configuracao_contas_receber')
-                .select('tipo_registro, conta_contabil_id')
-                .eq('proprietario_id', usuario.id)
-                .in('tipo_registro', ['desconto_concedido', 'estorno_desconto_concedido']);
-                
-            contaDescontoConcedidoId = configData?.find(c => c.tipo_registro === 'desconto_concedido')?.conta_contabil_id || null;
-            contaEstornoDescontoId = configData?.find(c => c.tipo_registro === 'estorno_desconto_concedido')?.conta_contabil_id || null;
-        }
+        const { data: configData } = await supabase
+            .from('configuracao_contas_receber')
+            .select('tipo_registro, conta_contabil_id')
+            .eq('proprietario_id', usuario.id)
+            .in('tipo_registro', ['desconto_concedido', 'estorno_desconto_concedido']);
+            
+        contaDescontoConcedidoId = configData?.find(c => c.tipo_registro === 'desconto_concedido')?.conta_contabil_id || null;
+        contaEstornoDescontoId = configData?.find(c => c.tipo_registro === 'estorno_desconto_concedido')?.conta_contabil_id || null;
         
         // 3. Buscar TODOS os lançamentos originais vinculados a esta parcela
         // Busca por: origem = 'recebimento_manual' E origem = 'desconto_cp:ID'
@@ -259,7 +308,7 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
         const isDiscountApplied = parcela.observacao?.includes('desconto');
         const valorDesconto = isDiscountApplied ? (parcela.valor_parcela - (parcela.valor_pago || 0)) : 0;
 
-        if (isDiscountApplied && isAdmin && contaEstornoDescontoId && conta.id_conta_patrimonial && valorDesconto > 0.01) {
+        if (isDiscountApplied && contaEstornoDescontoId && conta.id_conta_patrimonial && valorDesconto > 0.01) {
             
             // Lançamento 1: D: Clientes a Receber (Ativo) - ENTRADA (Aumenta Ativo Devedor)
             const idEstornoAtivo = crypto.randomUUID();
@@ -282,24 +331,22 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
             lancamentosEstornoPayload.push(lancamentoEstornoPatrimonial);
 
             // Lançamento 2: C: Receita Estorno do Desconto (Resultado) - CRÉDITO (Saída)
-            if (contaEstornoDescontoId) {
-                const lancamentoEstornoReceita = {
-                    id: idEstornoReceita,
-                    proprietario_id: usuario.id,
-                    data_movimentacao: dataEstornoISO,
-                    descricao: `RECEITA ESTORNO DESCONTO: ${conta.descricao} (CR ID: ${contaReceberIdShort})`,
-                    valor: valorDesconto,
-                    tipo: 'Saida' as const, // CRÉDITO (Saída) na Receita Credora
-                    conta_bancaria_id: null,
-                    conta_contabil_id: contaEstornoDescontoId, // Conta de Estorno Desconto Concedido (Receita)
-                    origem: 'estorno_recebimento_manual',
-                    historico_id: recebimentos[0].historico_id,
-                    conta_resultado_id: idEstornoAtivo, // Referência cruzada
-                };
-                lancamentosEstornoPayload.push(lancamentoEstornoReceita);
-            } else {
-                console.warn('Aviso: Conta de Estorno Desconto Concedido (Receita) não mapeada. Estorno incompleto.');
-            }
+            const lancamentoEstornoReceita = {
+                id: idEstornoReceita,
+                proprietario_id: usuario.id,
+                data_movimentacao: dataEstornoISO,
+                descricao: `RECEITA ESTORNO DESCONTO: ${conta.descricao} (CR ID: ${contaReceberIdShort})`,
+                valor: valorDesconto,
+                tipo: 'Saida' as const, // CRÉDITO (Saída) na Receita Credora
+                conta_bancaria_id: null,
+                conta_contabil_id: contaEstornoDescontoId, // Conta de Estorno Desconto Concedido (Receita)
+                origem: 'estorno_recebimento_manual',
+                historico_id: recebimentos[0].historico_id,
+                conta_resultado_id: idEstornoAtivo, // Referência cruzada
+            };
+            lancamentosEstornoPayload.push(lancamentoEstornoReceita);
+        } else if (isDiscountApplied && valorDesconto > 0.01 && !contaEstornoDescontoId) {
+            console.warn('Aviso: Conta de Estorno Desconto Concedido (Receita) não configurada. Estorno de desconto não será realizado.');
         }
         
         // 6. Inserir todos os lançamentos de estorno

@@ -368,13 +368,19 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
                 await supabase.from(tabelaContasPagar).update({ status: 'pago' }).eq('id', parcela.conta_pagar_id);
             }
             
-            // 8. Salvar Histórico Padrão (se marcado)
-            if (isAdmin && parentValues.salvar_como_padrao && parentValues.historico_id) {
-                await supabase.from('configuracao_historico_padrao').upsert({
+            // 8. Salvar Histórico Padrão (se marcado) - Delete + Insert para evitar conflito
+            if (parentValues.salvar_como_padrao && parentValues.historico_id) {
+                await supabase
+                    .from('configuracao_historico_padrao')
+                    .delete()
+                    .eq('proprietario_id', adminId)
+                    .eq('tipo_registro', 'pagamento_padrao');
+                    
+                await supabase.from('configuracao_historico_padrao').insert({
                     proprietario_id: adminId,
                     tipo_registro: 'pagamento_padrao',
                     historico_id: parentValues.historico_id,
-                }, { onConflict: 'proprietario_id, tipo_registro' });
+                });
             }
 
             showSuccess('Pagamento registrado com sucesso!');

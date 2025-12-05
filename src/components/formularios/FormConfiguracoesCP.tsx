@@ -11,45 +11,35 @@ import { useSessao } from '@/hooks/use-sessao';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { PlanoContas } from '@/types/plano-contas';
 import { Separator } from '../ui/separator';
-import { Historico } from '@/types/historico';
-import { ClienteProfile } from '@/types/usuario';
 
-// Tipos de registro que precisam de mapeamento contábil para CP
 const TIPOS_REGISTRO_CONTABIL = [
-  { key: 'a_pagar', label: 'Contas a Pagar (Sintético)', tipo: 'Patrimonial' }, // NOVO TIPO
-  { key: 'parcela_pagar', label: 'Parcelas a Pagar (Analítico)', tipo: 'Patrimonial' }, // NOVO TIPO
-  { key: 'pagamento', label: 'Pagamentos (Saída)', tipo: 'Resultado' }, // NOVO TIPO
-  { key: 'desconto_obtido', label: 'Descontos Obtidos (Receita)', tipo: 'Resultado' }, // NOVO TIPO
-  { key: 'estorno_desconto_obtido', label: 'Estorno Desconto Obtido (Despesa)', tipo: 'Resultado' }, // NOVO CAMPO CRÍTICO
+  { key: 'a_pagar', label: 'Contas a Pagar (Sintético)', tipo: 'Patrimonial', analitica: 'Não' },
+  { key: 'parcela_pagar', label: 'Parcelas a Pagar (Analítico)', tipo: 'Patrimonial', analitica: 'Sim' },
+  { key: 'pagamento', label: 'Pagamentos (Saída)', tipo: 'Resultado', analitica: 'Sim' },
+  { key: 'desconto_obtido', label: 'Descontos Obtidos (Receita)', tipo: 'Resultado', analitica: 'Sim' },
+  { key: 'estorno_desconto_obtido', label: 'Estorno Desconto Obtido (Despesa)', tipo: 'Resultado', analitica: 'Sim' },
 ];
 
-// Esquema dinâmico para garantir que todos os campos estejam presentes
 const formSchema = z.object({
-  a_pagar: z.string().uuid('Conta inválida para Contas a Pagar.').nullable(),
-  parcela_pagar: z.string().uuid('Conta inválida para Parcelas a Pagar.').nullable(),
-  pagamento: z.string().uuid('Conta inválida para Pagamentos.').nullable(),
-  desconto_obtido: z.string().uuid('Conta inválida para Descontos Obtidos.').nullable(),
-  estorno_desconto_obtido: z.string().uuid('Conta inválida para Estorno de Desconto.').nullable(), // NOVO CAMPO
-  historico_padrao_id: z.string().uuid('Histórico inválido.').nullable(),
+  a_pagar: z.string().nullable(),
+  parcela_pagar: z.string().nullable(),
+  pagamento: z.string().nullable(),
+  desconto_obtido: z.string().nullable(),
+  estorno_desconto_obtido: z.string().nullable(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
-
-interface FormConfiguracoesCPProps {
-  // ... (props)
-}
 
 const FormConfiguracoesCP: React.FC = () => {
   const { role, usuario, perfil, carregando: carregandoSessao } = useSessao();
   const [loadingData, setLoadingData] = useState(true);
   const [contasContabeis, setContasContabeis] = useState<PlanoContas[]>([]);
-  const [historicos, setHistoricos] = useState<Historico[]>([]);
   const [loadingContas, setLoadingContas] = useState(true);
   
   const isAdmin = role === 'Admin';
   const isCliente = role === 'Cliente';
   const canAccess = isAdmin || isCliente;
-  const proprietarioId = isAdmin ? usuario?.id : (perfil as ClienteProfile)?.id;
+  const proprietarioId = usuario?.id;
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -58,8 +48,7 @@ const FormConfiguracoesCP: React.FC = () => {
       parcela_pagar: null,
       pagamento: null,
       desconto_obtido: null,
-      estorno_desconto_obtido: null, // NOVO DEFAULT
-      historico_padrao_id: null,
+      estorno_desconto_obtido: null,
     },
   });
   
@@ -67,10 +56,9 @@ const FormConfiguracoesCP: React.FC = () => {
     if (!proprietarioId) return;
     setLoadingContas(true);
     
-    // 1. Busca TODAS as contas (Analíticas e Sintéticas) do Admin
     const { data, error } = await supabase
         .from('plano_contas')
-        .select('id, Conta, Descricao, Analitica, is_conta_patrimonial, is_conta_resultado') // Incluindo booleanos
+        .select('id, Conta, Descricao, Analitica, is_conta_patrimonial, is_conta_resultado, is_a_pagar')
         .eq('proprietario_id', proprietarioId)
         .order('Conta');
         
@@ -82,22 +70,6 @@ const FormConfiguracoesCP: React.FC = () => {
     }
     setLoadingContas(false);
   }, [proprietarioId]);
-  
-  const fetchHistoricos = useCallback(async () => {
-    if (!proprietarioId) return;
-    const { data, error } = await supabase
-        .from('historicos')
-        .select('id, descricao, codigo')
-        .eq('proprietario_id', proprietarioId)
-        .order('descricao');
-        
-    if (error) {
-        console.error('Erro ao carregar históricos:', error);
-        setHistoricos([]);
-    } else {
-        setHistoricos(data as Historico[]);
-    }
-  }, [proprietarioId]);
 
   const fetchConfig = useCallback(async () => {
     if (!canAccess || !proprietarioId) {
@@ -107,36 +79,22 @@ const FormConfiguracoesCP: React.FC = () => {
     
     setLoadingData(true);
     
-    // 1. Buscar Mapeamento Contábil
     const { data: contasData, error: contasError } = await supabase
       .from('configuracao_contas_pagar')
       .select('tipo_registro, conta_contabil_id')
       .eq('proprietario_id', proprietarioId);
-      
-    // 2. Buscar Histórico Padrão (da nova tabela)
-    const { data: historicoData } = await supabase
-        .from('configuracao_historico_padrao')
-        .select('historico_id')
-        .eq('proprietario_id', proprietarioId)
-        .eq('tipo_registro', 'pagamento_padrao')
-        .limit(1)
-        .single();
 
     if (contasError) {
       showError('Erro ao carregar configurações de CP: ' + contasError.message);
     } else if (contasData) {
       const mappedData = contasData.reduce((acc: Partial<FormValues>, item: { tipo_registro: string, conta_contabil_id: string | null }) => {
         
-        // Mapeia os campos existentes
         if (TIPOS_REGISTRO_CONTABIL.some(t => t.key === item.tipo_registro)) {
             acc[item.tipo_registro as keyof FormValues] = item.conta_contabil_id;
         }
         
         return acc;
       }, {} as Partial<FormValues>);
-      
-      // Adiciona o ID do histórico padrão
-      mappedData.historico_padrao_id = historicoData?.historico_id || null;
       
       form.reset(mappedData);
     }
@@ -146,10 +104,9 @@ const FormConfiguracoesCP: React.FC = () => {
   useEffect(() => {
     if (!carregandoSessao && canAccess) {
       fetchContasContabeis();
-      fetchHistoricos();
       fetchConfig();
     }
-  }, [carregandoSessao, canAccess, fetchConfig, fetchContasContabeis, fetchHistoricos]);
+  }, [carregandoSessao, canAccess, fetchConfig, fetchContasContabeis]);
 
   const onSubmit = async (values: FormValues) => {
     if (!canAccess || !proprietarioId) {
@@ -160,30 +117,15 @@ const FormConfiguracoesCP: React.FC = () => {
     const dataToUpsertContabil = TIPOS_REGISTRO_CONTABIL.map(tipo => ({
         proprietario_id: proprietarioId,
         tipo_registro: tipo.key,
-        // Usa o valor diretamente (null ou string UUID)
         conta_contabil_id: values[tipo.key as keyof FormValues] || null,
     }));
-    
-    const historicoPadraoPayload = {
-        proprietario_id: proprietarioId,
-        tipo_registro: 'pagamento_padrao',
-        historico_id: values.historico_padrao_id || null,
-    };
 
     try {
-      // 1. Salvar Mapeamento Contábil
       const { error: contabilError } = await supabase
         .from('configuracao_contas_pagar')
         .upsert(dataToUpsertContabil, { onConflict: 'proprietario_id, tipo_registro' });
         
       if (contabilError) throw contabilError;
-      
-      // 2. Salvar Histórico Padrão na nova tabela
-      const { error: historicoError } = await supabase
-        .from('configuracao_historico_padrao')
-        .upsert(historicoPadraoPayload, { onConflict: 'proprietario_id, tipo_registro' });
-        
-      if (historicoError) throw historicoError;
 
       showSuccess('Configurações de Contas a Pagar salvas com sucesso!');
       fetchConfig();
@@ -200,9 +142,21 @@ const FormConfiguracoesCP: React.FC = () => {
     return <div className="flex justify-center items-center h-20"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>;
   }
   
-  const getContasDisponiveis = (tipo: 'Patrimonial' | 'Resultado') => {
+  const getContasDisponiveis = (tipo: 'Patrimonial' | 'Resultado', requiredAnalitica: 'Sim' | 'Não') => {
       return contasContabeis
-          .filter(c => c.Analitica === 'Sim' && (tipo === 'Patrimonial' ? c.is_conta_patrimonial : c.is_conta_resultado))
+          .filter(c => {
+              const analiticaMatch = c.Analitica === requiredAnalitica;
+              
+              if (tipo === 'Patrimonial') {
+                  if (requiredAnalitica === 'Não') {
+                      return c.Analitica === 'Não' && c.is_conta_resultado === false;
+                  }
+                  return analiticaMatch && (c.is_conta_patrimonial || (c as any).is_a_pagar);
+              } else if (tipo === 'Resultado') {
+                  return analiticaMatch && c.is_conta_resultado;
+              }
+              return false;
+          })
           .map(c => ({
               id: c.id,
               display: `${c.Conta} - ${c.Descricao}`,
@@ -219,73 +173,48 @@ const FormConfiguracoesCP: React.FC = () => {
         <Separator />
         
         <div className="space-y-4">
-            {TIPOS_REGISTRO_CONTABIL.map(tipo => (
-                <FormField
-                    key={tipo.key}
-                    control={form.control}
-                    name={tipo.key as keyof FormValues}
-                    render={({ field }) => (
-                        <FormItem>
-                            <FormLabel>{tipo.label} ({tipo.tipo})</FormLabel>
-                            <Select 
-                                onValueChange={field.onChange} 
-                                value={field.value || undefined}
-                            >
-                                <FormControl>
-                                    <SelectTrigger>
-                                        <SelectValue placeholder={`Selecione a conta ${tipo.tipo}`} />
-                                    </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                    <SelectItem value={null as any}>Nenhum</SelectItem>
-                                    {getContasDisponiveis(tipo.tipo as 'Patrimonial' | 'Resultado').map(c => (
-                                        <SelectItem key={c.id} value={c.id}>
-                                            {c.display}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                            <FormMessage />
-                        </FormItem>
-                    )}
-                />
-            ))}
+            {TIPOS_REGISTRO_CONTABIL.map(tipo => {
+                const requiredAnalitica = tipo.analitica;
+                const contasDisponiveis = getContasDisponiveis(tipo.tipo as 'Patrimonial' | 'Resultado', requiredAnalitica as 'Sim' | 'Não');
+                
+                return (
+                    <FormField
+                        key={tipo.key}
+                        control={form.control}
+                        name={tipo.key as keyof FormValues}
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>{tipo.label} ({tipo.tipo} - {requiredAnalitica})</FormLabel>
+                                <Select 
+                                    onValueChange={(v) => field.onChange(v === "null" ? null : v)} 
+                                    value={field.value || "null"}
+                                >
+                                    <FormControl>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder={`Selecione a conta ${tipo.tipo}`} />
+                                        </SelectTrigger>
+                                    </FormControl>
+                                    <SelectContent>
+                                        <SelectItem value="null">Nenhum</SelectItem>
+                                        {contasDisponiveis.map(c => (
+                                            <SelectItem key={c.id} value={c.id}>
+                                                {c.display}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                <FormMessage />
+                                {contasDisponiveis.length === 0 && !loadingContas && (
+                                    <p className="text-xs text-red-500">
+                                        Nenhuma conta {requiredAnalitica} marcada como {tipo.tipo} no Plano de Contas.
+                                    </p>
+                                )}
+                            </FormItem>
+                        )}
+                    />
+                );
+            })}
         </div>
-        
-        <Separator />
-        
-        {/* Histórico Padrão */}
-        <FormField
-            control={form.control}
-            name="historico_padrao_id"
-            render={({ field }) => (
-                <FormItem>
-                    <FormLabel>Histórico Padrão (Pagamento)</FormLabel>
-                    <Select 
-                        onValueChange={field.onChange} 
-                        value={field.value || undefined}
-                    >
-                        <FormControl>
-                            <SelectTrigger>
-                                <SelectValue placeholder="Selecione o Histórico Padrão" />
-                            </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                            <SelectItem value={null as any}>Nenhum (Não Mapear)</SelectItem>
-                            {historicos.map(h => (
-                                <SelectItem key={h.id} value={h.id}>
-                                    {h.codigo && `[${h.codigo}] `}{h.descricao}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                    <FormMessage />
-                    <p className="text-xs text-muted-foreground">
-                        Este histórico será sugerido automaticamente ao registrar um pagamento manual.
-                    </p>
-                </FormItem>
-            )}
-        />
         
         <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
           {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

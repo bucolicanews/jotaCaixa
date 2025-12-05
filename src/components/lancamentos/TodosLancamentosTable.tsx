@@ -120,11 +120,6 @@ const TodosLancamentosTable: React.FC = () => {
     const handleDelete = async (lancamento: LancamentoDetalhado) => {
         const origem = lancamento.origem;
         
-        if (origem !== 'lancamento_manual' && origem !== 'movimentacao_direta' && origem !== 'Manual') {
-            showError(`Lançamentos de origem '${getOrigemDisplay(origem)}' devem ser excluídos no módulo de origem (Ex: Contas a Receber, Conciliação).`);
-            return;
-        }
-        
         if (!window.confirm(`Tem certeza que deseja excluir este lançamento (${getOrigemDisplay(origem)})? Isso removerá o par de partidas dobradas.`)) return;
         
         setIsDeleting(true);
@@ -222,7 +217,8 @@ const TodosLancamentosTable: React.FC = () => {
                                     const contaDisplay = l.plano_contas ? `${l.plano_contas.Conta} - ${l.plano_contas.Descricao}` : 'N/A';
                                     const origemDisplay = getOrigemDisplay(l.origem);
                                     
-                                    const canDelete = l.origem === 'lancamento_manual' || l.origem === 'movimentacao_direta' || l.origem === 'Manual';
+                                    // Permitir deletar qualquer lançamento
+                                    const canDelete = true;
                                     
                                     return (
                                         <TableRow key={l.id} className={cn(l.origem === 'estorno_direto' && 'bg-red-500/10', l.origem.endsWith('_estornada') && 'opacity-50')}>

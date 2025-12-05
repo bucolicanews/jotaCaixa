@@ -23,9 +23,10 @@ import { useDebounce } from '@/hooks/use-debounce'; // Importando useDebounce
 // O tipo ContaStatus foi movido para utils/badge-variants.ts ou é inferido nos componentes filhos.
 
 const ContasPagar: React.FC = () => {
-  const { usuario, role } = useSessao();
-  const isSupervisao = role === 'Admin';
-  const proprietarioId = isSupervisao ? usuario?.id : (usuario as any)?.empresa_id;
+  const { usuario, role, perfil } = useSessao();
+  const isAdmin = role === 'Admin';
+  const isCliente = role === 'Cliente';
+  const proprietarioId = usuario?.id;
 
   const [contasRaw, setContasRaw] = useState<(ContaPagar | ContaPagarComProgresso)[]>([]); // Armazena dados brutos
   const [parcelas, setParcelas] = useState<ExtendedParcelaPagar[]>([]);
@@ -49,10 +50,10 @@ const ContasPagar: React.FC = () => {
     if (!proprietarioId) return;
     setLoading(true);
     
-    const tabela = isSupervisao ? 'admin_contas_pagar' : 'contas_pagar';
+    const tabela = isAdmin ? 'admin_contas_pagar' : 'contas_pagar';
     let query = supabase.from(tabela).select('*');
     
-    if (!isSupervisao) {
+    if (!isAdmin) {
         query = query.eq('empresa_id', proprietarioId);
     } else {
         query = query.eq('admin_id', proprietarioId);
@@ -67,7 +68,7 @@ const ContasPagar: React.FC = () => {
     }
     
     // Aplica filtros de origem (apenas para Admin)
-    if (isSupervisao && filtroOrigem !== 'todos') {
+    if (isAdmin && filtroOrigem !== 'todos') {
         query = query.eq('origem', filtroOrigem);
     }
     
@@ -83,43 +84,44 @@ const ContasPagar: React.FC = () => {
       showError('Erro ao carregar contas a pagar: ' + error.message);
       setContasRaw([]);
     } else {
-      // Se for supervisão, precisamos calcular o progresso de parcelas
-      if (isSupervisao) {
-        const contasComProgresso = await Promise.all((data as ContaPagarComProgresso[]).map(async (conta) => {
-            const { count, error: countError } = await supabase
-                .from('admin_parcelas_pagar')
-                .select('*', { count: 'exact', head: true })
-                .eq('conta_pagar_id', conta.id);
-            
-            const { count: pagasCount, error: pagasError } = await supabase
-                .from('admin_parcelas_pagar')
-                .select('*', { count: 'exact', head: true })
-                .eq('conta_pagar_id', conta.id)
-                .eq('status', 'paga');
-                
-            if (countError || pagasError) {
-                console.error('Erro ao contar parcelas:', countError || pagasError);
-                return { ...conta, parcelas_total: 0, parcelas_pagas: 0 };
-            }
-            
-            return { ...conta, parcelas_total: count || 0, parcelas_pagas: pagasCount || 0 };
-        }));
-        setContasRaw(contasComProgresso);
-      } else {
-        setContasRaw(data as ContaPagar[]);
-      }
+      const tabelaParcelasCP = isAdmin ? 'admin_parcelas_pagar' : 'parcelas_contas_pagar';
+      
+      const contasComProgresso = await Promise.all((data as ContaPagarComProgresso[]).map(async (conta) => {
+          const { count, error: countError } = await supabase
+              .from(tabelaParcelasCP)
+              .select('*', { count: 'exact', head: true })
+              .eq('conta_pagar_id', conta.id);
+          
+          const { count: pagasCount, error: pagasError } = await supabase
+              .from(tabelaParcelasCP)
+              .select('*', { count: 'exact', head: true })
+              .eq('conta_pagar_id', conta.id)
+              .eq('status', 'paga');
+              
+          if (countError || pagasError) {
+              console.error('Erro ao contar parcelas:', countError || pagasError);
+              return { ...conta, parcelas_total: 0, parcelas_pagas: 0 };
+          }
+          
+          return { ...conta, parcelas_total: count || 0, parcelas_pagas: pagasCount || 0 };
+      }));
+      setContasRaw(contasComProgresso);
     }
     setLoading(false);
-  }, [proprietarioId, isSupervisao, filtroPeriodo, filtroOrigem]); // Removido filtroTextoDebounced
+  }, [proprietarioId, isAdmin, filtroPeriodo, filtroOrigem]);
   
   const fetchParcelas = useCallback(async () => {
-    if (!proprietarioId || !isSupervisao) return;
+    if (!proprietarioId) return;
     setLoading(true);
     
-    let query = supabase.from('admin_parcelas_pagar').select(`
+    const tabelaParcelasCP = isAdmin ? 'admin_parcelas_pagar' : 'parcelas_contas_pagar';
+    const tabelaContasCP = isAdmin ? 'admin_contas_pagar' : 'contas_pagar';
+    const ownerKey = isAdmin ? 'admin_id' : 'empresa_id';
+    
+    let query = supabase.from(tabelaParcelasCP).select(`
         *,
-        admin_contas_pagar ( id, fornecedor, origem, descricao )
-    `).eq('admin_id', proprietarioId);
+        ${tabelaContasCP} ( id, fornecedor, origem, ${isAdmin ? 'descricao' : 'Descricao'} )
+    `).eq(ownerKey, proprietarioId);
     
     // Aplica filtros de período
     if (filtroPeriodo?.from) {
@@ -142,19 +144,24 @@ const ContasPagar: React.FC = () => {
       showError('Erro ao carregar parcelas: ' + error.message);
       setParcelas([]);
     } else {
-      let fetchedParcelas = data as ExtendedParcelaPagar[];
+      let fetchedParcelas = (data || []).map((p: any) => ({
+          ...p,
+          admin_contas_pagar: p[tabelaContasCP] || p.admin_contas_pagar,
+      })) as ExtendedParcelaPagar[];
       
       // Filtragem de origem e texto no frontend
       fetchedParcelas = fetchedParcelas.filter(p => {
-          const origemMatch = filtroOrigem === 'todos' || p.admin_contas_pagar?.origem === filtroOrigem;
+          const contaCP = p.admin_contas_pagar || (p as any).contas_pagar;
+          const origemMatch = filtroOrigem === 'todos' || contaCP?.origem === filtroOrigem;
           
           const termo = filtroTextoDebounced.toLowerCase();
-          const contaPagarId = p.admin_contas_pagar?.id || '';
+          const contaPagarId = contaCP?.id || '';
+          const descricao = contaCP?.descricao || contaCP?.Descricao || '';
           const textMatch = !termo || 
                             p.id.toLowerCase().includes(termo) ||
                             contaPagarId.toLowerCase().includes(termo) ||
-                            p.admin_contas_pagar?.descricao.toLowerCase().includes(termo) ||
-                            p.admin_contas_pagar?.fornecedor.toLowerCase().includes(termo);
+                            descricao.toLowerCase().includes(termo) ||
+                            contaCP?.fornecedor?.toLowerCase().includes(termo);
                             
           return origemMatch && textMatch;
       });
@@ -162,20 +169,25 @@ const ContasPagar: React.FC = () => {
       setParcelas(fetchedParcelas);
     }
     setLoading(false);
-  }, [proprietarioId, isSupervisao, filtroPeriodo, filtroStatus, filtroOrigem, filtroTextoDebounced]);
+  }, [proprietarioId, isAdmin, filtroPeriodo, filtroStatus, filtroOrigem, filtroTextoDebounced]);
   
   const fetchPagamentos = useCallback(async () => {
-    if (!proprietarioId || !isSupervisao) return;
+    if (!proprietarioId) return;
     setLoading(true);
     
-    let query = supabase.from('admin_pagamentos').select(`
+    const tabelaPagamentosCP = isAdmin ? 'admin_pagamentos' : 'pagamentos_contas_pagar';
+    const tabelaParcelasCP = isAdmin ? 'admin_parcelas_pagar' : 'parcelas_contas_pagar';
+    const tabelaContasCP = isAdmin ? 'admin_contas_pagar' : 'contas_pagar';
+    const ownerKey = isAdmin ? 'admin_id' : 'empresa_id';
+    
+    let query = supabase.from(tabelaPagamentosCP).select(`
         *,
         saldo_contas ( nome ),
-        admin_parcelas_pagar (
+        ${tabelaParcelasCP} (
             numero_parcela,
-            admin_contas_pagar ( id, descricao, origem, fornecedor )
+            ${tabelaContasCP} ( id, ${isAdmin ? 'descricao' : 'Descricao'}, origem, fornecedor )
         )
-    `).eq('admin_id', proprietarioId);
+    `).eq(ownerKey, proprietarioId);
     
     // Aplica filtros de período
     if (filtroPeriodo?.from) {
@@ -191,19 +203,25 @@ const ContasPagar: React.FC = () => {
       showError('Erro ao carregar pagamentos: ' + error.message);
       setPagamentos([]);
     } else {
-      let fetchedPagamentos = data as any[];
+      let fetchedPagamentos = (data || []).map((p: any) => ({
+          ...p,
+          admin_parcelas_pagar: p[tabelaParcelasCP] || p.admin_parcelas_pagar,
+      })) as any[];
       
       // Filtragem de origem e texto no frontend
       fetchedPagamentos = fetchedPagamentos.filter(p => {
-          const origemMatch = filtroOrigem === 'todos' || p.admin_parcelas_pagar?.admin_contas_pagar?.origem === filtroOrigem;
+          const parcelaCP = p.admin_parcelas_pagar || p.parcelas_contas_pagar;
+          const contaCP = parcelaCP?.[tabelaContasCP] || parcelaCP?.admin_contas_pagar || parcelaCP?.contas_pagar;
+          const origemMatch = filtroOrigem === 'todos' || contaCP?.origem === filtroOrigem;
           
           const termo = filtroTextoDebounced.toLowerCase();
-          const contaPagarId = p.admin_parcelas_pagar?.admin_contas_pagar?.id || '';
+          const contaPagarId = contaCP?.id || '';
+          const descricao = contaCP?.descricao || contaCP?.Descricao || '';
           const textMatch = !termo || 
                             p.id.toLowerCase().includes(termo) ||
                             contaPagarId.toLowerCase().includes(termo) ||
-                            p.admin_parcelas_pagar?.admin_contas_pagar?.descricao.toLowerCase().includes(termo) ||
-                            p.admin_parcelas_pagar?.admin_contas_pagar?.fornecedor.toLowerCase().includes(termo);
+                            descricao.toLowerCase().includes(termo) ||
+                            contaCP?.fornecedor?.toLowerCase().includes(termo);
                             
           return origemMatch && textMatch;
       });
@@ -211,7 +229,7 @@ const ContasPagar: React.FC = () => {
       setPagamentos(fetchedPagamentos);
     }
     setLoading(false);
-  }, [proprietarioId, isSupervisao, filtroPeriodo, filtroOrigem, filtroTextoDebounced]);
+  }, [proprietarioId, isAdmin, filtroPeriodo, filtroOrigem, filtroTextoDebounced]);
 
   useEffect(() => {
     if (activeTab === 'sintetico') {
@@ -233,7 +251,7 @@ const ContasPagar: React.FC = () => {
           const total = ((conta as ContaPagarComProgresso).parcelas_total ?? 0);
           const pagas = ((conta as ContaPagarComProgresso).parcelas_pagas ?? 0);
 
-          const isPago = isSupervisao 
+          const isPago = isAdmin 
               ? pagas === total && total > 0
               : conta.status === 'pago';
               
@@ -254,7 +272,7 @@ const ContasPagar: React.FC = () => {
       }
       
       return filtered;
-  }, [contasRaw, filtroStatus, filtroTextoDebounced, isSupervisao]);
+  }, [contasRaw, filtroStatus, filtroTextoDebounced, isAdmin]);
   // -----------------------------------------------
 
 
@@ -277,18 +295,19 @@ const ContasPagar: React.FC = () => {
   const handleDelete = async (id: string) => {
     if (!proprietarioId) return;
     
-    const tabela = isSupervisao ? 'admin_contas_pagar' : 'contas_pagar';
+    const tabela = isAdmin ? 'admin_contas_pagar' : 'contas_pagar';
+    const campoDescricao = isAdmin ? 'descricao' : 'Descricao';
     
     try {
       // 1. Buscar a descrição da conta sintética antes de deletar
       const { data: contaToDelete, error: fetchError } = await supabase
           .from(tabela)
-          .select('descricao')
+          .select(campoDescricao)
           .eq('id', id)
           .single();
           
       if (fetchError) throw fetchError;
-      const descricaoBusca = contaToDelete?.descricao || '';
+      const descricaoBusca = (contaToDelete as any)?.[campoDescricao] || '';
       
       // 2. Deletar todos os Lançamentos (Entrada/Saída) relacionados a esta conta sintética
       if (descricaoBusca) {
@@ -316,8 +335,8 @@ const ContasPagar: React.FC = () => {
   };
   
   const totalSintetico = useMemo(() => {
-    return contas.reduce((sum, conta) => sum + (isSupervisao ? (conta as ContaPagarComProgresso).valor_total : (conta as ContaPagar).valor), 0);
-  }, [contas, isSupervisao]);
+    return contas.reduce((sum, conta) => sum + ((conta as any).valor_total || (conta as any).valor || 0), 0);
+  }, [contas]);
   
   const totalParcelas = useMemo(() => {
     return parcelas.reduce((sum, parcela) => sum + parcela.valor_parcela, 0);
@@ -339,17 +358,17 @@ const ContasPagar: React.FC = () => {
   return (
     <LayoutPrincipal>
       <div className="space-y-6">
-        <h1 className="text-3xl font-bold">Contas a Pagar {isSupervisao && '(Admin)'}</h1>
+        <h1 className="text-3xl font-bold">Contas a Pagar {isAdmin && '(Admin)'}</h1>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
           <TabsList>
             <TabsTrigger value="sintetico">Sintético</TabsTrigger>
-            {isSupervisao && <TabsTrigger value="parcelas">Parcelas</TabsTrigger>}
-            {isSupervisao && <TabsTrigger value="pagamentos">Pagamentos</TabsTrigger>}
+            {isAdmin && <TabsTrigger value="parcelas">Parcelas</TabsTrigger>}
+            {isAdmin && <TabsTrigger value="pagamentos">Pagamentos</TabsTrigger>}
           </TabsList>
 
           <ContasPagarHeader
-              isSupervisao={isSupervisao}
+              isAdmin={isAdmin}
               filtroOrigem={filtroOrigem}
               setFiltroOrigem={setFiltroOrigem}
               filtroStatus={filtroStatus}
@@ -370,7 +389,7 @@ const ContasPagar: React.FC = () => {
               <SinteticoTab
                   loading={loading}
                   contas={contas}
-                  isSupervisao={isSupervisao}
+                  isAdmin={isAdmin}
                   handleOpenDetalhes={handleOpenDetalhes}
                   handleOpenForm={handleOpenForm}
                   handleDelete={handleDelete}
@@ -380,7 +399,7 @@ const ContasPagar: React.FC = () => {
               />
           </TabsContent>
 
-          {isSupervisao && (
+          {isAdmin && (
               <TabsContent value="parcelas" className="space-y-4">
                   <ParcelasTab
                       loading={loading}
@@ -395,7 +414,7 @@ const ContasPagar: React.FC = () => {
               </TabsContent>
           )}
           
-          {isSupervisao && (
+          {isAdmin && (
               <TabsContent value="pagamentos" className="space-y-4">
                   <PagamentosTab
                       loading={loading}

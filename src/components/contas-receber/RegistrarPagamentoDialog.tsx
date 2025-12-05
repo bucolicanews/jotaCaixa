@@ -93,12 +93,15 @@ export async function saveRecebimentoAndLancamentos({
     const saldoRestanteCalculado = parcela.valor_parcela - novoValorPagoTotal;
     const quitouComPagamentoAtual = novoValorPagoTotal >= parcela.valor_parcela;
     
-    // Contas Contábeis Mapeadas (apenas Admin)
-    const [configCR] = await Promise.all([
-        isAdmin ? supabase.from('configuracao_contas_receber').select('tipo_registro, conta_contabil_id').eq('proprietario_id', proprietarioDaSessao) : Promise.resolve({ data: [], error: null }),
-    ]);
+    // Contas Contábeis Mapeadas (Admin e Cliente)
+    const { data: configCRData, error: configCRError } = await supabase
+        .from('configuracao_contas_receber')
+        .select('tipo_registro, conta_contabil_id')
+        .eq('proprietario_id', proprietarioDaSessao);
     
-    const configMap = (configCR.data || []).reduce((acc, item) => { acc[item.tipo_registro] = item.conta_contabil_id; return acc; }, {} as Record<string, string | null>);
+    if (configCRError) console.warn('Aviso: Erro ao buscar configuração de CR:', configCRError);
+    
+    const configMap = (configCRData || []).reduce((acc, item) => { acc[item.tipo_registro] = item.conta_contabil_id; return acc; }, {} as Record<string, string | null>);
     
     const contaRecebimento = configMap['recebimento'];
     const contaParcela = configMap['parcela'];
@@ -178,7 +181,7 @@ export async function saveRecebimentoAndLancamentos({
             status: 'paga',
             valor_pago: novoValorPagoTotal,
             data_pagamento: format(dataPagamento, 'yyyy-MM-dd'),
-            ...(isAdmin && { id_conta_contabil: contaParcela })
+            ...(contaParcela && { id_conta_contabil: contaParcela })
         }).eq('id', parcela.id);
     } else { // Pagamento parcial
         if (values.acao_saldo_restante === 'desconto') {
@@ -187,48 +190,56 @@ export async function saveRecebimentoAndLancamentos({
             valor_pago: novoValorPagoTotal,
             data_pagamento: format(dataPagamento, 'yyyy-MM-dd'),
             observacao: `Recebido R$ ${valorRecebido.toFixed(2)} com R$ ${saldoRestanteCalculado.toFixed(2)} de desconto. ${values.observacao || ''}`,
-            ...(isAdmin && { id_conta_contabil: contaParcela })
+            ...(contaParcela && { id_conta_contabil: contaParcela })
           }).eq('id', parcela.id);
           
           // LANÇAMENTO DE DESCONTO (DÉBITO na Despesa/Custo)
-          if (contaDesconto && values.conta_patrimonial_id) {
-              
-              // CRÍTICO: Geração de IDs e Referência Cruzada
-              const idDescontoDespesa = crypto.randomUUID();
-              const idDescontoPatrimonial = crypto.randomUUID();
-              
-              // Lançamento 1: D: Despesa (Desconto Concedido) - ENTRADA (Aumenta Despesa Credora)
-              const lancamentoDescontoPayload = {
-                  id: idDescontoDespesa,
-                  proprietario_id: proprietarioDaSessao,
-                  data_movimentacao: dataPagamentoISO,
-                  descricao: `Desconto Concedido: ${descricaoContaSintetica} (CR ID: ${parcela.conta_receber_id.substring(0, 8)})`,
-                  valor: saldoRestanteCalculado,
-                  tipo: 'Entrada' as const, // DÉBITO (Aumenta Despesa Credora)
-                  conta_bancaria_id: null,
-                  conta_contabil_id: contaDesconto, // Conta de Desconto (Despesa)
-                  origem: 'recebimento_manual',
-                  historico_id: values.historico_id,
-                  conta_resultado_id: idDescontoPatrimonial, // REFERÊNCIA CRUZADA
-              };
-              lancamentosPayload.push(lancamentoDescontoPayload);
-              
-              // Lançamento 2: C: Ativo (Direito a Receber) - SAÍDA (Diminui Ativo Devedor)
-              const lancamentoPatrimonialPayload = {
-                  id: idDescontoPatrimonial,
-                  proprietario_id: proprietarioDaSessao,
-                  data_movimentacao: dataPagamentoISO,
-                  descricao: `Estorno Patrimonial Desconto CR: ${descricaoContaSintetica} (CR ID: ${parcela.conta_receber_id.substring(0, 8)})`,
-                  valor: saldoRestanteCalculado,
-                  tipo: 'Saida' as const, // CRÉDITO (Diminui Ativo Devedor)
-                  conta_bancaria_id: null,
-                  conta_contabil_id: values.conta_patrimonial_id, // Conta Patrimonial (1.x.x)
-                  historico_id: values.historico_id,
-                  origem: 'recebimento_manual',
-                  conta_resultado_id: idDescontoDespesa, // REFERÊNCIA CRUZADA
-              };
-              lancamentosPayload.push(lancamentoPatrimonialPayload);
+          // Validação: Se tentar dar desconto sem conta configurada, lança erro
+          if (!contaDesconto) {
+              console.warn('Aviso: Conta de Desconto Concedido não configurada. Configure em Configurações > Contas a Receber.');
+              throw new Error('Conta de Desconto Concedido não configurada. Configure em Configurações > Contas a Receber antes de conceder descontos.');
           }
+          
+          if (!values.conta_patrimonial_id) {
+              console.warn('Aviso: Conta Patrimonial (Clientes a Receber) não selecionada.');
+              throw new Error('Selecione a Conta Patrimonial (Clientes a Receber) para registrar o desconto.');
+          }
+          
+          // CRÍTICO: Geração de IDs e Referência Cruzada
+          const idDescontoDespesa = crypto.randomUUID();
+          const idDescontoPatrimonial = crypto.randomUUID();
+          
+          // Lançamento 1: D: Despesa (Desconto Concedido) - ENTRADA (Aumenta Despesa Credora)
+          const lancamentoDescontoPayload = {
+              id: idDescontoDespesa,
+              proprietario_id: proprietarioDaSessao,
+              data_movimentacao: dataPagamentoISO,
+              descricao: `Desconto Concedido: ${descricaoContaSintetica} (CR ID: ${parcela.conta_receber_id.substring(0, 8)})`,
+              valor: saldoRestanteCalculado,
+              tipo: 'Entrada' as const, // DÉBITO (Aumenta Despesa Credora)
+              conta_bancaria_id: null,
+              conta_contabil_id: contaDesconto, // Conta de Desconto (Despesa)
+              origem: 'recebimento_manual',
+              historico_id: values.historico_id,
+              conta_resultado_id: idDescontoPatrimonial, // REFERÊNCIA CRUZADA
+          };
+          lancamentosPayload.push(lancamentoDescontoPayload);
+          
+          // Lançamento 2: C: Ativo (Direito a Receber) - SAÍDA (Diminui Ativo Devedor)
+          const lancamentoPatrimonialDescontoPayload = {
+              id: idDescontoPatrimonial,
+              proprietario_id: proprietarioDaSessao,
+              data_movimentacao: dataPagamentoISO,
+              descricao: `Estorno Patrimonial Desconto CR: ${descricaoContaSintetica} (CR ID: ${parcela.conta_receber_id.substring(0, 8)})`,
+              valor: saldoRestanteCalculado,
+              tipo: 'Saida' as const, // CRÉDITO (Diminui Ativo Devedor)
+              conta_bancaria_id: null,
+              conta_contabil_id: values.conta_patrimonial_id, // Conta Patrimonial (1.x.x)
+              historico_id: values.historico_id,
+              origem: 'recebimento_manual',
+              conta_resultado_id: idDescontoDespesa, // REFERÊNCIA CRUZADA
+          };
+          lancamentosPayload.push(lancamentoPatrimonialDescontoPayload);
           
         } else if (values.acao_saldo_restante === 'reprogramar' || values.acao_saldo_restante === 'parcelar') {
           await supabase.from(tabelaParcelas).update({
@@ -236,10 +247,12 @@ export async function saveRecebimentoAndLancamentos({
             valor_pago: novoValorPagoTotal,
             data_pagamento: format(dataPagamento, 'yyyy-MM-dd'),
             observacao: `Recebido R$ ${valorRecebido.toFixed(2)}. Saldo de R$ ${saldoRestanteCalculado.toFixed(2)} ${values.acao_saldo_restante === 'reprogramar' ? 'reprogramado' : 'parcelado'}. ${values.observacao || ''}`,
-            ...(isAdmin && { id_conta_contabil: contaParcela })
+            ...(contaParcela && { id_conta_contabil: contaParcela })
           }).eq('id', parcela.id);
 
-          const baseParcelaPayload = isAdmin ? { admin_id: proprietarioDaSessao, id_conta_contabil: contaParcela } : { empresa_id: proprietarioDaSessao };
+          const baseParcelaPayload = isAdmin 
+            ? { admin_id: proprietarioDaSessao, ...(contaParcela && { id_conta_contabil: contaParcela }) } 
+            : { empresa_id: proprietarioDaSessao, ...(contaParcela && { id_conta_contabil: contaParcela }) };
           
           if (values.acao_saldo_restante === 'reprogramar') {
             await supabase.from(tabelaParcelas).insert({
@@ -266,7 +279,7 @@ export async function saveRecebimentoAndLancamentos({
             await supabase.from(tabelaParcelas).update({
                 status: 'parcial',
                 valor_pago: novoValorPagoTotal,
-                ...(isAdmin && { id_conta_contabil: contaParcela })
+                ...(contaParcela && { id_conta_contabil: contaParcela })
             }).eq('id', parcela.id);
         }
     }
@@ -326,13 +339,19 @@ export async function saveRecebimentoAndLancamentos({
     const { error: lancamentoError } = await supabase.from('lancamentos').insert(lancamentosPayload);
     if (lancamentoError) throw lancamentoError;
     
-    // 7. Salvar Histórico Padrão (se marcado)
-    if (isAdmin && values.salvar_como_padrao && values.historico_id) {
-        await supabase.from('configuracao_historico_padrao').upsert({
+    // 7. Salvar Histórico Padrão (se marcado) - Delete + Insert para evitar conflito
+    if (values.salvar_como_padrao && values.historico_id) {
+        await supabase
+            .from('configuracao_historico_padrao')
+            .delete()
+            .eq('proprietario_id', proprietarioDaSessao)
+            .eq('tipo_registro', 'recebimento_padrao');
+            
+        await supabase.from('configuracao_historico_padrao').insert({
             proprietario_id: proprietarioDaSessao,
             tipo_registro: 'recebimento_padrao',
             historico_id: values.historico_id,
-        }, { onConflict: 'proprietario_id, tipo_registro' });
+        });
     }
 }
 

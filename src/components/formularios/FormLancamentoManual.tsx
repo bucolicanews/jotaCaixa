@@ -193,8 +193,6 @@ const FormLancamentoManual: React.FC<FormLancamentoManualProps> = ({ onSaveCompl
   if (loadingData) {
     return <div className="flex justify-center items-center h-40"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>;
   }
-  
-  const isFormValid = form.formState.isValid;
 
   return (
     <Form {...form}>
@@ -333,7 +331,7 @@ const FormLancamentoManual: React.FC<FormLancamentoManualProps> = ({ onSaveCompl
             </FormItem>
         )} />
         
-        <Button type="submit" className="w-full" disabled={isSubmitting || !isFormValid}>
+        <Button type="submit" className="w-full" disabled={isSubmitting}>
           {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           <Save className="mr-2 h-4 w-4" /> Registrar Lançamento
         </Button>

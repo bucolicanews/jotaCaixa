@@ -41,7 +41,7 @@ interface ContaBalanco {
 const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ endDate, filtroSomenteComSaldo, logoUrl, ownerName }) => {
   const { perfil, role } = useSessao();
   const { configMap } = useContabilConfig(); // Obtendo o mapeamento
-  const { contas, totalAtivo, totalPassivo, totalPatrimonioLiquido, resultadoLiquido, totalPassivoPL, carregando, totalReceita, totalCusto, totalDespesa } = useBalancoPatrimonial(endDate);
+  const { contas, totalAtivo, totalPassivo, totalPatrimonioLiquido, resultadoLiquido, totalPassivoPL, carregando } = useBalancoPatrimonial(endDate);
   const { printContent } = usePrint();
   
   const empresaNome = ownerName; // USANDO O NOME PASSADO VIA PROP
@@ -114,9 +114,8 @@ const BalancoPatrimonialDetalhe: React.FC<BalancoPatrimonialDetalheProps> = ({ e
   // NOVO FILTRO: Apenas contas de PL (usa o código configurado)
   const getContasPL = () => {
       const plCode = configMap['Patrimonio Liquido'] || '3';
-      // Contas de PL são as contas que começam com o código de PL E NÃO são Resultado
-      const plContas = contas.filter(c => c.Conta.startsWith(plCode) && !c.is_conta_resultado);
-      return filterAndIncludeParents(plContas, plCode);
+      const plContas = contasFiltradas.filter(c => c.Conta.startsWith(plCode) && !c.is_conta_resultado);
+      return plContas;
   };
   
   const renderContas = (contasList: ContaBalanco[]) => {

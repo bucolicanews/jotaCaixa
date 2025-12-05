@@ -33,8 +33,7 @@ export function useContabilConfig(): ContabilConfigHook {
   const [refreshKey, setRefreshKey] = useState(0);
 
   const getOwnerId = () => {
-    if (role === 'Admin') return usuario?.id || null;
-    if (role === 'Cliente') return (perfil as ClienteProfile)?.id || null;
+    if (role === 'Admin' || role === 'Cliente') return usuario?.id || null;
     if (role === 'Usuario') {
       const user = perfil as any;
       if (user?.admin_id) return user.admin_id;

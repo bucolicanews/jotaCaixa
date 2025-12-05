@@ -39,6 +39,15 @@ const getBadgeVariant = (status: ParcelaStatus, dataVencimento: string): BadgeVa
 
 type FiltroOrigem = 'todos' | 'contrato' | 'assinatura_recorrente' | 'manual';
 
+interface ParcelaParaPagamento {
+  id: string;
+  conta_receber_id: string;
+  empresa_id: string;
+  valor_parcela: number;
+  valor_pago: number;
+  cliente_id: string | null;
+}
+
 
 const ContasReceber = () => {
   const { usuario, perfil, role, carregando: carregandoSessao } = useSessao();
@@ -64,8 +73,8 @@ const ContasReceber = () => {
   
   const getOwnerId = () => {
     if (isAdmin) return usuario?.id || null;
-    if (role === 'Cliente') return (perfil as ClienteProfile)?.id || null;
-    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id || null; // FIX: proprietario_id -> cliente_id
+    if (role === 'Cliente') return usuario?.id || null;
+    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id || null;
     return null;
   };
   
@@ -81,12 +90,13 @@ const ContasReceber = () => {
     
     const tabelaContasReceber = isAdmin ? 'admin_contas_receber' : 'contas_receber';
     const tabelaParcelasReceber = isAdmin ? 'admin_parcelas_receber' : 'parcelas_contas_receber';
+    const tabelaClientes = isAdmin ? 'tbl_clientes' : 'clientes';
     const ownerKey = isAdmin ? 'admin_id' : 'empresa_id';
     
-    // --- 1. Buscar Contas Sintéticas ---
+    // --- 1. Buscar Contas Sintéticas (sem JOIN automático para evitar ambiguidade) ---
     let contasQuery = supabase
         .from(tabelaContasReceber)
-        .select(`*, clientes:cliente_id(nome)`)
+        .select(`*`)
         .eq(ownerKey, ownerId)
         .order('data_vencimento', { ascending: true });
         
@@ -108,7 +118,7 @@ const ContasReceber = () => {
     const [contasRes, parcelasRes, recebimentosRes] = await Promise.all([
       contasQuery,
       
-      // --- 2. Buscar Parcelas (Analítico) ---
+      // --- 2. Buscar Parcelas (Analítico) - Sem JOIN automático de clientes ---
       supabase
         .from(tabelaParcelasReceber)
         .select(`
@@ -117,7 +127,6 @@ const ContasReceber = () => {
             id,
             descricao,
             cliente_id,
-            clientes:cliente_id ( nome ),
             origem
           )
         `)
@@ -141,21 +150,36 @@ const ContasReceber = () => {
         : Promise.resolve({ data: [], error: null }),
     ]);
 
-    if (contasRes.error) showError('Erro ao carregar contas: ' + contasRes.error.message);
-    else {
-        let fetchedContas = contasRes.data as ContaReceberComProgresso[];
-        let fetchedParcelas = parcelasRes.data as unknown as ExtendedParcelaDetalhada[];
+    if (contasRes.error) {
+        showError('Erro ao carregar contas: ' + contasRes.error.message);
+        setCarregandoDados(false);
+        return;
+    }
+    
+    if (parcelasRes.error) {
+        showError('Erro ao carregar parcelas: ' + parcelasRes.error.message);
+        setCarregandoDados(false);
+        return;
+    }
+    
+    let fetchedContas = contasRes.data as ContaReceberComProgresso[];
+    let fetchedParcelas = parcelasRes.data as unknown as ExtendedParcelaDetalhada[];
         
-        // --- Buscar nomes dos clientes da tabela 'clientes' ---
-        const clienteIds = fetchedContas.map(c => c.cliente_id).filter(Boolean);
+        // --- Buscar nomes dos clientes da tabela correta (tbl_clientes para admin, clientes para cliente) ---
+        const clienteIds = [...new Set([
+            ...fetchedContas.map(c => c.cliente_id).filter(Boolean),
+            ...fetchedParcelas.map(p => p.contas_receber?.cliente_id).filter(Boolean)
+        ])];
+        
+        let clienteMap: Record<string, string> = {};
         if (clienteIds.length > 0) {
             const { data: clientesData } = await supabase
-                .from('clientes')
+                .from(tabelaClientes)
                 .select('id, nome')
                 .in('id', clienteIds);
                 
             if (clientesData) {
-                const clienteMap = clientesData.reduce((acc, c) => {
+                clienteMap = clientesData.reduce((acc, c) => {
                     acc[c.id] = c.nome;
                     return acc;
                 }, {} as Record<string, string>);
@@ -164,8 +188,19 @@ const ContasReceber = () => {
                 fetchedContas = fetchedContas.map(conta => ({
                     ...conta,
                     clientes: conta.cliente_id && clienteMap[conta.cliente_id] 
-                        ? { nome: clienteMap[conta.cliente_id] } 
+                        ? { nome: clienteMap[conta.cliente_id] } as any
                         : conta.clientes
+                }));
+                
+                // Merge dos nomes dos clientes nas parcelas
+                fetchedParcelas = fetchedParcelas.map(parcela => ({
+                    ...parcela,
+                    contas_receber: parcela.contas_receber ? {
+                        ...parcela.contas_receber,
+                        clientes: parcela.contas_receber.cliente_id && clienteMap[parcela.contas_receber.cliente_id]
+                            ? { nome: clienteMap[parcela.contas_receber.cliente_id] }
+                            : null
+                    } : null
                 }));
             }
         }
@@ -196,9 +231,8 @@ const ContasReceber = () => {
             );
         }
         
-        setContas(fetchedContas);
-        setParcelas(fetchedParcelas);
-    }
+    setContas(fetchedContas);
+    setParcelas(fetchedParcelas);
     
     if (isAdmin && recebimentosRes.data) {
         setRecebimentos(recebimentosRes.data as AdminRecebimento[]);

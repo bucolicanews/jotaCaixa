@@ -106,25 +106,22 @@ export const useBalancoPatrimonial = (dataFim: Date | null): BalancoPatrimonialH
         });
     };
     
-    // Filter only relevant accounts (Patrimonial, Result, and Caixa/Banco)
-    const contasRelevantes = contas.filter(c => 
-        c.is_conta_patrimonial || c.is_conta_resultado || c.is_conta_caixa_banco
-    );
-    
-    return mapContas(contasRelevantes);
+    // Processa TODAS as contas - o tipo_principal é determinado pelo prefixo
+    return mapContas(contas);
   }, [calcularSaldo, configMap]);
 
   const fetchBalanco = useCallback(async () => {
-    if (!usuario?.id || !dataFim) return;
+    if (!usuario?.id || !dataFim) {
+      return;
+    }
 
     setLoading(true);
     
-    // 1. Buscar todas as contas relevantes (Patrimonial, Resultado E Caixa/Banco)
+    // 1. Buscar TODAS as contas do plano de contas do proprietário
     const { data: contasData, error: contasError } = await supabase
         .from('plano_contas')
         .select('*')
         .eq('proprietario_id', usuario.id)
-        .or('is_conta_patrimonial.eq.true,is_conta_resultado.eq.true,is_conta_caixa_banco.eq.true')
         .order('Conta');
 
     if (contasError) {
@@ -159,7 +156,6 @@ export const useBalancoPatrimonial = (dataFim: Date | null): BalancoPatrimonialH
     
     const saldosIniciaisMap: SaldoInicialMap = (saldosIniciaisData || []).reduce((acc, s) => {
         if (s.conta_contabil_id) {
-            // Se houver múltiplas entradas em saldo_contas para a mesma conta contábil, soma os saldos iniciais
             acc[s.conta_contabil_id] = (acc[s.conta_contabil_id] || 0) + s.saldo_inicial;
         }
         return acc;

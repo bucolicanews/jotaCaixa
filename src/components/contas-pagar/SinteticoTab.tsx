@@ -62,8 +62,8 @@ const SinteticoTab: React.FC<SinteticoTabProps> = ({
                                         <TableCell>{formatarData(conta.data_vencimento)}</TableCell>
                                         {isSupervisao && <TableCell className="text-sm text-muted-foreground">{(conta as unknown as ContaPagarComProgresso).admin_id || 'Admin'}</TableCell>}
                                         <TableCell className="font-medium">{conta.fornecedor}</TableCell>
-                                        <TableCell>{isSupervisao ? (conta as ContaPagarComProgresso).descricao : (conta as ContaPagar).documento || 'N/A'}</TableCell>
-                                        <TableCell className="text-right font-semibold">{formatCurrency(isSupervisao ? (conta as ContaPagarComProgresso).valor_total : (conta as ContaPagar).valor)}</TableCell>
+                                        <TableCell>{isSupervisao ? (conta as ContaPagarComProgresso).descricao : ((conta as any).Descricao || (conta as any).descricao || 'N/A')}</TableCell>
+                                        <TableCell className="text-right font-semibold">{formatCurrency((conta as any).valor_total || (conta as ContaPagar).valor || 0)}</TableCell>
                                         {isSupervisao && (
                                             <TableCell>
                                                 {`${(conta as ContaPagarComProgresso).parcelas_pagas || 0} / ${(conta as ContaPagarComProgresso).parcelas_total || 0}`}

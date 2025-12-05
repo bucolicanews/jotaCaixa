@@ -23,15 +23,18 @@ interface DetalhesParcelasCPDialogProps {
 }
 
 const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ conta, open, onOpenChange, onDataChange }) => {
-  const { usuario } = useSessao();
+  const { usuario, role } = useSessao();
   const [parcelas, setParcelas] = useState<ExtendedParcelaPagar[]>([]);
   const [loading, setLoading] = useState(false);
   const [isUndoing, setIsUndoing] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [pagamentoDialog, setPagamentoDialog] = useState<{ open: boolean, parcela: (AdminParcelaPagar & { fornecedor: string }) | null }>({ open: false, parcela: null });
 
-  const tabelaContasPagar = 'admin_contas_pagar';
-  const tabelaParcelas = 'admin_parcelas_pagar';
+  const isAdmin = role === 'Admin';
+  const tabelaContasPagar = isAdmin ? 'admin_contas_pagar' : 'contas_pagar';
+  const tabelaParcelas = isAdmin ? 'admin_parcelas_pagar' : 'parcelas_contas_pagar';
+  const tabelaPagamentos = isAdmin ? 'admin_pagamentos' : 'pagamentos_contas_pagar';
+  const joinTable = isAdmin ? 'admin_contas_pagar' : 'contas_pagar';
 
   const fetchParcelas = useCallback(async () => {
     if (!usuario?.id) return;
@@ -41,7 +44,7 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
         .from(tabelaParcelas)
         .select(`
             *,
-            admin_contas_pagar ( fornecedor, descricao, origem )
+            ${joinTable} ( fornecedor, descricao, origem )
         `)
         .eq('conta_pagar_id', conta.id)
         .order('numero_parcela', { ascending: true });
@@ -50,10 +53,14 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
         showError('Erro ao carregar parcelas: ' + error.message);
         setParcelas([]);
     } else {
-        setParcelas(data as ExtendedParcelaPagar[]);
+        const mappedData = (data || []).map((p: any) => ({
+            ...p,
+            admin_contas_pagar: p[joinTable] || p.admin_contas_pagar,
+        }));
+        setParcelas(mappedData as ExtendedParcelaPagar[]);
     }
     setLoading(false);
-  }, [conta.id, usuario?.id]);
+  }, [conta.id, usuario?.id, tabelaParcelas, joinTable]);
   
   useEffect(() => {
     if (open) {
@@ -80,7 +87,7 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
       try {
           // 1. Verificar se há pagamentos associados
           const { count, error: countError } = await supabase
-              .from('admin_pagamentos')
+              .from(tabelaPagamentos)
               .select('id', { count: 'exact', head: true })
               .eq('parcela_id', parcelaId);
               
@@ -112,8 +119,6 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
   const handleUndoPayment = async (parcelaId: string) => {
     if (!usuario?.id) return;
     setIsUndoing(true);
-
-    const tabelaPagamentos = 'admin_pagamentos';
     
     try {
         // 1. Buscar a parcela para obter o valor pago e observação (para desconto)
