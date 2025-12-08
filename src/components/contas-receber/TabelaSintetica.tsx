@@ -42,7 +42,10 @@ const TabelaSintetica: React.FC<TabelaSinteticaProps> = ({
             displayStatus = 'quitada';
             statusVariant = 'success';
         } else {
+            // O componente usa `data_vencimento` que é string. Precisa de 'T00:00:00' para parsear corretamente.
             const vencimento = parseISO(conta.data_vencimento + 'T00:00:00');
+            
+            // Verifica se está no passado e não é hoje
             if (isPast(vencimento) && !isToday(vencimento)) {
                 statusVariant = 'destructive';
                 displayStatus = 'atrasada';
@@ -87,23 +90,50 @@ const TabelaSintetica: React.FC<TabelaSinteticaProps> = ({
                                     const pagas = conta.parcelas_pagas ?? 0;
                                     const progresso = total ? `${pagas}/${total}` : 'N/A';
                                     
+                                    // *** RESTRIÇÃO DE EDIÇÃO/EXCLUSÃO ***
+                                    // Desabilita se houver alguma parcela paga (pagas > 0)
+                                    const podeEditarOuExcluir = pagas === 0;
+
                                     const origemDisplay = conta.origem === 'assinatura_recorrente' ? 'Assinatura' : (conta.origem === 'contrato' ? 'Contrato' : 'Manual');
 
                                     return (
                                         <TableRow key={conta.id}>
                                             <TableCell className="text-left min-w-[120px]">
                                                 <div className="flex space-x-1">
-                                                    <Button variant="ghost" size="icon" onClick={() => handleOpenParcelas(conta)} title="Ver Parcelas"><ListChecks className="h-4 w-4" /></Button>
-                                                    <Button variant="ghost" size="icon" onClick={() => handleEdit(conta)} title="Editar Lançamento"><Edit className="h-4 w-4" /></Button>
+                                                    
+                                                    {/* Botão Ver Parcelas */}
+                                                    <Button variant="ghost" size="icon" onClick={() => handleOpenParcelas(conta)} title="Ver Parcelas">
+                                                        <ListChecks className="h-4 w-4" />
+                                                    </Button>
+
+                                                    {/* Botão Editar (Restrição Aplicada) */}
+                                                    <Button 
+                                                        variant="ghost" 
+                                                        size="icon" 
+                                                        onClick={() => handleEdit(conta)} 
+                                                        title={podeEditarOuExcluir ? "Editar Lançamento" : "Não é possível editar lançamentos com parcelas já recebidas."}
+                                                        disabled={!podeEditarOuExcluir}
+                                                    >
+                                                        <Edit className="h-4 w-4" />
+                                                    </Button>
+
+                                                    {/* Botão Excluir (Restrição Aplicada) */}
                                                     <AlertDialog>
                                                         <AlertDialogTrigger asChild>
-                                                            <Button variant="ghost" size="icon" title="Excluir Lançamento"><Trash2 className="w-4 h-4 text-red-500" /></Button>
+                                                            <Button 
+                                                                variant="ghost" 
+                                                                size="icon" 
+                                                                title={podeEditarOuExcluir ? "Excluir Lançamento" : "Não é possível excluir lançamentos com parcelas já recebidas."}
+                                                                disabled={!podeEditarOuExcluir}
+                                                            >
+                                                                <Trash2 className="w-4 h-4 text-red-500" />
+                                                            </Button>
                                                         </AlertDialogTrigger>
                                                         <AlertDialogContent>
                                                             <AlertDialogHeader>
                                                                 <AlertDialogTitle>Tem certeza?</AlertDialogTitle>
                                                                 <AlertDialogDescription>
-                                                                    Esta ação não pode ser desfeita. Isso excluirá permanentemente esta conta a receber.
+                                                                    Esta ação não pode ser desfeita. Isso excluirá permanentemente esta conta a receber e todas as parcelas não recebidas vinculadas.
                                                                 </AlertDialogDescription>
                                                             </AlertDialogHeader>
                                                             <AlertDialogFooter>

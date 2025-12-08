@@ -57,46 +57,74 @@ const SinteticoTab: React.FC<SinteticoTabProps> = ({
                             ) : contas.length === 0 ? (
                                 <TableRow><TableCell colSpan={isSupervisao ? 8 : 7} className="text-center">Nenhuma conta a pagar encontrada no período.</TableCell></TableRow>
                             ) : (
-                                contas.map((conta) => (
-                                    <TableRow key={conta.id}>
-                                        <TableCell>{formatarData(conta.data_vencimento)}</TableCell>
-                                        {isSupervisao && <TableCell className="text-sm text-muted-foreground">{(conta as unknown as ContaPagarComProgresso).admin_id || 'Admin'}</TableCell>}
-                                        <TableCell className="font-medium">{conta.fornecedor}</TableCell>
-                                        <TableCell>{isSupervisao ? (conta as ContaPagarComProgresso).descricao : ((conta as any).descricao || 'N/A')}</TableCell>
-                                        <TableCell className="text-right font-semibold">{formatCurrency((conta as any).valor_total || (conta as ContaPagar).valor || 0)}</TableCell>
-                                        <TableCell className="text-sm text-muted-foreground">
-                                            {`${(conta as ContaPagarComProgresso).parcelas_pagas || 0} / ${(conta as ContaPagarComProgresso).parcelas_total || 0}`}
-                                        </TableCell>
-                                        <TableCell>
-                                            <Badge variant={getBadgeVariant(conta.status as ContaStatus, conta.data_vencimento)}>
-                                                {conta.status}
-                                            </Badge>
-                                        </TableCell>
-                                        <TableCell className="text-right space-x-2">
-                                            <Button variant="outline" size="sm" onClick={() => handleOpenDetalhes(conta as ContaPagarComProgresso)}>
-                                                <Eye className="w-4 h-4" />
-                                            </Button>
-                                            <Button variant="outline" size="sm" onClick={() => handleOpenForm(conta as ContaPagarComProgresso)}>
-                                                <Edit className="w-4 h-4" />
-                                            </Button>
-                                            <AlertDialog>
-                                                <AlertDialogTrigger asChild>
-                                                    <Button variant="destructive" size="sm"><Trash2 className="w-4 h-4" /></Button>
-                                                </AlertDialogTrigger>
-                                                <AlertDialogContent>
-                                                    <AlertDialogHeader>
-                                                        <AlertDialogTitle>Tem certeza?</AlertDialogTitle>
-                                                        <AlertDialogDescription>Esta ação não pode ser desfeita. Isso excluirá permanentemente o lançamento.</AlertDialogDescription>
-                                                    </AlertDialogHeader>
-                                                    <AlertDialogFooter>
-                                                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                                        <AlertDialogAction onClick={() => handleDelete(conta.id)}>Excluir</AlertDialogAction>
-                                                    </AlertDialogFooter>
-                                                </AlertDialogContent>
-                                            </AlertDialog>
-                                        </TableCell>
-                                    </TableRow>
-                                ))
+                                contas.map((conta) => {
+                                    // Converta para ContaPagarComProgresso para acesso seguro às parcelas
+                                    const contaComProgresso = conta as ContaPagarComProgresso;
+
+                                    // RESTRIÇÃO: Não pode editar/excluir se já houver parcelas pagas (> 0)
+                                    const parcelasPagas = contaComProgresso.parcelas_pagas || 0;
+                                    const podeEditarOuExcluir = parcelasPagas === 0;
+
+                                    return (
+                                        <TableRow key={conta.id}>
+                                            <TableCell>{formatarData(conta.data_vencimento)}</TableCell>
+                                            {isSupervisao && <TableCell className="text-sm text-muted-foreground">{contaComProgresso.admin_id || 'Admin'}</TableCell>}
+                                            <TableCell className="font-medium">{conta.fornecedor}</TableCell>
+                                            <TableCell>{isSupervisao ? contaComProgresso.descricao : ((conta as any).descricao || 'N/A')}</TableCell>
+                                            <TableCell className="text-right font-semibold">{formatCurrency((conta as any).valor_total || contaComProgresso.valor || 0)}</TableCell>
+                                            <TableCell className="text-sm text-muted-foreground">
+                                                {`${parcelasPagas} / ${contaComProgresso.parcelas_total || 0}`}
+                                            </TableCell>
+                                            <TableCell>
+                                                <Badge variant={getBadgeVariant(conta.status as ContaStatus, conta.data_vencimento)}>
+                                                    {conta.status}
+                                                </Badge>
+                                            </TableCell>
+                                            <TableCell className="text-right space-x-2">
+                                                
+                                                {/* Botão Detalhes */}
+                                                <Button variant="outline" size="sm" onClick={() => handleOpenDetalhes(contaComProgresso)}>
+                                                    <Eye className="w-4 h-4" />
+                                                </Button>
+
+                                                {/* Botão Editar (Restrição aplicada) */}
+                                                <Button 
+                                                    variant="outline" 
+                                                    size="sm" 
+                                                    onClick={() => handleOpenForm(contaComProgresso)}
+                                                    disabled={!podeEditarOuExcluir}
+                                                    title={!podeEditarOuExcluir ? "Não é possível editar lançamentos com parcelas já pagas." : "Editar lançamento"}
+                                                >
+                                                    <Edit className="w-4 h-4" />
+                                                </Button>
+
+                                                {/* Botão Excluir (Restrição aplicada) */}
+                                                <AlertDialog>
+                                                    <AlertDialogTrigger asChild>
+                                                        <Button 
+                                                            variant="destructive" 
+                                                            size="sm"
+                                                            disabled={!podeEditarOuExcluir}
+                                                            title={!podeEditarOuExcluir ? "Não é possível excluir lançamentos com parcelas já pagas." : "Excluir lançamento"}
+                                                        >
+                                                            <Trash2 className="w-4 h-4" />
+                                                        </Button>
+                                                    </AlertDialogTrigger>
+                                                    <AlertDialogContent>
+                                                        <AlertDialogHeader>
+                                                            <AlertDialogTitle>Tem certeza?</AlertDialogTitle>
+                                                            <AlertDialogDescription>Esta ação não pode ser desfeita. Isso excluirá permanentemente o lançamento e todas as parcelas não pagas vinculadas.</AlertDialogDescription>
+                                                        </AlertDialogHeader>
+                                                        <AlertDialogFooter>
+                                                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                            <AlertDialogAction onClick={() => handleDelete(conta.id)}>Excluir</AlertDialogAction>
+                                                        </AlertDialogFooter>
+                                                    </AlertDialogContent>
+                                                </AlertDialog>
+                                            </TableCell>
+                                        </TableRow>
+                                    )
+                                })
                             )}
                         </TableBody>
                     </Table>

@@ -65,7 +65,7 @@ const ContasFuturasDialog: React.FC<ContasFuturasDialogProps> = ({ clienteId, op
   const [contaDebitoId, setContaDebitoId] = useState<string>('');
   const [contaCreditoId, setContaCreditoId] = useState<string>('');
   const [historicoId, setHistoricoId] = useState<string>('');
-
+  
   const contasDespesa = useMemo(() => {
     return contasAnaliticas.filter(c => c.is_conta_resultado && c.Conta.startsWith('5.'));
   }, [contasAnaliticas]);
@@ -255,6 +255,31 @@ const ContasFuturasDialog: React.FC<ContasFuturasDialogProps> = ({ clienteId, op
         setLancando(null);
         return;
       }
+
+
+      // *** INSERIR AQUI A ATUALIZAÇÃO DA CONTA A PAGAR ***
+      const { error: updateContaError } = await supabase
+        .from('contas_pagar')
+        .update({
+          historico_id: historicoId || null,
+          // Conta Patrimonial (Passivo) - Crédito
+          id_conta_patrimonial: contaCreditoId, 
+          // Conta de Resultado (Despesa) - Débito
+          id_conta_resultado: contaDebitoId, 
+        })
+        .eq('id', novaContaPagar.id);
+
+      if (updateContaError) {
+        showError('Erro ao mapear contas contábeis na conta a pagar: ' + updateContaError.message);
+        // Considere deletar a conta a pagar recém-criada e suas parcelas aqui em um cenário real.
+        setLancando(null);
+        return;
+      }
+      // ****************************************************
+
+
+
+
 
       const novasParcelas = parcelasParaLancar.map((parcela) => ({
         conta_pagar_id: novaContaPagar.id,
