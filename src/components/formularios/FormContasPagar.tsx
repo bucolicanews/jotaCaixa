@@ -277,7 +277,7 @@ const FormContasPagar: React.FC<FormContasPagarProps> = ({ contaInicial, onSaveC
       } : {
           empresa_id: proprietarioId,
           fornecedor: values.fornecedor,
-          Descricao: values.descricao,
+          descricao: values.descricao,
           valor_total: valorTotal,
           data_vencimento: parcelasParaInserir[0].data_vencimento,
           status: 'pendente',

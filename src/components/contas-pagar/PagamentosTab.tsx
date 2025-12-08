@@ -50,7 +50,7 @@ const PagamentosTab: React.FC<PagamentosTabProps> = ({
                                     pagamentos.map((p) => {
                                         const parcelaCP = p.admin_parcelas_pagar || p.parcelas_contas_pagar;
                                         const contaCP = parcelaCP?.admin_contas_pagar || parcelaCP?.contas_pagar;
-                                        const descricao = contaCP?.descricao || contaCP?.Descricao || 'N/A';
+                                        const descricao = contaCP?.descricao || 'N/A';
                                         
                                         return (
                                             <TableRow key={p.id}>

@@ -69,7 +69,7 @@ const ParcelasTab: React.FC<ParcelasTabProps> = ({
                                         const isPaga = p.status === 'paga';
                                         const contaCP = p.admin_contas_pagar || (p as any).contas_pagar;
                                         const fornecedor = contaCP?.fornecedor || 'N/A';
-                                        const descricao = contaCP?.descricao || contaCP?.Descricao || 'N/A';
+                                        const descricao = contaCP?.descricao || 'N/A';
                                         const origem = contaCP?.origem || 'manual';
                                         
                                         return (

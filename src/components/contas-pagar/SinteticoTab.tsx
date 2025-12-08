@@ -46,29 +46,27 @@ const SinteticoTab: React.FC<SinteticoTabProps> = ({
                                 <TableHead>Fornecedor</TableHead>
                                 <TableHead>Descrição</TableHead>
                                 <TableHead className="text-right">Valor Total</TableHead>
-                                {isSupervisao && <TableHead>Progresso</TableHead>}
+                                <TableHead>Progresso</TableHead>
                                 <TableHead>Status</TableHead>
                                 <TableHead className="text-right">Ações</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {loading ? (
-                                <TableRow><TableCell colSpan={isSupervisao ? 8 : 6} className="text-center">Carregando...</TableCell></TableRow>
+                                <TableRow><TableCell colSpan={isSupervisao ? 8 : 7} className="text-center">Carregando...</TableCell></TableRow>
                             ) : contas.length === 0 ? (
-                                <TableRow><TableCell colSpan={isSupervisao ? 8 : 6} className="text-center">Nenhuma conta a pagar encontrada no período.</TableCell></TableRow>
+                                <TableRow><TableCell colSpan={isSupervisao ? 8 : 7} className="text-center">Nenhuma conta a pagar encontrada no período.</TableCell></TableRow>
                             ) : (
                                 contas.map((conta) => (
                                     <TableRow key={conta.id}>
                                         <TableCell>{formatarData(conta.data_vencimento)}</TableCell>
                                         {isSupervisao && <TableCell className="text-sm text-muted-foreground">{(conta as unknown as ContaPagarComProgresso).admin_id || 'Admin'}</TableCell>}
                                         <TableCell className="font-medium">{conta.fornecedor}</TableCell>
-                                        <TableCell>{isSupervisao ? (conta as ContaPagarComProgresso).descricao : ((conta as any).Descricao || (conta as any).descricao || 'N/A')}</TableCell>
+                                        <TableCell>{isSupervisao ? (conta as ContaPagarComProgresso).descricao : ((conta as any).descricao || 'N/A')}</TableCell>
                                         <TableCell className="text-right font-semibold">{formatCurrency((conta as any).valor_total || (conta as ContaPagar).valor || 0)}</TableCell>
-                                        {isSupervisao && (
-                                            <TableCell>
-                                                {`${(conta as ContaPagarComProgresso).parcelas_pagas || 0} / ${(conta as ContaPagarComProgresso).parcelas_total || 0}`}
-                                            </TableCell>
-                                        )}
+                                        <TableCell className="text-sm text-muted-foreground">
+                                            {`${(conta as ContaPagarComProgresso).parcelas_pagas || 0} / ${(conta as ContaPagarComProgresso).parcelas_total || 0}`}
+                                        </TableCell>
                                         <TableCell>
                                             <Badge variant={getBadgeVariant(conta.status as ContaStatus, conta.data_vencimento)}>
                                                 {conta.status}

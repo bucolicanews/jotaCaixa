@@ -126,7 +126,7 @@ const ContasPagar: React.FC = () => {
     
     let query = supabase.from(tabelaParcelasCP).select(`
         *,
-        ${tabelaContasCP} ( id, fornecedor, origem, ${isAdmin ? 'descricao' : 'Descricao'} )
+        ${tabelaContasCP} ( id, fornecedor, origem, descricao )
     `).eq(ownerKey, proprietarioId);
     
     // Aplica filtros de período
@@ -162,7 +162,7 @@ const ContasPagar: React.FC = () => {
           
           const termo = filtroTextoDebounced.toLowerCase();
           const contaPagarId = contaCP?.id || '';
-          const descricao = contaCP?.descricao || contaCP?.Descricao || '';
+          const descricao = contaCP?.descricao || '';
           const textMatch = !termo || 
                             p.id.toLowerCase().includes(termo) ||
                             contaPagarId.toLowerCase().includes(termo) ||
@@ -185,15 +185,12 @@ const ContasPagar: React.FC = () => {
     const tabelaParcelasCP = isAdmin ? 'admin_parcelas_pagar' : 'parcelas_contas_pagar';
     const tabelaContasCP = isAdmin ? 'admin_contas_pagar' : 'contas_pagar';
     const ownerKey = isAdmin ? 'admin_id' : 'empresa_id';
-    const fkParcela = isAdmin ? 'parcela_pagar_id' : 'parcela_id';
-    const fkSaldoConta = isAdmin ? 'saldo_conta_id' : 'conta_id';
     
     let query = supabase.from(tabelaPagamentosCP).select(`
         *,
-        saldo_contas!${fkSaldoConta} ( nome ),
-        ${tabelaParcelasCP}!${fkParcela} (
+        ${tabelaParcelasCP}!parcela_id (
             numero_parcela,
-            ${tabelaContasCP} ( id, ${isAdmin ? 'descricao' : 'Descricao'}, origem, fornecedor )
+            ${tabelaContasCP} ( id, descricao, origem, fornecedor )
         )
     `).eq(ownerKey, proprietarioId);
     
@@ -211,9 +208,25 @@ const ContasPagar: React.FC = () => {
       showError('Erro ao carregar pagamentos: ' + error.message);
       setPagamentos([]);
     } else {
+      const saldoContasIds = [...new Set((data || []).map((p: any) => p.saldo_contas_id).filter(Boolean))];
+      let saldoContasMap: Record<string, string> = {};
+      
+      if (saldoContasIds.length > 0) {
+        const { data: saldoContasData } = await supabase
+          .from('saldo_contas')
+          .select('id, nome')
+          .in('id', saldoContasIds);
+        
+        saldoContasMap = (saldoContasData || []).reduce((acc: Record<string, string>, sc: any) => {
+          acc[sc.id] = sc.nome;
+          return acc;
+        }, {});
+      }
+      
       let fetchedPagamentos = (data || []).map((p: any) => ({
           ...p,
           admin_parcelas_pagar: p[tabelaParcelasCP] || p.admin_parcelas_pagar,
+          saldo_contas: { nome: saldoContasMap[p.saldo_contas_id] || 'N/A' },
       })) as any[];
       
       // Filtragem de origem e texto no frontend
@@ -224,7 +237,7 @@ const ContasPagar: React.FC = () => {
           
           const termo = filtroTextoDebounced.toLowerCase();
           const contaPagarId = contaCP?.id || '';
-          const descricao = contaCP?.descricao || contaCP?.Descricao || '';
+          const descricao = contaCP?.descricao || '';
           const textMatch = !termo || 
                             p.id.toLowerCase().includes(termo) ||
                             contaPagarId.toLowerCase().includes(termo) ||
@@ -352,7 +365,7 @@ const ContasPagar: React.FC = () => {
     
     const tabela = isAdmin ? 'admin_contas_pagar' : 'contas_pagar';
     const tabelaParcelas = isAdmin ? 'admin_parcelas_pagar' : 'parcelas_contas_pagar';
-    const campoDescricao = isAdmin ? 'descricao' : 'Descricao';
+    const campoDescricao = 'descricao';
     
     try {
       // 1. Verificar se existem parcelas vinculadas

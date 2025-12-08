@@ -42,7 +42,7 @@ const LancamentosManuaisTable: React.FC = () => {
                 historicos:historico_id ( codigo, descricao )
             `)
             .eq('proprietario_id', ownerId)
-            .eq('origem', 'lancamento_manual')
+            .not('conta_resultado_id', 'is', null)
             .order('data_movimentacao', { ascending: false });
             
         if (filtroTextoDebounced) {

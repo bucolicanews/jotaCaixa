@@ -576,12 +576,12 @@ export function useConciliacao(isBancoOnly: boolean = false): ConciliacaoHook {
                     id_saldo_contas: contaSelecionadaId,
                     data: formattedDate,
                     descricao: t.descricao,
-                    // Salva o valor com o sinal correto (como no extrato original)
                     valor: Number(Number(t.valor).toFixed(2)), 
                     tipo: t.tipo,
                     identificacao: t.identificacao || null,
                     conciliado: true,
                     conta_contabil_id: t.conta_contabil_id,
+                    status_mapeamento: 'pendente_mapeamento',
                 };
             });
             

@@ -124,7 +124,8 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
   const tabelaContasPagar = isAdmin ? 'admin_contas_pagar' : 'contas_pagar';
   const ownerKey = isAdmin ? 'admin_id' : 'empresa_id';
 
-  const proprietarioId = usuario?.id;
+  const empresaId = (parcela as any)?.empresa_id;
+  const proprietarioId = isAdmin ? usuario?.id : empresaId;
 
   const { contas: contasOrigem, carregando: loadingContas, refetch: refetchSaldos } = useSaldoContaCalculado('todos', 'todos', '', 'bancos', false);
 
@@ -307,9 +308,17 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
 
     const { data: contaSintetica, error: csError } = await supabase
       .from(tabelaContasPagar)
-      .select(`id_conta_patrimonial, ${isAdmin ? 'descricao' : 'Descricao'}, id_conta_resultado`)
+      .select(`id_conta_patrimonial, descricao, id_conta_resultado`)
       .eq('id', parcela.conta_pagar_id)
       .single();
+
+    console.log('🔍 Debug - Busca conta sintética:', {
+      tabela: tabelaContasPagar,
+      contaPagarId: parcela.conta_pagar_id,
+      contaSintetica,
+      csError,
+      role,
+    });
 
     if (csError) {
       showError('Erro ao buscar conta sintética: ' + csError.message);
@@ -317,9 +326,22 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
       return;
     }
 
-    const contaPatrimonial = contaSintetica?.id_conta_patrimonial;
-    const descricaoContaSintetica = contaSintetica?.[isAdmin ? 'descricao' : 'Descricao'] || 'Pagamento';
+    const contaPatrimonial = contaSintetica?.id_conta_patrimonial || values.conta_patrimonial_id;
+    const descricaoContaSintetica = contaSintetica?.descricao || 'Pagamento';
     const contaDespesaCriacao = contaSintetica?.id_conta_resultado;
+
+    if (!contaPatrimonial) {
+      console.error('Conta patrimonial não encontrada:', {
+        contaSinteticaId: parcela.conta_pagar_id,
+        contaSintetica,
+        contaPatrimonialFormulario: values.conta_patrimonial_id,
+        role,
+        proprietarioId,
+      });
+      showError('Erro: conta patrimonial não configurada. Selecione uma conta patrimonial no formulário.');
+      setLoading(false);
+      return;
+    }
 
     const dataPagamento = values.data_pagamento;
     const dataNoonUTC = new Date(Date.UTC(dataPagamento.getFullYear(), dataPagamento.getMonth(), dataPagamento.getDate(), 12, 0, 0));
@@ -408,21 +430,19 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
         });
 
         // Lançamento 2: D: Passivo (Obrigação a Pagar) - DÉBITO (Entrada)
-        if (contaPatrimonial) {
-          lancamentosPayload.push({
-            id: idPatrimonial,
-            proprietario_id: proprietarioId,
-            data_movimentacao: dataPagamentoISO,
-            descricao: `Baixa Passivo CP: ${descricaoContaSintetica} (CP ID: ${parcela.conta_pagar_id.substring(0, 8)})`,
-            valor: pagamento.valor_pago,
-            tipo: 'Entrada' as const, // <<< CORREÇÃO AQUI: DÉBITO é 'Entrada' no Passivo (Diminui Passivo Credora)
-            conta_bancaria_id: null,
-            conta_contabil_id: contaPatrimonial,
-            origem: origemVincular,
-            historico_id: values.historico_id,
-            conta_resultado_id: idAtivo, // Passivo aponta para Ativo
-          });
-        }
+        lancamentosPayload.push({
+          id: idPatrimonial,
+          proprietario_id: proprietarioId,
+          data_movimentacao: dataPagamentoISO,
+          descricao: `Baixa Passivo CP: ${descricaoContaSintetica} (CP ID: ${parcela.conta_pagar_id.substring(0, 8)})`,
+          valor: pagamento.valor_pago,
+          tipo: 'Entrada' as const,
+          conta_bancaria_id: null,
+          conta_contabil_id: contaPatrimonial,
+          origem: origemVincular,
+          historico_id: values.historico_id,
+          conta_resultado_id: idAtivo,
+        });
       }
 
       // 2) Tratar desconto (se houver) — mantém lógica contábil correta
@@ -462,9 +482,37 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
         });
       }
 
+      console.log('🔍 Debug - Criação de lançamentos CP:', {
+        role,
+        usuarioId: usuario?.id,
+        empresaId,
+        proprietarioId,
+        parcelaId: parcela.id,
+        contaPatrimonial,
+        quantidadeLancamentos: lancamentosPayload.length,
+        lancamentos: lancamentosPayload.map(l => ({
+          tipo: l.tipo,
+          valor: l.valor,
+          conta_contabil_id: l.conta_contabil_id,
+          proprietario_id: l.proprietario_id,
+        })),
+      });
+
       // 3) Inserir todos os lançamentos de uma vez
       const { error: lancamentoError } = await supabase.from('lancamentos').insert(lancamentosPayload);
-      if (lancamentoError) throw lancamentoError;
+      
+      if (lancamentoError) {
+        console.error('❌ Erro ao inserir lançamentos:', {
+          error: lancamentoError,
+          payload: lancamentosPayload,
+        });
+        throw lancamentoError;
+      } else {
+        console.log('✅ Lançamentos criados com sucesso:', {
+          quantidade: lancamentosPayload.length,
+          proprietarioId,
+        });
+      }
 
       // 4) Atualizar parcela / conta sintética
       const finalStatus: AdminParcelaPagar['status'] = isPagamentoParcial ? (values.acao_saldo_restante ? 'paga' : 'parcial') : 'paga';
@@ -547,6 +595,11 @@ const RegistrarPagamentoCPDialog: React.FC<RegistrarPagamentoCPDialogProps> = ({
   const onSubmit = async (values: FormValues) => {
     if (!parcela || !proprietarioId) {
       showError('Dados da parcela ou proprietário estão incompletos.');
+      return;
+    }
+
+    if (isCliente && !empresaId) {
+      showError('Erro: parcela sem empresa_id associado. Contate o suporte.');
       return;
     }
 

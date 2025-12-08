@@ -80,7 +80,7 @@ const ContasPagarHeader: React.FC<ContasPagarHeaderProps> = ({
                     'ID Parcela': p.id,
                     'ID Conta': contaCP?.id || 'N/A',
                     'Fornecedor': contaCP?.fornecedor || 'N/A',
-                    'Descrição': contaCP?.descricao || contaCP?.Descricao || 'N/A',
+                    'Descrição': contaCP?.descricao || 'N/A',
                     'Nº Parcela': p.numero_parcela,
                     'Vencimento': formatDateFns(new Date(p.data_vencimento + 'T00:00:00'), 'dd/MM/yyyy'),
                     'Valor Parcela': p.valor_parcela,
@@ -99,7 +99,7 @@ const ContasPagarHeader: React.FC<ContasPagarHeaderProps> = ({
                     'Data Pagamento': formatDateFns(new Date(p.data_pagamento), 'dd/MM/yyyy HH:mm'),
                     'ID Conta': contaCP?.id || 'N/A',
                     'Fornecedor': contaCP?.fornecedor || 'N/A',
-                    'Descrição': contaCP?.descricao || contaCP?.Descricao || 'N/A',
+                    'Descrição': contaCP?.descricao || 'N/A',
                     'Valor Pago': p.valor_pago,
                     'Conta Origem': p.saldo_contas?.nome || 'N/A',
                 };

@@ -60,6 +60,13 @@ interface FormExtratoManualCPProps {
     mapeamentoContabil: Record<string, string | null>;
     onSaveComplete: () => void;
     onClose: () => void;
+    parentValues?: {
+        acao_saldo_restante?: 'desconto' | 'reprogramar' | 'parcelar';
+        nova_data_vencimento?: Date;
+        numero_novas_parcelas?: number;
+        intervalo_dias_novas_parcelas?: number;
+        salvar_como_padrao?: boolean;
+    };
 }
 
 const formSchema = z.object({
@@ -165,6 +172,7 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
     mapeamentoContabil,
     onSaveComplete,
     onClose,
+    parentValues,
 }) => {
     const { role, usuario, perfil } = useSessao();
     const isAdmin = role === 'Admin';
@@ -282,16 +290,15 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
         
         setLoading(true);
 
-        const tabelaPagamentos = 'admin_pagamentos';
-        const tabelaParcelas = 'admin_parcelas_pagar';
-        const tabelaContasPagar = 'admin_contas_pagar';
+        const tabelaPagamentos = isAdmin ? 'admin_pagamentos' : 'pagamentos';
+        const tabelaParcelas = isAdmin ? 'admin_parcelas_pagar' : 'parcelas_contas_pagar';
+        const tabelaContasPagar = isAdmin ? 'admin_contas_pagar' : 'contas_pagar';
         
         const valorPagoAnterior = parcela.valor_pago || 0;
         const novoValorPagoTotal = valorPagoAnterior + totalPago;
         const saldoRestanteCalculado = parcela.valor_parcela - novoValorPagoTotal;
         const isPagamentoParcial = saldoRestanteCalculado > 0.01;
         
-        const parentValues = (form.getValues() as any).parentValues as any;
         const acaoSaldoRestante = parentValues?.acao_saldo_restante;
         
         try {
@@ -303,18 +310,21 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
             
             const { data: contaSintetica, error: csError } = await supabase
                 .from(tabelaContasPagar)
-                .select(`id_conta_patrimonial, ${isAdmin ? 'descricao' : 'Descricao'}, id_conta_resultado`)
+                .select(`id_conta_patrimonial, descricao, id_conta_resultado`)
                 .eq('id', parcela.conta_pagar_id)
                 .single();
                 
             if (csError) throw csError;
             const contaPatrimonial = contaSintetica?.id_conta_patrimonial;
-            const descricaoContaSintetica = contaSintetica?.[isAdmin ? 'descricao' : 'Descricao'] || 'Pagamento';
+            const descricaoContaSintetica = contaSintetica?.descricao || 'Pagamento';
             const contaDespesaCriacao = contaSintetica?.id_conta_resultado;
             
-            const dataPagamentoLocal = parentValues.data_pagamento;
+            const dataPagamentoLocal = dataPagamento;
             const dataNoonUTC = new Date(Date.UTC(dataPagamentoLocal.getFullYear(), dataPagamentoLocal.getMonth(), dataPagamentoLocal.getDate(), 12, 0, 0));
             const dataPagamentoISO = dataNoonUTC.toISOString();
+            
+            const ownerKey = isAdmin ? 'admin_id' : 'empresa_id';
+            const proprietarioId = isAdmin ? adminId : proprietarioDaSessao;
             
             const extratosPayload = pagamentoDetalhes
                 .map(p => {
@@ -323,7 +333,7 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
                     const valorExtrato = -Math.abs(p.valor_pago); 
                     const contaContabilPagamento = isAdmin ? mapeamentoContabil['pagamento'] : null;
                     return {
-                        empresa_id: adminId,
+                        empresa_id: proprietarioId,
                         id_saldo_contas: p.conta_id,
                         data: format(dataPagamentoLocal, 'yyyy-MM-dd'),
                         descricao: values.descricao_extrato,
@@ -347,14 +357,14 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
             for (const pagamento of pagamentoDetalhes) {
                 const pagamentoPayload = { 
                     parcela_id: parcela.id, 
-                    admin_id: adminId, 
+                    [ownerKey]: proprietarioId, 
                     valor_pago: pagamento.valor_pago, 
                     conta_id: pagamento.conta_id,
                     id_conta_contabil: contaPagamento,
                     data_pagamento: dataPagamentoISO,
-                    forma_pagamento: parentValues.forma_pagamento,
+                    forma_pagamento: formaPagamento,
                     tipo_pagamento: isPagamentoParcial ? 'parcial' : 'total',
-                    historico_id: parentValues.historico_id,
+                    historico_id: historicoId,
                     id_conta_resultado: contaDespesaCriacao,
                     anexo_url: comprovanteUrl,
                     observacao: values.observacao || null,
@@ -373,7 +383,7 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
                 
                 const lancamentoAtivoPayload = {
                     id: idAtivo,
-                    proprietario_id: adminId,
+                    proprietario_id: proprietarioId,
                     data_movimentacao: dataPagamentoISO,
                     descricao: `Pagamento Parcela ${parcela.id.substring(0, 8)} - ${parcela.fornecedor}`, 
                     valor: pagamento.valor_pago,
@@ -381,7 +391,7 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
                     conta_bancaria_id: pagamento.conta_id,
                     conta_contabil_id: contaContabilCaixaBanco,
                     origem: origemVincular,
-                    historico_id: parentValues.historico_id,
+                    historico_id: historicoId,
                     conta_resultado_id: idPatrimonial,
                 };
                 lancamentosPayload.push(lancamentoAtivoPayload);
@@ -389,7 +399,7 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
                 if (contaPatrimonial) {
                     const lancamentoPatrimonialPayload = {
                         id: idPatrimonial,
-                        proprietario_id: adminId,
+                        proprietario_id: proprietarioId,
                         data_movimentacao: dataPagamentoISO,
                         descricao: `Baixa Passivo CP: ${descricaoContaSintetica} (CP ID: ${parcela.conta_pagar_id.substring(0, 8)})`,
                         valor: pagamento.valor_pago,
@@ -397,7 +407,7 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
                         conta_bancaria_id: null,
                         conta_contabil_id: contaPatrimonial,
                         origem: origemVincular,
-                        historico_id: parentValues.historico_id,
+                        historico_id: historicoId,
                         conta_resultado_id: idAtivo,
                     };
                     lancamentosPayload.push(lancamentoPatrimonialPayload);
@@ -418,7 +428,7 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
 
                         const lancamentoDescontoPassivoPayload = {
                             id: idDescontoPassivo,
-                            proprietario_id: adminId,
+                            proprietario_id: proprietarioId,
                             data_movimentacao: dataPagamentoISO,
                             descricao: `Baixa Passivo Desconto CP: ${descricaoContaSintetica} (CP ID: ${parcela.conta_pagar_id.substring(0, 8)})`,
                             valor: saldoRestanteCalculado,
@@ -426,14 +436,14 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
                             conta_bancaria_id: null,
                             conta_contabil_id: contaPatrimonial,
                             origem: 'pagamento_manual',
-                            historico_id: parentValues.historico_id,
+                            historico_id: historicoId,
                             conta_resultado_id: idDescontoReceita,
                         };
                         lancamentosPayload.push(lancamentoDescontoPassivoPayload);
 
                         const lancamentoDescontoReceitaPayload = {
                             id: idDescontoReceita,
-                            proprietario_id: adminId,
+                            proprietario_id: proprietarioId,
                             data_movimentacao: dataPagamentoISO,
                             descricao: `Desconto Obtido: ${descricaoContaSintetica} (CP ID: ${parcela.conta_pagar_id.substring(0, 8)})`,
                             valor: saldoRestanteCalculado,
@@ -441,7 +451,7 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
                             conta_bancaria_id: null,
                             conta_contabil_id: contaDescontoObtido,
                             origem: 'pagamento_manual',
-                            historico_id: parentValues.historico_id,
+                            historico_id: historicoId,
                             conta_resultado_id: idDescontoPassivo,
                         };
                         lancamentosPayload.push(lancamentoDescontoReceitaPayload);
@@ -451,7 +461,7 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
                     finalStatus = 'paga';
                     observacaoFinal = `Pago R$ ${novoValorPagoTotal.toFixed(2)} com R$ ${saldoRestanteCalculado.toFixed(2)} ${acaoSaldoRestante === 'reprogramar' ? 'reprogramado' : 'parcelado'}. ${values.observacao || ''}`;
                     
-                    const baseParcelaPayload = { admin_id: adminId, id_conta_contabil: contaParcelaPagar };
+                    const baseParcelaPayload = { [ownerKey]: proprietarioId, id_conta_contabil: contaParcelaPagar };
                     
                     if (acaoSaldoRestante === 'reprogramar') {
                         await supabase.from(tabelaParcelas).insert({
@@ -459,17 +469,17 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
                             ...baseParcelaPayload,
                             numero_parcela: 99,
                             valor_parcela: saldoRestanteCalculado,
-                            data_vencimento: format(parentValues.nova_data_vencimento!, 'yyyy-MM-dd'),
+                            data_vencimento: format(parentValues?.nova_data_vencimento!, 'yyyy-MM-dd'),
                             status: 'reprogramada'
                         });
                     } else {
-                        const valorNovaParcela = saldoRestanteCalculado / parentValues.numero_novas_parcelas!;
-                        const novasParcelas = Array.from({ length: parentValues.numero_novas_parcelas! }).map((_, i) => ({
+                        const valorNovaParcela = saldoRestanteCalculado / parentValues?.numero_novas_parcelas!;
+                        const novasParcelas = Array.from({ length: parentValues?.numero_novas_parcelas! }).map((_, i) => ({
                             conta_pagar_id: parcela.conta_pagar_id,
                             ...baseParcelaPayload,
                             numero_parcela: 100 + i,
                             valor_parcela: valorNovaParcela,
-                            data_vencimento: format(addDays(parentValues.nova_data_vencimento!, i * parentValues.intervalo_dias_novas_parcelas!), 'yyyy-MM-dd'),
+                            data_vencimento: format(addDays(parentValues?.nova_data_vencimento!, i * parentValues?.intervalo_dias_novas_parcelas!), 'yyyy-MM-dd'),
                             status: 'reprogramada',
                         }));
                         await supabase.from(tabelaParcelas).insert(novasParcelas);
@@ -500,17 +510,17 @@ const FormExtratoManualCP: React.FC<FormExtratoManualCPProps> = ({
                 await supabase.from(tabelaContasPagar).update({ status: 'pago' }).eq('id', parcela.conta_pagar_id);
             }
             
-            if (parentValues.salvar_como_padrao && parentValues.historico_id) {
+            if (parentValues?.salvar_como_padrao && historicoId) {
                 await supabase
                     .from('configuracao_historico_padrao')
                     .delete()
-                    .eq('proprietario_id', adminId)
+                    .eq('proprietario_id', proprietarioId)
                     .eq('tipo_registro', 'pagamento_padrao');
                     
                 await supabase.from('configuracao_historico_padrao').insert({
-                    proprietario_id: adminId,
+                    proprietario_id: proprietarioId,
                     tipo_registro: 'pagamento_padrao',
-                    historico_id: parentValues.historico_id,
+                    historico_id: historicoId,
                 });
             }
 

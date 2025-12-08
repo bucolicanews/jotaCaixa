@@ -36,6 +36,7 @@ export interface AdminParcelaPagar {
   data_vencimento: string;
   data_pagamento: string | null;
   status: 'aberta' | 'parcial' | 'paga' | 'reprogramada' | 'cancelada';
+  mapeado_extrato_id: string | null;
 }
 
 export interface AdminPagamento {

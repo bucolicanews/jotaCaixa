@@ -9,11 +9,12 @@ import { showError, showSuccess } from '@/utils/toast';
 import { useSessao } from '@/hooks/use-sessao';
 import { getBadgeVariant } from '@/utils/badge-variants';
 import { Badge } from './ui/badge';
-import { DollarSign, Undo2, Loader2, Trash2, Edit } from 'lucide-react';
+import { DollarSign, Undo2, Loader2, Trash2, Edit, Unlink } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import RegistrarPagamentoCPDialog from '@/components/contas-pagar/RegistrarPagamentoCPDialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
 import { Progress } from './ui/progress';
+import { desvincularMapeamento } from '@/hooks/conciliacao/useMapeamentoParcelas';
 
 interface DetalhesParcelasCPDialogProps {
   conta: AdminContaPagar;
@@ -28,6 +29,7 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
   const [loading, setLoading] = useState(false);
   const [isUndoing, setIsUndoing] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isUnlinking, setIsUnlinking] = useState(false);
   const [pagamentoDialog, setPagamentoDialog] = useState<{ open: boolean, parcela: (AdminParcelaPagar & { fornecedor: string }) | null }>({ open: false, parcela: null });
 
   const isAdmin = role === 'Admin';
@@ -40,7 +42,7 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
     if (!usuario?.id) return;
     setLoading(true);
     
-    const campoDescricao = isAdmin ? 'descricao' : 'Descricao';
+    const campoDescricao = 'descricao';
     
     const { data, error } = await supabase
         .from(tabelaParcelas)
@@ -59,7 +61,7 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
             ...p,
             admin_contas_pagar: {
                 ...p[joinTable],
-                descricao: p[joinTable]?.descricao || p[joinTable]?.Descricao,
+                descricao: p[joinTable]?.descricao,
             },
         }));
         setParcelas(mappedData as ExtendedParcelaPagar[]);
@@ -303,6 +305,33 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
     }
   };
 
+  const handleDesvincularMapeamento = async (parcela: ExtendedParcelaPagar) => {
+    if (!parcela.mapeado_extrato_id) return;
+    setIsUnlinking(true);
+    
+    try {
+      const result = await desvincularMapeamento(
+        parcela.mapeado_extrato_id,
+        parcela.id,
+        'CP',
+        isAdmin
+      );
+      
+      if (!result.success) {
+        showError('Erro ao desvincular: ' + result.error);
+        return;
+      }
+      
+      showSuccess('Mapeamento desvinculado! A parcela voltou para pendente.');
+      fetchParcelas();
+      onDataChange();
+    } catch (error: any) {
+      showError('Erro ao desvincular mapeamento: ' + error.message);
+    } finally {
+      setIsUnlinking(false);
+    }
+  };
+
   const totalValor = useMemo(() => parcelas.reduce((sum, p) => sum + p.valor_parcela, 0), [parcelas]);
   const totalPago = useMemo(() => parcelas.reduce((sum, p) => sum + (p.valor_pago || 0), 0), [parcelas]);
   const progressoPercentual = totalValor > 0 ? Math.round((totalPago / totalValor) * 100) : 0;
@@ -377,12 +406,44 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
                                       <TableCell className="text-right">{formatCurrency(p.valor_parcela)}</TableCell>
                                       <TableCell className="text-right">{formatCurrency(p.valor_pago || 0)}</TableCell>
                                       <TableCell>
-                                          <Badge variant={statusVariant}>
-                                              {p.status}
-                                          </Badge>
+                                          <div className="flex flex-col gap-1">
+                                              <Badge variant={statusVariant}>
+                                                  {p.status}
+                                              </Badge>
+                                              {p.mapeado_extrato_id && (
+                                                  <Badge variant="outline" className="text-xs text-blue-600 border-blue-300">
+                                                      Mapeado
+                                                  </Badge>
+                                              )}
+                                          </div>
                                       </TableCell>
                                       <TableCell>{p.data_pagamento ? formatarData(p.data_pagamento) : '-'}</TableCell>
-                                      <TableCell className="text-right space-x-2">
+                                      <TableCell className="text-right space-x-1">
+                                          
+                                          {/* Botão de Desvincular Mapeamento */}
+                                          {p.mapeado_extrato_id && (
+                                              <AlertDialog>
+                                                  <AlertDialogTrigger asChild>
+                                                      <Button variant="ghost" size="icon" disabled={isUnlinking} title="Desvincular Mapeamento">
+                                                          {isUnlinking ? <Loader2 className="w-4 h-4 animate-spin" /> : <Unlink className="w-4 h-4 text-orange-500" />}
+                                                      </Button>
+                                                  </AlertDialogTrigger>
+                                                  <AlertDialogContent>
+                                                      <AlertDialogHeader>
+                                                          <AlertDialogTitle>Desvincular Mapeamento?</AlertDialogTitle>
+                                                          <AlertDialogDescription>
+                                                              Isso irá remover o vínculo com a transação do extrato, deletar o lançamento de pagamento criado pelo mapeamento, e a parcela voltará para status pendente. A transação do extrato ficará disponível para novo mapeamento.
+                                                          </AlertDialogDescription>
+                                                      </AlertDialogHeader>
+                                                      <AlertDialogFooter>
+                                                          <AlertDialogCancel disabled={isUnlinking}>Cancelar</AlertDialogCancel>
+                                                          <AlertDialogAction onClick={() => handleDesvincularMapeamento(p)} disabled={isUnlinking}>
+                                                              {isUnlinking ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Desvincular'}
+                                                          </AlertDialogAction>
+                                                      </AlertDialogFooter>
+                                                  </AlertDialogContent>
+                                              </AlertDialog>
+                                          )}
                                           
                                           {/* Botão de Edição (Apenas se não estiver paga/cancelada) */}
                                           {canEditOrDelete && (
@@ -417,27 +478,38 @@ const DetalhesParcelasCPDialog: React.FC<DetalhesParcelasCPDialogProps> = ({ con
                                           )}
                                           
                                           {isPaga ? (
-                                              <AlertDialog>
-                                                  <AlertDialogTrigger asChild>
-                                                      <Button variant="destructive" size="icon" disabled={isUndoing}>
-                                                          {isUndoing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Undo2 className="w-4 h-4" />}
-                                                      </Button>
-                                                  </AlertDialogTrigger>
-                                                  <AlertDialogContent>
-                                                      <AlertDialogHeader>
-                                                          <AlertDialogTitle>Confirmar Estorno de Pagamento</AlertDialogTitle>
-                                                          <AlertDialogDescription>
-                                                              Esta ação irá reverter o pagamento desta parcela, deletando os registros de pagamento e lançamentos de estorno associados. O saldo da conta de origem e a obrigação no Passivo serão reajustados. Tem certeza?
-                                                          </AlertDialogDescription>
-                                                      </AlertDialogHeader>
-                                                      <AlertDialogFooter>
-                                                          <AlertDialogCancel disabled={isUndoing}>Cancelar</AlertDialogCancel>
-                                                          <AlertDialogAction onClick={() => handleUndoPayment(p.id)} disabled={isUndoing}>
-                                                              {isUndoing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : 'Estornar Pagamento'}
-                                                          </AlertDialogAction>
-                                                      </AlertDialogFooter>
-                                                  </AlertDialogContent>
-                                              </AlertDialog>
+                                              p.mapeado_extrato_id ? (
+                                                  <Button 
+                                                      variant="destructive" 
+                                                      size="icon" 
+                                                      disabled={true}
+                                                      title="Desvincule o mapeamento antes de estornar"
+                                                  >
+                                                      <Undo2 className="w-4 h-4 opacity-50" />
+                                                  </Button>
+                                              ) : (
+                                                  <AlertDialog>
+                                                      <AlertDialogTrigger asChild>
+                                                          <Button variant="destructive" size="icon" disabled={isUndoing}>
+                                                              {isUndoing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Undo2 className="w-4 h-4" />}
+                                                          </Button>
+                                                      </AlertDialogTrigger>
+                                                      <AlertDialogContent>
+                                                          <AlertDialogHeader>
+                                                              <AlertDialogTitle>Confirmar Estorno de Pagamento</AlertDialogTitle>
+                                                              <AlertDialogDescription>
+                                                                  Esta ação irá reverter o pagamento desta parcela, deletando os registros de pagamento e lançamentos de estorno associados. O saldo da conta de origem e a obrigação no Passivo serão reajustados. Tem certeza?
+                                                              </AlertDialogDescription>
+                                                          </AlertDialogHeader>
+                                                          <AlertDialogFooter>
+                                                              <AlertDialogCancel disabled={isUndoing}>Cancelar</AlertDialogCancel>
+                                                              <AlertDialogAction onClick={() => handleUndoPayment(p.id)} disabled={isUndoing}>
+                                                                  {isUndoing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : 'Estornar Pagamento'}
+                                                              </AlertDialogAction>
+                                                          </AlertDialogFooter>
+                                                      </AlertDialogContent>
+                                                  </AlertDialog>
+                                              )
                                           ) : (
                                               <Button size="sm" onClick={() => handleOpenPagamento(p)} disabled={!canEditOrDelete}>
                                                   <DollarSign className="w-4 h-4" /> Pagar

@@ -58,6 +58,7 @@ import Razao from "./pages/Razao"; // NOVO IMPORT
 import Lancamentos from "./pages/Lancamentos"; // NOVO IMPORT
 import GerenciarDescricoesExtrato from "./pages/GerenciarDescricoesExtrato";
 import GerenciarIdentificadoresExtrato from "./pages/GerenciarIdentificadoresExtrato";
+import Mapeamento from "./pages/Mapeamento";
 
 const queryClient = new QueryClient();
 
@@ -300,6 +301,7 @@ const App = () => (
             <Route path="/extratos" element={<Extratos />} />
             <Route path="/banco/descricoes" element={<GerenciarDescricoesExtrato />} />
             <Route path="/banco/identificadores" element={<GerenciarIdentificadoresExtrato />} />
+            <Route path="/mapeamento" element={<Mapeamento />} />
             
             {/* NOVA ROTA: Lançamentos Manuais */}
             <Route path="/lancamentos" element={<Lancamentos />} />

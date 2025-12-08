@@ -12,9 +12,10 @@ import { Card, CardContent } from './ui/card';
 import { Progress } from './ui/progress';
 import FormParcelaReceberDialog from './formularios/FormParcelaReceberDialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
-import { Loader2, BadgeDollarSign, DollarSign, Edit, Trash2, Undo2 } from 'lucide-react';
+import { Loader2, BadgeDollarSign, DollarSign, Edit, Trash2, Undo2, Unlink } from 'lucide-react';
 import RegistrarPagamentoDialog from '@/components/contas-receber/RegistrarPagamentoDialog';
-import { Badge } from '@/components/ui/badge'; // IMPORTAÇÃO CORRIGIDA
+import { Badge } from '@/components/ui/badge';
+import { desvincularMapeamento } from '@/hooks/conciliacao/useMapeamentoParcelas';
 
 // Interface ParcelaParaPagamento copiada de RegistrarPagamentoDialog.tsx
 interface ParcelaParaPagamento {
@@ -34,10 +35,11 @@ interface Parcela {
   valor_parcela: number;
   valor_pago: number;
   data_vencimento: string;
-  data_pagamento: string | null; // ADICIONADO
+  data_pagamento: string | null;
   status: 'aberta' | 'parcial' | 'paga' | 'reprogramada' | 'cancelada' | 'bloqueada';
-  id_conta_contabil: string | null; // Adicionado para estorno
-  observacao: string | null; // Adicionado para estorno
+  id_conta_contabil: string | null;
+  observacao: string | null;
+  mapeado_extrato_id: string | null;
 }
 
 interface DetalhesParcelasDialogProps {
@@ -59,6 +61,7 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
   const [parcelaParaEdicao, setParcelaParaEdicao] = useState<Parcela | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isUndoing, setIsUndoing] = useState(false);
+  const [isUnlinking, setIsUnlinking] = useState(false);
 
   // Determina a tabela correta com base na role
   const isAdmin = role === 'Admin'; // DEFINIÇÃO AQUI
@@ -380,6 +383,33 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
     }
   };
 
+  const handleDesvincularMapeamento = async (parcela: Parcela) => {
+    if (!parcela.mapeado_extrato_id) return;
+    setIsUnlinking(true);
+    
+    try {
+      const result = await desvincularMapeamento(
+        parcela.mapeado_extrato_id,
+        parcela.id,
+        'CR',
+        isAdmin
+      );
+      
+      if (!result.success) {
+        showError('Erro ao desvincular: ' + result.error);
+        return;
+      }
+      
+      showSuccess('Mapeamento desvinculado! A parcela voltou para pendente.');
+      fetchParcelas();
+      onDataChange();
+    } catch (error: any) {
+      showError('Erro ao desvincular mapeamento: ' + error.message);
+    } finally {
+      setIsUnlinking(false);
+    }
+  };
+
   const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
   const formatDate = (dateString: string) => new Date(dateString + 'T00:00:00').toLocaleDateString('pt-BR');
   
@@ -469,12 +499,43 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
                                 <TableCell className={cn(isPaga && 'font-semibold text-green-600')}>{formatCurrency(p.valor_pago || 0)}</TableCell>
                                 <TableCell>{p.data_pagamento ? formatDate(p.data_pagamento) : '-'}</TableCell>
                                 <TableCell>
-                                    <Badge variant={isPaga ? 'success' : (isCanceled ? 'destructive' : 'secondary')}>
-                                        {getStatusDisplay(p.status)}
-                                    </Badge>
+                                    <div className="flex flex-col gap-1">
+                                        <Badge variant={isPaga ? 'success' : (isCanceled ? 'destructive' : 'secondary')}>
+                                            {getStatusDisplay(p.status)}
+                                        </Badge>
+                                        {p.mapeado_extrato_id && (
+                                            <Badge variant="outline" className="text-xs text-blue-600 border-blue-300">
+                                                Mapeado
+                                            </Badge>
+                                        )}
+                                    </div>
                                 </TableCell>
                                 <TableCell className="text-right">
-                                    <div className="flex justify-end space-x-2">
+                                    <div className="flex justify-end space-x-1">
+                                        {p.mapeado_extrato_id && (
+                                            <AlertDialog>
+                                                <AlertDialogTrigger asChild>
+                                                    <Button variant="ghost" size="icon" disabled={isUnlinking} title="Desvincular Mapeamento">
+                                                        {isUnlinking ? <Loader2 className="w-4 h-4 animate-spin" /> : <Unlink className="w-4 h-4 text-orange-500" />}
+                                                    </Button>
+                                                </AlertDialogTrigger>
+                                                <AlertDialogContent>
+                                                    <AlertDialogHeader>
+                                                        <AlertDialogTitle>Desvincular Mapeamento?</AlertDialogTitle>
+                                                        <AlertDialogDescription>
+                                                            Isso irá remover o vínculo com a transação do extrato, deletar o lançamento de pagamento/recebimento criado pelo mapeamento, e a parcela voltará para status pendente. A transação do extrato ficará disponível para novo mapeamento.
+                                                        </AlertDialogDescription>
+                                                    </AlertDialogHeader>
+                                                    <AlertDialogFooter>
+                                                        <AlertDialogCancel disabled={isUnlinking}>Cancelar</AlertDialogCancel>
+                                                        <AlertDialogAction onClick={() => handleDesvincularMapeamento(p)} disabled={isUnlinking}>
+                                                            {isUnlinking ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Desvincular'}
+                                                        </AlertDialogAction>
+                                                    </AlertDialogFooter>
+                                                </AlertDialogContent>
+                                            </AlertDialog>
+                                        )}
+                                        
                                         {canEditOrDelete && (
                                             <Button variant="ghost" size="icon" onClick={() => handleOpenEdicao(p)} title="Editar Parcela">
                                                 <Edit className="w-4 h-4" />
@@ -506,27 +567,38 @@ const DetalhesParcelasDialog: React.FC<DetalhesParcelasDialogProps> = ({ conta, 
                                         )}
                                         
                                         {isPaga ? (
-                                            <AlertDialog>
-                                                <AlertDialogTrigger asChild>
-                                                    <Button variant="destructive" size="icon" disabled={isUndoing} title="Estornar Recebimento">
-                                                        {isUndoing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Undo2 className="w-4 h-4" />}
-                                                    </Button>
-                                                </AlertDialogTrigger>
-                                                <AlertDialogContent>
-                                                    <AlertDialogHeader>
-                                                        <AlertDialogTitle>Confirmar Estorno de Recebimento</AlertDialogTitle>
-                                                        <AlertDialogDescription>
-                                                            Esta ação irá reverter o recebimento desta parcela, deletando os registros de recebimento e lançamentos de estorno associados. O saldo da conta de destino e o direito a receber no Ativo serão reajustados. Tem certeza?
-                                                        </AlertDialogDescription>
-                                                    </AlertDialogHeader>
-                                                    <AlertDialogFooter>
-                                                        <AlertDialogCancel disabled={isUndoing}>Cancelar</AlertDialogCancel>
-                                                        <AlertDialogAction onClick={() => handleUndoPayment(p)} disabled={isUndoing}>
-                                                            {isUndoing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : 'Estornar Recebimento'}
-                                                        </AlertDialogAction>
-                                                    </AlertDialogFooter>
-                                                </AlertDialogContent>
-                                            </AlertDialog>
+                                            p.mapeado_extrato_id ? (
+                                                <Button 
+                                                    variant="destructive" 
+                                                    size="icon" 
+                                                    disabled={true}
+                                                    title="Desvincule o mapeamento antes de estornar"
+                                                >
+                                                    <Undo2 className="w-4 h-4 opacity-50" />
+                                                </Button>
+                                            ) : (
+                                                <AlertDialog>
+                                                    <AlertDialogTrigger asChild>
+                                                        <Button variant="destructive" size="icon" disabled={isUndoing} title="Estornar Recebimento">
+                                                            {isUndoing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Undo2 className="w-4 h-4" />}
+                                                        </Button>
+                                                    </AlertDialogTrigger>
+                                                    <AlertDialogContent>
+                                                        <AlertDialogHeader>
+                                                            <AlertDialogTitle>Confirmar Estorno de Recebimento</AlertDialogTitle>
+                                                            <AlertDialogDescription>
+                                                                Esta ação irá reverter o recebimento desta parcela, deletando os registros de recebimento e lançamentos de estorno associados. O saldo da conta de destino e o direito a receber no Ativo serão reajustados. Tem certeza?
+                                                            </AlertDialogDescription>
+                                                        </AlertDialogHeader>
+                                                        <AlertDialogFooter>
+                                                            <AlertDialogCancel disabled={isUndoing}>Cancelar</AlertDialogCancel>
+                                                            <AlertDialogAction onClick={() => handleUndoPayment(p)} disabled={isUndoing}>
+                                                                {isUndoing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : 'Estornar Recebimento'}
+                                                            </AlertDialogAction>
+                                                        </AlertDialogFooter>
+                                                    </AlertDialogContent>
+                                                </AlertDialog>
+                                            )
                                         ) : (
                                             !isCanceled && (
                                                 <Button variant="outline" size="sm" onClick={() => handleOpenPagamento(p)}>
