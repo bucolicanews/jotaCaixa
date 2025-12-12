@@ -15,3 +15,4 @@
 15- DOCUMENTOS SOCIETÁRIOS: Lógica, scripts, relações e componentes (Gerenciar Blocos, Gerenciar Modelos, Documentos Gerados) implementados. ok
 16- Plano de Contas ok
 17 - erstorino dfe contas as pagar correto
+18-build
