@@ -9,7 +9,7 @@ import { PERMISSOES_DISPONIVEIS } from '@/config/permissoes';
 import { cn } from '@/lib/utils';
 import CheckoutPlano from '@/components/CheckoutPlano';
 import { useSessao } from '@/hooks/use-sessao';
-import { useNavigate } from 'react-router-dom'; // Importando useNavigate
+import { useLocation, useNavigate } from 'react-router-dom';
 
 const Vendas: React.FC = () => {
   const [planos, setPlanos] = useState<Plano[]>([]);
@@ -17,6 +17,7 @@ const Vendas: React.FC = () => {
   const [planoSelecionado, setPlanoSelecionado] = useState<Plano | null>(null);
   
   const { role, usuario, carregando: carregandoSessao } = useSessao();
+  const location = useLocation();
   const navigate = useNavigate();
   const isClient = role === 'Cliente';
 
@@ -48,10 +49,22 @@ const Vendas: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (!carregandoSessao) { // Adicionado a dependência de carregandoSessao
+    if (!carregandoSessao) {
       buscarPlanos();
     }
   }, [carregandoSessao, buscarPlanos]);
+
+  useEffect(() => {
+    if (planos.length === 0) return;
+    const params = new URLSearchParams(location.search);
+    const planoIdParam = params.get('plano');
+    if (planoIdParam) {
+      const found = planos.find((plan) => plan.id === planoIdParam);
+      if (found && (!planoSelecionado || planoSelecionado.id !== found.id)) {
+        setPlanoSelecionado(found);
+      }
+    }
+  }, [location.search, planos, planoSelecionado]);
   
   const handleSelectPlan = (plano: Plano) => {
       setPlanoSelecionado(plano);
@@ -68,12 +81,11 @@ const Vendas: React.FC = () => {
         </div>
     );
   }
-  
-  // Se o usuário não estiver logado E não houver um plano selecionado, redireciona para o login.
-  // Isso garante que a página de vendas só seja usada para checkout/upgrade.
-  if (!usuario && !planoSelecionado) {
-      navigate('/login', { replace: true });
-      return null;
+
+  // Bloqueio: exige login antes de prosseguir para checkout/upgrade
+  if (!usuario) {
+    navigate('/login', { replace: true });
+    return null;
   }
   
   if (planoSelecionado) {

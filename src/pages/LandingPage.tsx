@@ -11,59 +11,68 @@ import { PERMISSOES_DISPONIVEIS } from '@/config/permissoes';
 import { cn } from '@/lib/utils';
 
 const FEATURES = [
-    { 
-        icon: ArrowUpCircle, 
-        title: "Contas a Receber", 
-        subtitle: "Otimize seu Faturamento",
-        description: "Nunca mais perca um prazo de pagamento. Gerencie faturas, parcelas e recebimentos de clientes." 
+    {
+        icon: ArrowUpCircle,
+        title: "Financeiro Inteligente",
+        subtitle: "Cobranças, contas e bancos",
+        description: "Contas a receber, contas a pagar e consolidação de saldos em tempo real com alertas, conciliações e fluxo de caixa multibanco."
     },
-    { 
-        icon: ArrowDownCircle, 
-        title: "Contas a Pagar", 
-        subtitle: "Controle Total de Despesas",
-        description: "Mantenha seus fornecedores em dia. Controle despesas, visualize parcelamentos futuros e evite atrasos." 
+    {
+        icon: Scale,
+        title: "Contabilidade Confiável",
+        subtitle: "Partidas dobradas automatizadas",
+        description: "Plano de contas completo, lançamentos manuais, DRE, balancete e razão com integração Calima e exportações configuráveis."
     },
-    { 
-        icon: Banknote, 
-        title: "Bancos e Saldos", 
-        subtitle: "Visão Unificada de Caixa",
-        description: "Conecte todas as suas contas bancárias e caixas internos. Calcule o saldo atual em tempo real." 
+    {
+        icon: Clock,
+        title: "RH & Folha",
+        subtitle: "Ponto eletrônico e férias",
+        description: "Controle de jornada com ponto biométrico, folgas fixas, férias e cadastro automatizado das permissões de cada gestor."
     },
-    { 
-        icon: Clock, 
-        title: "Ponto Eletrônico", 
-        subtitle: "Gestão de RH Simplificada",
-        description: "Sistema de ponto eletrônico para funcionários com registro por selfie e geolocalização." 
+    {
+        icon: FileSignature,
+        title: "Contratos e Documentos",
+        subtitle: "Modelos com tags dinâmicas",
+        description: "Templates de contratos/atas, tags customizadas e assinatura eletrônica, com rastreio completo dos fluxos de aprovação."
     },
-    { 
-        icon: FileSignature, 
-        title: "Contratos Dinâmicos", 
-        subtitle: "Assinatura Eletrônica Rápida",
-        description: "Crie modelos de contrato com tags dinâmicas e envie para assinatura eletrônica em um clique." 
+    {
+        icon: Check,
+        title: "Conciliação e Integridade",
+        subtitle: "Regras inteligentes",
+        description: "Regras reutilizáveis conciliam extratos, identificam duplicidades e alimentam o fluxo contábil sem planilha."
     },
-    { 
-        icon: Check, 
-        title: "Conciliação Bancária", 
-        subtitle: "Automatize Lançamentos",
-        description: "Importe extratos CSV e deixe o sistema conciliar lançamentos automaticamente com base em regras." 
-    },
-    { 
-        icon: Scale, 
-        title: "Relatórios Contábeis", 
-        subtitle: "Pronto para o Contador",
-        description: "Gere DRE e Balanço Patrimonial. Exporte lançamentos no formato de partidas dobradas (Calima)." 
-    },
-    { 
-        icon: TrendingUp, 
-        title: "Faturamento e Assinaturas", 
-        subtitle: "Vendas e Recorrência",
-        description: "Gerencie planos de assinatura, integre com o Stripe para pagamentos recorrentes e acompanhe o ciclo de vida." 
+    {
+        icon: TrendingUp,
+        title: "Modelos de receita",
+        subtitle: "Cobrança recorrente",
+        description: "Planos, Stripe Checkout e renovações automáticas para escalar seu faturamento com segurança e métricas detalhadas."
     },
 ];
+
+const buildWhatsappLink = (value?: string | null) => {
+    if (!value) return null;
+    if (value.startsWith('http')) return value;
+    const digits = value.replace(/\D/g, '');
+    if (!digits) return null;
+    return `https://wa.me/${digits}`;
+};
+
+const DEFAULT_WHATSAPP = 'https://wa.me/5591996293532';
 
 const LandingPage: React.FC = () => {
     const [planos, setPlanos] = useState<Plano[]>([]);
     const [carregandoPlanos, setCarregandoPlanos] = useState(true);
+    const envWhatsapp = React.useMemo(
+        () =>
+            buildWhatsappLink(
+                (import.meta.env.VITE_SUPPORT_WHATSAPP_URL ||
+                    import.meta.env.VITE_SUPPORT_WHATSAPP_PHONE ||
+                    DEFAULT_WHATSAPP) as string | undefined
+            ),
+        []
+    );
+    const [supportWhatsappLink, setSupportWhatsappLink] = useState<string | null>(envWhatsapp);
+    const [loadingSupportLink, setLoadingSupportLink] = useState<boolean>(!envWhatsapp);
 
     const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
     
@@ -92,9 +101,57 @@ const LandingPage: React.FC = () => {
         setCarregandoPlanos(false);
     }, []);
 
-    useEffect(() => {
-        buscarPlanos();
+  useEffect(() => {
+      buscarPlanos();
     }, [buscarPlanos]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const hash = window.location.hash?.replace('#', '');
+      if (hash) {
+        const element = document.getElementById(hash);
+        if (element) {
+          setTimeout(() => element.scrollIntoView({ behavior: 'smooth' }), 100);
+        }
+      }
+    }
+  }, []);
+
+    useEffect(() => {
+        const fetchPhone = async () => {
+            setLoadingSupportLink(true);
+            const { data, error } = await supabase
+                .from('tbl_admins')
+                .select('telefone')
+                .not('telefone', 'is', null)
+                .limit(1)
+                .single();
+            if (!error && data?.telefone) {
+                const link = buildWhatsappLink(data.telefone);
+                if (link) {
+                    setSupportWhatsappLink(link);
+                    setLoadingSupportLink(false);
+                    return;
+                }
+            }
+            if (error) {
+                console.warn('Falha ao obter telefone de suporte:', error.message);
+            }
+            setSupportWhatsappLink(envWhatsapp ?? DEFAULT_WHATSAPP);
+            setLoadingSupportLink(false);
+        };
+        fetchPhone();
+    }, [envWhatsapp]);
+
+  const handleContactSupport = () => {
+       console.log('Abrindo link de suporte:', supportWhatsappLink);
+      if (supportWhatsappLink) {
+         
+            window.open(supportWhatsappLink, '_blank', 'noopener,noreferrer');
+        } else {
+            showError('Canal de WhatsApp indisponível no momento. Tente novamente em instantes.');
+        }
+    };
 
   return (
     <div className="w-full">
@@ -104,12 +161,12 @@ const LandingPage: React.FC = () => {
         <div className="container mx-auto px-4 max-w-5xl">
           <Zap className="w-16 h-16 text-primary mx-auto mb-6 animate-pulse" />
           <h1 className="text-4xl md:text-7xl font-extrabold mb-6 text-foreground leading-tight tracking-tighter">
-            Controle Financeiro e RH em um Só Lugar.
+            Controle Financeiro, Contábil e RH sob um único painel.
           </h1>
           <p className="text-lg md:text-2xl text-muted-foreground mb-10 max-w-3xl mx-auto">
-            A plataforma completa que simplifica a gestão da sua empresa, do faturamento à folha de ponto, com foco em automação e conformidade.
+            Plataforma integrada que conecta financeiro, contabilidade, RH e folha com segurança RLS multi-tenant. Automatize operações, reduza retrabalho e escale seu negócio com confiança.
           </p>
-          <Link to="/login"> {/* ALTERADO: CTA principal vai para o Login */}
+          <Link to="/teste-gratis">
             <Button size="lg" className="text-xl px-10 py-7 shadow-xl hover:shadow-2xl transition-all transform hover:scale-[1.02]">
               Comece Agora (Teste Grátis)
             </Button>
@@ -144,6 +201,62 @@ const LandingPage: React.FC = () => {
         </div>
       </section>
       
+      {/* Seção 3: Módulos estratégicos */}
+      <section id="modulos" className="py-16 md:py-24 bg-background">
+        <div className="container mx-auto px-4">
+          <h2 className="text-3xl md:text-5xl font-bold text-center mb-4">Módulos Estratégicos</h2>
+          <p className="text-lg text-muted-foreground text-center mb-12 max-w-4xl mx-auto">
+            Financeiro, Contabilidade, RH e Folha conectados por segurança multi-tenant e controle de acessos por RLS. Escale sem comprometer a governança.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <Card className="border-primary/30">
+              <CardHeader>
+                <h3 className="text-lg font-semibold">Financeiro</h3>
+                <p className="text-sm text-muted-foreground">Conciliação, bancos e faturamento</p>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">
+                  Centralize contas a pagar/receber, boletos, calendários, fluxo de caixa e projeções com alertas inteligentes.
+                </p>
+              </CardContent>
+            </Card>
+            <Card className="border-secondary/50">
+              <CardHeader>
+                <h3 className="text-lg font-semibold">Contábil</h3>
+                <p className="text-sm text-muted-foreground">Plano de contas completo</p>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">
+                  Lançamentos manuais ou automáticos, exportações para Calima, e relatórios (DRE, Balanço, Balancete, Razão) prontos para auditoria.
+                </p>
+              </CardContent>
+            </Card>
+            <Card className="border-primary/30">
+              <CardHeader>
+                <h3 className="text-lg font-semibold">RH</h3>
+                <p className="text-sm text-muted-foreground">Pessoas e permissões</p>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">
+                  Controle de pontos, cadastros de funcionários, folgas e permissões moduladas por planos customizados.
+                </p>
+              </CardContent>
+            </Card>
+            <Card className="border-secondary/50">
+              <CardHeader>
+                <h3 className="text-lg font-semibold">Folha de Ponto</h3>
+                <p className="text-sm text-muted-foreground">Ponto eletrônico integrado</p>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">
+                  Registro com selfie e geolocalização, relatórios de horas extras e integração com cálculos de férias e ajustes.
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </section>
+
       {/* Seção 3: Preços (Nova Seção com Cards de Planos) */}
       <section id="precos" className="py-16 md:py-24 bg-background">
         <div className="container mx-auto px-4 text-center">
@@ -199,16 +312,19 @@ const LandingPage: React.FC = () => {
                                     })}
                                 </div>
                             </div>
-                            
-                            <Link to="/login" className="w-full mt-6">
-                                <Button variant="default" className="w-full">
-                                    Começar Teste Grátis
-                                </Button>
-                            </Link>
                         </Card>
                     ))}
                 </div>
             )}
+        </div>
+      </section>
+
+      {/* CTA Teste Grátis (centralizado após preços) */}
+      <section className="py-10 bg-secondary/30">
+        <div className="container mx-auto px-4 text-center">
+          <Link to="/teste-gratis">
+            <Button size="lg" className="px-10 py-6 text-lg">Teste Grátis</Button>
+          </Link>
         </div>
       </section>
 
@@ -219,7 +335,7 @@ const LandingPage: React.FC = () => {
           <p className="text-lg text-muted-foreground mb-8">
             Nossa equipe está pronta para ajudar você a tirar o máximo proveito do sistema. Entre em contato para dúvidas, demonstrações ou assistência técnica.
           </p>
-          <Button variant="secondary" size="lg" className="text-lg px-8 py-6">
+          <Button onClick={handleContactSupport} disabled={loadingSupportLink} variant="secondary" size="lg" className="text-lg px-8 py-6">
             <Phone className="w-5 h-5 mr-2" /> Contatar Suporte
           </Button>
         </div>

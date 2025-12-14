@@ -36,6 +36,7 @@ import MinhaAssinatura from "./pages/MinhaAssinatura";
 import SelecaoPagamentoRenovacao from "./pages/SelecaoPagamentoRenovacao";
 import FluxoCaixa from "./pages/FluxoCaixa";
 import BalancoPatrimonial from "./pages/BalancoPatrimonial";
+import TesteGratis from "./pages/TesteGratis";
 import AssinarContrato from "./pages/AssinarContrato";
 import ContratoLinkPage from "./pages/ContratoLinkPage";
 import DRE from "./pages/DRE";
@@ -241,8 +242,9 @@ const App = () => (
           <Routes>
             {/* Rotas Públicas/Site (Usam SiteLayout) */}
             <Route element={<SiteLayout />}>
-                <Route path="/" element={<Index />} />
-                <Route path="/vendas" element={<Vendas />} />
+            <Route path="/" element={<Index />} />
+            <Route path="/vendas" element={<Vendas />} />
+            <Route path="/teste-gratis" element={<TesteGratis />} />
             </Route>
             
             {/* Rotas de Auth (Não usam layout) */}

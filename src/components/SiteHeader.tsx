@@ -8,9 +8,10 @@ import { cn } from '@/lib/utils';
 const NAV_ITEMS = [
   { name: 'Início', href: '/' },
   { name: 'Sistema', href: '/#sistema' },
-  { name: 'Preços', href: '/#precos' }, // ALTERADO PARA ÂNCORA
+  { name: 'Preços', href: '/#precos' },
   { name: 'Suporte', href: '/#suporte' },
   { name: 'Sobre Nós', href: '/#sobre' },
+  { name: 'Teste Grátis', href: '/teste-gratis', cta: true },
 ];
 
 const SiteHeader: React.FC = () => {
@@ -20,40 +21,49 @@ const SiteHeader: React.FC = () => {
 
   const handleScrollToSection = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
     e.preventDefault();
-    
-    const targetId = href.substring(href.indexOf('#') + 1);
-    const targetElement = document.getElementById(targetId);
-    
-    // Se for o link de Início (href='/'), forçamos o scroll para o topo
+
     if (href === '/') {
-        if (location.pathname === '/') {
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-        } else {
-            navigate('/');
-        }
-        setSheetOpen(false);
-        return;
+      if (location.pathname === '/') {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } else {
+        navigate('/');
+      }
+      setSheetOpen(false);
+      return;
     }
 
-    // Se for um link de âncora
-    if (targetElement) {
-      if (location.pathname === '/') {
-        // Se já estiver na Landing Page, faz o scroll suave
+    const hashIndex = href.indexOf('#');
+    const targetId = hashIndex >= 0 ? href.substring(hashIndex + 1) : '';
+
+    if (location.pathname === '/' && targetId) {
+      const targetElement = document.getElementById(targetId);
+      if (targetElement) {
         targetElement.scrollIntoView({ behavior: 'smooth' });
         setSheetOpen(false);
-      } else {
-        // Se estiver em outra página, navega para a raiz e usa o hash para que o scroll ocorra após o carregamento.
-        navigate(href);
+        return;
       }
     }
+
+    // Em qualquer outra página ou se o elemento não existir ainda, navega para a rota com hash
+    navigate(href);
+    setSheetOpen(false);
   };
   
   // Função auxiliar para renderizar links de navegação
   const renderNavLink = (item: typeof NAV_ITEMS[0]) => {
       const isAnchor = item.href.startsWith('/#');
       const isHome = item.href === '/';
-      
       const classes = "text-sm font-medium text-muted-foreground hover:text-foreground transition-colors";
+
+      if (item.cta) {
+        return (
+          <Link to={item.href}>
+            <Button size="sm" variant="default" className="ml-2">
+              {item.name}
+            </Button>
+          </Link>
+        );
+      }
       
       if (isHome || isAnchor) {
           return (
@@ -78,18 +88,29 @@ const SiteHeader: React.FC = () => {
   };
   
   const renderMobileNavLink = (item: typeof NAV_ITEMS[0]) => {
+    if (item.cta) {
       return (
-          <a
-              href={item.href}
-              onClick={(e) => {
-                  handleScrollToSection(e, item.href);
-                  setSheetOpen(false);
-              }}
-              className="text-lg font-medium text-foreground hover:text-primary transition-colors"
-          >
-              {item.name}
-          </a>
+        <Link
+          to={item.href}
+          onClick={() => setSheetOpen(false)}
+          className="text-lg font-semibold text-primary"
+        >
+          {item.name}
+        </Link>
       );
+    }
+    return (
+      <a
+        href={item.href}
+        onClick={(e) => {
+          handleScrollToSection(e, item.href);
+          setSheetOpen(false);
+        }}
+        className="text-lg font-medium text-foreground hover:text-primary transition-colors"
+      >
+        {item.name}
+      </a>
+    );
   };
 
   return (

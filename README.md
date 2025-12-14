@@ -150,6 +150,62 @@ pnpm build
 2. Crie um novo projeto
 3. Copie a **Project URL** e **Anon Key**
 
+## Desenvolvimento, Build e Deploy
+
+### Pré-requisitos
+- Node.js >= 20 LTS  
+- pnpm >= 9 (ou npm/yarn compatível)  
+- Supabase CLI ou acesso direto ao editor SQL do painel  
+- Conta Supabase/Stripe configurada para as integrações
+
+### Instalação e execução local
+1. `git clone https://github.com/seu-usuario/jota-app-basico.git && cd jota-app-basico`
+2. `pnpm install`
+3. Copie o `.env.example` para `.env.local` e ajuste:
+   - `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` (projeto Supabase)
+   - `VITE_STRIPE_PUBLIC_KEY`, `VITE_APP_URL`, `VITE_GOOGLE_MAPS_API_KEY`
+   - `VITE_APP_URL` deve apontar para `http://localhost:8080` em dev
+4. Inicie `pnpm dev` e abra `http://localhost:8080`
+
+### Build e preview
+- `pnpm build` gera artefatos em `dist/`
+- `pnpm preview` roda um servidor estático local para validar a build
+- `pnpm lint` roda o ESLint configurado (opcional, mas recomendado antes do deploy)
+
+### Deploy (Vercel, Netlify, Supabase Hosting, etc.)
+1. Configure as variáveis de ambiente da mesma forma que no `.env.local`
+2. Garanta que as Functions (RPCs) do Supabase estejam implantadas e executadas
+3. Execute `pnpm build` no pipeline e publique `dist/`
+4. Para o Supabase, aplique `fix-rls-policies.sql` após qualquer restauração de banco:
+   - Use o editor SQL (`supabase db query` ou painel) para recriar `saldo_contas`, `plano_contas` e `lancamentos` com o `EXISTS` para `admin_usuarios`
+5. Teste rodando `SELECT * FROM admin_usuarios WHERE id = '<admin_usuario_id>'` e confirme `admin_id`
+6. Faça logout/login no app após rodar o script para que o JWT receba as novas policies
+
+### Supabase + Stripe
+- Supabase Auth com RLS garante que cada tenant só veja seus dados.  
+- `fix-rls-policies.sql` está em raiz e sincroniza as políticas (execute após restore).  
+- Integrações com Stripe usam as edge functions `create-checkout-session`, `create-renewal-session` e `get-stripe-session` para acesso seguro.
+
+## Visão geral do sistema
+- **Admin:** Gerencia clientes, contratos, finanças e suporte via tabelas `admin_*`.  
+- **Clientes (tbl_clientes):** Possuem seus próprios cadastros, lançamentos, contratos e relatórios.  
+- **Funcionários (`tbl_usuarios` ou `admin_usuarios`):** Herdam permissões configuradas no plano/perfil e acessam apenas o `ownerId` vinculado (cliente ou admin).  
+- **Fluxos-chave:** lançamentos contábeis, contratos com tags dinâmicas, conciliações automáticas, folha de ponto, relatórios (balanço, DRE, razão, balancete).  
+- **Hooks reutilizáveis:** `useOwner`, `useConciliacao`, `useContasReceber`, `useBalancete`, `useRazao` e demais encapsulam lógica de tenant, RLS e fetchs Supabase.
+
+## RLS e controle de acesso
+- A tabela `admin_usuarios` conecta cada colaborador ao `admin_id` do dono.  
+- As policies `saldo_contas_select_policy`, `plano_contas_select_policy` e `lancamentos_select_policy` aceitam agora `auth.uid() = proprietario_id` **ou** o administrador delegado (`EXISTS` com `admin_usuarios`).  
+- Sempre que restaurar o banco ou promover um cliente, execute `fix-rls-policies.sql` para garantir consistência.  
+- Verifique RLS com:
+  ```sql
+  SELECT * FROM pg_policies WHERE tablename IN ('saldo_contas','plano_contas','lancamentos');
+  SELECT id, admin_id FROM admin_usuarios WHERE id = '<admin_usuario_id>';
+  ```
+- O dropdown `Conta de Débito/Crédito` e as tabelas de lançamentos usam `useOwner()` para resolver `ownerId` do cliente ou admin (funcionários).  
+- No Supabase storage/edge functions, confirme que os headers `Authorization: Bearer <supabase_jwt>` estão presentes.
+*** End Patch***-BEGIN-END applyPATCH PyTHON"""
+
 ### 2. Executar Script de Banco de Dados
 
 Execute o SQL abaixo no editor SQL do Supabase:
