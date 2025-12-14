@@ -7,6 +7,7 @@ import { Lancamento } from '@/types/lancamento';
 import { useContabilConfig } from '../use-contabil-config';
 import { format, parseISO } from 'date-fns';
 import { DateRange } from 'react-day-picker';
+import { resolveOwnerContext } from '@/utils/owner';
 
 // Tipo auxiliar para a conta
 interface ContaRazao extends PlanoContas {
@@ -37,8 +38,9 @@ interface SaldoInicialMap {
  * para cada conta analítica dentro de um período.
  */
 export const useRazao = (filtroPeriodo: DateRange | undefined): RazaoHook => {
-  const { usuario } = useSessao();
+  const { usuario, perfil, role } = useSessao();
   const { configMap } = useContabilConfig();
+  const { ownerId } = resolveOwnerContext(role, perfil, usuario?.id);
   const [contas, setContas] = useState<ContaRazao[]>([]);
   const [lancamentosPorConta, setLancamentosPorConta] = useState<Record<string, LancamentoRazao[]>>({});
   const [contasContabeis, setContasContabeis] = useState<PlanoContas[]>([]);
@@ -129,7 +131,7 @@ export const useRazao = (filtroPeriodo: DateRange | undefined): RazaoHook => {
   }, [calcularSaldoInicial, getNatureza]);
 
   const fetchRazao = useCallback(async () => {
-    if (!usuario?.id || !filtroPeriodo?.from || !filtroPeriodo?.to) {
+    if (!ownerId || !filtroPeriodo?.from || !filtroPeriodo?.to) {
       setLoading(false);
       return;
     }
@@ -148,7 +150,7 @@ export const useRazao = (filtroPeriodo: DateRange | undefined): RazaoHook => {
     const { data: contasData, error: contasError } = await supabase
         .from('plano_contas')
         .select('*')
-        .eq('proprietario_id', usuario.id)
+        .eq('proprietario_id', ownerId)
         .eq('Analitica', 'Sim')
         .order('Conta');
 
@@ -162,7 +164,7 @@ export const useRazao = (filtroPeriodo: DateRange | undefined): RazaoHook => {
     const { data: lancamentosData, error: lError } = await supabase
         .from('lancamentos')
         .select('valor, tipo, conta_contabil_id, data_movimentacao, descricao, origem')
-        .eq('proprietario_id', usuario.id)
+        .eq('proprietario_id', ownerId)
         .neq('origem', 'movimentacao_direta_estornada') // Ignora lançamentos originais estornados
         .order('data_movimentacao', { ascending: true });
 
@@ -186,7 +188,7 @@ export const useRazao = (filtroPeriodo: DateRange | undefined): RazaoHook => {
     const { data: saldosIniciaisData } = await supabase
         .from('saldo_contas')
         .select('conta_contabil_id, saldo_inicial')
-        .eq('proprietario_id', usuario.id)
+        .eq('proprietario_id', ownerId)
         .not('conta_contabil_id', 'is', null);
         
     const saldosIniciaisMap: SaldoInicialMap = (saldosIniciaisData || []).reduce((acc, s) => {
@@ -212,7 +214,7 @@ export const useRazao = (filtroPeriodo: DateRange | undefined): RazaoHook => {
     setLancamentosPorConta(lancamentosPorContaMap);
     setContasContabeis(contasAnaliticas);
     setLoading(false);
-  }, [usuario?.id, filtroPeriodo, calcularRazao]);
+  }, [ownerId, filtroPeriodo, calcularRazao]);
 
   useEffect(() => {
     fetchRazao();

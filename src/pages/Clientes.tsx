@@ -93,12 +93,21 @@ const ClientesPage = () => {
   const [activeTab, setActiveTab] = useState('clientes_cr');
   // Removendo activeEmpresaTab e activeCRTab
 
-  const isAdmin = role === 'Admin';
+  const isUsuario = role === 'Usuario';
+  const isAdminUsuario = isUsuario && !!(perfil as any)?.admin_id;
+  const isAdmin = role === 'Admin' || isAdminUsuario;
 
   const getOwnerId = () => {
-    if (role === 'Admin') return usuario?.id || null; // Admin usa seu próprio ID
+    if (role === 'Admin') return usuario?.id || null;
     if (role === 'Cliente') return (perfil as ClienteProfile)?.id;
-    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id; // FIX: proprietario_id -> cliente_id
+    if (role === 'Usuario' && perfil) {
+      if ('cliente_id' in perfil && (perfil as any).cliente_id) {
+        return (perfil as any).cliente_id;
+      }
+      if ('admin_id' in perfil && (perfil as any).admin_id) {
+        return (perfil as any).admin_id;
+      }
+    }
     return null;
   };
   
@@ -1173,7 +1182,7 @@ const ClientesPage = () => {
   };
 
   // NOVO: Verificação de permissão
-  const canAccessPage = isAdmin || (role === 'Cliente' && (perfil as ClienteProfile)?.permissoes?.contas_receber === true);
+  const canAccessPage = isAdmin || (perfil as any)?.permissoes?.gerenciar_clientes === true;
 
   if (carregandoSessao) {
     return (

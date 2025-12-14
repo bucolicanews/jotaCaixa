@@ -43,12 +43,16 @@ DROP POLICY IF EXISTS "admin_delete_saldo_contas" ON saldo_contas;
 -- Habilitar RLS (caso não esteja)
 ALTER TABLE saldo_contas ENABLE ROW LEVEL SECURITY;
 
--- NOVA POLÍTICA: Permite SELECT para Admin e Cliente
--- Como tbl_admins.id = auth.uid() e tbl_clientes.id = auth.uid(),
--- basta verificar se proprietario_id = auth.uid()
+-- NOVA POLÍTICA: Permite SELECT para Admin, Cliente e funcionários (admin_usuarios)
 CREATE POLICY "saldo_contas_select_policy" ON saldo_contas
 FOR SELECT USING (
     proprietario_id = auth.uid()
+    OR EXISTS (
+        SELECT 1
+        FROM admin_usuarios au
+        WHERE au.id = auth.uid()
+          AND au.admin_id = saldo_contas.proprietario_id
+    )
 );
 
 -- NOVA POLÍTICA: Permite INSERT para Admin e Cliente
@@ -86,10 +90,16 @@ DROP POLICY IF EXISTS "admin_delete_plano_contas" ON plano_contas;
 -- Habilitar RLS (caso não esteja)
 ALTER TABLE plano_contas ENABLE ROW LEVEL SECURITY;
 
--- NOVA POLÍTICA: Permite SELECT para Admin e Cliente
+-- NOVA POLÍTICA: Permite SELECT para Admin, Cliente e funcionários (admin_usuarios)
 CREATE POLICY "plano_contas_select_policy" ON plano_contas
 FOR SELECT USING (
     proprietario_id = auth.uid()
+    OR EXISTS (
+        SELECT 1
+        FROM admin_usuarios au
+        WHERE au.id = auth.uid()
+          AND au.admin_id = plano_contas.proprietario_id
+    )
 );
 
 -- NOVA POLÍTICA: Permite INSERT para Admin e Cliente
@@ -127,10 +137,16 @@ DROP POLICY IF EXISTS "admin_delete_lancamentos" ON lancamentos;
 -- Habilitar RLS (caso não esteja)
 ALTER TABLE lancamentos ENABLE ROW LEVEL SECURITY;
 
--- NOVA POLÍTICA: Permite SELECT para Admin e Cliente
+-- NOVA POLÍTICA: Permite SELECT para Admin, Cliente e funcionários (admin_usuarios)
 CREATE POLICY "lancamentos_select_policy" ON lancamentos
 FOR SELECT USING (
     proprietario_id = auth.uid()
+    OR EXISTS (
+        SELECT 1
+        FROM admin_usuarios au
+        WHERE au.id = auth.uid()
+          AND au.admin_id = lancamentos.proprietario_id
+    )
 );
 
 -- NOVA POLÍTICA: Permite INSERT para Admin e Cliente

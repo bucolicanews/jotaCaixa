@@ -9,6 +9,7 @@ import { Loader2, Save } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { useSessao } from '@/hooks/use-sessao';
+import { useOwner } from '@/hooks/use-owner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { PlanoContas } from '@/types/plano-contas';
 import { Historico } from '@/types/historico';
@@ -42,14 +43,14 @@ interface FormLancamentoManualProps {
 
 const FormLancamentoManual: React.FC<FormLancamentoManualProps> = ({ onSaveComplete }) => {
   const { usuario } = useSessao();
+  const { ownerId } = useOwner();
   const { configMap } = useContabilConfig();
   const [contasAnaliticas, setContasAnaliticas] = useState<PlanoContas[]>([]);
   const [contasSaldo, setContasSaldo] = useState<SaldoContaDetalhada[]>([]);
   const [historicos, setHistoricos] = useState<Historico[]>([]);
   const [loadingData, setLoadingData] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
-  const ownerId = usuario?.id;
+
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),

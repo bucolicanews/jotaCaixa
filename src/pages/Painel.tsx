@@ -4,11 +4,11 @@ import { ClienteProfile, UsuarioProfile, AdminUsuarioProfile } from '@/types/usu
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
-import { Package, Loader2, Scale, Clock, Users, FileText, MessageSquare, PlusCircle } from 'lucide-react';
+import { Package, Loader2, Scale, Clock, Users, FileText, MessageSquare, PlusCircle, Building2 } from 'lucide-react';
 import DashboardFinanceiro from '@/components/DashboardFinanceiro';
 import React from 'react';
 
-type DashboardType = 'financeiro' | 'contabilidade' | 'folha' | 'rh' | 'suporte' | 'documentos' | 'restrito';
+type DashboardType = 'financeiro' | 'contabilidade' | 'folha' | 'rh' | 'geral' | 'restrito';
 
 const Painel = () => {
   const { role, perfil, carregando } = useSessao();
@@ -65,9 +65,10 @@ const Painel = () => {
     permissoes.cadastrar_usuarios === true || 
     permissoes.folha_ponto === true;
 
-  const hasSuportePermission = permissoes.gestao_suporte === true;
-
-  const hasDocumentosPermission = permissoes.documentos_societarios === true;
+  const hasGeralPermission =
+    permissoes.documentos_societarios === true ||
+    permissoes.gestao_suporte === true ||
+    permissoes.gerenciar_clientes === true;
 
   const getDashboardType = (): DashboardType => {
     if (isAdmin) return 'financeiro';
@@ -82,8 +83,7 @@ const Painel = () => {
     if (hasContabilidadePermission) return 'contabilidade';
     if (hasRHPermission) return 'rh';
     if (hasFolhaPermission) return 'folha';
-    if (hasSuportePermission) return 'suporte';
-    if (hasDocumentosPermission) return 'documentos';
+    if (hasGeralPermission) return 'geral';
     
     return 'restrito';
   };
@@ -99,8 +99,7 @@ const Painel = () => {
     hasContabilidadePermission,
     hasFolhaPermission,
     hasRHPermission,
-    hasSuportePermission,
-    hasDocumentosPermission,
+    hasGeralPermission,
     dashboardType,
   });
 
@@ -110,8 +109,7 @@ const Painel = () => {
       case 'contabilidade': return 'Painel Contabil';
       case 'folha': return 'Meu Ponto';
       case 'rh': return 'Gestao de RH';
-      case 'suporte': return 'Gestao de Suporte';
-      case 'documentos': return 'Documentos Societarios';
+      case 'geral': return 'Painel Geral';
       default: return 'Painel de Controle';
     }
   };
@@ -256,59 +254,48 @@ const Painel = () => {
           </div>
         );
         
-      case 'suporte':
-        return (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Link to="/admin/suporte">
-              <Card className="hover:shadow-lg transition-shadow cursor-pointer border-l-4 border-orange-500">
-                <CardHeader>
-                  <CardTitle className="flex items-center">
-                    <MessageSquare className="w-5 h-5 mr-2" />
-                    Gestao de Tickets
-                  </CardTitle>
-                  <CardDescription>Atenda os tickets de suporte</CardDescription>
-                </CardHeader>
-              </Card>
-            </Link>
-          </div>
-        );
-        
-      case 'documentos':
+      case 'geral':
         return (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <Link to="/documentos-societarios">
-              <Card className="hover:shadow-lg transition-shadow cursor-pointer border-l-4 border-indigo-500">
-                <CardHeader>
-                  <CardTitle className="flex items-center">
-                    <FileText className="w-5 h-5 mr-2" />
-                    Documentos Gerados
-                  </CardTitle>
-                  <CardDescription>Visualize documentos gerados</CardDescription>
-                </CardHeader>
-              </Card>
-            </Link>
-            <Link to="/documentos-societarios/modelos">
-              <Card className="hover:shadow-lg transition-shadow cursor-pointer border-l-4 border-pink-500">
-                <CardHeader>
-                  <CardTitle className="flex items-center">
-                    <FileText className="w-5 h-5 mr-2" />
-                    Gerenciar Modelos
-                  </CardTitle>
-                  <CardDescription>Crie e edite modelos de documentos</CardDescription>
-                </CardHeader>
-              </Card>
-            </Link>
-            <Link to="/documentos-societarios/blocos">
-              <Card className="hover:shadow-lg transition-shadow cursor-pointer border-l-4 border-cyan-500">
-                <CardHeader>
-                  <CardTitle className="flex items-center">
-                    <FileText className="w-5 h-5 mr-2" />
-                    Gerenciar Blocos
-                  </CardTitle>
-                  <CardDescription>Crie blocos reutilizaveis</CardDescription>
-                </CardHeader>
-              </Card>
-            </Link>
+            {permissoes.documentos_societarios && (
+              <Link to="/documentos-societarios">
+                <Card className="hover:shadow-lg transition-shadow cursor-pointer border-l-4 border-indigo-500">
+                  <CardHeader>
+                    <CardTitle className="flex items-center">
+                      <FileText className="w-5 h-5 mr-2" />
+                      Documentos Societarios
+                    </CardTitle>
+                    <CardDescription>Gerencie seus documentos societarios</CardDescription>
+                  </CardHeader>
+                </Card>
+              </Link>
+            )}
+            {permissoes.gestao_suporte && (
+              <Link to="/admin/suporte">
+                <Card className="hover:shadow-lg transition-shadow cursor-pointer border-l-4 border-orange-500">
+                  <CardHeader>
+                    <CardTitle className="flex items-center">
+                      <MessageSquare className="w-5 h-5 mr-2" />
+                      Gestao de Tickets
+                    </CardTitle>
+                    <CardDescription>Atenda os tickets de suporte</CardDescription>
+                  </CardHeader>
+                </Card>
+              </Link>
+            )}
+            {permissoes.gerenciar_clientes && (
+              <Link to="/clientes">
+                <Card className="hover:shadow-lg transition-shadow cursor-pointer border-l-4 border-green-500">
+                  <CardHeader>
+                    <CardTitle className="flex items-center">
+                      <Building2 className="w-5 h-5 mr-2" />
+                      Gerenciar Clientes
+                    </CardTitle>
+                    <CardDescription>Gerencie seus clientes</CardDescription>
+                  </CardHeader>
+                </Card>
+              </Link>
+            )}
           </div>
         );
         

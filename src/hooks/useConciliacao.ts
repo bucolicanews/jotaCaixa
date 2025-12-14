@@ -9,6 +9,7 @@ import Papa, { ParseResult } from 'papaparse';
 import { format, parseISO, parse, isValid } from 'date-fns';
 import { formatDDMMYYYYToISO, normalizeString } from '@/utils/formatters'; // Importando normalizeString
 import useSaldoContaCalculado from './use-saldo-conta-calculado'; // Importando useSaldoContaCalculado
+import { useOwner } from './use-owner';
 
 interface ConciliacaoHook {
     // State
@@ -64,6 +65,7 @@ const calculateContentHash = (csvContent: string): string => {
 
 export function useConciliacao(isBancoOnly: boolean = false): ConciliacaoHook {
     const { usuario } = useSessao();
+    const { ownerId } = useOwner();
     
     // --- Estados ---
     const [loading, setLoading] = useState(true);
@@ -142,7 +144,7 @@ export function useConciliacao(isBancoOnly: boolean = false): ConciliacaoHook {
     }, [proprietarioDaConfiguracao]);
     
     const fetchHistorico = useCallback(async () => {
-        if (!usuario?.id) return;
+        if (!ownerId) return;
         
         const { data, error } = await supabase
             .from('conciliacoes')
@@ -150,7 +152,7 @@ export function useConciliacao(isBancoOnly: boolean = false): ConciliacaoHook {
                 *,
                 saldo_contas:id_saldo_contas ( nome )
             `)
-            .eq('empresa_id', usuario.id)
+            .eq('empresa_id', ownerId)
             .order('criado_em', { ascending: false });
             
         if (error) {
@@ -159,7 +161,7 @@ export function useConciliacao(isBancoOnly: boolean = false): ConciliacaoHook {
         } else {
             setHistorico(data as ConciliacaoHistorico[]);
         }
-    }, [usuario]);
+    }, [ownerId]);
 
     // --- Efeitos ---
     useEffect(() => {

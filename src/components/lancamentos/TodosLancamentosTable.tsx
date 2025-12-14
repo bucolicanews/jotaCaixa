@@ -4,6 +4,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Loader2, Filter, Search, Printer, Trash2, Edit } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
+import { useOwner } from '@/hooks/use-owner';
 import { showError, showSuccess } from '@/utils/toast';
 import { Lancamento } from '@/types/lancamento';
 import { formatCurrency, formatarData } from '@/utils/formatters';
@@ -27,6 +28,7 @@ interface LancamentoDetalhado extends Lancamento {
 
 const TodosLancamentosTable: React.FC = () => {
     const { usuario } = useSessao();
+    const { ownerId } = useOwner();
     const { printContent } = usePrint();
     const { logoUrl, ownerName } = useOwnerBranding();
     
@@ -36,8 +38,6 @@ const TodosLancamentosTable: React.FC = () => {
     const [filtroTexto, setFiltroTexto] = useState('');
     const [filtroOrigem, setFiltroOrigem] = useState('todos');
     const filtroTextoDebounced = useDebounce(filtroTexto, 500);
-
-    const ownerId = usuario?.id;
 
     const fetchLancamentos = useCallback(async () => {
         if (!ownerId) return;

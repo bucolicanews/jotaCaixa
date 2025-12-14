@@ -6,6 +6,7 @@ import { PlanoContas } from '@/types/plano-contas';
 import { Lancamento } from '@/types/lancamento';
 import { useContabilConfig } from './use-contabil-config';
 import { format } from 'date-fns';
+import { resolveOwnerContext } from '@/utils/owner';
 
 interface ContaBP extends PlanoContas {
   saldo_final: number;
@@ -30,8 +31,9 @@ interface SaldoInicialMap {
 }
 
 export const useBalancoPatrimonial = (dataFim: Date | null): BalancoPatrimonialHook => {
-  const { usuario } = useSessao();
+  const { usuario, perfil, role } = useSessao();
   const { configMap } = useContabilConfig();
+  const { ownerId } = resolveOwnerContext(role, perfil, usuario?.id);
   const [balanco, setBalanco] = useState<ContaBP[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0); // NOVO ESTADO
@@ -111,7 +113,7 @@ export const useBalancoPatrimonial = (dataFim: Date | null): BalancoPatrimonialH
   }, [calcularSaldo, configMap]);
 
   const fetchBalanco = useCallback(async () => {
-    if (!usuario?.id || !dataFim) {
+    if (!ownerId || !dataFim) {
       return;
     }
 
@@ -121,7 +123,7 @@ export const useBalancoPatrimonial = (dataFim: Date | null): BalancoPatrimonialH
     const { data: contasData, error: contasError } = await supabase
         .from('plano_contas')
         .select('*')
-        .eq('proprietario_id', usuario.id)
+        .eq('proprietario_id', ownerId)
         .order('Conta');
 
     if (contasError) {
@@ -134,7 +136,7 @@ export const useBalancoPatrimonial = (dataFim: Date | null): BalancoPatrimonialH
     const { data: lancamentosData, error: lancamentosError } = await supabase
         .from('lancamentos')
         .select('*')
-        .eq('proprietario_id', usuario.id)
+        .eq('proprietario_id', ownerId)
         .lte('data_movimentacao', format(dataFim, 'yyyy-MM-dd') + 'T23:59:59Z');
 
     if (lancamentosError) {
@@ -147,7 +149,7 @@ export const useBalancoPatrimonial = (dataFim: Date | null): BalancoPatrimonialH
     const { data: saldosIniciaisData, error: saldosError } = await supabase
         .from('saldo_contas')
         .select('conta_contabil_id, saldo_inicial')
-        .eq('proprietario_id', usuario.id)
+        .eq('proprietario_id', ownerId)
         .not('conta_contabil_id', 'is', null);
         
     if (saldosError) {
@@ -166,7 +168,7 @@ export const useBalancoPatrimonial = (dataFim: Date | null): BalancoPatrimonialH
     
     setBalanco(balancoCalculado);
     setLoading(false);
-  }, [usuario?.id, dataFim, calcularSaldosRecursivo, refreshKey]); // Adicionando refreshKey
+  }, [ownerId, dataFim, calcularSaldosRecursivo, refreshKey]); // Adicionando refreshKey
 
   useEffect(() => {
     fetchBalanco();

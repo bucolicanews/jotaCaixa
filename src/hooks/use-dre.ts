@@ -6,6 +6,7 @@ import { PlanoContas } from '@/types/plano-contas';
 import { Lancamento } from '@/types/lancamento';
 import { useContabilConfig } from './use-contabil-config';
 import { format } from 'date-fns';
+import { resolveOwnerContext } from '@/utils/owner';
 
 interface ContaDRE extends PlanoContas {
   saldo_final: number;
@@ -24,8 +25,9 @@ interface DREHook {
 }
 
 export const useDRE = (filtroPeriodo: { from: Date | undefined, to: Date | undefined } | undefined): DREHook => {
-  const { usuario } = useSessao();
+  const { usuario, perfil, role } = useSessao();
   const { configMap } = useContabilConfig();
+  const { ownerId } = resolveOwnerContext(role, perfil, usuario?.id);
   const [dre, setDre] = useState<ContaDRE[]>([]);
   const [loading, setLoading] = useState(true);
   
@@ -98,7 +100,7 @@ export const useDRE = (filtroPeriodo: { from: Date | undefined, to: Date | undef
   }, [calcularSaldo, configMap]);
 
   const fetchDRE = useCallback(async () => {
-    if (!usuario?.id || !dataInicio || !dataFim) {
+    if (!ownerId || !dataInicio || !dataFim) {
       setLoading(false);
       return;
     }
@@ -113,7 +115,7 @@ export const useDRE = (filtroPeriodo: { from: Date | undefined, to: Date | undef
     const { data: contasData, error: contasError } = await supabase
         .from('plano_contas')
         .select('*')
-        .eq('proprietario_id', usuario.id)
+        .eq('proprietario_id', ownerId)
         .eq('is_conta_resultado', true)
         .order('Conta');
 
@@ -127,7 +129,7 @@ export const useDRE = (filtroPeriodo: { from: Date | undefined, to: Date | undef
     const { data: lancamentosData, error: lancamentosError } = await supabase
         .from('lancamentos')
         .select('*')
-        .eq('proprietario_id', usuario.id)
+        .eq('proprietario_id', ownerId)
         .gte('data_movimentacao', startOfDayLocal)
         .lte('data_movimentacao', endOfDayLocal);
 
@@ -142,7 +144,7 @@ export const useDRE = (filtroPeriodo: { from: Date | undefined, to: Date | undef
     
     setDre(dreCalculada);
     setLoading(false);
-  }, [usuario?.id, dataInicio, dataFim, calcularSaldosRecursivo]);
+  }, [ownerId, dataInicio, dataFim, calcularSaldosRecursivo]);
 
   useEffect(() => {
     fetchDRE();

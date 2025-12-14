@@ -64,13 +64,14 @@ const GerenciarUsuarios: React.FC = () => {
     
     let fetchedClientes: EmpresaFiltro[] = [];
     let fetchedUsers: UsuarioComEmpresa[] = [];
-    const ownerId = isAdmin ? usuario.id : (perfil as ClienteProfile)?.id;
+    const creatorId = isAdmin ? usuario.id : isAdminUsuario ? adminIdDoUsuario : (perfil as ClienteProfile)?.id;
 
-    if (isAdmin) {
-      // 1. Admin: Busca todos os clientes
+    if (isAdmin || (isAdminUsuario && creatorId)) {
+      // 1. Admin ou Sub-Admin: Busca todos os clientes do criador
       const { data: clientsData, error: clientsError } = await supabase
         .from('tbl_clientes')
-        .select('id, nome');
+        .select('id, nome')
+        .eq('admin_id', creatorId);
 
       if (clientsError) {
         showError('Erro ao carregar clientes para filtro: ' + clientsError.message);
@@ -80,19 +81,19 @@ const GerenciarUsuarios: React.FC = () => {
       
       fetchedClientes = clientsData as EmpresaFiltro[];
       
-      // Adiciona o próprio Admin como um "proprietário"
-      if (usuario.id) {
-          const adminOption: EmpresaFiltro = { id: usuario.id, nome: 'Meus Usuários (Admin)' };
+      // Adiciona o próprio Admin/Sub-Admin como um "proprietário"
+      if (creatorId) {
+          const adminOption: EmpresaFiltro = { id: creatorId, nome: 'Meus Usuários (Admin)' };
           fetchedClientes.unshift(adminOption);
       }
       
       setEmpresasFiltro(fetchedClientes);
 
-      // ADMIN: Busca Usuários (Funcionários) do Admin
+      // Busca Usuários (Funcionários) do Admin/Sub-Admin
       const { data: adminUsersData, error: adminUsersError } = await supabase
         .from('admin_usuarios')
         .select('*, admin_id')
-        .eq('admin_id', usuario.id)
+        .eq('admin_id', creatorId)
         .order('nome', { ascending: true });
         
       if (adminUsersError) console.error('Erro ao carregar usuários do Admin:', adminUsersError);
@@ -106,21 +107,19 @@ const GerenciarUsuarios: React.FC = () => {
       
       fetchedUsers.push(...adminUsers);
 
-      // ADMIN: Busca Usuários (Funcionários) dos Clientes
-      const clientIds = fetchedClientes.filter(c => c.id !== usuario.id).map(c => c.id);
+      // Busca Usuários (Funcionários) dos Clientes
+      const clientIds = fetchedClientes.filter(c => c.id !== creatorId).map(c => c.id);
       
       if (clientIds.length > 0) {
-          // CORREÇÃO CRÍTICA: Usar o filtro 'in' apenas se houver IDs válidos
           const { data: clientUsersData, error: clienteUsersError } = await supabase
             .from('tbl_usuarios')
             .select('*, admin_id')
-            .in('cliente_id', clientIds) // Filtrando por cliente_id
+            .in('cliente_id', clientIds)
             .order('nome', { ascending: true });
             
           if (clienteUsersError) console.error('Erro ao carregar usuários dos Clientes:', clienteUsersError);
           
           const clientUsers = (clientUsersData || []).map(item => {
-            // CORREÇÃO: Usa fetchedClientes (que está no escopo)
             const nomeEmpresa = fetchedClientes.find(c => c.id === (item as UsuarioProfile).cliente_id)?.nome || 'N/A';
             return { ...item, cliente_nome: nomeEmpresa, is_admin_user: false } as UsuarioComEmpresa;
           });
@@ -128,12 +127,12 @@ const GerenciarUsuarios: React.FC = () => {
           fetchedUsers.push(...clientUsers);
       }
       
-    } else if (isCliente && ownerId) {
+    } else if (isCliente && creatorId) {
       // CLIENTE: Busca apenas seus próprios Usuários (Funcionários)
       const { data: usuariosData, error: usuariosError } = await supabase
         .from('tbl_usuarios')
         .select('*')
-        .eq('cliente_id', ownerId) // Filtrando por cliente_id
+        .eq('cliente_id', creatorId) 
         .order('nome', { ascending: true });
 
       if (usuariosError) {
@@ -144,26 +143,6 @@ const GerenciarUsuarios: React.FC = () => {
       }
       
       fetchedUsers = (usuariosData || []).map(u => ({ ...u, cliente_nome: (perfil as ClienteProfile)?.nome || 'Minha Empresa' })) as UsuarioComEmpresa[];
-    } else if (isAdminUsuario && adminIdDoUsuario) {
-      // ADMIN_USUARIO (Funcionário do Admin com permissão de RH): Busca usuários do Admin
-      const { data: adminUsersData, error: adminUsersError } = await supabase
-        .from('admin_usuarios')
-        .select('*, admin_id')
-        .eq('admin_id', adminIdDoUsuario)
-        .order('nome', { ascending: true });
-        
-      if (adminUsersError) {
-        showError('Erro ao carregar usuários: ' + adminUsersError.message);
-        setCarregandoDados(false);
-        return;
-      }
-      
-      fetchedUsers = (adminUsersData || []).map(u => ({ 
-          ...u, 
-          cliente_id: null,
-          is_admin_user: true,
-          cliente_nome: 'Funcionários do Admin' 
-      })) as UsuarioComEmpresa[];
     }
     
     // NOVO PASSO: Buscar todos os IDs de Clientes (tbl_clientes) e Admin (tbl_admins) para exclusão

@@ -7,6 +7,7 @@ import { Lancamento } from '@/types/lancamento';
 import { useContabilConfig } from '../use-contabil-config';
 import { format } from 'date-fns';
 import { DateRange } from 'react-day-picker';
+import { resolveOwnerContext } from '@/utils/owner';
 
 // Tipo auxiliar para a conta
 interface ContaBalancete extends PlanoContas {
@@ -41,8 +42,9 @@ interface SaldoInicialMap {
  * e o saldo final de TODAS as contas (analíticas e sintéticas).
  */
 export const useBalancete = (filtroPeriodo: DateRange | undefined): BalanceteHook => {
-  const { usuario } = useSessao();
+  const { usuario, perfil, role } = useSessao();
   const { configMap } = useContabilConfig();
+  const { ownerId } = resolveOwnerContext(role, perfil, usuario?.id);
   const [balancete, setBalancete] = useState<ContaBalancete[]>([]);
   const [totais, setTotais] = useState<TotaisBalancete>({ totalDebito: 0, totalCredito: 0, totalSaldoFinal: 0 });
   const [loading, setLoading] = useState(true);
@@ -188,7 +190,7 @@ export const useBalancete = (filtroPeriodo: DateRange | undefined): BalanceteHoo
   }, [calcularMovimento, calcularSaldoInicial, getNatureza]);
 
   const fetchBalancete = useCallback(async () => {
-    if (!usuario?.id || !filtroPeriodo?.from || !filtroPeriodo?.to) {
+    if (!ownerId || !filtroPeriodo?.from || !filtroPeriodo?.to) {
       setLoading(false);
       return;
     }
@@ -207,7 +209,7 @@ export const useBalancete = (filtroPeriodo: DateRange | undefined): BalanceteHoo
     const { data: contasData, error: contasError } = await supabase
         .from('plano_contas')
         .select('*')
-        .eq('proprietario_id', usuario.id)
+        .eq('proprietario_id', ownerId)
         .order('Conta');
 
     if (contasError) {
@@ -220,7 +222,7 @@ export const useBalancete = (filtroPeriodo: DateRange | undefined): BalanceteHoo
     const { data: lancamentosPeriodoData, error: lpError } = await supabase
         .from('lancamentos')
         .select('valor, tipo, conta_contabil_id, origem')
-        .eq('proprietario_id', usuario.id)
+        .eq('proprietario_id', ownerId)
         .gte('data_movimentacao', startOfPeriod)
         .lte('data_movimentacao', endOfPeriod)
         .neq('origem', 'movimentacao_direta_estornada'); // Ignora lançamentos originais estornados
@@ -235,7 +237,7 @@ export const useBalancete = (filtroPeriodo: DateRange | undefined): BalanceteHoo
     const { data: lancamentosAnterioresData, error: laError } = await supabase
         .from('lancamentos')
         .select('valor, tipo, conta_contabil_id, origem')
-        .eq('proprietario_id', usuario.id)
+        .eq('proprietario_id', ownerId)
         .lt('data_movimentacao', beforePeriod)
         .neq('origem', 'movimentacao_direta_estornada'); // Ignora lançamentos originais estornados
 
@@ -249,7 +251,7 @@ export const useBalancete = (filtroPeriodo: DateRange | undefined): BalanceteHoo
     const { data: saldosIniciaisData } = await supabase
         .from('saldo_contas')
         .select('conta_contabil_id, saldo_inicial')
-        .eq('proprietario_id', usuario.id)
+        .eq('proprietario_id', ownerId)
         .not('conta_contabil_id', 'is', null);
         
     const saldosIniciaisMap: SaldoInicialMap = (saldosIniciaisData || []).reduce((acc, s) => {
@@ -275,7 +277,7 @@ export const useBalancete = (filtroPeriodo: DateRange | undefined): BalanceteHoo
     setBalancete(balanceteCalculado);
     setTotais({ totalDebito, totalCredito, totalSaldoFinal });
     setLoading(false);
-  }, [usuario?.id, filtroPeriodo, calcularBalancete]);
+  }, [ownerId, filtroPeriodo, calcularBalancete]);
 
   useEffect(() => {
     fetchBalancete();

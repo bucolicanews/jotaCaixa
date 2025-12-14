@@ -2,9 +2,9 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { ContratoGerado } from '@/types/contratos';
-import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 import { useSessao } from './use-sessao';
 import { useDebounce } from './use-debounce';
+import { resolveOwnerContext } from '@/utils/owner';
 
 type ContratoComCliente = ContratoGerado & { clientes: { nome: string } | null };
 export type ContratoStatus = ContratoGerado['status'] | 'todos'; // EXPORTADO
@@ -51,16 +51,7 @@ export function useContratos(): ContratosHook {
     const [ordenacao, setOrdenacao] = useState<Ordenacao>('criado_em_desc');
 
     const isAdmin = role === 'Admin';
-    const isClient = role === 'Cliente';
-
-    const getEmpresaId = () => {
-        if (isAdmin) return usuario?.id || null;
-        if (isClient) return (perfil as ClienteProfile)?.id;
-        if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id; // FIX: proprietario_id -> cliente_id
-        return null;
-    };
-    
-    const empresaId = getEmpresaId();
+    const { ownerId: empresaId } = resolveOwnerContext(role, perfil, usuario?.id);
 
     const refetch = useCallback(() => {
         setRefreshKey(prev => prev + 1);
