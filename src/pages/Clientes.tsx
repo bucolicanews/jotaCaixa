@@ -25,6 +25,7 @@ import ClientesPrint from '@/components/ClientesPrint';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { BASE_URL } from '@/config/app-config';
 import { useOwnerBranding } from '@/hooks/use-owner-branding'; // NOVO IMPORT
+import { Plano } from '@/types/plano';
 
 // Tipo para o filtro de empresa (inclui o Admin)
 interface EmpresaFiltro {
@@ -44,12 +45,6 @@ export interface EmpresaSistema extends ClienteProfile {
     cnpj?: string | null;
     cpf?: string | null;
     documento?: string | null;
-}
-
-// NOVO TIPO
-interface PlanoSimples {
-    id: string;
-    nome: string;
 }
 
 // NOVO TIPO: Cliente CR com status de sistema e contagens
@@ -84,6 +79,7 @@ const ClientesPage = () => {
   
   // NOVO ESTADO
   const [planosMap, setPlanosMap] = useState<Record<string, string>>({});
+  const [planosDisponiveis, setPlanosDisponiveis] = useState<Plano[]>([]);
   
   // Filtros para Admin
   const [empresasFiltro, setEmpresasFiltro] = useState<EmpresaFiltro[]>([]);
@@ -116,14 +112,19 @@ const ClientesPage = () => {
   const fetchPlanos = useCallback(async () => {
     const { data, error } = await supabase
         .from('planos')
-        .select('id, nome');
+        .select('*')
+        .order('preco_mensal', { ascending: true });
         
     if (error) {
         console.error('Erro ao carregar planos:', error);
+        setPlanosDisponiveis([]);
+        setPlanosMap({});
         return;
     }
     
-    const map = (data as PlanoSimples[]).reduce((acc, p) => {
+    const planosList = data as Plano[];
+    setPlanosDisponiveis(planosList);
+    const map = planosList.reduce((acc, p) => {
         acc[p.id] = p.nome;
         return acc;
     }, {} as Record<string, string>);
@@ -1425,6 +1426,7 @@ const ClientesPage = () => {
               criadorRole={role!}
               criadorPerfil={perfil!}
               usuarioInicial={perfilParaEditar}
+              planos={planosDisponiveis}
               onSaveComplete={handleSaveComplete}
             />
           </DialogContent>
