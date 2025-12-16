@@ -12,6 +12,7 @@ import { UsuarioProfile, AdminUsuarioProfile } from '@/types/usuario';
 import usePontoStatus from '@/hooks/use-ponto-status';
 import { format, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { Input } from '@/components/ui/input';
 
 type RegistroTipo = 'Entrada' | 'Saida';
 
@@ -26,6 +27,9 @@ const RegistroPonto: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [location, setLocation] = useState<GeoLocation | null>(null);
   const [locationStatus, setLocationStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [manualLat, setManualLat] = useState('');
+  const [manualLng, setManualLng] = useState('');
+  const [manualAccuracy, setManualAccuracy] = useState('');
   
   // State for camera capture
   const [selfieFile, setSelfieFile] = useState<File | null>(null); 
@@ -76,22 +80,21 @@ const RegistroPonto: React.FC = () => {
           setLocationStatus('error');
           reject(new Error(`Erro ao obter localização: ${error.message}`));
         },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
       );
     });
   }, []);
+
+  const requestGeoLocation = useCallback(() => {
+    getGeoLocation()
+      .then((position) => setLocation(position))
+      .catch((error) => {
+        console.error('Erro ao obter localização:', error);
+        setLocation(null);
+      });
+  }, [getGeoLocation]);
   
   // Efeito para tentar obter a localização assim que o componente carrega
-  React.useEffect(() => {
-      if (funcionarioId && locationStatus === 'idle') {
-          getGeoLocation().then(setLocation).catch(error => {
-              console.error("Erro inicial de geolocalização:", error);
-              setLocation(null);
-          });
-      }
-  }, [funcionarioId, locationStatus, getGeoLocation]);
-
-
   const uploadSelfie = async (file: File): Promise<string> => {
     const fileExt = file.name.split('.').pop();
     const fileName = `${funcionarioId}/${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
@@ -115,21 +118,43 @@ const RegistroPonto: React.FC = () => {
 
   const handleCapture = useCallback((file: File) => {
     setSelfieFile(file);
-  }, []);
+    requestGeoLocation();
+  }, [requestGeoLocation]);
 
   const handleResetSelfie = useCallback(() => {
     setSelfieFile(null);
+    setLocation(null);
+    setLocationStatus('idle');
+    setManualLat('');
+    setManualLng('');
+    setManualAccuracy('');
   }, []);
+
+  const handleManualLocationApply = useCallback(() => {
+    const lat = parseFloat(manualLat.replace(',', '.'));
+    const lng = parseFloat(manualLng.replace(',', '.'));
+    const accuracyValue = manualAccuracy ? parseFloat(manualAccuracy.replace(',', '.')) : undefined;
+
+    if (!isFinite(lat) || !isFinite(lng)) {
+      showError('Informe latitude e longitude válidas (ex.: -23.5555 e -46.6392).');
+      return;
+    }
+
+    const manualGeo: GeoLocation = {
+      latitude: lat,
+      longitude: lng,
+      accuracy: accuracyValue,
+    };
+
+    setLocation(manualGeo);
+    setLocationStatus('success');
+    showSuccess('Localização definida manualmente.');
+  }, [manualLat, manualLng, manualAccuracy]);
 
   const handlePreRegister = (tipo: RegistroTipo) => {
     if (!selfieFile) {
       showError('Por favor, capture uma selfie antes de registrar o ponto.');
       return;
-    }
-    
-    if (locationStatus !== 'success' || !location) {
-        showError('Aguarde a obtenção da localização ou tente novamente.');
-        return;
     }
     
     // Regra 2: Verifica se a ação é a esperada
@@ -143,7 +168,7 @@ const RegistroPonto: React.FC = () => {
   };
 
   const registrarPonto = async (tipo: RegistroTipo) => {
-    if (!funcionarioId || !empresaId || !selfieFile || !location) {
+    if (!funcionarioId || !empresaId || !selfieFile) {
       showError('Dados incompletos para registro.');
       return;
     }
@@ -155,8 +180,8 @@ const RegistroPonto: React.FC = () => {
 
       const selfieUrl = await uploadSelfie(selfieFile);
       
-      // Constrói a URL do Google Maps
-      const mapsUrl = `https://www.google.com/maps?q=${geo.latitude},${geo.longitude}`;
+      // Constrói a URL do Google Maps (quando disponível)
+      const mapsUrl = geo ? `https://www.google.com/maps?q=${geo.latitude},${geo.longitude}` : null;
 
       const payload = {
           funcionario_id: funcionarioId,
@@ -164,9 +189,9 @@ const RegistroPonto: React.FC = () => {
           horario_registro: new Date().toISOString(),
           selfie_url: selfieUrl,
           tipo: tipo,
-          latitude: geo.latitude, // SALVANDO LATITUDE
-          longitude: geo.longitude, // SALVANDO LONGITUDE
-          maps_url: mapsUrl, // SALVANDO LINK DO MAPA
+          latitude: geo?.latitude ?? null,
+          longitude: geo?.longitude ?? null,
+          maps_url: geo ? mapsUrl : null,
       };
 
       const { error } = await supabase
@@ -227,7 +252,7 @@ const RegistroPonto: React.FC = () => {
   
   const isEntrada = proximaAcao === 'Entrada';
   const isSaida = proximaAcao === 'Saida';
-  const isPontoDisabled = loading || carregandoStatus || !selfieFile || locationStatus !== 'success';
+  const isPontoDisabled = loading || carregandoStatus || !selfieFile;
 
   return (
     <Card className="w-full max-w-xl mx-auto">
@@ -270,12 +295,74 @@ const RegistroPonto: React.FC = () => {
             <h3 className="text-lg font-semibold flex items-center">
                 <MapPin className="w-5 h-5 mr-2" /> 2. Localização
             </h3>
-            <div className="p-3 border rounded-md">
+            <div className="p-3 border rounded-md space-y-2">
                 {renderLocationStatus()}
-                {locationStatus === 'error' && (
-                    <Button variant="link" size="sm" onClick={() => getGeoLocation().then(setLocation).catch(() => {})} disabled={loading} className="mt-1 p-0 h-auto">
-                        Tentar Obter Localização Novamente
+                <p className="text-xs text-muted-foreground">
+                    A localização só é capturada após tocar no botão abaixo, logo após a selfie. Caso o navegador bloqueie, permita o acesso ou use a opção manual.
+                </p>
+                <div className="flex items-center gap-2">
+                    <Button
+                        variant="link"
+                        size="sm"
+                        onClick={requestGeoLocation}
+                        disabled={loading || locationStatus === 'loading'}
+                        className="mt-1 p-0 h-auto"
+                    >
+                        {locationStatus === 'error'
+                            ? 'Tentar Obter Localização Novamente'
+                            : locationStatus === 'success'
+                                ? 'Atualizar Localização'
+                                : 'Obter Localização'}
                     </Button>
+                    {locationStatus === 'loading' && (
+                        <span className="text-muted-foreground text-xs">Pedindo permissão...</span>
+                    )}
+                </div>
+                {(!location || locationStatus === 'error') && (
+                  <div className="mt-3 space-y-2 rounded-md border border-dashed border-muted-foreground/40 bg-muted/20 p-3">
+                    <p className="text-xs font-semibold">
+                      Alternativa manual via Google Maps
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Abra o Google Maps, toque no local exato e copie as coordenadas exibidas (ex.: -23.5555, -46.6392). Cole abaixo para continuar.
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <Input
+                        placeholder="Latitude (ex: -23.5555)"
+                        value={manualLat}
+                        onChange={(e) => setManualLat(e.target.value)}
+                        inputMode="decimal"
+                      />
+                      <Input
+                        placeholder="Longitude (ex: -46.6392)"
+                        value={manualLng}
+                        onChange={(e) => setManualLng(e.target.value)}
+                        inputMode="decimal"
+                      />
+                      <Input
+                        placeholder="Precisão (metros, opcional)"
+                        value={manualAccuracy}
+                        onChange={(e) => setManualAccuracy(e.target.value)}
+                        inputMode="decimal"
+                        className="sm:col-span-2"
+                      />
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={handleManualLocationApply}
+                        disabled={!manualLat || !manualLng}
+                      >
+                        Usar coordenadas
+                      </Button>
+                      <Button size="sm" variant="outline" asChild>
+                        <a href="https://www.google.com/maps" target="_blank" rel="noreferrer">
+                          Abrir Google Maps
+                        </a>
+                      </Button>
+                    </div>
+                  </div>
                 )}
             </div>
         </div>
@@ -343,6 +430,12 @@ const RegistroPonto: React.FC = () => {
               Você está prestes a registrar um ponto de <span className="font-bold text-primary">{pendingRegistroType}</span>.
               {location && (
                   <p className="mt-2 text-xs">Localização: {location.latitude.toFixed(4)}, {location.longitude.toFixed(4)} (Precisão: {location.accuracy?.toFixed(0)}m)</p>
+              )}
+              {!location && (
+                <p className="mt-2 text-xs text-amber-600 flex items-center gap-1">
+                  <AlertTriangle className="w-3 h-3" />
+                  Localização não registrada. O gestor verá esse lançamento sem coordenadas.
+                </p>
               )}
             </div>
           </AlertDialogHeader>

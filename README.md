@@ -713,17 +713,18 @@ $$ LANGUAGE plpgsql;
 - Marca como "já lançado" com badge verde
 
 ### 6. **Ponto Eletrônico (`/ponto-eletronico`)**
-- Registro de entrada/saída com hora
-- Captura de foto (selfie)
-- Geolocalização automática
-- Histórico diário
+- Registro de entrada/saída com selfie, geolocalização guiada e fallback manual.
+- O GPS é solicitado *após* a captura da foto (gesto do usuário), e há um botão “Obter/Atualizar Localização” com status visual para guiar permissões.
+- Quando o navegador nega ou dá timeout, o usuário copia coordenadas do Google Maps (botão link abre o Maps) e cola nos campos manuais (latitude, longitude, precisão) antes de salvar.
+- O lançamento é permitido com ou sem localização; a confirmação alerta que o envio ficará sem coordenadas quando necessário.
+- O histórico registra `latitude`, `longitude`, `accuracy` e `maps_url` somente quando disponíveis.
 
 **Como Usar:**
-1. Acesse `/ponto-eletronico`
-2. Clique em "Registrar Entrada" ou "Registrar Saída"
-3. Câmera ativa para captura de selfie
-4. Sistema registra localização
-5. Dados salvos no banco
+1. Acesse `/ponto-eletronico`.
+2. Capture a selfie (a câmera é ativada automaticamente).
+3. Toque em “Obter Localização” depois da foto; aguarde permissão/minutos.
+4. Se necessário, cole coordenadas do Google Maps e clique em “Usar coordenadas”.
+5. Confirme a Entrada ou Saída; mesmo sem GPS, o registro é salvo, e o alerta no diálogo informa o gestor.
 
 ### 7. **Folha de Ponto (`/folha-ponto`)**
 - Visualização mensal de horas trabalhadas
@@ -805,6 +806,7 @@ $$ LANGUAGE plpgsql;
 - **Configuração para Admin:** Em Configurações (somente para admin) existe a aba “Configuração Tabelas Padrão” onde o administrador pode subir planos/ históricos no formato CSV ou JSON, ou apontar para um link externo. Os dados são parseados, exibem um resumo e ficam disponíveis para download nos registros listados.
 - **Banco e migração:** Os dados vão para a tabela `public.configuracao_tabelas_padrao` (migrada pelo script `supabase/migrations/20241216_configuracao_tabelas_padrao.sql`). A tabela tem FK para `tbl_admins(id)` e guarda JSON em `plano_de_contas` e `historicos`, além de registrar `created_at`. Rode `supabase db push` (ou aplique o SQL manualmente) para criar a tabela antes de usar essa aba.
 - **Segurança/RLS:** A tabela habilita Row Level Security e aplica a policy `Admins gerenciam suas tabelas padrão`, portanto apenas o admin autenticado (`auth.uid() = id_admin`) consegue inserir, editar ou deletar seus próprios registros. Edge functions ou scripts que precisam manipular esses dados devem usar a role de serviço (service role key) ou atuar enquanto o admin estiver autenticado para vencer a policy.
+- **Permissões e Upsert:** A mesma policy garante isolamento por admin; o campo `configuracao_tabelas_padrao.id_admin` referencia `tbl_admins.id`. Além disso, a migration `supabase/migrations/20241217_configuracao_contabil_unique_constraint.sql` adiciona a constraint única `(proprietario_id, tipo_natureza)` em `configuracao_contabil`, exigida pelos formulários que fazem `upsert(..., { on_conflict: 'proprietario_id, tipo_natureza' })`.
 
 ### Guia obrigatório de marcações no Plano de Contas
 Depois de importar o plano e os históricos, marque no mínimo uma conta para cada categoria abaixo. O sistema bloqueia o dashboard e os módulos de Contas a Pagar/Receber enquanto algum item estiver pendente (o checklist aparece no topo da tela de Plano de Contas).
@@ -862,6 +864,13 @@ Criação CP:        D: Despesa/Custo       | C: Obrigação a Pagar
 Pagamento CP:      D: Obrigação a Pagar   | C: Caixa/Banco
 ```
 
+### Fluxo de Configuração Inicial
+
+1. Cliente importa plano de contas e históricos **e** marca obrigatoriamente Caixa, Banco, Clientes, Fornecedores, Capital Social, Receita e Despesa no plano de contas.
+2. O `SetupBlocker` bloqueia `/painel`, `/contas-pagar`, `/contas-receber` e `/plano-contas` até todas as etapas (planos, históricos, configurações de CP/CR/Contratos e marcações) ficarem completas; o checklist aparece no topo do `PlanoContas`.
+3. Após o checklist completo, o alerta "Lançamento inicial obrigatório" instrui o cliente sobre o primeiro lançamento contábil: **D: Caixa/Banco · C: Capital Social**.
+4. O sistema exige que este primeiro lançamento manual seja registrado antes de liberar definitivamente os módulos.
+
 ---
 
 ## API e Integrações
@@ -903,6 +912,7 @@ Pagamento CP:      D: Obrigação a Pagar   | C: Caixa/Banco
 - Admin vê dados via tabelas `admin_*`
 - Cliente vê apenas seus dados
 - Funcionário vê apenas seus registros
+- **Configuração inicial exigida:** O `SetupBlocker` trava os módulos financeiros até que o cliente importe plano/históricos, configure contas a pagar/receber/contratos e marque as 7 categorias essenciais. Após a conclusão, um alerta fixa o requisito do primeiro lançamento contábil (D: Caixa/Banco · C: Capital Social) e libera o uso completo do sistema.
 
 ### Campos Sensíveis
 - Senhas: hash via Supabase Auth
