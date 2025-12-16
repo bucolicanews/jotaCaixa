@@ -16,6 +16,8 @@ import {
   CheckCircle2,
   AlertTriangle,
   Info,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
@@ -117,6 +119,7 @@ const PlanoContasPage = () => {
   const [novaContaInicial, setNovaContaInicial] = useState<NovaContaInicial | null>(null);
   
   const [dialogAberto, setDialogAberto] = useState(false);
+  const [guiaAberta, setGuiaAberta] = useState(false);
   
   // NOVO ESTADO: Conta clicada para navegação hierárquica
   const [contaClicada, setContaClicada] = useState<PlanoContas | null>(null);
@@ -425,6 +428,8 @@ const PlanoContasPage = () => {
     };
   }, [contas]);
 
+  const allGuiaDone = useMemo(() => Object.values(guiaStatus).every(Boolean), [guiaStatus]);
+
   const guiaItens = [
     {
       key: '1',
@@ -532,41 +537,64 @@ const PlanoContasPage = () => {
       </div>
 
       <Card className="mb-6 border-dashed border-primary/30 bg-primary/5">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-primary">
-            <Info className="h-5 w-5" />
-            Guia de marcação obrigatória
-          </CardTitle>
-          <CardDescription>
-            Após importar o plano e os históricos, marque pelo menos uma conta para cada categoria abaixo.
-            Esses marcadores alimentam os módulos de Contas a Pagar/Receber e Contratos.
-          </CardDescription>
+        <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <CardTitle className="flex items-center gap-2 text-primary">
+              <Info className="h-5 w-5" />
+              Guia de marcação obrigatória
+            </CardTitle>
+            <CardDescription>
+              Após importar o plano e os históricos, marque pelo menos uma conta para cada categoria abaixo.
+              Esses marcadores alimentam os módulos de Contas a Pagar/Receber e Contratos.
+            </CardDescription>
+            {allGuiaDone && (
+              <p className="mt-2 text-sm text-emerald-700 flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4" />
+                Tudo certo! Todos os marcadores obrigatórios já foram configurados.
+              </p>
+            )}
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setGuiaAberta((prev) => !prev)}
+          >
+            {guiaAberta ? 'Recolher guia' : 'Ver detalhes'}
+            {guiaAberta ? (
+              <ChevronUp className="h-4 w-4 ml-1" />
+            ) : (
+              <ChevronDown className="h-4 w-4 ml-1" />
+            )}
+          </Button>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {guiaItens.map((item) => (
-            <div
-              key={item.key}
-              className={cn(
-                'flex items-start gap-3 rounded-lg border p-3 text-sm',
-                item.done
-                  ? 'border-emerald-400 bg-emerald-50 dark:bg-emerald-900/20'
-                  : 'border-amber-400 bg-amber-50 dark:bg-amber-900/20',
-              )}
-            >
-              {item.done ? (
-                <CheckCircle2 className="h-5 w-5 text-emerald-600 mt-0.5" />
-              ) : (
-                <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5" />
-              )}
-              <div>
-                <p className="font-semibold">
-                  {item.key}. {item.title}
-                </p>
-                <p className="text-muted-foreground">{item.description}</p>
+        {(!allGuiaDone || guiaAberta) && (
+          <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {guiaItens.map((item) => (
+              <div
+                key={item.key}
+                className={cn(
+                  'flex items-start gap-3 rounded-lg border p-3 text-sm',
+                  item.done
+                    ? 'border-emerald-400 bg-emerald-50 dark:bg-emerald-900/20'
+                    : 'border-amber-400 bg-amber-50 dark:bg-amber-900/20',
+                )}
+              >
+                {item.done ? (
+                  <CheckCircle2 className="h-5 w-5 text-emerald-600 mt-0.5" />
+                ) : (
+                  <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5" />
+                )}
+                <div>
+                  <p className="font-semibold">
+                    {item.key}. {item.title}
+                  </p>
+                  <p className="text-muted-foreground">{item.description}</p>
+                </div>
               </div>
-            </div>
-          ))}
-        </CardContent>
+            ))}
+          </CardContent>
+        )}
       </Card>
 
       {/* GRID MODERNO DE DUAS COLUNAS */}

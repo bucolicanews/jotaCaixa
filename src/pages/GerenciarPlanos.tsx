@@ -92,7 +92,7 @@ const GerenciarPlanos: React.FC = () => {
     <LayoutPrincipal>
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
         <h1 className="text-2xl md:text-3xl font-bold flex items-center">
-          <DollarSign className="w-6 h-6 mr-2" /> Gerenciar Planos de Assinatura
+          <DollarSign className="w-6 h-6 mr-2" />Planos
         </h1>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>

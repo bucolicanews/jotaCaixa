@@ -65,8 +65,8 @@ const FluxoCaixa: React.FC = () => {
   return (
     <LayoutPrincipal>
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-        <h1 className="text-2xl md:text-3xl font-bold flex items-center">
-          <TrendingUp className="w-6 h-6 mr-2" /> Relatório de Fluxo de Caixa
+  <h1 className="text-3xl font-bold flex items-center" >
+             <TrendingUp className="w-6 h-6 mr-2" />Fluxo de Caixa
         </h1>
         
         <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>

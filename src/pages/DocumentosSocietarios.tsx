@@ -1,27 +1,28 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, FileText, Eye, Trash2, Building2, Edit } from 'lucide-react';
+import { Loader2, FileText, Eye, Trash2, Building2, Edit, Plus } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
 import { DocumentoSocietarioGerado } from '@/types/documentos-societarios';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { UsuarioProfile, ClienteProfile, AdminUsuarioProfile } from '@/types/usuario';
+import { UsuarioProfile, AdminUsuarioProfile } from '@/types/usuario';
 import { Link, useNavigate } from 'react-router-dom';
 import { format, parseISO } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import ContratoPreviewDialog from '@/components/contratos/ContratoPreviewDialog';
+import { cn } from '@/lib/utils';
 
 interface DocumentoComCliente extends DocumentoSocietarioGerado {
-    cliente_nome: string | null; // NOVO CAMPO
-    modelos_societarios: { titulo: string, tipo_conteudo: 'html' | 'texto' } | null;
+  cliente_nome: string | null;
+  modelos_societarios: { titulo: string, tipo_conteudo: 'html' | 'texto' } | null;
 }
 
 const DocumentosSocietarios: React.FC = () => {
   const { role, perfil, carregando: carregandoSessao } = useSessao();
-  const navigate = useNavigate(); // Inicializando useNavigate
+  const navigate = useNavigate();
   const [documentos, setDocumentos] = useState<DocumentoComCliente[]>([]);
   const [carregandoDocumentos, setCarregandoDocumentos] = useState(true);
   
@@ -30,7 +31,7 @@ const DocumentosSocietarios: React.FC = () => {
   const [previewTitle, setPreviewTitle] = useState('');
   const [isPreviewHtml, setIsPreviewHtml] = useState(true);
   
-  const [clienteNomeMap, setClienteNomeMap] = useState<Record<string, string>>({}); // NOVO ESTADO
+  const [clienteNomeMap, setClienteNomeMap] = useState<Record<string, string>>({});
 
   const getOwnerId = () => {
     if (role === 'Admin' || role === 'Cliente') return (perfil as any)?.id;
@@ -64,7 +65,7 @@ const DocumentosSocietarios: React.FC = () => {
         data_registro,
         criado_em,
         modelos_societarios ( titulo, tipo_conteudo )
-      `) // REMOVIDO clientes (nome)
+      `)
       .eq('proprietario_id', ownerId)
       .order('data_registro', { ascending: false });
 
@@ -75,11 +76,8 @@ const DocumentosSocietarios: React.FC = () => {
       setDocumentos([]);
     } else {
       const fetchedDocs = data as DocumentoComCliente[];
-      
-      // 1. Coletar IDs de clientes
       const clienteIds = Array.from(new Set(fetchedDocs.map(d => d.cliente_id).filter((id): id is string => !!id)));
       
-      // 2. Buscar nomes dos clientes (usando tbl_clientes, que é a fonte de dados para clientes do sistema)
       const { data: clientesData } = await supabase
           .from('tbl_clientes')
           .select('id, nome')
@@ -91,7 +89,6 @@ const DocumentosSocietarios: React.FC = () => {
       }, {} as Record<string, string>);
       setClienteNomeMap(nomeMap);
       
-      // 3. Mapear o nome do cliente no frontend
       const documentosComNome = fetchedDocs.map(doc => ({
           ...doc,
           cliente_nome: doc.cliente_id ? nomeMap[doc.cliente_id] || 'N/A' : 'N/A',
@@ -124,20 +121,17 @@ const DocumentosSocietarios: React.FC = () => {
     }
   };
   
-  // NOVO HANDLER: Edição
   const handleEdit = (doc: DocumentoComCliente) => {
       if (!doc.modelo_id) {
           showError('Modelo base não encontrado para edição.');
           return;
       }
-      // Redireciona para a página de geração, passando o ID do documento para edição
       navigate(`/documentos-societarios/gerar/${doc.modelo_id}?documentoId=${doc.id}`);
   };
   
   const handleView = (doc: DocumentoComCliente) => {
       setPreviewContent(doc.conteudo_renderizado || 'Conteúdo não renderizado.');
       setPreviewTitle(doc.valores_tags_preenchidos?.titulo || doc.modelos_societarios?.titulo || 'Documento');
-      // Determina se é HTML ou Texto Simples
       const isHtml = doc.valores_tags_preenchidos?.tipo_conteudo === 'html' || doc.modelos_societarios?.tipo_conteudo === 'html';
       setIsPreviewHtml(isHtml);
       setPreviewOpen(true);
@@ -154,77 +148,135 @@ const DocumentosSocietarios: React.FC = () => {
   }
   
   if (!ownerId) {
-    return <LayoutPrincipal><Card><CardHeader><CardTitle>Acesso Negado</CardTitle></CardHeader><CardContent><p>Você não tem permissão para gerenciar documentos.</p></CardContent></Card></LayoutPrincipal>;
+    return (
+      <LayoutPrincipal>
+        <Card className="mt-8">
+          <CardHeader><CardTitle>Acesso Negado</CardTitle></CardHeader>
+          <CardContent><p>Você não tem permissão para gerenciar documentos.</p></CardContent>
+        </Card>
+      </LayoutPrincipal>
+    );
   }
 
   return (
     <LayoutPrincipal>
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-        <h1 className="text-2xl md:text-3xl font-bold flex items-center">
-          <FileText className="w-6 h-6 mr-2" /> Documentos Societários
-        </h1>
-        <div className="flex space-x-2 w-full sm:w-auto">
-            <Link to="/documentos-societarios/modelos">
-                <Button variant="secondary" className="w-full sm:w-auto">
+      {/* HEADER RESPONSIVO */}
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-8 gap-6">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-bold flex items-center">
+            <FileText className="w-8 h-8 mr-3 text-primary" /> Documentos Societários
+          </h1>
+          <p className="text-muted-foreground mt-1">Gerencie os documentos gerados para seus clientes.</p>
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
+            <Link to="/documentos-societarios/modelos" className="w-full sm:w-auto">
+                <Button variant="outline" className="w-full">
                     <Building2 className="w-4 h-4 mr-2" />
-                    Gerenciar Modelos
+                    Modelos
                 </Button>
             </Link>
-            <Link to="/documentos-societarios/blocos">
-                <Button variant="secondary" className="w-full sm:w-auto">
+            <Link to="/documentos-societarios/blocos" className="w-full sm:w-auto">
+                <Button variant="outline" className="w-full">
                     <FileText className="w-4 h-4 mr-2" />
-                    Gerenciar Blocos
+                    Blocos
+                </Button>
+            </Link>
+            <Link to="/documentos-societarios/modelos" className="w-full sm:w-auto">
+                <Button variant="default" className="w-full">
+                    <Plus className="w-4 h-4 mr-2" />
+                    Novo Documento
                 </Button>
             </Link>
         </div>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-xl">Documentos Gerados ({documentos.length})</CardTitle>
+      <Card className="overflow-hidden border-none shadow-md">
+        <CardHeader className="bg-muted/30 border-b">
+          <CardTitle className="text-lg flex items-center justify-between">
+            <span>Documentos Gerados</span>
+            <Badge variant="outline" className="ml-2">{documentos.length}</Badge>
+          </CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
+        <CardContent className="p-0">
+          <div className="overflow-x-auto no-scrollbar">
             <Table>
-              <TableHeader>
+              <TableHeader className="bg-muted/10">
                 <TableRow>
-                  <TableHead className="w-[250px]">Título</TableHead>
-                  <TableHead className="w-[150px]">Modelo Base</TableHead>
-                  <TableHead className="w-[150px]">Cliente</TableHead>
-                  <TableHead className="w-[100px]">Data Registro</TableHead>
-                  <TableHead className="w-[100px]">Status</TableHead>
-                  <TableHead className="w-[150px] text-right">Ações</TableHead>
+                  <TableHead className="min-w-[200px]">Título</TableHead>
+                  <TableHead className="min-w-[150px]">Cliente</TableHead>
+                  <TableHead className="min-w-[120px]">Data</TableHead>
+                  <TableHead className="min-w-[100px]">Status</TableHead>
+                  <TableHead className="text-right pr-6">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {documentos.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-4 text-muted-foreground">
-                      Nenhum documento gerado.
+                    <TableCell colSpan={5} className="text-center py-12 text-muted-foreground italic">
+                      Nenhum documento gerado até o momento.
                     </TableCell>
                   </TableRow>
                 ) : (
                   documentos.map((doc) => (
-                    <TableRow key={doc.id}>
-                      <TableCell className="font-medium">{doc.valores_tags_preenchidos?.titulo || doc.modelos_societarios?.titulo || 'Documento Sem Título'}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{doc.modelos_societarios?.titulo || 'N/A'}</TableCell>
-                      <TableCell className="text-sm">{doc.cliente_nome}</TableCell>
-                      <TableCell className="text-sm">{format(parseISO(doc.data_registro), 'dd/MM/yyyy')}</TableCell>
+                    <TableRow key={doc.id} className="hover:bg-muted/5 transition-colors">
                       <TableCell>
-                        <Badge variant={doc.status === 'finalizado' ? 'default' : 'secondary'}>
+                        <div className="flex flex-col">
+                          <span className="font-semibold text-sm md:text-base">
+                            {doc.valores_tags_preenchidos?.titulo || doc.modelos_societarios?.titulo || 'Documento Sem Título'}
+                          </span>
+                          <span className="text-xs text-muted-foreground sm:hidden">
+                             Modelo: {doc.modelos_societarios?.titulo || 'N/A'}
+                          </span>
+                          <span className="text-xs text-muted-foreground hidden sm:inline">
+                             Base: {doc.modelos_societarios?.titulo || 'N/A'}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-sm font-medium">{doc.cliente_nome}</span>
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {format(parseISO(doc.data_registro), 'dd/MM/yyyy')}
+                      </TableCell>
+                      <TableCell>
+                        <Badge 
+                          className="capitalize"
+                          variant={doc.status === 'finalizado' ? 'default' : 'secondary'}
+                        >
                             {doc.status}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end space-x-2">
-                            <Button variant="ghost" size="icon" onClick={() => handleEdit(doc)} title="Editar Documento">
+                      <TableCell className="text-right pr-4">
+                        <div className="flex justify-end items-center gap-1 sm:gap-2">
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-9 w-9 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                              onClick={() => handleEdit(doc)} 
+                              title="Editar"
+                            >
                                 <Edit className="w-4 h-4" />
                             </Button>
-                            <Button variant="outline" size="icon" onClick={() => handleView(doc)} title="Visualizar">
+                            
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-9 w-9 text-slate-600 hover:text-slate-900"
+                              onClick={() => handleView(doc)} 
+                              title="Visualizar"
+                            >
                                 <Eye className="w-4 h-4" />
                             </Button>
-                            <Button variant="ghost" size="icon" onClick={() => handleDelete(doc.id)}>
-                                <Trash2 className="w-4 h-4 text-red-500" />
+                            
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-9 w-9 text-red-500 hover:text-red-700 hover:bg-red-50"
+                              onClick={() => handleDelete(doc.id)}
+                              title="Excluir"
+                            >
+                                <Trash2 className="w-4 h-4" />
                             </Button>
                         </div>
                       </TableCell>

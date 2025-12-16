@@ -240,7 +240,7 @@ const AdminSuporte: React.FC = () => {
   return (
     <LayoutPrincipal>
       <h1 className="text-2xl md:text-3xl font-bold flex items-center mb-6">
-        <MessageSquare className="w-6 h-6 mr-2" /> Gestão de Tickets (Admin)
+        <MessageSquare className="w-6 h-6 mr-2" /> Gestão de Tickets
       </h1>
       
       {/* CARDS DE RESUMO (5 Cards) */}

@@ -46,13 +46,13 @@ const Lancamentos: React.FC = () => {
     <LayoutPrincipal>
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl md:text-3xl font-bold flex items-center">
-          <DollarSign className="w-6 h-6 mr-2" /> Lançamentos Contábeis
+          <DollarSign className="w-6 h-6 mr-2" /> Lançamentos
         </h1>
         
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
             <Button onClick={() => setActiveTab('novo')}>
-              <PlusCircle className="w-4 h-4 mr-2" /> Novo Lançamento
+              <PlusCircle className="w- h-4 " /> Novo
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-[425px] max-h-[95vh] overflow-y-auto">
@@ -67,10 +67,10 @@ const Lancamentos: React.FC = () => {
       </div>
       
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="novo">Novo Lançamento</TabsTrigger>
-            <TabsTrigger value="historico">Histórico Manual</TabsTrigger>
-            <TabsTrigger value="todos">Todos os Lançamentos</TabsTrigger>
+        <TabsList className="flex flex-wrap justify-start w-full h-auto p-1">
+            <TabsTrigger value="novo">Novo</TabsTrigger>
+            <TabsTrigger value="historico">Manuais</TabsTrigger>
+            <TabsTrigger value="todos">Todos</TabsTrigger>
         </TabsList>
         
         <TabsContent value="novo" className="mt-4">

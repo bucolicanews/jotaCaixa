@@ -459,7 +459,7 @@ const ContasPagar: React.FC = () => {
   return (
     <LayoutPrincipal>
       <div className="space-y-6">
-        <h1 className="text-3xl font-bold">Contas a Pagar {isAdmin && '(Admin)'}</h1>
+        <h1 className="text-3xl font-bold">Contas a Pagar</h1>
 
         {temContasFuturas && !contasFuturasOpen && (
           <Alert className="border-amber-500 bg-amber-50 dark:bg-amber-900/20">

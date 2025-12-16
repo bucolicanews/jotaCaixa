@@ -199,11 +199,15 @@ const ClientesPage = () => {
 
     if (isAdmin) {
         if (filtroEmpresaId !== 'todos') {
-            queryCR = queryCR.eq('proprietario_id', filtroEmpresaId); // AJUSTE AQUI
+            queryCR = queryCR.eq('proprietario_id', filtroEmpresaId);
+        } else if (ownerId) {
+            // Se for admin e "todos", filtra pelos seus próprios clientes
+            queryCR = queryCR.eq('proprietario_id', ownerId);
         }
     } else if (ownerId) {
-        queryCR = queryCR.eq('proprietario_id', ownerId); // AJUSTE AQUI
+        queryCR = queryCR.eq('proprietario_id', ownerId);
     } else {
+        // Se não houver ownerId, não deve retornar nada
         setClientesCR([]);
     }
 

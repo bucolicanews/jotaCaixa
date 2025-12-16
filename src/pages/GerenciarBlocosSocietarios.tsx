@@ -183,7 +183,7 @@ const GerenciarBlocosSocietarios: React.FC = () => {
             </Button>
         </Link>
         <h1 className="text-2xl md:text-3xl font-bold flex items-center">
-          <FileText className="w-6 h-6 mr-2" /> Gerenciar Blocos de Conteúdo
+          <FileText className="w-6 h-6 mr-2" />Blocos
         </h1>
       </div>
       

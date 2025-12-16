@@ -256,8 +256,8 @@ const Extratos: React.FC = () => {
 
   return (
     <LayoutPrincipal>
-      <h1 className="text-2xl md:text-3xl font-bold mb-6 flex items-center">
-        <Banknote className="w-6 h-6 mr-2" /> Extratos Bancários Salvos
+      <h1 className="text-3xl font-bold mb-6 flex items-center">
+        <Banknote className="w-6 h-6 mr-2" /> Extratos Bancários
       </h1>
       
       {/* NOVO: CARDS DE RESUMO */}

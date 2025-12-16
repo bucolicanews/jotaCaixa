@@ -202,7 +202,7 @@ const GerenciarModelosSocietarios: React.FC = () => {
             </Button>
         </Link>
         <h1 className="text-2xl md:text-3xl font-bold flex items-center">
-          <FileText className="w-6 h-6 mr-2" /> Gerenciar Modelos Societários
+          <FileText className="w-6 h-6 mr-2" />Modelos
         </h1>
       </div>
       
