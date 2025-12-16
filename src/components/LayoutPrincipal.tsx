@@ -116,7 +116,9 @@ const LayoutPrincipal: React.FC<LayoutPrincipalProps> = ({ children }) => {
     (isClient || isClientUser) && setupStatus && !setupStatus.isComplete;
 
   const shouldShowFirstLaunchNotice =
-    (isClient || isClientUser) && Boolean(setupStatus?.isComplete);
+    (isClient || isClientUser) &&
+    Boolean(setupStatus?.isComplete) &&
+    !setupStatus?.firstLaunchCompleted;
 
   return (
     <div className="flex flex-col min-h-screen w-full bg-background">

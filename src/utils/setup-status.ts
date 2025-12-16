@@ -138,6 +138,21 @@ const REQUIREMENTS: Record<SetupStepKey, RequirementChecker> = {
 
 const ALL_STEPS = Object.keys(REQUIREMENTS) as SetupStepKey[];
 
+const checkFirstLaunchCompleted = async (ownerId: string): Promise<boolean> => {
+  const { count, error } = await supabase
+    .from('lancamentos')
+    .select('id', { count: 'exact', head: true })
+    .eq('proprietario_id', ownerId)
+    .gt('valor', 0);
+
+  if (error) {
+    console.error('[setup-status] erro ao consultar lançamentos:', error);
+    return false;
+  }
+
+  return (count ?? 0) > 0;
+};
+
 export const fetchSetupStatus = async (
   ownerId: string | null,
 ): Promise<SetupStatus> => {
@@ -158,10 +173,12 @@ export const fetchSetupStatus = async (
   const missingSteps = checks
     .filter((result) => !result.ok)
     .map((result) => result.step);
+  const firstLaunchCompleted = await checkFirstLaunchCompleted(ownerId);
 
   return {
     isComplete: missingSteps.length === 0,
     missingSteps,
+    firstLaunchCompleted,
     checkedAt: new Date().toISOString(),
   };
 };

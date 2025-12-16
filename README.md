@@ -870,6 +870,7 @@ Pagamento CP:      D: Obrigação a Pagar   | C: Caixa/Banco
 2. O `SetupBlocker` bloqueia `/painel`, `/contas-pagar`, `/contas-receber` e `/plano-contas` até todas as etapas (planos, históricos, configurações de CP/CR/Contratos e marcações) ficarem completas; o checklist aparece no topo do `PlanoContas`.
 3. Após o checklist completo, o alerta "Lançamento inicial obrigatório" instrui o cliente sobre o primeiro lançamento contábil: **D: Caixa/Banco · C: Capital Social**.
 4. O sistema exige que este primeiro lançamento manual seja registrado antes de liberar definitivamente os módulos.
+5. O alerta desaparece automaticamente assim que qualquer lançamento entra na tabela `lancamentos` para esse `proprietario_id`, pois o hook `fetchSetupStatus` agora marca o campo `firstLaunchCompleted` quando encontra um registro no banco.
 
 ---
 

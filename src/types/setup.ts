@@ -16,4 +16,5 @@ export interface SetupStatus {
   isComplete: boolean;
   missingSteps: SetupStepKey[];
   checkedAt?: string;
+  firstLaunchCompleted?: boolean;
 }
