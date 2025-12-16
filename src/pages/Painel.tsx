@@ -7,11 +7,12 @@ import { Link } from 'react-router-dom';
 import { Package, Loader2, Scale, Clock, Users, FileText, MessageSquare, PlusCircle, Building2 } from 'lucide-react';
 import DashboardFinanceiro from '@/components/DashboardFinanceiro';
 import React from 'react';
+import SetupBlocker from '@/components/SetupBlocker';
 
 type DashboardType = 'financeiro' | 'contabilidade' | 'folha' | 'rh' | 'geral' | 'restrito';
 
 const Painel = () => {
-  const { role, perfil, carregando } = useSessao();
+  const { role, perfil, carregando, setupStatus } = useSessao();
 
   const isClient = role === 'Cliente';
   const isAdmin = role === 'Admin';
@@ -114,12 +115,30 @@ const Painel = () => {
     }
   };
 
+  const isClientUser =
+    role === 'Usuario' &&
+    perfil &&
+    'cliente_id' in perfil &&
+    Boolean((perfil as UsuarioProfile)?.cliente_id);
+  const shouldBlockSetup =
+    (role === 'Cliente' || isClientUser) &&
+    setupStatus &&
+    !setupStatus.isComplete;
+
   if (carregando) {
     return (
       <LayoutPrincipal>
         <div className="flex justify-center items-center h-64">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
+      </LayoutPrincipal>
+    );
+  }
+
+  if (shouldBlockSetup) {
+    return (
+      <LayoutPrincipal>
+        <SetupBlocker missingSteps={setupStatus.missingSteps} />
       </LayoutPrincipal>
     );
   }

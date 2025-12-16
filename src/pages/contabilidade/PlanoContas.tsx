@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import {
   Loader2,
   Edit,
@@ -13,6 +13,9 @@ import {
   ArrowRight,
   FileDown, // Adicionado
   FileUp, // Adicionado
+  CheckCircle2,
+  AlertTriangle,
+  Info,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
@@ -125,6 +128,7 @@ const PlanoContasPage = () => {
   const filtroTextoDebounced = useDebounce(filtroTexto, 500);
   const [filtroTipoConta, setFiltroTipoConta] = useState('todos');
   const [filtroAnalitica, setFiltroAnalitica] = useState('todos');
+
 
   const fetchMascara = useCallback(async (id: string) => {
     const { data, error } = await supabase
@@ -366,32 +370,6 @@ const PlanoContasPage = () => {
   
   // --- FIM Lógica de Criação Hierárquica ---
 
-  if (carregandoSessao) {
-    return (
-      <LayoutPrincipal>
-        <div className="flex justify-center items-center h-64">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      </LayoutPrincipal>
-    );
-  }
-
-  if (!proprietarioId) {
-    return (
-      <LayoutPrincipal>
-        <Card>
-          <CardHeader>
-            <CardTitle>Plano de Contas</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-red-500">Não foi possível carregar o ID da empresa/proprietário. Verifique se o usuário está vinculado.</p>
-          </CardContent>
-        </Card>
-      </LayoutPrincipal>
-    );
-  }
-  
-  // Determina os valores iniciais do formulário de diálogo
   const initialFormValues: PlanoContas | FormInitialData | null = contaSelecionada 
     ? contaSelecionada 
     : (novaContaInicial 
@@ -410,7 +388,115 @@ const PlanoContasPage = () => {
         } as FormInitialData
         : null);
 
+  const guiaStatus = useMemo(() => {
+    const hasCaixa = contas.some((c) => c.is_caixa);
+    const hasBanco = contas.some((c) => c.is_banco);
+    const hasCliente = contas.some((c) => c.is_a_receber);
+    const hasFornecedor = contas.some((c) => c.is_a_pagar);
+    const hasCapital = contas.some(
+      (c) =>
+        c.is_conta_patrimonial &&
+        ((c.Descricao && c.Descricao.toLowerCase().includes('capital')) ||
+          (c.Conta && c.Conta.toLowerCase().includes('capital'))),
+    );
+    const hasReceita = contas.some(
+      (c) =>
+        c.is_conta_resultado &&
+        ((c.Conta && c.Conta.startsWith('4')) ||
+          (c.Descricao && c.Descricao.toLowerCase().includes('receita'))),
+    );
+    const hasDespesa = contas.some(
+      (c) =>
+        c.is_conta_resultado &&
+        ((c.Conta && c.Conta.startsWith('5')) ||
+          (c.Descricao &&
+            (c.Descricao.toLowerCase().includes('despesa') ||
+              c.Descricao.toLowerCase().includes('custo')))),
+    );
+
+    return {
+      caixa: hasCaixa,
+      banco: hasBanco,
+      cliente: hasCliente,
+      fornecedor: hasFornecedor,
+      capital: hasCapital,
+      receita: hasReceita,
+      despesa: hasDespesa,
+    };
+  }, [contas]);
+
+  const guiaItens = [
+    {
+      key: '1',
+      title: 'Caixa',
+      description: 'Marque uma conta analítica com o switch "☑ Caixa?".',
+      done: guiaStatus.caixa,
+    },
+    {
+      key: '2',
+      title: 'Banco',
+      description: 'Marque uma conta analítica com o switch "☑ Banco?".',
+      done: guiaStatus.banco,
+    },
+    {
+      key: '3',
+      title: 'Clientes / Contas a Receber',
+      description: 'Marque uma conta patrimonial com o switch "Clientes a Receber".',
+      done: guiaStatus.cliente,
+    },
+    {
+      key: '4',
+      title: 'Fornecedores / Contas a Pagar',
+      description: 'Marque uma conta patrimonial com o switch "Fornecedores a Pagar".',
+      done: guiaStatus.fornecedor,
+    },
+    {
+      key: '5',
+      title: 'Capital Social',
+      description: 'Identifique a conta de capital social e mantenha o flag patrimonial ativo.',
+      done: guiaStatus.capital,
+    },
+    {
+      key: '6',
+      title: 'Receita',
+      description: 'Marque ao menos uma conta de resultado como Receita.',
+      done: guiaStatus.receita,
+    },
+    {
+      key: '7',
+      title: 'Despesa / Custo',
+      description: 'Marque ao menos uma conta de resultado como Despesa ou Custo.',
+      done: guiaStatus.despesa,
+    },
+  ];
+
+  if (carregandoSessao) {
+    return (
+      <LayoutPrincipal>
+        <div className="flex justify-center items-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </LayoutPrincipal>
+    );
+  }
+
+  if (!proprietarioId) {
+
   return (
+      <LayoutPrincipal>
+        <Card>
+          <CardHeader>
+            <CardTitle>Plano de Contas</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-red-500">Não foi possível carregar o ID da empresa/proprietário. Verifique se o usuário está vinculado.</p>
+          </CardContent>
+        </Card>
+      </LayoutPrincipal>
+    );
+  }
+  
+    return (
     <LayoutPrincipal>
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
         <h1 className="text-2xl md:text-3xl font-bold">Plano de Contas</h1>
@@ -444,6 +530,44 @@ const PlanoContasPage = () => {
             </Button>
         </div>
       </div>
+
+      <Card className="mb-6 border-dashed border-primary/30 bg-primary/5">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-primary">
+            <Info className="h-5 w-5" />
+            Guia de marcação obrigatória
+          </CardTitle>
+          <CardDescription>
+            Após importar o plano e os históricos, marque pelo menos uma conta para cada categoria abaixo.
+            Esses marcadores alimentam os módulos de Contas a Pagar/Receber e Contratos.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {guiaItens.map((item) => (
+            <div
+              key={item.key}
+              className={cn(
+                'flex items-start gap-3 rounded-lg border p-3 text-sm',
+                item.done
+                  ? 'border-emerald-400 bg-emerald-50 dark:bg-emerald-900/20'
+                  : 'border-amber-400 bg-amber-50 dark:bg-amber-900/20',
+              )}
+            >
+              {item.done ? (
+                <CheckCircle2 className="h-5 w-5 text-emerald-600 mt-0.5" />
+              ) : (
+                <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5" />
+              )}
+              <div>
+                <p className="font-semibold">
+                  {item.key}. {item.title}
+                </p>
+                <p className="text-muted-foreground">{item.description}</p>
+              </div>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
 
       {/* GRID MODERNO DE DUAS COLUNAS */}
       <div className="grid grid-cols-1 lg:grid-cols-[20%_80%] gap-6 items-start">

@@ -21,6 +21,7 @@ import TabelaParcelas from '@/components/contas-receber/TabelaParcelas';
 import TabelaRecebimentos from '@/components/contas-receber/TabelaRecebimentos';
 import { useDebounce } from '@/hooks/use-debounce';
 import { formatarData } from '@/utils/formatters';
+import SetupBlocker from '@/components/SetupBlocker';
 
 type ParcelaStatus = 'aberta' | 'parcial' | 'paga' | 'reprogramada' | 'cancelada' | 'bloqueada';
 type BadgeVariant = 'success' | 'warning' | 'secondary' | 'destructive' | 'default' | 'info';
@@ -50,7 +51,7 @@ interface ParcelaParaPagamento {
 
 
 const ContasReceber = () => {
-  const { usuario, perfil, role, carregando: carregandoSessao } = useSessao();
+  const { usuario, perfil, role, carregando: carregandoSessao, setupStatus } = useSessao();
   
   const [contas, setContas] = useState<ContaReceberComProgresso[]>([]);
   const [parcelas, setParcelas] = useState<ExtendedParcelaDetalhada[]>([]);
@@ -79,11 +80,20 @@ const ContasReceber = () => {
   };
   
   const ownerId = getOwnerId();
+  const isClientUser =
+    role === 'Usuario' &&
+    perfil &&
+    'cliente_id' in perfil &&
+    Boolean((perfil as UsuarioProfile)?.cliente_id);
+  const shouldBlockSetup =
+    (role === 'Cliente' || isClientUser) &&
+    setupStatus &&
+    !setupStatus.isComplete;
 
   const buscarDados = useCallback(async () => {
-    if (!ownerId) {
-        setCarregandoDados(false);
-        return;
+    if (!ownerId || shouldBlockSetup) {
+      setCarregandoDados(false);
+      return;
     }
     
     setCarregandoDados(true);
@@ -256,7 +266,7 @@ const ContasReceber = () => {
     }
 
     setCarregandoDados(false);
-  }, [ownerId, isAdmin, filtroPeriodo, filtroTextoDebounced]);
+  }, [ownerId, isAdmin, filtroPeriodo, filtroTextoDebounced, shouldBlockSetup]);
 
   useEffect(() => {
     if (!carregandoSessao && usuario) {
@@ -526,6 +536,14 @@ const ContasReceber = () => {
 
   if (carregandoSessao || carregandoDados) {
     return <LayoutPrincipal><div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div></LayoutPrincipal>;
+  }
+
+  if (shouldBlockSetup) {
+    return (
+      <LayoutPrincipal>
+        <SetupBlocker missingSteps={setupStatus?.missingSteps ?? []} />
+      </LayoutPrincipal>
+    );
   }
 
   return (

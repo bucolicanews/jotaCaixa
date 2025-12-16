@@ -750,6 +750,19 @@ $$ LANGUAGE plpgsql;
 - **Banco e migração:** Os dados vão para a tabela `public.configuracao_tabelas_padrao` (migrada pelo script `supabase/migrations/20241216_configuracao_tabelas_padrao.sql`). A tabela tem FK para `tbl_admins(id)` e guarda JSON em `plano_de_contas` e `historicos`, além de registrar `created_at`. Rode `supabase db push` (ou aplique o SQL manualmente) para criar a tabela antes de usar essa aba.
 - **Segurança/RLS:** A tabela habilita Row Level Security e aplica a policy `Admins gerenciam suas tabelas padrão`, portanto apenas o admin autenticado (`auth.uid() = id_admin`) consegue inserir, editar ou deletar seus próprios registros. Edge functions ou scripts que precisam manipular esses dados devem usar a role de serviço (service role key) ou atuar enquanto o admin estiver autenticado para vencer a policy.
 
+### Guia obrigatório de marcações no Plano de Contas
+Depois de importar o plano e os históricos, marque no mínimo uma conta para cada categoria abaixo. O sistema bloqueia o dashboard e os módulos de Contas a Pagar/Receber enquanto algum item estiver pendente (o checklist aparece no topo da tela de Plano de Contas).
+
+1. **Caixa** – abra a conta correspondente e habilite o switch `É Caixa?`.
+2. **Banco** – marque ao menos uma conta bancária com o switch `É Banco?`.
+3. **Clientes / Contas a Receber** – marque uma conta patrimonial para clientes com o switch `Clientes a Receber`.
+4. **Fornecedores / Contas a Pagar** – marque uma conta patrimonial de fornecedores com o switch `Fornecedores a Pagar`.
+5. **Capital Social** – identifique a conta de capital social (geralmente em Patrimônio Líquido) e mantenha o flag patrimonial ativo.
+6. **Receita** – marque ao menos uma conta de resultado como Receita.
+7. **Despesa / Custo** – marque ao menos uma conta de resultado de despesa ou custo.
+
+Esses marcadores abastecem as configurações 3.1/3.2/3.3 e os formulários de lançamentos; sem eles o usuário não consegue registrar entradas/saídas.
+
 ## Arquitetura e Fluxos
 
 ### Fluxo de Autenticação

@@ -1,4 +1,5 @@
 import { User } from '@supabase/supabase-js';
+import { SetupStatus } from './setup';
 
 export type UserRole = 'Admin' | 'Cliente' | 'Usuario' | null;
 
@@ -189,4 +190,5 @@ export interface DadosSessao {
   perfil: AnyProfile;
   role: UserRole;
   carregando: boolean;
+  setupStatus: SetupStatus;
 }
