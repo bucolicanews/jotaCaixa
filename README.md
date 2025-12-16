@@ -19,7 +19,7 @@ Um sistema robusto de gestão financeira, RH e contratos construído com React, 
 
 ---
 
-## 🎯 Visão Geral
+## Visão Geral
 
 O Jota App é uma plataforma SaaS multi-tenant que permite:
 
@@ -34,7 +34,7 @@ O Jota App é uma plataforma SaaS multi-tenant que permite:
 
 ---
 
-## ✨ Recursos Principais
+## Recursos Principais
 
 ### 1. 💳 Faturamento e Assinatura (Stripe)
 - Planos mensais/anuais configuráveis
@@ -74,7 +74,7 @@ O Jota App é uma plataforma SaaS multi-tenant que permite:
 
 ---
 
-## 🖥️ Requisitos do Sistema
+## Requisitos do Sistema
 
 ### Dependências Principais
 - **Node.js:** >= 18.0.0
@@ -88,7 +88,7 @@ O Jota App é uma plataforma SaaS multi-tenant que permite:
 
 ---
 
-## 🚀 Instalação e Configuração
+## Instalação e Configuração
 
 ### 1. Clonar o Repositório
 
@@ -142,7 +142,7 @@ pnpm build
 
 ---
 
-## 🗄️ Configuração do Supabase
+## Configuração do Supabase
 
 ### 1. Criar Projeto Supabase
 
@@ -583,7 +583,7 @@ $$ LANGUAGE plpgsql;
 
 ---
 
-## 📱 Funcionalidades e Telas
+## Funcionalidades e Telas
 
 ### 1. **Tela de Login e Autenticação**
 - Autenticação via email/senha
@@ -744,7 +744,13 @@ $$ LANGUAGE plpgsql;
 
 ---
 
-## 🏗️ Arquitetura e Fluxos
+### 13. **Tabelas Padrão & Exportação (`/exportar`)**
+- **Card de Downloads:** A página `/exportar` agora oferece botões para baixar os CSVs `plano_contas_padrao.csv` e `historicos_padrao.csv` que ficam em `public/` como modelos oficiais antes de importar.
+- **Configuração para Admin:** Em Configurações (somente para admin) existe a aba “Configuração Tabelas Padrão” onde o administrador pode subir planos/ históricos no formato CSV ou JSON, ou apontar para um link externo. Os dados são parseados, exibem um resumo e ficam disponíveis para download nos registros listados.
+- **Banco e migração:** Os dados vão para a tabela `public.configuracao_tabelas_padrao` (migrada pelo script `supabase/migrations/20241216_configuracao_tabelas_padrao.sql`). A tabela tem FK para `tbl_admins(id)` e guarda JSON em `plano_de_contas` e `historicos`, além de registrar `created_at`. Rode `supabase db push` (ou aplique o SQL manualmente) para criar a tabela antes de usar essa aba.
+- **Segurança/RLS:** A tabela habilita Row Level Security e aplica a policy `Admins gerenciam suas tabelas padrão`, portanto apenas o admin autenticado (`auth.uid() = id_admin`) consegue inserir, editar ou deletar seus próprios registros. Edge functions ou scripts que precisam manipular esses dados devem usar a role de serviço (service role key) ou atuar enquanto o admin estiver autenticado para vencer a policy.
+
+## Arquitetura e Fluxos
 
 ### Fluxo de Autenticação
 
@@ -789,7 +795,7 @@ Pagamento CP:      D: Obrigação a Pagar   | C: Caixa/Banco
 
 ---
 
-## 🔌 API e Integrações
+## API e Integrações
 
 ### Stripe
 - **Checkout:** `/create-checkout-session`
@@ -822,7 +828,7 @@ Pagamento CP:      D: Obrigação a Pagar   | C: Caixa/Banco
 
 ---
 
-## 🔐 Segurança
+## Segurança
 
 ### RLS (Row Level Security)
 - Admin vê dados via tabelas `admin_*`
@@ -847,7 +853,7 @@ CREATE POLICY "Cliente marca parcelas como ciente"
 
 ---
 
-## 📊 Estrutura de Dados Simplificada
+## Estrutura de Dados Simplificada
 
 ```
 tbl_admins (proprietário da plataforma)
@@ -871,7 +877,7 @@ tbl_clientes (empresa/cliente)
 
 ---
 
-## 🧪 Testando Localmente
+## Testando Localmente
 
 ### 1. Criar Admin e Cliente de Teste
 
@@ -922,7 +928,7 @@ VALUES (
 
 ---
 
-## 📝 Estrutura de Pastas
+## Estrutura de Pastas
 
 ```
 src/
@@ -942,7 +948,7 @@ src/
 
 ---
 
-## 🛠️ Troubleshooting
+## Troubleshooting
 
 ### Erro: "Could not find the 'cliente_id' column"
 - Verificar se a coluna existe na tabela
@@ -962,7 +968,7 @@ src/
 
 ---
 
-## 📞 Suporte
+## Suporte
 
 Para dúvidas ou problemas:
 1. Consulte documentação do Supabase: https://supabase.com/docs
@@ -971,13 +977,13 @@ Para dúvidas ou problemas:
 
 ---
 
-## 📄 Licença
+## Licença
 
 MIT License - veja arquivo LICENSE para detalhes
 
 ---
 
-## 👥 Autores
+## Autores
 
 Desenvolvido com ❤️ para gestão financeira e RH moderna.
 
