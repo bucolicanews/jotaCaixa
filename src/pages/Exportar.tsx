@@ -1,7 +1,8 @@
 import React from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { FileText, Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { FileText, Loader2, Download } from 'lucide-react';
 import ExportarHistoricos from '@/components/calima/ExportarHistoricos';
 import ExportarLancamentos from '@/components/calima/ExportarLancamentos';
 import { useSessao } from '@/hooks/use-sessao';
@@ -40,6 +41,34 @@ const Exportar: React.FC = () => {
         <ExportarPlanoContasCard />
         
         <ExportarLancamentos />
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Tabelas Padrões (CSV)</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Baixe os modelos oficiais de Plano de Contas e Históricos para importar rapidamente em novos clientes.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Button variant="outline" className="w-full" asChild>
+                <a href="/plano_contas_padrao.csv" download target="_blank" rel="noreferrer">
+                  <Download className="w-4 h-4 mr-2" />
+                  Plano Padrão
+                </a>
+              </Button>
+              <Button variant="outline" className="w-full" asChild>
+                <a href="/historicos_padrao.csv" download target="_blank" rel="noreferrer">
+                  <Download className="w-4 h-4 mr-2" />
+                  Históricos Padrão
+                </a>
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Precisa atualizar esses arquivos? Vá em Configurações &gt; Configuração Tabelas Padrão (apenas Admin).
+            </p>
+          </CardContent>
+        </Card>
       </div>
       
       <Card className="mt-6">

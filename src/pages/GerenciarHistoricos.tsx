@@ -371,28 +371,36 @@ const GerenciarHistoricos: React.FC = () => {
 
   return (
     <LayoutPrincipal>
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
         <h1 className="text-2xl md:text-3xl font-bold flex items-center">
           <History className="w-6 h-6 mr-2" /> Gerenciar Históricos
         </h1>
-        <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
-          <DialogTrigger asChild>
-            <Button onClick={() => setHistoricoSelecionado(null)} className="w-full sm:w-auto">
-              <PlusCircle className="w-4 h-4 mr-2" />
-              Novo Histórico
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px]">
-            <DialogHeader>
-              <DialogTitle>{historicoSelecionado ? 'Editar Histórico' : 'Novo Histórico'}</DialogTitle>
-            </DialogHeader>
-            <FormHistorico 
-              historicoInicial={historicoSelecionado}
-              proprietarioId={ownerId}
-              onSaveComplete={handleSaveComplete}
-            />
-          </DialogContent>
-        </Dialog>
+        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+          <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
+            <DialogTrigger asChild>
+              <Button onClick={() => setHistoricoSelecionado(null)} className="w-full sm:w-auto">
+                <PlusCircle className="w-4 h-4 mr-2" />
+                Novo Histórico
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[425px]">
+              <DialogHeader>
+                <DialogTitle>{historicoSelecionado ? 'Editar Histórico' : 'Novo Histórico'}</DialogTitle>
+              </DialogHeader>
+              <FormHistorico 
+                historicoInicial={historicoSelecionado}
+                proprietarioId={ownerId}
+                onSaveComplete={handleSaveComplete}
+              />
+            </DialogContent>
+          </Dialog>
+          <Button variant="outline" className="w-full sm:w-auto" asChild>
+            <a href="/historicos_padrao.csv" target="_blank" rel="noreferrer" download>
+              <FileDown className="w-4 h-4 mr-2" />
+              Baixar Histórico Padrão
+            </a>
+          </Button>
+        </div>
       </div>
       
       <Card className="mb-6">

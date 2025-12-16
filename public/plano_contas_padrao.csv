@@ -1,0 +1,81 @@
+Conta;Código reduzido;Descrição;Analítica
+1;1;ATIVO;Não
+1.1;11;ATIVO CIRCULANTE;Não
+1.1.01;1101;DISPONIBILIDADES;Não
+1.1.01.0001;11010001;Caixa Matriz;Sim
+1.1.01.0002;11010002;Bancos Conta Movimento;Sim
+1.1.01.0003;11010003;Strip;Sim
+1.1.01.0004;11010004;Aplicações Financeiras;Sim
+1.1.02;1102;Contas a Receber;Não
+1.1.02.0001;11020001;Clientes Strip a Receber;Sim
+1.1.02.0002;11020002;Clientes Contratos a Receber;Sim
+1.1.02.0003;11020003;Clientes a Receber Avulso;Sim
+1.1.03;1103;Estoques;Não
+1.1.03.0001;11030001;Mercadorias para Revenda;Sim
+1.1.03.0002;11030002;Materiais de Consumo;Sim
+1.2;12;ATIVO NÃO CIRCULANTE;Não
+1.2.01;1201;Imobilizado;Não
+1.2.01.0001;12010001;Máquinas e Equipamentos;Sim
+1.2.01.0002;12010002;Móveis e Utensílios;Sim
+1.2.01.0003;12010003;Veículos;Sim
+1.2.02;1202;Intangível;Não
+1.2.02.0001;12020001;Softwares;Sim
+1.2.02.0002;12020002;Marcas e Patentes;Sim
+2;2;PASSIVO;Não
+2.1;21;PASSIVO CIRCULANTE;Não
+2.1.01;2101;Obrigações Trabalhistas;Não
+2.1.01.0001;21010001;Salários a Pagar;Sim
+2.1.01.0002;21010002;INSS a Recolher;Sim
+2.1.02;2102;Obrigações Fiscais;Não
+2.1.02.0001;21020001;ISS a Recolher;Sim
+2.1.02.0002;21020002;ICMS a Recolher;Sim
+2.1.03;2103;Fornecedores;Não
+2.1.03.0001;21030001;Fornecedores Nacionais;Sim
+2.2;22;PASSIVO NÃO CIRCULANTE;Não
+2.2.01;2201;Empréstimos de Longo Prazo;Não
+2.2.01.0001;22010001;Financiamentos Bancários;Sim
+3;3;PATRIMÔNIO LÍQUIDO;Não
+3.1;31;Capital Social;Não
+3.1.00.0001;31000001;Capital Integralizado;Sim
+3.1.01;3101;Capital;Não
+3.2;32;Reservas de Lucros;Não
+3.2.00.0001;32000001;Reserva Legal;Sim
+3.3;33;Lucros ou Prejuízos Acumulados;Não
+3.3.00.0001;33000001;Lucros Acumulados;Sim
+4;4;RECEITA;Não
+4.1;41;Receita Bruta;Não
+4.1.01;4101;Receita de Serviços;Não
+4.1.01.0001;41010001;Prestação de Serviços Contabeis;Sim
+4.1.01.0002;41010002;Receita de Serviços Gedoor;Sim
+4.1.01.0003;41010003;Receita de serviços de Certificação Digital;Sim
+4.1.01.0004;41010004;Receita Serviços Digitais (Strip);Sim
+4.1.02;4102;Receita de Vendas;Não
+4.1.02.0001;41020001;Vendas de Mercadorias;Sim
+4.1.03;4103;Estorno desconco concedido;Não
+4.1.03.0001;4103001;Receita Estorno do desconto;Sim
+4.2;42;(-)Deduções da Receita;Não
+4.2.01.0001;42010001;(-) ISS sobre Serviços;Sim
+4.2.01.0002;42010002;(-) Devoluções de Vendas;Sim
+4.2.01.0003;42010003;(-) Custo Serviço Gedoor;Sim
+4.2.01.0004;42010004;(-) Custo Serviço Certificado;Sim
+4.2.01.0005;42010005;(-) Custo do Seviço Strip;Sim
+4.3.01;43;DESCONTOS OBTIDOS AO PAGAR;Não
+4.3.01.0001;43010001;Descontos Obtidos ao Pagar;Sim
+5;5;DESPESAS;Não
+5.1;51;Despesas Operacionais;Não
+5.1.01;5101;Despesas Administrativas;Não
+5.1.01.0001;51010001;Aluguéis;Sim
+5.1.01.0002;51010002;Água, Luz e Telefone;Sim
+5.1.01.0003;51010003;Desconto Concedido;Sim
+5.1.01.0010;51010010;Despesa com Fornecedoress em Geral;Sim
+5.1.02;5102;Despesas com Pessoal;Não
+5.1.02.0001;51020001;Salários;Sim
+5.2;52;Despesas Financeiras;Não
+5.2.01.0001;52010001;Juros Pagos;Sim
+5.2.01.0002;52010002;Multas Pagas;Sim
+5.2.01.0003;52010003;Estorno Desconto Obtido;Sim
+6;6;RESULTADO;Não
+6.1;61;Resultado Operacional;Não
+6.1.01;6101;Lucro/Prejuizo;Não
+6.1.01.0001;61010001;Lucro do exercício;Sim
+6.1.01.0002;61010002;Prejuizo do exercício;Sim

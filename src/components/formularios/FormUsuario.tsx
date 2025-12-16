@@ -3,7 +3,7 @@ import { useForm, FormProvider, Control } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from '@/components/ui/button';
-import { Loader2, Tag, FileSignature } from 'lucide-react';
+import { Loader2, Tag, FileSignature, CalendarIcon } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { AnyProfile, ClienteProfile, UsuarioProfile, UserRole, AdminUsuarioProfile } from '@/types/usuario';
@@ -26,6 +26,12 @@ import { Checkbox } from '../ui/checkbox'; // IMPORT CORRIGIDO
 import FormIdentificacao from '../cliente-forms/FormIdentificacao'; // NOVO IMPORT
 import FormContato from '../cliente-forms/FormContato'; // NOVO IMPORT
 import FormEndereco from '../cliente-forms/FormEndereco'; // NOVO IMPORT
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
+import { Calendar } from '../ui/calendar';
+import { ptBR } from 'date-fns/locale';
+import { cn } from '@/lib/utils';
+import { Plano } from '@/types/plano';
 
 const textOptional = z.string().optional().or(z.literal(''));
 const urlSchema = z.string().url('URL inválida.').optional().or(z.literal(''));
@@ -35,6 +41,7 @@ const formSchema = z.object({
   email: z.string().email('Email inválido.'),
   senha: z.string().min(6, 'A senha deve ter pelo menos 6 caracteres.').optional().or(z.literal('')),
   permissoes: z.record(z.boolean()).optional(),
+  limite_usuarios: z.coerce.number().int().min(1, 'O limite deve ser ao menos 1.').optional(),
   
   // Novos Campos de Folga
   dias_folga_fixos: z.array(z.string()).optional(),
@@ -64,6 +71,7 @@ const formSchema = z.object({
   nome_fantasia: textOptional,
   documento: textOptional,
   cnpj: textOptional,
+  plano_id: z.string().optional(),
   
   // NOVOS CAMPOS DE ASSINATURA (Apenas para Cliente Profile)
   assinatura_proprietario_nome: textOptional,
@@ -104,6 +112,7 @@ interface FormUsuarioProps {
   onSaveComplete: () => void;
   isNewClient?: boolean;
   isReadOnly?: boolean;
+  planos?: Plano[];
 }
 
 // Type guard para verificar se o perfil é UsuarioProfile
@@ -128,6 +137,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
   onSaveComplete,
   isNewClient = false,
   isReadOnly = false,
+  planos = [],
 }) => {
   const isEditing = !!usuarioInicial;
   
@@ -139,6 +149,8 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
   const userProfile: UsuarioProfile | AdminUsuarioProfile | null = isEditingUser ? profileToEdit as UsuarioProfile | AdminUsuarioProfile : null;
   const clientProfile: ClienteProfile | null = isEditingClientProfile ? profileToEdit as ClienteProfile : null;
   
+  const isClientEditLocked = isEditingClientProfile && criadorRole !== 'Admin';
+
   const [activeTab, setActiveTab] = useState('pessoal');
   const [isSubmitting, setIsSubmitting] = useState(false);
   
@@ -158,9 +170,13 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
         email: '',
         senha: '',
         permissoes: {},
+        limite_usuarios: 5,
+        plano_id: undefined,
+        data_fim_acesso: undefined,
     },
   });
   
+  const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
   const { watch, setValue } = form;
   const cepValue = watch('cep');
   const isAddressLoading = watch('endereco') === 'Buscando...';
@@ -243,6 +259,8 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
         
         // Dados de Cliente Profile
         limite_usuarios: clientProfile?.limite_usuarios || 5,
+        plano_id: clientProfile?.plano_id || undefined,
+        data_fim_acesso: parseDate(clientProfile?.data_fim_acesso),
         razao_social: clientProfile?.razao_social || '',
         nome_fantasia: clientProfile?.nome_fantasia || '',
         documento: clientProfile?.documento || '',
@@ -417,14 +435,21 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
         // 2. Prepare Data Payload (tbl_usuarios OU tbl_clientes OU admin_usuarios)
         
         if (isEditingClientProfile || isNewClient) {
+            const planoIdAtualizado = values.plano_id ?? clientProfile?.plano_id ?? null;
+            const dataFimAcessoIso = values.data_fim_acesso
+                ? format(values.data_fim_acesso, 'yyyy-MM-dd') + 'T12:00:00Z'
+                : clientProfile?.data_fim_acesso || null;
+            const limiteUsuariosAtualizado = values.limite_usuarios ?? clientProfile?.limite_usuarios ?? 5;
             // Edição de Cliente Profile (tbl_clientes)
             const dataToUpdate: Partial<ClienteProfile> = {
                 nome: values.nome,
                 email: values.email,
                 admin_id: isAdminContext ? proprietarioId : (criadorPerfil as ClienteProfile)?.admin_id,
                 aprovado: isEditingClientProfile ? clientProfile!.aprovado : false,
-                limite_usuarios: values.limite_usuarios,
+                limite_usuarios: limiteUsuariosAtualizado,
                 permissoes: values.permissoes,
+                plano_id: planoIdAtualizado,
+                data_fim_acesso: dataFimAcessoIso,
                 
                 razao_social: values.razao_social || null,
                 nome_fantasia: values.nome_fantasia || null,
@@ -625,8 +650,69 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                             <Separator />
                             <h3 className="font-semibold text-lg">Configurações da Empresa</h3>
                             <FormField control={form.control} name="limite_usuarios" render={({ field }) => (
-                                <FormItem><FormLabel>Limite de Usuários</FormLabel><FormControl><Input type="number" placeholder="5" {...field} disabled={isReadOnly || (isEditingClientProfile && criadorRole !== 'Admin')} /></FormControl><FormMessage /></FormItem>
+                                <FormItem><FormLabel>Limite de Usuários</FormLabel><FormControl><Input type="number" placeholder="5" {...field} disabled={isReadOnly || isClientEditLocked} /></FormControl><FormMessage /></FormItem>
                             )} />
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <FormField control={form.control} name="plano_id" render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Plano de Assinatura</FormLabel>
+                                        <FormControl>
+                                            <Select
+                                                onValueChange={(value) => field.onChange(value)}
+                                                value={field.value ?? ''}
+                                                disabled={isSubmitting || isReadOnly || planos.length === 0 || isClientEditLocked}
+                                            >
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder={planos.length ? 'Selecione o plano' : 'Nenhum plano carregado'} />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {planos.map((plano) => (
+                                                        <SelectItem key={plano.id} value={plano.id}>
+                                                            {plano.nome}
+                                                            {plano.preco_mensal > 0 ? ` (${formatCurrency(plano.preco_mensal)})` : ' (Grátis)'}
+                                                            {!plano.visivel_vendas && ' (Interno)'}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )} />
+                                <FormField control={form.control} name="data_fim_acesso" render={({ field }) => (
+                                    <FormItem className="flex flex-col">
+                                        <FormLabel>Data Limite de Acesso</FormLabel>
+                                        <Popover>
+                                            <PopoverTrigger asChild>
+                                                <FormControl>
+                                                    <Button
+                                                        variant="outline"
+                                                        className={cn(
+                                                            'w-full pl-3 text-left font-normal',
+                                                            !field.value && 'text-muted-foreground'
+                                                        )}
+                                                        disabled={isSubmitting || isReadOnly || isClientEditLocked}
+                                                    >
+                                                        {field.value ? format(field.value as Date, 'PPP', { locale: ptBR }) : <span>Escolha a data</span>}
+                                                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                                    </Button>
+                                                </FormControl>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-auto p-0" align="start">
+                                                <Calendar
+                                                    mode="single"
+                                                    selected={field.value as Date}
+                                                    onSelect={field.onChange}
+                                                    initialFocus
+                                                    locale={ptBR}
+                                                />
+                                            </PopoverContent>
+                                        </Popover>
+                                        <FormMessage />
+                                    </FormItem>
+                                )} />
+                            </div>
                             
                             <div className="space-y-2 pt-4">
                                 <div className="flex justify-between items-center mb-1">

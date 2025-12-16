@@ -23,14 +23,23 @@ import ParcelasTab from '@/components/contas-pagar/ParcelasTab';
 import PagamentosTab from '@/components/contas-pagar/PagamentosTab';
 import LayoutPrincipal from '@/components/LayoutPrincipal'; // Importando LayoutPrincipal
 import { useDebounce } from '@/hooks/use-debounce'; // Importando useDebounce
+import SetupBlocker from '@/components/SetupBlocker';
+import { UsuarioProfile } from '@/types/usuario';
 
 // O tipo ContaStatus foi movido para utils/badge-variants.ts ou é inferido nos componentes filhos.
 
 const ContasPagar: React.FC = () => {
-  const { usuario, role, perfil } = useSessao();
+  const { usuario, role, perfil, setupStatus } = useSessao();
   const isAdmin = role === 'Admin';
   const isCliente = role === 'Cliente';
+  const isClientUser =
+    role === 'Usuario' &&
+    perfil &&
+    'cliente_id' in perfil &&
+    Boolean((perfil as UsuarioProfile)?.cliente_id);
   const proprietarioId = usuario?.id;
+  const shouldBlockSetup =
+    (isCliente || isClientUser) && setupStatus && !setupStatus.isComplete;
 
   const [contasRaw, setContasRaw] = useState<(ContaPagar | ContaPagarComProgresso)[]>([]); // Armazena dados brutos
   const [parcelas, setParcelas] = useState<ExtendedParcelaPagar[]>([]);
@@ -53,7 +62,7 @@ const ContasPagar: React.FC = () => {
   const [temContasFuturas, setTemContasFuturas] = useState(false);
 
   const fetchContas = useCallback(async () => {
-    if (!proprietarioId) return;
+    if (!proprietarioId || shouldBlockSetup) return;
     setLoading(true);
     
     const tabela = isAdmin ? 'admin_contas_pagar' : 'contas_pagar';
@@ -114,10 +123,10 @@ const ContasPagar: React.FC = () => {
       setContasRaw(contasComProgresso);
     }
     setLoading(false);
-  }, [proprietarioId, isAdmin, filtroPeriodo, filtroOrigem]);
+  }, [proprietarioId, isAdmin, filtroPeriodo, filtroOrigem, shouldBlockSetup]);
   
   const fetchParcelas = useCallback(async () => {
-    if (!proprietarioId) return;
+    if (!proprietarioId || shouldBlockSetup) return;
     setLoading(true);
     
     const tabelaParcelasCP = isAdmin ? 'admin_parcelas_pagar' : 'parcelas_contas_pagar';
@@ -175,10 +184,10 @@ const ContasPagar: React.FC = () => {
       setParcelas(fetchedParcelas);
     }
     setLoading(false);
-  }, [proprietarioId, isAdmin, filtroPeriodo, filtroStatus, filtroOrigem, filtroTextoDebounced]);
+  }, [proprietarioId, isAdmin, filtroPeriodo, filtroStatus, filtroOrigem, filtroTextoDebounced, shouldBlockSetup]);
   
   const fetchPagamentos = useCallback(async () => {
-    if (!proprietarioId) return;
+    if (!proprietarioId || shouldBlockSetup) return;
     setLoading(true);
     
     const tabelaPagamentosCP = isAdmin ? 'admin_pagamentos' : 'pagamentos';
@@ -250,9 +259,13 @@ const ContasPagar: React.FC = () => {
       setPagamentos(fetchedPagamentos);
     }
     setLoading(false);
-  }, [proprietarioId, isAdmin, filtroPeriodo, filtroOrigem, filtroTextoDebounced]);
+  }, [proprietarioId, isAdmin, filtroPeriodo, filtroOrigem, filtroTextoDebounced, shouldBlockSetup]);
 
   useEffect(() => {
+    if (shouldBlockSetup) {
+      setLoading(false);
+      return;
+    }
     if (activeTab === 'sintetico') {
       fetchContas();
     } else if (activeTab === 'parcelas') {
@@ -264,7 +277,7 @@ const ContasPagar: React.FC = () => {
 
   // Verificar contas futuras ao carregar (apenas para Cliente)
   const verificarContasFuturas = useCallback(async (abrirModalSeHouver: boolean = true) => {
-    if (!proprietarioId || isAdmin) {
+    if (!proprietarioId || isAdmin || shouldBlockSetup) {
       setTemContasFuturas(false);
       return;
     }
@@ -301,13 +314,13 @@ const ContasPagar: React.FC = () => {
       console.error('Erro ao verificar contas futuras:', error);
       setTemContasFuturas(false);
     }
-  }, [proprietarioId, isAdmin]);
+  }, [proprietarioId, isAdmin, shouldBlockSetup]);
 
   useEffect(() => {
-    if (proprietarioId && !isAdmin) {
+    if (proprietarioId && !isAdmin && !shouldBlockSetup) {
       verificarContasFuturas();
     }
-  }, [proprietarioId, isAdmin, verificarContasFuturas]);
+  }, [proprietarioId, isAdmin, verificarContasFuturas, shouldBlockSetup]);
 
   // --- Filtro de Frontend para a aba Sintético ---
   const contas = useMemo(() => {
@@ -434,6 +447,14 @@ const ContasPagar: React.FC = () => {
         default: return origem;
     }
   };
+
+  if (shouldBlockSetup) {
+    return (
+      <LayoutPrincipal>
+        <SetupBlocker missingSteps={setupStatus?.missingSteps ?? []} />
+      </LayoutPrincipal>
+    );
+  }
 
   return (
     <LayoutPrincipal>
