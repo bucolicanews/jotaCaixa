@@ -9,6 +9,7 @@ import FormConfiguracoesContrato from '@/components/formularios/FormConfiguracoe
 import FormConfiguracaoPlanoContas from '@/components/formularios/FormConfiguracaoPlanoContas';
 import FormConfiguracaoContabil from '@/components/formularios/FormConfiguracaoContabil';
 import { Key, Settings, DollarSign, ArrowDownCircle, FileSignature, BookOpen, Scale } from 'lucide-react';
+import FormConfiguracaoTabelasPadrao from '@/components/formularios/FormConfiguracaoTabelasPadrao';
 import { ClienteProfile } from '@/types/usuario';
 
 const Configuracoes = () => {
@@ -35,6 +36,7 @@ const Configuracoes = () => {
           {canAccessContabil && <TabsTrigger value="cp" className="flex-1 sm:flex-auto flex items-center"><ArrowDownCircle className="w-4 h-4 mr-1" /> Contas a Pagar</TabsTrigger>}
           {canAccessContabil && <TabsTrigger value="contratos" className="flex-1 sm:flex-auto flex items-center"><FileSignature className="w-4 h-4 mr-1" /> Contratos</TabsTrigger>}
           {isAdmin && <TabsTrigger value="stripe" className="flex-1 sm:flex-auto flex items-center"><Key className="w-4 h-4 mr-1" /> Stripe</TabsTrigger>}
+          {isAdmin && <TabsTrigger value="configuracao_tebelas_padrao" className="flex-1 sm:flex-auto">Configuração Tabelas Padrão</TabsTrigger>}
           <TabsTrigger value="usuarios" className="flex-1 sm:flex-auto">Usuários</TabsTrigger>
           <TabsTrigger value="tributarias" className="flex-1 sm:flex-auto">Tributárias</TabsTrigger>
         </TabsList>
@@ -113,6 +115,12 @@ const Configuracoes = () => {
                 <FormConfiguracoesStripe />
               </CardContent>
             </Card>
+          </TabsContent>
+        )}
+        
+        {isAdmin && (
+          <TabsContent value="configuracao_tebelas_padrao" className="mt-4">
+            <FormConfiguracaoTabelasPadrao adminId={usuario?.id || null} />
           </TabsContent>
         )}
         

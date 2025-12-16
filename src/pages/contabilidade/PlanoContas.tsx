@@ -436,6 +436,12 @@ const PlanoContasPage = () => {
             
             <ImportarPlanoContas onImportComplete={handleImportComplete} />
             <ExportarPlanoContasButton />
+            <Button variant="outline" className="w-full sm:w-auto" asChild>
+                <a href="/plano_contas_padrao.csv" target="_blank" rel="noreferrer" download>
+                    <FileDown className="w-4 h-4 mr-2" />
+                    Baixar Plano Padrão
+                </a>
+            </Button>
         </div>
       </div>
 
