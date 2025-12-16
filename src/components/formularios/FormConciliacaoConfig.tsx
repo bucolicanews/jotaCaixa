@@ -40,8 +40,8 @@ const FormConciliacaoConfig: React.FC<FormConciliacaoConfigProps> = ({ configIni
       coluna_descricao: configInicial?.mapeamento?.descricao || 'Transação',
       coluna_valor: configInicial?.mapeamento?.valor || 'Valor',
       coluna_identificacao: configInicial?.mapeamento?.identificacao || 'Identificação', // Valor inicial
-      coluna_tipo_transacao: configInicial?.coluna_tipo_transacao || 'Tipo Transação',
-      valor_credito: configInicial?.valor_credito || 'CRÉDITO',
+      coluna_tipo_transacao: configInicial?.coluna_tipo_transacao || '',
+      valor_credito: configInicial?.valor_credito || '',
     },
   });
 
@@ -52,6 +52,10 @@ const FormConciliacaoConfig: React.FC<FormConciliacaoConfigProps> = ({ configIni
       return;
     }
 
+    const colunaIdentificacao = (values.coluna_identificacao || '').trim();
+    const colunaTipoTransacao = (values.coluna_tipo_transacao || '').trim();
+    const valorCredito = (values.valor_credito || '').trim();
+
     const dataToSave = {
       proprietario_id: ownerId,
       id_saldo_contas: idSaldoContas,
@@ -60,10 +64,10 @@ const FormConciliacaoConfig: React.FC<FormConciliacaoConfigProps> = ({ configIni
         data: values.coluna_data,
         descricao: values.coluna_descricao,
         valor: values.coluna_valor,
-        identificacao: values.coluna_identificacao || null, // Salva o novo campo
+        identificacao: colunaIdentificacao || null, // Salva o novo campo
       },
-      coluna_tipo_transacao: values.coluna_tipo_transacao || null,
-      valor_credito: values.valor_credito || null,
+      coluna_tipo_transacao: colunaTipoTransacao || null,
+      valor_credito: valorCredito || null,
     };
 
     let error = null;

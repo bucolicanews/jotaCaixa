@@ -402,6 +402,10 @@ export function useConciliacao(isBancoOnly: boolean = false): ConciliacaoHook {
                 dynamicTyping: true,
                 complete: (results: ParseResult<any>) => {
                     try {
+                        const colunaTipoConfigurada = config.coluna_tipo_transacao?.trim() || null;
+                        const valorCreditoConfigurado = config.valor_credito?.trim() || null;
+                        const valorCreditoNormalizado = valorCreditoConfigurado ? normalizeString(valorCreditoConfigurado) : '';
+
                         const rawTransacoes: TransacaoExtrato[] = results.data.map((row: any) => {
                             // valor vindo do CSV *sempre* tratado como texto primeiro e convertido
                             const rawValorStr = String(row[config.mapeamento.valor] ?? '0').replace(/\s+/g, '').replace(',', '.');
@@ -409,8 +413,14 @@ export function useConciliacao(isBancoOnly: boolean = false): ConciliacaoHook {
                             let valor = isNaN(parsedValor) ? 0 : parsedValor;
                             
                             // Lógica para determinar o sinal do valor (mantemos valor numérico real)
-                            if (config.coluna_tipo_transacao && row[config.coluna_tipo_transacao] !== config.valor_credito) {
-                                valor = -Math.abs(valor);
+                            if (colunaTipoConfigurada && valorCreditoNormalizado) {
+                                const rawTipoValor = row[colunaTipoConfigurada];
+                                const tipoValorNormalizado = normalizeString(String(rawTipoValor ?? ''));
+
+                                if (tipoValorNormalizado) {
+                                    const isCredito = tipoValorNormalizado === valorCreditoNormalizado;
+                                    valor = isCredito ? Math.abs(valor) : -Math.abs(valor);
+                                }
                             }
                             
                             const identificacao = config.mapeamento.identificacao 

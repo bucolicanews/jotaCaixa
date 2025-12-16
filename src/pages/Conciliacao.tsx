@@ -1,5 +1,6 @@
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Loader2, Link2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import FormConciliacaoConfig from '@/components/formularios/FormConciliacaoConfig';
@@ -30,6 +31,7 @@ import {
 
 const Conciliacao = () => {
   const { role } = useSessao();
+  const [searchParams, setSearchParams] = useSearchParams();
   const isAdmin = role === 'Admin';
   
   const {
@@ -79,6 +81,35 @@ const Conciliacao = () => {
   const [carregandoCandidatos, setCarregandoCandidatos] = useState(false);
   const [indiceAtual, setIndiceAtual] = useState(1);
   const [historicoMapeamento, setHistoricoMapeamento] = useState<TransacaoComId[]>([]);
+
+  const dialogParam = searchParams.get('dialog');
+
+  const clearDialogParam = useCallback(() => {
+    if (searchParams.has('dialog')) {
+      const newParams = new URLSearchParams(searchParams);
+      newParams.delete('dialog');
+      setSearchParams(newParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
+
+  useEffect(() => {
+    if (
+      dialogParam === 'nova-configuracao' &&
+      contaSelecionadaId &&
+      proprietarioDaConfiguracao
+    ) {
+      setConfigParaEditar(null);
+      setDialogOpen(true);
+      clearDialogParam();
+    }
+  }, [dialogParam, contaSelecionadaId, proprietarioDaConfiguracao, clearDialogParam]);
+
+  const handleDialogOpenChange = useCallback((open: boolean) => {
+    setDialogOpen(open);
+    if (!open) {
+      clearDialogParam();
+    }
+  }, [clearDialogParam]);
 
   const fetchPendentes = useCallback(async () => {
     if (!proprietarioDaConfiguracao) return;
@@ -213,6 +244,7 @@ const Conciliacao = () => {
   
   const handleConfigSaveComplete = () => {
     setDialogOpen(false);
+    clearDialogParam();
     fetchConfigs();
   };
 
@@ -325,9 +357,9 @@ const Conciliacao = () => {
       </Tabs>
       
       {contaSelecionadaId && (
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <Dialog open={dialogOpen} onOpenChange={handleDialogOpenChange}>
           <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
-            <DialogHeader><DialogTitle>{configParaEditar ? 'Editar' : 'Nova'} Configuração de Mapeamento</DialogTitle></DialogHeader>
+            <DialogHeader><DialogTitle>{configParaEditar ? 'Editar' : 'Nova'} Configuração do Extrato</DialogTitle></DialogHeader>
             <FormConciliacaoConfig 
               configInicial={configParaEditar}
               idSaldoContas={contaSelecionadaId} 
