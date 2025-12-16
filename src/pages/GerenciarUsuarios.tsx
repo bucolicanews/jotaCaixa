@@ -10,7 +10,7 @@ import FormUsuario from '@/components/formularios/FormUsuario';
 import { supabase } from '@/integrations/supabase/client';
 import { showError, showSuccess } from '@/utils/toast';
 import { AnyProfile, UsuarioProfile, UserRole, AdminUsuarioProfile, ClienteProfile } from '@/types/usuario';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -45,6 +45,10 @@ const GerenciarUsuarios: React.FC = () => {
   // Determina se o usuário é funcionário do Admin (admin_usuario)
   const isAdminUsuario = isUsuario && !!(perfil as AdminUsuarioProfile)?.admin_id;
   const adminIdDoUsuario = isAdminUsuario ? (perfil as AdminUsuarioProfile)?.admin_id : null;
+  const usuarioId = usuario?.id || null;
+  const clientePerfil = isCliente && perfil ? (perfil as ClienteProfile) : null;
+  const clientePerfilId = clientePerfil?.id || null;
+  const clientePerfilNome = clientePerfil?.nome || 'Minha Empresa';
 
   // Efeito para definir a aba ativa inicial
   useEffect(() => {
@@ -55,7 +59,7 @@ const GerenciarUsuarios: React.FC = () => {
 
 
   const fetchDados = useCallback(async () => {
-    if (!usuario || !role) {
+    if (!usuarioId || !role) {
         setCarregandoDados(false);
         return;
     }
@@ -64,7 +68,7 @@ const GerenciarUsuarios: React.FC = () => {
     
     let fetchedClientes: EmpresaFiltro[] = [];
     let fetchedUsers: UsuarioComEmpresa[] = [];
-    const creatorId = isAdmin ? usuario.id : isAdminUsuario ? adminIdDoUsuario : (perfil as ClienteProfile)?.id;
+    const creatorId = isAdmin ? usuarioId : isAdminUsuario ? adminIdDoUsuario : clientePerfilId;
 
     if (isAdmin || (isAdminUsuario && creatorId)) {
       // 1. Admin ou Sub-Admin: Busca todos os clientes do criador
@@ -108,18 +112,35 @@ const GerenciarUsuarios: React.FC = () => {
       fetchedUsers.push(...adminUsers);
 
       // Busca Usuários (Funcionários) dos Clientes
-      const clientIds = fetchedClientes.filter(c => c.id !== creatorId).map(c => c.id);
+      const clientIds = fetchedClientes
+        .filter(c => c.id && c.id !== creatorId)
+        .map(c => c.id as string);
+      const uniqueClientIds = Array.from(new Set(clientIds));
       
-      if (clientIds.length > 0) {
-          const { data: clientUsersData, error: clienteUsersError } = await supabase
-            .from('tbl_usuarios')
-            .select('*, admin_id')
-            .in('cliente_id', clientIds)
-            .order('nome', { ascending: true });
-            
-          if (clienteUsersError) console.error('Erro ao carregar usuários dos Clientes:', clienteUsersError);
+      if (uniqueClientIds.length > 0) {
+          const chunkSize = 20;
+          const clientUsersRows: UsuarioProfile[] = [];
           
-          const clientUsers = (clientUsersData || []).map(item => {
+          for (let i = 0; i < uniqueClientIds.length; i += chunkSize) {
+              const chunk = uniqueClientIds.slice(i, i + chunkSize);
+              const inFilter = `(${chunk.map(id => `"${id}"`).join(',')})`;
+              
+              const { data: clientUsersData, error: clienteUsersError } = await supabase
+                .from('tbl_usuarios')
+                .select('*')
+                .filter('cliente_id', 'in', inFilter)
+                .order('nome', { ascending: true });
+              
+              if (clienteUsersError) {
+                  console.error('Erro ao carregar usuários dos Clientes:', clienteUsersError);
+                  showError('Falha ao carregar usuários das empresas clientes: ' + clienteUsersError.message);
+                  break;
+              }
+              
+              clientUsersRows.push(...((clientUsersData as UsuarioProfile[]) || []));
+          }
+          
+          const clientUsers = clientUsersRows.map(item => {
             const nomeEmpresa = fetchedClientes.find(c => c.id === (item as UsuarioProfile).cliente_id)?.nome || 'N/A';
             return { ...item, cliente_nome: nomeEmpresa, is_admin_user: false } as UsuarioComEmpresa;
           });
@@ -142,7 +163,7 @@ const GerenciarUsuarios: React.FC = () => {
         return;
       }
       
-      fetchedUsers = (usuariosData || []).map(u => ({ ...u, cliente_nome: (perfil as ClienteProfile)?.nome || 'Minha Empresa' })) as UsuarioComEmpresa[];
+      fetchedUsers = (usuariosData || []).map(u => ({ ...u, cliente_nome: clientePerfilNome })) as UsuarioComEmpresa[];
     }
     
     // NOVO PASSO: Buscar todos os IDs de Clientes (tbl_clientes) e Admin (tbl_admins) para exclusão
@@ -156,22 +177,22 @@ const GerenciarUsuarios: React.FC = () => {
     
     // 3. Filtrar: Excluir o Admin logado E qualquer perfil que seja Cliente ou Admin (para garantir que apenas subordinados fiquem)
     const filteredUsers = fetchedUsers
-        .filter(u => u.id !== usuario.id) // Exclui o usuário logado
+        .filter(u => u.id !== usuarioId) // Exclui o usuário logado
         .filter(u => !clientProfileIds.has(u.id) && !adminProfileIds.has(u.id)); // Exclui qualquer um que seja Cliente ou Admin
 
     setUsuarios(filteredUsers);
     setCarregandoDados(false);
-  }, [usuario, role, isAdmin, isCliente, isAdminUsuario, adminIdDoUsuario, perfil, filtroEmpresaId]);
+  }, [usuarioId, role, isAdmin, isCliente, isAdminUsuario, adminIdDoUsuario, clientePerfilId, clientePerfilNome]);
 
   useEffect(() => {
     if (!carregando) {
-        if (usuario) {
+        if (usuarioId) {
             fetchDados();
         } else {
             setCarregandoDados(false);
         }
     }
-  }, [carregando, usuario, fetchDados]);
+  }, [carregando, usuarioId, fetchDados]);
 
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFiltro(e.target.value);
@@ -179,7 +200,7 @@ const GerenciarUsuarios: React.FC = () => {
 
   // Separação de usuários para as abas
   // Para admin_usuario, considera o admin_id do Admin como "seu" proprietário
-  const meuProprietarioId = isAdminUsuario ? adminIdDoUsuario : usuario?.id;
+  const meuProprietarioId = isAdminUsuario ? adminIdDoUsuario : usuarioId;
   const meusFuncionarios = usuarios.filter(u => (u as UsuarioProfile)?.cliente_id === meuProprietarioId || (u as AdminUsuarioProfile)?.admin_id === meuProprietarioId);
   const funcionariosClientes = usuarios.filter(u => (u as UsuarioProfile)?.cliente_id !== meuProprietarioId && (u as AdminUsuarioProfile)?.admin_id !== meuProprietarioId);
 
@@ -217,7 +238,7 @@ const GerenciarUsuarios: React.FC = () => {
     try {
       // Determina a tabela de origem
       const userToDelete = usuarios.find(u => u.id === id);
-      const isMyUser = (userToDelete as UsuarioProfile)?.cliente_id === usuario?.id || (userToDelete as AdminUsuarioProfile)?.admin_id === usuario?.id;
+      const isMyUser = (userToDelete as UsuarioProfile)?.cliente_id === usuarioId || (userToDelete as AdminUsuarioProfile)?.admin_id === usuarioId;
       const tabela = isMyUser && isAdmin ? 'admin_usuarios' : 'tbl_usuarios';
       
       // Deleta o perfil do usuário na tabela correta
@@ -318,9 +339,11 @@ const GerenciarUsuarios: React.FC = () => {
                                     <TableCell className="text-sm text-muted-foreground">{userProfile.cliente_nome || 'N/A'}</TableCell>
                                 )}
                                 <TableCell>
-                                    {userProfile.data_inicio_contrato 
-                                        ? format(new Date(userProfile.data_inicio_contrato!), 'dd/MM/yyyy', { locale: ptBR })
-                                        : 'N/A'}
+                                    {userProfile.data_inicio_contrato ? (
+                                        format(parseISO(userProfile.data_inicio_contrato), 'dd/MM/yyyy', { locale: ptBR })
+                                    ) : (
+                                        'N/A'
+                                    )}
                                 </TableCell>
                                 <TableCell className="text-right space-x-2 min-w-[150px]">
                                     
@@ -446,7 +469,7 @@ const GerenciarUsuarios: React.FC = () => {
                       <SelectContent>
                           <SelectItem value="todos">Todas as Empresas</SelectItem>
                           {/* Filtra a opção 'Meus Usuários (Admin)' para esta aba */}
-                          {empresasFiltro.filter(e => e.id !== usuario?.id).map(e => (
+                          {empresasFiltro.filter(e => e.id !== usuarioId).map(e => (
                               <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>
                           ))}
                       </SelectContent>
