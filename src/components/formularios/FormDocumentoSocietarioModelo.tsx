@@ -19,7 +19,7 @@ import { TAGS_PADRAO } from '@/config/contrato-tags-padrao';
 import { cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { sanitizeConteudo } from '@/utils/formatters';
-import RichTextEditor from '@/components/RichTextEditor';
+import RichTextEditor, { RichTextEditorRef } from '@/components/RichTextEditor';
 import { Label } from '@/components/ui/label';
 
 // Extensão local para DocumentoSocietarioModelo
@@ -49,6 +49,8 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
   const [previewOpen, setPreviewOpen] = useState(false);
   const [conteudoPreview, setConteudoPreview] = useState('');
   const [previewTitle, setPreviewTitle] = useState('');
+  const quillRef = useRef<RichTextEditorRef>(null);
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
   
   const getOwnerId = () => {
     if (role === 'Admin') return usuario?.id || null;
@@ -59,37 +61,40 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
   
   const ownerId = getOwnerId();
 
-  const fetchTagsAndBlocos = useCallback(async () => {
-    if (!ownerId) return;
-    
-    // 1. Buscar Tags Customizadas
-    const { data: tagsData } = await supabase
-        .from('contrato_tags')
-        .select('*')
-        .eq('empresa_id', ownerId)
-        .order('nome_tag', { ascending: true });
-        
-    if (tagsData) {
-        setTagsCustomizadas(tagsData as any[]);
-    }
-    
-    // 2. Buscar Blocos de Conteúdo
+  const fetchBlocos = useCallback(async () => {
     const { data: blocosData, error: blocosError } = await supabase
-        .from('blocos_societarios')
-        .select('*')
-        .or(`proprietario_id.eq.${ownerId},proprietario_id.is.null`)
-        .order('titulo');
-        
+      .from('blocos_societarios')
+      .select('*')
+      .order('titulo');
+
     if (blocosError) {
-        console.error('Erro ao carregar blocos:', blocosError);
+      console.error('Erro ao carregar blocos:', blocosError);
+      showError('Falha ao carregar blocos.');
     } else {
-        setBlocos(blocosData as BlocoSocietario[]);
+      setBlocos(blocosData as BlocoSocietario[]);
+    }
+  }, []);
+
+  const fetchTags = useCallback(async () => {
+    if (!ownerId) return; // Tags dependem do ownerId
+
+    const { data: tagsData, error: tagsError } = await supabase
+      .from('contrato_tags')
+      .select('*')
+      .eq('empresa_id', ownerId)
+      .order('nome_tag', { ascending: true });
+
+    if (tagsError) {
+      console.error('Erro ao carregar tags:', tagsError);
+    } else if (tagsData) {
+      setTagsCustomizadas(tagsData as any[]);
     }
   }, [ownerId]);
-  
+
   useEffect(() => {
-      fetchTagsAndBlocos();
-  }, [fetchTagsAndBlocos]);
+    fetchBlocos();
+    fetchTags();
+  }, [fetchBlocos, fetchTags]);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -181,64 +186,54 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
       return Array.from(tagMap.values()).sort((a, b) => a.nome_tag.localeCompare(b.nome_tag));
   }, [tagsCustomizadas]);
   
-  // --- FUNÇÕES DE INSERÇÃO DE TEXTO (Tags e Blocos) ---
-  
-  const handleInsertText = useCallback((insertText: string) => {
-      const current = form.getValues("conteudo_template") || "";
-      
-      // Se estiver no modo HTML (Quill), precisamos manipular o DOM do Quill
-      const quillEditor = document.querySelector(".ql-editor");
-      
-      if (quillEditor) {
-          const selection = window.getSelection();
-          if (selection && selection.rangeCount > 0) {
-              const range = selection.getRangeAt(0);
-              
-              // Cria um nó de texto para inserir
-              const textNode = document.createTextNode(insertText);
-              
-              // Insere o nó no cursor
-              range.deleteContents();
-              range.insertNode(textNode);
-              
-              // Move o cursor para o final do texto inserido
-              range.setStartAfter(textNode);
-              range.setEndAfter(textNode);
-              selection.removeAllRanges();
-              selection.addRange(range);
-              
-              // Atualiza o valor do formulário com o novo HTML do Quill
-              form.setValue("conteudo_template", quillEditor.innerHTML, { shouldDirty: true, shouldValidate: true });
-              
-              showSuccess(`Tag inserida no editor.`);
-              return;
-          }
+  const handleInsertText = useCallback((textToInsert: string, isHtml = false) => {
+    const editor = quillRef.current?.getEditor()?.getEditor();
+    if (editor) {
+      const range = editor.getSelection(true);
+      if (isHtml) {
+        editor.pasteHTML(range.index, textToInsert);
+      } else {
+        editor.insertText(range.index, textToInsert, 'user');
       }
-      
-      // Fallback: Se não for possível manipular o Quill, anexa no final
-      form.setValue("conteudo_template", current + insertText, { shouldDirty: true, shouldValidate: true });
-      
+      // Move cursor to the end of inserted text
+      editor.setSelection(range.index + textToInsert.length, 0, 'silent');
+    } else {
+      // Fallback for plain textarea
+      const current = form.getValues("conteudo_template") || "";
+      form.setValue("conteudo_template", current + textToInsert, { shouldDirty: true, shouldValidate: true });
+    }
   }, [form]);
-  
+
   const handleInsertBloco = (bloco: BlocoSocietario) => {
-      handleInsertText(`\n\n${bloco.conteudo}\n\n`);
-      showSuccess(`Bloco '${bloco.titulo}' inserido no conteúdo.`);
+    const contentToInsert = `<br><p>${bloco.conteudo.replace(/\n/g, '<br>')}</p><br>`;
+    handleInsertText(contentToInsert, true);
+    showSuccess(`Bloco '${bloco.titulo}' inserido no conteúdo.`);
   };
   
-  const handleDragStart = (e: React.DragEvent<HTMLDivElement>, tag: string) => {
-      e.dataTransfer.setData("text/plain", tag);
+  const handleDragStart = (e: React.DragEvent<HTMLDivElement>, content: string, isHtml: boolean) => {
+    e.dataTransfer.setData('text/plain', content);
+    e.dataTransfer.setData('application/json', JSON.stringify({ isHtml }));
   };
   
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
-      e.preventDefault(); // Permite que o drop ocorra
+      e.preventDefault();
+      setIsDraggingOver(true);
   };
   
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      setIsDraggingOver(false);
+  };
+
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
       e.preventDefault();
+      setIsDraggingOver(false);
       const text = e.dataTransfer.getData("text/plain");
+      const meta = e.dataTransfer.getData('application/json');
+      const isHtml = meta ? JSON.parse(meta).isHtml : false;
 
       if (text) {
-          handleInsertText(text);
+          handleInsertText(text, isHtml);
       }
   };
   
@@ -247,8 +242,6 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
       navigator.clipboard.writeText(tagsString);
       showSuccess('Todas as tags copiadas para a área de transferência!');
   };
-  
-  // --- FIM FUNÇÕES DE INSERÇÃO DE TEXTO ---
 
   return (
     <>
@@ -265,7 +258,7 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 flex-1 overflow-hidden">
             
             <div className="lg:col-span-3 space-y-4 flex flex-col h-full">
-                <Card className="h-full flex flex-col">
+                <Card className={cn("h-full flex flex-col transition-all", isDraggingOver && "ring-2 ring-primary-foreground")}>
                     <CardHeader className="flex flex-row items-center justify-between">
                         <CardTitle className="text-xl">Conteúdo do Template</CardTitle>
                         <Button type="button" variant="outline" size="sm" onClick={handlePreview} disabled={!form.watch('conteudo_template')}>
@@ -278,11 +271,17 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
                             name="conteudo_template"
                             render={({ field }) => (
                                 <FormItem className="h-full flex flex-col">
-                                    <FormControl className="flex-1" onDrop={handleDrop} onDragOver={handleDragOver}>
+                                    <FormControl 
+                                      className="flex-1" 
+                                      onDrop={handleDrop} 
+                                      onDragOver={handleDragOver}
+                                      onDragLeave={handleDragLeave}
+                                    >
                                         <RichTextEditor
+                                            ref={quillRef}
                                             value={field.value}
                                             onChange={field.onChange}
-                                            placeholder="Insira o conteúdo formatado aqui..."
+                                            placeholder="Insira o conteúdo formatado aqui ou arraste um bloco..."
                                             className="flex-1"
                                         />
                                     </FormControl>
@@ -297,8 +296,6 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
             <div className="lg:col-span-1 space-y-4 flex flex-col">
                 <Card 
                     className="flex-1 min-h-[200px] max-h-[calc(100vh-200px)] overflow-y-auto"
-                    onDragOver={handleDragOver}
-                    onDrop={handleDrop}
                 >
                     <CardHeader className="pb-2">
                         <CardTitle className="text-lg flex items-center"><Tag className="w-4 h-4 mr-2" /> Tags e Blocos</CardTitle>
@@ -313,8 +310,8 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
                                     key={tag.nome_tag} 
                                     className="p-2 border rounded-md cursor-pointer hover:bg-accent/50 transition-colors"
                                     draggable
-                                    onDragStart={(e) => handleDragStart(e, tag.nome_tag)}
-                                    onClick={() => handleInsertText(tag.nome_tag)}
+                                    onDragStart={(e) => handleDragStart(e, tag.nome_tag, false)}
+                                    onClick={() => handleInsertText(tag.nome_tag, false)}
                                 >
                                     <p className="font-mono text-xs font-semibold text-primary">{tag.nome_tag}</p>
                                     <p className="text-xs text-muted-foreground">{tag.descricao}</p>
@@ -327,7 +324,7 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
                         <h4 className="font-semibold flex items-center"><PlusCircle className="w-4 h-4 mr-2" /> Blocos</h4>
                         <div className="grid grid-cols-1 gap-2 max-h-40 overflow-y-auto p-2 border rounded-md">
                             {blocos.length === 0 ? (
-                                <p className="text-muted-foreground text-sm">Nenhum bloco disponível.</p>
+                                <p data-dyad-id="src\components\formularios\FormDocumentoSocietarioModelo.tsx:330:32" data-dyad-name="p" className="text-muted-foreground text-sm">Nenhum bloco disponível.</p>
                             ) : (
                                 blocos.map(bloco => (
                                     <Button 
@@ -335,9 +332,9 @@ const FormDocumentoSocietarioModelo: React.FC<FormDocumentoSocietarioModeloProps
                                         variant="outline" 
                                         size="sm" 
                                         onClick={() => handleInsertBloco(bloco)}
-                                        className="justify-start truncate"
+                                        className="justify-start truncate cursor-grab"
                                         draggable
-                                        onDragStart={(e) => e.dataTransfer.setData("text/plain", `\n\n${bloco.conteudo}\n\n`)}
+                                        onDragStart={(e) => handleDragStart(e, `<br><p>${bloco.conteudo.replace(/\n/g, '<br>')}</p><br>`, true)}
                                     >
                                         {bloco.titulo}
                                     </Button>
