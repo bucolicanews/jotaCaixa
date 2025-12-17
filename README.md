@@ -583,6 +583,267 @@ $$ LANGUAGE plpgsql;
 
 ---
 
+## Histórico de Manutenção e Migrações Críticas
+
+Esta seção documenta as principais alterações de arquitetura e migrações críticas que garantem a estabilidade e segurança do sistema.
+
+### Dezembro 2025: Correção da Recursão Infinita de RLS
+
+O sistema apresentou um erro crítico de "infinite recursion" que bloqueava o acesso de administradores (admin_usuarios) a diversas funcionalidades, como saldos, planos, lançamentos e folha de ponto.
+
+**Contexto do Problema:**
+A `tbl_usuarios_select_policy` causava recursão porque, ao avaliar um `SELECT` em `tbl_usuarios`, ela executava uma subquery (`EXISTS`) que tocava em `tbl_clientes` e `admin_usuarios`. Como essas tabelas também possuíam RLS ativo, o PostgreSQL reavaliava as mesmas policies em um loop infinito, impedindo o carregamento dos dados.
+
+**Solução Aplicada:**
+A solução definitiva envolveu a criação de uma tabela auxiliar sem RLS e a reescrita de todas as policies problemáticas para usar uma função segura (`SECURITY DEFINER`) que consulta essa tabela.
+
+---
+
+#### Passo 1: Tabela Auxiliar e Função Segura
+
+Primeiro, criamos uma tabela de lookup, seus triggers de sincronização e a função que busca o `admin_id` do usuário logado de forma segura, sem disparar RLS.
+
+```sql
+-- 1.1) Cria tabela auxiliar (sem RLS) para mapear admin_id de cada admin_usuario
+CREATE TABLE IF NOT EXISTS public.admin_user_lookup (
+  id uuid PRIMARY KEY,
+  admin_id uuid NOT NULL
+);
+
+-- 1.2) Trigger que sincroniza a tabela auxiliar sempre que admin_usuarios muda
+CREATE OR REPLACE FUNCTION public.sync_admin_user_lookup()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF (TG_OP = 'DELETE') THEN
+    DELETE FROM public.admin_user_lookup WHERE id = OLD.id;
+    RETURN OLD;
+  ELSE
+    INSERT INTO public.admin_user_lookup (id, admin_id)
+    VALUES (NEW.id, NEW.admin_id)
+    ON CONFLICT (id) DO UPDATE SET admin_id = EXCLUDED.admin_id;
+    RETURN NEW;
+  END IF;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_admin_usuarios_lookup_aiu ON public.admin_usuarios;
+DROP TRIGGER IF EXISTS trg_admin_usuarios_lookup_ad ON public.admin_usuarios;
+
+CREATE TRIGGER trg_admin_usuarios_lookup_aiu
+AFTER INSERT OR UPDATE ON public.admin_usuarios
+FOR EACH ROW EXECUTE FUNCTION public.sync_admin_user_lookup();
+
+CREATE TRIGGER trg_admin_usuarios_lookup_ad
+AFTER DELETE ON public.admin_usuarios
+FOR EACH ROW EXECUTE FUNCTION public.sync_admin_user_lookup();
+
+-- 1.3) Backfill (para garantir que todos os usuários atuais estão refletidos)
+INSERT INTO public.admin_user_lookup (id, admin_id)
+SELECT id, admin_id FROM public.admin_usuarios
+ON CONFLICT (id) DO UPDATE SET admin_id = EXCLUDED.admin_id;
+
+-- 1.4) Função segura para obter o admin_id do usuário atual (sem RLS)
+-- A função precisa ser VOLATILE porque usa 'SET LOCAL', que é proibido em funções STABLE ou IMMUTABLE.
+CREATE OR REPLACE FUNCTION public.get_admin_id_for_current_user()
+  RETURNS uuid
+  LANGUAGE plpgsql
+  VOLATILE
+  SECURITY DEFINER
+AS $$
+DECLARE
+  current_admin uuid;
+BEGIN
+  SET LOCAL row_security = off;
+  SELECT admin_id INTO current_admin FROM public.admin_user_lookup WHERE id = auth.uid();
+  RETURN current_admin;
+END;
+$$;
+```
+
+---
+
+#### Passo 2: Recriação das Policies de `tbl_clientes` e `tbl_usuarios`
+
+Com a função `get_admin_id_for_current_user()` disponível, as policies foram reescritas para evitar subqueries recursivas.
+
+```sql
+-- Limpa policies antigas de tbl_clientes e tbl_usuarios
+DO $$
+DECLARE r RECORD;
+BEGIN
+  FOR r IN
+    SELECT policyname, tablename
+    FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename IN ('tbl_clientes', 'tbl_usuarios')
+  LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I;', r.policyname, r.tablename);
+  END LOOP;
+END$$;
+
+-- tbl_clientes
+ALTER TABLE public.tbl_clientes ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY tbl_clientes_select ON public.tbl_clientes
+FOR SELECT USING (
+  id = auth.uid()
+  OR admin_id = auth.uid()
+  OR public.get_admin_id_for_current_user() = public.tbl_clientes.admin_id
+);
+CREATE POLICY tbl_clientes_insert ON public.tbl_clientes FOR INSERT WITH CHECK (admin_id = auth.uid());
+CREATE POLICY tbl_clientes_update ON public.tbl_clientes FOR UPDATE USING (admin_id = auth.uid());
+CREATE POLICY tbl_clientes_delete ON public.tbl_clientes FOR DELETE USING (admin_id = auth.uid());
+
+-- tbl_usuarios
+ALTER TABLE public.tbl_usuarios ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY tbl_usuarios_select ON public.tbl_usuarios
+FOR SELECT USING (
+  id = auth.uid()
+  OR cliente_id = auth.uid()
+  OR (
+    public.get_admin_id_for_current_user() IS NOT NULL
+    AND public.get_admin_id_for_current_user() = (
+      SELECT tc.admin_id FROM public.tbl_clientes tc
+      WHERE tc.id = public.tbl_usuarios.cliente_id
+      LIMIT 1
+    )
+  )
+);
+-- Policies de INSERT, UPDATE, DELETE seguem a mesma lógica da SELECT.
+CREATE POLICY tbl_usuarios_insert ON public.tbl_usuarios FOR INSERT WITH CHECK (cliente_id = auth.uid() OR (public.get_admin_id_for_current_user() IS NOT NULL AND public.get_admin_id_for_current_user() = (SELECT tc.admin_id FROM public.tbl_clientes tc WHERE tc.id = public.tbl_usuarios.cliente_id LIMIT 1)));
+CREATE POLICY tbl_usuarios_update ON public.tbl_usuarios FOR UPDATE USING (cliente_id = auth.uid() OR (public.get_admin_id_for_current_user() IS NOT NULL AND public.get_admin_id_for_current_user() = (SELECT tc.admin_id FROM public.tbl_clientes tc WHERE tc.id = public.tbl_usuarios.cliente_id LIMIT 1)));
+CREATE POLICY tbl_usuarios_delete ON public.tbl_usuarios FOR DELETE USING (cliente_id = auth.uid() OR (public.get_admin_id_for_current_user() IS NOT NULL AND public.get_admin_id_for_current_user() = (SELECT tc.admin_id FROM public.tbl_clientes tc WHERE tc.id = public.tbl_usuarios.cliente_id LIMIT 1)));
+```
+
+---
+
+#### Passo 3: Recriação das Policies de `saldo_contas`, `plano_contas`, e `lancamentos`
+
+As tabelas financeiras também foram corrigidas para permitir o acesso do administrador.
+
+```sql
+-- Limpa policies antigas
+DO $$
+DECLARE r RECORD;
+BEGIN
+  FOR r IN
+    SELECT policyname, tablename
+    FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename IN ('saldo_contas','plano_contas','lancamentos')
+  LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I;', r.policyname, r.tablename);
+  END LOOP;
+END$$;
+
+-- saldo_contas
+ALTER TABLE public.saldo_contas ENABLE ROW LEVEL SECURITY;
+CREATE POLICY saldo_contas_select_policy ON public.saldo_contas FOR SELECT USING (proprietario_id = auth.uid() OR public.get_admin_id_for_current_user() = public.saldo_contas.proprietario_id);
+CREATE POLICY saldo_contas_insert_policy ON public.saldo_contas FOR INSERT WITH CHECK (proprietario_id = auth.uid());
+CREATE POLICY saldo_contas_update_policy ON public.saldo_contas FOR UPDATE USING (proprietario_id = auth.uid());
+CREATE POLICY saldo_contas_delete_policy ON public.saldo_contas FOR DELETE USING (proprietario_id = auth.uid());
+
+-- plano_contas
+ALTER TABLE public.plano_contas ENABLE ROW LEVEL SECURITY;
+CREATE POLICY plano_contas_select_policy ON public.plano_contas FOR SELECT USING (proprietario_id = auth.uid() OR public.get_admin_id_for_current_user() = public.plano_contas.proprietario_id);
+CREATE POLICY plano_contas_insert_policy ON public.plano_contas FOR INSERT WITH CHECK (proprietario_id = auth.uid());
+CREATE POLICY plano_contas_update_policy ON public.plano_contas FOR UPDATE USING (proprietario_id = auth.uid());
+CREATE POLICY plano_contas_delete_policy ON public.plano_contas FOR DELETE USING (proprietario_id = auth.uid());
+
+-- lancamentos
+ALTER TABLE public.lancamentos ENABLE ROW LEVEL SECURITY;
+CREATE POLICY lancamentos_select_policy ON public.lancamentos FOR SELECT USING (proprietario_id = auth.uid() OR public.get_admin_id_for_current_user() = public.lancamentos.proprietario_id);
+CREATE POLICY lancamentos_insert_policy ON public.lancamentos FOR INSERT WITH CHECK (proprietario_id = auth.uid());
+CREATE POLICY lancamentos_update_policy ON public.lancamentos FOR UPDATE USING (proprietario_id = auth.uid());
+CREATE POLICY lancamentos_delete_policy ON public.lancamentos FOR DELETE USING (proprietario_id = auth.uid());
+```
+
+---
+
+#### Passo 4: Recriação das Policies de Ponto e Férias
+
+Finalmente, as tabelas de RH foram ajustadas.
+
+```sql
+-- Limpa policies antigas
+DO $$
+DECLARE r RECORD;
+BEGIN
+  FOR r IN
+    SELECT policyname, tablename
+    FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename IN ('registros_ponto','admin_registros_ponto','ferias','admin_ferias_user')
+  LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I;', r.policyname, r.tablename);
+  END LOOP;
+END$$;
+
+-- registros_ponto
+ALTER TABLE public.registros_ponto ENABLE ROW LEVEL SECURITY;
+CREATE POLICY registros_ponto_select ON public.registros_ponto FOR SELECT USING (funcionario_id = auth.uid() OR empresa_id = auth.uid() OR public.get_admin_id_for_current_user() = public.registros_ponto.empresa_id);
+CREATE POLICY registros_ponto_insert ON public.registros_ponto FOR INSERT WITH CHECK (funcionario_id = auth.uid() OR empresa_id = auth.uid());
+CREATE POLICY registros_ponto_update ON public.registros_ponto FOR UPDATE USING (funcionario_id = auth.uid() OR empresa_id = auth.uid());
+CREATE POLICY registros_ponto_delete ON public.registros_ponto FOR DELETE USING (funcionario_id = auth.uid() OR empresa_id = auth.uid());
+
+-- admin_registros_ponto
+ALTER TABLE public.admin_registros_ponto ENABLE ROW LEVEL SECURITY;
+CREATE POLICY admin_registros_ponto_select ON public.admin_registros_ponto FOR SELECT USING (funcionario_id = auth.uid() OR admin_id = auth.uid() OR public.get_admin_id_for_current_user() = public.admin_registros_ponto.admin_id);
+CREATE POLICY admin_registros_ponto_insert ON public.admin_registros_ponto FOR INSERT WITH CHECK (funcionario_id = auth.uid() OR admin_id = auth.uid());
+CREATE POLICY admin_registros_ponto_update ON public.admin_registros_ponto FOR UPDATE USING (funcionario_id = auth.uid() OR admin_id = auth.uid());
+CREATE POLICY admin_registros_ponto_delete ON public.admin_registros_ponto FOR DELETE USING (funcionario_id = auth.uid() OR admin_id = auth.uid());
+
+-- ferias
+ALTER TABLE public.ferias ENABLE ROW LEVEL SECURITY;
+CREATE POLICY ferias_select ON public.ferias FOR SELECT USING (funcionario_id = auth.uid() OR empresa_id = auth.uid() OR public.get_admin_id_for_current_user() = public.ferias.empresa_id);
+CREATE POLICY ferias_insert ON public.ferias FOR INSERT WITH CHECK (funcionario_id = auth.uid() OR empresa_id = auth.uid());
+CREATE POLICY ferias_update ON public.ferias FOR UPDATE USING (funcionario_id = auth.uid() OR empresa_id = auth.uid());
+CREATE POLICY ferias_delete ON public.ferias FOR DELETE USING (funcionario_id = auth.uid() OR empresa_id = auth.uid());
+
+-- admin_ferias_user
+ALTER TABLE public.admin_ferias_user ENABLE ROW LEVEL SECURITY;
+CREATE POLICY admin_ferias_user_select ON public.admin_ferias_user FOR SELECT USING (funcionario_id = auth.uid() OR admin_id = auth.uid() OR public.get_admin_id_for_current_user() = public.admin_ferias_user.admin_id);
+CREATE POLICY admin_ferias_user_insert ON public.admin_ferias_user FOR INSERT WITH CHECK (funcionario_id = auth.uid() OR admin_id = auth.uid());
+CREATE POLICY admin_ferias_user_update ON public.admin_ferias_user FOR UPDATE USING (funcionario_id = auth.uid() OR admin_id = auth.uid());
+CREATE POLICY admin_ferias_user_delete ON public.admin_ferias_user FOR DELETE USING (funcionario_id = auth.uid() OR admin_id = auth.uid());
+```
+**Conclusão:**
+A aplicação desses scripts eliminou completamente os erros de recursão, restaurando o acesso e a funcionalidade para todos os perfis de usuário. Este conjunto de migrações serve como um ponto de partida estável para o sistema de RLS.
+
+### Dezembro 2025: Correção de Acesso e UX em Documentos Societários
+
+Após a correção da recursão, foram identificados e resolvidos problemas subsequentes no módulo de Documentos Societários, especificamente na criação de modelos.
+
+**1. Problema de Acesso aos Blocos Societários:**
+- **Sintoma:** Usuários do tipo `admin_usuario` não conseguiam visualizar os blocos de conteúdo criados pelo seu `admin` proprietário, embora a permissão de RLS devesse permitir.
+- **Causa Raiz:** A política de RLS para a tabela `blocos_societarios` estava ausente ou incorreta.
+- **Solução:** Foi aplicada uma nova política de RLS para garantir que `admin_usuarios` pudessem ver tanto os seus próprios blocos quanto os do seu `admin` chefe, utilizando a função `get_admin_id_for_current_user()` já existente.
+
+```sql
+-- Política de SELECT para blocos_societarios
+ALTER POLICY "admin_usuarios_select_blocos_societarios"
+ON public.blocos_societarios
+USING (
+  (proprietario_id = auth.uid())
+  OR
+  (proprietario_id = public.get_admin_id_for_current_user())
+  OR
+  (proprietario_id IS NULL)
+);
+```
+
+**2. Bug na Listagem de Blocos no Formulário:**
+- **Sintoma:** Mesmo com a política de RLS correta, a lista de blocos continuava vazia para `admin_usuarios`.
+- **Causa Raiz:** Um bug no componente de formulário (`FormDocumentoSocietarioModelo.tsx`). Uma verificação `if (!ownerId) return;` impedia a execução da busca de blocos, pois a função `getOwnerId` retornava `null` para o perfil `admin_usuario`.
+- **Solução:** A lógica de busca de dados foi refatorada. A função `fetchBlocos` foi separada da `fetchTags`, permitindo que a busca de blocos seja executada para qualquer usuário autenticado, independentemente do `ownerId`, deixando a segurança a cargo exclusivo do RLS no backend.
+
+**3. Melhoria na Experiência de Arrastar e Soltar (Drag-and-Drop):**
+- **Sintoma:** A funcionalidade nativa de arrastar e soltar era pouco intuitiva e a inserção do texto no editor era frágil.
+- **Solução:** O componente `RichTextEditor` foi refatorado para expor uma referência à sua API interna. O formulário agora utiliza essa referência para inserir o conteúdo dos blocos de forma mais robusta. Além disso, foi adicionado um feedback visual (um anel de destaque) que aparece na área do editor ao arrastar um bloco sobre ela, melhorando a usabilidade.
+
 ## Funcionalidades e Telas
 
 ### 1. **Tela de Login e Autenticação**

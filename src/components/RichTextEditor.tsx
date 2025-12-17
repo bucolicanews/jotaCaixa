@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, forwardRef, useImperativeHandle, useRef } from 'react';
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
 import { cn } from "@/lib/utils";
@@ -15,8 +15,18 @@ interface RichTextEditorProps {
   isSimpleTextMode?: boolean; // NOVO PROP
 }
 
-const RichTextEditor: React.FC<RichTextEditorProps> = ({ value, onChange, placeholder, readOnly, className, isSimpleTextMode = false }) => {
+// O tipo do Ref que será exposto. Incluímos o editor Quill para manipulação.
+export interface RichTextEditorRef {
+  getEditor: () => ReactQuill | null;
+}
+
+const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(({ value, onChange, placeholder, readOnly, className, isSimpleTextMode = false }, ref) => {
   const [isHtmlMode, setIsHtmlMode] = useState(false);
+  const quillRef = useRef<ReactQuill>(null);
+
+  useImperativeHandle(ref, () => ({
+    getEditor: () => quillRef.current,
+  }));
 
   const toggleHtmlMode = useCallback(() => {
     setIsHtmlMode(prev => !prev);
@@ -40,13 +50,11 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ value, onChange, placeh
     'link', 'image', 'align'
   ];
   
-  // Se estiver no modo de texto simples, forçamos o Textarea
   const finalIsHtmlMode = isHtmlMode || isSimpleTextMode;
 
   return (
     <div className={cn(className, "flex flex-col h-full space-y-2")}>
       
-      {/* Botão de Alternância no Topo (Oculto se for modo de texto simples) */}
       {!isSimpleTextMode && (
           <div className="flex justify-end">
             <Button 
@@ -72,7 +80,7 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ value, onChange, placeh
 
       {finalIsHtmlMode ? (
         <Textarea
-          id="conteudo-template-textarea" // Adicionando ID para manipulação de cursor
+          id="conteudo-template-textarea"
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={isSimpleTextMode ? "Insira o conteúdo em texto simples aqui..." : "Edite o código HTML puro aqui..."}
@@ -81,6 +89,7 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ value, onChange, placeh
         />
       ) : (
         <ReactQuill 
+          ref={quillRef}
           theme="snow" 
           value={value} 
           onChange={onChange} 
@@ -89,12 +98,13 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ value, onChange, placeh
           placeholder={placeholder}
           readOnly={readOnly}
           className="flex-1 flex flex-col" 
-          // Adicionando estilo para garantir que o editor tenha barra de rolagem
           style={{ height: '100%', minHeight: '300px' }}
         />
       )}
     </div>
   );
-};
+});
+
+RichTextEditor.displayName = 'RichTextEditor';
 
 export default RichTextEditor;
