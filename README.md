@@ -16,6 +16,7 @@ Um sistema robusto de gestão financeira, RH e contratos construído com React, 
 - [Funcionalidades e Telas](#funcionalidades-e-telas)
 - [Arquitetura e Fluxos](#arquitetura-e-fluxos)
 - [API e Integrações](#api-e-integrações)
+- [Supabase Schema e Scripts](#supabase-schema-e-scripts)
 
 ---
 
@@ -130,7 +131,7 @@ VITE_GOOGLE_MAPS_API_KEY=sua_chave
 
 ```bash
 pnpm dev
-# A aplicação estará disponível em http://localhost:5173
+# A aplicação estará disponível em http://localhost:8080
 ```
 
 ### 5. Build para Produção
@@ -140,39 +141,13 @@ pnpm build
 # Os arquivos compilados estarão em ./dist
 ```
 
----
-
-## Configuração do Supabase
-
-### 1. Criar Projeto Supabase
-
-1. Acesse [supabase.com](https://supabase.com)
-2. Crie um novo projeto
-3. Copie a **Project URL** e **Anon Key**
-
-## Desenvolvimento, Build e Deploy
-
-### Pré-requisitos
-- Node.js >= 20 LTS  
-- pnpm >= 9 (ou npm/yarn compatível)  
-- Supabase CLI ou acesso direto ao editor SQL do painel  
-- Conta Supabase/Stripe configurada para as integrações
-
-### Instalação e execução local
-1. `git clone https://github.com/seu-usuario/jota-app-basico.git && cd jota-app-basico`
-2. `pnpm install`
-3. Copie o `.env.example` para `.env.local` e ajuste:
-   - `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` (projeto Supabase)
-   - `VITE_STRIPE_PUBLIC_KEY`, `VITE_APP_URL`, `VITE_GOOGLE_MAPS_API_KEY`
-   - `VITE_APP_URL` deve apontar para `http://localhost:8080` em dev
-4. Inicie `pnpm dev` e abra `http://localhost:8080`
-
-### Build e preview
+### 6. Build e preview
 - `pnpm build` gera artefatos em `dist/`
 - `pnpm preview` roda um servidor estático local para validar a build
 - `pnpm lint` roda o ESLint configurado (opcional, mas recomendado antes do deploy)
+- `pnpm start` roda o servidor estático de produção
 
-### Deploy (Vercel, Netlify, Supabase Hosting, etc.)
+### 7. Deploy (Vercel, Netlify, Supabase Hosting, etc.)
 1. Configure as variáveis de ambiente da mesma forma que no `.env.local`
 2. Garanta que as Functions (RPCs) do Supabase estejam implantadas e executadas
 3. Execute `pnpm build` no pipeline e publique `dist/`
@@ -181,7 +156,7 @@ pnpm build
 5. Teste rodando `SELECT * FROM admin_usuarios WHERE id = '<admin_usuario_id>'` e confirme `admin_id`
 6. Faça logout/login no app após rodar o script para que o JWT receba as novas policies
 
-### Supabase + Stripe
+### 8. Supabase + Stripe
 - Supabase Auth com RLS garante que cada tenant só veja seus dados.  
 - `fix-rls-policies.sql` está em raiz e sincroniza as políticas (execute após restore).  
 - Integrações com Stripe usam as edge functions `create-checkout-session`, `create-renewal-session` e `get-stripe-session` para acesso seguro.
@@ -204,701 +179,8 @@ pnpm build
   ```
 - O dropdown `Conta de Débito/Crédito` e as tabelas de lançamentos usam `useOwner()` para resolver `ownerId` do cliente ou admin (funcionários).  
 - No Supabase storage/edge functions, confirme que os headers `Authorization: Bearer <supabase_jwt>` estão presentes.
-*** End Patch***-BEGIN-END applyPATCH PyTHON"""
-
-### 2. Executar Script de Banco de Dados
-
-Execute o SQL abaixo no editor SQL do Supabase:
-
-#### A. Criar Tabelas Principais
-
-```sql
--- ==========================================
--- 1. TABELAS DE AUTENTICAÇÃO E PERFIS
--- ==========================================
-
-CREATE TABLE tbl_admins (
-  id UUID PRIMARY KEY DEFAULT auth.uid(),
-  nome TEXT NOT NULL,
-  email TEXT UNIQUE NOT NULL,
-  stripe_account_id TEXT,
-  created_at TIMESTAMP DEFAULT now(),
-  updated_at TIMESTAMP DEFAULT now()
-);
-
-CREATE TABLE tbl_clientes (
-  id UUID PRIMARY KEY DEFAULT auth.uid(),
-  nome TEXT NOT NULL,
-  email TEXT UNIQUE NOT NULL,
-  cnpj TEXT UNIQUE,
-  cpf TEXT UNIQUE,
-  admin_id UUID REFERENCES tbl_admins(id),
-  plano_id TEXT,
-  data_fim_acesso TIMESTAMP,
-  permissoes JSONB DEFAULT '{}',
-  created_at TIMESTAMP DEFAULT now(),
-  updated_at TIMESTAMP DEFAULT now()
-);
-
-CREATE TABLE tbl_usuarios (
-  id UUID PRIMARY KEY DEFAULT auth.uid(),
-  nome TEXT NOT NULL,
-  email TEXT UNIQUE NOT NULL,
-  cliente_id UUID REFERENCES tbl_clientes(id),
-  admin_id UUID REFERENCES tbl_admins(id),
-  cargo TEXT,
-  created_at TIMESTAMP DEFAULT now(),
-  updated_at TIMESTAMP DEFAULT now()
-);
-
--- ==========================================
--- 2. TABELAS FINANCEIRAS (ADMIN)
--- ==========================================
-
-CREATE TABLE admin_contas_receber (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  admin_id UUID NOT NULL REFERENCES tbl_admins(id) ON DELETE CASCADE,
-  cliente_id UUID NOT NULL REFERENCES tbl_clientes(id) ON DELETE CASCADE,
-  descricao TEXT NOT NULL,
-  valor_total DECIMAL(12, 2),
-  data_vencimento DATE,
-  status TEXT DEFAULT 'aberta',
-  origem TEXT,
-  created_at TIMESTAMP DEFAULT now(),
-  updated_at TIMESTAMP DEFAULT now()
-);
-
-CREATE TABLE admin_parcelas_receber (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  conta_receber_id UUID NOT NULL REFERENCES admin_contas_receber(id) ON DELETE CASCADE,
-  admin_id UUID NOT NULL REFERENCES tbl_admins(id) ON DELETE CASCADE,
-  numero_parcela INTEGER,
-  valor_parcela DECIMAL(12, 2),
-  data_vencimento DATE,
-  status TEXT DEFAULT 'aberta',
-  ciente_cliente BOOLEAN DEFAULT false,
-  created_at TIMESTAMP DEFAULT now(),
-  updated_at TIMESTAMP DEFAULT now()
-);
-
-CREATE TABLE admin_contas_pagar (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  admin_id UUID NOT NULL REFERENCES tbl_admins(id) ON DELETE CASCADE,
-  descricao TEXT NOT NULL,
-  valor_total DECIMAL(12, 2),
-  data_vencimento DATE,
-  status TEXT DEFAULT 'aberto',
-  origem TEXT,
-  created_at TIMESTAMP DEFAULT now(),
-  updated_at TIMESTAMP DEFAULT now()
-);
-
-CREATE TABLE admin_parcelas_pagar (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  conta_pagar_id UUID NOT NULL REFERENCES admin_contas_pagar(id) ON DELETE CASCADE,
-  admin_id UUID NOT NULL REFERENCES tbl_admins(id) ON DELETE CASCADE,
-  numero_parcela INTEGER,
-  valor_parcela DECIMAL(12, 2),
-  data_vencimento DATE,
-  status TEXT DEFAULT 'aberta',
-  created_at TIMESTAMP DEFAULT now(),
-  updated_at TIMESTAMP DEFAULT now()
-);
-
--- ==========================================
--- 3. TABELAS FINANCEIRAS (CLIENTE)
--- ==========================================
-
-CREATE TABLE contas_receber (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  empresa_id UUID NOT NULL REFERENCES tbl_clientes(id) ON DELETE CASCADE,
-  cliente_id UUID NOT NULL REFERENCES tbl_clientes(id),
-  descricao TEXT NOT NULL,
-  valor_total DECIMAL(12, 2),
-  data_vencimento DATE,
-  status TEXT DEFAULT 'aberta',
-  origem TEXT,
-  created_at TIMESTAMP DEFAULT now(),
-  updated_at TIMESTAMP DEFAULT now()
-);
-
-CREATE TABLE parcelas_contas_receber (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  conta_receber_id UUID NOT NULL REFERENCES contas_receber(id) ON DELETE CASCADE,
-  empresa_id UUID NOT NULL REFERENCES tbl_clientes(id),
-  numero_parcela INTEGER,
-  valor_parcela DECIMAL(12, 2),
-  data_vencimento DATE,
-  data_pagamento DATE,
-  valor_pago DECIMAL(12, 2) DEFAULT 0,
-  status TEXT DEFAULT 'aberta',
-  created_at TIMESTAMP DEFAULT now(),
-  updated_at TIMESTAMP DEFAULT now()
-);
-
-CREATE TABLE contas_pagar (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  empresa_id UUID NOT NULL REFERENCES tbl_clientes(id) ON DELETE CASCADE,
-  Descricao TEXT NOT NULL,
-  fornecedor TEXT,
-  valor_total DECIMAL(12, 2),
-  data_vencimento DATE,
-  status TEXT DEFAULT 'aberto',
-  origem TEXT,
-  created_at TIMESTAMP DEFAULT now(),
-  updated_at TIMESTAMP DEFAULT now()
-);
-
-CREATE TABLE parcelas_contas_pagar (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  conta_pagar_id UUID NOT NULL REFERENCES contas_pagar(id) ON DELETE CASCADE,
-  empresa_id UUID NOT NULL REFERENCES tbl_clientes(id),
-  numero_parcela INTEGER,
-  valor_parcela DECIMAL(12, 2),
-  data_vencimento DATE,
-  data_pagamento DATE,
-  valor_pago DECIMAL(12, 2) DEFAULT 0,
-  status TEXT DEFAULT 'aberta',
-  created_at TIMESTAMP DEFAULT now(),
-  updated_at TIMESTAMP DEFAULT now()
-);
-
--- ==========================================
--- 4. TABELAS DE BANCOS E SALDOS
--- ==========================================
-
-CREATE TABLE saldo_contas (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  empresa_id UUID NOT NULL REFERENCES tbl_clientes(id) ON DELETE CASCADE,
-  nome TEXT NOT NULL,
-  saldo_inicial DECIMAL(12, 2) DEFAULT 0,
-  created_at TIMESTAMP DEFAULT now(),
-  updated_at TIMESTAMP DEFAULT now()
-);
-
-CREATE TABLE lancamentos (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  proprietario_id UUID NOT NULL,
-  saldo_conta_id UUID REFERENCES saldo_contas(id),
-  tipo TEXT NOT NULL, -- 'Entrada' ou 'Saída'
-  valor DECIMAL(12, 2) NOT NULL,
-  descricao TEXT,
-  data_lancamento DATE NOT NULL,
-  created_at TIMESTAMP DEFAULT now(),
-  updated_at TIMESTAMP DEFAULT now()
-);
-
--- ==========================================
--- 5. TABELAS DE PONTO ELETRÔNICO
--- ==========================================
-
-CREATE TABLE registros_ponto (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  usuario_id UUID NOT NULL REFERENCES tbl_usuarios(id) ON DELETE CASCADE,
-  empresa_id UUID NOT NULL REFERENCES tbl_clientes(id),
-  data_registro DATE NOT NULL,
-  hora_entrada TIME,
-  hora_saida TIME,
-  latitude DECIMAL(10, 8),
-  longitude DECIMAL(11, 8),
-  foto_entrada TEXT,
-  foto_saida TEXT,
-  created_at TIMESTAMP DEFAULT now()
-);
-
-CREATE TABLE folha_ponto (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  usuario_id UUID NOT NULL REFERENCES tbl_usuarios(id) ON DELETE CASCADE,
-  empresa_id UUID NOT NULL REFERENCES tbl_clientes(id),
-  mes_ano DATE NOT NULL,
-  horas_trabalhadas DECIMAL(5, 2),
-  horas_extras DECIMAL(5, 2),
-  faltas_injustificadas INTEGER DEFAULT 0,
-  faltas_justificadas INTEGER DEFAULT 0,
-  created_at TIMESTAMP DEFAULT now()
-);
-
--- ==========================================
--- 6. TABELAS DE CONTRATOS
--- ==========================================
-
-CREATE TABLE contratos (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  admin_id UUID NOT NULL REFERENCES tbl_admins(id),
-  cliente_id UUID NOT NULL REFERENCES tbl_clientes(id),
-  numero_contrato TEXT UNIQUE,
-  status TEXT DEFAULT 'ativo',
-  data_inicio DATE,
-  data_fim DATE,
-  created_at TIMESTAMP DEFAULT now(),
-  updated_at TIMESTAMP DEFAULT now()
-);
-
-CREATE TABLE modelos_contrato (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  admin_id UUID NOT NULL REFERENCES tbl_admins(id),
-  nome TEXT NOT NULL,
-  conteudo TEXT NOT NULL,
-  tags JSONB DEFAULT '{}',
-  created_at TIMESTAMP DEFAULT now()
-);
-
--- ==========================================
--- 7. TABELAS DE DOCUMENTOS SOCIETÁRIOS
--- ==========================================
-
-CREATE TABLE blocos_societarios (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  admin_id UUID NOT NULL REFERENCES tbl_admins(id),
-  titulo TEXT NOT NULL,
-  conteudo TEXT NOT NULL,
-  created_at TIMESTAMP DEFAULT now()
-);
-
-CREATE TABLE modelos_documentos_societarios (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  admin_id UUID NOT NULL REFERENCES tbl_admins(id),
-  nome TEXT NOT NULL,
-  conteudo TEXT NOT NULL,
-  created_at TIMESTAMP DEFAULT now()
-);
-
--- ==========================================
--- ÍNDICES PARA PERFORMANCE
--- ==========================================
-
-CREATE INDEX idx_admin_contas_receber_admin ON admin_contas_receber(admin_id);
-CREATE INDEX idx_admin_contas_receber_cliente ON admin_contas_receber(cliente_id);
-CREATE INDEX idx_admin_parcelas_receber_conta ON admin_parcelas_receber(conta_receber_id);
-CREATE INDEX idx_contas_pagar_empresa ON contas_pagar(empresa_id);
-CREATE INDEX idx_parcelas_contas_pagar_conta ON parcelas_contas_pagar(conta_pagar_id);
-CREATE INDEX idx_registros_ponto_usuario ON registros_ponto(usuario_id);
-CREATE INDEX idx_registros_ponto_data ON registros_ponto(data_registro);
-CREATE INDEX idx_lancamentos_proprietario ON lancamentos(proprietario_id);
-CREATE INDEX idx_lancamentos_saldo_conta ON lancamentos(saldo_conta_id);
-```
-
-#### B. Criar Políticas de RLS (Row Level Security)
-
-```sql
--- ==========================================
--- ROW LEVEL SECURITY (RLS) POLICIES
--- ==========================================
-
--- Habilitar RLS
-ALTER TABLE admin_contas_receber ENABLE ROW LEVEL SECURITY;
-ALTER TABLE admin_parcelas_receber ENABLE ROW LEVEL SECURITY;
-ALTER TABLE contas_pagar ENABLE ROW LEVEL SECURITY;
-ALTER TABLE parcelas_contas_pagar ENABLE ROW LEVEL SECURITY;
-ALTER TABLE saldo_contas ENABLE ROW LEVEL SECURITY;
-ALTER TABLE registros_ponto ENABLE ROW LEVEL SECURITY;
-
--- ========== CONTAS A PAGAR (Cliente) ==========
-
--- Cliente vê apenas suas próprias contas a pagar
-CREATE POLICY "Cliente vê suas contas a pagar"
-  ON contas_pagar FOR SELECT
-  USING (empresa_id = auth.uid());
-
--- Cliente insere em suas contas a pagar
-CREATE POLICY "Cliente insere contas a pagar"
-  ON contas_pagar FOR INSERT
-  WITH CHECK (empresa_id = auth.uid());
-
--- Cliente atualiza suas contas a pagar
-CREATE POLICY "Cliente atualiza contas a pagar"
-  ON contas_pagar FOR UPDATE
-  USING (empresa_id = auth.uid())
-  WITH CHECK (empresa_id = auth.uid());
-
--- ========== PARCELAS CONTAS A PAGAR ==========
-
--- Cliente vê parcelas de suas contas
-CREATE POLICY "Cliente vê parcelas contas a pagar"
-  ON parcelas_contas_pagar FOR SELECT
-  USING (
-    empresa_id = auth.uid()
-  );
-
--- Cliente insere parcelas
-CREATE POLICY "Cliente insere parcelas contas a pagar"
-  ON parcelas_contas_pagar FOR INSERT
-  WITH CHECK (empresa_id = auth.uid());
-
--- ========== ADMIN PARCELAS RECEBER ==========
-
--- Permite cliente marcar ciente_cliente = true
-CREATE POLICY "Cliente marca parcelas como ciente"
-  ON admin_parcelas_receber FOR UPDATE
-  USING (
-    conta_receber_id IN (
-      SELECT id FROM admin_contas_receber WHERE cliente_id = auth.uid()
-    )
-  )
-  WITH CHECK (
-    conta_receber_id IN (
-      SELECT id FROM admin_contas_receber WHERE cliente_id = auth.uid()
-    )
-  );
-
--- ========== SALDO CONTAS ==========
-
-CREATE POLICY "Cliente vê suas contas"
-  ON saldo_contas FOR SELECT
-  USING (empresa_id = auth.uid());
-
--- ========== REGISTROS PONTO ==========
-
-CREATE POLICY "Funcionário vê seus registros"
-  ON registros_ponto FOR SELECT
-  USING (usuario_id = auth.uid());
-
-CREATE POLICY "Funcionário insere registros"
-  ON registros_ponto FOR INSERT
-  WITH CHECK (usuario_id = auth.uid());
-```
-
-#### C. Criar Funções RPC
-
-```sql
--- ==========================================
--- FUNÇÕES RPC (Remote Procedure Call)
--- ==========================================
-
--- Ativar assinatura
-CREATE OR REPLACE FUNCTION activate_subscription(
-  p_cliente_id UUID,
-  p_plano_id TEXT,
-  p_dias_trial INTEGER DEFAULT 30
-)
-RETURNS TABLE(success BOOLEAN, message TEXT) AS $$
-BEGIN
-  UPDATE tbl_clientes
-  SET 
-    plano_id = p_plano_id,
-    data_fim_acesso = NOW() + (p_dias_trial || ' days')::INTERVAL,
-    updated_at = NOW()
-  WHERE id = p_cliente_id;
-  
-  RETURN QUERY SELECT true::BOOLEAN, 'Assinatura ativada com sucesso'::TEXT;
-END;
-$$ LANGUAGE plpgsql;
-
--- Renovar assinatura
-CREATE OR REPLACE FUNCTION manual_subscription_renewal(
-  p_cliente_id UUID,
-  p_dias_renovacao INTEGER DEFAULT 30
-)
-RETURNS TABLE(success BOOLEAN, message TEXT) AS $$
-BEGIN
-  UPDATE tbl_clientes
-  SET 
-    data_fim_acesso = NOW() + (p_dias_renovacao || ' days')::INTERVAL,
-    updated_at = NOW()
-  WHERE id = p_cliente_id;
-  
-  RETURN QUERY SELECT true::BOOLEAN, 'Assinatura renovada com sucesso'::TEXT;
-END;
-$$ LANGUAGE plpgsql;
-
--- Calcular saldo dinâmico de conta
-CREATE OR REPLACE FUNCTION calcular_saldo_conta(p_saldo_conta_id UUID)
-RETURNS DECIMAL AS $$
-DECLARE
-  v_saldo DECIMAL;
-  v_saldo_inicial DECIMAL;
-BEGIN
-  SELECT saldo_inicial INTO v_saldo_inicial
-  FROM saldo_contas
-  WHERE id = p_saldo_conta_id;
-  
-  SELECT v_saldo_inicial + 
-    COALESCE(SUM(CASE WHEN tipo = 'Entrada' THEN valor ELSE -valor END), 0)
-  INTO v_saldo
-  FROM lancamentos
-  WHERE saldo_conta_id = p_saldo_conta_id;
-  
-  RETURN v_saldo;
-END;
-$$ LANGUAGE plpgsql;
-
--- Validar email disponível
-CREATE OR REPLACE FUNCTION email_disponivel(p_email TEXT)
-RETURNS BOOLEAN AS $$
-BEGIN
-  RETURN NOT EXISTS(
-    SELECT 1 FROM tbl_admins WHERE email = p_email
-    UNION ALL
-    SELECT 1 FROM tbl_clientes WHERE email = p_email
-    UNION ALL
-    SELECT 1 FROM tbl_usuarios WHERE email = p_email
-  );
-END;
-$$ LANGUAGE plpgsql;
-```
 
 ---
-
-## Histórico de Manutenção e Migrações Críticas
-
-Esta seção documenta as principais alterações de arquitetura e migrações críticas que garantem a estabilidade e segurança do sistema.
-
-### Dezembro 2025: Correção da Recursão Infinita de RLS
-
-O sistema apresentou um erro crítico de "infinite recursion" que bloqueava o acesso de administradores (admin_usuarios) a diversas funcionalidades, como saldos, planos, lançamentos e folha de ponto.
-
-**Contexto do Problema:**
-A `tbl_usuarios_select_policy` causava recursão porque, ao avaliar um `SELECT` em `tbl_usuarios`, ela executava uma subquery (`EXISTS`) que tocava em `tbl_clientes` e `admin_usuarios`. Como essas tabelas também possuíam RLS ativo, o PostgreSQL reavaliava as mesmas policies em um loop infinito, impedindo o carregamento dos dados.
-
-**Solução Aplicada:**
-A solução definitiva envolveu a criação de uma tabela auxiliar sem RLS e a reescrita de todas as policies problemáticas para usar uma função segura (`SECURITY DEFINER`) que consulta essa tabela.
-
----
-
-#### Passo 1: Tabela Auxiliar e Função Segura
-
-Primeiro, criamos uma tabela de lookup, seus triggers de sincronização e a função que busca o `admin_id` do usuário logado de forma segura, sem disparar RLS.
-
-```sql
--- 1.1) Cria tabela auxiliar (sem RLS) para mapear admin_id de cada admin_usuario
-CREATE TABLE IF NOT EXISTS public.admin_user_lookup (
-  id uuid PRIMARY KEY,
-  admin_id uuid NOT NULL
-);
-
--- 1.2) Trigger que sincroniza a tabela auxiliar sempre que admin_usuarios muda
-CREATE OR REPLACE FUNCTION public.sync_admin_user_lookup()
-RETURNS trigger
-LANGUAGE plpgsql
-AS $$
-BEGIN
-  IF (TG_OP = 'DELETE') THEN
-    DELETE FROM public.admin_user_lookup WHERE id = OLD.id;
-    RETURN OLD;
-  ELSE
-    INSERT INTO public.admin_user_lookup (id, admin_id)
-    VALUES (NEW.id, NEW.admin_id)
-    ON CONFLICT (id) DO UPDATE SET admin_id = EXCLUDED.admin_id;
-    RETURN NEW;
-  END IF;
-END;
-$$;
-
-DROP TRIGGER IF EXISTS trg_admin_usuarios_lookup_aiu ON public.admin_usuarios;
-DROP TRIGGER IF EXISTS trg_admin_usuarios_lookup_ad ON public.admin_usuarios;
-
-CREATE TRIGGER trg_admin_usuarios_lookup_aiu
-AFTER INSERT OR UPDATE ON public.admin_usuarios
-FOR EACH ROW EXECUTE FUNCTION public.sync_admin_user_lookup();
-
-CREATE TRIGGER trg_admin_usuarios_lookup_ad
-AFTER DELETE ON public.admin_usuarios
-FOR EACH ROW EXECUTE FUNCTION public.sync_admin_user_lookup();
-
--- 1.3) Backfill (para garantir que todos os usuários atuais estão refletidos)
-INSERT INTO public.admin_user_lookup (id, admin_id)
-SELECT id, admin_id FROM public.admin_usuarios
-ON CONFLICT (id) DO UPDATE SET admin_id = EXCLUDED.admin_id;
-
--- 1.4) Função segura para obter o admin_id do usuário atual (sem RLS)
--- A função precisa ser VOLATILE porque usa 'SET LOCAL', que é proibido em funções STABLE ou IMMUTABLE.
-CREATE OR REPLACE FUNCTION public.get_admin_id_for_current_user()
-  RETURNS uuid
-  LANGUAGE plpgsql
-  VOLATILE
-  SECURITY DEFINER
-AS $$
-DECLARE
-  current_admin uuid;
-BEGIN
-  SET LOCAL row_security = off;
-  SELECT admin_id INTO current_admin FROM public.admin_user_lookup WHERE id = auth.uid();
-  RETURN current_admin;
-END;
-$$;
-```
-
----
-
-#### Passo 2: Recriação das Policies de `tbl_clientes` e `tbl_usuarios`
-
-Com a função `get_admin_id_for_current_user()` disponível, as policies foram reescritas para evitar subqueries recursivas.
-
-```sql
--- Limpa policies antigas de tbl_clientes e tbl_usuarios
-DO $$
-DECLARE r RECORD;
-BEGIN
-  FOR r IN
-    SELECT policyname, tablename
-    FROM pg_policies
-    WHERE schemaname = 'public'
-      AND tablename IN ('tbl_clientes', 'tbl_usuarios')
-  LOOP
-    EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I;', r.policyname, r.tablename);
-  END LOOP;
-END$$;
-
--- tbl_clientes
-ALTER TABLE public.tbl_clientes ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY tbl_clientes_select ON public.tbl_clientes
-FOR SELECT USING (
-  id = auth.uid()
-  OR admin_id = auth.uid()
-  OR public.get_admin_id_for_current_user() = public.tbl_clientes.admin_id
-);
-CREATE POLICY tbl_clientes_insert ON public.tbl_clientes FOR INSERT WITH CHECK (admin_id = auth.uid());
-CREATE POLICY tbl_clientes_update ON public.tbl_clientes FOR UPDATE USING (admin_id = auth.uid());
-CREATE POLICY tbl_clientes_delete ON public.tbl_clientes FOR DELETE USING (admin_id = auth.uid());
-
--- tbl_usuarios
-ALTER TABLE public.tbl_usuarios ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY tbl_usuarios_select ON public.tbl_usuarios
-FOR SELECT USING (
-  id = auth.uid()
-  OR cliente_id = auth.uid()
-  OR (
-    public.get_admin_id_for_current_user() IS NOT NULL
-    AND public.get_admin_id_for_current_user() = (
-      SELECT tc.admin_id FROM public.tbl_clientes tc
-      WHERE tc.id = public.tbl_usuarios.cliente_id
-      LIMIT 1
-    )
-  )
-);
--- Policies de INSERT, UPDATE, DELETE seguem a mesma lógica da SELECT.
-CREATE POLICY tbl_usuarios_insert ON public.tbl_usuarios FOR INSERT WITH CHECK (cliente_id = auth.uid() OR (public.get_admin_id_for_current_user() IS NOT NULL AND public.get_admin_id_for_current_user() = (SELECT tc.admin_id FROM public.tbl_clientes tc WHERE tc.id = public.tbl_usuarios.cliente_id LIMIT 1)));
-CREATE POLICY tbl_usuarios_update ON public.tbl_usuarios FOR UPDATE USING (cliente_id = auth.uid() OR (public.get_admin_id_for_current_user() IS NOT NULL AND public.get_admin_id_for_current_user() = (SELECT tc.admin_id FROM public.tbl_clientes tc WHERE tc.id = public.tbl_usuarios.cliente_id LIMIT 1)));
-CREATE POLICY tbl_usuarios_delete ON public.tbl_usuarios FOR DELETE USING (cliente_id = auth.uid() OR (public.get_admin_id_for_current_user() IS NOT NULL AND public.get_admin_id_for_current_user() = (SELECT tc.admin_id FROM public.tbl_clientes tc WHERE tc.id = public.tbl_usuarios.cliente_id LIMIT 1)));
-```
-
----
-
-#### Passo 3: Recriação das Policies de `saldo_contas`, `plano_contas`, e `lancamentos`
-
-As tabelas financeiras também foram corrigidas para permitir o acesso do administrador.
-
-```sql
--- Limpa policies antigas
-DO $$
-DECLARE r RECORD;
-BEGIN
-  FOR r IN
-    SELECT policyname, tablename
-    FROM pg_policies
-    WHERE schemaname = 'public'
-      AND tablename IN ('saldo_contas','plano_contas','lancamentos')
-  LOOP
-    EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I;', r.policyname, r.tablename);
-  END LOOP;
-END$$;
-
--- saldo_contas
-ALTER TABLE public.saldo_contas ENABLE ROW LEVEL SECURITY;
-CREATE POLICY saldo_contas_select_policy ON public.saldo_contas FOR SELECT USING (proprietario_id = auth.uid() OR public.get_admin_id_for_current_user() = public.saldo_contas.proprietario_id);
-CREATE POLICY saldo_contas_insert_policy ON public.saldo_contas FOR INSERT WITH CHECK (proprietario_id = auth.uid());
-CREATE POLICY saldo_contas_update_policy ON public.saldo_contas FOR UPDATE USING (proprietario_id = auth.uid());
-CREATE POLICY saldo_contas_delete_policy ON public.saldo_contas FOR DELETE USING (proprietario_id = auth.uid());
-
--- plano_contas
-ALTER TABLE public.plano_contas ENABLE ROW LEVEL SECURITY;
-CREATE POLICY plano_contas_select_policy ON public.plano_contas FOR SELECT USING (proprietario_id = auth.uid() OR public.get_admin_id_for_current_user() = public.plano_contas.proprietario_id);
-CREATE POLICY plano_contas_insert_policy ON public.plano_contas FOR INSERT WITH CHECK (proprietario_id = auth.uid());
-CREATE POLICY plano_contas_update_policy ON public.plano_contas FOR UPDATE USING (proprietario_id = auth.uid());
-CREATE POLICY plano_contas_delete_policy ON public.plano_contas FOR DELETE USING (proprietario_id = auth.uid());
-
--- lancamentos
-ALTER TABLE public.lancamentos ENABLE ROW LEVEL SECURITY;
-CREATE POLICY lancamentos_select_policy ON public.lancamentos FOR SELECT USING (proprietario_id = auth.uid() OR public.get_admin_id_for_current_user() = public.lancamentos.proprietario_id);
-CREATE POLICY lancamentos_insert_policy ON public.lancamentos FOR INSERT WITH CHECK (proprietario_id = auth.uid());
-CREATE POLICY lancamentos_update_policy ON public.lancamentos FOR UPDATE USING (proprietario_id = auth.uid());
-CREATE POLICY lancamentos_delete_policy ON public.lancamentos FOR DELETE USING (proprietario_id = auth.uid());
-```
-
----
-
-#### Passo 4: Recriação das Policies de Ponto e Férias
-
-Finalmente, as tabelas de RH foram ajustadas.
-
-```sql
--- Limpa policies antigas
-DO $$
-DECLARE r RECORD;
-BEGIN
-  FOR r IN
-    SELECT policyname, tablename
-    FROM pg_policies
-    WHERE schemaname = 'public'
-      AND tablename IN ('registros_ponto','admin_registros_ponto','ferias','admin_ferias_user')
-  LOOP
-    EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I;', r.policyname, r.tablename);
-  END LOOP;
-END$$;
-
--- registros_ponto
-ALTER TABLE public.registros_ponto ENABLE ROW LEVEL SECURITY;
-CREATE POLICY registros_ponto_select ON public.registros_ponto FOR SELECT USING (funcionario_id = auth.uid() OR empresa_id = auth.uid() OR public.get_admin_id_for_current_user() = public.registros_ponto.empresa_id);
-CREATE POLICY registros_ponto_insert ON public.registros_ponto FOR INSERT WITH CHECK (funcionario_id = auth.uid() OR empresa_id = auth.uid());
-CREATE POLICY registros_ponto_update ON public.registros_ponto FOR UPDATE USING (funcionario_id = auth.uid() OR empresa_id = auth.uid());
-CREATE POLICY registros_ponto_delete ON public.registros_ponto FOR DELETE USING (funcionario_id = auth.uid() OR empresa_id = auth.uid());
-
--- admin_registros_ponto
-ALTER TABLE public.admin_registros_ponto ENABLE ROW LEVEL SECURITY;
-CREATE POLICY admin_registros_ponto_select ON public.admin_registros_ponto FOR SELECT USING (funcionario_id = auth.uid() OR admin_id = auth.uid() OR public.get_admin_id_for_current_user() = public.admin_registros_ponto.admin_id);
-CREATE POLICY admin_registros_ponto_insert ON public.admin_registros_ponto FOR INSERT WITH CHECK (funcionario_id = auth.uid() OR admin_id = auth.uid());
-CREATE POLICY admin_registros_ponto_update ON public.admin_registros_ponto FOR UPDATE USING (funcionario_id = auth.uid() OR admin_id = auth.uid());
-CREATE POLICY admin_registros_ponto_delete ON public.admin_registros_ponto FOR DELETE USING (funcionario_id = auth.uid() OR admin_id = auth.uid());
-
--- ferias
-ALTER TABLE public.ferias ENABLE ROW LEVEL SECURITY;
-CREATE POLICY ferias_select ON public.ferias FOR SELECT USING (funcionario_id = auth.uid() OR empresa_id = auth.uid() OR public.get_admin_id_for_current_user() = public.ferias.empresa_id);
-CREATE POLICY ferias_insert ON public.ferias FOR INSERT WITH CHECK (funcionario_id = auth.uid() OR empresa_id = auth.uid());
-CREATE POLICY ferias_update ON public.ferias FOR UPDATE USING (funcionario_id = auth.uid() OR empresa_id = auth.uid());
-CREATE POLICY ferias_delete ON public.ferias FOR DELETE USING (funcionario_id = auth.uid() OR empresa_id = auth.uid());
-
--- admin_ferias_user
-ALTER TABLE public.admin_ferias_user ENABLE ROW LEVEL SECURITY;
-CREATE POLICY admin_ferias_user_select ON public.admin_ferias_user FOR SELECT USING (funcionario_id = auth.uid() OR admin_id = auth.uid() OR public.get_admin_id_for_current_user() = public.admin_ferias_user.admin_id);
-CREATE POLICY admin_ferias_user_insert ON public.admin_ferias_user FOR INSERT WITH CHECK (funcionario_id = auth.uid() OR admin_id = auth.uid());
-CREATE POLICY admin_ferias_user_update ON public.admin_ferias_user FOR UPDATE USING (funcionario_id = auth.uid() OR admin_id = auth.uid());
-CREATE POLICY admin_ferias_user_delete ON public.admin_ferias_user FOR DELETE USING (funcionario_id = auth.uid() OR admin_id = auth.uid());
-```
-**Conclusão:**
-A aplicação desses scripts eliminou completamente os erros de recursão, restaurando o acesso e a funcionalidade para todos os perfis de usuário. Este conjunto de migrações serve como um ponto de partida estável para o sistema de RLS.
-
-### Dezembro 2025: Correção de Acesso e UX em Documentos Societários
-
-Após a correção da recursão, foram identificados e resolvidos problemas subsequentes no módulo de Documentos Societários, especificamente na criação de modelos.
-
-**1. Problema de Acesso aos Blocos Societários:**
-- **Sintoma:** Usuários do tipo `admin_usuario` não conseguiam visualizar os blocos de conteúdo criados pelo seu `admin` proprietário, embora a permissão de RLS devesse permitir.
-- **Causa Raiz:** A política de RLS para a tabela `blocos_societarios` estava ausente ou incorreta.
-- **Solução:** Foi aplicada uma nova política de RLS para garantir que `admin_usuarios` pudessem ver tanto os seus próprios blocos quanto os do seu `admin` chefe, utilizando a função `get_admin_id_for_current_user()` já existente.
-
-```sql
--- Política de SELECT para blocos_societarios
-ALTER POLICY "admin_usuarios_select_blocos_societarios"
-ON public.blocos_societarios
-USING (
-  (proprietario_id = auth.uid())
-  OR
-  (proprietario_id = public.get_admin_id_for_current_user())
-  OR
-  (proprietario_id IS NULL)
-);
-```
-
-**2. Bug na Listagem de Blocos no Formulário:**
-- **Sintoma:** Mesmo com a política de RLS correta, a lista de blocos continuava vazia para `admin_usuarios`.
-- **Causa Raiz:** Um bug no componente de formulário (`FormDocumentoSocietarioModelo.tsx`). Uma verificação `if (!ownerId) return;` impedia a execução da busca de blocos, pois a função `getOwnerId` retornava `null` para o perfil `admin_usuario`.
-- **Solução:** A lógica de busca de dados foi refatorada. A função `fetchBlocos` foi separada da `fetchTags`, permitindo que a busca de blocos seja executada para qualquer usuário autenticado, independentemente do `ownerId`, deixando a segurança a cargo exclusivo do RLS no backend.
-
-**3. Melhoria na Experiência de Arrastar e Soltar (Drag-and-Drop):**
-- **Sintoma:** A funcionalidade nativa de arrastar e soltar era pouco intuitiva e a inserção do texto no editor era frágil.
-- **Solução:** O componente `RichTextEditor` foi refatorado para expor uma referência à sua API interna. O formulário agora utiliza essa referência para inserir o conteúdo dos blocos de forma mais robusta. Além disso, foi adicionado um feedback visual (um anel de destaque) que aparece na área do editor ao arrastar um bloco sobre ela, melhorando a usabilidade.
 
 ## Funcionalidades e Telas
 
@@ -1060,8 +342,6 @@ USING (
 - Controle de permissões por módulo
 - Desativação de usuários
 
----
-
 ### 13. **Tabelas Padrão & Exportação (`/exportar`)**
 - **Card de Downloads:** A página `/exportar` agora oferece botões para baixar os CSVs `plano_contas_padrao.csv` e `historicos_padrao.csv` que ficam em `public/` como modelos oficiais antes de importar.
 - **Configuração para Admin:** Em Configurações (somente para admin) existe a aba “Configuração Tabelas Padrão” onde o administrador pode subir planos/ históricos no formato CSV ou JSON, ou apontar para um link externo. Os dados são parseados, exibem um resumo e ficam disponíveis para download nos registros listados.
@@ -1078,7 +358,7 @@ Depois de importar o plano e os históricos, marque no mínimo uma conta para ca
 4. **Fornecedores / Contas a Pagar** – marque uma conta patrimonial de fornecedores com o switch `Fornecedores a Pagar`.
 5. **Capital Social** – identifique a conta de capital social (geralmente em Patrimônio Líquido) e mantenha o flag patrimonial ativo.
 6. **Receita** – marque ao menos uma conta de resultado como Receita.
-7. **Despesa / Custo** – marque ao menos uma conta de resultado de despesa ou custo.
+7. **Despesa / Custo** – marque ao menos uma conta de resultado como Despesa ou Custo.
 
 Esses marcadores abastecem as configurações 3.1/3.2/3.3 e os formulários de lançamentos; sem eles o usuário não consegue registrar entradas/saídas.
 
@@ -1333,3 +613,586 @@ Desenvolvido com ❤️ para gestão financeira e RH moderna.
 **Versão:** 2.0  
 **Última atualização:** Dezembro 2025  
 **Status:** Production Ready ✅
+
+---
+
+## 🛠️ Supabase Schema e Scripts
+
+Esta seção detalha o estado atual do schema do banco de dados Supabase, incluindo todas as tabelas, funções, políticas e Edge Functions implantadas.
+
+### 1. Tabelas (Public Schema)
+
+| Table Name | Purpose |
+| :--- | :--- |
+| `admin_contas_pagar` | Contas a Pagar do Admin |
+| `admin_contas_receber` | Contas a Receber do Admin |
+| `admin_descricao_extrato` | Descrições de Extrato do Admin |
+| `admin_ferias_user` | Férias de Funcionários do Admin |
+| `admin_identificacao_extrato` | Identificadores de Extrato do Admin |
+| `admin_pagamentos` | Histórico de Pagamentos do Admin |
+| `admin_parcelas_pagar` | Parcelas a Pagar do Admin |
+| `admin_parcelas_receber` | Parcelas a Receber do Admin |
+| `admin_recebimentos` | Histórico de Recebimentos do Admin |
+| `admin_registros_ponto` | Registros de Ponto de Funcionários do Admin |
+| `admin_usuarios` | Perfis de Funcionários do Admin |
+| `anexos` | Metadados de Anexos |
+| `blocos_societarios` | Blocos de Conteúdo Societário |
+| `clientes` | Clientes de Contas a Receber (CR) |
+| `conciliacao_regras` | Regras de Mapeamento de Conciliação |
+| `conciliacoes` | Histórico de Arquivos Conciliados |
+| `configuracao_conciliacao` | Configurações de Mapeamento de Extrato |
+| `configuracao_contabil` | Mapeamento de Níveis Contábeis |
+| `configuracao_contas_pagar` | Mapeamento Contábil CP |
+| `configuracao_contas_receber` | Mapeamento Contábil CR |
+| `configuracao_contratos` | Configurações de Contratos e Faturamento |
+| `configuracao_historico_padrao` | Histórico Padrão para Lançamentos |
+| `configuracao_plano_contas` | Máscara de Código do Plano de Contas |
+| `configuracoes_calima` | Configurações de Exportação Calima |
+| `configuracoes_stripe` | Credenciais e Mapeamento Stripe |
+| `contas_pagar` | Contas a Pagar do Cliente |
+| `contas_receber` | Contas a Receber do Cliente |
+| `contrato_modelos` | Modelos de Contrato |
+| `contrato_tags` | Tags Dinâmicas de Contrato |
+| `contratos` | Contratos de Recorrência |
+| `contratos_gerados` | Instâncias de Contratos Gerados |
+| `descricao_extrato` | Descrições de Extrato do Cliente |
+| `documentos_societarios_gerados` | Documentos Societários Gerados |
+| `extratos` | Transações Brutas de Extrato Bancário |
+| `ferias` | Férias de Funcionários do Cliente |
+| `historico_auditoria` | Histórico de Auditoria |
+| `historicos` | Históricos Padronizados |
+| `identificacao_extrato` | Identificadores de Extrato do Cliente |
+| `lancamentos` | Lançamentos Contábeis (Partidas Dobradas) |
+| `mensagens_ticket` | Mensagens de Tickets de Suporte |
+| `modelos_societarios` | Modelos de Documentos Societários |
+| `pagamentos` | Histórico de Pagamentos do Cliente |
+| `parcelas_contas_pagar` | Parcelas a Pagar do Cliente |
+| `parcelas_contas_receber` | Parcelas a Receber do Cliente |
+| `periodos_aquisitivos` | Períodos Aquisitivos de Férias |
+| `plano_contas` | Plano de Contas Contábil |
+| `planos` | Planos de Assinatura |
+| `recebimentos` | Histórico de Recebimentos do Cliente |
+| `registros_ponto` | Registros de Ponto de Funcionários do Cliente |
+| `saldo_contas` | Contas de Saldo (Caixa/Banco/Patrimonial) |
+| `tbl_admins` | Perfil do Administrador |
+| `tbl_clientes` | Perfil de Clientes do Sistema |
+| `tbl_usuarios` | Perfis de Usuários/Funcionários |
+| `tickets` | Tickets de Suporte |
+
+### 2. Functions (RPCs e Triggers)
+
+```sql
+-- is_owner_or_admin_user
+CREATE OR REPLACE FUNCTION public.is_owner_or_admin_user(owner_id uuid)
+ RETURNS boolean
+ LANGUAGE sql
+ SECURITY DEFINER
+AS $function$
+    SELECT owner_id = auth.uid() OR EXISTS (
+        SELECT 1
+        FROM public.admin_usuarios au
+        WHERE au.id = auth.uid() AND au.admin_id = owner_id
+    );
+$function$
+
+-- update_updated_at_column
+CREATE OR REPLACE FUNCTION public.update_updated_at_column()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+   NEW.updated_at = NOW();
+   RETURN NEW;
+END;
+$function$
+
+-- activate_subscription
+CREATE OR REPLACE FUNCTION public.activate_subscription(p_cliente_id uuid, p_plano_id uuid, p_id_conta_resultado uuid DEFAULT NULL::uuid)
+ RETURNS void
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_plano_nome text;
+    v_plano_preco numeric;
+    v_proxima_data_fim date;
+    v_data_emissao date := CURRENT_DATE;
+    v_data_vencimento date := CURRENT_DATE + INTERVAL '5 days'; -- Exemplo: Vencimento em 5 dias
+BEGIN
+    -- 1. Obter informações do plano (preço e nome)
+    SELECT 
+        nome, 
+        preco_mensal 
+    INTO 
+        v_plano_nome, 
+        v_plano_preco
+    FROM 
+        public.planos 
+    WHERE 
+        id = p_plano_id;
+
+    -- Se o plano não for encontrado, levanta um erro
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Plano com ID % não encontrado.', p_plano_id;
+    END IF;
+
+    -- Calcula a nova data de fim de acesso (Exemplo: 30 dias a partir de hoje)
+    v_proxima_data_fim := CURRENT_DATE + INTERVAL '30 days';
+
+    -- 2. Atualizar a tabela tbl_clientes
+    UPDATE public.tbl_clientes
+    SET 
+        plano_id = p_plano_id,
+        data_fim_acesso = v_proxima_data_fim,
+        aprovado = TRUE -- Aprova o cliente após o pagamento/ativação
+    WHERE 
+        id = p_cliente_id;
+
+    -- Se o cliente não for encontrado, levanta um erro
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Cliente com ID % não encontrado para atualização.', p_cliente_id;
+    END IF;
+
+    -- 3. Inserir um novo Título de Contas a Receber (Registro do Pagamento/Assinatura)
+    -- NOTA: O status é 'recebido' porque a Edge Function foi chamada APÓS o pagamento do Stripe.
+    INSERT INTO public.contas_receber (
+        empresa_id, 
+        cliente_id, 
+        origem, 
+        descricao, 
+        valor_total, 
+        data_emissao, 
+        data_vencimento, 
+        status, 
+        tipo_receita, 
+        id_conta_resultado
+    )
+    VALUES (
+        -- Assumimos que o admin_id do cliente é o empresa_id
+        (SELECT admin_id FROM public.tbl_clientes WHERE id = p_cliente_id), 
+        p_cliente_id, 
+        'Stripe Assinatura', 
+        'Receita de Assinatura: ' || v_plano_nome, 
+        v_plano_preco, 
+        v_data_emissao, 
+        v_data_vencimento, -- Usado para registro, mas o pagamento já ocorreu
+        'recebido',        -- Marca como recebido
+        'Assinatura',
+        p_id_conta_resultado -- O ID da conta de resultado consultado na Edge Function
+    );
+
+    -- 4. Inserir uma Parcela de Recebimento (simplificado, pois o pagamento já ocorreu)
+    -- NOTA: Isto assume que você tem uma coluna 'id' em tbl_admins (para a FK admin_id)
+    INSERT INTO public.parcelas_contas_receber (
+        conta_receber_id, 
+        empresa_id,
+        numero_parcela, 
+        valor_parcela, 
+        valor_pago,
+        data_vencimento,
+        data_pagamento,
+        status
+    )
+    VALUES (
+        (SELECT id FROM public.contas_receber WHERE cliente_id = p_cliente_id ORDER BY created_at DESC LIMIT 1),
+        (SELECT admin_id FROM public.tbl_clientes WHERE id = p_cliente_id),
+        1, 
+        v_plano_preco, 
+        v_plano_preco, 
+        v_data_vencimento,
+        CURRENT_DATE,
+        'pago' 
+    );
+    
+    -- 5. Opcional: Inserir o Registro de Recebimento (Baixa) na tabela `recebimentos`
+    -- ... (Inserir aqui a lógica de inserção na tabela `recebimentos` se necessário)
+    
+END;
+$function$
+
+-- manual_subscription_renewal
+CREATE OR REPLACE FUNCTION public.manual_subscription_renewal(p_cliente_id uuid, p_plano_id uuid, p_conta_pagar_id uuid, p_valor_pago numeric, p_forma_pagamento text)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE
+  v_plano_preco NUMERIC;
+  v_plano_nome TEXT; -- NOVO: Para usar na descrição
+  v_plano_permissoes JSONB;
+  v_data_hoje DATE := (NOW() AT TIME ZONE 'America/Sao_Paulo')::DATE;
+  v_admin_id UUID;
+  v_cliente_nome TEXT;
+  v_cliente_email TEXT;
+  v_current_data_fim_acesso TIMESTAMP WITH TIME ZONE;
+  v_new_data_fim_acesso TIMESTAMP WITH TIME ZONE;
+  v_start_of_today TIMESTAMP WITH TIME ZONE := date_trunc('day', NOW() AT TIME ZONE 'America/Sao_Paulo') AT TIME ZONE 'America/Sao_Paulo';
+  v_base_date TIMESTAMP WITH TIME ZONE;
+  v_proximo_vencimento DATE;
+  v_segundo_vencimento DATE; -- 60 dias para a segunda
+  v_recorrencia_id UUID; -- ID da conta sintética de recorrência
+  v_parcela_paga_id UUID; -- ID da parcela que está sendo paga
+  v_conta_destino_id UUID; -- NOVO: ID da conta de destino (Stripe/Banco)
+  
+  -- Variáveis de Configuração Stripe
+  v_conta_sintetica_stripe_id UUID; -- conta_sintetica_id
+  v_historico_padrao_stripe_id UUID;       -- historico_padrao_id
+  v_conta_resultado_stripe_id UUID; -- NOVO: id_conta_resultado do Stripe
+  
+  -- NOVAS VARIÁVEIS PARA MAPEAR CONTAS CONTÁBEIS
+  v_conta_contabil_a_receber UUID;
+  v_conta_contabil_parcela UUID;
+  v_conta_contabil_recebimento UUID;
+  v_conta_resultado_recebimento UUID; -- NOVO: Conta de Resultado (Receita)
+  v_historico_padrao_recebimento UUID; -- NOVO: Histórico Padrão para Recebimentos
+BEGIN
+  -- 1. Verifica permissão (Apenas Admin ou o próprio Cliente pode executar)
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION 'Acesso negado. Usuário não autenticado.';
+  END IF;
+  
+  -- 2. Busca o ID do Admin (necessário para registrar o recebimento)
+  SELECT admin_id INTO v_admin_id FROM public.tbl_clientes WHERE id = p_cliente_id;
+  IF v_admin_id IS NULL THEN
+    RAISE EXCEPTION 'Admin não encontrado para o cliente.';
+  END IF;
+  
+  -- NOVO: 3. Busca o mapeamento contábil CR (Pode ser NULL, mas é usado nos lançamentos)
+  SELECT conta_contabil_id INTO v_conta_contabil_a_receber FROM public.configuracao_contas_receber WHERE proprietario_id = v_admin_id AND tipo_registro = 'a_receber' LIMIT 1;
+  SELECT conta_contabil_id INTO v_conta_contabil_parcela FROM public.configuracao_contas_receber WHERE proprietario_id = v_admin_id AND tipo_registro = 'parcela' LIMIT 1;
+  SELECT conta_contabil_id INTO v_conta_contabil_recebimento FROM public.configuracao_contas_receber WHERE proprietario_id = v_admin_id AND tipo_registro = 'recebimento' LIMIT 1;
+  SELECT conta_contabil_id INTO v_conta_resultado_recebimento FROM public.configuracao_contas_receber WHERE proprietario_id = v_admin_id AND tipo_registro = 'recebimento_resultado' LIMIT 1;
+  
+  -- NOVO: Busca Histórico Padrão de Recebimento (da tabela correta)
+  SELECT historico_id INTO v_historico_padrao_recebimento FROM public.configuracao_historico_padrao WHERE proprietario_id = v_admin_id AND tipo_registro = 'recebimento_padrao' LIMIT 1;
+  
+  -- 4. Busca mapeamento Stripe (incluindo a conta de resultado)
+  SELECT conta_sintetica_id, historico_padrao_id, id_conta_resultado INTO v_conta_sintetica_stripe_id, v_historico_padrao_stripe_id, v_conta_resultado_stripe_id FROM public.configuracoes_stripe WHERE proprietario_id = v_admin_id LIMIT 1;
+  
+  -- 5. VALIDAÇÃO CRÍTICA: Apenas as configurações do Stripe são obrigatórias
+  IF v_conta_sintetica_stripe_id IS NULL OR v_historico_padrao_stripe_id IS NULL OR v_conta_resultado_stripe_id IS NULL THEN -- ADICIONADO v_conta_resultado_stripe_id
+    RAISE EXCEPTION 'Configurações Stripe incompletas. Verifique: Conta Sintética Stripe, Histórico Padrão Stripe e Conta de Resultado Stripe.';
+  END IF;
+
+  -- 6. Busca a saldo_conta do Admin que referencia a conta sintética configurada no Stripe
+  SELECT id INTO v_conta_destino_id 
+  FROM public.saldo_contas 
+  WHERE proprietario_id = v_admin_id AND conta_contabil_id = v_conta_sintetica_stripe_id
+  LIMIT 1;
+  
+  IF v_conta_destino_id IS NULL THEN
+    RAISE EXCEPTION 'Nenhuma conta de saldo (Stripe/Banco) encontrada para o Admin vinculada à conta contábil configurada no Stripe. Cadastre uma em Bancos/Caixas.';
+  END IF;
+
+  -- 7. Busca o preço, NOME e as PERMISSÕES do NOVO plano
+  SELECT preco_mensal, nome, permissoes INTO v_plano_preco, v_plano_nome, v_plano_permissoes FROM public.planos WHERE id = p_plano_id;
+
+  IF v_plano_preco IS NULL THEN
+    RAISE EXCEPTION 'Plano não encontrado ou sem preço definido.';
+  END IF;
+  
+  -- 8. Busca nome, email e data_fim_acesso atual do cliente
+  SELECT nome, email, data_fim_acesso INTO v_cliente_nome, v_cliente_email, v_current_data_fim_acesso FROM public.tbl_clientes WHERE id = p_cliente_id;
+
+  -- 9. Determina a data base para o cálculo de renovação (30 dias)
+  v_base_date := v_start_of_today;
+  
+  -- Calcula a data de vencimento da PRÓXIMA MENSALIDADE (30 dias a partir da data base)
+  v_proximo_vencimento := (date_trunc('day', v_base_date) + INTERVAL '30 days')::DATE;
+  v_segundo_vencimento := (date_trunc('day', v_base_date) + INTERVAL '60 days')::DATE; -- 60 dias para a segunda
+  
+  -- A nova data de fim de acesso é o final do dia ANTERIOR ao próximo vencimento.
+  v_new_data_fim_acesso := (v_proximo_vencimento::TIMESTAMP WITH TIME ZONE - INTERVAL '1 millisecond') AT TIME ZONE 'America/Sao_Paulo';
+
+  -- 10. Atualiza o perfil do cliente com a nova data de acesso E PERMISSÕES
+  UPDATE public.tbl_clientes
+  SET 
+    plano_id = p_plano_id,
+    data_fim_acesso = v_new_data_fim_acesso,
+    permissoes = v_plano_permissoes, -- APLICANDO AS PERMISSÕES DO NOVO PLANO
+    aprovado = TRUE
+  WHERE id = p_cliente_id;
+
+  -- 11. BUSCA A CONTA SINTÉTICA DE RECORRÊNCIA
+  SELECT id INTO v_recorrencia_id
+  FROM public.admin_contas_receber
+  WHERE cliente_id = p_cliente_id AND origem = 'assinatura_recorrente'
+  LIMIT 1;
+
+  IF v_recorrencia_id IS NULL THEN
+    RAISE EXCEPTION 'Conta de recorrência não encontrada para o cliente %.', p_cliente_id;
+  END IF;
+  
+  -- CORREÇÃO: Atualiza a descrição, o valor total e a conta contábil da conta sintética
+  UPDATE public.admin_contas_receber
+  SET
+    descricao = 'Assinatura Recorrente - Plano ' || v_plano_nome, -- USANDO NOME DO PLANO
+    valor_total = v_plano_preco, -- CORREÇÃO: Atualiza o valor total
+    data_vencimento = v_proximo_vencimento, -- Atualiza o vencimento sintético para o próximo
+    id_conta_patrimonial = v_conta_contabil_a_receber -- NOVO: Atualiza Conta Contábil
+  WHERE id = v_recorrencia_id;
+  
+  -- 12. MARCA A PARCELA CORRESPONDENTE AO PAGAMENTO COMO PAGA
+  UPDATE public.admin_parcelas_receber
+  SET 
+    status = 'paga',
+    valor_pago = p_valor_pago,
+    data_pagamento = v_data_hoje,
+    id_conta_contabil = v_conta_contabil_parcela -- NOVO: Conta Contábil da Parcela
+  WHERE id = p_conta_pagar_id -- p_conta_pagar_id agora é o ID da parcela
+  RETURNING id INTO v_parcela_paga_id;
+
+  -- 13. DELETA TODAS AS OUTRAS PARCELAS PENDENTES DE ASSINATURA ANTERIORES
+  -- ESTA É A LÓGICA CRÍTICA: DELETA TODAS AS PARCELAS ABERTAS/PENDENTES (EXCETO A QUE ACABOU DE SER PAGA)
+  DELETE FROM public.admin_parcelas_receber
+  WHERE admin_id = v_admin_id
+    AND conta_receber_id = v_recorrencia_id
+    AND status IN ('aberta', 'reprogramada', 'parcial')
+    AND id != v_parcela_paga_id; -- Não altera a parcela que acabou de ser paga
+
+  -- 14. CRIA O REGISTRO DE RECEBIMENTO DO ADMIN (AGORA COM conta_id E id_conta_contabil)
+  INSERT INTO public.admin_recebimentos (parcela_id, admin_id, cliente_id, valor_recebido, data_recebimento, tipo_recebimento, forma_pagamento, conta_id, id_conta_contabil, historico_id, id_conta_resultado)
+  VALUES (
+    v_parcela_paga_id,
+    v_admin_id,
+    p_cliente_id,
+    p_valor_pago,
+    NOW() AT TIME ZONE 'America/Sao_Paulo',
+    'total',
+    p_forma_pagamento, -- Usa a forma de pagamento fornecida
+    v_conta_destino_id, -- ID da conta de destino (buscada via conta_sintetica_stripe_id)
+    v_conta_contabil_recebimento, -- Conta Contábil do Recebimento (Patrimonial)
+    v_historico_padrao_stripe_id,
+    v_conta_resultado_stripe_id -- USANDO v_conta_resultado_stripe_id
+  );
+  
+  -- NOVO: 14.1 CRIA O LANÇAMENTO DE ENTRADA NA CONTA DE SALDO (Stripe) - DÉBITO (Ativo)
+  IF v_conta_sintetica_stripe_id IS NOT NULL THEN
+    INSERT INTO public.lancamentos (proprietario_id, data_movimentacao, descricao, valor, tipo, conta_bancaria_id, conta_contabil_id, origem, conciliado, historico_id)
+    VALUES (
+      v_admin_id,
+      NOW() AT TIME ZONE 'America/Sao_Paulo',
+      'Recebimento Renovação Assinatura - Cliente ' || v_cliente_nome || ' (CR ID: ' || v_recorrencia_id::TEXT || ')', -- NOVO: Inclui ID da CR
+      p_valor_pago,
+      'Entrada',
+      v_conta_destino_id, -- ID da saldo_contas (Stripe)
+      v_conta_sintetica_stripe_id, -- ID da conta_contabil (Stripe)
+      'assinatura_stripe',
+      true, -- Pagamentos via Stripe já vêm conciliados
+      v_historico_padrao_stripe_id -- NOVO: Histórico Padrão
+    );
+  END IF;
+  
+  -- NOVO: 14.2 CRIA O LANÇAMENTO DE RECEITA (DRE) - CRÉDITO (Resultado)
+  -- CORREÇÃO CRÍTICA: Tipo deve ser 'Saida' para contas de Receita (Natureza Credora)
+  IF v_conta_resultado_stripe_id IS NOT NULL THEN
+    INSERT INTO public.lancamentos (proprietario_id, data_movimentacao, descricao, valor, tipo, conta_bancaria_id, conta_contabil_id, origem, conciliado, historico_id)
+    VALUES (v_admin_id, v_data_hoje, 'Receita Renovação Assinatura - Plano ' || v_plano_nome || ' (CR ID: ' || v_recorrencia_id::TEXT || ')', p_valor_pago, 'Saida', NULL, v_conta_resultado_stripe_id, 'assinatura_stripe', true, v_historico_padrao_stripe_id); -- NOVO: Inclui ID da CR
+  END IF;
+  
+  -- NOVO: 14.3 CRIA O LANÇAMENTO INICIAL DE DÉBITO (CR) - DÉBITO (Ativo)
+  -- Este lançamento deve ser o valor total do plano, pois o valor total da conta sintética foi atualizado no passo 10.
+  IF v_conta_contabil_a_receber IS NOT NULL THEN
+    INSERT INTO public.lancamentos (proprietario_id, data_movimentacao, descricao, valor, tipo, conta_bancaria_id, conta_contabil_id, origem, conciliado, historico_id)
+    VALUES (v_admin_id, v_data_hoje, 'Lançamento Inicial CR: Assinatura Recorrente (CR ID: ' || v_recorrencia_id::TEXT || ')', v_plano_preco, 'Entrada', NULL, v_conta_contabil_a_receber, 'assinatura_stripe', true, v_historico_padrao_stripe_id);
+  END IF;
+  
+  -- NOVO: 14.4 CRIA O LANÇAMENTO DE ESTORNO PATRIMONIAL (CR) - CRÉDITO (Ativo)
+  IF v_conta_contabil_a_receber IS NOT NULL THEN
+    INSERT INTO public.lancamentos (proprietario_id, data_movimentacao, descricao, valor, tipo, conta_bancaria_id, conta_contabil_id, origem, conciliado, historico_id)
+    VALUES (v_admin_id, v_data_hoje, 'Estorno Patrimonial CR - Renovação Assinatura (CR ID: ' || v_recorrencia_id::TEXT || ')', p_valor_pago, 'Saida', NULL, v_conta_contabil_a_receber, 'assinatura_stripe', true, v_historico_padrao_stripe_id); -- NOVO: Inclui ID da CR
+  END IF;
+  
+  -- 15. CRIA AS PRÓXIMAS DUAS PARCELAS PENDENTES (30 e 60 dias)
+  IF v_conta_contabil_parcela IS NOT NULL THEN
+    -- Próxima Mensalidade (30 dias)
+    INSERT INTO public.admin_parcelas_receber (conta_receber_id, admin_id, numero_parcela, valor_parcela, data_vencimento, status, id_conta_contabil)
+    VALUES (
+      v_recorrencia_id,
+      v_admin_id,
+      (SELECT COALESCE(MAX(numero_parcela), 1) + 1 FROM public.admin_parcelas_receber WHERE conta_receber_id = v_recorrencia_id), -- Próximo número de parcela
+      v_plano_preco,
+      v_proximo_vencimento,
+      'aberta',
+      v_conta_contabil_parcela -- NOVO: Conta Contábil da Parcela
+    );
+    
+    -- Segunda Mensalidade (60 dias)
+    INSERT INTO public.admin_parcelas_receber (conta_receber_id, admin_id, numero_parcela, valor_parcela, data_vencimento, status, id_conta_contabil)
+    VALUES (
+      v_recorrencia_id,
+      v_admin_id,
+      (SELECT COALESCE(MAX(numero_parcela), 1) + 1 FROM public.admin_parcelas_receber WHERE conta_receber_id = v_recorrencia_id), -- Próximo número de parcela
+      v_plano_preco,
+      v_segundo_vencimento,
+      'aberta',
+      v_conta_contabil_parcela -- NOVO: Conta Contábil da Parcela
+    );
+  END IF;
+
+END;
+$function$
+
+-- delete_contract_and_reverse_accounting
+CREATE OR REPLACE FUNCTION public.delete_contract_and_reverse_accounting(p_contrato_id uuid, p_proprietario_id uuid)
+ RETURNS TABLE(success boolean, message text)
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE
+  v_tabela_contas_receber TEXT;
+  v_tabela_parcelas TEXT;
+  v_conta_receber_id UUID;
+  v_parcelas_pagas_count INTEGER;
+  v_valor_total NUMERIC;
+  v_descricao TEXT;
+  v_conta_patrimonial_id UUID;
+  v_conta_resultado_id UUID;
+  v_historico_id UUID;
+  v_data_movimentacao TIMESTAMP WITH TIME ZONE := NOW() AT TIME ZONE 'America/Sao_Paulo';
+BEGIN
+  -- 1. Determinar as tabelas corretas (Admin vs Cliente)
+  IF EXISTS (SELECT 1 FROM public.tbl_admins WHERE id = p_proprietario_id) THEN
+    v_tabela_contas_receber := 'admin_contas_receber';
+    v_tabela_parcelas := 'admin_parcelas_receber';
+  ELSE
+    v_tabela_contas_receber := 'contas_receber';
+    v_tabela_parcelas := 'parcelas_contas_receber';
+  END IF;
+
+  -- 2. Buscar a conta sintética e verificar parcelas pagas
+  EXECUTE format('SELECT id, valor_total, descricao, id_conta_patrimonial, id_conta_resultado, historico_id FROM public.%I WHERE contrato_gerado_id = $1 LIMIT 1', v_tabela_contas_receber)
+  INTO v_conta_receber_id, v_valor_total, v_descricao, v_conta_patrimonial_id, v_conta_resultado_id, v_historico_id
+  USING p_contrato_id;
+
+  IF v_conta_receber_id IS NULL THEN
+    -- Se não houver conta a receber associada, apenas deleta o contrato
+    DELETE FROM public.contratos_gerados WHERE id = p_contrato_id;
+    RETURN QUERY SELECT TRUE, 'Contrato deletado. Nenhuma conta a receber associada encontrada.';
+    RETURN;
+  END IF;
+
+  -- Contar parcelas pagas
+  EXECUTE format('SELECT COUNT(*) FROM public.%I WHERE conta_receber_id = $1 AND status = ''paga''', v_tabela_parcelas)
+  INTO v_parcelas_pagas_count
+  USING v_conta_receber_id;
+
+  IF v_parcelas_pagas_count > 0 THEN
+    RETURN QUERY SELECT FALSE, 'Não é possível deletar o contrato. Existem ' || v_parcelas_pagas_count || ' parcelas quitadas.';
+    RETURN;
+  END IF;
+
+  -- 3. Reverter Lançamentos Contábeis (Apenas se for Admin e as contas estiverem mapeadas)
+  IF v_tabela_contas_receber = 'admin_contas_receber' AND v_conta_patrimonial_id IS NOT NULL AND v_conta_resultado_id IS NOT NULL THEN
+    
+    -- Lançamento de Estorno (D: Receita, C: Clientes a Receber)
+    
+    -- D: Conta de Resultado (Receita) - Tipo 'Entrada' (Débito)
+    -- Para diminuir a Receita (Credora), usamos Débito (Entrada)
+    INSERT INTO public.lancamentos (proprietario_id, data_movimentacao, descricao, valor, tipo, conta_contabil_id, origem, historico_id)
+    VALUES (
+      p_proprietario_id,
+      v_data_movimentacao,
+      'Estorno Receita Contrato: ' || v_descricao || ' (CR ID: ' || v_conta_receber_id::TEXT || ')',
+      v_valor_total,
+      'Entrada', -- Débito na conta de Receita (Natureza Credora)
+      v_conta_resultado_id,
+      'estorno_contrato',
+      v_historico_id
+    );
+
+    -- C: Conta Patrimonial (Clientes a Receber) - Tipo 'Saida' (Crédito)
+    -- Para diminuir o Ativo (Devedor), usamos Crédito (Saída)
+    INSERT INTO public.lancamentos (proprietario_id, data_movimentacao, descricao, valor, tipo, conta_contabil_id, origem, historico_id)
+    VALUES (
+      p_proprietario_id,
+      v_data_movimentacao,
+      'Estorno Ativo Contrato: ' || v_descricao || ' (CR ID: ' || v_conta_receber_id::TEXT || ')',
+      v_valor_total,
+      'Saida', -- Crédito na conta de Ativo (Natureza Devedora)
+      v_conta_patrimonial_id,
+      'estorno_contrato',
+      v_historico_id
+    );
+    
+    -- 3.1. Deletar lançamentos originais (para evitar duplicidade no histórico)
+    -- Usamos a descrição padronizada do PreencherContrato.tsx
+    
+    -- Lançamento Inicial CR (Débito no Ativo)
+    DELETE FROM public.lancamentos
+    WHERE proprietario_id = p_proprietario_id
+      AND origem = 'lancamento_cr'
+      AND descricao ILIKE ('Lançamento Inicial CR: Contrato: ' || v_descricao || ' (CR ID: ' || v_conta_receber_id::TEXT || ')%');
+
+    -- Lançamento Receita (Crédito na Receita)
+    DELETE FROM public.lancamentos
+    WHERE proprietario_id = p_proprietario_id
+      AND origem = 'lancamento_cr'
+      AND descricao ILIKE ('Receita: Contrato: ' || v_descricao || ' (CR ID: ' || v_conta_receber_id::TEXT || ')%');
+
+  END IF;
+
+  -- 4. Deletar a conta sintética (deleta parcelas em cascata)
+  EXECUTE format('DELETE FROM public.%I WHERE id = $1', v_tabela_contas_receber)
+  USING v_conta_receber_id;
+  
+  -- 5. Deletar o contrato gerado
+  DELETE FROM public.contratos_gerados WHERE id = p_contrato_id;
+
+  RETURN QUERY SELECT TRUE, 'Contrato e lançamentos associados deletados com sucesso.';
+END;
+$function$
+
+-- handle_new_user
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER
+LANGUAGE PLPGSQL
+SECURITY DEFINER SET search_path = ''
+AS $$
+BEGIN
+  INSERT INTO public.profiles (id, first_name, last_name)
+  VALUES (
+    new.id, 
+    new.raw_user_meta_data ->> 'first_name', 
+    new.raw_user_meta_data ->> 'last_name'
+  );
+  RETURN new;
+END;
+$$;
+```
+
+### 3. Policies (RLS)
+
+| Policy Name | Table | Command | Using Clause |
+| :--- | :--- | :--- | :--- |
+| `tickets_access_policy` | `tickets` | `*` | `is_owner_or_admin_user(proprietario_id)` |
+| `Users can view and update their own profile` | `tbl_usuarios` | `*` | `(auth.uid() = id)` |
+| `plano_contas_access_policy` | `plano_contas` | `*` | `is_owner_or_admin_user(proprietario_id)` |
+| `saldo_contas_access_policy` | `saldo_contas` | `*` | `is_owner_or_admin_user(proprietario_id)` |
+| `Clientes can view and update their own profile` | `tbl_clientes` | `*` | `((auth.uid() = id) OR (admin_id = auth.uid()))` |
+| `Admins can view and update their own profile` | `tbl_admins` | `*` | `(auth.uid() = id)` |
+| `Admin Users can view and update their own profile` | `admin_usuarios` | `*` | `(auth.uid() = id)` |
+| `Admin pode gerenciar seus usuarios` | `admin_usuarios` | `*` | `(admin_id = auth.uid())` |
+| `Cliente/Admin ve registros de seus funcionarios` | `registros_ponto` | `*` | `((funcionario_id = auth.uid()) OR (empresa_id = auth.uid()) OR (EXISTS ( SELECT 1 FROM tbl_clientes c WHERE ((c.id = registros_ponto.empresa_id) AND (c.admin_id = auth.uid())))))` |
+| `Admin e funcionarios veem registros` | `admin_registros_ponto` | `*` | `((funcionario_id = auth.uid()) OR (admin_id = auth.uid()) OR (EXISTS ( SELECT 1 FROM admin_usuarios au WHERE ((au.id = auth.uid()) AND (au.admin_id = admin_registros_ponto.admin_id)))))` |
+| `ferias_access_policy` | `ferias` | `*` | `((funcionario_id = auth.uid()) OR (empresa_id = auth.uid()) OR (EXISTS ( SELECT 1 FROM tbl_clientes c WHERE ((c.id = ferias.empresa_id) AND (c.admin_id = auth.uid())))))` |
+| `admin_ferias_user_access_policy` | `admin_ferias_user` | `*` | `((funcionario_id = auth.uid()) OR (admin_id = auth.uid()) OR (EXISTS ( SELECT 1 FROM admin_usuarios au WHERE ((au.id = auth.uid()) AND (au.admin_id = admin_ferias_user.admin_id)))))` |
+| `Clientes podem gerenciar seus usuarios` | `tbl_usuarios` | `*` | `((cliente_id = auth.uid()) OR (EXISTS ( SELECT 1 FROM tbl_clientes c WHERE ((c.id = tbl_usuarios.cliente_id) AND (c.admin_id = auth.uid())))))` |
+| `lancamentos_access_policy` | `lancamentos` | `*` | `is_owner_or_admin_user(proprietario_id)` |
+| `historicos_access_policy` | `historicos` | `*` | `is_owner_or_admin_user(proprietario_id)` |
+
+### 4. Edge Functions (Deno)
+
+| Function Name | Purpose |
+| :--- | :--- |
+| `manage-plano-contas` | Exclui e insere o Plano de Contas (Service Role) |
+| `update-plano-contas-fks` | Atualiza FKs e flags booleanas após importação (Service Role) |
+| `activate-subscription` | Ativa assinatura e registra faturamento inicial |
+| `create-renewal-session` | Cria sessão de checkout Stripe para renovação |
+| `get-admin-stripe-config` | Busca chaves Stripe secretas (Admin Only) |
+| `get-stripe-session` | Busca metadados da sessão Stripe |
+| `promote-client-direct` | Promove Cliente CR para Cliente Sistema (Admin Only) |
+| `promote-client-to-system` | Promove Cliente CR para Cliente Sistema (Admin Only) |
+| `send-signed-contract` | Simula envio de contrato assinado por email |
+| `extract-comprovante-ocr` | Simula extração de dados de comprovantes (OCR) |
