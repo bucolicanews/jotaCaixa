@@ -37,9 +37,10 @@ type FormValues = z.infer<typeof formSchema>;
 interface FormContratoModeloProps {
   modeloInicial?: ExtendedContratoModelo | null;
   onSaveComplete: () => void;
+  ownerId: string | null; // Adicionando ownerId como prop obrigatória
 }
 
-const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, onSaveComplete }) => {
+const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, onSaveComplete, ownerId }) => {
   const isEditing = !!modeloInicial;
   const { role, perfil, usuario } = useSessao();
   const [tagsCustomizadas, setTagsCustomizadas] = useState<ContratoTag[]>([]);
@@ -47,15 +48,6 @@ const FormContratoModelo: React.FC<FormContratoModeloProps> = ({ modeloInicial, 
   const [previewOpen, setPreviewOpen] = useState(false);
   const [conteudoPreview, setConteudoPreview] = useState('');
   const [previewTitle, setPreviewTitle] = useState('');
-  
-  const getOwnerId = () => {
-    if (role === 'Admin') return usuario?.id || null;
-    if (role === 'Cliente') return (perfil as ClienteProfile)?.id;
-    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id;
-    return null;
-  };
-  
-  const ownerId = getOwnerId();
 
   const fetchTagsAndBlocos = useCallback(async () => {
     if (!ownerId) return;

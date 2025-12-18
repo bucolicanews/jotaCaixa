@@ -1,7 +1,7 @@
 # Jota App - Sistema de Gestão Financeira e RH Multi-Tenant
 
 ![Version](https://img.shields.io/badge/version-2.0-blue)
-![License](https://img-shields.io/badge/license-MIT-green)
+![License](https://img.shields.io/badge/license-MIT-green)
 ![Status](https://img.shields.io/badge/status-production-brightgreen)
 
 Um sistema robusto de gestão financeira, RH e contratos construído com React, TypeScript, Supabase e Stripe. Oferece soluções completas para administração de empresas, gestão de clientes, contas a receber/pagar, ponto eletrônico, folha de ponto e contratos dinâmicos.
@@ -17,6 +17,7 @@ Um sistema robusto de gestão financeira, RH e contratos construído com React, 
 - [Arquitetura e Fluxos](#arquitetura-e-fluxos)
 - [API e Integrações](#api-e-integrações)
 - [Supabase Schema e Scripts](#supabase-schema-e-scripts)
+- [Arquitetura de Acesso e RLS](#️-arquitetura-de-acesso-e-rls-pós-correção-de-recursão)
 
 ---
 
@@ -151,14 +152,13 @@ pnpm build
 1. Configure as variáveis de ambiente da mesma forma que no `.env.local`
 2. Garanta que as Functions (RPCs) do Supabase estejam implantadas e executadas
 3. Execute `pnpm build` no pipeline e publique `dist/`
-4. Para o Supabase, aplique `fix-rls-policies.sql` após qualquer restauração de banco:
-   - Use o editor SQL (`supabase db query` ou painel) para recriar `saldo_contas`, `plano_contas` e `lancamentos` com o `EXISTS` para `admin_usuarios`
+4. As políticas de RLS (Row Level Security) são cruciais. Após qualquer restauração de banco, garanta que a arquitetura de RLS não-recursiva está implantada. Consulte a seção de arquitetura de RLS para mais detalhes.
 5. Teste rodando `SELECT * FROM admin_usuarios WHERE id = '<admin_usuario_id>'` e confirme `admin_id`
-6. Faça logout/login no app após rodar o script para que o JWT receba as novas policies
+6. Faça logout/login no app após qualquer alteração de RLS para que o JWT do usuário receba as novas permissões.
 
 ### 8. Supabase + Stripe
-- Supabase Auth com RLS garante que cada tenant só veja seus dados.  
-- `fix-rls-policies.sql` está em raiz e sincroniza as políticas (execute após restore).  
+- Supabase Auth com RLS garante que cada tenant só veja seus dados.
+- A segurança é garantida por políticas de RLS (Row Level Security) em nível de banco de dados.
 - Integrações com Stripe usam as edge functions `create-checkout-session`, `create-renewal-session` e `get-stripe-session` para acesso seguro.
 
 ## Visão geral do sistema
@@ -169,16 +169,9 @@ pnpm build
 - **Hooks reutilizáveis:** `useOwner`, `useConciliacao`, `useContasReceber`, `useBalancete`, `useRazao` e demais encapsulam lógica de tenant, RLS e fetchs Supabase.
 
 ## RLS e controle de acesso
-- A tabela `admin_usuarios` conecta cada colaborador ao `admin_id` do dono.  
-- As policies `saldo_contas_select_policy`, `plano_contas_select_policy` e `lancamentos_select_policy` aceitam agora `auth.uid() = proprietario_id` **ou** o administrador delegado (`EXISTS` com `admin_usuarios`).  
-- Sempre que restaurar o banco ou promover um cliente, execute `fix-rls-policies.sql` para garantir consistência.  
-- Verifique RLS com:
-  ```sql
-  SELECT * FROM pg_policies WHERE tablename IN ('saldo_contas','plano_contas','lancamentos');
-  SELECT id, admin_id FROM admin_usuarios WHERE id = '<admin_usuario_id>';
-  ```
-- O dropdown `Conta de Débito/Crédito` e as tabelas de lançamentos usam `useOwner()` para resolver `ownerId` do cliente ou admin (funcionários).  
-- No Supabase storage/edge functions, confirme que os headers `Authorization: Bearer <supabase_jwt>` estão presentes.
+O sistema utiliza uma arquitetura de Row Level Security (RLS) robusta e não-recursiva para garantir o isolamento de dados entre tenants (multi-tenant).
+
+**Para detalhes técnicos sobre a implementação, consulte a seção: [🏛️ Arquitetura de Acesso e RLS (Pós-Correção de Recursão)](#️-arquitetura-de-acesso-e-rls-pós-correção-de-recursão).**
 
 ---
 
@@ -613,6 +606,93 @@ Desenvolvido com ❤️ para gestão financeira e RH moderna.
 **Versão:** 2.0  
 **Última atualização:** Dezembro 2025  
 **Status:** Production Ready ✅
+
+---
+
+## 🏛️ Arquitetura de Acesso e RLS (Pós-Correção de Recursão)
+
+Esta seção documenta o ponto de partida definitivo para o controle de acesso no sistema, implementado para resolver erros críticos de "infinite recursion" no PostgreSQL. A arquitetura anterior foi descontinuada.
+
+### O Problema (Depreciado)
+
+As políticas de RLS (Row Level Security) originais causavam recursão infinita porque uma política em uma tabela (ex: `tbl_usuarios`) executava uma subconsulta (`SELECT ... FROM tbl_clientes`) em outra tabela que também possuía uma política de RLS, criando um loop de verificação que impedia o acesso aos dados e gerava erros no banco de dados.
+
+### A Solução Definitiva: Acesso Não-Recursivo
+
+A nova arquitetura elimina completamente a recursão, garantindo performance e estabilidade. Ela se baseia em três pilares:
+
+#### 1. Tabela de Mapeamento `admin_user_lookup`
+
+Foi criada uma tabela auxiliar, `public.admin_user_lookup`, com o RLS **desabilitado**. Sua única função é manter um mapeamento direto entre o `id` de um usuário (`admin_usuarios`) e seu respectivo `admin_id`.
+
+```sql
+CREATE TABLE IF NOT EXISTS public.admin_user_lookup (
+  id uuid PRIMARY KEY,
+  admin_id uuid NOT NULL
+);
+```
+
+#### 2. Gatilho de Sincronização Automática
+
+Um gatilho (`trg_admin_usuarios_lookup_aiu` e `trg_admin_usuarios_lookup_ad`) na tabela `admin_usuarios` garante que a tabela `admin_user_lookup` seja **automaticamente atualizada** em qualquer operação de `INSERT`, `UPDATE` ou `DELETE`. Isso mantém o mapeamento sempre consistente sem intervenção manual.
+
+```sql
+CREATE OR REPLACE FUNCTION public.sync_admin_user_lookup()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF (TG_OP = 'DELETE') THEN
+    DELETE FROM public.admin_user_lookup WHERE id = OLD.id;
+    RETURN OLD;
+  ELSE
+    INSERT INTO public.admin_user_lookup (id, admin_id)
+    VALUES (NEW.id, NEW.admin_id)
+    ON CONFLICT (id) DO UPDATE SET admin_id = EXCLUDED.admin_id;
+    RETURN NEW;
+  END IF;
+END;
+$$;
+```
+
+#### 3. Função Segura `get_admin_id_for_current_user()`
+
+Esta é a peça central da solução. A função `get_admin_id_for_current_user` busca o `admin_id` do usuário logado diretamente da tabela `admin_user_lookup`, mas com três propriedades críticas que evitam a recursão:
+
+- **`SECURITY DEFINER`**: Executa com os privilégios do usuário que a *criou*, não de quem a *chama*.
+- **`SET LOCAL row_security = off`**: Desliga temporariamente o RLS **apenas durante a execução desta função**, permitindo a leitura da tabela de lookup sem disparar outras políticas.
+- **`VOLATILE`**: Indica ao Postgres que a função tem efeitos colaterais (como `SET LOCAL`) e não pode ser otimizada de forma agressiva.
+
+```sql
+CREATE OR REPLACE FUNCTION public.get_admin_id_for_current_user()
+  RETURNS uuid
+  LANGUAGE plpgsql
+  VOLATILE -- Essencial por causa do SET LOCAL
+  SECURITY DEFINER
+AS $$
+DECLARE
+  current_admin uuid;
+BEGIN
+  SET LOCAL row_security = off;
+  SELECT admin_id INTO current_admin FROM public.admin_user_lookup WHERE id = auth.uid();
+  RETURN current_admin;
+END;
+$$;
+```
+
+### Novo Padrão de Políticas (Exemplo)
+
+Com a função auxiliar, as políticas de RLS se tornaram simples, legíveis e não-recursivas. Elas apenas comparam IDs diretamente ou usam o resultado da função segura.
+
+**Exemplo para `saldo_contas`:**
+```sql
+-- Acesso permitido se o usuário logado é o dono do registro
+-- OU se o admin_id do usuário logado (retornado pela função segura) é o dono do registro.
+CREATE POLICY saldo_contas_select_policy ON public.saldo_contas
+FOR SELECT USING (
+  proprietario_id = auth.uid()
+  OR public.get_admin_id_for_current_user() = public.saldo_contas.proprietario_id
+);
+```
+Este padrão foi aplicado a todas as tabelas críticas (`tbl_clientes`, `tbl_usuarios`, `saldo_contas`, `plano_contas`, `lancamentos`, `registros_ponto`, etc.), resolvendo permanentemente os problemas de acesso e garantindo a estabilidade do sistema. **Quaisquer novas políticas devem seguir estritamente este modelo.**
 
 ---
 

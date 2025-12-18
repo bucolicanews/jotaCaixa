@@ -22,23 +22,39 @@ const GerenciarBlocosSocietarios: React.FC = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [blocoSelecionado, setBlocoSelecionado] = useState<BlocoSocietario | null>(null);
   const [activeTab, setActiveTab] = useState('meus_blocos');
+  const [ownerId, setOwnerId] = useState<string | null>(null);
 
   const isAdmin = role === 'Admin';
   const isCliente = role === 'Cliente';
   
-  // ID do proprietário (Admin ou Cliente)
-  const getOwnerId = () => {
-    if (isAdmin) return usuario?.id || null;
-    if (isCliente) return (perfil as ClienteProfile)?.id;
-    if (role === 'Usuario') {
-      const user = perfil as UsuarioProfile | AdminUsuarioProfile;
-      if ('admin_id' in user && user.admin_id) return user.admin_id;
-      if ('cliente_id' in user && user.cliente_id) return user.cliente_id;
-    }
-    return null;
-  };
-  
-  const ownerId = getOwnerId();
+  useEffect(() => {
+    console.log('[GerenciarBlocos] useEffect para ownerId. Carregando sessão:', carregandoSessao);
+    if (carregandoSessao) return;
+
+    console.log('[GerenciarBlocos] Calculando ownerId com dados da sessão:', { role, perfil, usuario });
+
+    const getOwnerId = () => {
+      if (isAdmin) return usuario?.id || null;
+      if (isCliente) return (perfil as ClienteProfile)?.id;
+      if (role === 'Usuario') {
+        const user = perfil as any;
+        if (user?.admin_id) {
+            console.log('[GerenciarBlocos] ID do proprietário encontrado via user.admin_id:', user.admin_id);
+            return user.admin_id;
+        }
+        if (user?.cliente_id) {
+            console.log('[GerenciarBlocos] ID do proprietário encontrado via user.cliente_id:', user.cliente_id);
+            return user.cliente_id;
+        }
+      }
+      console.warn('[GerenciarBlocos] Não foi possível determinar o ID do proprietário.');
+      return null;
+    };
+
+    const calculatedOwnerId = getOwnerId();
+    setOwnerId(calculatedOwnerId);
+    console.log('[GerenciarBlocos] ownerId final definido para:', calculatedOwnerId);
+  }, [carregandoSessao, isAdmin, isCliente, role, perfil, usuario]);
 
   const buscarBlocos = useCallback(async () => {
     if (!ownerId && !isAdmin) {
@@ -161,7 +177,7 @@ const GerenciarBlocosSocietarios: React.FC = () => {
     );
   }
   
-  if (!ownerId && !isAdmin) {
+  if (!carregandoSessao && !ownerId && !isAdmin) {
       return (
           <LayoutPrincipal>
               <Card><CardContent className="p-6">Você não tem permissão para gerenciar blocos de conteúdo.</CardContent></Card>
@@ -202,6 +218,7 @@ const GerenciarBlocosSocietarios: React.FC = () => {
                   <FormBlocoSocietario
                       blocoInicial={blocoSelecionado}
                       onSaveComplete={handleSaveComplete}
+                      ownerId={ownerId}
                   />
               </DialogContent>
           </Dialog>

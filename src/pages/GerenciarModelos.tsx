@@ -6,16 +6,15 @@ import { supabase } from '@/integrations/supabase/client';
 import { useSessao } from '@/hooks/use-sessao';
 import { showError, showSuccess } from '@/utils/toast';
 import { ContratoModelo } from '@/types/contratos';
-import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
+import { AdminUsuarioProfile, ClienteProfile, UsuarioProfile } from '@/types/usuario';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import FormContratoModelo from '@/components/formularios/FormContratoModelo';
-import ImportarModeloContrato from '@/components/contratos/ImportarModeloContrato'; // CORRIGIDO: Importação padrão
+import ImportarModeloContrato from '@/components/contratos/ImportarModeloContrato';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
-// Extensão local para ContratoModelo
 interface ExtendedContratoModelo extends ContratoModelo {
-    tipo_conteudo?: 'html' | 'texto'; // Reintroduzindo o campo
+  tipo_conteudo?: 'html' | 'texto';
 }
 
 const GerenciarModelos: React.FC = () => {
@@ -25,21 +24,42 @@ const GerenciarModelos: React.FC = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [modeloSelecionado, setModeloSelecionado] = useState<ExtendedContratoModelo | null>(null);
   const [activeTab, setActiveTab] = useState('meus_modelos');
+  const [ownerId, setOwnerId] = useState<string | null>(null);
 
   const isAdmin = role === 'Admin';
   const isCliente = role === 'Cliente';
-  
-  // ID do proprietário (Admin ou Cliente)
-  const getOwnerId = () => {
-    if (isAdmin) return usuario?.id || null;
-    if (isCliente) return (perfil as ClienteProfile)?.id;
-    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id; // FIX: proprietario_id -> cliente_id
-    return null;
-  };
-  
-  const ownerId = getOwnerId();
+
+  useEffect(() => {
+    console.log('[GerenciarModelos] useEffect para ownerId. Carregando sessão:', carregandoSessao);
+    if (carregandoSessao) return;
+
+    console.log('[GerenciarModelos] Calculando ownerId com dados da sessão:', { role, perfil, usuario });
+
+    const getOwnerId = () => {
+      if (isAdmin) return usuario?.id || null;
+      if (isCliente) return (perfil as ClienteProfile)?.id;
+      if (role === 'Usuario') {
+        const user = perfil as any;
+        if (user?.admin_id) {
+            console.log('[GerenciarModelos] ID do proprietário encontrado via user.admin_id:', user.admin_id);
+            return user.admin_id;
+        }
+        if (user?.cliente_id) {
+            console.log('[GerenciarModelos] ID do proprietário encontrado via user.cliente_id:', user.cliente_id);
+            return user.cliente_id;
+        }
+      }
+      console.warn('[GerenciarModelos] Não foi possível determinar o ID do proprietário.');
+      return null;
+    };
+
+    const calculatedOwnerId = getOwnerId();
+    setOwnerId(calculatedOwnerId);
+    console.log('[GerenciarModelos] ownerId final definido para:', calculatedOwnerId);
+  }, [carregandoSessao, isAdmin, isCliente, role, perfil, usuario]);
 
   const buscarModelos = useCallback(async () => {
+    // Se não tiver ownerId e não for Admin, não há o que buscar
     if (!ownerId && !isAdmin) {
         setModelos([]);
         setCarregando(false);
@@ -50,18 +70,19 @@ const GerenciarModelos: React.FC = () => {
     
     let query = supabase
       .from('contrato_modelos')
-      .select('*') // REMOVIDO: tipo_conteudo
+      .select('*')
       .order('titulo', { ascending: true });
       
-    // Se for Cliente, busca apenas os seus modelos (RLS já garante isso)
+    // Alinhando com a lógica de GerenciarBlocosSocietarios:
+    // Apenas 'Cliente' tem filtro explícito. Para 'Admin' e 'Usuario', confiamos na RLS do Supabase.
     if (isCliente) {
-        query = query.eq('empresa_id', ownerId);
+        query = query.or(`empresa_id.eq.${ownerId},empresa_id.is.null`);
     }
-    // Se for Admin, a RLS permite ver todos os modelos (seus e dos clientes)
 
     const { data, error } = await query;
 
     if (error) {
+      console.error('Erro Supabase:', error);
       showError('Erro ao carregar modelos: ' + error.message);
       setModelos([]);
     } else {
@@ -112,13 +133,13 @@ const GerenciarModelos: React.FC = () => {
   
   const modelosFiltrados = useMemo(() => {
       if (!isAdmin) {
-          // Cliente/Usuário só vê seus próprios modelos
+          // Para usuários comuns, tudo o que retornou da query é "meu modelo"
           return { meusModelos: modelos, modelosClientes: [] };
       }
       
-      // Admin: Separa modelos próprios (empresa_id = ownerId) e modelos de clientes (empresa_id != ownerId)
-      const meusModelos = modelos.filter(m => m.empresa_id === ownerId);
-      const modelosClientes = modelos.filter(m => m.empresa_id !== ownerId);
+      // Admin separa o que é dele do que é dos clientes
+      const meusModelos = modelos.filter(m => m.empresa_id === ownerId || m.empresa_id === null);
+      const modelosClientes = modelos.filter(m => m.empresa_id !== ownerId && m.empresa_id !== null);
       
       return { meusModelos, modelosClientes };
   }, [modelos, isAdmin, ownerId]);
@@ -129,30 +150,44 @@ const GerenciarModelos: React.FC = () => {
       
   const isSupervisao = isAdmin && activeTab === 'modelos_clientes';
 
-  // Helper para renderizar a lista de modelos
   const renderModelosList = (list: ExtendedContratoModelo[], isSupervisao: boolean) => (
       <div className="space-y-4">
-          {list.map((modelo) => (
-              <div key={modelo.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-secondary/50 transition-colors">
-                  <div className="flex-1 min-w-0">
-                      <p className="font-semibold truncate">{modelo.titulo}</p>
-                      {isSupervisao && <p className="text-xs text-muted-foreground">Empresa ID: {modelo.empresa_id}</p>}
-                      <p className="text-sm text-muted-foreground">Última atualização: {new Date(modelo.criado_em).toLocaleDateString()}</p>
-                  </div>
-                  <div className="flex space-x-2 ml-4">
-                      {/* Admin pode editar/deletar modelos de clientes, mas vamos restringir a edição para evitar quebra de dados */}
-                      <Button variant="outline" size="icon" onClick={() => handleEdit(modelo)} disabled={isSupervisao} title={isSupervisao ? "Apenas visualização" : "Editar Modelo"}>
-                          <Edit className="w-4 h-4" />
-                      </Button>
-                      <Button variant="destructive" size="icon" onClick={() => handleDelete(modelo.id)} disabled={isSupervisao} title={isSupervisao ? "Apenas visualização" : "Excluir Modelo"}>
-                          <Trash2 className="w-4 h-4" />
-                      </Button>
-                  </div>
-              </div>
-          ))}
+          {list.map((modelo) => {
+              // Só pode editar/deletar se for dono do modelo ou se for Admin e não estiver na aba de supervisão
+              const isOwner = modelo.empresa_id === ownerId || (isAdmin && !isSupervisao);
+
+              return (
+                <div key={modelo.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-secondary/50 transition-colors">
+                    <div className="flex-1 min-w-0">
+                        <p className="font-semibold truncate">{modelo.titulo}</p>
+                        {isSupervisao && <p className="text-xs text-muted-foreground">Empresa ID: {modelo.empresa_id}</p>}
+                        <p className="text-sm text-muted-foreground">Última atualização: {new Date(modelo.criado_em).toLocaleDateString()}</p>
+                    </div>
+                    <div className="flex space-x-2 ml-4">
+                        <Button 
+                            variant="outline" 
+                            size="icon" 
+                            onClick={() => handleEdit(modelo)} 
+                            disabled={!isOwner} 
+                            title={isOwner ? "Editar Modelo" : "Apenas visualização"}
+                        >
+                            <Edit className="w-4 h-4" />
+                        </Button>
+                        <Button 
+                            variant="destructive" 
+                            size="icon" 
+                            onClick={() => handleDelete(modelo.id)} 
+                            disabled={!isOwner} 
+                            title={isOwner ? "Excluir Modelo" : "Apenas visualização"}
+                        >
+                            <Trash2 className="w-4 h-4" />
+                        </Button>
+                    </div>
+                </div>
+              );
+          })}
       </div>
   );
-
 
   if (carregandoSessao) {
     return (
@@ -164,10 +199,10 @@ const GerenciarModelos: React.FC = () => {
     );
   }
   
-  if (!ownerId && !isAdmin) {
+  if (!carregandoSessao && !ownerId && !isAdmin) {
       return (
           <LayoutPrincipal>
-              <Card><CardContent className="p-6">Você não tem permissão para gerenciar modelos de contrato.</CardContent></Card>
+              <Card><CardContent className="p-6">Você não tem permissão para acessar esta área ou seu vínculo de empresa não foi encontrado.</CardContent></Card>
           </LayoutPrincipal>
       );
   }
@@ -180,10 +215,8 @@ const GerenciarModelos: React.FC = () => {
         </h1>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
-            <Button onClick={handleNewModel} className="w-full sm:w-auto mx-auto sm:mx-0">
-              <Plus className="w-4 h-4 mr-2 sm:mr-0" /> 
-              <span className="hidden sm:inline">Novo Modelo</span>
-              <span className="sm:hidden">Novo</span>
+            <Button onClick={handleNewModel} className="w-full sm:w-auto">
+              <Plus className="w-4 h-4 mr-2" /> Novo Modelo
             </Button>
           </DialogTrigger>
           <DialogContent className="w-full sm:max-w-7xl max-h-[95vh] overflow-y-auto">
@@ -193,6 +226,7 @@ const GerenciarModelos: React.FC = () => {
             <FormContratoModelo
               modeloInicial={modeloSelecionado}
               onSaveComplete={handleSaveComplete}
+              ownerId={ownerId}
             />
           </DialogContent>
         </Dialog>
@@ -215,8 +249,8 @@ const GerenciarModelos: React.FC = () => {
             </TabsList>
         )}
         
-        {isAdmin && activeTab === 'modelos_clientes' && (
-            <div className="p-4 bg-yellow-100 dark:bg-yellow-900/20 border border-yellow-500 rounded-md mt-4 mb-4">
+        {isSupervisao && (
+            <div className="p-4 bg-yellow-100 dark:bg-yellow-900/20 border border-yellow-500 rounded-md mb-4">
                 <p className="text-sm text-yellow-700 dark:text-yellow-300 font-semibold flex items-center">
                     <Building2 className="w-4 h-4 mr-2" /> Modo Supervisão: Modelos de clientes não podem ser editados ou excluídos diretamente.
                 </p>
@@ -227,7 +261,7 @@ const GerenciarModelos: React.FC = () => {
             <Card>
                 <CardHeader>
                     <CardTitle className="text-xl">
-                        Modelos Cadastrados ({modelosParaExibir.length})
+                        Modelos Disponíveis ({modelosParaExibir.length})
                     </CardTitle>
                 </CardHeader>
                 <CardContent>

@@ -8,7 +8,7 @@ import { ContratoModelo } from '@/types/contratos';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 import { Button } from '@/components/ui/button';
 import { Link, useNavigate } from 'react-router-dom';
-import { useSessao } from '@/hooks/use-sessao'; // CORRIGIDO: Importação useSessao
+import { useSessao } from '@/hooks/use-sessao';
 
 const NovoContrato: React.FC = () => {
   const { role, perfil, usuario, carregando: carregandoSessao } = useSessao();
@@ -19,66 +19,96 @@ const NovoContrato: React.FC = () => {
   const isCliente = role === 'Cliente';
   const isAdmin = role === 'Admin';
   
-  // ID do proprietário (Admin ou Cliente)
-  const getOwnerId = () => {
+  // Memoize o ownerId para evitar recálculos desnecessários
+  const getOwnerId = useCallback(() => {
     if (isAdmin) return usuario?.id || null;
     if (isCliente) return (perfil as ClienteProfile)?.id;
-    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id; // FIX: proprietario_id -> cliente_id
+    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id;
     return null;
-  };
-  
+  }, [isAdmin, isCliente, role, usuario, perfil]);
+
   const ownerId = getOwnerId();
 
   const buscarModelos = useCallback(async () => {
-    if (!role || !ownerId) return;
+    // Se a sessão ainda carrega, não faz nada
+    if (carregandoSessao) return;
+    
+    // Admin pode ver modelos globais mesmo sem ownerId definido no momento
+    if (!role) return;
+
     setCarregandoModelos(true);
     
-    let query = supabase
-      .from('contrato_modelos')
-      .select('*') // REMOVIDO: tipo_conteudo
-      .order('titulo', { ascending: true });
-      
-    if (isCliente) {
-        // Clientes veem seus próprios modelos (ownerId) e modelos globais (empresa_id is null)
-        query = query.or(`empresa_id.eq.${ownerId},empresa_id.is.null`);
-    } else if (isAdmin) {
-        // Admin vê seus próprios modelos (ownerId) e modelos globais (empresa_id is null)
-        query = query.or(`empresa_id.eq.${ownerId},empresa_id.is.null`);
-    }
+    try {
+      let query = supabase
+        .from('contrato_modelos')
+        .select('*')
+        .order('titulo', { ascending: true });
+        
+      if (isAdmin) {
+        // Admin: Vê modelos da sua "empresa" OU modelos globais (empresa_id is null)
+        if (ownerId) {
+          query = query.or(`empresa_id.eq.${ownerId},empresa_id.is.null`);
+        } else {
+          // Fallback caso o ID do admin ainda não esteja disponível
+          query = query.is('empresa_id', null);
+        }
+      } else if (isCliente || role === 'Usuario') {
+        if (ownerId) {
+          query = query.or(`empresa_id.eq.${ownerId},empresa_id.is.null`);
+        } else {
+          // Se for cliente/usuário e não tiver ownerId, só vê globais
+          query = query.is('empresa_id', null);
+        }
+      }
 
-    const { data, error } = await query;
+      const { data, error } = await query;
 
-    if (error) {
+      if (error) throw error;
+      setModelos(data as ContratoModelo[]);
+    } catch (error: any) {
+      console.error('Erro ao buscar modelos:', error);
       showError('Erro ao carregar modelos: ' + error.message);
       setModelos([]);
-    } else {
-      setModelos(data as ContratoModelo[]);
+    } finally {
+      setCarregandoModelos(false);
     }
-    setCarregandoModelos(false);
-  }, [role, isCliente, isAdmin, ownerId]);
+  }, [carregandoSessao, role, isAdmin, isCliente, ownerId]);
 
+  // Efeito principal de busca
   useEffect(() => {
-    if (!carregandoSessao && ownerId) {
-      buscarModelos();
-    }
-  }, [carregandoSessao, ownerId, buscarModelos]);
+    buscarModelos();
+  }, [buscarModelos]);
   
   const handleSelectModel = (modeloId: string) => {
       navigate(`/contratos/preencher/${modeloId}`);
   };
 
-  if (carregandoSessao || carregandoModelos) {
+  // Renderização de carregamento
+  if (carregandoSessao || (carregandoModelos && modelos.length === 0)) {
     return (
       <LayoutPrincipal>
         <div className="flex justify-center items-center h-64">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <span className="ml-2 text-muted-foreground">Carregando modelos...</span>
         </div>
       </LayoutPrincipal>
     );
   }
   
-  if (!isAdmin && !isCliente) {
-    return <LayoutPrincipal><Card><CardHeader><CardTitle>Acesso Negado</CardTitle></CardHeader><CardContent><p>Apenas administradores e clientes podem criar contratos.</p></CardContent></Card></LayoutPrincipal>;
+  // Verificação de permissão (após carregar a sessão)
+  if (!isAdmin && !isCliente && role !== 'Usuario') {
+    return (
+      <LayoutPrincipal>
+        <Card>
+          <CardHeader>
+            <CardTitle>Acesso Negado</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p>Você não possui permissão para criar contratos. Entre em contato com o administrador.</p>
+          </CardContent>
+        </Card>
+      </LayoutPrincipal>
+    );
   }
 
   return (
@@ -90,36 +120,45 @@ const NovoContrato: React.FC = () => {
       <Card className="mb-6">
         <CardHeader>
           <CardTitle className="text-xl">1. Selecione um Modelo</CardTitle>
-          <CardDescription>Escolha um modelo de contrato para começar a preencher as informações.</CardDescription>
+          <CardDescription>
+            {isAdmin ? 'Como administrador, você visualiza modelos globais e da sua conta.' : 'Escolha um modelo de contrato para começar.'}
+          </CardDescription>
         </CardHeader>
         <CardContent>
           {modelos.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-                <FileTextIcon className="w-8 h-8 mx-auto mb-2" />
-                <p>Nenhum modelo de contrato disponível. Crie um em <Link to="/contratos/modelos" className="text-primary underline">Gerenciar Modelos</Link>.</p>
+            <div className="text-center py-12 border-2 border-dashed rounded-lg text-muted-foreground">
+                <FileTextIcon className="w-12 h-12 mx-auto mb-4 opacity-20" />
+                <p className="mb-4">Nenhum modelo de contrato encontrado.</p>
+                <Button asChild variant="outline">
+                  <Link to="/contratos/modelos">Criar Primeiro Modelo</Link>
+                </Button>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {modelos.map(modelo => (
                 <Card 
                   key={modelo.id} 
-                  className="hover:border-primary transition-colors cursor-pointer"
+                  className="hover:border-primary transition-all hover:shadow-md cursor-pointer flex flex-col"
+                  onClick={() => handleSelectModel(modelo.id)}
                 >
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-lg font-medium">{modelo.titulo}</CardTitle>
-                    <FileTextIcon className="h-5 w-5 text-muted-foreground" />
+                  <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
+                    <CardTitle className="text-lg font-medium leading-tight">{modelo.titulo}</CardTitle>
+                    <FileTextIcon className="h-5 w-5 text-primary/50 shrink-0" />
                   </CardHeader>
-                  <CardContent>
-                    <p className="text-sm text-muted-foreground line-clamp-3">
-                        {modelo.conteudo_template.substring(0, 150)}...
+                  <CardContent className="flex-grow">
+                    <p className="text-sm text-muted-foreground line-clamp-3 mb-4">
+                        {modelo.conteudo_template.replace(/<[^>]*>?/gm, '').substring(0, 120)}...
                     </p>
                     <Button 
                         variant="secondary" 
                         size="sm" 
-                        className="mt-3 w-full"
-                        onClick={() => handleSelectModel(modelo.id)}
+                        className="w-full mt-auto"
+                        onClick={(e) => {
+                          e.stopPropagation(); // Evita clique duplo
+                          handleSelectModel(modelo.id);
+                        }}
                     >
-                        Selecionar
+                        Selecionar Modelo
                     </Button>
                   </CardContent>
                 </Card>

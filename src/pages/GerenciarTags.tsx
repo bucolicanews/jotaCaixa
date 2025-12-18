@@ -10,14 +10,14 @@ import { showError, showSuccess } from '@/utils/toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import FormContratoTag from '@/components/formularios/FormContratoTag';
 import { ContratoTag } from '@/types/contratos';
-import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
+import { AdminUsuarioProfile, ClienteProfile, UsuarioProfile } from '@/types/usuario';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { useDebounce } from '@/hooks/use-debounce';
 
 const GerenciarTags = () => {
-  const { role, perfil, carregando: carregandoSessao } = useSessao();
+  const { role, perfil,usuario, carregando: carregandoSessao } = useSessao();
   const [tags, setTags] = useState<ContratoTag[]>([]);
   const [carregandoTags, setCarregandoTags] = useState(true);
   const [tagSelecionada, setTagSelecionada] = useState<ContratoTag | null>(null);
@@ -34,10 +34,16 @@ const GerenciarTags = () => {
   const isUsuario = role === 'Usuario';
   
   const getEmpresaId = () => {
+    if (isAdmin) return usuario?.id || null;
     if (isCliente) return (perfil as ClienteProfile)?.id;
-    if (isUsuario) return (perfil as UsuarioProfile)?.cliente_id; // FIX: proprietario_id -> cliente_id
+    //if (isUsuario) return (perfil as UsuarioProfile)?.cliente_id; // FIX: proprietario_id -> cliente_id
     // Se for Admin, o proprietário da tag é o próprio Admin logado.
-    if (isAdmin) return (perfil as any)?.id;
+   
+    if (role === 'Usuario') {
+           const user = perfil as UsuarioProfile | AdminUsuarioProfile;
+                if ('admin_id' in user && user.admin_id) return user.admin_id;
+                if ('cliente_id' in user && user.cliente_id) return user.cliente_id;
+              }
     return null;
   };
   

@@ -25,20 +25,11 @@ type FormValues = z.infer<typeof formSchema>;
 interface FormBlocoSocietarioProps {
   blocoInicial?: BlocoSocietario | null;
   onSaveComplete: () => void;
+  ownerId: string | null;
 }
 
-const FormBlocoSocietario: React.FC<FormBlocoSocietarioProps> = ({ blocoInicial, onSaveComplete }) => {
+const FormBlocoSocietario: React.FC<FormBlocoSocietarioProps> = ({ blocoInicial, onSaveComplete, ownerId }) => {
   const isEditing = !!blocoInicial;
-  const { role, perfil, usuario } = useSessao();
-  
-  const getOwnerId = () => {
-    if (role === 'Admin') return usuario?.id || null;
-    if (role === 'Cliente') return (perfil as ClienteProfile)?.id;
-    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id; // FIX: proprietario_id -> cliente_id
-    return null;
-  };
-  
-  const ownerId = getOwnerId();
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
