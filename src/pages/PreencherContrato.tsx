@@ -32,27 +32,23 @@ const PreencherContrato: React.FC = () => {
   
   const isAdmin = role === 'Admin';
   const isCliente = role === 'Cliente'; 
-  
+
   const [modelo, setModelo] = useState<ContratoModelo | null>(null);
   const [clientesCR, setClientesCR] = useState<any[]>([]);
   const [tagsCustomizadas, setTagsCustomizadas] = useState<ContratoTag[]>([]);
-  
   const [valoresTags, setValoresTags] = useState<Record<string, string>>({});
   const [carregandoDados, setCarregandoDados] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
   const [previewOpen, setPreviewOpen] = useState(false);
   const [clienteSelecionadoId, setClienteSelecionadoId] = useState<string>('');
   const [valorTotal, setValorTotal] = useState<number>(0); 
   const [tituloDocumento, setTituloDocumento] = useState('');
-  
   const [proprietarioContratoId, setProprietarioContratoId] = useState<string | null>(null); 
   const [empresasContrato, setEmpresasContrato] = useState<any[]>([]);
-  
   const [tipoLancamento, setTipoLancamento] = useState<TipoLancamento>('unico');
-  const [dataVencimentoUnico, setDataVencimentoUnico] = useState<Date | undefined>(undefined);
+  const [dataVencimentoUnico, setDataVencimentoUnico] = useState<Date | undefined>(new Date());
   const [numeroParcelas, setNumeroParcelas] = useState<number>(1);
-  const [dataPrimeiroVencimento, setDataPrimeiroVencimento] = useState<Date | undefined>(undefined);
+  const [dataPrimeiroVencimento, setDataPrimeiroVencimento] = useState<Date | undefined>(new Date());
   const [intervaloDias, setIntervaloDias] = useState<number>(30);
 
   const isEditing = !!contratoId;
@@ -86,7 +82,8 @@ const PreencherContrato: React.FC = () => {
     }
     if (isAdmin && ownerIdLogado) {
       const { data } = await supabase.from('tbl_clientes').select('id, nome').eq('aprovado', true);
-      setEmpresasContrato([{ id: ownerIdLogado, nome: 'Meus Contratos' }, ...(data || [])]);
+      const options = [{ id: ownerIdLogado, nome: 'Meus Contratos' }, ...(data || [])];
+      setEmpresasContrato(options);
     }
     setProprietarioContratoId(ownerIdLogado);
     await fetchDependentData(ownerIdLogado!);
@@ -97,28 +94,67 @@ const PreencherContrato: React.FC = () => {
     if (!carregandoSessao && ownerIdLogado) buscarDados();
   }, [carregandoSessao, ownerIdLogado, buscarDados]);
 
+  // CORREÇÃO TAGS: Filtro para mostrar tags manuais que não são preenchidas automaticamente
   const tagsParaPreenchimentoManual = useMemo(() => {
-    const padrao = TAGS_PADRAO.map(t => t.nome_tag);
-    return tagsCustomizadas.map(t => t.nome_tag).filter(t => !padrao.includes(t));
+    const combined = [...TAGS_PADRAO, ...tagsCustomizadas];
+    return combined.filter(tag => !tag.origem_dado).map(t => t.nome_tag);
   }, [tagsCustomizadas]);
 
-  const renderConteudo = () => {
+  const renderConteudo = useCallback(() => {
     let html = modelo?.conteudo_template || '';
     Object.keys(valoresTags).forEach(tag => {
-      html = html.replace(new RegExp(tag, 'g'), valoresTags[tag] || tag);
+      const regex = new RegExp(tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+      html = html.replace(regex, valoresTags[tag] || tag);
     });
     return html;
+  }, [modelo, valoresTags]);
+
+  const handleSalvarContrato = async (status: string) => {
+    // CORREÇÃO data_inicio: Garantir que a data não seja nula
+    const dataInicio = tipoLancamento === 'unico' ? dataVencimentoUnico : dataPrimeiroVencimento;
+    
+    if (!clienteSelecionadoId || !proprietarioContratoId || !dataInicio) {
+        showError('Preencha o cliente, proprietário e as datas de vencimento.');
+        return;
+    }
+
+    setIsSubmitting(true);
+    try {
+        const payload = {
+            modelo_id: modelo?.id,
+            cliente_id: clienteSelecionadoId,
+            proprietario_id: proprietarioContratoId,
+            status,
+            valor_total: tipoLancamento === 'repetir' ? valorTotal * numeroParcelas : valorTotal,
+            data_inicio: format(dataInicio, 'yyyy-MM-dd'),
+            numero_parcelas: tipoLancamento === 'unico' ? 1 : numeroParcelas,
+            valores_tags_preenchidos: valoresTags,
+            conteudo_renderizado: renderConteudo(),
+        };
+
+        const { error } = isEditing 
+            ? await supabase.from('contratos_gerados').update(payload).eq('id', contratoId)
+            : await supabase.from('contratos_gerados').insert(payload);
+
+        if (error) throw error;
+        showSuccess('Contrato processado com sucesso');
+        navigate('/contratos');
+    } catch (e: any) {
+        showError(e.message);
+    } finally {
+        setIsSubmitting(false);
+    }
   };
 
   if (carregandoSessao || carregandoDados) {
-    return <LayoutPrincipal><div className="flex justify-center p-10"><Loader2 className="animate-spin" /></div></LayoutPrincipal>;
+    return <LayoutPrincipal><div className="flex justify-center p-20"><Loader2 className="animate-spin" /></div></LayoutPrincipal>;
   }
 
   return (
     <LayoutPrincipal>
       <div className="flex items-center mb-6">
         <Button onClick={() => navigate('/contratos')} variant="link" className="p-0 mr-4"><ChevronLeft /> Voltar</Button>
-        <h1 className="text-2xl font-bold flex items-center"><FileSignature className="mr-2"/> {isEditing ? 'Editar' : 'Iniciar'} Contrato</h1>
+        <h1 className="text-2xl font-bold">Preencher: {modelo?.titulo}</h1>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -154,7 +190,7 @@ const PreencherContrato: React.FC = () => {
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Valor Total (R$)</Label>
+                  <Label>Valor Base (R$)</Label>
                   <Input type="number" value={valorTotal} onChange={e => setValorTotal(Number(e.target.value))} />
                 </div>
                 <div className="space-y-2">
@@ -182,17 +218,16 @@ const PreencherContrato: React.FC = () => {
                 </div>
               ) : (
                 <div className="grid grid-cols-3 gap-2">
-                  <div className="space-y-2">
-                    <Label>Parcelas</Label>
-                    <Input type="number" value={numeroParcelas} onChange={e => setNumeroParcelas(Number(e.target.value))} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Intervalo</Label>
-                    <Input type="number" value={intervaloDias} onChange={e => setIntervaloDias(Number(e.target.value))} />
-                  </div>
+                  <div className="space-y-2"><Label>Parcelas</Label><Input type="number" value={numeroParcelas} onChange={e => setNumeroParcelas(Number(e.target.value))} /></div>
+                  <div className="space-y-2"><Label>Intervalo</Label><Input type="number" value={intervaloDias} onChange={e => setIntervaloDias(Number(e.target.value))} /></div>
                   <div className="space-y-2">
                     <Label>1º Vencimento</Label>
-                    <Input type="date" onChange={e => setDataPrimeiroVencimento(new Date(e.target.value))} />
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" className="w-full px-2 h-10"><CalendarIcon className="h-4 w-4" /></Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={dataPrimeiroVencimento} onSelect={setDataPrimeiroVencimento} /></PopoverContent>
+                    </Popover>
                   </div>
                 </div>
               )}
@@ -202,11 +237,10 @@ const PreencherContrato: React.FC = () => {
           <Card>
             <CardHeader><CardTitle>3. Tags Manuais</CardTitle></CardHeader>
             <CardContent className="space-y-4">
-              <p className="text-xs text-muted-foreground">Preencha as tags que não foram automáticas.</p>
               {tagsParaPreenchimentoManual.map(tag => (
                 <div key={tag} className="space-y-1">
                   <Label className="text-xs">{tag}</Label>
-                  <Input placeholder={`Valor para ${tag}`} onChange={e => setValoresTags(prev => ({...prev, [tag]: e.target.value}))} />
+                  <Input placeholder={`Valor para ${tag}`} value={valoresTags[tag] || ''} onChange={e => setValoresTags(prev => ({...prev, [tag]: e.target.value}))} />
                 </div>
               ))}
             </CardContent>
@@ -214,19 +248,31 @@ const PreencherContrato: React.FC = () => {
         </div>
 
         <Card className="h-fit sticky top-6">
-          <CardHeader><CardTitle className="flex justify-between">Prévia <Eye className="h-4 w-4"/></CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle className="flex justify-between items-center">
+              Prévia do Documento
+              <Button variant="ghost" size="sm" onClick={() => setPreviewOpen(true)}><Eye className="h-4 w-4 mr-2" /> Ampliar</Button>
+            </CardTitle>
+          </CardHeader>
           <CardContent>
-            <div className="border p-6 rounded bg-slate-50 min-h-[500px] text-sm leading-relaxed" 
+            <div className="border p-6 rounded bg-slate-50 min-h-[400px] text-sm overflow-y-auto max-h-[600px]" 
                  dangerouslySetInnerHTML={{ __html: renderConteudo() }} />
           </CardContent>
         </Card>
       </div>
 
       <div className="mt-6 flex justify-end space-x-4">
-        <Button variant="outline" onClick={() => navigate('/contratos')}>Cancelar</Button>
-        <Button variant="secondary" onClick={() => console.log("Salvar Rascunho")}><Save className="mr-2 h-4 w-4"/> Rascunho</Button>
-        <Button onClick={() => console.log("Gerar")}>Gerar e Enviar</Button>
+        <Button variant="secondary" onClick={() => handleSalvarContrato('rascunho')} disabled={isSubmitting}><Save className="mr-2 h-4 w-4"/> Rascunho</Button>
+        <Button onClick={() => handleSalvarContrato('pendente_assinatura')} disabled={isSubmitting}>Gerar e Enviar</Button>
       </div>
+
+      <ContratoPreviewDialog 
+        open={previewOpen} 
+        onOpenChange={setPreviewOpen} 
+        conteudoHtml={renderConteudo()} 
+        titulo={tituloDocumento} 
+        isHtml={true} 
+      />
     </LayoutPrincipal>
   );
 };
