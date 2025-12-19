@@ -47,6 +47,7 @@ const SelecaoPagamentoRenovacao: React.FC = () => {
     const { data, error } = await supabase
       .from('planos')
       .select('*')
+      .gt('preco_mensal', 0) // FILTRA PLANOS GRATUITOS (TRIAL)
       .order('preco_mensal', { ascending: true });
 
     if (error) {

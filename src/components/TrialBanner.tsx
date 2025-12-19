@@ -8,6 +8,9 @@ import { AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Plano } from '@/types/plano';
 
+import { Link } from 'react-router-dom';
+import { Button } from './ui/button';
+
 interface PlanoInfo extends Plano {}
 
 const TrialBanner: React.FC = () => {
@@ -70,15 +73,20 @@ const TrialBanner: React.FC = () => {
     let message: string;
 
     // Cenário: Plano gratuito (Preço zero)
-    message = `Aproveite seu teste gratuito com acesso completo até <span class="font-bold">${dataCobranca}</span>! ${planoInfo.descricao || 'O acesso será desativado após esta data.'}`;
+    message = `Aproveite seu teste gratuito com acesso completo até <span class="font-bold">${dataCobranca}</span>!`;
 
     return (
         <div className={cn(
-            "w-full bg-yellow-100 dark:bg-yellow-900/30 border-b border-yellow-500 p-3 text-sm",
+            "w-full bg-yellow-100 dark:bg-yellow-900/30 border-b border-yellow-500 p-2 text-sm",
             "flex items-center justify-center text-center text-yellow-800 dark:text-yellow-300"
         )}>
-            <AlertTriangle className="w-4 h-4 mr-2 flex-shrink-0" />
-            <p className="font-medium" dangerouslySetInnerHTML={{ __html: message }} />
+            <div className="flex items-center justify-center flex-wrap gap-2">
+                <AlertTriangle className="w-4 h-4 mr-2 flex-shrink-0" />
+                <p className="font-medium" dangerouslySetInnerHTML={{ __html: message }} />
+                <Button asChild size="sm" className="bg-primary hover:bg-primary/90 text-primary-foreground h-7">
+                    <Link to="/vendas">Atualizar Plano</Link>
+                </Button>
+            </div>
         </div>
     );
 };
