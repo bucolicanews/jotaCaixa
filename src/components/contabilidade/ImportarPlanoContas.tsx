@@ -261,7 +261,7 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
             <Input 
               id="csv-file" 
               type="file" 
-              accept=".csv,.json" 
+              accept=".csv,text/csv,.json,application/json" 
               onChange={handleFileChange} 
               className="flex-1"
               disabled={loading}

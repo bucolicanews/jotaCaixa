@@ -136,7 +136,7 @@ const ImportarModeloContrato: React.FC<ImportarModeloContratoProps> = ({ empresa
           <Input 
             id="modelo-file" 
             type="file" 
-            accept=".txt,.html" 
+            accept=".txt,text/plain,.html,text/html" 
             onChange={handleFileChange} 
             className="flex-1 w-full"
             disabled={loading}

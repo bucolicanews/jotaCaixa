@@ -411,7 +411,7 @@ const GerenciarHistoricos: React.FC = () => {
                     <Input 
                         id="import-file" 
                         type="file" 
-                        accept=".csv,.json" 
+                        accept=".csv,text/csv,.json,application/json" 
                         onChange={handleFileChange} 
                         className="w-full"
                         disabled={importLoading}

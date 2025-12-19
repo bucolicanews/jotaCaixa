@@ -209,7 +209,7 @@ const GerenciarFaltas: React.FC<GerenciarFaltasProps> = ({ usuarioId, onFaltaReg
               <div className="flex items-center space-x-4">
                 <Input
                   type="file"
-                  accept=".pdf,image/*"
+                  accept=".pdf,application/pdf,image/*"
                   onChange={(e) => setFile(e.target.files ? e.target.files[0] : null)}
                   className="flex-1"
                   disabled={isSubmitting || isUploading}

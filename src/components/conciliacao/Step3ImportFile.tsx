@@ -19,7 +19,7 @@ const Step3ImportFile: React.FC<Step3ImportFileProps> = ({ file, loading, onFile
       <CardContent className="flex items-center space-x-2">
         <Input 
           type="file" 
-          accept=".csv" 
+          accept=".csv,text/csv" 
           onChange={(e) => onFileChange(e.target.files?.[0] || null)} 
           className="flex-1" 
         />

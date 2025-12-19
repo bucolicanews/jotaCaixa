@@ -173,7 +173,7 @@ const FormNovoTicket: React.FC<FormNovoTicketProps> = ({ onSaveComplete }) => {
             />
             <FormItem>
                 <FormLabel>Anexo (Opcional)</FormLabel>
-                <Input type="file" onChange={handleFileChange} disabled={loading} />
+                <Input type="file" onChange={handleFileChange} disabled={loading} accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.csv,text/plain,.zip,.rar" />
                 {anexoFile && <p className="text-xs text-muted-foreground">Arquivo: {anexoFile.name}</p>}
             </FormItem>
         </div>

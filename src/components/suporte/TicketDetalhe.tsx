@@ -450,7 +450,7 @@ const TicketDetalhe: React.FC<TicketDetalheProps> = ({ ticket, onClose, onUpdate
                         disabled={loadingAcao || isReplyDisabled}
                     />
                     <div className="flex items-center justify-between mt-2">
-                        <Input type="file" onChange={handleFileChange} disabled={loadingAcao || isReplyDisabled} className="w-1/2" />
+                        <Input type="file" onChange={handleFileChange} disabled={loadingAcao || isReplyDisabled} className="w-1/2" accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.csv,text/plain,.zip,.rar" />
                         <Button 
                             onClick={handleSendMensagem} 
                             disabled={loadingAcao || isReplyDisabled || (!novaMensagem.trim() && !anexoFile)}

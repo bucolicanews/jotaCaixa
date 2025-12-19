@@ -237,7 +237,7 @@ const FormConfiguracaoTabelasPadrao: React.FC<FormConfiguracaoTabelasPadraoProps
               </div>
               <Input
                 type="file"
-                accept=".csv,.json"
+                accept=".csv,text/csv,.json,application/json"
                 onChange={(e) => {
                   const file = e.target.files?.[0];
                   if (file) handleFileLoad(file, 'plan');
@@ -269,7 +269,7 @@ const FormConfiguracaoTabelasPadrao: React.FC<FormConfiguracaoTabelasPadraoProps
               </div>
               <Input
                 type="file"
-                accept=".csv,.json"
+                accept=".csv,text/csv,.json,application/json"
                 onChange={(e) => {
                   const file = e.target.files?.[0];
                   if (file) handleFileLoad(file, 'history');
