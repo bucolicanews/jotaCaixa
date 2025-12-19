@@ -42,22 +42,18 @@ const TrialButton: React.FC<TrialButtonProps> = ({ clienteProfile, onTrialActiva
     const dataFimAcesso = addDays(dataAtual, days).toISOString();
     
     try {
-        // 3. Atualizar o perfil do cliente para iniciar o trial
-        const { error: updateError } = await supabase
-            .from('tbl_clientes')
-            .update({
-                aprovado: true, // Aprova o cliente
-                plano_id: planoTrial.id,
-                data_fim_acesso: dataFimAcesso,
-                permissoes: PERMISSOES_TRIAL_COMPLETO, // APLICA PERMISSÕES TOTAIS
-                tipo_cliente: planoTrial.tipo_cliente,
-            })
-            .eq('id', clienteProfile.id);
+        // 3. Chamar a função RPC para ativar a assinatura (modo trial)
+        // Isso é mais seguro e contorna problemas de RLS
+        const { error: rpcError } = await supabase.rpc('activate_subscription', {
+            p_cliente_id: clienteProfile.id,
+            p_plano_id: planoTrial.id,
+            p_id_conta_resultado: null // Não há pagamento, então não há conta de resultado
+        });
 
-        if (updateError) throw updateError;
+        if (rpcError) throw rpcError;
         
         showSuccess(`Trial de ${days} dias ativado com acesso completo!`);
-        onTrialActivated(); // Força o refetch da sessão no LayoutPrincipal
+        await onTrialActivated(); // Força o refetch da sessão no LayoutPrincipal e AGUARDA
         navigate('/painel', { replace: true });
 
     } catch (error: any) {
