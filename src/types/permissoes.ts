@@ -1,0 +1,27 @@
+export type PermissoesUsuario = {
+  dre: boolean;
+  razao: boolean;
+  bancos: boolean;
+  balanco: boolean;
+  exportar: boolean;
+  extratos: boolean;
+  importar: boolean;
+  balancete: boolean;
+  contratos: boolean;
+  historicos: boolean;
+  relatorios: boolean;
+  conciliacao: boolean;
+  folha_ponto: boolean;
+  lancamentos: boolean;
+  contas_pagar: boolean;
+  plano_contas: boolean;
+  configuracoes: boolean;
+  contas_receber: boolean;
+  gestao_suporte: boolean;
+  ponto_eletronico: boolean;
+  cadastrar_usuarios: boolean;
+  gerenciar_clientes: boolean;
+  contas_patrimoniais: boolean;
+  documentos_societarios: boolean;
+  visualizar_proprio_ponto: boolean;
+};

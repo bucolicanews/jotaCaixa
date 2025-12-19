@@ -60,6 +60,8 @@ import Lancamentos from "./pages/Lancamentos"; // NOVO IMPORT
 import GerenciarDescricoesExtrato from "./pages/GerenciarDescricoesExtrato";
 import GerenciarIdentificadoresExtrato from "./pages/GerenciarIdentificadoresExtrato";
 import Mapeamento from "./pages/Mapeamento";
+import ProtectedRoute from "@/components/ProtectedRoute";
+
 
 const queryClient = new QueryClient();
 
@@ -250,63 +252,64 @@ const App = () => (
             {/* Rotas de Auth (Não usam layout) */}
             <Route path="/login" element={<Login />} />
             <Route path="/atualizar-senha" element={<AtualizarSenha />} />
+            <Route path="/painel" element={<Painel />} />
             
             {/* Rotas de Contrato (Não usam layout) */}
             <Route path="/assinar-contrato/:id" element={<AssinarContrato />} />
             <Route path="/contrato-link/:id" element={<ContratoLinkPage />} />
             
             {/* Rotas Autenticadas (Protegidas pelo LayoutPrincipal) */}
-            <Route path="/painel" element={<Painel />} />
-            <Route path="/contas-pagar" element={<ContasPagar />} />
-            <Route path="/contas-receber" element={<ContasReceber />} />
-            <Route path="/bancos" element={<Bancos />} />
-            <Route path="/contas-patrimoniais" element={<ContasPatrimoniais />} />
-            <Route path="/conciliacao" element={<Conciliacao />} />
-            <Route path="/importar" element={<Importar />} />
-            <Route path="/exportar" element={<Exportar />} />
-            <Route path="/relatorios" element={<Relatorios />} />
-            <Route path="/relatorios/fluxo-caixa" element={<FluxoCaixa />} />
-            <Route path="/relatorios/balanco" element={<BalancoPatrimonial />} />
-            <Route path="/relatorios/dre" element={<DRE />} />
-            <Route path="/relatorios/balancete" element={<Balancete />} />
-            <Route path="/relatorios/razao" element={<Razao />} />
-            <Route path="/relatorios/lancamentos-nao-mapeados" element={<LancamentosNaoMapeados />} />
-            <Route path="/configuracoes" element={<Configuracoes />} />
-            <Route path="/planos" element={<GerenciarPlanos />} />
-            <Route path="/plano-contas" element={<PlanoContasPage />} />
-            <Route path="/gerenciar-usuarios" element={<GerenciarUsuarios />} />
-            <Route path="/cadastrar-empresa" element={<CadastrarEmpresa />} />
-            <Route path="/ponto-eletronico" element={<PontoEletronico />} />
+           
+            <Route path="/contas-pagar" element={<ProtectedRoute permissionKey="contas_pagar"><ContasPagar /></ProtectedRoute>} />
+            <Route path="/contas-receber" element={<ProtectedRoute permissionKey="contas_receber"><ContasReceber /></ProtectedRoute>} />
+            <Route path="/bancos" element={<ProtectedRoute permissionKey="bancos"><Bancos /></ProtectedRoute>} />
+            <Route path="/contas-patrimoniais" element={<ProtectedRoute permissionKey="contas_patrimoniais"><ContasPatrimoniais /></ProtectedRoute>} />
+            <Route path="/conciliacao" element={<ProtectedRoute permissionKey="conciliacao"><Conciliacao /></ProtectedRoute>} />
+            <Route path="/importar" element={<ProtectedRoute permissionKey="importar"><Importar /></ProtectedRoute>} />
+            <Route path="/exportar" element={<ProtectedRoute permissionKey="exportar"><Exportar /></ProtectedRoute>} />
+            <Route path="/relatorios" element={<ProtectedRoute permissionKey="relatorios"><Relatorios /></ProtectedRoute>} />
+            <Route path="/relatorios/fluxo-caixa" element={<ProtectedRoute permissionKey="relatorios"><FluxoCaixa /></ProtectedRoute>} />
+            <Route path="/relatorios/balanco" element={<ProtectedRoute permissionKey="balanco"><BalancoPatrimonial /></ProtectedRoute>} />
+            <Route path="/relatorios/dre" element={<ProtectedRoute permissionKey="dre"><DRE /></ProtectedRoute>} />
+            <Route path="/relatorios/balancete" element={<ProtectedRoute permissionKey="balancete"><Balancete /></ProtectedRoute>} />
+            <Route path="/relatorios/razao" element={<ProtectedRoute permissionKey="razao"><Razao /></ProtectedRoute>} />
+            <Route path="/relatorios/lancamentos-nao-mapeados" element={<ProtectedRoute permissionKey="lancamentos"><LancamentosNaoMapeados /></ProtectedRoute>} />
+            <Route path="/configuracoes" element={<ProtectedRoute permissionKey="configuracoes"><Configuracoes /></ProtectedRoute>} />
+            <Route path="/planos" element={<ProtectedRoute permissionKey=""><GerenciarPlanos /></ProtectedRoute>} />
+            <Route path="/plano-contas" element={<ProtectedRoute permissionKey="plano_contas"><PlanoContasPage /></ProtectedRoute>} />
+            <Route path="/gerenciar-usuarios" element={<ProtectedRoute permissionKey="cadastrar_usuarios"><GerenciarUsuarios /></ProtectedRoute>} />
+            <Route path="/cadastrar-empresa" element={<ProtectedRoute permissionKey="gerenciar_clientes"><CadastrarEmpresa /></ProtectedRoute>} />
+            <Route path="/ponto-eletronico" element={<ProtectedRoute permissionKey="ponto_eletronico"><PontoEletronico /></ProtectedRoute>} />
             <Route path="/perfil" element={<Perfil />} />
-            <Route path="/folha-ponto" element={<FolhaPonto />} />
-            <Route path="/contratos" element={<Contratos />} />
-            <Route path="/contratos/tags" element={<GerenciarTags />} />
-            <Route path="/contratos/modelos" element={<GerenciarModelos />} />
-            <Route path="/contratos/novo" element={<NovoContrato />} />
-            <Route path="/contratos/preencher/:modeloId" element={<PreencherContrato />} />
+            <Route path="/folha-ponto" element={<ProtectedRoute permissionKey="folha_ponto"><FolhaPonto /></ProtectedRoute>} />
+            <Route path="/contratos" element={<ProtectedRoute permissionKey="contratos"><Contratos /></ProtectedRoute>} />
+            <Route path="/contratos/tags" element={<ProtectedRoute permissionKey="contratos"><GerenciarTags /></ProtectedRoute>} />
+            <Route path="/contratos/modelos" element={<ProtectedRoute permissionKey="contratos"><GerenciarModelos /></ProtectedRoute>} />
+            <Route path="/contratos/novo" element={<ProtectedRoute permissionKey="contratos"><NovoContrato /></ProtectedRoute>} />
+            <Route path="/contratos/preencher/:modeloId" element={<ProtectedRoute permissionKey="contratos"><PreencherContrato /></ProtectedRoute>} />
             <Route path="/minha-assinatura" element={<MinhaAssinatura />} />
-            <Route path="/renovacao" element={<SelecaoPagamentoRenovacao />} />
-            <Route path="/historicos" element={<GerenciarHistoricos />} />
+            <Route path="/renovacao" element={<ProtectedRoute permissionKey=""><SelecaoPagamentoRenovacao /></ProtectedRoute>} />
+            <Route path="/historicos" element={<ProtectedRoute permissionKey="historicos"><GerenciarHistoricos /></ProtectedRoute>} />
             <Route path="/clientes" element={<ClientesPage />} />
             
             {/* NOVAS ROTAS: Documentos Societários */}
-            <Route path="/documentos-societarios" element={<DocumentosSocietarios />} />
-            <Route path="/documentos-societarios/modelos" element={<GerenciarModelosSocietarios />} />
-            <Route path="/documentos-societarios/blocos" element={<GerenciarBlocosSocietarios />} />
-            <Route path="/documentos-societarios/gerar/:modeloId" element={<GerarDocumentoSocietario />} />
-            
+            <Route path="/documentos-societarios" element={<ProtectedRoute permissionKey="documentos_societarios"><DocumentosSocietarios /></ProtectedRoute>} />
+            <Route path="/documentos-societarios/modelos" element={<ProtectedRoute permissionKey="documentos_societarios"><GerenciarModelosSocietarios /></ProtectedRoute>} />
+            <Route path="/documentos-societarios/blocos" element={<ProtectedRoute permissionKey="documentos_societarios"><GerenciarBlocosSocietarios /></ProtectedRoute>} />
+            <Route path="/documentos-societarios/gerar/:modeloId" element={<ProtectedRoute permissionKey="documentos_societarios"><GerarDocumentoSocietario /></ProtectedRoute>} />
+
             {/* NOVAS ROTAS: Suporte */}
-            <Route path="/suporte" element={<Suporte />} />
-            <Route path="/admin/suporte" element={<AdminSuporte />} />
+            <Route path="/suporte" element={<ProtectedRoute permissionKey="gestao_suporte"><Suporte /></ProtectedRoute>} />
+            <Route path="/admin/suporte" element={<ProtectedRoute permissionKey="gestao_suporte"><AdminSuporte /></ProtectedRoute>} />
             
             {/* NOVA ROTA: Extratos */}
-            <Route path="/extratos" element={<Extratos />} />
-            <Route path="/banco/descricoes" element={<GerenciarDescricoesExtrato />} />
-            <Route path="/banco/identificadores" element={<GerenciarIdentificadoresExtrato />} />
-            <Route path="/mapeamento" element={<Mapeamento />} />
+            <Route path="/extratos" element={<ProtectedRoute permissionKey="extratos"><Extratos /></ProtectedRoute>} />
+            <Route path="/banco/descricoes" element={<ProtectedRoute permissionKey="extratos"><GerenciarDescricoesExtrato /></ProtectedRoute>} />
+            <Route path="/banco/identificadores" element={<ProtectedRoute permissionKey="extratos"><GerenciarIdentificadoresExtrato /></ProtectedRoute>} />
+            <Route path="/mapeamento" element={<ProtectedRoute permissionKey="conciliacao"><Mapeamento /></ProtectedRoute>} />
             
             {/* NOVA ROTA: Lançamentos Manuais */}
-            <Route path="/lancamentos" element={<Lancamentos />} />
+            <Route path="/lancamentos" element={<ProtectedRoute permissionKey="lancamentos"><Lancamentos /></ProtectedRoute>} />
 
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />

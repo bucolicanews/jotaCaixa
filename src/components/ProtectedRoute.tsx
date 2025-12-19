@@ -1,51 +1,29 @@
-import React, { ReactNode } from 'react';
+import React, { ReactNode, useMemo } from 'react';
 import { useSessao } from '@/hooks/use-sessao';
-import { useNavigate } from 'react-router-dom';
+import { Navigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
-import { AdminUsuarioProfile, ClienteProfile, UsuarioProfile } from '@/types/usuario';
+import { AdminUsuarioProfile, UsuarioProfile } from '@/types/usuario';
 
 interface ProtectedRouteProps {
-  permissionKey: string;
+  permissionKey?: string; // Tornar opcional
   children: ReactNode;
 }
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ permissionKey, children }) => {
-  const { role, perfil, carregando } = useSessao();
-  const navigate = useNavigate();
+  const { role, perfil, carregando, usuario } = useSessao();
 
-  React.useEffect(() => {
-    if (carregando) {
-      return; // Aguarda o carregamento da sessão
+  const permissoes = useMemo<Record<string, boolean> | null>(() => {
+    if (role !== 'Usuario' || !perfil) return null;
+
+    // Usuario do Admin
+    if ('admin_id' in perfil) {
+      return (perfil as AdminUsuarioProfile).permissoes || {};
     }
 
-    // Admin tem acesso a tudo
-    if (role === 'Admin') {
-      return;
-    }
+    // Usuario de Cliente
+    return (perfil as UsuarioProfile).permissoes || {};
+  }, [role, perfil]);
 
-    const getPermissoes = (): Record<string, boolean> => {
-        if (role === 'Usuario' && perfil && ('admin_id' in perfil)) {
-            return (perfil as AdminUsuarioProfile)?.permissoes || {};
-        }
-        if (role === 'Cliente') {
-            return (perfil as ClienteProfile)?.permissoes || {};
-        }
-        if (role === 'Usuario') {
-            return (perfil as UsuarioProfile)?.permissoes || {};
-        }
-        return {};
-    };
-
-    const permissoes = getPermissoes();
-    
-    if (!permissoes[permissionKey]) {
-      // Se não tiver a permissão, redireciona para o painel
-      navigate('/painel', { replace: true });
-    }
-
-  }, [carregando, role, perfil, permissionKey, navigate]);
-
-  // Enquanto carrega, exibe um loader
   if (carregando) {
     return (
       <div className="flex justify-center items-center h-screen">
@@ -54,33 +32,29 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ permissionKey, children
     );
   }
 
-  // Se tiver permissão (passou pelo useEffect), renderiza o componente filho
-  // A lógica do useEffect já terá redirecionado se necessário
-  
-  const getPermissoes = (): Record<string, boolean> => {
-    if (role === 'Admin') return { [permissionKey]: true }; // Admin sempre tem permissão
-    if (role === 'Usuario' && perfil && ('admin_id' in perfil)) {
-        return (perfil as AdminUsuarioProfile)?.permissoes || {};
-    }
-    if (role === 'Cliente') {
-        return (perfil as ClienteProfile)?.permissoes || {};
-    }
-    if (role === 'Usuario') {
-        return (perfil as UsuarioProfile)?.permissoes || {};
-    }
-    return {};
-  };
+  // Se não houver usuário logado, redireciona para o login
+  if (!usuario) {
+    return <Navigate to="/login" replace />;
+  }
 
-  if (getPermissoes()[permissionKey]) {
+  // 🔓 Admin e Cliente passam direto
+  if (role === 'Admin' || role === 'Cliente') {
     return <>{children}</>;
   }
 
-  // Renderiza um loader enquanto o redirecionamento do useEffect acontece
-  return (
-    <div className="flex justify-center items-center h-screen">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-    </div>
-  );
+  // 🔐 Lógica para Role 'Usuario'
+  if (role === 'Usuario') {
+    // Se não for necessária uma permissão específica, permite o acesso
+    if (!permissionKey) {
+      return <>{children}</>;
+    }
+    // Se for necessária uma permissão, verifica se o usuário a possui
+    if (!permissoes || !permissoes[permissionKey]) {
+      return <Navigate to="/painel" replace />;
+    }
+  }
+
+  return <>{children}</>;
 };
 
 export default ProtectedRoute;
