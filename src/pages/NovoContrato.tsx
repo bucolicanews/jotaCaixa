@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader2, FileTextIcon, PlusCircle } from 'lucide-react';
@@ -10,31 +10,49 @@ import { Button } from '@/components/ui/button';
 import { Link, useNavigate } from 'react-router-dom';
 import { useSessao } from '@/hooks/use-sessao';
 
+// Definição local caso a tipagem não esteja exportada corretamente
+interface AdminUsuarioProfile extends UsuarioProfile {
+  admin_id?: string;
+  cliente_id?: string;
+}
+
 const NovoContrato: React.FC = () => {
   const { role, perfil, usuario, carregando: carregandoSessao } = useSessao();
   const navigate = useNavigate();
   const [modelos, setModelos] = useState<ContratoModelo[]>([]);
   const [carregandoModelos, setCarregandoModelos] = useState(true);
 
-  const isCliente = role === 'Cliente';
   const isAdmin = role === 'Admin';
-  
-  // Memoize o ownerId para evitar recálculos desnecessários
-  const getOwnerId = useCallback(() => {
-    if (isAdmin) return usuario?.id || null;
-    if (isCliente) return (perfil as ClienteProfile)?.id;
-    if (role === 'Usuario') return (perfil as UsuarioProfile)?.cliente_id;
-    return null;
-  }, [isAdmin, isCliente, role, usuario, perfil]);
+  const isCliente = role === 'Cliente';
 
-  const ownerId = getOwnerId();
-
-  const buscarModelos = useCallback(async () => {
-    // Se a sessão ainda carrega, não faz nada
-    if (carregandoSessao) return;
+  /**
+   * 1. Cálculo do OwnerID com useMemo.
+   * Isso evita que a variável seja recriada em todo render, 
+   * impedindo o loop infinito no useEffect.
+   * As dependências foram trocadas para valores primitivos para garantir a estabilidade.
+   */
+  const ownerId = useMemo(() => {
+    if (carregandoSessao) return null;
     
-    // Admin pode ver modelos globais mesmo sem ownerId definido no momento
-    if (!role) return;
+    if (isAdmin) return usuario?.id || null;
+    
+    if (isCliente) return (perfil as ClienteProfile)?.id || null;
+    
+    if (role === 'Usuario') {
+      const user = perfil as AdminUsuarioProfile;
+      // Tenta admin_id (vinculado a um escritório) ou cliente_id
+      return user?.admin_id || user?.cliente_id || null;
+    }
+    
+    return null;
+  }, [carregandoSessao, isAdmin, isCliente, role, usuario, perfil]);
+
+  /**
+   * 2. Função de busca memorizada.
+   */
+  const buscarModelos = useCallback(async () => {
+    // Se a sessão ainda carrega ou não tem role, não faz nada
+    if (carregandoSessao || !role) return;
 
     setCarregandoModelos(true);
     
@@ -44,21 +62,12 @@ const NovoContrato: React.FC = () => {
         .select('*')
         .order('titulo', { ascending: true });
         
-      if (isAdmin) {
-        // Admin: Vê modelos da sua "empresa" OU modelos globais (empresa_id is null)
-        if (ownerId) {
-          query = query.or(`empresa_id.eq.${ownerId},empresa_id.is.null`);
-        } else {
-          // Fallback caso o ID do admin ainda não esteja disponível
-          query = query.is('empresa_id', null);
-        }
-      } else if (isCliente || role === 'Usuario') {
-        if (ownerId) {
-          query = query.or(`empresa_id.eq.${ownerId},empresa_id.is.null`);
-        } else {
-          // Se for cliente/usuário e não tiver ownerId, só vê globais
-          query = query.is('empresa_id', null);
-        }
+      // Filtra por empresa_id (ID do Admin/Dono) ou modelos globais (nulos)
+      if (ownerId) {
+        query = query.or(`empresa_id.eq.${ownerId},empresa_id.is.null`);
+      } else {
+        // Se não houver ID de dono detectado, mostra apenas globais
+        query = query.is('empresa_id', null);
       }
 
       const { data, error } = await query;
@@ -72,15 +81,17 @@ const NovoContrato: React.FC = () => {
     } finally {
       setCarregandoModelos(false);
     }
-  }, [carregandoSessao, role, isAdmin, isCliente, ownerId]);
+  }, [carregandoSessao, role, ownerId]);
 
-  // Efeito principal de busca
+  /**
+   * 3. Efeito principal de busca.
+   */
   useEffect(() => {
     buscarModelos();
   }, [buscarModelos]);
   
   const handleSelectModel = (modeloId: string) => {
-      navigate(`/contratos/preencher/${modeloId}`);
+    navigate(`/contratos/preencher/${modeloId}`);
   };
 
   // Renderização de carregamento
@@ -95,7 +106,7 @@ const NovoContrato: React.FC = () => {
     );
   }
   
-  // Verificação de permissão (após carregar a sessão)
+  // Verificação de permissão
   if (!isAdmin && !isCliente && role !== 'Usuario') {
     return (
       <LayoutPrincipal>
@@ -121,7 +132,9 @@ const NovoContrato: React.FC = () => {
         <CardHeader>
           <CardTitle className="text-xl">1. Selecione um Modelo</CardTitle>
           <CardDescription>
-            {isAdmin ? 'Como administrador, você visualiza modelos globais e da sua conta.' : 'Escolha um modelo de contrato para começar.'}
+            {isAdmin 
+              ? 'Como administrador, você visualiza modelos globais e da sua conta.' 
+              : 'Escolha um modelo de contrato para começar.'}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -154,7 +167,7 @@ const NovoContrato: React.FC = () => {
                         size="sm" 
                         className="w-full mt-auto"
                         onClick={(e) => {
-                          e.stopPropagation(); // Evita clique duplo
+                          e.stopPropagation();
                           handleSelectModel(modelo.id);
                         }}
                     >
