@@ -33,6 +33,7 @@ import { Calendar } from '../ui/calendar';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { Plano } from '@/types/plano';
+import { fetchAddressByCep } from '@/utils/cep-lookup'; // IMPORTANDO UTILITÁRIO
 
 const textOptional = z.string().optional().or(z.literal(''));
 const urlSchema = z.string().url('URL inválida.').optional().or(z.literal(''));
@@ -184,6 +185,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
   const cepValue = watch('cep');
   const isAddressLoading = watch('endereco') === 'Buscando...';
   
+  // --- LÓGICA CENTRALIZADA DE BUSCA DE CEP ---
   const handleCepLookup = useCallback(async (cep: string) => {
     const cleanCep = cep.replace(/\D/g, '');
 
@@ -191,38 +193,25 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
       return;
     }
     
-    // Bloqueia a edição dos campos enquanto busca
+    // 1. Define estado de carregamento
     setValue('endereco', 'Buscando...');
     setValue('bairro', 'Buscando...');
     setValue('cidade', 'Buscando...');
     setValue('estado', 'Buscando...');
     
-    try {
-      const response = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
-      const data = await response.json();
-
-      if (data.erro) {
-        showError('CEP não encontrado.');
+    const address = await fetchAddressByCep(cleanCep); // Usa o utilitário
+    
+    if (address) {
+        setValue('endereco', address.logradouro || '');
+        setValue('bairro', address.bairro || '');
+        setValue('cidade', address.localidade || '');
+        setValue('estado', address.uf || '');
+    } else {
+        // Limpa se falhar
         setValue('endereco', '');
         setValue('bairro', '');
         setValue('cidade', '');
         setValue('estado', '');
-        return;
-      }
-
-      // Preenche os campos
-      setValue('endereco', data.logradouro || '');
-      setValue('bairro', data.bairro || '');
-      setValue('cidade', data.localidade || '');
-      setValue('estado', data.uf || '');
-      
-    } catch (error) {
-      console.error('Erro ao consultar ViaCEP:', error);
-      showError('Falha ao consultar o CEP.');
-      setValue('endereco', '');
-      setValue('bairro', '');
-      setValue('cidade', '');
-      setValue('estado', '');
     }
   }, [setValue]);
   
@@ -240,6 +229,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
       setValue('estado', '');
     }
   }, [cepValue, handleCepLookup, setValue]);
+  // --- FIM LÓGICA CENTRALIZADA DE BUSCA DE CEP ---
 
 
   useEffect(() => {

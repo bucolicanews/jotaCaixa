@@ -2,7 +2,7 @@ import React, { useCallback, useEffect } from 'react';
 import { Control, useFormContext } from 'react-hook-form';
 import { Separator } from '@/components/ui/separator';
 import { TaggedFormField } from '../usuario-forms/TaggedFormField'; // Importando o componente TaggedFormField
-import { showError } from '@/utils/toast';
+import { fetchAddressByCep } from '@/utils/cep-lookup'; // IMPORTANDO UTILITÁRIO
 
 interface FormEnderecoProps {
   control: Control<any>;
@@ -16,45 +16,33 @@ const FormEndereco: React.FC<FormEnderecoProps> = ({ control, clienteId, isSubmi
   const { watch, setValue } = useFormContext();
   const cepValue = watch('cep');
   
-  const fetchAddressByCep = useCallback(async (cep: string) => {
+  // --- LÓGICA CENTRALIZADA DE BUSCA DE CEP ---
+  const handleCepLookup = useCallback(async (cep: string) => {
     const cleanCep = cep.replace(/\D/g, '');
 
     if (cleanCep.length !== 8) {
       return;
     }
     
-    // Bloqueia a edição dos campos enquanto busca
+    // 1. Define estado de carregamento
     setValue('endereco', 'Buscando...');
     setValue('bairro', 'Buscando...');
     setValue('cidade', 'Buscando...');
     setValue('estado', 'Buscando...');
     
-    try {
-      const response = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
-      const data = await response.json();
+    const address = await fetchAddressByCep(cleanCep); // Usa o utilitário
 
-      if (data.erro) {
-        showError('CEP não encontrado.');
+    if (address) {
+        setValue('endereco', address.logradouro || '');
+        setValue('bairro', address.bairro || '');
+        setValue('cidade', address.localidade || '');
+        setValue('estado', address.uf || '');
+    } else {
+        // Limpa se falhar
         setValue('endereco', '');
         setValue('bairro', '');
         setValue('cidade', '');
         setValue('estado', '');
-        return;
-      }
-
-      // Preenche os campos
-      setValue('endereco', data.logradouro || '');
-      setValue('bairro', data.bairro || '');
-      setValue('cidade', data.localidade || '');
-      setValue('estado', data.uf || '');
-      
-    } catch (error) {
-      console.error('Erro ao consultar ViaCEP:', error);
-      showError('Falha ao consultar o CEP.');
-      setValue('endereco', '');
-      setValue('bairro', '');
-      setValue('cidade', '');
-      setValue('estado', '');
     }
   }, [setValue]);
   
@@ -62,11 +50,12 @@ const FormEndereco: React.FC<FormEnderecoProps> = ({ control, clienteId, isSubmi
   useEffect(() => {
     const cleanCep = cepValue?.replace(/\D/g, '');
     if (cleanCep && cleanCep.length === 8) {
-      fetchAddressByCep(cleanCep);
+      handleCepLookup(cleanCep);
     }
-  }, [cepValue, fetchAddressByCep]);
+  }, [cepValue, handleCepLookup]);
   
   const isAddressLoading = watch('endereco') === 'Buscando...';
+  // --- FIM LÓGICA CENTRALIZADA DE BUSCA DE CEP ---
 
   return (
     <div className="space-y-4">
