@@ -15,9 +15,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useBulkTagManager } from '@/hooks/use-bulk-tag-manager';
 import FormIdentificacao from '../cliente-forms/FormIdentificacao';
 import FormContato from '../cliente-forms/FormContato';
+import { fetchAddressByCep } from '@/utils/cep-lookup';
 import FormEndereco from '../cliente-forms/FormEndereco';
 
 const textOptional = z.string().optional().or(z.literal(''));
+
 
 const formSchema = z.object({
   nome: z.string().min(1, 'O nome é obrigatório.'),
@@ -86,7 +88,6 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
   
   const { watch, setValue } = form;
   const cepValue = watch('cep');
-  const isAddressLoading = watch('endereco') === 'Buscando...';
   
   const handleCepLookup = useCallback(async (cep: string) => {
     const cleanCep = cep.replace(/\D/g, '');
@@ -95,34 +96,20 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
       return;
     }
     
-    // Bloqueia a edição dos campos enquanto busca
     setValue('endereco', 'Buscando...');
     setValue('bairro', 'Buscando...');
     setValue('cidade', 'Buscando...');
     setValue('estado', 'Buscando...');
     
-    try {
-      const response = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
-      const data = await response.json();
-
-      if (data.erro) {
-        showError('CEP não encontrado.');
-        setValue('endereco', '');
-        setValue('bairro', '');
-        setValue('cidade', '');
-        setValue('estado', '');
-        return;
-      }
-
-      // Preenche os campos
-      setValue('endereco', data.logradouro || '');
-      setValue('bairro', data.bairro || '');
-      setValue('cidade', data.localidade || '');
-      setValue('estado', data.uf || '');
-      
-    } catch (error) {
-      console.error('Erro ao consultar ViaCEP:', error);
-      showError('Falha ao consultar o CEP.');
+    const address = await fetchAddressByCep(cleanCep);
+    
+    if (address) {
+      setValue('endereco', address.logradouro || '');
+      setValue('bairro', address.bairro || '');
+      setValue('cidade', address.localidade || '');
+      setValue('estado', address.uf || '');
+    } else {
+      // Limpa os campos se o endereço não for encontrado
       setValue('endereco', '');
       setValue('bairro', '');
       setValue('cidade', '');
@@ -130,20 +117,11 @@ const FormCliente: React.FC<FormClienteProps> = ({ clienteInicial, onSaveComplet
     }
   }, [setValue]);
   
-  // Monitora a mudança do CEP para buscar o endereço
   useEffect(() => {
-    const cleanCep = cepValue?.replace(/\D/g, '');
-    
-    if (cleanCep && cleanCep.length === 8) {
-      handleCepLookup(cleanCep);
-    } else if (cleanCep && cleanCep.length > 0 && cleanCep.length < 8) {
-      // Limpa os campos de endereço se o CEP estiver incompleto
-      setValue('endereco', '');
-      setValue('bairro', '');
-      setValue('cidade', '');
-      setValue('estado', '');
+    if (cepValue) {
+      handleCepLookup(cepValue);
     }
-  }, [cepValue, handleCepLookup, setValue]);
+  }, [cepValue, handleCepLookup]);
   
   const handleTagToggle = useCallback(() => {
       refetchStatus();

@@ -50,27 +50,23 @@ const FormCapitalSocial: React.FC<FormCapitalSocialProps> = ({ onSaveComplete })
     setLoadingData(true);
     
     try {
-      // 1. Buscar Conta de Saldo (Caixa)
+      // 1. Buscar Conta de Saldo (Caixa) - Busca a conta de saldo que referencia a conta contábil padrão 1.1.01.0001
       const { data: caixaData } = await supabase
         .from('saldo_contas')
         .select(`*, plano_contas ( id, Conta, Descricao, is_caixa )`)
         .eq('proprietario_id', usuario.id)
-        .eq('plano_contas.is_caixa', true)
+        .eq('plano_contas.Conta', '1.1.01.0001') // Busca pela conta contábil padrão
         .limit(1)
         .single();
       
       if (caixaData) setContaCaixa(caixaData as SaldoContaDetalhada);
       
-      // 2. Buscar Conta de Capital Social (Plano de Contas)
-      const plCode = configMap['Patrimonio Liquido'] || '3';
+      // 2. Buscar Conta de Capital Social (Plano de Contas) - Busca a conta contábil padrão 3.1.00.0001
       const { data: capitalData } = await supabase
         .from('plano_contas')
         .select('*')
         .eq('proprietario_id', usuario.id)
-        .eq('Analitica', 'Sim')
-        .eq('is_conta_patrimonial', true)
-        .like('Conta', `${plCode}.%`)
-        .ilike('Descricao', '%capital%')
+        .eq('Conta', '3.1.00.0001') // Busca pela conta contábil padrão
         .limit(1)
         .single();
         
@@ -172,7 +168,7 @@ const FormCapitalSocial: React.FC<FormCapitalSocialProps> = ({ onSaveComplete })
                         <AlertTriangle className="w-5 h-5 mr-2" /> Configuração Incompleta
                     </p>
                     <ul className="list-disc list-inside text-xs text-red-600 dark:text-red-400 mt-1">
-                        {!contaCaixa && <li>Conta de Caixa (1.1.01.0001) não encontrada ou não marcada como Caixa.</li>}
+                        {!contaCaixa && <li>Conta de Saldo (Caixa) não encontrada. Verifique se a conta contábil '1.1.01.0001' está marcada como Caixa e vinculada em Bancos/Caixas.</li>}
                         {!contaCapital && <li>Conta de Capital Social (3.1.00.0001) não encontrada ou não marcada como Patrimonial.</li>}
                         {contaCaixa && !contaCaixa.conta_contabil_id && <li>Conta de Saldo 'Caixa Inicial' não vinculada a uma conta contábil.</li>}
                     </ul>

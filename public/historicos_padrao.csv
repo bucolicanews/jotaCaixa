@@ -1,7 +1,7 @@
 Código;Descrição
-100;Pagamento de Salário
-200;Recebimento de Mensalidade
-300;Transferência entre Contas
-400;Lançamento de Capital Social
-500;Pagamento de Fornecedor
-600;Recebimento de Cliente
+100;Venda de Mercadorias/Serviços
+200;Recebimento de Clientes
+300;Pagamento de Fornecedores
+400;Integralização de Capital Social
+500;Pagamento de Despesas Administrativas
+600;Transferência entre Contas

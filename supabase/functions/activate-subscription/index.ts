@@ -31,7 +31,7 @@ serve(async (req: Request) => {
       { auth: { persistSession: false } }
     );
     
-    // --- NOVO: 1. Importar Plano de Contas e Históricos Padrão ---
+    // --- 1. Importar Plano de Contas e Históricos Padrão ---
     console.log(`LOG: Importing default tables for client: ${clienteId}`);
     const { data: importData, error: importError } = await supabaseService.rpc('import_default_tables', {
         p_proprietario_id: clienteId,
@@ -46,7 +46,7 @@ serve(async (req: Request) => {
         });
     }
     
-    // --- NOVO: 2. Mapear Configurações Contábeis Padrão ---
+    // --- 2. Mapear Configurações Contábeis Padrão ---
     console.log(`LOG: Mapping default configs for client: ${clienteId}`);
     const { data: mapData, error: mapError } = await supabaseService.rpc('map_default_configs', {
         p_proprietario_id: clienteId,
@@ -78,7 +78,7 @@ serve(async (req: Request) => {
     
     console.log(`LOG: id_conta_resultado encontrado para RPC: ${idContaResultado}`);
 
-    // 4. Chamar a função RPC (passando o novo parâmetro)
+    // 4. Chamar a função RPC para ativar a assinatura (que também atualiza o setupStatus)
     const { error: rpcError } = await supabaseService.rpc('activate_subscription', {
       p_cliente_id: clienteId,
       p_plano_id: planoId,
