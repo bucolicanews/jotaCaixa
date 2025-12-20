@@ -25,19 +25,19 @@ DECLARE
     v_historico_pagamento_id UUID;
 BEGIN
     -- 1. Busca os IDs das Contas Analíticas Padrão
-    SELECT id INTO v_conta_caixa_id FROM public.plano_contas WHERE proprietario_id = p_proprietario_id AND conta = '1.1.01.0001' LIMIT 1;
-    SELECT id INTO v_conta_capital_id FROM public.plano_contas WHERE proprietario_id = p_proprietario_id AND conta = '3.1.00.0001' LIMIT 1;
-    SELECT id INTO v_conta_clientes_id FROM public.plano_contas WHERE proprietario_id = p_proprietario_id AND conta = '1.1.03.0003' LIMIT 1; -- CORRIGIDO: 1.1.03.0003
-    SELECT id INTO v_conta_fornecedores_id FROM public.plano_contas WHERE proprietario_id = p_proprietario_id AND conta = '2.1.03.0001' LIMIT 1;
-    SELECT id INTO v_conta_receita_id FROM public.plano_contas WHERE proprietario_id = p_proprietario_id AND conta = '4.1.02.0001' LIMIT 1;
-    SELECT id INTO v_conta_despesa_id FROM public.plano_contas WHERE proprietario_id = p_proprietario_id AND conta = '6.1.01.0010' LIMIT 1;
+    SELECT id INTO v_conta_caixa_id FROM public.plano_contas WHERE proprietario_id = p_proprietario_id AND "Conta" = '1.1.01.0001' LIMIT 1;
+    SELECT id INTO v_conta_capital_id FROM public.plano_contas WHERE proprietario_id = p_proprietario_id AND "Conta" = '3.1.00.0001' LIMIT 1;
+    SELECT id INTO v_conta_clientes_id FROM public.plano_contas WHERE proprietario_id = p_proprietario_id AND "Conta" = '1.1.02.0003' LIMIT 1; -- Usando 1.1.02.0003 conforme o CSV
+    SELECT id INTO v_conta_fornecedores_id FROM public.plano_contas WHERE proprietario_id = p_proprietario_id AND "Conta" = '2.1.03.0001' LIMIT 1;
+    SELECT id INTO v_conta_receita_id FROM public.plano_contas WHERE proprietario_id = p_proprietario_id AND "Conta" = '4.1.02.0001' LIMIT 1;
+    SELECT id INTO v_conta_despesa_id FROM public.plano_contas WHERE proprietario_id = p_proprietario_id AND "Conta" = '5.1.01.0010' LIMIT 1;
     
     -- NOVAS BUSCAS DE CONTAS DE RESULTADO
-    SELECT id INTO v_conta_desconto_concedido_id FROM public.plano_contas WHERE proprietario_id = p_proprietario_id AND conta = '5.1.01.0003' LIMIT 1;
-    SELECT id INTO v_conta_estorno_desconto_concedido_id FROM public.plano_contas WHERE proprietario_id = p_proprietario_id AND conta = '4.1.03.0001' LIMIT 1;
-    SELECT id INTO v_conta_desconto_obtido_id FROM public.plano_contas WHERE proprietario_id = p_proprietario_id AND conta = '4.3.01.0001' LIMIT 1;
-    SELECT id INTO v_conta_estorno_desconto_obtido_id FROM public.plano_contas WHERE proprietario_id = p_proprietario_id AND conta = '5.2.01.0003' LIMIT 1;
-    SELECT id INTO v_conta_pagamento_fornecedor_id FROM public.plano_contas WHERE proprietario_id = p_proprietario_id AND conta = '5.1.01.0010' LIMIT 1; -- Despesa com Fornecedores
+    SELECT id INTO v_conta_desconto_concedido_id FROM public.plano_contas WHERE proprietario_id = p_proprietario_id AND "Conta" = '5.1.01.0003' LIMIT 1;
+    SELECT id INTO v_conta_estorno_desconto_concedido_id FROM public.plano_contas WHERE proprietario_id = p_proprietario_id AND "Conta" = '4.1.03.0001' LIMIT 1;
+    SELECT id INTO v_conta_desconto_obtido_id FROM public.plano_contas WHERE proprietario_id = p_proprietario_id AND "Conta" = '4.3.01.0001' LIMIT 1;
+    SELECT id INTO v_conta_estorno_desconto_obtido_id FROM public.plano_contas WHERE proprietario_id = p_proprietario_id AND "Conta" = '5.2.01.0003' LIMIT 1;
+    SELECT id INTO v_conta_pagamento_fornecedor_id FROM public.plano_contas WHERE proprietario_id = p_proprietario_id AND "Conta" = '5.1.01.0010' LIMIT 1;
     
     -- 2. Busca os IDs dos Históricos Padrão
     SELECT id INTO v_historico_capital_id FROM public.historicos WHERE proprietario_id = p_proprietario_id AND codigo = '400' LIMIT 1;
@@ -59,21 +59,33 @@ BEGIN
     IF v_conta_clientes_id IS NOT NULL THEN
         INSERT INTO public.configuracao_contas_receber (proprietario_id, tipo_registro, conta_contabil_id)
         VALUES
-            (p_proprietario_id, 'a_receber', v_conta_clientes_id), -- 1.1.03 (Sintético)
-            (p_proprietario_id, 'parcela', v_conta_clientes_id) -- 1.1.03.0003 (Analítico)
+            (p_proprietario_id, 'a_receber', v_conta_clientes_id),
+            (p_proprietario_id, 'parcela', v_conta_clientes_id)
         ON CONFLICT (proprietario_id, tipo_registro) DO UPDATE SET conta_contabil_id = EXCLUDED.conta_contabil_id;
     END IF;
     
-    -- NOVOS MAPAS CR
+    -- Mapeamentos de Recebimento (Patrimonial) e Recebimento Resultado (DRE)
+    IF v_conta_caixa_id IS NOT NULL THEN
+        INSERT INTO public.configuracao_contas_receber (proprietario_id, tipo_registro, conta_contabil_id)
+        VALUES (p_proprietario_id, 'recebimento', v_conta_caixa_id)
+        ON CONFLICT (proprietario_id, tipo_registro) DO UPDATE SET conta_contabil_id = EXCLUDED.conta_contabil_id;
+    END IF;
+    
+    IF v_conta_receita_id IS NOT NULL THEN
+        INSERT INTO public.configuracao_contas_receber (proprietario_id, tipo_registro, conta_contabil_id)
+        VALUES (p_proprietario_id, 'recebimento_resultado', v_conta_receita_id)
+        ON CONFLICT (proprietario_id, tipo_registro) DO UPDATE SET conta_contabil_id = EXCLUDED.conta_contabil_id;
+    END IF;
+    
     IF v_conta_desconto_concedido_id IS NOT NULL THEN
         INSERT INTO public.configuracao_contas_receber (proprietario_id, tipo_registro, conta_contabil_id)
-        VALUES (p_proprietario_id, 'desconto_concedido', v_conta_desconto_concedido_id) -- 5.1.01.0003 (Despesa)
+        VALUES (p_proprietario_id, 'desconto_concedido', v_conta_desconto_concedido_id)
         ON CONFLICT (proprietario_id, tipo_registro) DO UPDATE SET conta_contabil_id = EXCLUDED.conta_contabil_id;
     END IF;
     
     IF v_conta_estorno_desconto_concedido_id IS NOT NULL THEN
         INSERT INTO public.configuracao_contas_receber (proprietario_id, tipo_registro, conta_contabil_id)
-        VALUES (p_proprietario_id, 'estorno_desconto_concedido', v_conta_estorno_desconto_concedido_id) -- 4.1.03.0001 (Receita)
+        VALUES (p_proprietario_id, 'estorno_desconto_concedido', v_conta_estorno_desconto_concedido_id)
         ON CONFLICT (proprietario_id, tipo_registro) DO UPDATE SET conta_contabil_id = EXCLUDED.conta_contabil_id;
     END IF;
     
@@ -81,27 +93,26 @@ BEGIN
     IF v_conta_fornecedores_id IS NOT NULL THEN
         INSERT INTO public.configuracao_contas_pagar (proprietario_id, tipo_registro, conta_contabil_id)
         VALUES
-            (p_proprietario_id, 'a_pagar', v_conta_fornecedores_id), -- 2.1.03 (Sintético)
-            (p_proprietario_id, 'parcela_pagar', v_conta_fornecedores_id) -- 2.1.03.0001 (Analítico)
+            (p_proprietario_id, 'a_pagar', v_conta_fornecedores_id),
+            (p_proprietario_id, 'parcela_pagar', v_conta_fornecedores_id)
         ON CONFLICT (proprietario_id, tipo_registro) DO UPDATE SET conta_contabil_id = EXCLUDED.conta_contabil_id;
     END IF;
     
-    -- NOVOS MAPAS CP
     IF v_conta_pagamento_fornecedor_id IS NOT NULL THEN
         INSERT INTO public.configuracao_contas_pagar (proprietario_id, tipo_registro, conta_contabil_id)
-        VALUES (p_proprietario_id, 'pagamento', v_conta_pagamento_fornecedor_id) -- 5.1.01.0010 (Despesa)
+        VALUES (p_proprietario_id, 'pagamento', v_conta_pagamento_fornecedor_id)
         ON CONFLICT (proprietario_id, tipo_registro) DO UPDATE SET conta_contabil_id = EXCLUDED.conta_contabil_id;
     END IF;
     
     IF v_conta_desconto_obtido_id IS NOT NULL THEN
         INSERT INTO public.configuracao_contas_pagar (proprietario_id, tipo_registro, conta_contabil_id)
-        VALUES (p_proprietario_id, 'desconto_obtido', v_conta_desconto_obtido_id) -- 4.3.01.0001 (Receita)
+        VALUES (p_proprietario_id, 'desconto_obtido', v_conta_desconto_obtido_id)
         ON CONFLICT (proprietario_id, tipo_registro) DO UPDATE SET conta_contabil_id = EXCLUDED.conta_contabil_id;
     END IF;
     
     IF v_conta_estorno_desconto_obtido_id IS NOT NULL THEN
         INSERT INTO public.configuracao_contas_pagar (proprietario_id, tipo_registro, conta_contabil_id)
-        VALUES (p_proprietario_id, 'estorno_desconto_obtido', v_conta_estorno_desconto_obtido_id) -- 5.2.01.0003 (Despesa)
+        VALUES (p_proprietario_id, 'estorno_desconto_obtido', v_conta_estorno_desconto_obtido_id)
         ON CONFLICT (proprietario_id, tipo_registro) DO UPDATE SET conta_contabil_id = EXCLUDED.conta_contabil_id;
     END IF;
 
@@ -128,7 +139,7 @@ BEGIN
     IF v_conta_caixa_id IS NOT NULL THEN
         INSERT INTO public.saldo_contas (proprietario_id, nome, saldo_inicial, tipo_saldo, natureza_contabil, conta_contabil_id)
         VALUES (p_proprietario_id, 'Caixa Inicial', 0.00, 'Debito', 'Ativo', v_conta_caixa_id)
-        ON CONFLICT (proprietario_id, nome) DO NOTHING; -- Evita duplicidade se já existir
+        ON CONFLICT (proprietario_id, nome) DO NOTHING;
     END IF;
 
     RETURN QUERY SELECT TRUE, 'Configurações padrão mapeadas com sucesso.'::TEXT;
