@@ -34,7 +34,7 @@ const FormGeral: React.FC<FormGeralProps> = ({
               {...field} 
               value={field.value === undefined || field.value === null ? '' : String(field.value)}
               onChange={(e) => field.onChange(e.target.value === '' ? undefined : Number(e.target.value))}
-              disabled={disabled || isReadOnly}
+              disabled={disabled || isReadOnly} 
             />
           </FormControl>
           <FormMessage />

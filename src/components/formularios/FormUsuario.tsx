@@ -596,15 +596,15 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
       
       // 2. Se for edição de perfil de funcionário por ele mesmo
       if (isSelfEditUsuario) {
-          // Permite edição em 'pessoal' e 'cadastrais'
-          return tabValue !== 'pessoal' && tabValue !== 'cadastrais';
+          // Permite edição em 'pessoal', 'cadastrais' e 'documentos'
+          return tabValue !== 'pessoal' && tabValue !== 'cadastrais' && tabValue !== 'documentos';
       }
       
       return false;
   };
   
   // 3. Controla a visibilidade do botão de salvar
-  const shouldShowSaveButton = !isReadOnly && (!isSelfEditUsuario || activeTab === 'pessoal' || activeTab === 'cadastrais');
+  const shouldShowSaveButton = !isReadOnly && (!isSelfEditUsuario || activeTab === 'pessoal' || activeTab === 'cadastrais' || activeTab === 'documentos');
   
   // Se for Cliente Profile, remove as abas de RH
   if (isEditingClientProfile) {

@@ -15,10 +15,9 @@ interface FormDocumentosProps {
   control: Control<any>;
   isSubmitting: boolean;
   resourceId: string | undefined;
-  isReadOnly: boolean; // FIX: NOVO PROP
 }
 
-const FormDocumentos: React.FC<FormDocumentosProps> = ({ control, isSubmitting, resourceId, isReadOnly }) => {
+const FormDocumentos: React.FC<FormDocumentosProps> = ({ control, isSubmitting, resourceId }) => {
   const { role } = useSessao();
   const [uploading, setUploading] = useState(false);
   const isSaving = isSubmitting || uploading;
@@ -83,7 +82,7 @@ const FormDocumentos: React.FC<FormDocumentosProps> = ({ control, isSubmitting, 
                 placeholder="URL do documento (preenchido automaticamente após upload)" 
                 value={(field.value as string) || ''}
                 onChange={field.onChange}
-                disabled={isSaving || isUploaded || isReadOnly} // Bloqueado se isReadOnly
+                disabled={isSaving || isUploaded}
                 className="flex-1"
               />
               <Button 
@@ -98,7 +97,7 @@ const FormDocumentos: React.FC<FormDocumentosProps> = ({ control, isSubmitting, 
                     document.getElementById(`file-upload-${fieldName}`)?.click();
                   }
                 }}
-                disabled={isSaving || isReadOnly} // Bloqueado se isReadOnly
+                disabled={isSaving}
               >
                 {isUploaded ? <XCircle className="w-4 h-4" /> : <Upload className="w-4 h-4" />}
               </Button>
@@ -112,7 +111,6 @@ const FormDocumentos: React.FC<FormDocumentosProps> = ({ control, isSubmitting, 
                     handleFileUpload(e.target.files[0], fieldName);
                   }
                 }}
-                disabled={isReadOnly} // Bloqueado se isReadOnly
               />
             </div>
             <div className="flex justify-between items-center">
@@ -187,7 +185,7 @@ const FormDocumentos: React.FC<FormDocumentosProps> = ({ control, isSubmitting, 
                                       <Checkbox
                                           checked={field.value}
                                           onCheckedChange={field.onChange}
-                                          disabled={isSaving || isReadOnly} // Bloqueado se isReadOnly
+                                          disabled={isSaving}
                                       />
                                   </FormControl>
                                   <div className="space-y-1 leading-none">
