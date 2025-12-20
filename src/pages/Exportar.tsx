@@ -3,7 +3,6 @@ import LayoutPrincipal from '@/components/LayoutPrincipal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { FileText, Loader2, Download } from 'lucide-react';
-import ExportarHistoricos from '@/components/calima/ExportarHistoricos';
 import ExportarLancamentos from '@/components/calima/ExportarLancamentos';
 import { useSessao } from '@/hooks/use-sessao';
 import { ClienteProfile } from '@/types/usuario';
@@ -35,9 +34,7 @@ const Exportar: React.FC = () => {
       </h1>
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <ExportarHistoricos />
         
-        {/* CARD PARA EXPORTAR PLANO DE CONTAS */}
         <ExportarPlanoContasCard />
         
         <ExportarLancamentos />

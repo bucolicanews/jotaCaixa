@@ -33,12 +33,12 @@ export const SETUP_STEPS_META: Record<
   },
   plano_contas_caixa: {
     label: 'Plano de Contas – Caixa',
-    description: 'Marque ao menos uma conta analítica como Caixa.',
+    description: 'Marque ao menos uma conta analítica com o switch "Caixa?".',
     link: '/plano-contas',
   },
   plano_contas_banco: {
     label: 'Plano de Contas – Banco',
-    description: 'Marque ao menos uma conta analítica como Banco.',
+    description: 'Marque ao menos uma conta analítica com o switch "Banco?".',
     link: '/plano-contas',
   },
   plano_contas_cliente: {
@@ -112,9 +112,13 @@ const planoContaCheck =
 const REQUIREMENTS: Record<SetupStepKey, RequirementChecker> = {
   plano_contas: tableCheck('plano_contas', 'proprietario_id'),
   historicos: tableCheck('historicos', 'proprietario_id'),
+  
+  // REMOVIDO: config_cp, config_cr, config_contratos (assumimos que map_default_configs cuida disso)
   config_cp: tableCheck('configuracao_contas_pagar', 'proprietario_id'),
   config_cr: tableCheck('configuracao_contas_receber', 'proprietario_id'),
   config_contratos: tableCheck('configuracao_contratos', 'proprietario_id'),
+  
+  // MARCAÇÕES ESSENCIAIS (Ainda necessárias)
   plano_contas_caixa: planoContaCheck((query) => query.eq('is_caixa', true)),
   plano_contas_banco: planoContaCheck((query) => query.eq('is_banco', true)),
   plano_contas_cliente: planoContaCheck((query) => query.eq('is_a_receber', true)),
@@ -122,7 +126,7 @@ const REQUIREMENTS: Record<SetupStepKey, RequirementChecker> = {
   plano_contas_capital_social: planoContaCheck((query) =>
     query
       .eq('is_conta_patrimonial', true)
-      .or('Descricao.ilike.%capital%,Conta.ilike.%capital%'),
+      .or('Descricao.ilike.%capital%,Conta.ilike.3.1.00.0001'),
   ),
   plano_contas_receita: planoContaCheck((query) =>
     query
@@ -132,11 +136,28 @@ const REQUIREMENTS: Record<SetupStepKey, RequirementChecker> = {
   plano_contas_despesa: planoContaCheck((query) =>
     query
       .eq('is_conta_resultado', true)
-      .or('Descricao.ilike.%despesa%,Descricao.ilike.%custo%,Conta.ilike.5.%'),
+      .or('Descricao.ilike.%despesa%,Descricao.ilike.%custo%,Conta.ilike.5.%,Conta.ilike.6.%'),
   ),
 };
 
-const ALL_STEPS = Object.keys(REQUIREMENTS) as SetupStepKey[];
+// Definindo os passos que são realmente obrigatórios para o fluxo de onboarding
+const ONBOARDING_STEPS: SetupStepKey[] = [
+    'plano_contas',
+    'historicos',
+    'plano_contas_caixa',
+    'plano_contas_banco',
+    'plano_contas_cliente',
+    'plano_contas_fornecedor',
+    'plano_contas_capital_social',
+    'plano_contas_receita',
+    'plano_contas_despesa',
+    // Mantemos as configs CR/CP/Contratos no checklist, mas elas devem ser preenchidas
+    // automaticamente pelo RPC map_default_configs (chamado no reset/onboarding).
+    // Se o RPC falhar, elas aparecerão aqui.
+    'config_cr',
+    'config_cp',
+    'config_contratos',
+];
 
 const checkFirstLaunchCompleted = async (ownerId: string): Promise<boolean> => {
   const { count, error } = await supabase
@@ -159,12 +180,12 @@ export const fetchSetupStatus = async (
   if (!ownerId) {
     return {
       isComplete: false,
-      missingSteps: ALL_STEPS,
+      missingSteps: ONBOARDING_STEPS,
     };
   }
 
   const checks = await Promise.all(
-    ALL_STEPS.map(async (step) => {
+    ONBOARDING_STEPS.map(async (step) => {
       const ok = await REQUIREMENTS[step](ownerId);
       return { step, ok };
     }),

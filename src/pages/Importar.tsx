@@ -52,22 +52,22 @@ const Importar = () => {
             buttonText="Ir para Conciliação"
         />
         
-        {/* 2. Importar Plano de Contas */}
-        <ImportarAtalho
-            title="Plano de Contas (CSV/JSON)"
-            description="Importe ou substitua seu Plano de Contas contábil completo."
-            icon={BookOpen}
-            destinationPath="/plano-contas"
-            buttonText="Ir para Plano de Contas"
-        />
-        
-        {/* 3. Importar Modelo de Contrato */}
+        {/* 2. Importar Modelo de Contrato */}
         <ImportarAtalho
             title="Modelo de Contrato (TXT/HTML)"
             description="Importe templates de contrato para uso na geração de documentos dinâmicos."
             icon={FileText}
             destinationPath="/contratos/modelos"
             buttonText="Ir para Modelos de Contrato"
+        />
+        
+        {/* 3. Importar Plano de Contas (Redireciona para Plano de Contas) */}
+        <ImportarAtalho
+            title="Plano de Contas e Históricos"
+            description="Importe ou substitua seu Plano de Contas e Históricos."
+            icon={BookOpen}
+            destinationPath="/plano-contas"
+            buttonText="Ir para Plano de Contas"
         />
         
       </div>
