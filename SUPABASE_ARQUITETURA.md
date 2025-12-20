@@ -136,6 +136,7 @@ BEGIN
     END IF;
 
     -- 7. Cria a Conta de Saldo (Caixa)
+    -- NOTA: A conta de saldo só é criada se a conta contábil existir.
     IF v_conta_caixa_id IS NOT NULL THEN
         INSERT INTO public.saldo_contas (proprietario_id, nome, saldo_inicial, tipo_saldo, natureza_contabil, conta_contabil_id)
         VALUES (p_proprietario_id, 'Caixa Inicial', 0.00, 'Debito', 'Ativo', v_conta_caixa_id)
