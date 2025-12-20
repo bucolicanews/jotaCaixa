@@ -24,6 +24,14 @@ const parseCSV = (file: File): Promise<ParsedData> => {
               'Código reduzido': String(row['Código reduzido'] || ''),
               Descrição: String(row.Descrição || ''),
               Analítica: (row.Analítica === 'Sim' ? 'Sim' : 'Não') as 'Sim' | 'Não',
+              // NOVO: Mapeamento das colunas booleanas
+              is_conta_caixa_banco: String(row.is_conta_caixa_banco).toUpperCase() === 'TRUE',
+              is_conta_patrimonial: String(row.is_conta_patrimonial).toUpperCase() === 'TRUE',
+              is_conta_resultado: String(row.is_conta_resultado).toUpperCase() === 'TRUE',
+              is_caixa: String(row.is_caixa).toUpperCase() === 'TRUE',
+              is_banco: String(row.is_banco).toUpperCase() === 'TRUE',
+              is_a_receber: String(row.is_a_receber).toUpperCase() === 'TRUE',
+              is_a_pagar: String(row.is_a_pagar).toUpperCase() === 'TRUE',
             })).filter((row: ContaCSV) => row.Conta && row.Descrição);
             return resolve(data as ContaCSV[]);
         }
@@ -75,6 +83,14 @@ const parseJSON = (file: File): Promise<ParsedData> => {
                 'Código reduzido': String(row['Código reduzido'] || ''),
                 Descrição: String(row.Descrição || ''),
                 Analítica: (row.Analítica === 'Sim' ? 'Sim' : 'Não') as 'Sim' | 'Não',
+                // NOVO: Mapeamento das colunas booleanas
+                is_conta_caixa_banco: row.is_conta_caixa_banco === true,
+                is_conta_patrimonial: row.is_conta_patrimonial === true,
+                is_conta_resultado: row.is_conta_resultado === true,
+                is_caixa: row.is_caixa === true,
+                is_banco: row.is_banco === true,
+                is_a_receber: row.is_a_receber === true,
+                is_a_pagar: row.is_a_pagar === true,
             })).filter((row: ContaJSON) => row.Conta && row.Descrição);
             return resolve(data as ContaJSON[]);
         }
