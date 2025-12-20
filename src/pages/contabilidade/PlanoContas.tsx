@@ -102,7 +102,7 @@ const TableCell = React.forwardRef<HTMLTableCellElement, React.TdHTMLAttributes<
         {...props}
       >
         {children}
-      </tr>
+      </td>
     );
   }
 );
