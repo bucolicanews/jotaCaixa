@@ -2,7 +2,7 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, AlertTriangle, CheckCircle2, Trash2 } from 'lucide-react';
+import { Loader2, AlertTriangle, CheckCircle2, Trash2, FileSignature } from 'lucide-react';
 import { PlanoContas } from '@/types/plano-contas';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
@@ -16,7 +16,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 interface OldFKData {
     id: string;
     nome: string; // Nome da conta/config
-    tabela: 'saldo_contas' | 'config_cr' | 'config_cp' | 'config_stripe_sintetica' | 'config_stripe_receber';
+    tabela: 'saldo_contas' | 'config_cr' | 'config_cp' | 'config_stripe_sintetica' | 'config_stripe_receber' | 'config_contrato_ativo' | 'config_contrato_receita';
     old_conta_contabil_id: string;
     old_conta_contabil_nome: string;
     saldo_inicial?: number; // Apenas para saldo_contas
@@ -113,6 +113,7 @@ const MapearTodasFKsDialog: React.FC<MapearTodasFKsDialogProps> = ({
             await supabase.from('configuracao_contas_receber').update({ conta_contabil_id: null }).eq('proprietario_id', proprietarioId);
             await supabase.from('configuracao_contas_pagar').update({ conta_contabil_id: null }).eq('proprietario_id', proprietarioId);
             await supabase.from('configuracoes_stripe').update({ conta_sintetica_id: null, conta_receber_id: null }).eq('proprietario_id', proprietarioId);
+            await supabase.from('configuracao_contratos').update({ id_conta_clientes_receber: null, id_conta_receita_contrato: null }).eq('proprietario_id', proprietarioId); // NOVO: Contratos
 
             // 2. Chamar Edge Function para Excluir/Inserir o Plano de Contas
             const { data, error: invokeError } = await supabase.functions.invoke('manage-plano-contas', {
@@ -135,6 +136,7 @@ const MapearTodasFKsDialog: React.FC<MapearTodasFKsDialogProps> = ({
             const updatesConfigCR: any[] = [];
             const updatesConfigCP: any[] = [];
             const updatesConfigStripe: any[] = [];
+            const updatesConfigContrato: any[] = []; // NOVO ARRAY
             
             // Mapa para rastrear os booleanos que devem ser marcados na nova tabela PlanoContas
             const newContaBooleansMap: Record<string, Partial<PlanoContas>> = {};
@@ -181,6 +183,12 @@ const MapearTodasFKsDialog: React.FC<MapearTodasFKsDialogProps> = ({
                     // Herança de booleanos (Caixa/Banco ou Patrimonial)
                     if (fk.is_conta_caixa_banco) newContaBooleansMap[newContaId].is_conta_caixa_banco = true;
                     if (fk.is_conta_patrimonial) newContaBooleansMap[newContaId].is_conta_patrimonial = true;
+                } else if (fk.tabela === 'config_contrato_ativo') { // NOVO
+                    updatesConfigContrato.push({ id: fk.id, id_conta_clientes_receber: newContaId });
+                    if (fk.is_conta_patrimonial) newContaBooleansMap[newContaId].is_conta_patrimonial = true;
+                } else if (fk.tabela === 'config_contrato_receita') { // NOVO
+                    updatesConfigContrato.push({ id: fk.id, id_conta_receita_contrato: newContaId });
+                    if (fk.is_conta_resultado) newContaBooleansMap[newContaId].is_conta_resultado = true;
                 }
             });
             
@@ -194,6 +202,7 @@ const MapearTodasFKsDialog: React.FC<MapearTodasFKsDialogProps> = ({
                     updatesConfigCR,
                     updatesConfigCP,
                     updatesConfigStripe,
+                    updatesConfigContrato, // NOVO
                     updatesPlanoContasBooleans,
                 },
             });
@@ -293,11 +302,12 @@ const MapearTodasFKsDialog: React.FC<MapearTodasFKsDialogProps> = ({
                 </DialogHeader>
 
                 <Tabs defaultValue="saldo_contas" className="flex-1 flex flex-col overflow-hidden">
-                    <TabsList className="grid w-full grid-cols-4">
+                    <TabsList className="grid w-full grid-cols-5">
                         <TabsTrigger value="saldo_contas">Saldos ({grupos.saldo_contas?.length || 0})</TabsTrigger>
                         <TabsTrigger value="configs_cr">CR Configs ({grupos.config_cr?.length || 0})</TabsTrigger>
                         <TabsTrigger value="configs_cp">CP Configs ({grupos.config_cp?.length || 0})</TabsTrigger>
                         <TabsTrigger value="configs_stripe">Stripe Configs ({grupos.config_stripe_sintetica?.length || 0 + grupos.config_stripe_receber?.length || 0})</TabsTrigger>
+                        <TabsTrigger value="configs_contrato" className="flex items-center"><FileSignature className="w-4 h-4 mr-1" /> Contratos ({grupos.config_contrato_ativo?.length || 0 + grupos.config_contrato_receita?.length || 0})</TabsTrigger>
                     </TabsList>
                     
                     <ScrollArea className="flex-1 mt-4">
@@ -313,6 +323,10 @@ const MapearTodasFKsDialog: React.FC<MapearTodasFKsDialogProps> = ({
                         <TabsContent value="configs_stripe" className="mt-0 space-y-4">
                             {renderTable("Stripe - Conta Sintética", grupos.config_stripe_sintetica || [], 'tipo_registro')}
                             {renderTable("Stripe - Conta Receber", grupos.config_stripe_receber || [], 'tipo_registro')}
+                        </TabsContent>
+                        <TabsContent value="configs_contrato" className="mt-0 space-y-4">
+                            {renderTable("Contrato - Clientes a Receber (Ativo)", grupos.config_contrato_ativo || [], 'tipo_registro')}
+                            {renderTable("Contrato - Receita (Resultado)", grupos.config_contrato_receita || [], 'tipo_registro')}
                         </TabsContent>
                     </ScrollArea>
                 </Tabs>

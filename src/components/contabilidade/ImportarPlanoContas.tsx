@@ -19,7 +19,7 @@ interface ImportarPlanoContasProps {
 interface OldFKData {
     id: string;
     nome: string;
-    tabela: 'saldo_contas' | 'config_cr' | 'config_cp' | 'config_stripe_sintetica' | 'config_stripe_receber';
+    tabela: 'saldo_contas' | 'config_cr' | 'config_cp' | 'config_stripe_sintetica' | 'config_stripe_receber' | 'config_contrato_ativo' | 'config_contrato_receita';
     old_conta_contabil_id: string;
     old_conta_contabil_nome: string;
     saldo_inicial?: number; // Apenas para saldo_contas
@@ -60,8 +60,6 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
   };
   
   const proprietarioId = getProprietarioId();
-
-  // REMOVIDO: performDirectImport
 
   const fetchAllFKs = async (proprietarioId: string): Promise<OldFKData[]> => {
       const fks: OldFKData[] = [];
@@ -152,6 +150,41 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
           }
       });
       
+      // 5. Configurações Contrato (NOVO)
+      const { data: contratoData } = await supabase
+        .from('configuracao_contratos')
+        .select(`id, id_conta_clientes_receber, id_conta_receita_contrato, 
+                 plano_contas_clientes:id_conta_clientes_receber ( Descricao, is_conta_patrimonial ),
+                 plano_contas_receita:id_conta_receita_contrato ( Descricao, is_conta_resultado )
+                `)
+        .eq('proprietario_id', proprietarioId)
+        .limit(1);
+
+      (contratoData || []).forEach((c: any) => {
+          if (c.id_conta_clientes_receber) {
+              fks.push({
+                  id: c.id,
+                  nome: 'Contrato: Clientes a Receber (Ativo)',
+                  tabela: 'config_contrato_ativo',
+                  old_conta_contabil_id: c.id_conta_clientes_receber,
+                  old_conta_contabil_nome: c.plano_contas_clientes?.Descricao || 'Conta Antiga Desconhecida',
+                  tipo_registro: 'id_conta_clientes_receber',
+                  is_conta_patrimonial: c.plano_contas_clientes?.is_conta_patrimonial,
+              });
+          }
+          if (c.id_conta_receita_contrato) {
+              fks.push({
+                  id: c.id,
+                  nome: 'Contrato: Receita (Resultado)',
+                  tabela: 'config_contrato_receita',
+                  old_conta_contabil_id: c.id_conta_receita_contrato,
+                  old_conta_contabil_nome: c.plano_contas_receita?.Descricao || 'Conta Antiga Desconhecida',
+                  tipo_registro: 'id_conta_receita_contrato',
+                  is_conta_resultado: c.plano_contas_receita?.is_conta_resultado,
+              });
+          }
+      });
+      
       return fks;
   };
 
@@ -216,6 +249,7 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
         await supabase.from('configuracao_contas_receber').update({ conta_contabil_id: null }).eq('proprietario_id', proprietarioId);
         await supabase.from('configuracao_contas_pagar').update({ conta_contabil_id: null }).eq('proprietario_id', proprietarioId);
         await supabase.from('configuracoes_stripe').update({ conta_sintetica_id: null, conta_receber_id: null }).eq('proprietario_id', proprietarioId);
+        await supabase.from('configuracao_contratos').update({ id_conta_clientes_receber: null, id_conta_receita_contrato: null }).eq('proprietario_id', proprietarioId); // NOVO: Contratos
         
         // 4. Chamar Edge Function para Excluir/Inserir
         const { data, error: invokeError } = await supabase.functions.invoke('manage-plano-contas', {

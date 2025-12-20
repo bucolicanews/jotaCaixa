@@ -20,6 +20,7 @@ serve(async (req: Request) => {
         updatesConfigCR, 
         updatesConfigCP, 
         updatesConfigStripe, 
+        updatesConfigContrato, 
         updatesPlanoContasBooleans 
     } = body;
 
@@ -36,6 +37,7 @@ serve(async (req: Request) => {
         supabaseService.from('configuracao_contas_receber').upsert(updatesConfigCR, { onConflict: 'id' }),
         supabaseService.from('configuracao_contas_pagar').upsert(updatesConfigCP, { onConflict: 'id' }),
         supabaseService.from('configuracoes_stripe').upsert(updatesConfigStripe, { onConflict: 'id' }),
+        supabaseService.from('configuracao_contratos').upsert(updatesConfigContrato, { onConflict: 'id' }),
     ];
     
     // 2. Atualizar os booleanos no novo Plano de Contas

@@ -13,28 +13,30 @@ import { PlanoContas } from '@/types/plano-contas';
 import { Checkbox } from '../ui/checkbox';
 import { cn } from '@/lib/utils';
 
-// Função de validação da máscara
+// Função de validação da máscara mais robusta
 const validateMask = (code: string, mask: string): boolean => {
     if (!mask) return true; // Se não houver máscara, a validação passa
     
-    const codeParts = code.split('.');
-    const maskParts = mask.split('.');
-    
-    if (codeParts.length !== maskParts.length) {
+    // Expressão regular para validar se o código contém apenas dígitos e pontos.
+    if (!/^[0-9.]+$/.test(code)) {
         return false;
     }
-    
+
+    const codeParts = code.split('.');
+    const maskParts = mask.split('.');
+
+    // A máscara pode ter mais níveis do que o código (e.g., código 1.1, máscara 9.9.99)
+    if (codeParts.length > maskParts.length) {
+        return false;
+    }
+
     for (let i = 0; i < codeParts.length; i++) {
         const codeSegment = codeParts[i];
         const maskSegment = maskParts[i];
         
         // Verifica se o segmento do código tem o mesmo comprimento do segmento da máscara
-        if (codeSegment.length !== maskSegment.length) {
-            return false;
-        }
-        
-        // Verifica se o segmento contém apenas dígitos (já que a máscara só tem '0')
-        if (!/^\d+$/.test(codeSegment)) {
+        // A máscara '9' significa qualquer número de dígitos.
+        if (maskSegment !== '9' && codeSegment.length > maskSegment.length) {
             return false;
         }
     }
@@ -49,13 +51,13 @@ const formSchema = z.object({
   Analitica: z.enum(['Sim', 'Não'], {
     required_error: 'O tipo é obrigatório.',
   }),
-  is_conta_caixa_banco: z.boolean().optional(), // RENOMEADO
-  is_conta_patrimonial: z.boolean().optional(), // NOVO CAMPO
-  is_conta_resultado: z.boolean().optional(),
-  is_caixa: z.boolean().optional(), // NOVO
-  is_banco: z.boolean().optional(), // NOVO
-  is_a_receber: z.boolean().optional(), // NOVO CAMPO
-  is_a_pagar: z.boolean().optional(), // NOVO CAMPO
+  is_conta_caixa_banco: z.boolean().default(false),
+  is_conta_patrimonial: z.boolean().default(false),
+  is_conta_resultado: z.boolean().default(false),
+  is_caixa: z.boolean().default(false),
+  is_banco: z.boolean().default(false),
+  is_a_receber: z.boolean().default(false),
+  is_a_pagar: z.boolean().default(false),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -72,24 +74,21 @@ const FormPlanoContas: React.FC<FormPlanoContasProps> = ({ proprietarioId, conta
   const [mascara, setMascaraAtiva] = useState<string | null>(null);
   const [loadingMascara, setLoadingMascara] = useState(true);
 
-  const defaultConta = contaInicial?.Conta || '';
-  const defaultAnalitica = contaInicial?.Analitica || 'Não';
-  
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      Conta: defaultConta,
+      Conta: contaInicial?.Conta || '',
       codigo_reduzido: contaInicial?.codigo_reduzido || '',
-      Descricao: contaInicial?.Descricao || '', // Inicializa a descrição
-      Analitica: defaultAnalitica,
-      // Garante que as flags sejam lidas corretamente, com fallback para false
-      is_conta_caixa_banco: contaInicial?.is_conta_caixa_banco || false,
-      is_conta_patrimonial: contaInicial?.is_conta_patrimonial || false,
-      is_conta_resultado: contaInicial?.is_conta_resultado || false,
-      is_caixa: contaInicial?.is_caixa || false,
-      is_banco: contaInicial?.is_banco || false,
-      is_a_receber: contaInicial?.is_a_receber || false,
-      is_a_pagar: contaInicial?.is_a_pagar || false,
+      Descricao: contaInicial?.Descricao || '',
+      Analitica: contaInicial?.Analitica || 'Não',
+      // As flags agora usam o .default(false) do Zod schema
+      is_conta_caixa_banco: contaInicial?.is_conta_caixa_banco,
+      is_conta_patrimonial: contaInicial?.is_conta_patrimonial,
+      is_conta_resultado: contaInicial?.is_conta_resultado,
+      is_caixa: contaInicial?.is_caixa,
+      is_banco: contaInicial?.is_banco,
+      is_a_receber: contaInicial?.is_a_receber,
+      is_a_pagar: contaInicial?.is_a_pagar,
     },
   });
   
