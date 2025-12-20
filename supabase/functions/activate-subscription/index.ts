@@ -30,8 +30,39 @@ serve(async (req: Request) => {
       (Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') as any)!,
       { auth: { persistSession: false } }
     );
+    
+    // --- NOVO: 1. Importar Plano de Contas e Históricos Padrão ---
+    console.log(`LOG: Importing default tables for client: ${clienteId}`);
+    const { data: importData, error: importError } = await supabaseService.rpc('import_default_tables', {
+        p_proprietario_id: clienteId,
+    });
+    
+    if (importError || (importData && !importData[0].success)) {
+        console.error('❌ RPC import_default_tables error:', importError || importData[0].message);
+        // Se a importação falhar, retornamos o erro, pois o sistema não pode funcionar sem o plano de contas.
+        return new Response(JSON.stringify({ error: importError?.message || importData[0].message }), {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+    }
+    
+    // --- NOVO: 2. Mapear Configurações Contábeis Padrão ---
+    console.log(`LOG: Mapping default configs for client: ${clienteId}`);
+    const { data: mapData, error: mapError } = await supabaseService.rpc('map_default_configs', {
+        p_proprietario_id: clienteId,
+    });
+    
+    if (mapError || (mapData && !mapData[0].success)) {
+        console.error('❌ RPC map_default_configs error:', mapError || mapData[0].message);
+        // Se o mapeamento falhar, retornamos o erro.
+        return new Response(JSON.stringify({ error: mapError?.message || mapData[0].message }), {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+    }
+    // -------------------------------------------------------
 
-    // 1. Buscar a Conta de Resultado do Stripe (configurada pelo Admin)
+    // 3. Buscar a Conta de Resultado do Stripe (configurada pelo Admin)
     const { data: stripeConfig, error: configError } = await supabaseService
       .from('configuracoes_stripe')
       .select('id_conta_resultado')
@@ -43,12 +74,11 @@ serve(async (req: Request) => {
       console.error('❌ Stripe config error:', configError);
     }
     
-    // Se a configuração não for encontrada ou o campo for nulo, idContaResultado será null
     const idContaResultado = stripeConfig?.id_conta_resultado || null;
     
     console.log(`LOG: id_conta_resultado encontrado para RPC: ${idContaResultado}`);
 
-    // 2. Chamar a função RPC (passando o novo parâmetro)
+    // 4. Chamar a função RPC (passando o novo parâmetro)
     const { error: rpcError } = await supabaseService.rpc('activate_subscription', {
       p_cliente_id: clienteId,
       p_plano_id: planoId,

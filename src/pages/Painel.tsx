@@ -8,11 +8,12 @@ import { Package, Loader2, Scale, Clock, Users, FileText, MessageSquare, PlusCir
 import DashboardFinanceiro from '@/components/DashboardFinanceiro';
 import React from 'react';
 import SetupBlocker from '@/components/SetupBlocker';
+import FormCapitalSocial from '@/components/formularios/FormCapitalSocial'; // NOVO IMPORT
 
 type DashboardType = 'financeiro' | 'contabilidade' | 'folha' | 'rh' | 'geral' | 'restrito';
 
 const Painel = () => {
-  const { role, perfil, carregando, setupStatus } = useSessao();
+  const { role, perfil, carregando, setupStatus, refetch } = useSessao();
 
   const isClient = role === 'Cliente';
   const isAdmin = role === 'Admin';
@@ -121,9 +122,16 @@ const Painel = () => {
     'cliente_id' in perfil &&
     Boolean((perfil as UsuarioProfile)?.cliente_id);
   const shouldBlockSetup =
-    (role === 'Cliente' || isClientUser) &&
+    (isClient || isClientUser) &&
     setupStatus &&
     !setupStatus.isComplete;
+    
+  // NOVO BLOQUEIO: Se o setup estiver completo, mas o primeiro lançamento não foi feito
+  const shouldBlockFirstLaunch = 
+    (isClient || isClientUser) &&
+    setupStatus &&
+    setupStatus.isComplete &&
+    !setupStatus.firstLaunchCompleted;
 
   if (carregando) {
     return (
@@ -138,9 +146,19 @@ const Painel = () => {
   if (shouldBlockSetup) {
     return (
       <LayoutPrincipal>
-        <SetupBlocker missingSteps={setupStatus.missingSteps} />
+        <SetupBlocker missingSteps={setupStatus?.missingSteps ?? []} />
       </LayoutPrincipal>
     );
+  }
+  
+  if (shouldBlockFirstLaunch) {
+      return (
+          <LayoutPrincipal>
+              <div className="max-w-xl mx-auto">
+                  <FormCapitalSocial onSaveComplete={refetch} />
+              </div>
+          </LayoutPrincipal>
+      );
   }
 
   const renderDashboard = () => {
