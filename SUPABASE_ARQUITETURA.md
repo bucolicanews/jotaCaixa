@@ -1,334 +1,139 @@
--- Função RPC para renovar a assinatura após o pagamento (Fluxo de Renovação)
-CREATE OR REPLACE FUNCTION public.manual_subscription_renewal(p_cliente_id uuid, p_plano_id uuid, p_conta_pagar_id uuid, p_valor_pago numeric, p_forma_pagamento text)
- RETURNS void
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO ''
-AS $function$
-DECLARE
-  v_plano_preco NUMERIC;
-  v_plano_nome TEXT; -- NOVO: Para usar na descrição
-  v_plano_permissoes JSONB;
-  v_data_hoje DATE := (NOW() AT TIME ZONE 'America/Sao_Paulo')::DATE;
-  v_admin_id UUID;
-  v_cliente_nome TEXT;
-  v_cliente_email TEXT;
-  v_current_data_fim_acesso TIMESTAMP WITH TIME ZONE;
-  v_new_data_fim_acesso TIMESTAMP WITH TIME ZONE;
-  v_start_of_today TIMESTAMP WITH TIME ZONE := date_trunc('day', NOW() AT TIME ZONE 'America/Sao_Paulo') AT TIME ZONE 'America/Sao_Paulo';
-  v_base_date TIMESTAMP WITH TIME ZONE;
-  v_proximo_vencimento DATE;
-  v_segundo_vencimento DATE; -- 60 dias para a segunda
-  v_recorrencia_id UUID; -- ID da conta sintética de recorrência
-  v_parcela_paga_id UUID; -- ID da parcela que está sendo paga
-  v_conta_destino_id UUID; -- NOVO: ID da conta de destino (Stripe/Banco)
-  
-  -- Variáveis de Configuração Stripe
-  v_conta_sintetica_stripe_id UUID; -- conta_sintetica_id
-  v_historico_padrao_stripe_id UUID;       -- historico_padrao_id
-  v_conta_resultado_stripe_id UUID; -- NOVO: id_conta_resultado do Stripe
-  
-  -- NOVAS VARIÁVEIS PARA MAPEAR CONTAS CONTÁBEIS
-  v_conta_contabil_a_receber UUID;
-  v_conta_contabil_parcela UUID;
-  v_conta_contabil_recebimento UUID;
-  v_conta_resultado_recebimento UUID; -- NOVO: Conta de Resultado (Receita)
-  v_historico_padrao_recebimento UUID; -- NOVO: Histórico Padrão para Recebimentos
-BEGIN
-  -- 1. Verifica permissão (Apenas Admin ou o próprio Cliente pode executar)
-  IF auth.uid() IS NULL THEN
-    RAISE EXCEPTION 'Acesso negado. Usuário não autenticado.';
-  END IF;
-  
-  -- 2. Busca o ID do Admin (necessário para registrar o recebimento)
-  SELECT admin_id INTO v_admin_id FROM public.tbl_clientes WHERE id = p_cliente_id;
-  IF v_admin_id IS NULL THEN
-    RAISE EXCEPTION 'Admin não encontrado para o cliente.';
-  END IF;
-  
-  -- NOVO: 3. Busca o mapeamento contábil CR (Pode ser NULL, mas é usado nos lançamentos)
-  SELECT conta_contabil_id INTO v_conta_contabil_a_receber FROM public.configuracao_contas_receber WHERE proprietario_id = v_admin_id AND tipo_registro = 'a_receber' LIMIT 1;
-  SELECT conta_contabil_id INTO v_conta_contabil_parcela FROM public.configuracao_contas_receber WHERE proprietario_id = v_admin_id AND tipo_registro = 'parcela' LIMIT 1;
-  SELECT conta_contabil_id INTO v_conta_contabil_recebimento FROM public.configuracao_contas_receber WHERE proprietario_id = v_admin_id AND tipo_registro = 'recebimento' LIMIT 1;
-  SELECT conta_contabil_id INTO v_conta_resultado_recebimento FROM public.configuracao_contas_receber WHERE proprietario_id = v_admin_id AND tipo_registro = 'recebimento_resultado' LIMIT 1;
-  
-  -- NOVO: Busca Histórico Padrão de Recebimento (da tabela correta)
-  SELECT historico_id INTO v_historico_padrao_recebimento FROM public.configuracao_historico_padrao WHERE proprietario_id = v_admin_id AND tipo_registro = 'recebimento_padrao' LIMIT 1;
-  
-  -- 4. Busca mapeamento Stripe (incluindo a conta de resultado)
-  SELECT conta_sintetica_id, historico_padrao_id, id_conta_resultado INTO v_conta_sintetica_stripe_id, v_historico_padrao_stripe_id, v_conta_resultado_stripe_id FROM public.configuracoes_stripe WHERE proprietario_id = v_admin_id LIMIT 1;
-  
-  -- 5. VALIDAÇÃO CRÍTICA: Apenas as configurações do Stripe são obrigatórias
-  IF v_conta_sintetica_stripe_id IS NULL OR v_historico_padrao_stripe_id IS NULL OR v_conta_resultado_stripe_id IS NULL THEN -- ADICIONADO v_conta_resultado_stripe_id
-    RAISE EXCEPTION 'Configurações Stripe incompletas. Verifique: Conta Sintética Stripe, Histórico Padrão Stripe e Conta de Resultado Stripe.';
-  END IF;
-
-  -- 6. Busca a saldo_conta do Admin que referencia a conta sintética configurada no Stripe
-  SELECT id INTO v_conta_destino_id 
-  FROM public.saldo_contas 
-  WHERE proprietario_id = v_admin_id AND conta_contabil_id = v_conta_sintetica_stripe_id
-  LIMIT 1;
-  
-  IF v_conta_destino_id IS NULL THEN
-    RAISE EXCEPTION 'Nenhuma conta de saldo (Stripe/Banco) encontrada para o Admin vinculada à conta contábil configurada no Stripe. Cadastre uma em Bancos/Caixas.';
-  END IF;
-
-  -- 7. Busca o preço, NOME e as PERMISSÕES do NOVO plano
-  SELECT preco_mensal, nome, permissoes INTO v_plano_preco, v_plano_nome, v_plano_permissoes FROM public.planos WHERE id = p_plano_id;
-
-  IF v_plano_preco IS NULL THEN
-    RAISE EXCEPTION 'Plano não encontrado ou sem preço definido.';
-  END IF;
-  
-  -- 8. Busca nome, email e data_fim_acesso atual do cliente
-  SELECT nome, email, data_fim_acesso INTO v_cliente_nome, v_cliente_email, v_current_data_fim_acesso FROM public.tbl_clientes WHERE id = p_cliente_id;
-
-  -- 9. Determina a data base para o cálculo de renovação (30 dias)
-  v_base_date := v_start_of_today;
-  
-  -- Calcula a data de vencimento da PRÓXIMA MENSALIDADE (30 dias a partir da data base)
-  v_proximo_vencimento := (date_trunc('day', v_base_date) + INTERVAL '30 days')::DATE;
-  v_segundo_vencimento := (date_trunc('day', v_base_date) + INTERVAL '60 days')::DATE; -- 60 dias para a segunda
-  
-  -- A nova data de fim de acesso é o final do dia ANTERIOR ao próximo vencimento.
-  v_new_data_fim_acesso := (v_proximo_vencimento::TIMESTAMP WITH TIME ZONE - INTERVAL '1 millisecond') AT TIME ZONE 'America/Sao_Paulo';
-
-  -- 10. Atualiza o perfil do cliente com a nova data de acesso E PERMISSÕES
-  UPDATE public.tbl_clientes
-  SET 
-    plano_id = p_plano_id,
-    data_fim_acesso = v_new_data_fim_acesso,
-    permissoes = v_plano_permissoes, -- APLICANDO AS PERMISSÕES DO NOVO PLANO
-    aprovado = TRUE
-  WHERE id = p_cliente_id;
-
-  -- 11. BUSCA A CONTA SINTÉTICA DE RECORRÊNCIA
-  SELECT id INTO v_recorrencia_id
-  FROM public.admin_contas_receber
-  WHERE cliente_id = p_cliente_id AND origem = 'assinatura_recorrente'
-  LIMIT 1;
-
-  IF v_recorrencia_id IS NULL THEN
-    RAISE EXCEPTION 'Conta de recorrência não encontrada para o cliente %.', p_cliente_id;
-  END IF;
-  
-  -- CORREÇÃO: Atualiza a descrição, o valor total e a conta contábil da conta sintética
-  UPDATE public.admin_contas_receber
-  SET
-    descricao = 'Assinatura Recorrente - Plano ' || v_plano_nome, -- USANDO NOME DO PLANO
-    valor_total = v_plano_preco, -- CORREÇÃO: Atualiza o valor total
-    data_vencimento = v_proximo_vencimento, -- Atualiza o vencimento sintético para o próximo
-    id_conta_patrimonial = v_conta_contabil_a_receber -- NOVO: Atualiza Conta Contábil
-  WHERE id = v_recorrencia_id;
-  
-  -- 12. MARCA A PARCELA CORRESPONDENTE AO PAGAMENTO COMO PAGA
-  UPDATE public.admin_parcelas_receber
-  SET 
-    status = 'paga',
-    valor_pago = p_valor_pago,
-    data_pagamento = v_data_hoje,
-    id_conta_contabil = v_conta_contabil_parcela -- NOVO: Conta Contábil da Parcela
-  WHERE id = p_conta_pagar_id -- p_conta_pagar_id agora é o ID da parcela
-  RETURNING id INTO v_parcela_paga_id;
-
-  -- 13. DELETA TODAS AS OUTRAS PARCELAS PENDENTES DE ASSINATURA ANTERIORES
-  -- ESTA É A LÓGICA CRÍTICA: DELETA TODAS AS PARCELAS ABERTAS/PENDENTES (EXCETO A QUE ACABOU DE SER PAGA)
-  DELETE FROM public.admin_parcelas_receber
-  WHERE admin_id = v_admin_id
-    AND conta_receber_id = v_recorrencia_id
-    AND status IN ('aberta', 'reprogramada', 'parcial')
-    AND id != v_parcela_paga_id; -- Não altera a parcela que acabou de ser paga
-
-  -- 14. CRIA O REGISTRO DE RECEBIMENTO DO ADMIN (AGORA COM conta_id E id_conta_contabil)
-  INSERT INTO public.admin_recebimentos (parcela_id, admin_id, cliente_id, valor_recebido, data_recebimento, tipo_recebimento, forma_pagamento, conta_id, id_conta_contabil, historico_id, id_conta_resultado)
-  VALUES (
-    v_parcela_paga_id,
-    v_admin_id,
-    p_cliente_id,
-    p_valor_pago,
-    NOW() AT TIME ZONE 'America/Sao_Paulo',
-    'total',
-    p_forma_pagamento, -- Usa a forma de pagamento fornecida
-    v_conta_destino_id, -- ID da conta de destino (buscada via conta_sintetica_stripe_id)
-    v_conta_contabil_recebimento, -- Conta Contábil do Recebimento (Patrimonial)
-    v_historico_padrao_stripe_id,
-    v_conta_resultado_stripe_id -- USANDO v_conta_resultado_stripe_id
-  );
-  
-  -- NOVO: 14.1 CRIA O LANÇAMENTO DE ENTRADA NA CONTA DE SALDO (Stripe) - DÉBITO (Ativo)
-  IF v_conta_sintetica_stripe_id IS NOT NULL THEN
-    INSERT INTO public.lancamentos (proprietario_id, data_movimentacao, descricao, valor, tipo, conta_bancaria_id, conta_contabil_id, origem, conciliado, historico_id)
-    VALUES (
-      v_admin_id,
-      NOW() AT TIME ZONE 'America/Sao_Paulo',
-      'Recebimento Renovação Assinatura - Cliente ' || v_cliente_nome || ' (CR ID: ' || v_recorrencia_id::TEXT || ')', -- NOVO: Inclui ID da CR
-      p_valor_pago,
-      'Entrada',
-      v_conta_destino_id, -- ID da saldo_contas (Stripe)
-      v_conta_sintetica_stripe_id, -- ID da conta_contabil (Stripe)
-      'assinatura_stripe',
-      true, -- Pagamentos via Stripe já vêm conciliados
-      v_historico_padrao_stripe_id -- NOVO: Histórico Padrão
-    );
-  END IF;
-  
-  -- NOVO: 14.2 CRIA O LANÇAMENTO DE RECEITA (DRE) - CRÉDITO (Resultado)
-  -- CORREÇÃO CRÍTICA: Tipo deve ser 'Saida' para contas de Receita (Natureza Credora)
-  IF v_conta_resultado_stripe_id IS NOT NULL THEN
-    INSERT INTO public.lancamentos (proprietario_id, data_movimentacao, descricao, valor, tipo, conta_bancaria_id, conta_contabil_id, origem, conciliado, historico_id)
-    VALUES (v_admin_id, v_data_hoje, 'Receita Renovação Assinatura - Plano ' || v_plano_nome || ' (CR ID: ' || v_recorrencia_id::TEXT || ')', p_valor_pago, 'Saida', NULL, v_conta_resultado_stripe_id, 'assinatura_stripe', true, v_historico_padrao_stripe_id); -- NOVO: Inclui ID da CR
-  END IF;
-  
-  -- NOVO: 14.3 CRIA O LANÇAMENTO INICIAL DE DÉBITO (CR) - DÉBITO (Ativo)
-  -- Este lançamento deve ser o valor total do plano, pois o valor total da conta sintética foi atualizado no passo 10.
-  IF v_conta_contabil_a_receber IS NOT NULL THEN
-    INSERT INTO public.lancamentos (proprietario_id, data_movimentacao, descricao, valor, tipo, conta_bancaria_id, conta_contabil_id, origem, conciliado, historico_id)
-    VALUES (v_admin_id, v_data_hoje, 'Lançamento Inicial CR: Assinatura Recorrente (CR ID: ' || v_recorrencia_id::TEXT || ')', v_plano_preco, 'Entrada', NULL, v_conta_contabil_a_receber, 'assinatura_stripe', true, v_historico_padrao_stripe_id);
-  END IF;
-  
-  -- NOVO: 14.4 CRIA O LANÇAMENTO DE ESTORNO PATRIMONIAL (CR) - CRÉDITO (Ativo)
-  IF v_conta_contabil_a_receber IS NOT NULL THEN
-    INSERT INTO public.lancamentos (proprietario_id, data_movimentacao, descricao, valor, tipo, conta_bancaria_id, conta_contabil_id, origem, conciliado, historico_id)
-    VALUES (v_admin_id, v_data_hoje, 'Estorno Patrimonial CR - Renovação Assinatura (CR ID: ' || v_recorrencia_id::TEXT || ')', p_valor_pago, 'Saida', NULL, v_conta_contabil_a_receber, 'assinatura_stripe', true, v_historico_padrao_stripe_id); -- NOVO: Inclui ID da CR
-  END IF;
-  
-  -- 15. CRIA AS PRÓXIMAS DUAS PARCELAS PENDENTES (30 e 60 dias)
-  IF v_conta_contabil_parcela IS NOT NULL THEN
-    -- Próxima Mensalidade (30 dias)
-    INSERT INTO public.admin_parcelas_receber (conta_receber_id, admin_id, numero_parcela, valor_parcela, data_vencimento, status, id_conta_contabil)
-    VALUES (
-      v_recorrencia_id,
-      v_admin_id,
-      (SELECT COALESCE(MAX(numero_parcela), 1) + 1 FROM public.admin_parcelas_receber WHERE conta_receber_id = v_recorrencia_id), -- Próximo número de parcela
-      v_plano_preco,
-      v_proximo_vencimento,
-      'aberta',
-      v_conta_contabil_parcela -- NOVO: Conta Contábil da Parcela
-    );
-    
-    -- Segunda Mensalidade (60 dias)
-    INSERT INTO public.admin_parcelas_receber (conta_receber_id, admin_id, numero_parcela, valor_parcela, data_vencimento, status, id_conta_contabil)
-    VALUES (
-      v_recorrencia_id,
-      v_admin_id,
-      (SELECT COALESCE(MAX(numero_parcela), 1) + 1 FROM public.admin_parcelas_receber WHERE conta_receber_id = v_recorrencia_id), -- Próximo número de parcela
-      v_plano_preco,
-      v_segundo_vencimento,
-      'aberta',
-      v_conta_contabil_parcela -- NOVO: Conta Contábil da Parcela
-    );
-  END IF;
-
-END;
-$function$;
-
--- Função RPC para deletar contrato e reverter lançamentos contábeis
-CREATE OR REPLACE FUNCTION public.delete_contract_and_reverse_accounting(p_contrato_id uuid, p_proprietario_id uuid)
+-- Função RPC para mapear configurações padrão (chamada após importação de plano)
+CREATE OR REPLACE FUNCTION public.map_default_configs(p_proprietario_id uuid)
  RETURNS TABLE(success boolean, message text)
  LANGUAGE plpgsql
  SECURITY DEFINER
  SET search_path TO ''
 AS $function$
 DECLARE
-  v_tabela_contas_receber TEXT;
-  v_tabela_parcelas TEXT;
-  v_conta_receber_id UUID;
-  v_parcelas_pagas_count INTEGER;
-  v_valor_total NUMERIC;
-  v_descricao TEXT;
-  v_conta_patrimonial_id UUID;
-  v_conta_resultado_id UUID;
-  v_historico_id UUID;
-  v_data_movimentacao TIMESTAMP WITH TIME ZONE := NOW() AT TIME ZONE 'America/Sao_Paulo';
+    v_conta_caixa_id UUID;
+    v_conta_capital_id UUID;
+    v_conta_clientes_id UUID;
+    v_conta_fornecedores_id UUID;
+    v_conta_receita_id UUID;
+    v_conta_despesa_id UUID;
+    
+    -- NOVAS CONTAS DE DESCONTO
+    v_conta_desconto_concedido_id UUID;
+    v_conta_estorno_desconto_concedido_id UUID;
+    v_conta_desconto_obtido_id UUID;
+    v_conta_estorno_desconto_obtido_id UUID;
+    v_conta_pagamento_fornecedor_id UUID; -- 5.1.01.0010
+    
+    v_historico_capital_id UUID;
+    v_historico_recebimento_id UUID;
+    v_historico_pagamento_id UUID;
 BEGIN
-  -- 1. Determinar as tabelas corretas (Admin vs Cliente)
-  IF EXISTS (SELECT 1 FROM public.tbl_admins WHERE id = p_proprietario_id) THEN
-    v_tabela_contas_receber := 'admin_contas_receber';
-    v_tabela_parcelas := 'admin_parcelas_receber';
-  ELSE
-    v_tabela_contas_receber := 'contas_receber';
-    v_tabela_parcelas := 'parcelas_contas_receber';
-  END IF;
-
-  -- 2. Buscar a conta sintética e verificar parcelas pagas
-  EXECUTE format('SELECT id, valor_total, descricao, id_conta_patrimonial, id_conta_resultado, historico_id FROM public.%I WHERE contrato_gerado_id = $1 LIMIT 1', v_tabela_contas_receber)
-  INTO v_conta_receber_id, v_valor_total, v_descricao, v_conta_patrimonial_id, v_conta_resultado_id, v_historico_id
-  USING p_contrato_id;
-
-  IF v_conta_receber_id IS NULL THEN
-    -- Se não houver conta a receber associada, apenas deleta o contrato
-    DELETE FROM public.contratos_gerados WHERE id = p_contrato_id;
-    RETURN QUERY SELECT TRUE, 'Contrato deletado. Nenhuma conta a receber associada encontrada.';
-    RETURN;
-  END IF;
-
-  -- Contar parcelas pagas
-  EXECUTE format('SELECT COUNT(*) FROM public.%I WHERE conta_receber_id = $1 AND status = ''paga''', v_tabela_parcelas)
-  INTO v_parcelas_pagas_count
-  USING v_conta_receber_id;
-
-  IF v_parcelas_pagas_count > 0 THEN
-    RETURN QUERY SELECT FALSE, 'Não é possível deletar o contrato. Existem ' || v_parcelas_pagas_count || ' parcelas quitadas.';
-    RETURN;
-  END IF;
-
-  -- 3. Reverter Lançamentos Contábeis (Apenas se for Admin e as contas estiverem mapeadas)
-  IF v_tabela_contas_receber = 'admin_contas_receber' AND v_conta_patrimonial_id IS NOT NULL AND v_conta_resultado_id IS NOT NULL THEN
+    -- 1. Busca os IDs das Contas Analíticas Padrão
+    SELECT id INTO v_conta_caixa_id FROM public.plano_contas WHERE proprietario_id = p_proprietario_id AND conta = '1.1.01.0001' LIMIT 1;
+    SELECT id INTO v_conta_capital_id FROM public.plano_contas WHERE proprietario_id = p_proprietario_id AND conta = '3.1.00.0001' LIMIT 1;
+    SELECT id INTO v_conta_clientes_id FROM public.plano_contas WHERE proprietario_id = p_proprietario_id AND conta = '1.1.03.0003' LIMIT 1; -- CORRIGIDO: 1.1.03.0003
+    SELECT id INTO v_conta_fornecedores_id FROM public.plano_contas WHERE proprietario_id = p_proprietario_id AND conta = '2.1.03.0001' LIMIT 1;
+    SELECT id INTO v_conta_receita_id FROM public.plano_contas WHERE proprietario_id = p_proprietario_id AND conta = '4.1.02.0001' LIMIT 1;
+    SELECT id INTO v_conta_despesa_id FROM public.plano_contas WHERE proprietario_id = p_proprietario_id AND conta = '6.1.01.0010' LIMIT 1;
     
-    -- Lançamento de Estorno (D: Receita, C: Clientes a Receber)
+    -- NOVAS BUSCAS DE CONTAS DE RESULTADO
+    SELECT id INTO v_conta_desconto_concedido_id FROM public.plano_contas WHERE proprietario_id = p_proprietario_id AND conta = '5.1.01.0003' LIMIT 1;
+    SELECT id INTO v_conta_estorno_desconto_concedido_id FROM public.plano_contas WHERE proprietario_id = p_proprietario_id AND conta = '4.1.03.0001' LIMIT 1;
+    SELECT id INTO v_conta_desconto_obtido_id FROM public.plano_contas WHERE proprietario_id = p_proprietario_id AND conta = '4.3.01.0001' LIMIT 1;
+    SELECT id INTO v_conta_estorno_desconto_obtido_id FROM public.plano_contas WHERE proprietario_id = p_proprietario_id AND conta = '5.2.01.0003' LIMIT 1;
+    SELECT id INTO v_conta_pagamento_fornecedor_id FROM public.plano_contas WHERE proprietario_id = p_proprietario_id AND conta = '5.1.01.0010' LIMIT 1; -- Despesa com Fornecedores
     
-    -- D: Conta de Resultado (Receita) - Tipo 'Entrada' (Débito)
-    -- Para diminuir a Receita (Credora), usamos Débito (Entrada)
-    INSERT INTO public.lancamentos (proprietario_id, data_movimentacao, descricao, valor, tipo, conta_contabil_id, origem, historico_id)
-    VALUES (
-      p_proprietario_id,
-      v_data_movimentacao,
-      'Estorno Receita Contrato: ' || v_descricao || ' (CR ID: ' || v_conta_receber_id::TEXT || ')',
-      v_valor_total,
-      'Entrada', -- Débito na conta de Receita (Natureza Credora)
-      v_conta_resultado_id,
-      'estorno_contrato',
-      v_historico_id
-    );
+    -- 2. Busca os IDs dos Históricos Padrão
+    SELECT id INTO v_historico_capital_id FROM public.historicos WHERE proprietario_id = p_proprietario_id AND codigo = '400' LIMIT 1;
+    SELECT id INTO v_historico_recebimento_id FROM public.historicos WHERE proprietario_id = p_proprietario_id AND codigo = '200' LIMIT 1;
+    SELECT id INTO v_historico_pagamento_id FROM public.historicos WHERE proprietario_id = p_proprietario_id AND codigo = '500' LIMIT 1;
 
-    -- C: Conta Patrimonial (Clientes a Receber) - Tipo 'Saida' (Crédito)
-    -- Para diminuir o Ativo (Devedor), usamos Crédito (Saída)
-    INSERT INTO public.lancamentos (proprietario_id, data_movimentacao, descricao, valor, tipo, conta_contabil_id, origem, historico_id)
-    VALUES (
-      p_proprietario_id,
-      v_data_movimentacao,
-      'Estorno Ativo Contrato: ' || v_descricao || ' (CR ID: ' || v_conta_receber_id::TEXT || ')',
-      v_valor_total,
-      'Saida', -- Crédito na conta de Ativo (Natureza Devedora)
-      v_conta_patrimonial_id,
-      'estorno_contrato',
-      v_historico_id
-    );
+    -- 3. Mapeamento de Níveis Contábeis (configuracao_contabil)
+    INSERT INTO public.configuracao_contabil (proprietario_id, tipo_natureza, codigo_nivel_1)
+    VALUES
+        (p_proprietario_id, 'Ativo', '1'),
+        (p_proprietario_id, 'Passivo', '2'),
+        (p_proprietario_id, 'Patrimonio Liquido', '3'),
+        (p_proprietario_id, 'Receita', '4'),
+        (p_proprietario_id, 'Custo', '5'),
+        (p_proprietario_id, 'Despesa', '6')
+    ON CONFLICT (proprietario_id, tipo_natureza) DO UPDATE SET codigo_nivel_1 = EXCLUDED.codigo_nivel_1;
+
+    -- 4. Mapeamento de Contas a Receber (configuracao_contas_receber)
+    IF v_conta_clientes_id IS NOT NULL THEN
+        INSERT INTO public.configuracao_contas_receber (proprietario_id, tipo_registro, conta_contabil_id)
+        VALUES
+            (p_proprietario_id, 'a_receber', v_conta_clientes_id), -- 1.1.03 (Sintético)
+            (p_proprietario_id, 'parcela', v_conta_clientes_id) -- 1.1.03.0003 (Analítico)
+        ON CONFLICT (proprietario_id, tipo_registro) DO UPDATE SET conta_contabil_id = EXCLUDED.conta_contabil_id;
+    END IF;
     
-    -- 3.1. Deletar lançamentos originais (para evitar duplicidade no histórico)
-    -- Usamos a descrição padronizada do PreencherContrato.tsx
+    -- NOVOS MAPAS CR
+    IF v_conta_desconto_concedido_id IS NOT NULL THEN
+        INSERT INTO public.configuracao_contas_receber (proprietario_id, tipo_registro, conta_contabil_id)
+        VALUES (p_proprietario_id, 'desconto_concedido', v_conta_desconto_concedido_id) -- 5.1.01.0003 (Despesa)
+        ON CONFLICT (proprietario_id, tipo_registro) DO UPDATE SET conta_contabil_id = EXCLUDED.conta_contabil_id;
+    END IF;
     
-    -- Lançamento Inicial CR (Débito no Ativo)
-    DELETE FROM public.lancamentos
-    WHERE proprietario_id = p_proprietario_id
-      AND origem = 'lancamento_cr'
-      AND descricao ILIKE ('Lançamento Inicial CR: Contrato: ' || v_descricao || ' (CR ID: ' || v_conta_receber_id::TEXT || ')%');
+    IF v_conta_estorno_desconto_concedido_id IS NOT NULL THEN
+        INSERT INTO public.configuracao_contas_receber (proprietario_id, tipo_registro, conta_contabil_id)
+        VALUES (p_proprietario_id, 'estorno_desconto_concedido', v_conta_estorno_desconto_concedido_id) -- 4.1.03.0001 (Receita)
+        ON CONFLICT (proprietario_id, tipo_registro) DO UPDATE SET conta_contabil_id = EXCLUDED.conta_contabil_id;
+    END IF;
+    
+    -- 5. Mapeamento de Contas a Pagar (configuracao_contas_pagar)
+    IF v_conta_fornecedores_id IS NOT NULL THEN
+        INSERT INTO public.configuracao_contas_pagar (proprietario_id, tipo_registro, conta_contabil_id)
+        VALUES
+            (p_proprietario_id, 'a_pagar', v_conta_fornecedores_id), -- 2.1.03 (Sintético)
+            (p_proprietario_id, 'parcela_pagar', v_conta_fornecedores_id) -- 2.1.03.0001 (Analítico)
+        ON CONFLICT (proprietario_id, tipo_registro) DO UPDATE SET conta_contabil_id = EXCLUDED.conta_contabil_id;
+    END IF;
+    
+    -- NOVOS MAPAS CP
+    IF v_conta_pagamento_fornecedor_id IS NOT NULL THEN
+        INSERT INTO public.configuracao_contas_pagar (proprietario_id, tipo_registro, conta_contabil_id)
+        VALUES (p_proprietario_id, 'pagamento', v_conta_pagamento_fornecedor_id) -- 5.1.01.0010 (Despesa)
+        ON CONFLICT (proprietario_id, tipo_registro) DO UPDATE SET conta_contabil_id = EXCLUDED.conta_contabil_id;
+    END IF;
+    
+    IF v_conta_desconto_obtido_id IS NOT NULL THEN
+        INSERT INTO public.configuracao_contas_pagar (proprietario_id, tipo_registro, conta_contabil_id)
+        VALUES (p_proprietario_id, 'desconto_obtido', v_conta_desconto_obtido_id) -- 4.3.01.0001 (Receita)
+        ON CONFLICT (proprietario_id, tipo_registro) DO UPDATE SET conta_contabil_id = EXCLUDED.conta_contabil_id;
+    END IF;
+    
+    IF v_conta_estorno_desconto_obtido_id IS NOT NULL THEN
+        INSERT INTO public.configuracao_contas_pagar (proprietario_id, tipo_registro, conta_contabil_id)
+        VALUES (p_proprietario_id, 'estorno_desconto_obtido', v_conta_estorno_desconto_obtido_id) -- 5.2.01.0003 (Despesa)
+        ON CONFLICT (proprietario_id, tipo_registro) DO UPDATE SET conta_contabil_id = EXCLUDED.conta_contabil_id;
+    END IF;
 
-    -- Lançamento Receita (Crédito na Receita)
-    DELETE FROM public.lancamentos
-    WHERE proprietario_id = p_proprietario_id
-      AND origem = 'lancamento_cr'
-      AND descricao ILIKE ('Receita: Contrato: ' || v_descricao || ' (CR ID: ' || v_conta_receber_id::TEXT || ')%');
+    -- 6. Mapeamento de Históricos Padrão (configuracao_historico_padrao)
+    IF v_historico_capital_id IS NOT NULL THEN
+        INSERT INTO public.configuracao_historico_padrao (proprietario_id, tipo_registro, historico_id)
+        VALUES (p_proprietario_id, 'capital_social', v_historico_capital_id)
+        ON CONFLICT (proprietario_id, tipo_registro) DO UPDATE SET historico_id = EXCLUDED.historico_id;
+    END IF;
+    
+    IF v_historico_recebimento_id IS NOT NULL THEN
+        INSERT INTO public.configuracao_historico_padrao (proprietario_id, tipo_registro, historico_id)
+        VALUES (p_proprietario_id, 'recebimento_padrao', v_historico_recebimento_id)
+        ON CONFLICT (proprietario_id, tipo_registro) DO UPDATE SET historico_id = EXCLUDED.historico_id;
+    END IF;
+    
+    IF v_historico_pagamento_id IS NOT NULL THEN
+        INSERT INTO public.configuracao_historico_padrao (proprietario_id, tipo_registro, historico_id)
+        VALUES (p_proprietario_id, 'pagamento_padrao', v_historico_pagamento_id)
+        ON CONFLICT (proprietario_id, tipo_registro) DO UPDATE SET historico_id = EXCLUDED.historico_id;
+    END IF;
 
-  END IF;
+    -- 7. Cria a Conta de Saldo (Caixa)
+    IF v_conta_caixa_id IS NOT NULL THEN
+        INSERT INTO public.saldo_contas (proprietario_id, nome, saldo_inicial, tipo_saldo, natureza_contabil, conta_contabil_id)
+        VALUES (p_proprietario_id, 'Caixa Inicial', 0.00, 'Debito', 'Ativo', v_conta_caixa_id)
+        ON CONFLICT (proprietario_id, nome) DO NOTHING; -- Evita duplicidade se já existir
+    END IF;
 
-  -- 4. Deletar a conta sintética (deleta parcelas em cascata)
-  EXECUTE format('DELETE FROM public.%I WHERE id = $1', v_tabela_contas_receber)
-  USING v_conta_receber_id;
-  
-  -- 5. Deletar o contrato gerado
-  DELETE FROM public.contratos_gerados WHERE id = p_contrato_id;
+    RETURN QUERY SELECT TRUE, 'Configurações padrão mapeadas com sucesso.'::TEXT;
 
-  RETURN QUERY SELECT TRUE, 'Contrato e lançamentos associados deletados com sucesso.';
+EXCEPTION WHEN OTHERS THEN
+    RETURN QUERY SELECT FALSE, SQLERRM::TEXT;
 END;
-$function$;
+$function$
