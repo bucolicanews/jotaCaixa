@@ -19,6 +19,7 @@ import { useSessao } from '@/hooks/use-sessao';
 import LogoUpload from '../LogoUpload';
 import AvatarUpload from '../AvatarUpload'; // Import the new component
 import FormDadosCadastrais from '../usuario-forms/FormDadosCadastrais';
+import { fetchAddressByCep } from '@/utils/cep-lookup'; // IMPORTANDO UTILITÁRIO
 
 const textOptional = z.string().optional().or(z.literal(''));
 
@@ -35,7 +36,7 @@ const formSchema = z.object({
   
   // NOVOS CAMPOS DE ASSINATURA (Sincronizados com LogoUpload)
   assinatura_proprietario_nome: textOptional,
-  assinatura_proprietario_url: textOptional, // ÚNICO CAMPO DE URL
+  assinatura_proprietario_url: textOptional, // ÚNICO CAMPO de URL
   
   // Dados Cadastrais (Comum a Cliente e Admin)
   cpf: textOptional,
@@ -142,52 +143,43 @@ const form = useForm<FormValues>({
 const cepValue = form.watch('cep');
 const isAddressLoading = form.watch('endereco') === 'Buscando...';
 
-const fetchAddressByCep = useCallback(async (cep: string) => {
+// --- LÓGICA CENTRALIZADA DE BUSCA DE CEP ---
+const handleCepLookup = useCallback(async (cep: string) => {
   const cleanCep = cep.replace(/\D/g, '');
 
   if (cleanCep.length !== 8) {
     return;
   }
   
+  // 1. Define estado de carregamento
   form.setValue('endereco', 'Buscando...');
   form.setValue('bairro', 'Buscando...');
   form.setValue('cidade', 'Buscando...');
   form.setValue('estado', 'Buscando...');
   
-  try {
-    const response = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
-    const data = await response.json();
-
-    if (data.erro) {
-      showError('CEP não encontrado.');
+  const address = await fetchAddressByCep(cleanCep); // Usa o utilitário
+  
+  if (address) {
+      form.setValue('endereco', address.logradouro || '');
+      form.setValue('bairro', address.bairro || '');
+      form.setValue('cidade', address.localidade || '');
+      form.setValue('estado', address.uf || '');
+  } else {
+      // Limpa se falhar
       form.setValue('endereco', '');
       form.setValue('bairro', '');
       form.setValue('cidade', '');
       form.setValue('estado', '');
-      return;
-    }
-
-    form.setValue('endereco', data.logradouro || '');
-    form.setValue('bairro', data.bairro || '');
-    form.setValue('cidade', data.localidade || '');
-    form.setValue('estado', data.uf || '');
-    
-  } catch (error) {
-    console.error('Erro ao consultar ViaCEP:', error);
-    showError('Falha ao consultar o CEP.');
-    form.setValue('endereco', '');
-    form.setValue('bairro', '');
-    form.setValue('cidade', '');
-    form.setValue('estado', '');
   }
 }, [form]);
 
 useEffect(() => {
   const cleanCep = cepValue?.replace(/\D/g, '');
   if (cleanCep && cleanCep.length === 8) {
-    fetchAddressByCep(cleanCep);
+    handleCepLookup(cleanCep);
   }
-}, [cepValue, fetchAddressByCep]);
+}, [cepValue, handleCepLookup]);
+// --- FIM LÓGICA CENTRALIZADA DE BUSCA DE CEP ---
 
 
 const handleSelectAll = (select: boolean) => {
