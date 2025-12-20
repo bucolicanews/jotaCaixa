@@ -188,9 +188,13 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
             codigo_reduzido: codigoReduzido, // CORREÇÃO AQUI
             Descricao: conta.Descrição.trim(),
             Analitica: conta.Analítica,
-            is_conta_caixa_banco: false,
-            is_conta_patrimonial: false,
-            is_conta_resultado: false,
+            is_conta_caixa_banco: (conta as any).is_conta_caixa_banco || false,
+            is_conta_patrimonial: (conta as any).is_conta_patrimonial || false,
+            is_conta_resultado: (conta as any).is_conta_resultado || false,
+            is_caixa: (conta as any).is_caixa || false,
+            is_banco: (conta as any).is_banco || false,
+            is_a_receber: (conta as any).is_a_receber || false,
+            is_a_pagar: (conta as any).is_a_pagar || false,
           } as PlanoContas;
       });
       
@@ -223,7 +227,7 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
         
         onImportComplete();
         // MENSAGEM DE SUCESSO ALTERADA
-        showSuccess(`Cadastro do Plano de Contas realizado com sucesso.`);
+        showSuccess(`Plano de Contas importado e substituído com sucesso.`);
       }
 
     } catch (error) {
