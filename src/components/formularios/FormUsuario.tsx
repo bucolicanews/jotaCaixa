@@ -22,6 +22,7 @@ import FormDocumentos from '../usuario-forms/FormDocumentos';
 import FormDadosContratuais from '../usuario-forms/FormDadosContratuais';
 import FormFerias from '@/components/usuario-forms/FormFerias';
 import LogoUpload from '../LogoUpload'; // Importado para Cliente Profile
+import AvatarUpload from '../AvatarUpload'; // NOVO IMPORT
 import { Checkbox } from '../ui/checkbox'; // IMPORT CORRIGIDO
 import FormIdentificacao from '../cliente-forms/FormIdentificacao'; // NOVO IMPORT
 import FormContato from '../cliente-forms/FormContato'; // NOVO IMPORT
@@ -37,6 +38,7 @@ const textOptional = z.string().optional().or(z.literal(''));
 const urlSchema = z.string().url('URL inválida.').optional().or(z.literal(''));
 
 const formSchema = z.object({
+  avatar_url: textOptional, // ADICIONADO AO SCHEMA
   nome: z.string().min(1, 'O nome é obrigatório.'),
   email: z.string().email('Email inválido.'),
   senha: z.string().min(6, 'A senha deve ter pelo menos 6 caracteres.').optional().or(z.literal('')),
@@ -166,6 +168,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
+        avatar_url: '', // ADICIONADO
         nome: '',
         email: '',
         senha: '',
@@ -252,6 +255,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
     }, {} as Record<string, boolean>);
     
     const resetValues: Partial<FormValues> = {
+        avatar_url: profileToEdit?.avatar_url || '', // ADICIONADO
         nome: profileToEdit?.nome || '',
         email: profileToEdit?.email || '',
         senha: '',
@@ -326,7 +330,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
   // NOVO HANDLER: Sincroniza a URL da Logo com o campo de assinatura
   const handleLogoUploadComplete = useCallback(async (url: string | null) => {
       // Atualiza o campo de URL da assinatura com a nova URL da logo
-      form.setValue('assinatura_proprietario_url', url || '');
+      form.setValue('assinatura_proprietario_url', url || '', { shouldDirty: true });
       // Se for Cliente Profile, atualiza o logo_url também
       if (isEditingClientProfile) {
           await supabase.from('tbl_clientes').update({ logo_url: url || null }).eq('id', clientProfile!.id);
@@ -335,7 +339,12 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
   
   // NOVO HANDLER: Sincroniza a URL da Logo com o campo de assinatura (usado pelo checkbox)
   const handleSyncUrl = useCallback((url: string | null) => {
-      form.setValue('assinatura_proprietario_url', url || '');
+      form.setValue('assinatura_proprietario_url', url || '', { shouldDirty: true });
+  }, [form]);
+  
+  // NOVO HANDLER: Upload de Avatar
+  const handleAvatarUploadComplete = useCallback(async (url: string | null) => {
+      form.setValue('avatar_url', url || null, { shouldDirty: true });
   }, [form]);
   
   const isContractEditable = criadorRole === 'Admin' || criadorRole === 'Cliente' || criadorRole === 'Usuario';
@@ -394,7 +403,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                 return;
             }
             if (!emailDisponivel) {
-                showError('Este email já está cadastrado no sistema. Utilize outro email.');
+                showError('Este email já está cadastrado no sistema. Utilize outro email ou redefina a senha do usuário existente.');
                 setIsSubmitting(false);
                 return;
             }
@@ -442,6 +451,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
             const limiteUsuariosAtualizado = values.limite_usuarios ?? clientProfile?.limite_usuarios ?? 5;
             // Edição de Cliente Profile (tbl_clientes)
             const dataToUpdate: Partial<ClienteProfile> = {
+                avatar_url: values.avatar_url || null, // ADICIONADO
                 nome: values.nome,
                 email: values.email,
                 admin_id: isAdminContext ? proprietarioId : (criadorPerfil as ClienteProfile)?.admin_id,
@@ -482,6 +492,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
             const tabelaDestino = isAdminContext ? 'admin_usuarios' : 'tbl_usuarios';
             
             const dataToUpdate: any = { 
+                avatar_url: values.avatar_url || null, // ADICIONADO
                 nome: values.nome,
                 permissoes: values.permissoes,
                 
@@ -617,6 +628,13 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                         
                         {/* TAB 1: GERAL (CLIENTE PROFILE) */}
                         <TabsContent value="pessoal" className="mt-4 space-y-4 p-4">
+                            <AvatarUpload
+                                entityId={clientProfile!.id}
+                                bucketName="avatars"
+                                initialAvatarUrl={form.watch('avatar_url')}
+                                onUploadComplete={handleAvatarUploadComplete}
+                                isReadOnly={isSubmitting || isReadOnly}
+                            />
                             <FormField control={form.control} name="nome" render={({ field }) => (
                                 <FormItem><FormLabel>Nome Completo</FormLabel><FormControl><Input placeholder="Nome completo" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
                             )} />
@@ -632,10 +650,6 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                             
                             <FormField control={form.control} name="assinatura_proprietario_nome" render={({ field }) => (
                                 <FormItem><FormLabel>Nome da Empresa/Pessoa para Assinatura</FormLabel><FormControl><Input placeholder="Ex: Minha Empresa LTDA" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
-                            )} />
-                            
-                            <FormField control={form.control} name="assinatura_proprietario_url" render={({ field }) => (
-                                <FormItem><FormLabel>URL da Imagem de Assinatura (Logo)</FormLabel><FormControl><Input placeholder="URL da imagem de assinatura" {...field} disabled={isReadOnly} /></FormControl><FormMessage /></FormItem>
                             )} />
                             
                             <LogoUpload 
@@ -796,6 +810,13 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
             
             {/* TAB 1: GERAL */}
             <TabsContent value="pessoal" className="mt-4 space-y-4 p-4">
+                <AvatarUpload
+                    entityId={userProfile?.id || ''}
+                    bucketName="avatars"
+                    initialAvatarUrl={form.watch('avatar_url')}
+                    onUploadComplete={handleAvatarUploadComplete}
+                    isReadOnly={isSubmitting || isReadOnly}
+                />
               <FormGeral
                   control={form.control}
                   isSubmitting={isSubmitting}
