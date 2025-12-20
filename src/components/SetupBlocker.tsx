@@ -21,16 +21,25 @@ export const SetupChecklistList: React.FC<SetupChecklistListProps> = ({
     <ul className={cn('space-y-2', compact && 'text-sm space-y-1')}>
       {missingSteps.map((step) => {
         const meta = SETUP_STEPS_META[step];
+        
+        // Determina o link de destino
+        let targetPath = meta.link;
+        if (step === 'config_cp' || step === 'config_cr' || step === 'config_contratos') {
+            targetPath = `/configuracoes?tab=${step.replace('config_', '')}`;
+        }
+
         return (
           <li
             key={step}
             className="flex flex-col rounded-lg border border-dashed border-destructive/50 bg-destructive/5 p-3"
           >
-            <span className="font-medium text-destructive flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4" />
-              {meta.label}
-            </span>
-            <span className="text-muted-foreground text-sm">{meta.description}</span>
+            <Link to={targetPath} className="flex flex-col w-full">
+                <span className="font-medium text-destructive flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4" />
+                    {meta.label}
+                </span>
+                <span className="text-muted-foreground text-sm">{meta.description}</span>
+            </Link>
           </li>
         );
       })}
