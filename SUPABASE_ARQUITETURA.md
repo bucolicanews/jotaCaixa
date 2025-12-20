@@ -24,7 +24,7 @@ DECLARE
     v_historico_recebimento_id UUID;
     v_historico_pagamento_id UUID;
 BEGIN
-    -- 1. Busca os IDs das Contas Analíticas Padrão
+    -- 1. Busca os IDs das Contas Analíticas Padrão (USANDO AS ASPAS DUPLAS PARA GARANTIR O CASE)
     SELECT id INTO v_conta_caixa_id FROM public.plano_contas WHERE proprietario_id = p_proprietario_id AND "Conta" = '1.1.01.0001' LIMIT 1;
     SELECT id INTO v_conta_capital_id FROM public.plano_contas WHERE proprietario_id = p_proprietario_id AND "Conta" = '3.1.00.0001' LIMIT 1;
     SELECT id INTO v_conta_clientes_id FROM public.plano_contas WHERE proprietario_id = p_proprietario_id AND "Conta" = '1.1.02.0003' LIMIT 1; -- Usando 1.1.02.0003 conforme o CSV

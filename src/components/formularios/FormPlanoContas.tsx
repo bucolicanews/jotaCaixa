@@ -82,13 +82,14 @@ const FormPlanoContas: React.FC<FormPlanoContasProps> = ({ proprietarioId, conta
       codigo_reduzido: contaInicial?.codigo_reduzido || '',
       Descricao: contaInicial?.Descricao || '', // Inicializa a descrição
       Analitica: defaultAnalitica,
-      is_conta_caixa_banco: (contaInicial as any)?.is_conta_caixa_banco || false, // Corrigido acesso
-      is_conta_patrimonial: contaInicial?.is_conta_patrimonial || false, // NOVO CAMPO
+      // Garante que as flags sejam lidas corretamente, com fallback para false
+      is_conta_caixa_banco: contaInicial?.is_conta_caixa_banco || false,
+      is_conta_patrimonial: contaInicial?.is_conta_patrimonial || false,
       is_conta_resultado: contaInicial?.is_conta_resultado || false,
-      is_caixa: contaInicial?.is_caixa || false, // NOVO
-      is_banco: contaInicial?.is_banco || false, // NOVO
-      is_a_receber: contaInicial?.is_a_receber || false, // NOVO CAMPO
-      is_a_pagar: contaInicial?.is_a_pagar || false, // NOVO CAMPO
+      is_caixa: contaInicial?.is_caixa || false,
+      is_banco: contaInicial?.is_banco || false,
+      is_a_receber: contaInicial?.is_a_receber || false,
+      is_a_pagar: contaInicial?.is_a_pagar || false,
     },
   });
   
