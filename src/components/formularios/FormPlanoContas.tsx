@@ -56,21 +56,6 @@ const formSchema = z.object({
   is_banco: z.boolean().optional(), // NOVO
   is_a_receber: z.boolean().optional(), // NOVO CAMPO
   is_a_pagar: z.boolean().optional(), // NOVO CAMPO
-}).superRefine((data, ctx) => {
-    if (data.Analitica === 'Sim' && (data.is_caixa || data.is_banco) && data.is_conta_patrimonial) {
-        ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: 'Uma conta não pode ser Caixa/Banco E Patrimonial ao mesmo tempo.',
-            path: ['is_conta_patrimonial'],
-        });
-    }
-    if (data.Analitica === 'Sim' && data.is_caixa && data.is_banco) {
-        ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: 'Uma conta não pode ser Caixa E Banco ao mesmo tempo.',
-            path: ['is_banco'],
-        });
-    }
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -95,7 +80,7 @@ const FormPlanoContas: React.FC<FormPlanoContasProps> = ({ proprietarioId, conta
     defaultValues: {
       Conta: defaultConta,
       codigo_reduzido: contaInicial?.codigo_reduzido || '',
-      Descricao: contaInicial?.Descricao || '',
+      Descricao: contaInicial?.Descricao || '', // Inicializa a descrição
       Analitica: defaultAnalitica,
       is_conta_caixa_banco: (contaInicial as any)?.is_conta_caixa_banco || false, // Corrigido acesso
       is_conta_patrimonial: contaInicial?.is_conta_patrimonial || false, // NOVO CAMPO
@@ -145,6 +130,18 @@ const FormPlanoContas: React.FC<FormPlanoContasProps> = ({ proprietarioId, conta
   }, [fetchMascara]);
 
   const onSubmit = async (values: FormValues) => {
+    
+    // Validação de Flags (para evitar conflitos)
+    if (values.Analitica === 'Sim') {
+        if ((values.is_caixa || values.is_banco) && values.is_conta_patrimonial) {
+            showError('Uma conta não pode ser Caixa/Banco E Patrimonial ao mesmo tempo.');
+            return;
+        }
+        if (values.is_caixa && values.is_banco) {
+            showError('Uma conta não pode ser Caixa E Banco ao mesmo tempo.');
+            return;
+        }
+    }
     
     // Validação da Máscara (Apenas para contas analíticas)
     if (values.Analitica === 'Sim' && mascara) {

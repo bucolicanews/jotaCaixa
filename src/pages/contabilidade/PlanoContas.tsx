@@ -11,8 +11,8 @@ import {
   Search,
   ArrowUp,
   ArrowRight,
-  FileDown, // Adicionado
-  FileUp, // Adicionado
+  FileDown,
+  FileUp,
   CheckCircle2,
   AlertTriangle,
   Info,
@@ -24,8 +24,9 @@ import { showError, showSuccess } from '@/utils/toast';
 import { PlanoContas } from '@/types/plano-contas';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import FormPlanoContas from '@/components/formularios/FormPlanoContas';
-import ImportarPlanoContas from '@/components/contabilidade/ImportarPlanoContas'; // Importado
-import ExportarPlanoContasButton from '@/components/contabilidade/ExportarPlanoContasButton'; // Importado
+import FormPlanoContasDialog from '@/components/formularios/FormPlanoContasDialog'; // IMPORTADO
+import ImportarPlanoContas from '@/components/contabilidade/ImportarPlanoContas';
+import ExportarPlanoContasButton from '@/components/contabilidade/ExportarPlanoContasButton';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -39,12 +40,12 @@ import { useSessao } from '@/hooks/use-sessao';
 interface NovaContaInicial {
     Conta: string;
     Analitica: 'Sim' | 'Não';
+    Descricao: string; // Adicionado para preenchimento inicial
 }
 
 // Tipo para os dados que o FormPlanoContas realmente precisa para inicializar
 type FormInitialData = PlanoContas | (NovaContaInicial & {
     codigo_reduzido: string;
-    Descricao: string;
     is_conta_caixa_banco: boolean;
     is_conta_patrimonial: boolean;
     is_conta_resultado: boolean;
@@ -101,7 +102,7 @@ const TableCell = React.forwardRef<HTMLTableCellElement, React.TdHTMLAttributes<
         {...props}
       >
         {children}
-      </td>
+      </tr>
     );
   }
 );
@@ -124,7 +125,7 @@ const PlanoContasPage = () => {
   // NOVO ESTADO: Conta clicada para navegação hierárquica
   const [contaClicada, setContaClicada] = useState<PlanoContas | null>(null);
   const [popoverOpen, setPopoverOpen] = useState(false);
-  const [mascaraAtiva, setMascaraAtiva] = useState<string | null>(null); // NOVO ESTADO PARA MÁSCARA
+  const [mascaraAtiva, setMascaraAtiva] = useState<string | null>(null);
 
   // Estados dos filtros
   const [filtroTexto, setFiltroTexto] = useState('');
@@ -139,7 +140,7 @@ const PlanoContasPage = () => {
         .select('mascara_codigo')
         .eq('proprietario_id', id)
         .limit(1)
-        .maybeSingle(); // Busca a máscara
+        .maybeSingle();
         
     if (error) {
         console.error('Erro ao buscar máscara:', error);
@@ -287,13 +288,14 @@ const PlanoContasPage = () => {
       setPopoverOpen(true);
   };
   
-  const handleOpenNewConta = (nivel: 'acima' | 'mesmo') => {
+  const handleOpenNewConta = (nivel: 'acima' | 'mesmo' | 'abaixo') => {
       if (!contaClicada) return;
       
       const parts = contaClicada.Conta.split('.').filter(p => p.length > 0);
       const nivelAtual = parts.length;
       let novoCodigo = '';
       let novaAnalitica: 'Sim' | 'Não' = 'Não';
+      let novaDescricao = '';
       
       // 1. Determinar a máscara de padding
       const maskParts = mascaraAtiva?.split('.') || [];
@@ -301,6 +303,7 @@ const PlanoContasPage = () => {
       // Função auxiliar para calcular o próximo segmento
       const calculateNextSegment = (prefixo: string, nivelSegmento: number, paddingLength: number): string => {
           const prefixoBusca = prefixo ? prefixo + '.' : '';
+          
           // Filtra contas que são filhas diretas do prefixo (ou contas de nível 1 se prefixo vazio)
           const contasFilhas = contas.filter(c => {
               const cParts = c.Conta.split('.').filter(p => p.length > 0);
@@ -343,7 +346,6 @@ const PlanoContasPage = () => {
           
           const codigoPai = parts.slice(0, nivelSegmento).join('.');
           
-          // CORREÇÃO DE PADDING: Garante que o paddingLength seja extraído corretamente da máscara
           const maskSegment = maskParts[nivelSegmento];
           
           if (!maskSegment) {
@@ -352,7 +354,7 @@ const PlanoContasPage = () => {
              return;
           }
           
-          const paddingLength = maskSegment.length; // Usa o tamanho exato do segmento da máscara (e.g., 2 para '00')
+          const paddingLength = maskSegment.length;
           
           const novoSegmento = calculateNextSegment(codigoPai, nivelSegmento, paddingLength);
           
@@ -362,11 +364,33 @@ const PlanoContasPage = () => {
               novoCodigo = `${codigoPai}.${novoSegmento}`;
           }
           
-          novaAnalitica = 'Não'; // Sugere sintética para o mesmo nível
+          novaAnalitica = 'Não';
+          novaDescricao = `Nova Conta Nível ${nivelAtual}`;
+          
+      } else if (nivel === 'abaixo') {
+          // Nível Abaixo: Adiciona um novo segmento
+          
+          const nivelSegmento = nivelAtual; // O segmento a ser incrementado é o próximo
+          
+          if (nivelSegmento >= maskParts.length) {
+              showError(`A máscara (${mascaraAtiva}) não permite criar contas no nível ${nivelAtual + 1}.`);
+              setPopoverOpen(false);
+              return;
+          }
+          
+          const codigoPai = contaClicada.Conta;
+          const maskSegment = maskParts[nivelSegmento];
+          const paddingLength = maskSegment.length;
+          
+          const novoSegmento = calculateNextSegment(codigoPai, nivelSegmento, paddingLength);
+          
+          novoCodigo = `${codigoPai}.${novoSegmento}`;
+          novaAnalitica = 'Sim'; // Sugere analítica para o nível mais baixo
+          novaDescricao = `Nova Conta Analítica`;
       }
       
       setContaSelecionada(null); // Garante que é uma nova conta
-      setNovaContaInicial({ Conta: novoCodigo, Analitica: novaAnalitica }); // Define os valores iniciais
+      setNovaContaInicial({ Conta: novoCodigo, Analitica: novaAnalitica, Descricao: novaDescricao }); // Define os valores iniciais
       setDialogAberto(true);
       setPopoverOpen(false);
   };
@@ -379,8 +403,8 @@ const PlanoContasPage = () => {
         ? { 
             Conta: novaContaInicial.Conta, 
             Analitica: novaContaInicial.Analitica,
-            codigo_reduzido: '', 
-            Descricao: '', 
+            Descricao: novaContaInicial.Descricao,
+            codigo_reduzido: novaContaInicial.Conta.replace(/\./g, ''), 
             is_conta_caixa_banco: false,
             is_conta_patrimonial: false,
             is_conta_resultado: false,
@@ -400,7 +424,7 @@ const PlanoContasPage = () => {
       (c) =>
         c.is_conta_patrimonial &&
         ((c.Descricao && c.Descricao.toLowerCase().includes('capital')) ||
-          (c.Conta && c.Conta.toLowerCase().includes('capital'))),
+          (c.Conta && c.Conta.toLowerCase().includes('3.1.00.0001'))),
     );
     const hasReceita = contas.some(
       (c) =>
@@ -411,7 +435,7 @@ const PlanoContasPage = () => {
     const hasDespesa = contas.some(
       (c) =>
         c.is_conta_resultado &&
-        ((c.Conta && c.Conta.startsWith('5')) ||
+        ((c.Conta && (c.Conta.startsWith('5') || c.Conta.startsWith('6'))) ||
           (c.Descricao &&
             (c.Descricao.toLowerCase().includes('despesa') ||
               c.Descricao.toLowerCase().includes('custo')))),
@@ -506,25 +530,13 @@ const PlanoContasPage = () => {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
         <h1 className="text-2xl md:text-3xl font-bold">Plano de Contas</h1>
         <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-            <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
-              <DialogTrigger asChild>
-                <Button onClick={() => { setContaSelecionada(null); setNovaContaInicial(null); }} className="w-full sm:w-auto">
-                  <PlusCircle className="w-4 h-4 mr-2" />
-                  Nova Conta
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[425px] max-h-[95vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle>{(initialFormValues as PlanoContas)?.id ? 'Editar Conta' : 'Nova Conta'}</DialogTitle>
-                </DialogHeader>
-                <FormPlanoContas 
-                  proprietarioId={proprietarioId}
-                  contaInicial={initialFormValues as PlanoContas | null}
-                  onSaveComplete={handleSaveComplete}
-                />
-              </DialogContent>
-            </Dialog>
-            
+            <FormPlanoContasDialog
+                open={dialogAberto}
+                onOpenChange={setDialogAberto}
+                contaInicial={initialFormValues as PlanoContas | null}
+                proprietarioId={proprietarioId}
+                onSaveComplete={handleSaveComplete}
+            />
             <ImportarPlanoContas onImportComplete={handleImportComplete} />
             <ExportarPlanoContasButton />
             <Button variant="outline" className="w-full sm:w-auto" asChild>
@@ -871,8 +883,8 @@ const PlanoContasPage = () => {
                               <Button variant="ghost" size="sm" onClick={() => handleOpenNewConta('mesmo')}>
                                 <ArrowRight className="w-4 h-4 mr-2" /> Criar Conta Mesmo Nível
                               </Button>
-                              <Button variant="ghost" size="sm" onClick={() => handleOpenNewConta('acima')}>
-                                <ArrowUp className="w-4 h-4 mr-2" /> Criar Conta Nível Acima
+                              <Button variant="ghost" size="sm" onClick={() => handleOpenNewConta('abaixo')}>
+                                <ChevronDown className="w-4 h-4 mr-2" /> Criar Conta Nível Abaixo
                               </Button>
                             </PopoverContent>
                           </Popover>
@@ -887,19 +899,16 @@ const PlanoContasPage = () => {
         </div>
       </div>
       
-      {/* Diálogo de Criação/Edição (usando o FormPlanoContas) */}
-      <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
-        <DialogContent className="sm:max-w-[425px] max-h-[95vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{(initialFormValues as PlanoContas)?.id ? 'Editar Conta' : 'Nova Conta'}</DialogTitle>
-          </DialogHeader>
-          <FormPlanoContas 
-            proprietarioId={proprietarioId}
-            contaInicial={initialFormValues as PlanoContas | null}
-            onSaveComplete={handleSaveComplete}
+      {/* Diálogo de Criação/Edição (usando o FormPlanoContasDialog) */}
+      {proprietarioId && (
+          <FormPlanoContasDialog
+              open={dialogAberto}
+              onOpenChange={setDialogAberto}
+              contaInicial={initialFormValues as PlanoContas | null}
+              proprietarioId={proprietarioId}
+              onSaveComplete={handleSaveComplete}
           />
-        </DialogContent>
-      </Dialog>
+      )}
     </LayoutPrincipal>
   );
 };
