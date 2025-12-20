@@ -36,6 +36,7 @@ const AvatarUpload: React.FC<AvatarUploadProps> = ({ entityId, bucketName, initi
 
     try {
       const fileExt = file.name.split('.').pop();
+      // Caminho: [user_id]/avatar.[ext] - CRÍTICO para RLS
       const filePath = `${entityId}/avatar.${fileExt}`; 
       
       const { error: uploadError } = await supabase.storage
