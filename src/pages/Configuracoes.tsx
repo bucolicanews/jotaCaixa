@@ -12,9 +12,10 @@ import { Key, Settings, DollarSign, ArrowDownCircle, FileSignature, BookOpen, Sc
 import FormConfiguracaoTabelasPadrao from '@/components/formularios/FormConfiguracaoTabelasPadrao';
 import { ClienteProfile } from '@/types/usuario';
 import { cn } from '@/lib/utils';
+import ResetConfiguracoesPadrao from '@/components/formularios/ResetConfiguracoesPadrao'; // NOVO IMPORT
 
 const Configuracoes = () => {
-  const { role, usuario, perfil } = useSessao();
+  const { role, usuario, perfil, refetch } = useSessao();
   const isAdmin = role === 'Admin';
   const isCliente = role === 'Cliente';
   const canAccessContabil = isAdmin || isCliente;
@@ -81,14 +82,27 @@ const Configuracoes = () => {
         {/* Conteúdos das Abas (Mantidos conforme sua lógica) */}
         <div className="mt-6">
             <TabsContent value="geral">
-              <Card>
-                <CardHeader><CardTitle>Configurações Gerais da Empresa</CardTitle></CardHeader>
-                <CardContent>
-                  <p className="text-muted-foreground">
-                    Gerencie informações básicas da empresa, como nome, endereço e dados de contato.
-                  </p>
-                </CardContent>
-              </Card>
+              <div className="space-y-6">
+                <Card>
+                  <CardHeader><CardTitle>Configurações Gerais da Empresa</CardTitle></CardHeader>
+                  <CardContent>
+                    <p className="text-muted-foreground">
+                      Gerencie informações básicas da empresa, como nome, endereço e dados de contato.
+                    </p>
+                  </CardContent>
+                </Card>
+                
+                {/* NOVO: Botão de Reset */}
+                {proprietarioId && (
+                    <ResetConfiguracoesPadrao 
+                        proprietarioId={proprietarioId} 
+                        onResetComplete={() => {
+                            // Após o reset, forçamos o recarregamento da página para atualizar o Plano de Contas
+                            window.location.reload();
+                        }}
+                    />
+                )}
+              </div>
             </TabsContent>
             
             {canAccessContabil && (
