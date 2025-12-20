@@ -596,15 +596,15 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
       
       // 2. Se for edição de perfil de funcionário por ele mesmo
       if (isSelfEditUsuario) {
-          // Apenas 'cadastrais' deve ser editável. Todos os outros são read-only.
-          return tabValue !== 'cadastrais';
+          // Permite edição em 'pessoal' e 'cadastrais'
+          return tabValue !== 'pessoal' && tabValue !== 'cadastrais';
       }
       
       return false;
   };
   
   // 3. Controla a visibilidade do botão de salvar
-  const shouldShowSaveButton = !isReadOnly && (!isSelfEditUsuario || activeTab === 'cadastrais');
+  const shouldShowSaveButton = !isReadOnly && (!isSelfEditUsuario || activeTab === 'pessoal' || activeTab === 'cadastrais');
   
   // Se for Cliente Profile, remove as abas de RH
   if (isEditingClientProfile) {
@@ -815,7 +815,7 @@ const FormUsuario: React.FC<FormUsuarioProps> = ({
                     bucketName="avatars"
                     initialAvatarUrl={form.watch('avatar_url')}
                     onUploadComplete={handleAvatarUploadComplete}
-                    isReadOnly={isSubmitting || isReadOnly}
+                    isReadOnly={isSubmitting || isChildFormReadOnly('pessoal')}
                 />
               <FormGeral
                   control={form.control}
