@@ -1,3 +1,14 @@
+-- Função auxiliar para converter strings como 'TRUE', 'FALSE', 'Sim', 'Não' para booleanos
+CREATE OR REPLACE FUNCTION public.to_boolean_safe(p_text text)
+RETURNS boolean
+LANGUAGE sql
+AS $$
+    SELECT CASE 
+        WHEN UPPER(TRIM(p_text)) IN ('TRUE', 'T', 'SIM', '1') THEN TRUE
+        ELSE FALSE
+    END;
+$$;
+
 -- Função para importar tabelas padrão (Plano de Contas e Históricos)
 -- ATUALIZADO: Corrigido o formato do string CSV usando dollar-quoting para garantir a integridade dos dados.
 CREATE OR REPLACE FUNCTION public.import_default_tables(p_proprietario_id uuid)
@@ -108,8 +119,8 @@ BEGIN
                 is_conta_caixa_banco, is_conta_patrimonial, is_conta_resultado, is_caixa, is_banco, is_a_receber, is_a_pagar
             ) VALUES (
                 p_proprietario_id, csv_fields[1], csv_fields[2], csv_fields[3], csv_fields[4],
-                UPPER(csv_fields[5]) = 'TRUE', UPPER(csv_fields[6]) = 'TRUE', UPPER(csv_fields[7]) = 'TRUE',
-                UPPER(csv_fields[8]) = 'TRUE', UPPER(csv_fields[9]) = 'TRUE', UPPER(csv_fields[10]) = 'TRUE', UPPER(csv_fields[11]) = 'TRUE'
+                public.to_boolean_safe(csv_fields[5]), public.to_boolean_safe(csv_fields[6]), public.to_boolean_safe(csv_fields[7]),
+                public.to_boolean_safe(csv_fields[8]), public.to_boolean_safe(csv_fields[9]), public.to_boolean_safe(csv_fields[10]), public.to_boolean_safe(csv_fields[11])
             );
         END IF;
     END LOOP;
