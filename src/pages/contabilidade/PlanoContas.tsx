@@ -35,6 +35,7 @@ import EditableCell from '@/components/contabilidade/EditableCell';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { useSessao } from '@/hooks/use-sessao';
+import { SETUP_STEPS_META } from '@/utils/setup-status';
 
 // Tipo para inicializar o formulário de nova conta
 interface NovaContaInicial {
@@ -109,7 +110,7 @@ const TableCell = React.forwardRef<HTMLTableCellElement, React.TdHTMLAttributes<
 
 
 const PlanoContasPage = () => {
-  const { usuario, perfil, role, carregando: carregandoSessao, refetch: refetchSessao } = useSessao();
+  const { usuario, perfil, role, carregando: carregandoSessao, refetch: refetchSessao, setupStatus } = useSessao();
   const [contas, setContas] = useState<PlanoContas[]>([]);
   const [carregandoContas, setCarregandoContas] = useState(true);
   const [proprietarioId, setProprietarioId] = useState<string | null>(null);
@@ -168,8 +169,8 @@ const PlanoContasPage = () => {
       let prefix = '';
       if (filtroTipoConta === 'ativo') prefix = '1';
       if (filtroTipoConta === 'passivo') prefix = '2';
-      if (filtroTipoConta === 'receita') prefix = '3';
-      if (filtroTipoConta === 'despesa') prefix = '4';
+      if (filtroTipoConta === 'receita') prefix = '4'; // CORREÇÃO: Receita é 4
+      if (filtroTipoConta === 'despesa') prefix = '5'; // CORREÇÃO: Despesa é 5/6
       query = query.like('Conta', `${prefix}.%`);
     }
 
@@ -247,6 +248,7 @@ const PlanoContasPage = () => {
       if (proprietarioId) {
           buscarPlanoContas(proprietarioId);
       }
+      refetchSessao(); // CRÍTICO: Refetch da sessão para atualizar o setupStatus
   };
 
   const handleEdit = (conta: PlanoContas) => {
@@ -265,8 +267,8 @@ const PlanoContasPage = () => {
         await supabase.from('lancamentos').update({ conta_contabil_id: null }).eq('conta_contabil_id', id);
         await supabase.from('configuracao_contas_receber').update({ conta_contabil_id: null }).eq('conta_contabil_id', id);
         await supabase.from('configuracao_contas_pagar').update({ conta_contabil_id: null }).eq('conta_contabil_id', id);
-        await supabase.from('configuracoes_stripe').update({ conta_sintetica_id: null }).eq('conta_sintetica_id', id);
-        await supabase.from('configuracoes_stripe').update({ conta_receber_id: null }).eq('conta_receber_id', id);
+        await supabase.from('configuracoes_stripe').update({ conta_sintetica_id: null, conta_receber_id: null }).eq('proprietario_id', proprietarioId);
+        await supabase.from('configuracao_contratos').update({ id_conta_clientes_receber: null, id_conta_receita_contrato: null }).eq('proprietario_id', proprietarioId); // NOVO: Contratos
         
         // 2. Deletar a conta
         const { error } = await supabase
@@ -444,60 +446,59 @@ const PlanoContasPage = () => {
     );
 
     return {
-      caixa: hasCaixa,
-      banco: hasBanco,
-      cliente: hasCliente,
-      fornecedor: hasFornecedor,
-      capital: hasCapital,
-      receita: hasReceita,
-      despesa: hasDespesa,
+      plano_contas: contas.length > 0,
+      historicos: setupStatus?.missingSteps.includes('historicos') === false,
+      config_cr: setupStatus?.missingSteps.includes('config_cr') === false,
+      config_cp: setupStatus?.missingSteps.includes('config_cp') === false,
+      config_contratos: setupStatus?.missingSteps.includes('config_contratos') === false,
+      plano_contas_caixa: hasCaixa,
+      plano_contas_banco: hasBanco,
+      plano_contas_cliente: hasCliente,
+      plano_contas_fornecedor: hasFornecedor,
+      plano_contas_capital_social: hasCapital,
+      plano_contas_receita: hasReceita,
+      plano_contas_despesa: hasDespesa,
     };
-  }, [contas]);
+  }, [contas, setupStatus?.missingSteps]);
 
-  const allGuiaDone = useMemo(() => Object.values(guiaStatus).every(Boolean), [guiaStatus]);
+  const allGuiaDone = useMemo(() => {
+      const requiredKeys: (keyof typeof guiaStatus)[] = [
+          'plano_contas', 'historicos', 'config_cr', 'config_cp', 'config_contratos',
+          'plano_contas_caixa', 'plano_contas_banco', 'plano_contas_cliente', 
+          'plano_contas_fornecedor', 'plano_contas_capital_social', 
+          'plano_contas_receita', 'plano_contas_despesa'
+      ];
+      return requiredKeys.every(key => guiaStatus[key]);
+  }, [guiaStatus]);
 
   const guiaItens = [
     {
-      key: '1',
-      title: 'Caixa',
-      description: 'Marque uma conta analítica com o switch "☑ Caixa?".',
-      done: guiaStatus.caixa,
+      key: 'plano_contas',
+      title: '1. Importe o Plano de Contas',
+      description: 'Cadastre ou importe o plano de contas do cliente.',
+      link: '/plano-contas',
+      done: guiaStatus.plano_contas,
     },
     {
-      key: '2',
-      title: 'Banco',
-      description: 'Marque uma conta analítica com o switch "☑ Banco?".',
-      done: guiaStatus.banco,
+      key: 'historicos',
+      title: '2. Importe os Históricos',
+      description: 'Importe ou cadastre históricos financeiros em Configurações > Históricos.',
+      link: '/historicos',
+      done: guiaStatus.historicos,
     },
     {
-      key: '3',
-      title: 'Clientes / Contas a Receber',
-      description: 'Marque uma conta patrimonial com o switch "Clientes a Receber".',
-      done: guiaStatus.cliente,
+      key: 'plano_contas_caixa',
+      title: '3. Marque as Contas Essenciais',
+      description: 'Marque ao menos uma conta analítica para cada categoria (Caixa, Banco, Clientes, Fornecedores, Capital, Receita, Despesa).',
+      link: '/plano-contas',
+      done: guiaStatus.plano_contas_caixa && guiaStatus.plano_contas_banco && guiaStatus.plano_contas_cliente && guiaStatus.plano_contas_fornecedor && guiaStatus.plano_contas_capital_social && guiaStatus.plano_contas_receita && guiaStatus.plano_contas_despesa,
     },
     {
-      key: '4',
-      title: 'Fornecedores / Contas a Pagar',
-      description: 'Marque uma conta patrimonial com o switch "Fornecedores a Pagar".',
-      done: guiaStatus.fornecedor,
-    },
-    {
-      key: '5',
-      title: 'Capital Social',
-      description: 'Identifique a conta de capital social e mantenha o flag patrimonial ativo.',
-      done: guiaStatus.capital,
-    },
-    {
-      key: '6',
-      title: 'Receita',
-      description: 'Marque ao menos uma conta de resultado como Receita.',
-      done: guiaStatus.receita,
-    },
-    {
-      key: '7',
-      title: 'Despesa / Custo',
-      description: 'Marque ao menos uma conta de resultado como Despesa ou Custo.',
-      done: guiaStatus.despesa,
+      key: 'config_contabil',
+      title: '4. Configure Mapeamentos Contábeis',
+      description: 'Verifique se as configurações de Níveis, CR, CP e Contratos estão preenchidas.',
+      link: '/configuracoes',
+      done: guiaStatus.config_cr && guiaStatus.config_cp && guiaStatus.config_contratos,
     },
   ];
 
@@ -532,13 +533,21 @@ const PlanoContasPage = () => {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
         <h1 className="text-2xl md:text-3xl font-bold">Plano de Contas</h1>
         <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-            <FormPlanoContasDialog
-                open={dialogAberto}
-                onOpenChange={setDialogAberto}
-                contaInicial={initialFormValues as PlanoContas | null}
-                proprietarioId={proprietarioId}
-                onSaveComplete={handleSaveComplete}
-            />
+            <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
+                <DialogTrigger asChild>
+                    <Button onClick={() => { setContaSelecionada(null); setNovaContaInicial(null); }} className="w-full sm:w-auto">
+                        <PlusCircle className="w-4 h-4 mr-2" />
+                        Nova Conta
+                    </Button>
+                </DialogTrigger>
+                <FormPlanoContasDialog
+                    open={dialogAberto}
+                    onOpenChange={setDialogAberto}
+                    contaInicial={initialFormValues as PlanoContas | null}
+                    proprietarioId={proprietarioId}
+                    onSaveComplete={handleSaveComplete}
+                />
+            </Dialog>
             <ImportarPlanoContas onImportComplete={handleImportComplete} />
             <ExportarPlanoContasButton />
             <Button variant="outline" className="w-full sm:w-auto" asChild>
@@ -590,7 +599,7 @@ const PlanoContasPage = () => {
                 className={cn(
                   'flex items-start gap-3 rounded-lg border p-3 text-sm',
                   item.done
-                    ? 'border-emerald-400 bg-emerald-50 dark:bg-emerald-900/20'
+                    ? 'border-emerald-400 bg-emerald-50/50 dark:bg-emerald-900/20'
                     : 'border-amber-400 bg-amber-50 dark:bg-amber-900/20',
                 )}
               >
@@ -601,7 +610,7 @@ const PlanoContasPage = () => {
                 )}
                 <div>
                   <p className="font-semibold">
-                    {item.key}. {item.title}
+                    {item.title}
                   </p>
                   <p className="text-muted-foreground">{item.description}</p>
                 </div>
@@ -641,8 +650,8 @@ const PlanoContasPage = () => {
                   <SelectItem value="todos">Todos os Tipos</SelectItem>
                   <SelectItem value="ativo">Ativo (Inicia com 1)</SelectItem>
                   <SelectItem value="passivo">Passivo (Inicia com 2)</SelectItem>
-                  <SelectItem value="receita">Receita (Inicia com 3)</SelectItem>
-                  <SelectItem value="despesa">Despesa (Inicia com 4)</SelectItem>
+                  <SelectItem value="receita">Receita (Inicia com 4)</SelectItem>
+                  <SelectItem value="despesa">Despesa (Inicia com 5/6)</SelectItem>
                 </SelectContent>
               </Select>
 

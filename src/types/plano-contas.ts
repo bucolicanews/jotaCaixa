@@ -5,13 +5,13 @@ export interface PlanoContas {
   Descricao: string; // Nome da Conta
   codigo_reduzido: string | null;
   Analitica: 'Sim' | 'Não'; // Sim ou Não
-  is_conta_caixa_banco: boolean; // RENOMEADO: Antigo is_conta_saldo
-  is_conta_patrimonial: boolean; // NOVO CAMPO
-  is_conta_resultado: boolean; // NOVO CAMPO
+  is_conta_caixa_banco?: boolean; // RENOMEADO: Antigo is_conta_saldo
+  is_conta_patrimonial?: boolean; // NOVO CAMPO
+  is_conta_resultado?: boolean; // NOVO CAMPO
   criado_em: string;
   atualizado_em: string;
-  is_caixa: boolean; // ADICIONADO
-  is_banco: boolean; // ADICIONADO
+  is_caixa?: boolean; // ADICIONADO
+  is_banco?: boolean; // ADICIONADO
   is_a_receber?: boolean; // NOVO CAMPO
   is_a_pagar?: boolean; // NOVO CAMPO
 }
@@ -21,6 +21,13 @@ export interface ContaCSV {
   'Código reduzido': string; // Corrigido para o cabeçalho exato
   Descrição: string; // Corrigido para o cabeçalho exato
   Analítica: 'Sim' | 'Não'; // Corrigido para o cabeçalho exato
+  is_conta_caixa_banco?: boolean;
+  is_conta_patrimonial?: boolean;
+  is_conta_resultado?: boolean;
+  is_caixa?: boolean;
+  is_banco?: boolean;
+  is_a_receber?: boolean;
+  is_a_pagar?: boolean;
 }
 
 // Interface para dados importados via JSON (mesmos campos finais)
@@ -29,4 +36,11 @@ export interface ContaJSON {
   'Código reduzido': string;
   Descrição: string;
   Analítica: 'Sim' | 'Não';
+  is_conta_caixa_banco?: boolean;
+  is_conta_patrimonial?: boolean;
+  is_conta_resultado?: boolean;
+  is_caixa?: boolean;
+  is_banco?: boolean;
+  is_a_receber?: boolean;
+  is_a_pagar?: boolean;
 }

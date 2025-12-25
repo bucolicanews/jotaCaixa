@@ -82,13 +82,13 @@ const FormPlanoContas: React.FC<FormPlanoContasProps> = ({ proprietarioId, conta
       Descricao: contaInicial?.Descricao || '',
       Analitica: contaInicial?.Analitica || 'Não',
       // As flags agora usam o .default(false) do Zod schema
-      is_conta_caixa_banco: contaInicial?.is_conta_caixa_banco,
-      is_conta_patrimonial: contaInicial?.is_conta_patrimonial,
-      is_conta_resultado: contaInicial?.is_conta_resultado,
-      is_caixa: contaInicial?.is_caixa,
-      is_banco: contaInicial?.is_banco,
-      is_a_receber: contaInicial?.is_a_receber,
-      is_a_pagar: contaInicial?.is_a_pagar,
+      is_conta_caixa_banco: contaInicial?.is_conta_caixa_banco ?? false,
+      is_conta_patrimonial: contaInicial?.is_conta_patrimonial ?? false,
+      is_conta_resultado: contaInicial?.is_conta_resultado ?? false,
+      is_caixa: contaInicial?.is_caixa ?? false,
+      is_banco: contaInicial?.is_banco ?? false,
+      is_a_receber: contaInicial?.is_a_receber ?? false,
+      is_a_pagar: contaInicial?.is_a_pagar ?? false,
     },
   });
   

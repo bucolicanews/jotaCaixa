@@ -269,9 +269,6 @@ BEGIN
 
     -- 8. Mapeamento de Contratos (configuracao_contratos)
     IF v_conta_clientes_id IS NOT NULL AND v_conta_receita_id IS NOT NULL THEN
-    -- Tenta inserir, se já existir um para o proprietario_id, atualiza.
-    -- É preciso uma restrição UNIQUE em proprietario_id na tabela configuracao_contratos para isso funcionar.
-    -- A migração `20251221_configuracao_contratos_unique_constraint.sql` garante essa restrição.
         INSERT INTO public.configuracao_contratos(proprietario_id, id_conta_clientes_receber, id_conta_receita_contrato)
         VALUES (p_proprietario_id, v_conta_clientes_id, v_conta_receita_id)
         ON CONFLICT (proprietario_id) DO UPDATE 

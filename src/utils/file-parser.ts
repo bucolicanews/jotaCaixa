@@ -4,6 +4,16 @@ import { HistoricoCSV } from '@/types/historico'; // Importando HistoricoCSV
 
 type ParsedData = ContaCSV[] | ContaJSON[] | HistoricoCSV[];
 
+// Função auxiliar para converter string para booleano
+const toBoolean = (value: any): boolean => {
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'string') {
+        const upper = value.toUpperCase().trim();
+        return upper === 'TRUE' || upper === 'SIM' || upper === '1';
+    }
+    return false;
+};
+
 /**
  * Faz o parse de um arquivo CSV.
  */
@@ -25,13 +35,13 @@ const parseCSV = (file: File): Promise<ParsedData> => {
               Descrição: String(row.Descrição || ''),
               Analítica: (row.Analítica === 'Sim' ? 'Sim' : 'Não') as 'Sim' | 'Não',
               // NOVO: Mapeamento das colunas booleanas
-              is_conta_caixa_banco: String(row.is_conta_caixa_banco).toUpperCase() === 'TRUE',
-              is_conta_patrimonial: String(row.is_conta_patrimonial).toUpperCase() === 'TRUE',
-              is_conta_resultado: String(row.is_conta_resultado).toUpperCase() === 'TRUE',
-              is_caixa: String(row.is_caixa).toUpperCase() === 'TRUE',
-              is_banco: String(row.is_banco).toUpperCase() === 'TRUE',
-              is_a_receber: String(row.is_a_receber).toUpperCase() === 'TRUE',
-              is_a_pagar: String(row.is_a_pagar).toUpperCase() === 'TRUE',
+              is_conta_caixa_banco: toBoolean(row.is_conta_caixa_banco),
+              is_conta_patrimonial: toBoolean(row.is_conta_patrimonial),
+              is_conta_resultado: toBoolean(row.is_conta_resultado),
+              is_caixa: toBoolean(row.is_caixa),
+              is_banco: toBoolean(row.is_banco),
+              is_a_receber: toBoolean(row.is_a_receber),
+              is_a_pagar: toBoolean(row.is_a_pagar),
             })).filter((row: ContaCSV) => row.Conta && row.Descrição);
             return resolve(data as ContaCSV[]);
         }
@@ -84,13 +94,13 @@ const parseJSON = (file: File): Promise<ParsedData> => {
                 Descrição: String(row.Descrição || ''),
                 Analítica: (row.Analítica === 'Sim' ? 'Sim' : 'Não') as 'Sim' | 'Não',
                 // NOVO: Mapeamento das colunas booleanas
-                is_conta_caixa_banco: row.is_conta_caixa_banco === true,
-                is_conta_patrimonial: row.is_conta_patrimonial === true,
-                is_conta_resultado: row.is_conta_resultado === true,
-                is_caixa: row.is_caixa === true,
-                is_banco: row.is_banco === true,
-                is_a_receber: row.is_a_receber === true,
-                is_a_pagar: row.is_a_pagar === true,
+                is_conta_caixa_banco: toBoolean(row.is_conta_caixa_banco),
+                is_conta_patrimonial: toBoolean(row.is_conta_patrimonial),
+                is_conta_resultado: toBoolean(row.is_conta_resultado),
+                is_caixa: toBoolean(row.is_caixa),
+                is_banco: toBoolean(row.is_banco),
+                is_a_receber: toBoolean(row.is_a_receber),
+                is_a_pagar: toBoolean(row.is_a_pagar),
             })).filter((row: ContaJSON) => row.Conta && row.Descrição);
             return resolve(data as ContaJSON[]);
         }
