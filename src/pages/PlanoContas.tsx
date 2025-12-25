@@ -35,6 +35,7 @@ import EditableCell from '@/components/contabilidade/EditableCell';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { useSessao } from '@/hooks/use-sessao';
+import { SETUP_STEPS_META } from '@/utils/setup-status';
 
 // Tipo para inicializar o formulário de nova conta
 interface NovaContaInicial {
@@ -109,7 +110,7 @@ const TableCell = React.forwardRef<HTMLTableCellElement, React.TdHTMLAttributes<
 
 
 const PlanoContasPage = () => {
-  const { usuario, perfil, role, carregando: carregandoSessao, refetch: refetchSessao } = useSessao();
+  const { usuario, perfil, role, carregando: carregandoSessao, refetch: refetchSessao, setupStatus } = useSessao();
   const [contas, setContas] = useState<PlanoContas[]>([]);
   const [carregandoContas, setCarregandoContas] = useState(true);
   const [proprietarioId, setProprietarioId] = useState<string | null>(null);
@@ -168,8 +169,8 @@ const PlanoContasPage = () => {
       let prefix = '';
       if (filtroTipoConta === 'ativo') prefix = '1';
       if (filtroTipoConta === 'passivo') prefix = '2';
-      if (filtroTipoConta === 'receita') prefix = '3';
-      if (filtroTipoConta === 'despesa') prefix = '4';
+      if (filtroTipoConta === 'receita') prefix = '4'; // CORREÇÃO: Receita é 4
+      if (filtroTipoConta === 'despesa') prefix = '5'; // CORREÇÃO: Despesa é 5/6
       query = query.like('Conta', `${prefix}.%`);
     }
 
@@ -247,6 +248,7 @@ const PlanoContasPage = () => {
       if (proprietarioId) {
           buscarPlanoContas(proprietarioId);
       }
+      refetchSessao(); // CRÍTICO: Refetch da sessão para atualizar o setupStatus
   };
 
   const handleEdit = (conta: PlanoContas) => {
@@ -266,7 +268,7 @@ const PlanoContasPage = () => {
         await supabase.from('configuracao_contas_receber').update({ conta_contabil_id: null }).eq('conta_contabil_id', id);
         await supabase.from('configuracao_contas_pagar').update({ conta_contabil_id: null }).eq('conta_contabil_id', id);
         await supabase.from('configuracoes_stripe').update({ conta_sintetica_id: null, conta_receber_id: null }).eq('proprietario_id', proprietarioId);
-        await supabase.from('configuracao_contratos').update({ id_conta_clientes_receber: null, id_conta_receita_contrato: null }).eq('proprietario_id', proprietarioId);
+        await supabase.from('configuracao_contratos').update({ id_conta_clientes_receber: null, id_conta_receita_contrato: null }).eq('proprietario_id', proprietarioId); // NOVO: Contratos
         
         // 2. Deletar a conta
         const { error } = await supabase
@@ -417,7 +419,88 @@ const PlanoContasPage = () => {
         } as FormInitialData
         : null);
 
-  // REMOVIDO: A lógica de guiaStatus e guiaItens foi removida daqui.
+  const guiaStatus = useMemo(() => {
+    const hasCaixa = contas.some((c) => c.is_caixa);
+    const hasBanco = contas.some((c) => c.is_banco);
+    const hasCliente = contas.some((c) => c.is_a_receber);
+    const hasFornecedor = contas.some((c) => c.is_a_pagar);
+    const hasCapital = contas.some(
+      (c) =>
+        c.is_conta_patrimonial &&
+        ((c.Descricao && c.Descricao.toLowerCase().includes('capital')) ||
+          (c.Conta && c.Conta.toLowerCase().includes('3.1.00.0001'))),
+    );
+    const hasReceita = contas.some(
+      (c) =>
+        c.is_conta_resultado &&
+        ((c.Conta && c.Conta.startsWith('4')) ||
+          (c.Descricao && c.Descricao.toLowerCase().includes('receita'))),
+    );
+    const hasDespesa = contas.some(
+      (c) =>
+        c.is_conta_resultado &&
+        ((c.Conta && (c.Conta.startsWith('5') || c.Conta.startsWith('6'))) ||
+          (c.Descricao &&
+            (c.Descricao.toLowerCase().includes('despesa') ||
+              c.Descricao.toLowerCase().includes('custo')))),
+    );
+
+    return {
+      plano_contas: contas.length > 0,
+      historicos: setupStatus?.missingSteps.includes('historicos') === false,
+      config_cr: setupStatus?.missingSteps.includes('config_cr') === false,
+      config_cp: setupStatus?.missingSteps.includes('config_cp') === false,
+      config_contratos: setupStatus?.missingSteps.includes('config_contratos') === false,
+      plano_contas_caixa: hasCaixa,
+      plano_contas_banco: hasBanco,
+      plano_contas_cliente: hasCliente,
+      plano_contas_fornecedor: hasFornecedor,
+      plano_contas_capital_social: hasCapital,
+      plano_contas_receita: hasReceita,
+      plano_contas_despesa: hasDespesa,
+    };
+  }, [contas, setupStatus?.missingSteps]);
+
+  const allGuiaDone = useMemo(() => {
+      const requiredKeys: (keyof typeof guiaStatus)[] = [
+          'plano_contas', 'historicos', 'config_cr', 'config_cp', 'config_contratos',
+          'plano_contas_caixa', 'plano_contas_banco', 'plano_contas_cliente', 
+          'plano_contas_fornecedor', 'plano_contas_capital_social', 
+          'plano_contas_receita', 'plano_contas_despesa'
+      ];
+      return requiredKeys.every(key => guiaStatus[key]);
+  }, [guiaStatus]);
+
+  const guiaItens = [
+    {
+      key: 'plano_contas',
+      title: '1. Importe o Plano de Contas',
+      description: 'Cadastre ou importe o plano de contas do cliente.',
+      link: '/plano-contas',
+      done: guiaStatus.plano_contas,
+    },
+    {
+      key: 'historicos',
+      title: '2. Importe os Históricos',
+      description: 'Importe ou cadastre históricos financeiros em Configurações > Históricos.',
+      link: '/historicos',
+      done: guiaStatus.historicos,
+    },
+    {
+      key: 'plano_contas_caixa',
+      title: '3. Marque as Contas Essenciais',
+      description: 'Marque ao menos uma conta analítica para cada categoria (Caixa, Banco, Clientes, Fornecedores, Capital, Receita, Despesa).',
+      link: '/plano-contas',
+      done: guiaStatus.plano_contas_caixa && guiaStatus.plano_contas_banco && guiaStatus.plano_contas_cliente && guiaStatus.plano_contas_fornecedor && guiaStatus.plano_contas_capital_social && guiaStatus.plano_contas_receita && guiaStatus.plano_contas_despesa,
+    },
+    {
+      key: 'config_contabil',
+      title: '4. Configure Mapeamentos Contábeis',
+      description: 'Verifique se as configurações de Níveis, CR, CP e Contratos estão preenchidas.',
+      link: '/configuracoes',
+      done: guiaStatus.config_cr && guiaStatus.config_cp && guiaStatus.config_contratos,
+    },
+  ];
 
   if (carregandoSessao) {
     return (
@@ -450,13 +533,21 @@ const PlanoContasPage = () => {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
         <h1 className="text-2xl md:text-3xl font-bold">Plano de Contas</h1>
         <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-            <FormPlanoContasDialog
-                open={dialogAberto}
-                onOpenChange={setDialogAberto}
-                contaInicial={initialFormValues as PlanoContas | null}
-                proprietarioId={proprietarioId}
-                onSaveComplete={handleSaveComplete}
-            />
+            <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
+                <DialogTrigger asChild>
+                    <Button onClick={() => { setContaSelecionada(null); setNovaContaInicial(null); }} className="w-full sm:w-auto">
+                        <PlusCircle className="w-4 h-4 mr-2" />
+                        Nova Conta
+                    </Button>
+                </DialogTrigger>
+                <FormPlanoContasDialog
+                    open={dialogAberto}
+                    onOpenChange={setDialogAberto}
+                    contaInicial={initialFormValues as PlanoContas | null}
+                    proprietarioId={proprietarioId}
+                    onSaveComplete={handleSaveComplete}
+                />
+            </Dialog>
             <ImportarPlanoContas onImportComplete={handleImportComplete} />
             <ExportarPlanoContasButton />
             <Button variant="outline" className="w-full sm:w-auto" asChild>
@@ -468,7 +559,66 @@ const PlanoContasPage = () => {
         </div>
       </div>
 
-      {/* REMOVIDO: O BLOCO DE GUIA DE MARCAÇÃO OBRIGATÓRIA */}
+      <Card className="mb-6 border-dashed border-primary/30 bg-primary/5">
+        <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <CardTitle className="flex items-center gap-2 text-primary">
+              <Info className="h-5 w-5" />
+              Guia de marcação obrigatória
+            </CardTitle>
+            <CardDescription>
+              Após importar o plano e os históricos, marque pelo menos uma conta para cada categoria abaixo.
+              Esses marcadores alimentam os módulos de Contas a Pagar/Receber e Contratos.
+            </CardDescription>
+            {allGuiaDone && (
+              <p className="mt-2 text-sm text-emerald-700 flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4" />
+                Tudo certo! Todos os marcadores obrigatórios já foram configurados.
+              </p>
+            )}
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setGuiaAberta((prev) => !prev)}
+          >
+            {guiaAberta ? 'Recolher guia' : 'Ver detalhes'}
+            {guiaAberta ? (
+              <ChevronUp className="h-4 w-4 ml-1" />
+            ) : (
+              <ChevronDown className="h-4 w-4 ml-1" />
+            )}
+          </Button>
+        </CardHeader>
+        {(!allGuiaDone || guiaAberta) && (
+          <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {guiaItens.map((item) => (
+              <div
+                key={item.key}
+                className={cn(
+                  'flex items-start gap-3 rounded-lg border p-3 text-sm',
+                  item.done
+                    ? 'border-emerald-400 bg-emerald-50/50 dark:bg-emerald-900/20'
+                    : 'border-amber-400 bg-amber-50 dark:bg-amber-900/20',
+                )}
+              >
+                {item.done ? (
+                  <CheckCircle2 className="h-5 w-5 text-emerald-600 mt-0.5" />
+                ) : (
+                  <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5" />
+                )}
+                <div>
+                  <p className="font-semibold">
+                    {item.title}
+                  </p>
+                  <p className="text-muted-foreground">{item.description}</p>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        )}
+      </Card>
 
       {/* GRID MODERNO DE DUAS COLUNAS */}
       <div className="grid grid-cols-1 lg:grid-cols-[20%_80%] gap-6 items-start">
@@ -500,8 +650,8 @@ const PlanoContasPage = () => {
                   <SelectItem value="todos">Todos os Tipos</SelectItem>
                   <SelectItem value="ativo">Ativo (Inicia com 1)</SelectItem>
                   <SelectItem value="passivo">Passivo (Inicia com 2)</SelectItem>
-                  <SelectItem value="receita">Receita (Inicia com 3)</SelectItem>
-                  <SelectItem value="despesa">Despesa (Inicia com 4)</SelectItem>
+                  <SelectItem value="receita">Receita (Inicia com 4)</SelectItem>
+                  <SelectItem value="despesa">Despesa (Inicia com 5/6)</SelectItem>
                 </SelectContent>
               </Select>
 

@@ -280,8 +280,6 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
       return fks.length > 0;
   };
 
-  // IMPORTANTE: Setup/Reset de defaults passa a ser responsabilidade de funções dedicadas (contabil-setup/contabil-reset).
-
 
   const handleImport = async () => {
     if (!file) {
@@ -366,15 +364,7 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
       } else {
         // Se não houver FKs antigas, procede com a exclusão direta e inserção (usando a Edge Function)
         
-        // 3. Setar todas as FKs para NULL (para evitar a violação)
-        await supabase.from('saldo_contas').update({ conta_contabil_id: null }).eq('proprietario_id', proprietarioId);
-        await supabase.from('lancamentos').update({ conta_contabil_id: null }).eq('proprietario_id', proprietarioId);
-        await supabase.from('configuracao_contas_receber').update({ conta_contabil_id: null }).eq('proprietario_id', proprietarioId);
-        await supabase.from('configuracao_contas_pagar').update({ conta_contabil_id: null }).eq('proprietario_id', proprietarioId);
-        await supabase.from('configuracoes_stripe').update({ conta_sintetica_id: null, conta_receber_id: null }).eq('proprietario_id', proprietarioId);
-        await supabase.from('configuracao_contratos').update({ id_conta_clientes_receber: null, id_conta_receita_contrato: null }).eq('proprietario_id', proprietarioId); // NOVO: Contratos
-        
-        // 4. Chamar Edge Function para Excluir/Inserir
+        // 3. Chamar Edge Function para Excluir/Inserir (que agora chama a RPC de reset)
         const { data, error: invokeError } = await supabase.functions.invoke('manage-plano-contas', {
             body: { proprietarioId, newPlanoContas: contasParaInserir },
         });
@@ -383,13 +373,11 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
         if (data?.error) throw new Error(data.error);
         
         onImportComplete();
-        // MENSAGEM DE SUCESSO ALTERADA
         showSuccess(`Plano de Contas importado e substituído com sucesso.`);
       }
 
     } catch (error) {
       console.error('Erro durante a importação:', error);
-      // MENSAGEM DE ERRO ALTERADA
       showError('Falha na importação do Plano de Contas: ' + (error as Error).message);
     } finally {
       setLoading(false);

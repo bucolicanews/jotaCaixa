@@ -31,16 +31,15 @@ serve(async (req: Request) => {
       { auth: { persistSession: false } }
     );
     
-    // 1. Limpar contas existentes para o proprietário
-    const { error: delErr } = await supabaseService
-      .from('plano_contas')
-      .delete()
-      .eq('proprietario_id', proprietarioId);
+    // 1. Limpar todas as FKs e o Plano de Contas antigo usando a RPC contabil_reset_all
+    console.log(`LOG: Running contabil_reset_all for owner: ${proprietarioId}`);
+    const { data: resetData, error: resetError } = await supabaseService.rpc("contabil_reset_all", {
+        p_proprietario_id: proprietarioId,
+    });
 
-    if (delErr) {
-        console.error('Edge Function Error: Failed to delete old plan:', delErr);
-        // Retorna 500 se a exclusão falhar
-        return new Response(JSON.stringify({ error: 'Falha ao limpar plano de contas antigo.' }), {
+    if (resetError || (resetData && resetData[0]?.success === false)) {
+        console.error('Edge Function Error: Failed to reset old plan and FKs:', resetError || resetData[0].message);
+        return new Response(JSON.stringify({ error: resetError?.message || resetData[0].message || 'Falha ao limpar plano de contas antigo.' }), {
             status: 500,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
