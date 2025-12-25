@@ -5,6 +5,7 @@ import { HistoricoCSV } from '@/types/historico';
 type ParsedData = ContaCSV[] | ContaJSON[] | HistoricoCSV[];
 
 // Função robusta para converter diversos formatos de entrada em booleano real
+// Aceita: true, "true", "Sim", "1", "S", "Y", "Yes"
 const toBoolean = (value: any): boolean => {
     if (value === null || value === undefined) return false;
     if (typeof value === 'boolean') return value;
@@ -22,31 +23,29 @@ const parseCSV = (file: File): Promise<ParsedData> => {
       header: true,
       skipEmptyLines: true,
       dynamicTyping: true,
-      encoding: "UTF-8", // Garante suporte a acentos
+      encoding: "UTF-8",
       complete: (results: ParseResult<any>) => {
         const headers = results.meta.fields || [];
         
-        // Verifica se é Plano de Contas (identifica pelos cabeçalhos principais)
         const hasConta = headers.some(h => h.toLowerCase() === 'conta');
         const hasAnalitica = headers.some(h => h.toLowerCase().includes('analitica') || h.toLowerCase().includes('analítica'));
 
         if (hasConta && hasAnalitica) {
             const data = results.data.map((row: any) => {
-              // Busca os valores independente de variação de acentuação nos headers
               const getVal = (keys: string[]) => {
                   const foundKey = keys.find(k => row[k] !== undefined);
                   return foundKey ? row[foundKey] : undefined;
               };
 
-              const contaCodigo = String(getVal(['Conta', 'conta']) || '');
-              const analitica = (String(getVal(['Analítica', 'Analitica', 'analitica']) || '').trim() === 'Sim' ? 'Sim' : 'Não') as 'Sim' | 'Não';
+              const contaCodigo = String(getVal(['Conta', 'conta']) || '').trim();
+              const analitica = (String(getVal(['Analítica', 'Analitica', 'analitica']) || '').trim().toLowerCase() === 'sim' ? 'Sim' : 'Não') as 'Sim' | 'Não';
 
               return {
                 Conta: contaCodigo,
-                'Código reduzido': String(getVal(['Código reduzido', 'Codigo reduzido', 'codigo_reduzido', 'Reduzido']) || ''),
+                'Código reduzido': String(getVal(['Código reduzido', 'Codigo reduzido', 'codigo_reduzido', 'Reduzido']) || '').trim(),
                 Descrição: String(getVal(['Descrição', 'Descricao', 'descricao']) || '').trim(),
                 Analítica: analitica,
-                // Flags Booleanas - Garantindo a conversão correta
+                // Flags Booleanas - Conversão Robusta
                 is_conta_caixa_banco: toBoolean(getVal(['is_conta_caixa_banco'])),
                 is_conta_patrimonial: toBoolean(getVal(['is_conta_patrimonial'])),
                 is_conta_resultado: toBoolean(getVal(['is_conta_resultado'])),
@@ -100,8 +99,8 @@ const parseJSON = (file: File): Promise<ParsedData> => {
         
         if (firstRow && ('Conta' in firstRow || 'conta' in firstRow)) {
             const data = json.map((row: any) => ({
-                Conta: String(row.Conta || row.conta || ''),
-                'Código reduzido': String(row['Código reduzido'] || row.codigo_reduzido || ''),
+                Conta: String(row.Conta || row.conta || '').trim(),
+                'Código reduzido': String(row['Código reduzido'] || row.codigo_reduzido || '').trim(),
                 Descrição: String(row.Descrição || row.Descricao || row.descricao || '').trim(),
                 Analítica: (row.Analítica === 'Sim' || row.Analitica === 'Sim' || row.analitica === 'Sim' ? 'Sim' : 'Não') as 'Sim' | 'Não',
                 is_conta_caixa_banco: toBoolean(row.is_conta_caixa_banco),
@@ -118,7 +117,7 @@ const parseJSON = (file: File): Promise<ParsedData> => {
         if (firstRow && ('Descricao' in firstRow || 'Descrição' in firstRow || 'descricao' in firstRow)) {
             const data = json.map((row: any) => ({
                 Descricao: String(row.Descricao || row.Descrição || row.descricao || '').trim(),
-                Código: String(row.Código || row.Codigo || row.codigo || '').trim(),
+                Código: String(row.Código || row.Código || row.codigo || '').trim(),
             })).filter((row: HistoricoCSV) => row.Descricao);
             return resolve(data as HistoricoCSV[]);
         }

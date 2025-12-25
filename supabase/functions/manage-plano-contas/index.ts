@@ -24,16 +24,14 @@ serve(async (req: Request) => {
       });
     }
 
-    console.log(`LOG: Iniciando importação para proprietário ${proprietarioId}. Total de contas: ${newPlanoContas.length}`);
-
-    // Inicializar Supabase Client com SERVICE ROLE KEY (ignora RLS)
+    // Inicializar Supabase Client com SERVICE ROLE KEY
     const supabaseService = createClient(
       (Deno.env.get('SUPABASE_URL') as any)!,
       (Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') as any)!,
       { auth: { persistSession: false } }
     );
     
-    // 1. Limpar todas as FKs e o Plano de Contas antigo usando a RPC
+    // 1. Limpar as FKs e o Plano antigo
     const { data: resetData, error: resetError } = await supabaseService.rpc("contabil_reset_all", {
         p_proprietario_id: proprietarioId,
     });
@@ -46,8 +44,8 @@ serve(async (req: Request) => {
         });
     }
 
-    // 2. Inserir novos dados (em lotes de 100 para evitar timeout ou erros de payload)
-    const CHUNK_SIZE = 100;
+    // 2. Inserir novos dados (em lotes menores para estabilidade)
+    const CHUNK_SIZE = 50;
     for (let i = 0; i < newPlanoContas.length; i += CHUNK_SIZE) {
         const chunk = newPlanoContas.slice(i, i + CHUNK_SIZE);
         const { error: insertErr } = await supabaseService
@@ -55,28 +53,25 @@ serve(async (req: Request) => {
           .insert(chunk);
 
         if (insertErr) {
-            console.error('Erro na inserção de lote (lote ' + (i/CHUNK_SIZE + 1) + '):', insertErr);
-            // Se falhar um lote, interrompe e retorna o erro detalhado
+            console.error(`Erro no lote ${i/CHUNK_SIZE + 1}:`, insertErr);
             return new Response(JSON.stringify({ 
-                error: `Falha ao inserir contas (Lote ${i/CHUNK_SIZE + 1}): ${insertErr.message}`,
-                hint: insertErr.hint || 'Verifique se existem códigos de conta duplicados no arquivo.'
+                error: `Falha na inserção (Lote ${i/CHUNK_SIZE + 1}): ${insertErr.message}`,
+                details: insertErr.details,
+                hint: insertErr.hint
             }), {
                 status: 500,
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             });
         }
     }
-    
-    console.log('LOG: Inserção concluída com sucesso.');
 
-    // 3. Buscar os IDs reais das contas recém-inseridas para o remapeamento
+    // 3. Buscar os IDs reais das contas recém-inseridas para o remapeamento do modal
     const { data: contasInseridas, error: fetchErr } = await supabaseService
         .from('plano_contas')
         .select('id, Conta')
         .eq('proprietario_id', proprietarioId);
         
     if (fetchErr) {
-        console.error('Erro ao buscar novos IDs:', fetchErr);
         return new Response(JSON.stringify({ error: 'Plano inserido, mas falha ao mapear IDs: ' + fetchErr.message }), {
             status: 500,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -89,9 +84,8 @@ serve(async (req: Request) => {
     });
 
   } catch (error) {
-    console.error('💥 ERRO FATAL na Edge Function manage-plano-contas:', error);
-    const message = error instanceof Error ? error.message : 'Erro desconhecido durante o processamento do servidor.';
-    return new Response(JSON.stringify({ error: message }), {
+    console.error('💥 ERRO FATAL:', error);
+    return new Response(JSON.stringify({ error: error.message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
