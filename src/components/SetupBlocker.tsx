@@ -1,7 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { AlertTriangle, CheckCircle, Settings, FileDown, FileUp, BookOpen, History, DollarSign, ArrowRight, Loader2 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { SetupStepKey } from '@/types/setup';
 import { cn } from '@/lib/utils';
 import { useCallback, useState } from 'react';
@@ -64,18 +64,16 @@ export const SetupChecklistList: React.FC<SetupChecklistListProps> = ({
   missingSteps,
   compact = false,
 }) => {
+  const navigate = useNavigate();
   if (missingSteps.length === 0) return null;
   
-  // Mapeia as chaves ausentes para fácil consulta
   const missingSet = new Set(missingSteps);
   
-  // Determina o status de cada passo sequencial
   const sequentialStatus = SEQUENTIAL_STEPS.map(step => {
       const isDone = step.requiredKeys.length > 0 && step.requiredKeys.every(key => !missingSet.has(key));
       return { ...step, isDone };
   });
   
-  // Determina o próximo passo pendente
   const nextPendingStep = sequentialStatus.find(step => !step.isDone);
 
   return (
@@ -86,13 +84,14 @@ export const SetupChecklistList: React.FC<SetupChecklistListProps> = ({
             const Icon = step.icon;
             const isCurrent = !step.isDone && nextPendingStep?.key === step.key;
 
-            const content = (
+            return (
                 <div 
+                    key={step.key}
                     className={cn(
                         "flex items-center justify-between p-3 rounded-lg border",
-                        step.isDone ? "border-emerald-400 bg-emerald-50/50 dark:bg-emerald-900/20" : (isCurrent ? "border-primary/50 bg-secondary/50" : "border-muted/50 opacity-60"),
-                        isCurrent && "hover:bg-secondary"
+                        step.isDone ? "border-emerald-400 bg-emerald-50/50 dark:bg-emerald-900/20" : (isCurrent ? "border-primary/50 bg-secondary/50 cursor-pointer hover:bg-secondary" : "border-muted/50 opacity-60")
                     )}
+                    onClick={() => isCurrent && navigate(step.link)}
                 >
                     <div className="flex items-center space-x-3">
                         <Icon className={cn("w-5 h-5", step.isDone ? "text-emerald-600" : "text-primary")} />
@@ -117,30 +116,24 @@ export const SetupChecklistList: React.FC<SetupChecklistListProps> = ({
                     </div>
                 </div>
             );
-
-            if (isCurrent) {
-                return <Link to={step.link} key={step.key} className="block">{content}</Link>;
-            }
-            
-            return <div key={step.key}>{content}</div>;
         })}
         
-        {/* PASSO FINAL: PRIMEIRO LANÇAMENTO */}
         <div 
             className={cn(
                 "flex items-center justify-between p-3 rounded-lg border",
-                !missingSet.has('plano_contas') && !missingSet.has('historicos') && !missingSet.has('plano_contas_caixa') && !missingSet.has('plano_contas_capital_social') ? "border-primary/50 bg-secondary/50" : "border-muted/50 opacity-60"
+                !missingSet.has('plano_contas') && !missingSet.has('historicos') && !missingSet.has('plano_contas_caixa') && !missingSet.has('plano_contas_capital_social') ? "border-primary/50 bg-secondary/50 cursor-pointer hover:bg-secondary" : "border-muted/50 opacity-60"
             )}
+            onClick={() => !missingSet.has('plano_contas') && navigate('/painel')}
         >
             <div className="flex items-center space-x-3">
                 <DollarSign className="w-5 h-5 text-primary" />
                 <span className="font-medium">5. Realizar Primeiro Lançamento (Capital Social)</span>
             </div>
-            <Button variant="default" size="sm" asChild>
-                <Link to="/painel">
-                    <ArrowRight className="w-4 h-4 mr-2" /> Ir para Painel
-                </Link>
-            </Button>
+            <div className="flex items-center gap-2">
+                <Button variant="default" size="sm" className="pointer-events-none">
+                    <ArrowRight className="w-4 h-4" />
+                </Button>
+            </div>
         </div>
     </div>
   );

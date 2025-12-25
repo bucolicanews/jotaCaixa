@@ -24,45 +24,51 @@ serve(async (req: Request) => {
       });
     }
 
-    console.log(`LOG: Iniciando processo de importação para: ${proprietarioId}`);
+    // --- DEDUPLICAÇÃO DE CÓDIGOS DE CONTA (Garante unicidade antes de enviar ao DB) ---
+    const uniqueContasMap = new Map();
+    newPlanoContas.forEach(conta => {
+        if (conta.Conta) {
+            uniqueContasMap.set(conta.Conta.trim(), {
+                ...conta,
+                proprietario_id: proprietarioId,
+                Conta: conta.Conta.trim(),
+                Descricao: (conta.Descricao || 'Sem Descrição').trim()
+            });
+        }
+    });
+    const sanitizedContas = Array.from(uniqueContasMap.values());
+    // --------------------------------------------------------------------------------
 
-    // Inicializar Supabase Client com SERVICE ROLE KEY (Ignora RLS)
+    console.log(`LOG: Iniciando importação para ${proprietarioId}. Contas processadas: ${sanitizedContas.length}`);
+
     const supabaseService = createClient(
       (Deno.env.get('SUPABASE_URL') as any)!,
       (Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') as any)!,
       { auth: { persistSession: false } }
     );
     
-    // 1. Limpar dados antigos usando a RPC robusta
-    console.log('LOG: Executando reset contábil...');
-    const { data: resetData, error: resetError } = await supabaseService.rpc("contabil_reset_all", {
+    // 1. Limpar dados antigos
+    const { error: resetError } = await supabaseService.rpc("contabil_reset_all", {
         p_proprietario_id: proprietarioId,
     });
 
     if (resetError) {
-        console.error('ERRO RPC reset:', resetError);
-        return new Response(JSON.stringify({ error: 'Erro ao limpar dados antigos: ' + resetError.message }), {
-            status: 500,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
+        throw new Error('Falha ao resetar plano anterior: ' + resetError.message);
     }
 
-    // 2. Inserir novos dados em lotes pequenos (50 por vez) para garantir estabilidade
+    // 2. Inserir novos dados em lotes (Deduplicados)
     const CHUNK_SIZE = 50;
-    console.log(`LOG: Inserindo ${newPlanoContas.length} contas em lotes de ${CHUNK_SIZE}...`);
-    
-    for (let i = 0; i < newPlanoContas.length; i += CHUNK_SIZE) {
-        const chunk = newPlanoContas.slice(i, i + CHUNK_SIZE);
+    for (let i = 0; i < sanitizedContas.length; i += CHUNK_SIZE) {
+        const chunk = sanitizedContas.slice(i, i + CHUNK_SIZE);
         const { error: insertErr } = await supabaseService
           .from('plano_contas')
           .insert(chunk);
 
         if (insertErr) {
-            console.error(`ERRO no lote ${Math.floor(i/CHUNK_SIZE) + 1}:`, insertErr);
+            console.error(`Erro no lote ${i/CHUNK_SIZE + 1}:`, insertErr);
             return new Response(JSON.stringify({ 
-                error: `Falha na inserção (Lote ${Math.floor(i/CHUNK_SIZE) + 1}): ${insertErr.message}`,
-                details: insertErr.details,
-                hint: insertErr.hint || 'Verifique se existem códigos de conta duplicados.'
+                error: `Erro no banco de dados (Lote ${i/CHUNK_SIZE + 1}): ${insertErr.message}`,
+                details: insertErr.details
             }), {
                 status: 500,
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -70,21 +76,15 @@ serve(async (req: Request) => {
         }
     }
 
-    // 3. Buscar os novos IDs para o mapeamento no frontend
-    const { data: contasInseridas, error: fetchErr } = await supabaseService
+    // 3. Buscar IDs para retorno
+    const { data: mappingData, error: fetchErr } = await supabaseService
         .from('plano_contas')
         .select('id, Conta')
         .eq('proprietario_id', proprietarioId);
         
-    if (fetchErr) {
-        return new Response(JSON.stringify({ error: 'Contas inseridas, mas falha ao recuperar IDs: ' + fetchErr.message }), {
-            status: 500,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-    }
+    if (fetchErr) throw fetchErr;
 
-    console.log('LOG: Importação finalizada com sucesso.');
-    return new Response(JSON.stringify({ success: true, contaIdMap: contasInseridas }), {
+    return new Response(JSON.stringify({ success: true, contaIdMap: mappingData }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
