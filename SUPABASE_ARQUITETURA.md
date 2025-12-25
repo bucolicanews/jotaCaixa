@@ -144,7 +144,7 @@ BEGIN
     RETURN QUERY SELECT TRUE, 'Plano de contas e históricos padrão importados com sucesso.'::TEXT;
 
 EXCEPTION WHEN OTHERS THEN
-    RETURN QUERY SELECT FALSE, SQLERRM::TEXT;
+    RETURN QUERY SELECT FALSE, SQLERRM::text;
 END;
 $function$;
 
