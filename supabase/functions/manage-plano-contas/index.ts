@@ -38,8 +38,9 @@ serve(async (req: Request) => {
     });
 
     if (resetError || (resetData && resetData[0]?.success === false)) {
-        console.error('Edge Function Error: Failed to reset old plan and FKs:', resetError || resetData[0].message);
-        return new Response(JSON.stringify({ error: resetError?.message || resetData[0].message || 'Falha ao limpar plano de contas antigo.' }), {
+        const errorMessage = resetError?.message || resetData?.[0]?.message || 'Falha ao executar reset contábil.';
+        console.error('Edge Function Error: Failed to reset old plan and FKs:', errorMessage);
+        return new Response(JSON.stringify({ error: errorMessage }), {
             status: 500,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
@@ -53,7 +54,7 @@ serve(async (req: Request) => {
     if (insertErr) {
         console.error('Edge Function Error: Failed to insert new plan:', insertErr);
         // Retorna 500 se a inserção falhar
-        return new Response(JSON.stringify({ error: 'Falha ao inserir novo plano de contas.' }), {
+        return new Response(JSON.stringify({ error: 'Falha ao inserir novo plano de contas: ' + insertErr.message }), {
             status: 500,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
