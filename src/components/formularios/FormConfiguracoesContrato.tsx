@@ -266,6 +266,13 @@ const FormConfiguracoesContrato: React.FC = () => {
                 <Textarea rows={3} placeholder="Use {{LINK_ASSINATURA}}" {...field} />
               </FormControl>
               <FormMessage />
+              <p className="text-xs text-muted-foreground">
+                Exemplo: Olá! Seu contrato está pronto para assinatura. Clique no link abaixo para visualizar e assinar:
+                <br />
+                <span className="font-mono text-green-600">
+                  {"{{LINK_ASSINATURA}}"}
+                </span>
+              </p>
             </FormItem>
           )}
         />
@@ -282,6 +289,13 @@ const FormConfiguracoesContrato: React.FC = () => {
                 <Textarea rows={5} placeholder="Use {{LINK_ASSINATURA}}" {...field} />
               </FormControl>
               <FormMessage />
+              <p className="text-xs text-muted-foreground">
+                Exemplo: Prezado(a) cliente, Seu contrato está pronto para assinatura. Clique no link abaixo para visualizar e assinar:
+                <br />
+                <span className="font-mono text-blue-600">
+                  {"{{LINK_ASSINATURA}}"}
+                </span>
+              </p>
             </FormItem>
           )}
         />
