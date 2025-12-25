@@ -5,13 +5,29 @@ import { HistoricoCSV } from '@/types/historico';
 type ParsedData = ContaCSV[] | ContaJSON[] | HistoricoCSV[];
 
 // Função robusta para converter diversos formatos de entrada em booleano real
-// Aceita: true, "true", "Sim", "1", "S", "Y", "Yes"
 const toBoolean = (value: any): boolean => {
     if (value === null || value === undefined) return false;
     if (typeof value === 'boolean') return value;
     
     const strValue = String(value).toUpperCase().trim();
-    return ['TRUE', 'SIM', '1', 'S', 'YES', 'Y', 'VERDADEIRO'].includes(strValue);
+    return ['TRUE', 'SIM', '1', 'S', 'YES', 'Y', 'VERDADEIRO', 'X'].includes(strValue);
+};
+
+// Função auxiliar para encontrar valor ignorando case e acentos nas chaves
+const getValueFuzzy = (row: any, keysToCheck: string[]) => {
+    const rowKeys = Object.keys(row);
+    const normalize = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+    
+    for (const key of keysToCheck) {
+        const normalizedKey = normalize(key);
+        // Tenta match exato primeiro
+        if (row[key] !== undefined) return row[key];
+        
+        // Tenta encontrar uma chave no objeto que corresponda à normalizada
+        const foundKey = rowKeys.find(k => normalize(k) === normalizedKey);
+        if (foundKey && row[foundKey] !== undefined) return row[foundKey];
+    }
+    return undefined;
 };
 
 /**
@@ -21,57 +37,58 @@ const parseCSV = (file: File): Promise<ParsedData> => {
   return new Promise((resolve, reject) => {
     Papa.parse(file, {
       header: true,
-      skipEmptyLines: true,
+      skipEmptyLines: 'greedy', // Remove linhas totalmente vazias
       dynamicTyping: true,
-      encoding: "UTF-8",
+      encoding: "UTF-8", // Tenta UTF-8
       complete: (results: ParseResult<any>) => {
         const headers = results.meta.fields || [];
+        const normalizedHeaders = headers.map(h => h.toLowerCase());
         
-        const hasConta = headers.some(h => h.toLowerCase() === 'conta');
-        const hasAnalitica = headers.some(h => h.toLowerCase().includes('analitica') || h.toLowerCase().includes('analítica'));
+        const hasConta = normalizedHeaders.some(h => h.includes('conta'));
+        const hasDescricao = normalizedHeaders.some(h => h.includes('descri'));
+        const hasAnalitica = normalizedHeaders.some(h => h.includes('analitica'));
 
-        if (hasConta && hasAnalitica) {
+        // Validação mínima: Precisa ter Conta e Descrição
+        if (hasConta && hasDescricao) {
             const data = results.data.map((row: any) => {
-              const getVal = (keys: string[]) => {
-                  const foundKey = keys.find(k => row[k] !== undefined);
-                  return foundKey ? row[foundKey] : undefined;
-              };
-
-              const contaCodigo = String(getVal(['Conta', 'conta']) || '').trim();
-              const analitica = (String(getVal(['Analítica', 'Analitica', 'analitica']) || '').trim().toLowerCase() === 'sim' ? 'Sim' : 'Não') as 'Sim' | 'Não';
+              const contaCodigo = String(getValueFuzzy(row, ['Conta', 'Código', 'Codigo']) || '').trim();
+              const analiticaRaw = String(getValueFuzzy(row, ['Analítica', 'Analitica', 'Tipo']) || '').trim();
+              
+              // Normaliza Sim/Não
+              const isAnalitica = ['sim', 's', 'yes', 'y', 'analitica', 'analítica'].includes(analiticaRaw.toLowerCase()) ? 'Sim' : 'Não';
 
               return {
                 Conta: contaCodigo,
-                'Código reduzido': String(getVal(['Código reduzido', 'Codigo reduzido', 'codigo_reduzido', 'Reduzido']) || '').trim(),
-                Descrição: String(getVal(['Descrição', 'Descricao', 'descricao']) || '').trim(),
-                Analítica: analitica,
-                // Flags Booleanas - Conversão Robusta
-                is_conta_caixa_banco: toBoolean(getVal(['is_conta_caixa_banco'])),
-                is_conta_patrimonial: toBoolean(getVal(['is_conta_patrimonial'])),
-                is_conta_resultado: toBoolean(getVal(['is_conta_resultado'])),
-                is_caixa: toBoolean(getVal(['is_caixa'])),
-                is_banco: toBoolean(getVal(['is_banco'])),
-                is_a_receber: toBoolean(getVal(['is_a_receber'])),
-                is_a_pagar: toBoolean(getVal(['is_a_pagar'])),
+                'Código reduzido': String(getValueFuzzy(row, ['Código reduzido', 'Codigo reduzido', 'Reduzido']) || '').trim(),
+                Descrição: String(getValueFuzzy(row, ['Descrição', 'Descricao', 'Nome']) || '').trim(),
+                Analítica: isAnalitica,
+                
+                // Flags Booleanas - Busca flexível
+                is_conta_caixa_banco: toBoolean(getValueFuzzy(row, ['is_conta_caixa_banco', 'caixa_banco'])),
+                is_conta_patrimonial: toBoolean(getValueFuzzy(row, ['is_conta_patrimonial', 'patrimonial'])),
+                is_conta_resultado: toBoolean(getValueFuzzy(row, ['is_conta_resultado', 'resultado'])),
+                is_caixa: toBoolean(getValueFuzzy(row, ['is_caixa', 'caixa'])),
+                is_banco: toBoolean(getValueFuzzy(row, ['is_banco', 'banco'])),
+                is_a_receber: toBoolean(getValueFuzzy(row, ['is_a_receber', 'a_receber', 'receber'])),
+                is_a_pagar: toBoolean(getValueFuzzy(row, ['is_a_pagar', 'a_pagar', 'pagar'])),
               };
-            }).filter((row: any) => row.Conta && row.Descrição);
+            }).filter((row: any) => row.Conta && row.Descrição); // Filtra linhas inválidas
             
             return resolve(data as ContaCSV[]);
         }
         
-        // Verifica se é Histórico
-        const descKey = headers.find(h => h.toLowerCase().includes('descri')) || 'Descrição';
-        const codigoKey = headers.find(h => h.toLowerCase().includes('código') || h.toLowerCase().includes('codigo')) || 'Código';
+        // Verifica se é Histórico (Código + Descrição)
+        const codigoKey = headers.find(h => h.toLowerCase().includes('código') || h.toLowerCase().includes('codigo'));
         
-        if (descKey) {
+        if (hasDescricao && codigoKey) {
             const data = results.data.map((row: any) => ({
-                Descricao: String(row[descKey] || '').trim(),
-                Código: String(row[codigoKey] || '').trim(),
+                Descricao: String(getValueFuzzy(row, ['Descrição', 'Descricao']) || '').trim(),
+                Código: String(getValueFuzzy(row, ['Código', 'Codigo', 'id']) || '').trim(),
             })).filter((row: HistoricoCSV) => row.Descricao);
             return resolve(data as HistoricoCSV[]);
         }
         
-        reject(new Error('Formato de arquivo CSV não reconhecido. Certifique-se de usar ponto e vírgula ou vírgula como delimitador.'));
+        reject(new Error('Formato de arquivo CSV não reconhecido. Certifique-se de que as colunas "Conta" e "Descrição" existem.'));
       },
       error: (error: Error) => {
         reject(error);
@@ -95,34 +112,35 @@ const parseJSON = (file: File): Promise<ParsedData> => {
             throw new Error('O arquivo JSON deve conter um array de objetos.');
         }
         
-        const firstRow = json[0];
+        const firstRow = json[0] || {};
         
-        if (firstRow && ('Conta' in firstRow || 'conta' in firstRow)) {
+        if (getValueFuzzy(firstRow, ['Conta']) && getValueFuzzy(firstRow, ['Descricao', 'Descrição'])) {
             const data = json.map((row: any) => ({
-                Conta: String(row.Conta || row.conta || '').trim(),
-                'Código reduzido': String(row['Código reduzido'] || row.codigo_reduzido || '').trim(),
-                Descrição: String(row.Descrição || row.Descricao || row.descricao || '').trim(),
-                Analítica: (row.Analítica === 'Sim' || row.Analitica === 'Sim' || row.analitica === 'Sim' ? 'Sim' : 'Não') as 'Sim' | 'Não',
-                is_conta_caixa_banco: toBoolean(row.is_conta_caixa_banco),
-                is_conta_patrimonial: toBoolean(row.is_conta_patrimonial),
-                is_conta_resultado: toBoolean(row.is_conta_resultado),
-                is_caixa: toBoolean(row.is_caixa),
-                is_banco: toBoolean(row.is_banco),
-                is_a_receber: toBoolean(row.is_a_receber),
-                is_a_pagar: toBoolean(row.is_a_pagar),
+                Conta: String(getValueFuzzy(row, ['Conta']) || '').trim(),
+                'Código reduzido': String(getValueFuzzy(row, ['Código reduzido', 'Codigo reduzido', 'Reduzido']) || '').trim(),
+                Descrição: String(getValueFuzzy(row, ['Descrição', 'Descricao', 'Nome']) || '').trim(),
+                Analítica: (toBoolean(getValueFuzzy(row, ['Analítica', 'Analitica'])) || String(getValueFuzzy(row, ['Analítica', 'Analitica'])).toLowerCase() === 'sim') ? 'Sim' : 'Não',
+                
+                is_conta_caixa_banco: toBoolean(getValueFuzzy(row, ['is_conta_caixa_banco'])),
+                is_conta_patrimonial: toBoolean(getValueFuzzy(row, ['is_conta_patrimonial'])),
+                is_conta_resultado: toBoolean(getValueFuzzy(row, ['is_conta_resultado'])),
+                is_caixa: toBoolean(getValueFuzzy(row, ['is_caixa'])),
+                is_banco: toBoolean(getValueFuzzy(row, ['is_banco'])),
+                is_a_receber: toBoolean(getValueFuzzy(row, ['is_a_receber'])),
+                is_a_pagar: toBoolean(getValueFuzzy(row, ['is_a_pagar'])),
             })).filter((row: any) => row.Conta && row.Descrição);
             return resolve(data as ContaJSON[]);
         }
         
-        if (firstRow && ('Descricao' in firstRow || 'Descrição' in firstRow || 'descricao' in firstRow)) {
+        if (getValueFuzzy(firstRow, ['Descricao', 'Descrição'])) {
             const data = json.map((row: any) => ({
-                Descricao: String(row.Descricao || row.Descrição || row.descricao || '').trim(),
-                Código: String(row.Código || row.Código || row.codigo || '').trim(),
+                Descricao: String(getValueFuzzy(row, ['Descricao', 'Descrição']) || '').trim(),
+                Código: String(getValueFuzzy(row, ['Código', 'Codigo']) || '').trim(),
             })).filter((row: HistoricoCSV) => row.Descricao);
             return resolve(data as HistoricoCSV[]);
         }
         
-        reject(new Error('Formato de arquivo JSON não reconhecido.'));
+        reject(new Error('JSON inválido: Campos obrigatórios (Conta/Descrição) não encontrados.'));
         
       } catch (error) {
         reject(new Error('Erro ao processar arquivo JSON: ' + (error as Error).message));

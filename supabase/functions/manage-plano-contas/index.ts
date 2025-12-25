@@ -24,7 +24,9 @@ serve(async (req: Request) => {
       });
     }
 
-    // --- DEDUPLICAÇÃO DE CÓDIGOS DE CONTA (Garante unicidade antes de enviar ao DB) ---
+    console.log(`LOG: Iniciando importação para ${proprietarioId}.`);
+
+    // DEDUPLICAÇÃO NO SERVIDOR
     const uniqueContasMap = new Map();
     newPlanoContas.forEach(conta => {
         if (conta.Conta) {
@@ -37,27 +39,68 @@ serve(async (req: Request) => {
         }
     });
     const sanitizedContas = Array.from(uniqueContasMap.values());
-    // --------------------------------------------------------------------------------
 
-    console.log(`LOG: Iniciando importação para ${proprietarioId}. Contas processadas: ${sanitizedContas.length}`);
-
+    // Inicializar Supabase Client com SERVICE ROLE KEY
     const supabaseService = createClient(
       (Deno.env.get('SUPABASE_URL') as any)!,
       (Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') as any)!,
       { auth: { persistSession: false } }
     );
     
-    // 1. Limpar dados antigos
+    // --- PASSO CRÍTICO: LIMPEZA MANUAL DE DEPENDÊNCIAS ---
+    // A RPC contabil_reset_all pode falhar se houver muitas FKs com RESTRICT.
+    // Vamos garantir que os campos sejam nulificados antes de tentar deletar.
+    
+    console.log('LOG: Desvinculando tabelas dependentes...');
+    
+    // 1. Limpar Lançamentos (Isso é o que geralmente causa o erro 500 se for RESTRICT)
+    await supabaseService.from('lancamentos')
+        .update({ conta_contabil_id: null, conta_bancaria_id: null })
+        .eq('proprietario_id', proprietarioId);
+        
+    // 2. Limpar Saldos
+    await supabaseService.from('saldo_contas')
+        .update({ conta_contabil_id: null })
+        .eq('proprietario_id', proprietarioId);
+        
+    // 3. Limpar Configurações
+    await supabaseService.from('configuracao_contas_receber')
+        .update({ conta_contabil_id: null })
+        .eq('proprietario_id', proprietarioId);
+        
+    await supabaseService.from('configuracao_contas_pagar')
+        .update({ conta_contabil_id: null })
+        .eq('proprietario_id', proprietarioId);
+        
+    await supabaseService.from('configuracao_contratos')
+        .update({ id_conta_clientes_receber: null, id_conta_receita_contrato: null })
+        .eq('proprietario_id', proprietarioId);
+        
+    // --- FIM LIMPEZA MANUAL ---
+    
+    // 4. Executar Reset (Agora deve passar liso pois não há amarras)
+    console.log('LOG: Executando delete de plano...');
     const { error: resetError } = await supabaseService.rpc("contabil_reset_all", {
         p_proprietario_id: proprietarioId,
     });
 
     if (resetError) {
-        throw new Error('Falha ao resetar plano anterior: ' + resetError.message);
+        // Se a RPC falhar, tentamos delete direto como fallback
+        console.error('ERRO RPC reset (tentando fallback direto):', resetError);
+        const { error: deleteError } = await supabaseService
+            .from('plano_contas')
+            .delete()
+            .eq('proprietario_id', proprietarioId);
+            
+        if (deleteError) {
+            throw new Error('Falha fatal ao limpar plano antigo: ' + deleteError.message);
+        }
     }
 
-    // 2. Inserir novos dados em lotes (Deduplicados)
+    // 5. Inserir novos dados em lotes
     const CHUNK_SIZE = 50;
+    console.log(`LOG: Inserindo ${sanitizedContas.length} contas...`);
+    
     for (let i = 0; i < sanitizedContas.length; i += CHUNK_SIZE) {
         const chunk = sanitizedContas.slice(i, i + CHUNK_SIZE);
         const { error: insertErr } = await supabaseService
@@ -65,10 +108,9 @@ serve(async (req: Request) => {
           .insert(chunk);
 
         if (insertErr) {
-            console.error(`Erro no lote ${i/CHUNK_SIZE + 1}:`, insertErr);
+            console.error(`ERRO no lote ${Math.floor(i/CHUNK_SIZE) + 1}:`, insertErr);
             return new Response(JSON.stringify({ 
-                error: `Erro no banco de dados (Lote ${i/CHUNK_SIZE + 1}): ${insertErr.message}`,
-                details: insertErr.details
+                error: `Falha na inserção do lote ${Math.floor(i/CHUNK_SIZE) + 1}. Verifique se há códigos duplicados no arquivo. Detalhe: ${insertErr.message}` 
             }), {
                 status: 500,
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -76,13 +118,15 @@ serve(async (req: Request) => {
         }
     }
 
-    // 3. Buscar IDs para retorno
+    // 6. Retornar IDs para remapeamento
     const { data: mappingData, error: fetchErr } = await supabaseService
         .from('plano_contas')
         .select('id, Conta')
         .eq('proprietario_id', proprietarioId);
         
     if (fetchErr) throw fetchErr;
+
+    console.log('LOG: Importação finalizada.');
 
     return new Response(JSON.stringify({ success: true, contaIdMap: mappingData }), {
       status: 200,
@@ -91,7 +135,7 @@ serve(async (req: Request) => {
 
   } catch (error) {
     console.error('💥 ERRO FATAL:', error);
-    return new Response(JSON.stringify({ error: error.message }), {
+    return new Response(JSON.stringify({ error: error.message || 'Erro interno desconhecido.' }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
