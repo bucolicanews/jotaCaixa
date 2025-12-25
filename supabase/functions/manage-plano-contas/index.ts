@@ -18,11 +18,13 @@ serve(async (req: Request) => {
     const { proprietarioId, newPlanoContas } = body;
 
     if (!proprietarioId || !Array.isArray(newPlanoContas)) {
-      return new Response(JSON.stringify({ error: 'Missing proprietarioId or newPlanoContas array' }), {
+      return new Response(JSON.stringify({ error: 'Dados inválidos: proprietarioId ou array de contas ausente.' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
+    console.log(`LOG: Iniciando importação para proprietário ${proprietarioId}. Total de contas: ${newPlanoContas.length}`);
 
     // Inicializar Supabase Client com SERVICE ROLE KEY (ignora RLS)
     const supabaseService = createClient(
@@ -31,59 +33,64 @@ serve(async (req: Request) => {
       { auth: { persistSession: false } }
     );
     
-    // 1. Limpar todas as FKs e o Plano de Contas antigo usando a RPC contabil_reset_all
-    console.log(`LOG: Running contabil_reset_all for owner: ${proprietarioId}`);
+    // 1. Limpar todas as FKs e o Plano de Contas antigo usando a RPC
     const { data: resetData, error: resetError } = await supabaseService.rpc("contabil_reset_all", {
         p_proprietario_id: proprietarioId,
     });
 
-    if (resetError || (resetData && resetData[0]?.success === false)) {
-        const errorMessage = resetError?.message || resetData?.[0]?.message || 'Falha ao executar reset contábil.';
-        console.error('Edge Function Error: Failed to reset old plan and FKs:', errorMessage);
-        return new Response(JSON.stringify({ error: errorMessage }), {
+    if (resetError) {
+        console.error('Erro RPC contabil_reset_all:', resetError);
+        return new Response(JSON.stringify({ error: 'Erro ao limpar dados antigos: ' + resetError.message }), {
             status: 500,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
     }
 
-    // 2. Inserir novos dados
-    const { error: insertErr } = await supabaseService
-      .from('plano_contas')
-      .insert(newPlanoContas);
+    // 2. Inserir novos dados (em lotes de 100 para evitar timeout ou erros de payload)
+    const CHUNK_SIZE = 100;
+    for (let i = 0; i < newPlanoContas.length; i += CHUNK_SIZE) {
+        const chunk = newPlanoContas.slice(i, i + CHUNK_SIZE);
+        const { error: insertErr } = await supabaseService
+          .from('plano_contas')
+          .insert(chunk);
 
-    if (insertErr) {
-        console.error('Edge Function Error: Failed to insert new plan:', insertErr);
-        // Retorna 500 se a inserção falhar
-        return new Response(JSON.stringify({ error: 'Falha ao inserir novo plano de contas: ' + insertErr.message }), {
-            status: 500,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
+        if (insertErr) {
+            console.error('Erro na inserção de lote (lote ' + (i/CHUNK_SIZE + 1) + '):', insertErr);
+            // Se falhar um lote, interrompe e retorna o erro detalhado
+            return new Response(JSON.stringify({ 
+                error: `Falha ao inserir contas (Lote ${i/CHUNK_SIZE + 1}): ${insertErr.message}`,
+                hint: insertErr.hint || 'Verifique se existem códigos de conta duplicados no arquivo.'
+            }), {
+                status: 500,
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            });
+        }
     }
     
-    // 3. Buscar os IDs reais das contas recém-inseridas (necessário para o remapeamento no frontend)
+    console.log('LOG: Inserção concluída com sucesso.');
+
+    // 3. Buscar os IDs reais das contas recém-inseridas para o remapeamento
     const { data: contasInseridas, error: fetchErr } = await supabaseService
         .from('plano_contas')
         .select('id, Conta')
         .eq('proprietario_id', proprietarioId);
         
     if (fetchErr) {
-        console.error('Edge Function Error: Failed to fetch new IDs:', fetchErr);
-        // Retorna 500 se a busca falhar
-        return new Response(JSON.stringify({ error: 'Falha ao buscar IDs do novo plano.' }), {
+        console.error('Erro ao buscar novos IDs:', fetchErr);
+        return new Response(JSON.stringify({ error: 'Plano inserido, mas falha ao mapear IDs: ' + fetchErr.message }), {
             status: 500,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
     }
 
-    // Retorna 200 com os dados de mapeamento
     return new Response(JSON.stringify({ success: true, contaIdMap: contasInseridas }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
   } catch (error) {
-    console.error('💥 FATAL ERROR in manage-plano-contas:', error);
-    const message = error instanceof Error ? error.message : 'Unknown error.';
+    console.error('💥 ERRO FATAL na Edge Function manage-plano-contas:', error);
+    const message = error instanceof Error ? error.message : 'Erro desconhecido durante o processamento do servidor.';
     return new Response(JSON.stringify({ error: message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

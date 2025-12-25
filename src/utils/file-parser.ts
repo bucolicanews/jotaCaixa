@@ -1,17 +1,16 @@
 import Papa, { ParseResult } from 'papaparse';
 import { ContaCSV, ContaJSON } from '@/types/plano-contas';
-import { HistoricoCSV } from '@/types/historico'; // Importando HistoricoCSV
+import { HistoricoCSV } from '@/types/historico';
 
 type ParsedData = ContaCSV[] | ContaJSON[] | HistoricoCSV[];
 
-// Função auxiliar para converter string para booleano
+// Função robusta para converter diversos formatos de entrada em booleano real
 const toBoolean = (value: any): boolean => {
+    if (value === null || value === undefined) return false;
     if (typeof value === 'boolean') return value;
-    if (typeof value === 'string') {
-        const upper = value.toUpperCase().trim();
-        return upper === 'TRUE' || upper === 'SIM' || upper === '1';
-    }
-    return false;
+    
+    const strValue = String(value).toUpperCase().trim();
+    return ['TRUE', 'SIM', '1', 'S', 'YES', 'Y', 'VERDADEIRO'].includes(strValue);
 };
 
 /**
@@ -23,43 +22,57 @@ const parseCSV = (file: File): Promise<ParsedData> => {
       header: true,
       skipEmptyLines: true,
       dynamicTyping: true,
-      // PapaParse adivinha o delimitador
+      encoding: "UTF-8", // Garante suporte a acentos
       complete: (results: ParseResult<any>) => {
         const headers = results.meta.fields || [];
         
-        // Verifica se é Plano de Contas
-        if (headers.includes('Conta') && headers.includes('Analítica')) {
-            const data = results.data.map((row: any) => ({
-              Conta: String(row.Conta || ''),
-              'Código reduzido': String(row['Código reduzido'] || ''),
-              Descrição: String(row.Descrição || ''),
-              Analítica: (row.Analítica === 'Sim' ? 'Sim' : 'Não') as 'Sim' | 'Não',
-              // NOVO: Mapeamento das colunas booleanas
-              is_conta_caixa_banco: toBoolean(row.is_conta_caixa_banco),
-              is_conta_patrimonial: toBoolean(row.is_conta_patrimonial),
-              is_conta_resultado: toBoolean(row.is_conta_resultado),
-              is_caixa: toBoolean(row.is_caixa),
-              is_banco: toBoolean(row.is_banco),
-              is_a_receber: toBoolean(row.is_a_receber),
-              is_a_pagar: toBoolean(row.is_a_pagar),
-            })).filter((row: ContaCSV) => row.Conta && row.Descrição);
+        // Verifica se é Plano de Contas (identifica pelos cabeçalhos principais)
+        const hasConta = headers.some(h => h.toLowerCase() === 'conta');
+        const hasAnalitica = headers.some(h => h.toLowerCase().includes('analitica') || h.toLowerCase().includes('analítica'));
+
+        if (hasConta && hasAnalitica) {
+            const data = results.data.map((row: any) => {
+              // Busca os valores independente de variação de acentuação nos headers
+              const getVal = (keys: string[]) => {
+                  const foundKey = keys.find(k => row[k] !== undefined);
+                  return foundKey ? row[foundKey] : undefined;
+              };
+
+              const contaCodigo = String(getVal(['Conta', 'conta']) || '');
+              const analitica = (String(getVal(['Analítica', 'Analitica', 'analitica']) || '').trim() === 'Sim' ? 'Sim' : 'Não') as 'Sim' | 'Não';
+
+              return {
+                Conta: contaCodigo,
+                'Código reduzido': String(getVal(['Código reduzido', 'Codigo reduzido', 'codigo_reduzido', 'Reduzido']) || ''),
+                Descrição: String(getVal(['Descrição', 'Descricao', 'descricao']) || '').trim(),
+                Analítica: analitica,
+                // Flags Booleanas - Garantindo a conversão correta
+                is_conta_caixa_banco: toBoolean(getVal(['is_conta_caixa_banco'])),
+                is_conta_patrimonial: toBoolean(getVal(['is_conta_patrimonial'])),
+                is_conta_resultado: toBoolean(getVal(['is_conta_resultado'])),
+                is_caixa: toBoolean(getVal(['is_caixa'])),
+                is_banco: toBoolean(getVal(['is_banco'])),
+                is_a_receber: toBoolean(getVal(['is_a_receber'])),
+                is_a_pagar: toBoolean(getVal(['is_a_pagar'])),
+              };
+            }).filter((row: any) => row.Conta && row.Descrição);
+            
             return resolve(data as ContaCSV[]);
         }
         
-        // Verifica se é Histórico (procura por 'Descrição' ou 'Descricao')
+        // Verifica se é Histórico
         const descKey = headers.find(h => h.toLowerCase().includes('descri')) || 'Descrição';
-        const codigoKey = headers.find(h => h.toLowerCase().includes('código')) || 'Código';
+        const codigoKey = headers.find(h => h.toLowerCase().includes('código') || h.toLowerCase().includes('codigo')) || 'Código';
         
         if (descKey) {
             const data = results.data.map((row: any) => ({
-                Descricao: String(row[descKey] || ''), // Mapeia para a chave sem acento
-                Código: String(row[codigoKey] || ''), // Mapeia para a chave com acento
+                Descricao: String(row[descKey] || '').trim(),
+                Código: String(row[codigoKey] || '').trim(),
             })).filter((row: HistoricoCSV) => row.Descricao);
             return resolve(data as HistoricoCSV[]);
         }
         
-        // Se não for nenhum dos formatos esperados
-        reject(new Error('Formato de arquivo CSV não reconhecido.'));
+        reject(new Error('Formato de arquivo CSV não reconhecido. Certifique-se de usar ponto e vírgula ou vírgula como delimitador.'));
       },
       error: (error: Error) => {
         reject(error);
@@ -83,17 +96,14 @@ const parseJSON = (file: File): Promise<ParsedData> => {
             throw new Error('O arquivo JSON deve conter um array de objetos.');
         }
         
-        // Tenta determinar o tipo de dados
         const firstRow = json[0];
         
-        if (firstRow && 'Conta' in firstRow && 'Analítica' in firstRow) {
-            // Plano de Contas JSON
+        if (firstRow && ('Conta' in firstRow || 'conta' in firstRow)) {
             const data = json.map((row: any) => ({
-                Conta: String(row.Conta || ''),
-                'Código reduzido': String(row['Código reduzido'] || ''),
-                Descrição: String(row.Descrição || ''),
-                Analítica: (row.Analítica === 'Sim' ? 'Sim' : 'Não') as 'Sim' | 'Não',
-                // NOVO: Mapeamento das colunas booleanas
+                Conta: String(row.Conta || row.conta || ''),
+                'Código reduzido': String(row['Código reduzido'] || row.codigo_reduzido || ''),
+                Descrição: String(row.Descrição || row.Descricao || row.descricao || '').trim(),
+                Analítica: (row.Analítica === 'Sim' || row.Analitica === 'Sim' || row.analitica === 'Sim' ? 'Sim' : 'Não') as 'Sim' | 'Não',
                 is_conta_caixa_banco: toBoolean(row.is_conta_caixa_banco),
                 is_conta_patrimonial: toBoolean(row.is_conta_patrimonial),
                 is_conta_resultado: toBoolean(row.is_conta_resultado),
@@ -101,15 +111,14 @@ const parseJSON = (file: File): Promise<ParsedData> => {
                 is_banco: toBoolean(row.is_banco),
                 is_a_receber: toBoolean(row.is_a_receber),
                 is_a_pagar: toBoolean(row.is_a_pagar),
-            })).filter((row: ContaJSON) => row.Conta && row.Descrição);
+            })).filter((row: any) => row.Conta && row.Descrição);
             return resolve(data as ContaJSON[]);
         }
         
-        if (firstRow && ('Descricao' in firstRow || 'Descrição' in firstRow)) {
-            // Histórico JSON
+        if (firstRow && ('Descricao' in firstRow || 'Descrição' in firstRow || 'descricao' in firstRow)) {
             const data = json.map((row: any) => ({
-                Descricao: String(row.Descricao || row.Descrição || ''),
-                Código: String(row.Código || row.Código || ''), // Tenta ler Código
+                Descricao: String(row.Descricao || row.Descrição || row.descricao || '').trim(),
+                Código: String(row.Código || row.Codigo || row.codigo || '').trim(),
             })).filter((row: HistoricoCSV) => row.Descricao);
             return resolve(data as HistoricoCSV[]);
         }
@@ -125,9 +134,6 @@ const parseJSON = (file: File): Promise<ParsedData> => {
   });
 };
 
-/**
- * Função principal para parsear arquivos CSV ou JSON.
- */
 export const parseFile = async (file: File): Promise<ParsedData> => {
     const fileName = file.name.toLowerCase();
     
