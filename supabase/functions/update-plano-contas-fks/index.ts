@@ -16,11 +16,13 @@ serve(async (req: Request) => {
   try {
     const body = await req.json();
     const { 
+        proprietarioId,
         updatesSaldoContas, 
         updatesConfigCR, 
         updatesConfigCP, 
         updatesConfigStripe, 
         updatesConfigContrato, 
+        updatesLancamentos,
         updatesPlanoContasBooleans 
     } = body;
 
@@ -32,13 +34,37 @@ serve(async (req: Request) => {
     );
     
     // 1. Executar todas as atualizações de FKs
-    const updatePromises = [
-        supabaseService.from('saldo_contas').upsert(updatesSaldoContas, { onConflict: 'id' }),
-        supabaseService.from('configuracao_contas_receber').upsert(updatesConfigCR, { onConflict: 'id' }),
-        supabaseService.from('configuracao_contas_pagar').upsert(updatesConfigCP, { onConflict: 'id' }),
-        supabaseService.from('configuracoes_stripe').upsert(updatesConfigStripe, { onConflict: 'id' }),
-        supabaseService.from('configuracao_contratos').upsert(updatesConfigContrato, { onConflict: 'id' }),
-    ];
+    const updatePromises: Promise<any>[] = [];
+
+    if (Array.isArray(updatesSaldoContas) && updatesSaldoContas.length > 0) {
+        updatePromises.push(
+            supabaseService.from('saldo_contas').upsert(updatesSaldoContas, { onConflict: 'id' })
+        );
+    }
+
+    if (Array.isArray(updatesConfigCR) && updatesConfigCR.length > 0) {
+        updatePromises.push(
+            supabaseService.from('configuracao_contas_receber').upsert(updatesConfigCR, { onConflict: 'id' })
+        );
+    }
+
+    if (Array.isArray(updatesConfigCP) && updatesConfigCP.length > 0) {
+        updatePromises.push(
+            supabaseService.from('configuracao_contas_pagar').upsert(updatesConfigCP, { onConflict: 'id' })
+        );
+    }
+
+    if (Array.isArray(updatesConfigStripe) && updatesConfigStripe.length > 0) {
+        updatePromises.push(
+            supabaseService.from('configuracoes_stripe').upsert(updatesConfigStripe, { onConflict: 'id' })
+        );
+    }
+
+    if (Array.isArray(updatesConfigContrato) && updatesConfigContrato.length > 0) {
+        updatePromises.push(
+            supabaseService.from('configuracao_contratos').upsert(updatesConfigContrato, { onConflict: 'id' })
+        );
+    }
     
     // 2. Atualizar os booleanos no novo Plano de Contas
     if (updatesPlanoContasBooleans && updatesPlanoContasBooleans.length > 0) {
@@ -54,6 +80,33 @@ serve(async (req: Request) => {
         if (res.error) {
             console.error('Edge Function Error: Failed to update FKs or Booleans:', res.error);
             throw new Error('Falha ao atualizar referências contábeis: ' + res.error.message);
+        }
+    }
+
+    // 3. Atualizar Lancamentos (em lote por conta antiga -> conta nova)
+    if (updatesLancamentos && updatesLancamentos.length > 0) {
+        if (!proprietarioId) {
+            throw new Error('proprietarioId é obrigatório para atualizar lançamentos.');
+        }
+
+        for (const u of updatesLancamentos) {
+            const field = u.field;
+            const oldId = u.old_conta_contabil_id;
+            const newId = u.new_conta_contabil_id;
+            
+            if (!field || !oldId || !newId) continue;
+            if (field !== 'conta_contabil_id' && field !== 'conta_resultado_id') continue;
+
+            const { error: lancError } = await supabaseService
+                .from('lancamentos')
+                .update({ [field]: newId })
+                .eq('proprietario_id', proprietarioId)
+                .eq(field, oldId);
+                
+            if (lancError) {
+                console.error('Edge Function Error: Failed to update lancamentos:', lancError);
+                throw new Error('Falha ao atualizar lançamentos: ' + lancError.message);
+            }
         }
     }
 

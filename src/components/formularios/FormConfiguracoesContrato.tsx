@@ -12,6 +12,7 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 import { Loader2, Link, MessageSquare, Mail, BookOpen } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
@@ -26,12 +27,15 @@ import {
   SelectValue,
 } from '../ui/select';
 import { PlanoContas } from '@/types/plano-contas';
+import { cn } from '@/lib/utils';
 import { useContabilConfig } from '@/hooks/use-contabil-config';
 import { ClienteProfile } from '@/types/usuario';
 
 /* ---------------- PADRÕES ---------------- */
 
 const PADROES_CONTRATO = {
+  conta_debito: { Conta: '1.1.02.0002', Descricao: 'Clientes Contratos a Receber' },
+  conta_credito: { Conta: '4.1.01.0001', Descricao: 'Prestação de Serviços Contabeis' },
   url_base: 'https://app-desenvolvimento-jota-caixa.ubjifz.easypanel.host',
   template_whatsapp:
     'Olá! Seu contrato está pronto para assinatura. Clique no link abaixo para visualizar e assinar:\n\n{{LINK_ASSINATURA}}',
@@ -52,7 +56,7 @@ const formSchema = z.object({
 type FormValues = z.infer<typeof formSchema>;
 
 const FormConfiguracoesContrato: React.FC = () => {
-  const { role, usuario, perfil, carregando: carregandoSessao } = useSessao();
+  const { role, usuario, perfil, carregando: carregandoSessao, refetch: refetchSessao } = useSessao();
   const { configMap } = useContabilConfig();
 
   const [loadingData, setLoadingData] = useState(true);
@@ -117,7 +121,7 @@ const FormConfiguracoesContrato: React.FC = () => {
       .from('configuracao_contratos')
       .select('*')
       .eq('proprietario_id', proprietarioId)
-      .maybeSingle(); // Usando maybeSingle para lidar com registros inexistentes
+      .maybeSingle();
 
     const valores: Partial<FormValues> = {};
 
@@ -126,38 +130,62 @@ const FormConfiguracoesContrato: React.FC = () => {
       Object.assign(valores, data);
     }
 
-    // Aplica padrões se o valor for nulo (garantindo que os campos de texto não sejam nulos)
+    if (!valores.id_conta_clientes_receber) {
+      const conta = contasAtivo.find(
+        c =>
+          c.Conta === PADROES_CONTRATO.conta_debito.Conta &&
+          c.Descricao === PADROES_CONTRATO.conta_debito.Descricao
+      );
+      if (conta) valores.id_conta_clientes_receber = conta.id;
+    }
+
+    if (!valores.id_conta_receita_contrato) {
+      const conta = contasReceita.find(
+        c =>
+          c.Conta === PADROES_CONTRATO.conta_credito.Conta &&
+          c.Descricao === PADROES_CONTRATO.conta_credito.Descricao
+      );
+      if (conta) valores.id_conta_receita_contrato = conta.id;
+    }
+
     valores.url_base_assinatura ||= PADROES_CONTRATO.url_base;
     valores.template_whatsapp ||= PADROES_CONTRATO.template_whatsapp;
     valores.template_email ||= PADROES_CONTRATO.template_email;
 
     form.reset(valores);
     setLoadingData(false);
-  }, [proprietarioId, form]);
+  }, [proprietarioId, contasAtivo, contasReceita, form]);
 
   useEffect(() => {
     if (!carregandoSessao && canAccess) fetchContas();
   }, [carregandoSessao, canAccess, fetchContas]);
 
   useEffect(() => {
-    if (contasAtivo.length || contasReceita.length) fetchConfig();
-  }, [contasAtivo, contasReceita, fetchConfig]);
+    if (canAccess && !loadingContas) fetchConfig();
+  }, [canAccess, loadingContas, fetchConfig]);
 
   /* ---------------- SUBMIT ---------------- */
 
   const onSubmit = async (values: FormValues) => {
     if (!proprietarioId) return;
-
     const payload = { ...values, proprietario_id: proprietarioId };
 
     const query = existingId
       ? supabase.from('configuracao_contratos').update(payload).eq('id', existingId)
-      : supabase.from('configuracao_contratos').insert(payload);
+      : supabase.from('configuracao_contratos').insert(payload).select().single();
 
-    const { error } = await query;
+    const { data, error } = await query;
 
-    if (error) showError(error.message);
-    else showSuccess('Configurações de Contrato salvas com sucesso!');
+    if (error) {
+      showError(error.message);
+    } else {
+      showSuccess('Configurações de Contrato salvas com sucesso!');
+      if (data && !existingId) {
+        setExistingId(data.id);
+      }
+      form.reset(values);
+      refetchSessao();
+    }
   };
 
   if (loadingData || loadingContas) {
@@ -173,55 +201,63 @@ const FormConfiguracoesContrato: React.FC = () => {
           <BookOpen className="w-4 h-4 mr-2" /> Mapeamento Contábil (Contratos)
         </h3>
 
-        {/* DÉBITO */}
-        <FormField
-          control={form.control}
-          name="id_conta_clientes_receber"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Conta DÉBITO: Clientes a Receber</FormLabel>
-              <Select value={field.value || undefined} onValueChange={field.onChange}>
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione a conta de Ativo" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {contasAtivo.map(c => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.Conta} - {c.Descricao}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </FormItem>
-          )}
-        />
-
-        {/* CRÉDITO */}
-        <FormField
-          control={form.control}
-          name="id_conta_receita_contrato"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Conta CRÉDITO: Receita de Contratos</FormLabel>
-              <Select value={field.value || undefined} onValueChange={field.onChange}>
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione a conta de Receita" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {contasReceita.map(c => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.Conta} - {c.Descricao}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </FormItem>
-          )}
-        />
+        <Table className="mb-4 rounded-lg border">
+          <TableHeader>
+            <TableRow>
+              <TableHead>Nome/Descrição</TableHead>
+              <TableHead>Conta Antiga</TableHead>
+              <TableHead>Tipo Registro</TableHead>
+              <TableHead>Mapear para Nova Conta</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {[{
+              key: 'id_conta_clientes_receber',
+              label: 'Conta DÉBITO: Clientes a Receber',
+              tipo: 'Clientes a Receber (Ativo)',
+              padrao: PADROES_CONTRATO.conta_debito,
+              options: contasAtivo,
+            }, {
+              key: 'id_conta_receita_contrato',
+              label: 'Conta CRÉDITO: Receita de Contratos',
+              tipo: 'Receita de Contratos (Resultado)',
+              padrao: PADROES_CONTRATO.conta_credito,
+              options: contasReceita,
+            }].map(row => (
+              <TableRow key={row.key}>
+                <TableCell className="text-sm font-medium">{row.label}</TableCell>
+                <TableCell className="text-xs text-muted-foreground">
+                  {row.padrao.Conta} - {row.padrao.Descricao}
+                </TableCell>
+                <TableCell className="text-xs text-muted-foreground">{row.tipo}</TableCell>
+                <TableCell>
+                  <FormField
+                    control={form.control}
+                    name={row.key as keyof FormValues}
+                    render={({ field }) => (
+                      <FormItem className="m-0">
+                        <Select value={field.value || undefined} onValueChange={field.onChange}>
+                          <FormControl>
+                            <SelectTrigger className={cn(!field.value && 'border-destructive')}>
+                              <SelectValue placeholder="Selecione a nova conta analítica" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {row.options.map(c => (
+                              <SelectItem key={c.id} value={c.id}>
+                                {c.Conta} - {c.Descricao}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </FormItem>
+                    )}
+                  />
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
 
         <Separator />
 

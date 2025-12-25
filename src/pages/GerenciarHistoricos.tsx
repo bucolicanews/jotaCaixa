@@ -98,7 +98,7 @@ const FormHistorico: React.FC<FormHistoricoProps> = ({ historicoInicial, proprie
 
 
 const GerenciarHistoricos: React.FC = () => {
-  const { perfil, role, carregando: carregandoSessao } = useSessao(); // Removido 'usuario'
+  const { perfil, role, carregando: carregandoSessao, refetch: refetchSessao } = useSessao(); // Removido 'usuario'
   const { printContent } = usePrint();
   
   const [historicos, setHistoricos] = useState<Historico[]>([]);
@@ -169,6 +169,7 @@ const GerenciarHistoricos: React.FC = () => {
     setDialogAberto(false);
     setHistoricoSelecionado(null);
     buscarHistoricos();
+    void refetchSessao();
   };
 
   const handleEdit = (historico: Historico) => {
@@ -281,6 +282,7 @@ const GerenciarHistoricos: React.FC = () => {
       showSuccess(`${historicosParaInserir.length} históricos importados com sucesso!`);
       setImportFile(null);
       buscarHistoricos();
+      void refetchSessao();
 
     } catch (error) {
       console.error('Erro durante a importação:', error);

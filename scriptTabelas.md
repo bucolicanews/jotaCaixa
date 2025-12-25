@@ -481,7 +481,7 @@ CREATE TABLE IF NOT EXISTS public.configuracao_contas_receber (
 -- Configurações de envio e mapeamento contábil para contratos/faturamento
 CREATE TABLE IF NOT EXISTS public.configuracao_contratos (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    proprietario_id uuid REFERENCES public.tbl_admins (id) NOT NULL,
+    proprietario_id uuid REFERENCES public.tbl_admins (id) NOT NULL UNIQUE,
 
     url_base_assinatura text,
     template_whatsapp text,

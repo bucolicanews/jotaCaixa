@@ -20,36 +20,25 @@ const ResetConfiguracoesPadrao: React.FC<ResetConfiguracoesPadraoProps> = ({ pro
         setLoading(true);
 
         try {
-            // 1. Setar todas as FKs para NULL (para evitar a violação antes de deletar o plano)
-            await supabase.from('saldo_contas').update({ conta_contabil_id: null }).eq('proprietario_id', proprietarioId);
-            await supabase.from('lancamentos').update({ conta_contabil_id: null }).eq('proprietario_id', proprietarioId);
-            await supabase.from('configuracao_contas_receber').update({ conta_contabil_id: null }).eq('proprietario_id', proprietarioId);
-            await supabase.from('configuracao_contas_pagar').update({ conta_contabil_id: null }).eq('proprietario_id', proprietarioId);
-            await supabase.from('configuracoes_stripe').update({ conta_sintetica_id: null, conta_receber_id: null }).eq('proprietario_id', proprietarioId);
-            
-            // 2. Importar Plano de Contas e Históricos Padrão (RPC)
-            const { data: importData, error: importError } = await supabase.rpc('import_default_tables', {
-                p_proprietario_id: proprietarioId,
+            // 1) Reset total (remove plano/historicos/configs contabil)
+            const { data: resetData, error: resetError } = await supabase.functions.invoke('contabil-reset', {
+                body: { proprietarioId },
             });
-            
-            if (importError || (importData && !importData[0].success)) {
-                throw new Error(importError?.message || importData[0].message);
-            }
-            
-            // 3. Mapear Configurações Contábeis Padrão (RPC)
-            const { data: mapData, error: mapError } = await supabase.rpc('map_default_configs', {
-                p_proprietario_id: proprietarioId,
+            if (resetError) throw resetError;
+            if (resetData?.error) throw new Error(resetData.error);
+
+            // 2) Recriar defaults
+            const { data: setupData, error: setupError } = await supabase.functions.invoke('contabil-setup', {
+                body: { proprietarioId },
             });
-            
-            if (mapError || (mapData && !mapData[0].success)) {
-                throw new Error(mapError?.message || mapData[0].message);
-            }
+            if (setupError) throw setupError;
+            if (setupData?.error) throw new Error(setupData.error);
 
             showSuccess('Configurações resetadas para o padrão com sucesso!');
             onResetComplete();
             refetchSessao(); // Força o recálculo do setupStatus
         } catch (error: any) {
-            console.error('Erro ao resetar configurações:', error);
+            console.error('Erro ao resetar configuracoes:', error);
             showError('Falha ao resetar: ' + error.message);
         } finally {
             setLoading(false);

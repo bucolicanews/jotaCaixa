@@ -191,4 +191,5 @@ export interface DadosSessao {
   role: UserRole;
   carregando: boolean;
   setupStatus: SetupStatus;
+  ownerId: string | null;
 }

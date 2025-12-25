@@ -31,31 +31,15 @@ serve(async (req: Request) => {
       { auth: { persistSession: false } }
     );
     
-    // --- 1. Importar Plano de Contas e Históricos Padrão ---
-    console.log(`LOG: Importing default tables for client: ${clienteId}`);
-    const { data: importData, error: importError } = await supabaseService.rpc('import_default_tables', {
+    // --- 1. Setup contabil padrao (Plano + Historicos + Configs) ---
+    console.log(`LOG: Running contabil_setup_defaults for client: ${clienteId}`);
+    const { data: setupData, error: setupError } = await supabaseService.rpc('contabil_setup_defaults', {
         p_proprietario_id: clienteId,
     });
-    
-    if (importError || (importData && !importData[0].success)) {
-        console.error('❌ RPC import_default_tables error:', importError || importData[0].message);
-        // Se a importação falhar, retornamos o erro, pois o sistema não pode funcionar sem o plano de contas.
-        return new Response(JSON.stringify({ error: importError?.message || importData[0].message }), {
-            status: 500,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-    }
-    
-    // --- 2. Mapear Configurações Contábeis Padrão ---
-    console.log(`LOG: Mapping default configs for client: ${clienteId}`);
-    const { data: mapData, error: mapError } = await supabaseService.rpc('map_default_configs', {
-        p_proprietario_id: clienteId,
-    });
-    
-    if (mapError || (mapData && !mapData[0].success)) {
-        console.error('❌ RPC map_default_configs error:', mapError || mapData[0].message);
-        // Se o mapeamento falhar, retornamos o erro.
-        return new Response(JSON.stringify({ error: mapError?.message || mapData[0].message }), {
+
+    if (setupError || (setupData && !setupData[0].success)) {
+        console.error('RPC contabil_setup_defaults error:', setupError || setupData[0].message);
+        return new Response(JSON.stringify({ error: setupError?.message || setupData[0].message }), {
             status: 500,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
@@ -71,7 +55,7 @@ serve(async (req: Request) => {
       .single();
 
     if (configError && configError.code !== 'PGRST116') {
-      console.error('❌ Stripe config error:', configError);
+      console.error('Stripe config error:', configError);
     }
     
     const idContaResultado = stripeConfig?.id_conta_resultado || null;
@@ -86,7 +70,7 @@ serve(async (req: Request) => {
     });
 
     if (rpcError) {
-      console.error('❌ RPC activate_subscription error:', rpcError);
+      console.error('RPC activate_subscription error:', rpcError);
       return new Response(JSON.stringify({ error: rpcError.message }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -99,7 +83,7 @@ serve(async (req: Request) => {
     });
 
   } catch (error) {
-    console.error('💥 FATAL ERROR in activate-subscription:', error);
+    console.error('FATAL ERROR in activate-subscription:', error);
     const message = error instanceof Error ? error.message : 'Unknown error during activation.';
     return new Response(JSON.stringify({ error: message }), {
       status: 500,

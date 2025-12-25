@@ -1,4 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import { format } from 'date-fns';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -172,6 +174,17 @@ const FormCapitalSocial: React.FC<FormCapitalSocialProps> = ({ onSaveComplete })
                         {!contaCapital && <li>Conta de Capital Social (3.1.00.0001) não encontrada ou não marcada como Patrimonial.</li>}
                         {contaCaixa && !contaCaixa.conta_contabil_id && <li>Conta de Saldo 'Caixa Inicial' não vinculada a uma conta contábil.</li>}
                     </ul>
+                    <div className="flex gap-2 mt-3">
+                        <Button asChild size="sm" variant="outline">
+                            <Link to="/plano-contas">Corrigir no Plano de Contas</Link>
+                        </Button>
+                        <Button asChild size="sm" variant="outline">
+                            <Link to="/bancos">Corrigir em Bancos/Caixas</Link>
+                        </Button>
+                        <Button asChild size="sm" variant="destructive">
+                            <Link to="/lancamentos?tab=novo">Ir para Lançamentos</Link>
+                        </Button>
+                    </div>
                 </div>
             )}
             

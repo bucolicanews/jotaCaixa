@@ -61,6 +61,7 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     role: null,
     carregando: true,
     setupStatus: DEFAULT_SETUP_STATUS,
+    ownerId: null,
   });
   const navigate = useNavigate();
 
@@ -72,6 +73,7 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
         role: null,
         carregando: false,
         setupStatus: DEFAULT_SETUP_STATUS,
+        ownerId: null,
       });
       return;
     }
@@ -132,7 +134,7 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const ownerId = resolveOwnerId(role, perfil, user);
     const setupStatus = await fetchSetupStatus(ownerId);
 
-    setEstado({ usuario: user, perfil, role, carregando: false, setupStatus });
+    setEstado({ usuario: user, perfil, role, carregando: false, setupStatus, ownerId });
   }, []);
 
   const refetch = useCallback(async () => {

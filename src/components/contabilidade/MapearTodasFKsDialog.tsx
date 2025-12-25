@@ -15,8 +15,18 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 // Tipos de dados que precisam de remapeamento
 interface OldFKData {
     id: string;
+    record_id: string;
     nome: string; // Nome da conta/config
-    tabela: 'saldo_contas' | 'config_cr' | 'config_cp' | 'config_stripe_sintetica' | 'config_stripe_receber' | 'config_contrato_ativo' | 'config_contrato_receita';
+    tabela:
+      | 'saldo_contas'
+      | 'config_cr'
+      | 'config_cp'
+      | 'config_stripe_sintetica'
+      | 'config_stripe_receber'
+      | 'config_contrato_ativo'
+      | 'config_contrato_receita'
+      | 'lancamentos_conta'
+      | 'lancamentos_resultado';
     old_conta_contabil_id: string;
     old_conta_contabil_nome: string;
     saldo_inicial?: number; // Apenas para saldo_contas
@@ -69,6 +79,22 @@ const MapearTodasFKsDialog: React.FC<MapearTodasFKsDialogProps> = ({
             return acc;
         }, {} as Record<OldFKData['tabela'], OldFKData[]>);
     }, [oldFKs]);
+
+    const stripeCount =
+        (grupos.config_stripe_sintetica?.length || 0) +
+        (grupos.config_stripe_receber?.length || 0);
+
+    const contratoCount =
+        (grupos.config_contrato_ativo?.length || 0) +
+        (grupos.config_contrato_receita?.length || 0);
+        
+    const lancamentosCount =
+        (grupos.lancamentos_conta?.length || 0) +
+        (grupos.lancamentos_resultado?.length || 0);
+
+    const tabsCount = 4 + (stripeCount > 0 ? 1 : 0) + (lancamentosCount > 0 ? 1 : 0);
+    const tabsGridColsClass =
+        tabsCount === 4 ? "grid-cols-4" : tabsCount === 5 ? "grid-cols-5" : "grid-cols-6";
 
     const isMappingComplete = oldFKs.every(s => mapping[s.id] && mapping[s.id].length > 0);
 
@@ -136,7 +162,9 @@ const MapearTodasFKsDialog: React.FC<MapearTodasFKsDialogProps> = ({
             const updatesConfigCR: any[] = [];
             const updatesConfigCP: any[] = [];
             const updatesConfigStripe: any[] = [];
-            const updatesConfigContrato: any[] = []; // NOVO ARRAY
+            const updatesLancamentos: any[] = [];
+            
+            const configContratoMap: Record<string, any> = {};
             
             // Mapa para rastrear os booleanos que devem ser marcados na nova tabela PlanoContas
             const newContaBooleansMap: Record<string, Partial<PlanoContas>> = {};
@@ -171,26 +199,40 @@ const MapearTodasFKsDialog: React.FC<MapearTodasFKsDialogProps> = ({
                     if (fk.is_conta_resultado) newContaBooleansMap[newContaId].is_conta_resultado = true;
                     
                 } else if (fk.tabela === 'config_stripe_sintetica') {
-                    updatesConfigStripe.push({ id: fk.id, conta_sintetica_id: newContaId });
+                    updatesConfigStripe.push({ id: fk.record_id, conta_sintetica_id: newContaId });
                     
                     // Herança de booleanos (Caixa/Banco ou Patrimonial)
                     if (fk.is_conta_caixa_banco) newContaBooleansMap[newContaId].is_conta_caixa_banco = true;
                     if (fk.is_conta_patrimonial) newContaBooleansMap[newContaId].is_conta_patrimonial = true;
                     
                 } else if (fk.tabela === 'config_stripe_receber') {
-                    updatesConfigStripe.push({ id: fk.id, conta_receber_id: newContaId });
+                    updatesConfigStripe.push({ id: fk.record_id, conta_receber_id: newContaId });
                     
                     // Herança de booleanos (Caixa/Banco ou Patrimonial)
                     if (fk.is_conta_caixa_banco) newContaBooleansMap[newContaId].is_conta_caixa_banco = true;
                     if (fk.is_conta_patrimonial) newContaBooleansMap[newContaId].is_conta_patrimonial = true;
-                } else if (fk.tabela === 'config_contrato_ativo') { // NOVO
-                    updatesConfigContrato.push({ id: fk.id, id_conta_clientes_receber: newContaId });
+                } else if (fk.tabela === 'config_contrato_ativo') {
+                    configContratoMap[fk.record_id] = { ...configContratoMap[fk.record_id], id: fk.record_id, proprietario_id: proprietarioId, id_conta_clientes_receber: newContaId };
                     if (fk.is_conta_patrimonial) newContaBooleansMap[newContaId].is_conta_patrimonial = true;
-                } else if (fk.tabela === 'config_contrato_receita') { // NOVO
-                    updatesConfigContrato.push({ id: fk.id, id_conta_receita_contrato: newContaId });
+                } else if (fk.tabela === 'config_contrato_receita') {
+                    configContratoMap[fk.record_id] = { ...configContratoMap[fk.record_id], id: fk.record_id, proprietario_id: proprietarioId, id_conta_receita_contrato: newContaId };
                     if (fk.is_conta_resultado) newContaBooleansMap[newContaId].is_conta_resultado = true;
+                } else if (fk.tabela === 'lancamentos_conta') {
+                    updatesLancamentos.push({
+                        field: 'conta_contabil_id',
+                        old_conta_contabil_id: fk.old_conta_contabil_id,
+                        new_conta_contabil_id: newContaId,
+                    });
+                } else if (fk.tabela === 'lancamentos_resultado') {
+                    updatesLancamentos.push({
+                        field: 'conta_resultado_id',
+                        old_conta_contabil_id: fk.old_conta_contabil_id,
+                        new_conta_contabil_id: newContaId,
+                    });
                 }
             });
+
+            const updatesConfigContrato = Object.values(configContratoMap);
             
             // 3.2. Coletar todos os payloads de booleanos
             const updatesPlanoContasBooleans = Object.values(newContaBooleansMap);
@@ -198,11 +240,13 @@ const MapearTodasFKsDialog: React.FC<MapearTodasFKsDialogProps> = ({
             // 3.3. Executar todas as atualizações (AGORA ENVIAMOS TUDO PARA A EDGE FUNCTION)
             const { error: finalUpdateError } = await supabase.functions.invoke('update-plano-contas-fks', {
                 body: {
+                    proprietarioId,
                     updatesSaldoContas,
                     updatesConfigCR,
                     updatesConfigCP,
                     updatesConfigStripe,
-                    updatesConfigContrato, // NOVO
+                    updatesConfigContrato,
+                    updatesLancamentos,
                     updatesPlanoContasBooleans,
                 },
             });
@@ -302,13 +346,22 @@ const MapearTodasFKsDialog: React.FC<MapearTodasFKsDialogProps> = ({
                 </DialogHeader>
 
                 <Tabs defaultValue="saldo_contas" className="flex-1 flex flex-col overflow-hidden">
-                    <TabsList className="grid w-full grid-cols-5">
-                        <TabsTrigger value="saldo_contas">Saldos ({grupos.saldo_contas?.length || 0})</TabsTrigger>
-                        <TabsTrigger value="configs_cr">CR Configs ({grupos.config_cr?.length || 0})</TabsTrigger>
-                        <TabsTrigger value="configs_cp">CP Configs ({grupos.config_cp?.length || 0})</TabsTrigger>
-                        <TabsTrigger value="configs_stripe">Stripe Configs ({grupos.config_stripe_sintetica?.length || 0 + grupos.config_stripe_receber?.length || 0})</TabsTrigger>
-                        <TabsTrigger value="configs_contrato" className="flex items-center"><FileSignature className="w-4 h-4 mr-1" /> Contratos ({grupos.config_contrato_ativo?.length || 0 + grupos.config_contrato_receita?.length || 0})</TabsTrigger>
-                    </TabsList>
+                <TabsList className={cn("grid w-full", tabsGridColsClass)}>
+                    <TabsTrigger value="saldo_contas">Saldos ({grupos.saldo_contas?.length || 0})</TabsTrigger>
+                    <TabsTrigger value="configs_cr">CR Configs ({grupos.config_cr?.length || 0})</TabsTrigger>
+                    <TabsTrigger value="configs_cp">CP Configs ({grupos.config_cp?.length || 0})</TabsTrigger>
+                    {stripeCount > 0 && (
+                        <TabsTrigger value="configs_stripe">
+                            Stripe Configs ({stripeCount})
+                        </TabsTrigger>
+                    )}
+                    <TabsTrigger value="configs_contrato" className="flex items-center">
+                        <FileSignature className="w-4 h-4 mr-1" /> Contratos ({contratoCount})
+                    </TabsTrigger>
+                    {lancamentosCount > 0 && (
+                        <TabsTrigger value="lancamentos">Lançamentos ({lancamentosCount})</TabsTrigger>
+                    )}
+                </TabsList>
                     
                     <ScrollArea className="flex-1 mt-4">
                         <TabsContent value="saldo_contas" className="mt-0">
@@ -320,14 +373,29 @@ const MapearTodasFKsDialog: React.FC<MapearTodasFKsDialogProps> = ({
                         <TabsContent value="configs_cp" className="mt-0">
                             {renderTable("Configurações de Contas a Pagar", grupos.config_cp || [], 'tipo_registro')}
                         </TabsContent>
-                        <TabsContent value="configs_stripe" className="mt-0 space-y-4">
-                            {renderTable("Stripe - Conta Sintética", grupos.config_stripe_sintetica || [], 'tipo_registro')}
-                            {renderTable("Stripe - Conta Receber", grupos.config_stripe_receber || [], 'tipo_registro')}
-                        </TabsContent>
+                        {stripeCount > 0 && (
+                            <TabsContent value="configs_stripe" className="mt-0 space-y-4">
+                                {renderTable("Stripe - Conta Sintética", grupos.config_stripe_sintetica || [], 'tipo_registro')}
+                                {renderTable("Stripe - Conta Receber", grupos.config_stripe_receber || [], 'tipo_registro')}
+                            </TabsContent>
+                        )}
                         <TabsContent value="configs_contrato" className="mt-0 space-y-4">
+                            <div className="p-4 rounded-md border border-secondary/40 bg-secondary/60">
+                                <div className="flex items-center space-x-2 text-sm font-semibold">
+                                    <FileSignature className="w-4 h-4" />
+                                    <span>Configurações de Contratos e Links</span>
+                                </div>
+                                <p className="text-xs text-muted-foreground">Mapeamento Contábil (Contratos)</p>
+                            </div>
                             {renderTable("Contrato - Clientes a Receber (Ativo)", grupos.config_contrato_ativo || [], 'tipo_registro')}
                             {renderTable("Contrato - Receita (Resultado)", grupos.config_contrato_receita || [], 'tipo_registro')}
                         </TabsContent>
+                        {lancamentosCount > 0 && (
+                            <TabsContent value="lancamentos" className="mt-0 space-y-4">
+                                {renderTable("Lançamentos - Conta Contábil", grupos.lancamentos_conta || [], 'tipo_registro')}
+                                {renderTable("Lançamentos - Conta Resultado", grupos.lancamentos_resultado || [], 'tipo_registro')}
+                            </TabsContent>
+                        )}
                     </ScrollArea>
                 </Tabs>
 

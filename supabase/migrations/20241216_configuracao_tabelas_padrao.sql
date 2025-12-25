@@ -12,9 +12,20 @@ CREATE TABLE IF NOT EXISTS public.configuracao_tabelas_padrao (
 -- Habilitar RLS
 ALTER TABLE public.configuracao_tabelas_padrao ENABLE ROW LEVEL SECURITY;
 
--- Policy: Admins gerenciam suas tabelas padrão
-CREATE POLICY "Admins gerenciam suas tabelas padrão" ON public.configuracao_tabelas_padrao
-  FOR ALL USING (auth.uid() = id_admin) WITH CHECK (auth.uid() = id_admin);
+-- Policy: Admins gerenciam suas tabelas padrão (idempotente para não quebrar db push)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'configuracao_tabelas_padrao'
+      AND policyname = 'Admins gerenciam suas tabelas padrão'
+  ) THEN
+    EXECUTE 'CREATE POLICY "Admins gerenciam suas tabelas padrão" ON public.configuracao_tabelas_padrao FOR ALL USING (auth.uid() = id_admin) WITH CHECK (auth.uid() = id_admin)';
+  END IF;
+END
+$$;
 
 -- Inserção de dados iniciais (Plano de Contas e Históricos)
 -- NOTA: O ID do Admin deve ser substituído pelo ID do primeiro Admin do sistema.

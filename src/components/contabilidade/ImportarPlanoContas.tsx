@@ -11,6 +11,11 @@ import { ContaCSV, ContaJSON, PlanoContas } from '@/types/plano-contas';
 import { ClienteProfile, UsuarioProfile } from '@/types/usuario';
 import MapearTodasFKsDialog from './MapearTodasFKsDialog';
 
+const PADROES_CONTRATO = {
+  conta_debito: { Conta: '1.1.02.0002', Descricao: 'Clientes Contratos a Receber' },
+  conta_credito: { Conta: '4.1.01.0001', Descricao: 'Prestação de Serviços Contábeis' },
+};
+
 interface ImportarPlanoContasProps {
   onImportComplete: () => void;
 }
@@ -18,8 +23,18 @@ interface ImportarPlanoContasProps {
 // Novo tipo para o estado de mapeamento (unificado)
 interface OldFKData {
     id: string;
+    record_id: string;
     nome: string;
-    tabela: 'saldo_contas' | 'config_cr' | 'config_cp' | 'config_stripe_sintetica' | 'config_stripe_receber' | 'config_contrato_ativo' | 'config_contrato_receita';
+    tabela:
+      | 'saldo_contas'
+      | 'config_cr'
+      | 'config_cp'
+      | 'config_stripe_sintetica'
+      | 'config_stripe_receber'
+      | 'config_contrato_ativo'
+      | 'config_contrato_receita'
+      | 'lancamentos_conta'
+      | 'lancamentos_resultado';
     old_conta_contabil_id: string;
     old_conta_contabil_nome: string;
     saldo_inicial?: number; // Apenas para saldo_contas
@@ -73,6 +88,7 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
         
       (saldosData || []).forEach((s: any) => fks.push({
           id: s.id,
+          record_id: s.id,
           nome: s.nome,
           tabela: 'saldo_contas',
           old_conta_contabil_id: s.conta_contabil_id,
@@ -92,6 +108,7 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
         
       (crData || []).forEach((c: any) => fks.push({
           id: c.id,
+          record_id: c.id,
           nome: `CR: ${c.tipo_registro}`,
           tabela: 'config_cr',
           old_conta_contabil_id: c.conta_contabil_id,
@@ -109,6 +126,7 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
         
       (cpData || []).forEach((c: any) => fks.push({
           id: c.id,
+          record_id: c.id,
           nome: `CP: ${c.tipo_registro}`,
           tabela: 'config_cp',
           old_conta_contabil_id: c.conta_contabil_id,
@@ -126,7 +144,8 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
       (stripeData || []).forEach((s: any) => {
           if (s.conta_sintetica_id) {
               fks.push({
-                  id: s.id,
+                  id: `${s.id}|conta_sintetica_id`,
+                  record_id: s.id,
                   nome: 'Stripe: Conta Sintética',
                   tabela: 'config_stripe_sintetica',
                   old_conta_contabil_id: s.conta_sintetica_id,
@@ -138,7 +157,8 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
           }
           if (s.conta_receber_id) {
               fks.push({
-                  id: s.id,
+                  id: `${s.id}|conta_receber_id`,
+                  record_id: s.id,
                   nome: 'Stripe: Conta Receber',
                   tabela: 'config_stripe_receber',
                   old_conta_contabil_id: s.conta_receber_id,
@@ -158,35 +178,113 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
                  plano_contas_receita:id_conta_receita_contrato ( Descricao, is_conta_resultado )
                 `)
         .eq('proprietario_id', proprietarioId)
-        .limit(1);
+        .maybeSingle();
 
-      (contratoData || []).forEach((c: any) => {
-          if (c.id_conta_clientes_receber) {
-              fks.push({
-                  id: c.id,
-                  nome: 'Contrato: Clientes a Receber (Ativo)',
-                  tabela: 'config_contrato_ativo',
-                  old_conta_contabil_id: c.id_conta_clientes_receber,
-                  old_conta_contabil_nome: c.plano_contas_clientes?.Descricao || 'Conta Antiga Desconhecida',
-                  tipo_registro: 'id_conta_clientes_receber',
-                  is_conta_patrimonial: c.plano_contas_clientes?.is_conta_patrimonial,
-              });
-          }
-          if (c.id_conta_receita_contrato) {
-              fks.push({
-                  id: c.id,
-                  nome: 'Contrato: Receita (Resultado)',
-                  tabela: 'config_contrato_receita',
-                  old_conta_contabil_id: c.id_conta_receita_contrato,
-                  old_conta_contabil_nome: c.plano_contas_receita?.Descricao || 'Conta Antiga Desconhecida',
-                  tipo_registro: 'id_conta_receita_contrato',
-                  is_conta_resultado: c.plano_contas_receita?.is_conta_resultado,
-              });
-          }
+      if (contratoData?.id) {
+        const contratoRecordId = contratoData.id;
+
+        if (contratoData.id_conta_clientes_receber) {
+          fks.push({
+            id: `${contratoRecordId}|id_conta_clientes_receber`,
+            record_id: contratoRecordId,
+            nome: 'Contrato: Clientes a Receber (Ativo)',
+            tabela: 'config_contrato_ativo',
+            old_conta_contabil_id: contratoData.id_conta_clientes_receber,
+            old_conta_contabil_nome:
+              contratoData.plano_contas_clientes?.Descricao || PADROES_CONTRATO.conta_debito.Descricao,
+            tipo_registro: 'id_conta_clientes_receber',
+            is_conta_patrimonial: contratoData.plano_contas_clientes?.is_conta_patrimonial ?? true,
+          });
+        }
+
+        if (contratoData.id_conta_receita_contrato) {
+          fks.push({
+            id: `${contratoRecordId}|id_conta_receita_contrato`,
+            record_id: contratoRecordId,
+            nome: 'Contrato: Receita (Resultado)',
+            tabela: 'config_contrato_receita',
+            old_conta_contabil_id: contratoData.id_conta_receita_contrato,
+            old_conta_contabil_nome:
+              contratoData.plano_contas_receita?.Descricao || PADROES_CONTRATO.conta_credito.Descricao,
+            tipo_registro: 'id_conta_receita_contrato',
+            is_conta_resultado: contratoData.plano_contas_receita?.is_conta_resultado ?? true,
+          });
+        }
+      }
+     
+      // 6. Lançamentos (contas já usadas)
+      const { data: lancData, error: lancError } = await supabase
+        .from('lancamentos')
+        .select(`conta_contabil_id, conta_resultado_id`)
+        .eq('proprietario_id', proprietarioId);
+
+      if (lancError) {
+        console.warn('[ImportarPlanoContas] erro ao buscar lançamentos para mapeamento:', lancError);
+      }
+
+      const lancContaSet = new Set<string>();
+      const lancResultadoSet = new Set<string>();
+
+      (lancData || []).forEach((l: any) => {
+        if (l.conta_contabil_id) lancContaSet.add(l.conta_contabil_id);
+        if (l.conta_resultado_id) lancResultadoSet.add(l.conta_resultado_id);
       });
-      
+
+      const nomeByPlanoContasId: Record<string, string> = {};
+      const allLancPlanoContasIds = Array.from(new Set([...lancContaSet, ...lancResultadoSet]));
+
+      if (allLancPlanoContasIds.length > 0) {
+        const { data: planoContasNomes, error: planoContasNomesError } = await supabase
+          .from('plano_contas')
+          .select('id, Descricao')
+          .in('id', allLancPlanoContasIds);
+
+        if (planoContasNomesError) {
+          console.warn(
+            '[ImportarPlanoContas] erro ao buscar nomes das contas para lancamentos:',
+            planoContasNomesError,
+          );
+        }
+
+        (planoContasNomes || []).forEach((c: any) => {
+          if (c?.id) nomeByPlanoContasId[c.id] = c?.Descricao || '';
+        });
+      }
+
+      lancContaSet.forEach((oldId) => {
+        fks.push({
+          id: `${oldId}|lancamentos_conta`,
+          record_id: oldId,
+          nome: 'Lançamentos: Conta Contábil',
+          tabela: 'lancamentos_conta',
+          old_conta_contabil_id: oldId,
+          old_conta_contabil_nome: nomeByPlanoContasId[oldId] || 'Conta Antiga Desconhecida',
+          tipo_registro: 'conta_contabil_id',
+        });
+      });
+
+      lancResultadoSet.forEach((oldId) => {
+        fks.push({
+          id: `${oldId}|lancamentos_resultado`,
+          record_id: oldId,
+          nome: 'Lançamentos: Conta Resultado',
+          tabela: 'lancamentos_resultado',
+          old_conta_contabil_id: oldId,
+          old_conta_contabil_nome: nomeByPlanoContasId[oldId] || 'Conta Antiga Desconhecida',
+          tipo_registro: 'conta_resultado_id',
+        });
+      });
+
       return fks;
   };
+
+
+  const hasRealDependenciesToMap = (fks: OldFKData[]) => {
+      return fks.length > 0;
+  };
+
+  // IMPORTANTE: Setup/Reset de defaults passa a ser responsabilidade de funções dedicadas (contabil-setup/contabil-reset).
+
 
   const handleImport = async () => {
     if (!file) {
@@ -212,31 +310,59 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
         return;
       }
       
-      const contasParaInserir = (parsedData as (ContaCSV | ContaJSON)[]).map(conta => {
-          const codigoReduzido = conta['Código reduzido'] || conta.Conta.replace(/\./g, '');
-          
+      const contasParaInserir = (parsedData as (ContaCSV | ContaJSON)[])
+        .map((conta: any) => {
+          const contaCodigo: string | null =
+            typeof conta?.Conta === 'string'
+              ? conta.Conta
+              : typeof conta?.conta === 'string'
+                ? conta.conta
+                : null;
+
+          if (!contaCodigo) return null;
+
+          const descricaoRaw: string =
+            (typeof conta?.['DescriÇõÇœo'] === 'string' ? conta['DescriÇõÇœo'] : undefined) ??
+            (typeof conta?.['Descrição'] === 'string' ? conta['Descrição'] : undefined) ??
+            (typeof conta?.Descricao === 'string' ? conta.Descricao : undefined) ??
+            '';
+
+          const analiticaRaw: 'Sim' | 'NÇœo' =
+            (typeof conta?.['AnalÇðtica'] === 'string' ? conta['AnalÇðtica'] : undefined) ??
+            (typeof conta?.['Analítica'] === 'string' ? conta['Analítica'] : undefined) ??
+            (typeof conta?.Analitica === 'string' ? conta.Analitica : undefined) ??
+            'NÇœo';
+
+          const codigoReduzido: string =
+            (typeof conta?.['CÇüdigo reduzido'] === 'string' ? conta['CÇüdigo reduzido'] : undefined) ??
+            (typeof conta?.['Código reduzido'] === 'string' ? conta['Código reduzido'] : undefined) ??
+            (typeof conta?.['Codigo reduzido'] === 'string' ? conta['Codigo reduzido'] : undefined) ??
+            contaCodigo.replace(/\./g, '');
+
           return {
             proprietario_id: proprietarioId,
-            Conta: conta.Conta,
-            codigo_reduzido: codigoReduzido, // CORREÇÃO AQUI
-            Descricao: conta.Descrição.trim(),
-            Analitica: conta.Analítica,
-            is_conta_caixa_banco: (conta as any).is_conta_caixa_banco || false,
-            is_conta_patrimonial: (conta as any).is_conta_patrimonial || false,
-            is_conta_resultado: (conta as any).is_conta_resultado || false,
-            is_caixa: (conta as any).is_caixa || false,
-            is_banco: (conta as any).is_banco || false,
-            is_a_receber: (conta as any).is_a_receber || false,
-            is_a_pagar: (conta as any).is_a_pagar || false,
+            Conta: contaCodigo,
+            codigo_reduzido: codigoReduzido,
+            Descricao: descricaoRaw.trim(),
+            Analitica: analiticaRaw,
+            is_conta_caixa_banco: conta?.is_conta_caixa_banco || false,
+            is_conta_patrimonial: conta?.is_conta_patrimonial || false,
+            is_conta_resultado: conta?.is_conta_resultado || false,
+            is_caixa: conta?.is_caixa || false,
+            is_banco: conta?.is_banco || false,
+            is_a_receber: conta?.is_a_receber || false,
+            is_a_pagar: conta?.is_a_pagar || false,
           } as PlanoContas;
-      });
+        })
+        .filter((conta): conta is PlanoContas => Boolean(conta));
       
       setNewPlanoContas(contasParaInserir);
 
-      // 2. Verificar todas as FKs existentes
+      // 2. Verificar FKs antigas e somente abrir o modal quando todas as abas estiverem preenchidas
       const oldFKs = await fetchAllFKs(proprietarioId);
+      const shouldMap = oldFKs.length > 0 && hasRealDependenciesToMap(oldFKs);
 
-      if (oldFKs.length > 0) {
+      if (shouldMap) {
         // Se houver FKs antigas, abre o modal de mapeamento
         setOldFKsToMap(oldFKs);
         setMappingDialogOpen(true);

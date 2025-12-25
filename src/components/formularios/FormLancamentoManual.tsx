@@ -22,6 +22,7 @@ import { ptBR } from 'date-fns/locale';
 import { SaldoContaDetalhada } from '@/types/saldo-conta';
 import { useContabilConfig } from '@/hooks/use-contabil-config';
 import { Checkbox } from '../ui/checkbox';
+import { Link } from 'react-router-dom';
 
 const formSchema = z.object({
   data_movimentacao: z.date({ required_error: 'A data é obrigatória.' }),
@@ -67,6 +68,12 @@ const FormLancamentoManual: React.FC<FormLancamentoManualProps> = ({ onSaveCompl
   
   const contaDebitoId = form.watch('conta_debito_id');
   const contaCreditoId = form.watch('conta_credito_id');
+  const contaSaldoDebitoId = form.watch('conta_saldo_debito_id');
+
+  const saldoDebitoOptions = useMemo(() => {
+    if (!contaDebitoId) return [];
+    return contasSaldo.filter((c) => c.conta_contabil_id === contaDebitoId);
+  }, [contasSaldo, contaDebitoId]);
 
   const fetchContasEHistoricos = useCallback(async () => {
     if (!ownerId) return;
@@ -116,6 +123,15 @@ const FormLancamentoManual: React.FC<FormLancamentoManualProps> = ({ onSaveCompl
       fetchContasEHistoricos();
     }
   }, [ownerId, fetchContasEHistoricos]);
+
+  // Mantém o DÉBITO sincronizado com a conta contábil vinculada à Conta de Saldo escolhida.
+  useEffect(() => {
+    if (!contaSaldoDebitoId) return;
+    const contaSaldo = contasSaldo.find((c) => c.id === contaSaldoDebitoId);
+    if (!contaSaldo?.conta_contabil_id) return;
+    if (form.getValues('conta_debito_id') === contaSaldo.conta_contabil_id) return;
+    form.setValue('conta_debito_id', contaSaldo.conta_contabil_id, { shouldValidate: true });
+  }, [contaSaldoDebitoId, contasSaldo, form]);
   
   // NOVO: Verifica se a conta de Débito é um Caixa/Banco
   const isDebitoCaixaBanco = useMemo(() => {
@@ -267,7 +283,14 @@ const FormLancamentoManual: React.FC<FormLancamentoManualProps> = ({ onSaveCompl
         {isDebitoCaixaBanco && (
             <FormField control={form.control} name="conta_saldo_debito_id" render={({ field }) => (
                 <FormItem>
-                    <FormLabel>Conta de Saldo (Caixa/Banco) - Onde o dinheiro entrou</FormLabel>
+                    <div className="flex items-center justify-between gap-2">
+                        <FormLabel>Conta de Saldo (Caixa/Banco) - Onde o dinheiro entrou</FormLabel>
+                        {Boolean(contaDebitoId) && saldoDebitoOptions.length === 0 && (
+                            <Button variant="outline" size="sm" asChild>
+                                <Link to="/bancos">Cadastrar</Link>
+                            </Button>
+                        )}
+                    </div>
                     <Select onValueChange={field.onChange} value={field.value || undefined}>
                         <FormControl>
                             <SelectTrigger className="border-blue-500">
@@ -275,17 +298,15 @@ const FormLancamentoManual: React.FC<FormLancamentoManualProps> = ({ onSaveCompl
                             </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                            {contasSaldo
-                                .filter(c => c.conta_contabil_id === contaDebitoId)
-                                .map(c => (
-                                    <SelectItem key={c.id} value={c.id}>
-                                        {c.nome}
-                                    </SelectItem>
-                                ))}
+                            {saldoDebitoOptions.map(c => (
+                                <SelectItem key={c.id} value={c.id}>
+                                    {c.nome}
+                                </SelectItem>
+                            ))}
                         </SelectContent>
                     </Select>
                     <FormMessage />
-                    {contasSaldo.filter(c => c.conta_contabil_id === contaDebitoId).length === 0 && (
+                    {Boolean(contaDebitoId) && saldoDebitoOptions.length === 0 && (
                         <p className="text-xs text-red-500">
                             Nenhuma conta de saldo vinculada à conta contábil de Débito.
                         </p>

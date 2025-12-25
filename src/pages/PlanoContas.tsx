@@ -109,7 +109,7 @@ const TableCell = React.forwardRef<HTMLTableCellElement, React.TdHTMLAttributes<
 
 
 const PlanoContasPage = () => {
-  const { usuario, perfil, role, carregando: carregandoSessao } = useSessao();
+  const { usuario, perfil, role, carregando: carregandoSessao, refetch: refetchSessao } = useSessao();
   const [contas, setContas] = useState<PlanoContas[]>([]);
   const [carregandoContas, setCarregandoContas] = useState(true);
   const [proprietarioId, setProprietarioId] = useState<string | null>(null);
@@ -229,6 +229,7 @@ const PlanoContasPage = () => {
     if (proprietarioId) {
       buscarPlanoContas(proprietarioId);
     }
+    refetchSessao();
   };
 
   const handleSaveComplete = () => {
@@ -238,6 +239,7 @@ const PlanoContasPage = () => {
     if (proprietarioId) {
       buscarPlanoContas(proprietarioId);
     }
+    refetchSessao();
   };
   
   // Função de sucesso para o EditableCell

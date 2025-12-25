@@ -34,6 +34,15 @@ const TIPOS_REGISTRO_CONTABIL = [
   { key: 'estorno_desconto_concedido', label: 'Estorno Desconto Concedido (Receita)', tipo: 'Resultado', analitica: 'Sim' },
 ];
 
+/* ---------------- PADRÕES ---------------- */
+
+const PADROES_CONTAS_CR = {
+  a_receber: { Conta: '1.1.02', Descricao: 'Contas a Receber' },
+  parcela: { Conta: '1.1.02.0003', Descricao: 'Clientes a Receber Avulso' },
+  desconto_concedido: { Conta: '5.1.01.0003', Descricao: 'Desconto Concedido' },
+  estorno_desconto_concedido: { Conta: '4.1.03.0001', Descricao: 'Receita Estorno do desconto' },
+};
+
 /* ---------------- FORM ---------------- */
 
 const formSchema = z.object({
@@ -46,7 +55,7 @@ const formSchema = z.object({
 type FormValues = z.infer<typeof formSchema>;
 
 const FormConfiguracoesCR: React.FC = () => {
-  const { role, usuario, perfil, carregando: carregandoSessao } = useSessao();
+  const { role, usuario, perfil, carregando: carregandoSessao, refetch: refetchSessao } = useSessao();
 
   const [loadingData, setLoadingData] = useState(true);
   const [loadingContas, setLoadingContas] = useState(true);
@@ -116,11 +125,27 @@ const FormConfiguracoesCR: React.FC = () => {
       valores[item.tipo_registro as keyof FormValues] = item.conta_contabil_id;
     });
 
-    // 🔹 Não aplica mais padrões automáticos, apenas carrega o que existe.
+    // 🔹 Aplica padrão SOMENTE se não houver valor salvo
+    TIPOS_REGISTRO_CONTABIL.forEach(tipo => {
+      const key = tipo.key as keyof FormValues;
+
+      if (!valores[key]) {
+        const padrao = PADROES_CONTAS_CR[key];
+        if (!padrao) return;
+
+        const conta = contasContabeis.find(
+          c => c.Conta === padrao.Conta && c.Descricao === padrao.Descricao
+        );
+
+        if (conta) {
+          valores[key] = conta.id;
+        }
+      }
+    });
 
     form.reset(valores);
     setLoadingData(false);
-  }, [canAccess, proprietarioId, form]);
+  }, [canAccess, proprietarioId, contasContabeis, form]);
 
   /* ---------------- EFFECTS ---------------- */
 
@@ -138,16 +163,43 @@ const FormConfiguracoesCR: React.FC = () => {
 
   /* ---------------- SUBMIT ---------------- */
 
+  const applyDefaults = useCallback(
+    (values: FormValues): FormValues => {
+      const patched: FormValues = { ...values };
+
+      TIPOS_REGISTRO_CONTABIL.forEach((tipo) => {
+        const key = tipo.key as keyof FormValues;
+        if (patched[key]) return;
+
+        const padrao = (PADROES_CONTAS_CR as any)[key];
+        if (!padrao) return;
+
+        const conta = contasContabeis.find(
+          (c) => c.Conta === padrao.Conta && c.Descricao === padrao.Descricao,
+        );
+
+        if (conta) {
+          patched[key] = conta.id;
+        }
+      });
+
+      return patched;
+    },
+    [contasContabeis],
+  );
+
   const onSubmit = async (values: FormValues) => {
     if (!canAccess || !proprietarioId) {
       showError('Sem permissão.');
       return;
     }
 
+    const finalValues = applyDefaults(values);
+
     const payload = TIPOS_REGISTRO_CONTABIL.map(tipo => ({
       proprietario_id: proprietarioId,
       tipo_registro: tipo.key,
-      conta_contabil_id: values[tipo.key as keyof FormValues] || null,
+      conta_contabil_id: finalValues[tipo.key as keyof FormValues] || null,
     }));
 
     const { error } = await supabase
@@ -158,7 +210,8 @@ const FormConfiguracoesCR: React.FC = () => {
       showError(error.message);
     } else {
       showSuccess('Configurações de Contas a Receber salvas com sucesso!');
-      fetchConfig();
+      form.reset(finalValues);
+      refetchSessao();
     }
   };
 

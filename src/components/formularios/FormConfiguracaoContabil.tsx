@@ -94,7 +94,7 @@ const FormConfiguracaoContabil: React.FC<FormConfiguracaoContabilProps> = ({ pro
       if (error) throw error;
 
       showSuccess('Configuração Contábil salva com sucesso!');
-      fetchConfig();
+      form.reset(values);
     } catch (error: any) {
       showError(`Falha ao salvar configuração: ${error.message}`);
     } finally {
