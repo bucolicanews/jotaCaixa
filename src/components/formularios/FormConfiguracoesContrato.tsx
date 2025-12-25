@@ -3,7 +3,6 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import {
   Form,
   FormControl,
@@ -81,9 +80,7 @@ const FormConfiguracoesContrato: React.FC = () => {
 
   /* ---------------- CONTAS ---------------- */
 
-  const fetchContas = useCallback(async () => {
-    if (!proprietarioId) return;
-
+  const fetchContas = useCallback(async (id: string) => {
     setLoadingContas(true);
 
     const ativoCode = configMap.Ativo || '1';
@@ -92,7 +89,7 @@ const FormConfiguracoesContrato: React.FC = () => {
     const { data: ativo } = await supabase
       .from('plano_contas')
       .select('id, Conta, Descricao')
-      .eq('proprietario_id', proprietarioId)
+      .eq('proprietario_id', id)
       .eq('Analitica', 'Sim')
       .eq('is_conta_patrimonial', true)
       .like('Conta', `${ativoCode}.%`);
@@ -100,7 +97,7 @@ const FormConfiguracoesContrato: React.FC = () => {
     const { data: receita } = await supabase
       .from('plano_contas')
       .select('id, Conta, Descricao')
-      .eq('proprietario_id', proprietarioId)
+      .eq('proprietario_id', id)
       .eq('Analitica', 'Sim')
       .eq('is_conta_resultado', true)
       .like('Conta', `${receitaCode}.%`);
@@ -108,19 +105,17 @@ const FormConfiguracoesContrato: React.FC = () => {
     setContasAtivo(ativo || []);
     setContasReceita(receita || []);
     setLoadingContas(false);
-  }, [proprietarioId, configMap]);
+  }, [configMap]);
 
   /* ---------------- CONFIG + PADRÕES ---------------- */
 
-  const fetchConfig = useCallback(async () => {
-    if (!proprietarioId) return;
-
+  const fetchConfig = useCallback(async (id: string) => {
     setLoadingData(true);
 
     const { data } = await supabase
       .from('configuracao_contratos')
       .select('*')
-      .eq('proprietario_id', proprietarioId)
+      .eq('proprietario_id', id)
       .maybeSingle();
 
     const valores: Partial<FormValues> = {};
@@ -154,15 +149,19 @@ const FormConfiguracoesContrato: React.FC = () => {
 
     form.reset(valores);
     setLoadingData(false);
-  }, [proprietarioId, contasAtivo, contasReceita, form]);
+  }, [contasAtivo, contasReceita, form]);
 
   useEffect(() => {
-    if (!carregandoSessao && canAccess) fetchContas();
-  }, [carregandoSessao, canAccess, fetchContas]);
+    if (!carregandoSessao && canAccess && proprietarioId) {
+      fetchContas(proprietarioId);
+    }
+  }, [carregandoSessao, canAccess, proprietarioId, fetchContas]);
 
   useEffect(() => {
-    if (canAccess && !loadingContas) fetchConfig();
-  }, [canAccess, loadingContas, fetchConfig]);
+    if (canAccess && proprietarioId && !loadingContas) {
+      fetchConfig(proprietarioId);
+    }
+  }, [canAccess, proprietarioId, loadingContas, fetchConfig]);
 
   /* ---------------- SUBMIT ---------------- */
 
