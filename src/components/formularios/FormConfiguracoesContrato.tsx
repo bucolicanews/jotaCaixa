@@ -73,7 +73,7 @@ const FormConfiguracoesContrato: React.FC = () => {
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      url_base_assinatura: 'http://localhost:8080',
+      url_base_assinatura: 'https://app-desenvolvimento-jota-caixa.ubjifz.easypanel.host',
       template_whatsapp: 'Olá! Seu contrato está pronto para assinatura. Clique no link abaixo para visualizar e assinar:\n\n{{LINK_ASSINATURA}}',
       template_email: 'Prezado(a) cliente,\n\nSeu contrato está pronto para assinatura. Clique no link abaixo para visualizar e assinar:\n\n{{LINK_ASSINATURA}}\n\nAtenciosamente,\nEquipe Financeira',
       id_conta_clientes_receber: null,
