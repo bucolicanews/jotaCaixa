@@ -145,22 +145,24 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
         return;
       }
       
+      // Higieniza os dados garantindo apenas as colunas válidas e tipos corretos
       const contasParaInserir = (parsedData as any[])
         .map((conta: any) => {
           const contaCodigo = conta.Conta || conta.conta;
-          if (!contaCodigo) return null;
+          const descricaoRaw = conta['Descrição'] || conta.Descricao || conta.descricao;
+          
+          if (!contaCodigo || !descricaoRaw) return null;
 
-          const descricaoRaw = conta['Descrição'] || conta.Descricao || conta.descricao || '';
           const analiticaRaw = (conta['Analítica'] || conta.Analitica || conta.analitica) === 'Sim' ? 'Sim' : 'Não';
           const codigoReduzido = conta['Código reduzido'] || conta.codigo_reduzido || String(contaCodigo).replace(/\./g, '');
 
+          // Retorna estritamente as colunas esperadas pelo DB
           return {
             proprietario_id: proprietarioId,
             Conta: String(contaCodigo).trim(),
             codigo_reduzido: String(codigoReduzido).trim(),
             Descricao: String(descricaoRaw).trim(),
             Analitica: analiticaRaw,
-            // Flags cruciais para o funcionamento dos módulos
             is_conta_caixa_banco: !!conta.is_conta_caixa_banco,
             is_conta_patrimonial: !!conta.is_conta_patrimonial,
             is_conta_resultado: !!conta.is_conta_resultado,
@@ -170,22 +172,22 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
             is_a_pagar: !!conta.is_a_pagar,
           } as PlanoContas;
         })
-        .filter((conta): conta is PlanoContas => Boolean(conta) && Boolean(conta.Descricao));
+        .filter((conta): conta is PlanoContas => Boolean(conta));
       
       if (contasParaInserir.length === 0) {
-          throw new Error("Nenhuma conta válida encontrada no arquivo. Verifique os cabeçalhos.");
+          throw new Error("Nenhuma conta válida encontrada. Verifique se as colunas 'Conta' e 'Descrição' estão corretas.");
       }
 
       setNewPlanoContas(contasParaInserir);
 
-      // Busca vínculos que precisam ser restaurados
+      // Busca vínculos existentes para restauração
       const oldFKs = await fetchAllFKs(proprietarioId);
 
       if (oldFKs.length > 0) {
         setOldFKsToMap(oldFKs);
         setMappingDialogOpen(true);
       } else {
-        // Se não houver vínculos, envia direto
+        // Importação direta se não houver dados vinculados
         const { data, error: invokeError } = await supabase.functions.invoke('manage-plano-contas', {
             body: { proprietarioId, newPlanoContas: contasParaInserir },
         });
@@ -199,7 +201,9 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
 
     } catch (error: any) {
       console.error('Erro na importação:', error);
-      showError('Falha na importação: ' + (error.message || 'Erro de processamento.'));
+      // Extrai a mensagem de erro detalhada da resposta da Edge Function se disponível
+      const errorMsg = error.response ? await error.response.json().then((d: any) => d.error || d.message) : error.message;
+      showError('Falha na importação: ' + (errorMsg || 'Verifique o formato do arquivo.'));
     } finally {
       setLoading(false);
     }
@@ -211,7 +215,7 @@ const ImportarPlanoContas: React.FC<ImportarPlanoContasProps> = ({ onImportCompl
         <CardHeader><CardTitle className="text-xl">Importar Plano de Contas</CardTitle></CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            A importação substituirá o plano atual. Certifique-se de que o arquivo segue o modelo padrão com as flags de marcadores preenchidas.
+            A importação substituirá o plano atual. Certifique-se de que as flags de marcadores (Caixa, Banco, etc) estão preenchidas.
           </p>
           <div className="flex items-center space-x-2">
             <Input type="file" accept=".csv,.json" onChange={handleFileChange} className="flex-1" disabled={loading} />
