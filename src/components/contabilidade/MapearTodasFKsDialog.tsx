@@ -58,7 +58,7 @@ const MapearTodasFKsDialog: React.FC<MapearTodasFKsDialogProps> = ({
     const newContasAnaliticas = useMemo(() => {
         return newPlanoContas
             .filter(c => c.Analitica === 'Sim')
-            .map(c => ({ Conta: c.Conta, Descricao: c.Descricao }));
+            .map(c => ({ id: c.id, Conta: c.Conta, Descricao: c.Descricao }));
     }, [newPlanoContas]);
 
     const grupos = useMemo(() => {
@@ -79,37 +79,24 @@ const MapearTodasFKsDialog: React.FC<MapearTodasFKsDialogProps> = ({
         setMapping(prev => ({ ...prev, [fkId]: newContaCodigo }));
     }, []);
 
-    const handleClearSelection = useCallback((fkId: string) => {
-        setMapping(prev => {
-            const newMapping = { ...prev };
-            delete newMapping[fkId];
-            return newMapping;
-        });
-    }, []);
-
     const handleConfirmImport = async () => {
         if (!isMappingComplete) return;
         setLoading(true);
 
         try {
-            const contaIdMap = newPlanoContas.reduce((acc, c) => {
-                acc[c.Conta] = c.id; // Isso será corrigido pela Edge Function que gera IDs reais
-                return acc;
-            }, {} as Record<string, string>);
-
-            // Chama a Edge Function que agora limpa as FKs antigas de contratos também
-            const { data, error: invokeError } = await supabase.functions.invoke('manage-plano-contas', {
+            // 1. Inserir o novo Plano e limpar referências antigas (Edge Function)
+            const { data: manageRes, error: manageErr } = await supabase.functions.invoke('manage-plano-contas', {
                 body: { proprietarioId, newPlanoContas },
             });
             
-            if (invokeError) throw invokeError;
-            if (data?.error) throw new Error(data.error);
+            if (manageErr || manageRes?.error) throw new Error(manageErr?.message || manageRes?.error);
             
-            const mappingWithRealIds = data.contaIdMap.reduce((acc: any, c: any) => {
+            const mappingWithRealIds = manageRes.contaIdMap.reduce((acc: any, c: any) => {
                 acc[c.Conta] = c.id;
                 return acc;
             }, {});
 
+            // 2. Preparar Payloads para Restauração
             const updatesSaldoContas: any[] = [];
             const updatesConfigCR: any[] = [];
             const updatesConfigCP: any[] = [];
@@ -123,12 +110,14 @@ const MapearTodasFKsDialog: React.FC<MapearTodasFKsDialogProps> = ({
                 const newContaId = mappingWithRealIds[newContaCodigo];
                 if (!newContaId) return;
 
+                // Salva marcações booleanas
                 const bools: any = { id: newContaId };
                 if (fk.is_conta_caixa_banco) bools.is_conta_caixa_banco = true;
                 if (fk.is_conta_patrimonial) bools.is_conta_patrimonial = true;
                 if (fk.is_conta_resultado) bools.is_conta_resultado = true;
                 if (Object.keys(bools).length > 1) updatesPlanoContasBooleans.push(bools);
 
+                // Mapeia por tabela
                 if (fk.tabela === 'saldo_contas') updatesSaldoContas.push({ id: fk.record_id, conta_contabil_id: newContaId });
                 else if (fk.tabela === 'config_cr') updatesConfigCR.push({ id: fk.record_id, conta_contabil_id: newContaId });
                 else if (fk.tabela === 'config_cp') updatesConfigCP.push({ id: fk.record_id, conta_contabil_id: newContaId });
@@ -140,17 +129,27 @@ const MapearTodasFKsDialog: React.FC<MapearTodasFKsDialogProps> = ({
                 else if (fk.tabela === 'lancamentos_resultado') updatesLancamentos.push({ field: 'conta_resultado_id', old_conta_contabil_id: fk.old_conta_contabil_id, new_conta_contabil_id: newContaId });
             });
 
+            // 3. Executar Atualizações Finais (Edge Function)
             const { error: finalError } = await supabase.functions.invoke('update-plano-contas-fks', {
-                body: { proprietarioId, updatesSaldoContas, updatesConfigCR, updatesConfigCP, updatesConfigStripe, updatesConfigContrato, updatesLancamentos, updatesPlanoContasBooleans },
+                body: { 
+                    proprietarioId, 
+                    updatesSaldoContas, 
+                    updatesConfigCR, 
+                    updatesConfigCP, 
+                    updatesConfigStripe, 
+                    updatesConfigContrato, 
+                    updatesLancamentos, 
+                    updatesPlanoContasBooleans 
+                },
             });
             
             if (finalError) throw finalError;
 
-            showSuccess(`Plano e ${oldFKs.length} referências atualizados!`);
+            showSuccess(`Plano importado e referências restauradas com sucesso!`);
             onSaveComplete();
             onOpenChange(false);
         } catch (e: any) {
-            showError("Erro no mapeamento: " + e.message);
+            showError("Falha na migração: " + e.message);
         } finally {
             setLoading(false);
         }
@@ -160,7 +159,7 @@ const MapearTodasFKsDialog: React.FC<MapearTodasFKsDialogProps> = ({
         <div className="overflow-x-auto border rounded-md mb-4">
             <h4 className="font-semibold p-3 bg-secondary text-sm">{title}</h4>
             <Table>
-                <TableHeader><TableRow><TableHead>Nome</TableHead><TableHead>Conta Antiga</TableHead><TableHead className="text-right">{keyField === 'saldo_inicial' ? 'Saldo' : 'Tipo'}</TableHead><TableHead>Nova Conta</TableHead></TableRow></TableHeader>
+                <TableHeader><TableRow><TableHead>Vínculo</TableHead><TableHead>Conta Antiga</TableHead><TableHead className="text-right">{keyField === 'saldo_inicial' ? 'Saldo' : 'Identificador'}</TableHead><TableHead>Mapear Nova Conta</TableHead></TableRow></TableHeader>
                 <TableBody>
                     {data.map(fk => (
                         <TableRow key={fk.id} className={cn(!mapping[fk.id] && "bg-red-500/5")}>
@@ -168,15 +167,12 @@ const MapearTodasFKsDialog: React.FC<MapearTodasFKsDialogProps> = ({
                             <TableCell className="text-xs text-muted-foreground">{fk.old_conta_contabil_nome}</TableCell>
                             <TableCell className="text-right text-xs font-mono">{keyField === 'saldo_inicial' ? formatCurrency(fk.saldo_inicial ?? 0) : fk.tipo_registro || '-'}</TableCell>
                             <TableCell>
-                                <div className="flex items-center gap-1">
-                                    <Select onValueChange={(v) => handleMapChange(fk.id, v)} value={mapping[fk.id] || ""}>
-                                        <SelectTrigger className="h-8 text-[10px] min-w-[150px]"><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                                        <SelectContent position="popper">
-                                            {newContasAnaliticas.map(c => <SelectItem key={c.Conta} value={c.Conta} className="text-xs">{c.Conta} - {c.Descricao}</SelectItem>)}
-                                        </SelectContent>
-                                    </Select>
-                                    {mapping[fk.id] && <Button variant="ghost" size="icon" onClick={() => handleClearSelection(fk.id)} className="h-6 w-6"><Trash2 className="h-3 w-3 text-red-500" /></Button>}
-                                </div>
+                                <Select onValueChange={(v) => handleMapChange(fk.id, v)} value={mapping[fk.id] || ""}>
+                                    <SelectTrigger className="h-8 text-[10px] min-w-[150px]"><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                                    <SelectContent position="popper">
+                                        {newContasAnaliticas.map(c => <SelectItem key={c.Conta} value={c.Conta} className="text-xs">{c.Conta} - {c.Descricao}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
                             </TableCell>
                         </TableRow>
                     ))}
@@ -189,12 +185,12 @@ const MapearTodasFKsDialog: React.FC<MapearTodasFKsDialogProps> = ({
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-[95vw] max-h-[95vh] flex flex-col">
                 <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2 text-red-600"><AlertTriangle /> Mapeamento de Referências</DialogTitle>
-                    <DialogDescription>O novo plano foi carregado. Agora, vincule as configurações antigas às novas contas analíticas.</DialogDescription>
+                    <DialogTitle className="flex items-center gap-2 text-red-600"><AlertTriangle /> Mapeamento Necessário</DialogTitle>
+                    <DialogDescription>As contas analíticas mudaram. Selecione as novas contas equivalentes para não perder dados de faturamento e históricos.</DialogDescription>
                 </DialogHeader>
 
                 <Tabs defaultValue="saldo_contas" className="flex-1 flex flex-col overflow-hidden">
-                    <div className="w-full overflow-x-auto no-scrollbar bg-muted rounded-md p-1 mb-2">
+                    <div className="w-full overflow-x-auto bg-muted rounded-md p-1 mb-2 scrollbar-hide">
                         <TabsList className="flex w-max sm:w-full h-9">
                             <TabsTrigger value="saldo_contas" className="text-xs">Saldos ({grupos.saldo_contas?.length || 0})</TabsTrigger>
                             <TabsTrigger value="configs_cr" className="text-xs">CR ({grupos.config_cr?.length || 0})</TabsTrigger>
@@ -206,20 +202,19 @@ const MapearTodasFKsDialog: React.FC<MapearTodasFKsDialogProps> = ({
                     </div>
                     
                     <ScrollArea className="flex-1">
-                        <TabsContent value="saldo_contas">{renderTable("Contas de Saldo", grupos.saldo_contas || [])}</TabsContent>
-                        <TabsContent value="configs_cr">{renderTable("Contas a Receber", grupos.config_cr || [], 'tipo_registro')}</TabsContent>
-                        <TabsContent value="configs_cp">{renderTable("Contas a Pagar", grupos.config_cp || [], 'tipo_registro')}</TabsContent>
+                        <TabsContent value="saldo_contas">{renderTable("Saldos de Caixa/Banco", grupos.saldo_contas || [])}</TabsContent>
+                        <TabsContent value="configs_cr">{renderTable("Configurações de Receber", grupos.config_cr || [], 'tipo_registro')}</TabsContent>
+                        <TabsContent value="configs_cp">{renderTable("Configurações de Pagar", grupos.config_cp || [], 'tipo_registro')}</TabsContent>
                         <TabsContent value="configs_contrato">
-                            {renderTable("Contrato - Ativo", grupos.config_contrato_ativo || [], 'tipo_registro')}
-                            {renderTable("Contrato - Receita", grupos.config_contrato_receita || [], 'tipo_registro')}
+                            {grupos.config_contrato_ativo && renderTable("Contrato: Clientes a Receber", grupos.config_contrato_ativo, 'tipo_registro')}
+                            {grupos.config_contrato_receita && renderTable("Contrato: Receita", grupos.config_contrato_receita, 'tipo_registro')}
                         </TabsContent>
                         <TabsContent value="configs_stripe">
-                            {renderTable("Stripe - Sintética", grupos.config_stripe_sintetica || [], 'tipo_registro')}
-                            {renderTable("Stripe - Receber", grupos.config_stripe_receber || [], 'tipo_registro')}
+                            {renderTable("Stripe (Sintética)", grupos.config_stripe_sintetica || [], 'tipo_registro')}
+                            {renderTable("Stripe (Parcelas)", grupos.config_stripe_receber || [], 'tipo_registro')}
                         </TabsContent>
                         <TabsContent value="lancamentos">
-                            {renderTable("Lançamentos - Conta", grupos.lancamentos_conta || [], 'tipo_registro')}
-                            {renderTable("Lançamentos - Resultado", grupos.lancamentos_resultado || [], 'tipo_registro')}
+                            {renderTable("Movimentações Históricas", [...(grupos.lancamentos_conta || []), ...(grupos.lancamentos_resultado || [])], 'tipo_registro')}
                         </TabsContent>
                     </ScrollArea>
                 </Tabs>
@@ -228,7 +223,7 @@ const MapearTodasFKsDialog: React.FC<MapearTodasFKsDialogProps> = ({
                     <Button onClick={() => onOpenChange(false)} variant="secondary" disabled={loading}>Cancelar</Button>
                     <Button onClick={handleConfirmImport} disabled={loading || !isMappingComplete}>
                         {loading ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
-                        Confirmar e Substituir Plano
+                        Confirmar Migração de Dados
                     </Button>
                 </div>
             </DialogContent>
