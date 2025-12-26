@@ -30,14 +30,20 @@ serve(async (req: Request) => {
       { auth: { persistSession: false } },
     );
 
-    // Executa o setup padrão (que inclui reset, importação de plano/históricos e mapeamento de configs)
+    console.log(`LOG: Executando contabil_setup_defaults para ${proprietarioId}`);
+    
     const { data, error } = await supabaseService.rpc("contabil_setup_defaults", {
       p_proprietario_id: proprietarioId,
     });
 
-    if (error || (data && !data[0]?.success)) {
-      console.error("RPC contabil_setup_defaults error:", error || data?.[0]?.message);
-      throw new Error(error?.message || data?.[0]?.message || "Falha ao executar setup contábil.");
+    if (error) {
+      console.error("RPC Error (Supabase):", error);
+      throw new Error(`RPC_FAIL: ${error.message}`);
+    }
+    
+    if (data && !data[0]?.success) {
+      console.error("RPC Logic Error:", data[0]?.message);
+      throw new Error(`LOGIC_FAIL: ${data[0]?.message}`);
     }
 
     return new Response(JSON.stringify({ success: true }), {
@@ -47,6 +53,8 @@ serve(async (req: Request) => {
   } catch (error) {
     console.error("💥 FATAL ERROR in contabil-setup:", error);
     const message = error instanceof Error ? error.message : "Unknown error.";
+    
+    // Retorna 500 com a mensagem de erro detalhada
     return new Response(JSON.stringify({ error: message }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
