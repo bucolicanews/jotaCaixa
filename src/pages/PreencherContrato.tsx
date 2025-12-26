@@ -71,7 +71,7 @@ const PreencherContrato: React.FC = () => {
   const fetchDependentData = useCallback(async (targetId: string) => {
     if (!targetId) return;
     
-    // 1. Busca Tags
+    // 1. Busca Tags (tags de contrato são sempre por empresa_id)
     const { data: tagsData } = await supabase
       .from('contrato_tags')
       .select('*')
@@ -79,19 +79,40 @@ const PreencherContrato: React.FC = () => {
       
     if (tagsData) setTagsCustomizadas(tagsData);
 
-    // 2. Busca Clientes (Corrigindo duplicidade com Map)
-    const { data: clientesData } = await supabase
-      .from('clientes')
-      .select('*')
-      .eq('proprietario_id', targetId)
-      .order('nome');
-      
-    if (clientesData) {
-        // Desduplicação por ID
-        const uniqueClients = Array.from(new Map(clientesData.map(item => [item.id, item])).values());
-        setClientesCR(uniqueClients);
+    // 2. Busca Clientes (Lógica Diferenciada)
+    let fetchedClients: any[] = [];
+    
+    // Se for Admin e estiver criando contrato para si mesmo (targetId == seu ID de Admin),
+    // a lista de "clientes" são as empresas do sistema (tbl_clientes).
+    const isTargetAdminSelf = isAdmin && targetId === ownerIdLogado;
+
+    if (isTargetAdminSelf) {
+        // Busca de tbl_clientes (Empresas do Sistema que o Admin gerencia)
+        const { data } = await supabase
+            .from('tbl_clientes')
+            .select('id, nome, documento, email, telefone, cep, endereco, numero, complemento, bairro, cidade, estado, cpf, cnpj, rg, razao_social, nome_fantasia')
+            .eq('admin_id', targetId)
+            // .eq('aprovado', true) // Removido para permitir contratos com pendentes, se desejar
+            .order('nome');
+            
+        fetchedClients = data || [];
+    } else {
+        // Caso contrário (Cliente logado ou Admin impersonando cliente),
+        // busca da tabela `clientes` (clientes de CR/Contratos dessa empresa).
+        const { data } = await supabase
+            .from('clientes')
+            .select('*')
+            .eq('proprietario_id', targetId)
+            .order('nome');
+            
+        fetchedClients = data || [];
     }
-  }, []);
+
+    // Desduplicação por ID
+    const uniqueClients = Array.from(new Map(fetchedClients.map(item => [item.id, item])).values());
+    setClientesCR(uniqueClients);
+
+  }, [isAdmin, ownerIdLogado]);
 
   const buscarDados = useCallback(async () => {
     setCarregandoDados(true);
@@ -167,7 +188,7 @@ const PreencherContrato: React.FC = () => {
   useEffect(() => {
       const newTags: Record<string, string> = { ...valoresTags };
       
-      // 1. Dados do Cliente Selecionado (CONTRATANTE ou CONTRATADO, depende do contexto, aqui assumimos Cliente do escritório)
+      // 1. Dados do Cliente Selecionado
       const cliente = clientesCR.find(c => c.id === clienteSelecionadoId);
       
       if (cliente) {
@@ -192,6 +213,8 @@ const PreencherContrato: React.FC = () => {
       }
 
       // 2. Dados da Empresa (CONTRATADA - Escritório/Dono do Sistema)
+      // Nota: Idealmente buscaríamos os dados da empresa selecionada no select "Empresa Contratante"
+      // Por enquanto, usa os dados de quem está logado como fallback ou principal.
       if (empresaLogadaData) {
           newTags['{{EMPRESA_NOME}}'] = empresaLogadaData.nome || '';
           newTags['{{EMPRESA_DOCUMENTO}}'] = empresaLogadaData.documento || '';
@@ -233,8 +256,6 @@ const PreencherContrato: React.FC = () => {
       newTags['{{PRIMEIRO_VENCIMENTO}}'] = dataPrimeiroVenc;
       newTags['{{DATA_EMISSAO}}'] = format(new Date(), 'dd/MM/yyyy');
       
-      // Atualiza o estado apenas se houver mudanças reais para evitar loops, 
-      // mas como estamos usando dependências explícitas, setValoresTags é seguro.
       setValoresTags(newTags);
 
   }, [
@@ -246,13 +267,11 @@ const PreencherContrato: React.FC = () => {
       numeroParcelas, 
       dataVencimentoUnico, 
       dataPrimeiroVencimento,
-      // Não incluímos valoresTags nas dependências para evitar loop infinito
   ]);
 
-  // Filtro para mostrar tags manuais na UI (exclui as que já calculamos automaticamente)
+  // Filtro para mostrar tags manuais na UI
   const tagsParaPreenchimentoManual = useMemo(() => {
     const combined = [...TAGS_PADRAO, ...tagsCustomizadas];
-    // Exibe apenas tags que NÃO são de sistema e NÃO são financeiras padrão
     return combined
         .filter(tag => 
             !tag.nome_tag.startsWith('{{CLIENTE_') && 
@@ -265,7 +284,6 @@ const PreencherContrato: React.FC = () => {
   const renderConteudo = useCallback(() => {
     let html = modelo?.conteudo_template || '';
     Object.keys(valoresTags).forEach(tag => {
-      // Escapa caracteres especiais da tag para usar no Regex
       const regex = new RegExp(tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
       html = html.replace(regex, valoresTags[tag] || tag);
     });
@@ -293,7 +311,7 @@ const PreencherContrato: React.FC = () => {
             valor_total: valorTotalFinal,
             data_inicio: format(dataInicio, 'yyyy-MM-dd'),
             numero_parcelas: tipoLancamento === 'unico' ? 1 : numeroParcelas,
-            valores_tags_preenchidos: valoresTags, // Salva todas as tags calculadas
+            valores_tags_preenchidos: valoresTags,
             conteudo_renderizado: renderConteudo(),
         };
 
@@ -381,10 +399,10 @@ const PreencherContrato: React.FC = () => {
                     <PopoverTrigger asChild>
                       <Button variant="outline" className="w-full justify-start text-left font-normal">
                         <CalendarIcon className="mr-2 h-4 w-4" />
-                        {dataVencimentoUnico ? format(dataVencimentoUnico, 'dd/MM/yyyy') : "Selecione a data"}
+                        {dataVencimentoUnico ? format(dataVencimentoUnico, 'dd/MM/yyyy', { locale: ptBR }) : "Selecione a data"}
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={dataVencimentoUnico} onSelect={setDataVencimentoUnico} /></PopoverContent>
+                    <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={dataVencimentoUnico} onSelect={setDataVencimentoUnico} initialFocus locale={ptBR} /></PopoverContent>
                   </Popover>
                 </div>
               ) : (
@@ -395,9 +413,18 @@ const PreencherContrato: React.FC = () => {
                     <Label>1º Vencimento</Label>
                     <Popover>
                       <PopoverTrigger asChild>
-                        <Button variant="outline" className="w-full px-2 h-10"><CalendarIcon className="h-4 w-4" /></Button>
+                        <Button 
+                          variant="outline" 
+                          className={cn(
+                            "w-full justify-start text-left font-normal",
+                            !dataPrimeiroVencimento && "text-muted-foreground"
+                          )}
+                        >
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {dataPrimeiroVencimento ? format(dataPrimeiroVencimento, 'dd/MM/yyyy', { locale: ptBR }) : <span>Selecione</span>}
+                        </Button>
                       </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={dataPrimeiroVencimento} onSelect={setDataPrimeiroVencimento} /></PopoverContent>
+                      <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={dataPrimeiroVencimento} onSelect={setDataPrimeiroVencimento} initialFocus locale={ptBR} /></PopoverContent>
                     </Popover>
                   </div>
                 </div>
