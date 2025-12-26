@@ -174,7 +174,7 @@ const FormCapitalSocial: React.FC<FormCapitalSocialProps> = ({ onSaveComplete })
                         {!contaCapital && <li>Conta de Capital Social (3.1.00.0001) não encontrada ou não marcada como Patrimonial.</li>}
                         {contaCaixa && !contaCaixa.conta_contabil_id && <li>Conta de Saldo 'Caixa Inicial' não vinculada a uma conta contábil.</li>}
                     </ul>
-                    <div className="flex gap-2 mt-3">
+                    <div className="flex flex-wrap gap-2 mt-3">
                         <Button asChild size="sm" variant="outline">
                             <Link to="/plano-contas">Plano de Contas</Link>
                         </Button>
