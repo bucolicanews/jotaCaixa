@@ -86,7 +86,6 @@ const AssinarContrato: React.FC = () => {
     return publicUrlData.publicUrl;
   };
   
-  // NOVO: Função para enviar o contrato assinado por email (usando Edge Function)
   const sendSignedContractEmail = async (contratoId: string, clienteEmail: string) => {
       try {
           const { data, error } = await supabase.functions.invoke('send-signed-contract', {
@@ -99,7 +98,6 @@ const AssinarContrato: React.FC = () => {
           showSuccess('Cópia do contrato assinado enviada para o seu email!');
       } catch (error: any) {
           console.error('Erro ao enviar email:', error);
-          // Não bloqueia o fluxo se o email falhar
           showError('Contrato assinado, mas falha ao enviar email: ' + error.message);
       }
   };
@@ -107,7 +105,6 @@ const AssinarContrato: React.FC = () => {
   const handleAssinar = async () => {
     if (!contrato || contrato.status === 'ativo' || contrato.status === 'concluido') return;
     
-    // Validação de Nome e Selfie
     if (!nomeCompleto.trim()) {
         showError('O nome completo é obrigatório.');
         return;
@@ -120,10 +117,8 @@ const AssinarContrato: React.FC = () => {
     setIsSigning(true);
     
     try {
-      // 1. Upload da Selfie
       const selfieUrl = await uploadSelfie(selfieFile);
       
-      // 2. Chamar RPC Pública para Assinar
       const { data: success, error: rpcError } = await supabase.rpc('sign_contract_public', {
           p_contract_id: contrato.id,
           p_assinatura_nome: nomeCompleto,
@@ -133,7 +128,6 @@ const AssinarContrato: React.FC = () => {
       if (rpcError) throw rpcError;
       if (!success) throw new Error('Falha ao registrar assinatura. Verifique se o contrato já não foi assinado.');
       
-      // 3. Atualizar o estado local
       const updatedContrato = { 
           ...contrato, 
           status: 'ativo' as const, 
@@ -145,7 +139,6 @@ const AssinarContrato: React.FC = () => {
       setContrato(updatedContrato);
       showSuccess('Contrato assinado com sucesso!');
       
-      // 4. Enviar cópia para o cliente (se o email estiver disponível nas tags)
       const clienteEmail = contrato.valores_tags_preenchidos?.['{{CLIENTE_EMAIL}}'];
       if (clienteEmail) {
           await sendSignedContractEmail(contrato.id, clienteEmail);
@@ -164,20 +157,18 @@ const AssinarContrato: React.FC = () => {
         return;
     }
     
-    // CORREÇÃO CRÍTICA: Inicializa finalContent com o conteúdo renderizado
     let finalContent = contrato.conteudo_renderizado;
     
-    const isHtml = contrato.valores_tags_preenchidos?.tipo_conteudo === 'html';
+    // Verificação robusta para saber se é HTML
+    const tipoConteudo = contrato.valores_tags_preenchidos?.tipo_conteudo;
+    const isHtml = tipoConteudo === 'html' || !tipoConteudo || contrato.conteudo_renderizado.includes('<');
+    
     const isAssinado = contrato.status === 'ativo' || contrato.status === 'concluido';
     
-    // Dados do Cliente
     const clienteNome = contrato.assinatura_nome || contrato.valores_tags_preenchidos?.['{{CLIENTE_NOME}}'] || 'Cliente Contratado';
     const clienteDocumento = contrato.valores_tags_preenchidos?.['{{CLIENTE_DOCUMENTO}}'] || contrato.valores_tags_preenchidos?.['{{CLIENTE_CPF}}'] || contrato.valores_tags_preenchidos?.['{{CLIENTE_CNPJ}}'] || 'Documento Não Informado';
     const dataAssinatura = isAssinado && contrato.updated_at ? format(new Date(contrato.updated_at), 'dd/MM/yyyy HH:mm') : 'Pendente';
     
-    // --- Lógica de Injeção de Assinaturas ---
-    
-    // Bloco de Assinatura do Cliente (Detalhado)
     const clienteSignatureBlock = isAssinado ? `
         <div style="text-align: center; margin-top: 20px; font-size: 10pt;">
             ${contrato.assinatura_selfie_url ? `<img src="${contrato.assinatura_selfie_url}" style="max-height: 50px; margin-bottom: 5px;" />` : '_________________________'}
@@ -197,7 +188,6 @@ const AssinarContrato: React.FC = () => {
         </div>
     `;
     
-    // Bloco de Assinatura da Empresa (Contratante)
     const empresaSignatureBlock = `
         <div style="text-align: center; margin-top: 20px; font-size: 10pt;">
             ${contrato.assinatura_proprietario_url ? `<img src="${contrato.assinatura_proprietario_url}" style="max-height: 50px; margin-bottom: 5px;" />` : '_________________________'}
@@ -208,13 +198,10 @@ const AssinarContrato: React.FC = () => {
         </div>
     `;
     
-    // Substituição das tags de assinatura
     finalContent = finalContent.replace(/\{\{ASSINATURA_EMPRESA\}\}/g, empresaSignatureBlock);
     finalContent = finalContent.replace(/\{\{ASSINATURA_CLIENTE\}\}/g, clienteSignatureBlock);
     
-    // 2. Se for HTML, injeta a seção de rodapé (data de assinatura)
     if (isHtml) {
-        // Adiciona um rodapé de validação eletrônica
         const validationRodape = `
             <div style="margin-top: 50px; padding-top: 20px; border-top: 1px solid #ccc; page-break-before: avoid; text-align: center; font-size: 10px;">
                 <p>Documento gerado e assinado eletronicamente. Validade jurídica conforme MP 2.200-2/2001.</p>
@@ -227,18 +214,15 @@ const AssinarContrato: React.FC = () => {
             finalContent += validationRodape;
         }
     } else {
-        // Se for texto simples, adiciona o rodapé de assinatura em formato de texto
         finalContent = `<pre style="white-space: pre-wrap; font-family: inherit; margin: 0;">${finalContent}</pre>`;
         finalContent += `\n\n--- Assinaturas ---\nContratante: ${contrato.assinatura_proprietario_nome || 'Empresa'}\nContratado: ${clienteNome}\nDocumento: ${clienteDocumento}\nData: ${dataAssinatura}\n\n(Documento assinado eletronicamente)`;
     }
     
-    // --- NOVO: Injeção da Logo no Cabeçalho de Impressão ---
     const logoUrl = contrato.assinatura_proprietario_url;
     const ownerName = contrato.assinatura_proprietario_nome || 'Empresa Contratante';
     
     let headerHtml = '';
     if (logoUrl) {
-        // ESTILO CRÍTICO: Garante que a logo fique no canto superior esquerdo
         headerHtml = `
             <div class="print-header" style="display: flex; flex-direction: column; align-items: flex-start; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 15px;">
                 <img src="${logoUrl}" alt="${ownerName}" class="print-logo" style="max-height: 50px; max-width: 150px; object-fit: contain; margin-bottom: 5px;" />
@@ -247,7 +231,6 @@ const AssinarContrato: React.FC = () => {
         `;
     }
     
-    // Envolve o conteúdo final com o cabeçalho
     const finalPrintHtml = `
         ${headerHtml}
         <div style="padding-top: 10px;">
@@ -281,22 +264,25 @@ const AssinarContrato: React.FC = () => {
   
   const isAssinado = contrato.status === 'ativo' || contrato.status === 'concluido';
   
-  // Verifica o tipo de conteúdo salvo no contrato
-  const isContentHtml = contrato.valores_tags_preenchidos?.tipo_conteudo === 'html';
+  // FIX: Verificação mais abrangente para determinar se é HTML
+  const tipoConteudo = contrato.valores_tags_preenchidos?.tipo_conteudo;
+  // Considera HTML se a flag for 'html', se não tiver flag (legado), ou se contiver tags HTML explícitas
+  const isContentHtml = tipoConteudo === 'html' || !tipoConteudo || (contrato.conteudo_renderizado && contrato.conteudo_renderizado.includes('<'));
   
   const contentToDisplay = contrato.conteudo_renderizado ? (
     isContentHtml ? (
-        <div dangerouslySetInnerHTML={{ __html: contrato.conteudo_renderizado }} />
+        <div 
+            className="ql-editor" // Classe essencial para formatação correta (alinhamentos, etc)
+            dangerouslySetInnerHTML={{ __html: contrato.conteudo_renderizado }} 
+        />
     ) : (
-        <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', margin: 0 }}>{contrato.conteudo_renderizado}</pre>
+        <pre className="whitespace-pre-wrap font-sans text-sm">{contrato.conteudo_renderizado}</pre>
     )
   ) : (
     <p className="text-center text-muted-foreground">Conteúdo não renderizado.</p>
   );
 
   const isReadyToSign = nomeCompleto.trim().length > 0 && !!selfieFile;
-  
-  // Dados da Assinatura do Proprietário
   const proprietarioNome = contrato.assinatura_proprietario_nome || 'Empresa Contratante';
   const proprietarioUrl = contrato.assinatura_proprietario_url;
 
