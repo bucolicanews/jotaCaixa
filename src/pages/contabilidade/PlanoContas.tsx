@@ -594,8 +594,9 @@ const PlanoContasPage = () => {
         {(!allGuiaDone || guiaAberta) && (
           <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {guiaItens.map((item) => (
-              <div
-                key={item.key}
+              <a
+                key= { item.key }
+                href={item.link}
                 className={cn(
                   'flex items-start gap-3 rounded-lg border p-3 text-sm',
                   item.done
@@ -614,7 +615,7 @@ const PlanoContasPage = () => {
                   </p>
                   <p className="text-muted-foreground">{item.description}</p>
                 </div>
-              </div>
+              </a>
             ))}
           </CardContent>
         )}
