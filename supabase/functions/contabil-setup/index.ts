@@ -39,12 +39,17 @@ serve(async (req: Request) => {
 
     if (error) {
       console.error("RPC Error (Supabase):", error);
+      // Se houver um erro de Postgrest (ex: RLS, FK), ele estará aqui.
       throw new Error(`RPC_FAIL: ${error.message}`);
     }
     
     if (data && !data[0]?.success) {
       console.error("RPC Logic Error:", data[0]?.message);
-      throw new Error(`LOGIC_FAIL: ${data[0]?.message}`);
+      // Se a RPC falhou logicamente (retornou success=false), retorna a mensagem de erro do PL/pgSQL
+      return new Response(JSON.stringify({ error: data[0]?.message || "Falha lógica na RPC." }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     return new Response(JSON.stringify({ success: true }), {
