@@ -9,7 +9,7 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ClienteProfile, AdminProfile } from '@/types/usuario';
+import { ClienteProfile, AdminProfile, UsuarioProfile, AdminUsuarioProfile } from '@/types/usuario';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { format, addDays, parseISO } from 'date-fns';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -20,6 +20,7 @@ import { TAGS_PADRAO } from '@/config/contrato-tags-padrao';
 import ContratoPreviewDialog from '@/components/contratos/ContratoPreviewDialog';
 import { useSessao } from '@/hooks/use-sessao';
 import { Separator } from '@/components/ui/separator';
+import { ptBR } from 'date-fns/locale';
 
 type TipoLancamento = 'unico' | 'repetir' | 'parcelar';
 
@@ -40,6 +41,8 @@ const PreencherContrato: React.FC = () => {
   const [carregandoDados, setCarregandoDados] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
+  
+  // Estados do Formulário
   const [clienteSelecionadoId, setClienteSelecionadoId] = useState<string>('');
   const [valorTotal, setValorTotal] = useState<number>(0); 
   const [tituloDocumento, setTituloDocumento] = useState('');
@@ -61,18 +64,39 @@ const PreencherContrato: React.FC = () => {
     return null;
   }, [carregandoSessao, isAdmin, isCliente, role, usuario, perfil]);
 
+  // Função auxiliar de formatação de moeda
+  const formatCurrency = (val: number) => 
+    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
+
   const fetchDependentData = useCallback(async (targetId: string) => {
     if (!targetId) return;
-    const [tagsRes, clientesRes] = await Promise.all([
-      supabase.from('contrato_tags').select('*').eq('empresa_id', targetId),
-      supabase.from('clientes').select('*').eq('proprietario_id', targetId).order('nome')
-    ]);
-    if (tagsRes.data) setTagsCustomizadas(tagsRes.data);
-    if (clientesRes.data) setClientesCR(clientesRes.data);
+    
+    // 1. Busca Tags
+    const { data: tagsData } = await supabase
+      .from('contrato_tags')
+      .select('*')
+      .eq('empresa_id', targetId);
+      
+    if (tagsData) setTagsCustomizadas(tagsData);
+
+    // 2. Busca Clientes (Corrigindo duplicidade com Map)
+    const { data: clientesData } = await supabase
+      .from('clientes')
+      .select('*')
+      .eq('proprietario_id', targetId)
+      .order('nome');
+      
+    if (clientesData) {
+        // Desduplicação por ID
+        const uniqueClients = Array.from(new Map(clientesData.map(item => [item.id, item])).values());
+        setClientesCR(uniqueClients);
+    }
   }, []);
 
   const buscarDados = useCallback(async () => {
     setCarregandoDados(true);
+    
+    // 1. Carregar Modelo
     if (modeloId) {
       const { data } = await supabase.from('contrato_modelos').select('*').eq('id', modeloId).single();
       if (data) {
@@ -80,29 +104,168 @@ const PreencherContrato: React.FC = () => {
         setTituloDocumento(data.titulo);
       }
     }
+    
+    // 2. Carregar Empresas (Se Admin)
     if (isAdmin && ownerIdLogado) {
       const { data } = await supabase.from('tbl_clientes').select('id, nome').eq('aprovado', true);
       const options = [{ id: ownerIdLogado, nome: 'Meus Contratos' }, ...(data || [])];
       setEmpresasContrato(options);
     }
+    
+    // Define o proprietário inicial
     setProprietarioContratoId(ownerIdLogado);
+    
+    // Carrega dados dependentes (clientes, tags)
     await fetchDependentData(ownerIdLogado!);
+    
     setCarregandoDados(false);
   }, [modeloId, ownerIdLogado, isAdmin, fetchDependentData]);
 
+  // Carregamento inicial
   useEffect(() => {
     if (!carregandoSessao && ownerIdLogado) buscarDados();
   }, [carregandoSessao, ownerIdLogado, buscarDados]);
 
-  // CORREÇÃO TAGS: Filtro para mostrar tags manuais que não são preenchidas automaticamente
+  // Se o proprietário mudar (no select do Admin), recarrega clientes
+  useEffect(() => {
+      if (proprietarioContratoId) {
+          fetchDependentData(proprietarioContratoId);
+      }
+  }, [proprietarioContratoId, fetchDependentData]);
+
+  // Dados da Empresa (Contratante) para preenchimento de tags
+  const empresaLogadaData = useMemo(() => {
+    if (!perfil) return null;
+    // Se for Admin e estiver criando para um cliente, precisaríamos buscar os dados desse cliente.
+    // Por simplificação, se for Admin criando "Meus Contratos", usa o perfil do Admin.
+    // Se for Cliente, usa o perfil do Cliente.
+    
+    const p = perfil as ClienteProfile | AdminProfile | UsuarioProfile | AdminUsuarioProfile;
+    
+    // Helper seguro para acessar propriedades que podem não existir em todos os tipos
+    const safeGet = (obj: any, key: string) => obj && obj[key] ? obj[key] : '';
+    
+    return {
+        nome: safeGet(p, 'nome') || safeGet(p, 'razao_social'),
+        documento: safeGet(p, 'documento') || safeGet(p, 'cnpj') || safeGet(p, 'cpf'),
+        email: safeGet(p, 'email'),
+        telefone: safeGet(p, 'telefone'),
+        cep: safeGet(p, 'cep'),
+        endereco: safeGet(p, 'endereco'),
+        numero: safeGet(p, 'numero'),
+        complemento: safeGet(p, 'complemento'),
+        bairro: safeGet(p, 'bairro'),
+        cidade: safeGet(p, 'cidade'),
+        estado: safeGet(p, 'estado'),
+        cnpj: safeGet(p, 'cnpj'),
+        cpf: safeGet(p, 'cpf'),
+        rg: safeGet(p, 'rg'),
+    };
+  }, [perfil]);
+
+  // --- LÓGICA DE PREENCHIMENTO AUTOMÁTICO DAS TAGS ---
+  useEffect(() => {
+      const newTags: Record<string, string> = { ...valoresTags };
+      
+      // 1. Dados do Cliente Selecionado (CONTRATANTE ou CONTRATADO, depende do contexto, aqui assumimos Cliente do escritório)
+      const cliente = clientesCR.find(c => c.id === clienteSelecionadoId);
+      
+      if (cliente) {
+          newTags['{{CLIENTE_NOME}}'] = cliente.nome || '';
+          newTags['{{CLIENTE_RAZAO_SOCIAL}}'] = cliente.razao_social || cliente.nome || '';
+          newTags['{{CLIENTE_NOME_FANTASIA}}'] = cliente.nome_fantasia || '';
+          newTags['{{CLIENTE_DOCUMENTO}}'] = cliente.documento || cliente.cpf || cliente.cnpj || '';
+          newTags['{{CLIENTE_CPF}}'] = cliente.cpf || '';
+          newTags['{{CLIENTE_CNPJ}}'] = cliente.cnpj || '';
+          newTags['{{CLIENTE_RG}}'] = cliente.rg || '';
+          newTags['{{CLIENTE_EMAIL}}'] = cliente.email || '';
+          newTags['{{CLIENTE_TELEFONE}}'] = cliente.telefone || '';
+          newTags['{{CLIENTE_TELEFONE_FIXO}}'] = cliente.telefone_fixo || '';
+          newTags['{{CLIENTE_CEP}}'] = cliente.cep || '';
+          newTags['{{CLIENTE_ENDERECO}}'] = cliente.endereco || '';
+          newTags['{{CLIENTE_NUMERO}}'] = cliente.numero || '';
+          newTags['{{CLIENTE_COMPLEMENTO}}'] = cliente.complemento || '';
+          newTags['{{CLIENTE_BAIRRO}}'] = cliente.bairro || '';
+          newTags['{{CLIENTE_CIDADE}}'] = cliente.cidade || '';
+          newTags['{{CLIENTE_ESTADO}}'] = cliente.estado || '';
+          newTags['{{CLIENTE_DATA_NASCIMENTO}}'] = cliente.data_nascimento ? format(parseISO(cliente.data_nascimento), 'dd/MM/yyyy') : '';
+      }
+
+      // 2. Dados da Empresa (CONTRATADA - Escritório/Dono do Sistema)
+      if (empresaLogadaData) {
+          newTags['{{EMPRESA_NOME}}'] = empresaLogadaData.nome || '';
+          newTags['{{EMPRESA_DOCUMENTO}}'] = empresaLogadaData.documento || '';
+          newTags['{{EMPRESA_EMAIL}}'] = empresaLogadaData.email || '';
+          newTags['{{EMPRESA_TELEFONE}}'] = empresaLogadaData.telefone || '';
+          newTags['{{EMPRESA_CEP}}'] = empresaLogadaData.cep || '';
+          newTags['{{EMPRESA_ENDERECO}}'] = empresaLogadaData.endereco || '';
+          newTags['{{EMPRESA_NUMERO}}'] = empresaLogadaData.numero || '';
+          newTags['{{EMPRESA_COMPLEMENTO}}'] = empresaLogadaData.complemento || '';
+          newTags['{{EMPRESA_BAIRRO}}'] = empresaLogadaData.bairro || '';
+          newTags['{{EMPRESA_CIDADE}}'] = empresaLogadaData.cidade || '';
+          newTags['{{EMPRESA_ESTADO}}'] = empresaLogadaData.estado || '';
+          newTags['{{EMPRESA_CNPJ}}'] = empresaLogadaData.cnpj || '';
+          newTags['{{EMPRESA_CPF}}'] = empresaLogadaData.cpf || '';
+      }
+
+      // 3. Dados Financeiros
+      let valorFinalContrato = 0;
+      let valorParcelaFinal = 0;
+      let dataPrimeiroVenc = '';
+
+      if (tipoLancamento === 'unico') {
+          valorFinalContrato = valorTotal;
+          valorParcelaFinal = valorTotal;
+          dataPrimeiroVenc = dataVencimentoUnico ? format(dataVencimentoUnico, 'dd/MM/yyyy') : '';
+      } else if (tipoLancamento === 'parcelar') {
+          valorFinalContrato = valorTotal;
+          valorParcelaFinal = numeroParcelas > 0 ? valorTotal / numeroParcelas : 0;
+          dataPrimeiroVenc = dataPrimeiroVencimento ? format(dataPrimeiroVencimento, 'dd/MM/yyyy') : '';
+      } else if (tipoLancamento === 'repetir') {
+          valorFinalContrato = valorTotal * numeroParcelas;
+          valorParcelaFinal = valorTotal;
+          dataPrimeiroVenc = dataPrimeiroVencimento ? format(dataPrimeiroVencimento, 'dd/MM/yyyy') : '';
+      }
+
+      newTags['{{VALOR_TOTAL_CONTRATO}}'] = formatCurrency(valorFinalContrato);
+      newTags['{{VALOR_PARCELA}}'] = formatCurrency(valorParcelaFinal);
+      newTags['{{NUMERO_PARCELAS}}'] = numeroParcelas.toString();
+      newTags['{{PRIMEIRO_VENCIMENTO}}'] = dataPrimeiroVenc;
+      newTags['{{DATA_EMISSAO}}'] = format(new Date(), 'dd/MM/yyyy');
+      
+      // Atualiza o estado apenas se houver mudanças reais para evitar loops, 
+      // mas como estamos usando dependências explícitas, setValoresTags é seguro.
+      setValoresTags(newTags);
+
+  }, [
+      clienteSelecionadoId, 
+      clientesCR, 
+      empresaLogadaData, 
+      valorTotal, 
+      tipoLancamento, 
+      numeroParcelas, 
+      dataVencimentoUnico, 
+      dataPrimeiroVencimento,
+      // Não incluímos valoresTags nas dependências para evitar loop infinito
+  ]);
+
+  // Filtro para mostrar tags manuais na UI (exclui as que já calculamos automaticamente)
   const tagsParaPreenchimentoManual = useMemo(() => {
     const combined = [...TAGS_PADRAO, ...tagsCustomizadas];
-    return combined.filter(tag => !tag.origem_dado).map(t => t.nome_tag);
+    // Exibe apenas tags que NÃO são de sistema e NÃO são financeiras padrão
+    return combined
+        .filter(tag => 
+            !tag.nome_tag.startsWith('{{CLIENTE_') && 
+            !tag.nome_tag.startsWith('{{EMPRESA_') &&
+            !['{{VALOR_TOTAL_CONTRATO}}', '{{VALOR_PARCELA}}', '{{NUMERO_PARCELAS}}', '{{PRIMEIRO_VENCIMENTO}}', '{{DATA_EMISSAO}}'].includes(tag.nome_tag)
+        )
+        .map(t => t.nome_tag);
   }, [tagsCustomizadas]);
 
   const renderConteudo = useCallback(() => {
     let html = modelo?.conteudo_template || '';
     Object.keys(valoresTags).forEach(tag => {
+      // Escapa caracteres especiais da tag para usar no Regex
       const regex = new RegExp(tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
       html = html.replace(regex, valoresTags[tag] || tag);
     });
@@ -110,7 +273,6 @@ const PreencherContrato: React.FC = () => {
   }, [modelo, valoresTags]);
 
   const handleSalvarContrato = async (status: string) => {
-    // CORREÇÃO data_inicio: Garantir que a data não seja nula
     const dataInicio = tipoLancamento === 'unico' ? dataVencimentoUnico : dataPrimeiroVencimento;
     
     if (!clienteSelecionadoId || !proprietarioContratoId || !dataInicio) {
@@ -120,15 +282,18 @@ const PreencherContrato: React.FC = () => {
 
     setIsSubmitting(true);
     try {
+        let valorTotalFinal = valorTotal;
+        if (tipoLancamento === 'repetir') valorTotalFinal = valorTotal * numeroParcelas;
+
         const payload = {
             modelo_id: modelo?.id,
             cliente_id: clienteSelecionadoId,
             proprietario_id: proprietarioContratoId,
             status,
-            valor_total: tipoLancamento === 'repetir' ? valorTotal * numeroParcelas : valorTotal,
+            valor_total: valorTotalFinal,
             data_inicio: format(dataInicio, 'yyyy-MM-dd'),
             numero_parcelas: tipoLancamento === 'unico' ? 1 : numeroParcelas,
-            valores_tags_preenchidos: valoresTags,
+            valores_tags_preenchidos: valoresTags, // Salva todas as tags calculadas
             conteudo_renderizado: renderConteudo(),
         };
 
@@ -179,7 +344,13 @@ const PreencherContrato: React.FC = () => {
                 <Label>Cliente (Contratado)</Label>
                 <Select value={clienteSelecionadoId} onValueChange={setClienteSelecionadoId}>
                   <SelectTrigger><SelectValue placeholder="Selecione o Cliente" /></SelectTrigger>
-                  <SelectContent>{clientesCR.map(c => <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>)}</SelectContent>
+                  <SelectContent>
+                    {clientesCR.map(c => (
+                        <SelectItem key={c.id} value={c.id}>
+                            {c.nome} {c.documento ? `(${c.documento})` : ''}
+                        </SelectItem>
+                    ))}
+                  </SelectContent>
                 </Select>
               </div>
             </CardContent>
@@ -235,8 +406,9 @@ const PreencherContrato: React.FC = () => {
           </Card>
 
           <Card>
-            <CardHeader><CardTitle>3. Tags Manuais</CardTitle></CardHeader>
+            <CardHeader><CardTitle>3. Tags Manuais (Outras)</CardTitle></CardHeader>
             <CardContent className="space-y-4">
+              {tagsParaPreenchimentoManual.length === 0 && <p className="text-sm text-muted-foreground">Nenhuma tag manual extra detectada.</p>}
               {tagsParaPreenchimentoManual.map(tag => (
                 <div key={tag} className="space-y-1">
                   <Label className="text-xs">{tag}</Label>
@@ -255,7 +427,7 @@ const PreencherContrato: React.FC = () => {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="border p-6 rounded bg-slate-50 min-h-[400px] text-sm overflow-y-auto max-h-[600px]" 
+            <div className="border p-6 rounded bg-slate-50 min-h-[400px] text-sm overflow-y-auto max-h-[600px] ql-editor" 
                  dangerouslySetInnerHTML={{ __html: renderConteudo() }} />
           </CardContent>
         </Card>
