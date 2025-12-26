@@ -69,8 +69,8 @@ const PreencherContrato: React.FC = () => {
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
   const fetchDependentData = useCallback(async (targetId: string) => {
-    if (!targetId) return;
-    
+    if (!targetId || !ownerIdLogado) return;
+
     // 1. Busca Tags
     const { data: tagsData } = await supabase
       .from('contrato_tags')
@@ -79,19 +79,35 @@ const PreencherContrato: React.FC = () => {
       
     if (tagsData) setTagsCustomizadas(tagsData);
 
-    // 2. Busca Clientes (Corrigindo duplicidade com Map)
-    const { data: clientesData } = await supabase
-      .from('clientes')
-      .select('*')
-      .eq('proprietario_id', targetId)
-      .order('nome');
+    // 2. Busca Clientes com a nova lógica
+    let clientesDataSource: Promise<any>;
+
+    // Se o admin estiver selecionando "Meus Contratos", a lista de clientes vem de tbl_clientes (empresas do sistema)
+    if (isAdmin && targetId === ownerIdLogado) {
+      clientesDataSource = supabase
+        .from('tbl_clientes')
+        .select('id, nome, documento:cnpj') // Adapta para o formato esperado
+        .eq('aprovado', true)
+        .order('nome');
+    } else {
+      // Para todos os outros casos (cliente logado, ou admin selecionando uma empresa), busca da tabela 'clientes'
+      clientesDataSource = supabase
+        .from('clientes')
+        .select('*')
+        .eq('proprietario_id', targetId)
+        .order('nome');
+    }
+    
+    const { data: clientesData } = await clientesDataSource;
       
     if (clientesData) {
-        // Desduplicação por ID
+        // A desduplicação continua útil para o caso de 'clientes'
         const uniqueClients = Array.from(new Map(clientesData.map(item => [item.id, item])).values());
         setClientesCR(uniqueClients);
+    } else {
+        setClientesCR([]); // Limpa a lista se nada for encontrado
     }
-  }, []);
+  }, [isAdmin, ownerIdLogado]);
 
   const buscarDados = useCallback(async () => {
     setCarregandoDados(true);
