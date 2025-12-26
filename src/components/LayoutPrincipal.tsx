@@ -71,8 +71,9 @@ const LayoutPrincipal: React.FC<LayoutPrincipalProps> = ({ children }) => {
         setAutoSetupState('done');
       } catch (error: any) {
         console.error('Erro ao executar setup contábil automático:', error);
-        showError('Não foi possível preparar o setup contábil automaticamente. Use o botão manual.');
-        setAutoSetupState('failed');
+        // AQUI: Em caso de falha, voltamos para 'idle' silenciosamente,
+        // permitindo que o usuário use o botão manual.
+        setAutoSetupState('idle'); 
       }
     };
 
