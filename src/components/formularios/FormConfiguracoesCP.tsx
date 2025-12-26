@@ -25,8 +25,6 @@ import {
 import { PlanoContas } from '@/types/plano-contas';
 import { Separator } from '../ui/separator';
 
-/* ---------------- TIPOS ---------------- */
-
 const TIPOS_REGISTRO_CONTABIL = [
   { key: 'a_pagar', label: 'Contas a Pagar (Sintético)', tipo: 'Patrimonial', analitica: 'Não' },
   { key: 'parcela_pagar', label: 'Parcelas a Pagar (Analítico)', tipo: 'Patrimonial', analitica: 'Sim' },
@@ -35,8 +33,6 @@ const TIPOS_REGISTRO_CONTABIL = [
   { key: 'estorno_desconto_obtido', label: 'Estorno Desconto Obtido (Despesa)', tipo: 'Resultado', analitica: 'Sim' },
 ];
 
-/* ---------------- PADRÕES ---------------- */
-
 const PADROES_CONTAS_CP = {
   a_pagar: { Conta: '2.1.03', Descricao: 'Fornecedores' },
   parcela_pagar: { Conta: '2.1.03.0001', Descricao: 'Fornecedores Nacionais' },
@@ -44,8 +40,6 @@ const PADROES_CONTAS_CP = {
   desconto_obtido: { Conta: '4.3.01.0001', Descricao: 'Descontos Obtidos ao Pagar' },
   estorno_desconto_obtido: { Conta: '5.2.01.0003', Descricao: 'Estorno Desconto Obtido' },
 };
-
-/* ---------------- FORM ---------------- */
 
 const formSchema = z.object({
   a_pagar: z.string().nullable(),
@@ -78,8 +72,6 @@ const FormConfiguracoesCP: React.FC = () => {
     },
   });
 
-  /* ---------------- PLANO DE CONTAS ---------------- */
-
   const fetchContasContabeis = useCallback(async () => {
     if (!proprietarioId) return;
 
@@ -101,8 +93,6 @@ const FormConfiguracoesCP: React.FC = () => {
     setLoadingContas(false);
   }, [proprietarioId]);
 
-  /* ---------------- CONFIG + PADRÕES ---------------- */
-
   const fetchConfig = useCallback(async () => {
     if (!canAccess || !proprietarioId) {
       setLoadingData(false);
@@ -123,26 +113,20 @@ const FormConfiguracoesCP: React.FC = () => {
     }
 
     const valores: Partial<FormValues> = {};
-
-    // 🔹 Aplica o que já está salvo
     data?.forEach(item => {
       valores[item.tipo_registro as keyof FormValues] = item.conta_contabil_id;
     });
 
-    // 🔹 Aplica padrão SOMENTE se não existir valor salvo
+    // Aplica padrões se não existir valor
     TIPOS_REGISTRO_CONTABIL.forEach(tipo => {
       const key = tipo.key as keyof FormValues;
-
       if (!valores[key]) {
-        const padrao = PADROES_CONTAS_CP[key];
-        if (!padrao) return;
-
-        const conta = contasContabeis.find(
-          c => c.Conta === padrao.Conta && c.Descricao === padrao.Descricao
-        );
-
-        if (conta) {
-          valores[key] = conta.id;
+        const padrao = (PADROES_CONTAS_CP as any)[key];
+        if (padrao) {
+          const conta = contasContabeis.find(
+            c => c.Conta === padrao.Conta && c.Descricao === padrao.Descricao
+          );
+          if (conta) valores[key] = conta.id;
         }
       }
     });
@@ -150,8 +134,6 @@ const FormConfiguracoesCP: React.FC = () => {
     form.reset(valores);
     setLoadingData(false);
   }, [canAccess, proprietarioId, contasContabeis, form]);
-
-  /* ---------------- EFFECT ---------------- */
 
   useEffect(() => {
     if (!carregandoSessao && canAccess) {
@@ -165,45 +147,16 @@ const FormConfiguracoesCP: React.FC = () => {
     }
   }, [contasContabeis, fetchConfig]);
 
-  /* ---------------- SUBMIT ---------------- */
-
-  const applyDefaults = useCallback(
-    (values: FormValues): FormValues => {
-      const patched: FormValues = { ...values };
-
-      TIPOS_REGISTRO_CONTABIL.forEach((tipo) => {
-        const key = tipo.key as keyof FormValues;
-        if (patched[key]) return;
-
-        const padrao = (PADROES_CONTAS_CP as any)[key];
-        if (!padrao) return;
-
-        const conta = contasContabeis.find(
-          (c) => c.Conta === padrao.Conta && c.Descricao === padrao.Descricao,
-        );
-
-        if (conta) {
-          patched[key] = conta.id;
-        }
-      });
-
-      return patched;
-    },
-    [contasContabeis],
-  );
-
   const onSubmit = async (values: FormValues) => {
     if (!canAccess || !proprietarioId) {
       showError('Sem permissão.');
       return;
     }
 
-    const finalValues = applyDefaults(values);
-
     const payload = TIPOS_REGISTRO_CONTABIL.map(tipo => ({
       proprietario_id: proprietarioId,
       tipo_registro: tipo.key,
-      conta_contabil_id: finalValues[tipo.key as keyof FormValues] || null,
+      conta_contabil_id: values[tipo.key as keyof FormValues] || null,
     }));
 
     const { error } = await supabase
@@ -214,12 +167,9 @@ const FormConfiguracoesCP: React.FC = () => {
       showError(error.message);
     } else {
       showSuccess('Configurações salvas com sucesso!');
-      form.reset(finalValues);
       refetchSessao();
     }
   };
-
-  /* ---------------- FILTRO CONTAS ---------------- */
 
   const getContasDisponiveis = (tipo: 'Patrimonial' | 'Resultado', analitica: 'Sim' | 'Não') =>
     contasContabeis
@@ -233,21 +183,14 @@ const FormConfiguracoesCP: React.FC = () => {
         display: `${c.Conta} - ${c.Descricao}`,
       }));
 
-  /* ---------------- UI ---------------- */
-
   if (loadingData || loadingContas) {
-    return (
-      <div className="flex justify-center py-10">
-        <Loader2 className="animate-spin" />
-      </div>
-    );
+    return <div className="flex justify-center py-10"><Loader2 className="animate-spin" /></div>;
   }
 
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
         <Separator />
-
         {TIPOS_REGISTRO_CONTABIL.map(tipo => (
           <FormField
             key={tipo.key}
@@ -279,7 +222,6 @@ const FormConfiguracoesCP: React.FC = () => {
             )}
           />
         ))}
-
         <Button type="submit" className="w-full">
           Salvar Mapeamento Contábil
         </Button>
