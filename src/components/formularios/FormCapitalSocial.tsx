@@ -176,13 +176,13 @@ const FormCapitalSocial: React.FC<FormCapitalSocialProps> = ({ onSaveComplete })
                     </ul>
                     <div className="flex gap-2 mt-3">
                         <Button asChild size="sm" variant="outline">
-                            <Link to="/plano-contas">Corrigir no Plano de Contas</Link>
+                            <Link to="/plano-contas">Plano de Contas</Link>
                         </Button>
                         <Button asChild size="sm" variant="outline">
-                            <Link to="/bancos">Corrigir em Bancos/Caixas</Link>
+                            <Link to="/bancos">Bancos/Caixas</Link>
                         </Button>
                         <Button asChild size="sm" variant="destructive">
-                            <Link to="/lancamentos?tab=novo">Ir para Lançamentos</Link>
+                            <Link to="/lancamentos?tab=novo">Lançamentos</Link>
                         </Button>
                     </div>
                 </div>

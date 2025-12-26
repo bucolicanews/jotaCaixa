@@ -175,7 +175,7 @@ const LayoutPrincipal: React.FC<LayoutPrincipalProps> = ({ children }) => {
               </p>
               <div className="pt-1">
                 <Button size="sm" asChild>
-                  <Link to="/lancamentos">Clique aqui e faÇõa o lanÇõamento</Link>
+                  <Link to="/lancamentos">Fazer Lançamento</Link>
                 </Button>
               </div>
             </AlertDescription>
