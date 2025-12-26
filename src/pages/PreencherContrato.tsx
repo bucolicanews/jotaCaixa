@@ -71,7 +71,7 @@ const PreencherContrato: React.FC = () => {
   const fetchDependentData = useCallback(async (targetId: string) => {
     if (!targetId) return;
     
-    // 1. Busca Tags (tags de contrato são sempre por empresa_id)
+    // 1. Busca Tags
     const { data: tagsData } = await supabase
       .from('contrato_tags')
       .select('*')
@@ -79,40 +79,19 @@ const PreencherContrato: React.FC = () => {
       
     if (tagsData) setTagsCustomizadas(tagsData);
 
-    // 2. Busca Clientes (Lógica Diferenciada)
-    let fetchedClients: any[] = [];
-    
-    // Se for Admin e estiver criando contrato para si mesmo (targetId == seu ID de Admin),
-    // a lista de "clientes" são as empresas do sistema (tbl_clientes).
-    const isTargetAdminSelf = isAdmin && targetId === ownerIdLogado;
-
-    if (isTargetAdminSelf) {
-        // Busca de tbl_clientes (Empresas do Sistema que o Admin gerencia)
-        const { data } = await supabase
-            .from('tbl_clientes')
-            .select('id, nome, documento, email, telefone, cep, endereco, numero, complemento, bairro, cidade, estado, cpf, cnpj, rg, razao_social, nome_fantasia')
-            .eq('admin_id', targetId)
-            // .eq('aprovado', true) // Removido para permitir contratos com pendentes, se desejar
-            .order('nome');
-            
-        fetchedClients = data || [];
-    } else {
-        // Caso contrário (Cliente logado ou Admin impersonando cliente),
-        // busca da tabela `clientes` (clientes de CR/Contratos dessa empresa).
-        const { data } = await supabase
-            .from('clientes')
-            .select('*')
-            .eq('proprietario_id', targetId)
-            .order('nome');
-            
-        fetchedClients = data || [];
+    // 2. Busca Clientes (Corrigindo duplicidade com Map)
+    const { data: clientesData } = await supabase
+      .from('clientes')
+      .select('*')
+      .eq('proprietario_id', targetId)
+      .order('nome');
+      
+    if (clientesData) {
+        // Desduplicação por ID
+        const uniqueClients = Array.from(new Map(clientesData.map(item => [item.id, item])).values());
+        setClientesCR(uniqueClients);
     }
-
-    // Desduplicação por ID
-    const uniqueClients = Array.from(new Map(fetchedClients.map(item => [item.id, item])).values());
-    setClientesCR(uniqueClients);
-
-  }, [isAdmin, ownerIdLogado]);
+  }, []);
 
   const buscarDados = useCallback(async () => {
     setCarregandoDados(true);
@@ -133,37 +112,79 @@ const PreencherContrato: React.FC = () => {
       setEmpresasContrato(options);
     }
     
-    // Define o proprietário inicial
-    setProprietarioContratoId(ownerIdLogado);
+    // Define o proprietário inicial como o usuário logado
+    // Se for edição, isso será sobrescrito logo abaixo
+    let currentProprietarioId = ownerIdLogado;
+    setProprietarioContratoId(currentProprietarioId);
     
-    // Carrega dados dependentes (clientes, tags)
-    await fetchDependentData(ownerIdLogado!);
+    // 3. SE FOR EDIÇÃO: Carregar dados do contrato existente
+    if (contratoId) {
+        const { data: contratoExistente, error: contratoError } = await supabase
+            .from('contratos_gerados')
+            .select('*')
+            .eq('id', contratoId)
+            .single();
+            
+        if (contratoError) {
+            showError('Erro ao carregar contrato para edição: ' + contratoError.message);
+        } else if (contratoExistente) {
+            // Preenche os estados com os dados do banco
+            setClienteSelecionadoId(contratoExistente.cliente_id);
+            setProprietarioContratoId(contratoExistente.proprietario_id);
+            currentProprietarioId = contratoExistente.proprietario_id; // Atualiza para buscar dados dependentes corretos
+            
+            setValorTotal(contratoExistente.valor_total || 0);
+            setNumeroParcelas(contratoExistente.numero_parcelas || 1);
+            
+            // Tenta inferir o tipo de lançamento
+            if ((contratoExistente.numero_parcelas || 1) > 1) {
+                setTipoLancamento('parcelar'); // Assumindo parcelar como padrão para > 1
+            } else {
+                setTipoLancamento('unico');
+            }
+            
+            if (contratoExistente.data_inicio) {
+                const dataInicio = parseISO(contratoExistente.data_inicio);
+                setDataVencimentoUnico(dataInicio);
+                setDataPrimeiroVencimento(dataInicio);
+            }
+            
+            if (contratoExistente.valores_tags_preenchidos) {
+                setValoresTags(contratoExistente.valores_tags_preenchidos as Record<string, string>);
+                // Se o título estiver salvo nas tags, usa ele
+                if ((contratoExistente.valores_tags_preenchidos as any)['titulo']) {
+                    setTituloDocumento((contratoExistente.valores_tags_preenchidos as any)['titulo']);
+                }
+            }
+        }
+    }
+    
+    // Carrega dados dependentes (clientes, tags) usando o proprietário correto
+    if (currentProprietarioId) {
+        await fetchDependentData(currentProprietarioId);
+    }
     
     setCarregandoDados(false);
-  }, [modeloId, ownerIdLogado, isAdmin, fetchDependentData]);
+  }, [modeloId, ownerIdLogado, isAdmin, fetchDependentData, contratoId]);
 
   // Carregamento inicial
   useEffect(() => {
     if (!carregandoSessao && ownerIdLogado) buscarDados();
   }, [carregandoSessao, ownerIdLogado, buscarDados]);
 
-  // Se o proprietário mudar (no select do Admin), recarrega clientes
+  // Se o proprietário mudar manualmente (no select do Admin), recarrega clientes
+  // Adicionamos uma verificação para não recarregar se já estiver carregando (evita loop na inicialização)
   useEffect(() => {
-      if (proprietarioContratoId) {
+      if (proprietarioContratoId && !carregandoDados) {
           fetchDependentData(proprietarioContratoId);
       }
-  }, [proprietarioContratoId, fetchDependentData]);
+  }, [proprietarioContratoId, fetchDependentData, carregandoDados]);
 
   // Dados da Empresa (Contratante) para preenchimento de tags
   const empresaLogadaData = useMemo(() => {
     if (!perfil) return null;
-    // Se for Admin e estiver criando para um cliente, precisaríamos buscar os dados desse cliente.
-    // Por simplificação, se for Admin criando "Meus Contratos", usa o perfil do Admin.
-    // Se for Cliente, usa o perfil do Cliente.
     
     const p = perfil as ClienteProfile | AdminProfile | UsuarioProfile | AdminUsuarioProfile;
-    
-    // Helper seguro para acessar propriedades que podem não existir em todos os tipos
     const safeGet = (obj: any, key: string) => obj && obj[key] ? obj[key] : '';
     
     return {
@@ -186,6 +207,9 @@ const PreencherContrato: React.FC = () => {
 
   // --- LÓGICA DE PREENCHIMENTO AUTOMÁTICO DAS TAGS ---
   useEffect(() => {
+      // Se estiver editando e os dados acabaram de carregar, não sobrescreve imediatamente
+      // a menos que o usuário mude algo. Porém, para garantir reatividade, mesclamos.
+      
       const newTags: Record<string, string> = { ...valoresTags };
       
       // 1. Dados do Cliente Selecionado
@@ -212,9 +236,7 @@ const PreencherContrato: React.FC = () => {
           newTags['{{CLIENTE_DATA_NASCIMENTO}}'] = cliente.data_nascimento ? format(parseISO(cliente.data_nascimento), 'dd/MM/yyyy') : '';
       }
 
-      // 2. Dados da Empresa (CONTRATADA - Escritório/Dono do Sistema)
-      // Nota: Idealmente buscaríamos os dados da empresa selecionada no select "Empresa Contratante"
-      // Por enquanto, usa os dados de quem está logado como fallback ou principal.
+      // 2. Dados da Empresa
       if (empresaLogadaData) {
           newTags['{{EMPRESA_NOME}}'] = empresaLogadaData.nome || '';
           newTags['{{EMPRESA_DOCUMENTO}}'] = empresaLogadaData.documento || '';
@@ -328,6 +350,18 @@ const PreencherContrato: React.FC = () => {
         setIsSubmitting(false);
     }
   };
+  
+  // Renderizador dos botões de ação para reutilização no topo e rodapé
+  const renderActionButtons = () => (
+      <div className="flex space-x-4">
+        <Button variant="secondary" onClick={() => handleSalvarContrato('rascunho')} disabled={isSubmitting}>
+            <Save className="mr-2 h-4 w-4"/> Rascunho
+        </Button>
+        <Button onClick={() => handleSalvarContrato('pendente_assinatura')} disabled={isSubmitting}>
+            Gerar e Enviar
+        </Button>
+      </div>
+  );
 
   if (carregandoSessao || carregandoDados) {
     return <LayoutPrincipal><div className="flex justify-center p-20"><Loader2 className="animate-spin" /></div></LayoutPrincipal>;
@@ -335,9 +369,13 @@ const PreencherContrato: React.FC = () => {
 
   return (
     <LayoutPrincipal>
-      <div className="flex items-center mb-6">
-        <Button onClick={() => navigate('/contratos')} variant="link" className="p-0 mr-4"><ChevronLeft /> Voltar</Button>
-        <h1 className="text-2xl font-bold">Preencher: {modelo?.titulo}</h1>
+      {/* CABEÇALHO COM TÍTULO E BOTÕES DE AÇÃO */}
+      <div className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
+        <div className="flex items-center">
+            <Button onClick={() => navigate('/contratos')} variant="link" className="p-0 mr-4"><ChevronLeft /> Voltar</Button>
+            <h1 className="text-2xl font-bold">Preencher: {modelo?.titulo}</h1>
+        </div>
+        {renderActionButtons()}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -459,10 +497,10 @@ const PreencherContrato: React.FC = () => {
           </CardContent>
         </Card>
       </div>
-
+      
+      {/* BOTÕES DE AÇÃO NO RODAPÉ */}
       <div className="mt-6 flex justify-end space-x-4">
-        <Button variant="secondary" onClick={() => handleSalvarContrato('rascunho')} disabled={isSubmitting}><Save className="mr-2 h-4 w-4"/> Rascunho</Button>
-        <Button onClick={() => handleSalvarContrato('pendente_assinatura')} disabled={isSubmitting}>Gerar e Enviar</Button>
+        {renderActionButtons()}
       </div>
 
       <ContratoPreviewDialog 
