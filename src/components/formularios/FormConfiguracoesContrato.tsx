@@ -11,7 +11,6 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 import { Loader2, Link, MessageSquare, Mail, BookOpen } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
@@ -28,7 +27,6 @@ import {
 import { PlanoContas } from '@/types/plano-contas';
 import { cn } from '@/lib/utils';
 import { useContabilConfig } from '@/hooks/use-contabil-config';
-import { ClienteProfile } from '@/types/usuario';
 import { Input } from '@/components/ui/input';
 
 /* ---------------- TIPOS ---------------- */

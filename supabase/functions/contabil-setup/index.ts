@@ -30,20 +30,13 @@ serve(async (req: Request) => {
       { auth: { persistSession: false } },
     );
 
-    // 1) Reset total para evitar violação de FK ao substituir o plano
-    const { data: resetData, error: resetError } = await supabaseService.rpc("contabil_reset_all", {
-      p_proprietario_id: proprietarioId,
-    });
-    if (resetError || (resetData && resetData[0]?.success === false)) {
-      throw new Error(resetError?.message || resetData?.[0]?.message || "Falha ao resetar antes do setup contábil.");
-    }
-
-    // 2) Executa o setup padrão (plano + históricos + configs)
+    // Executa o setup padrão (que inclui reset, importação de plano/históricos e mapeamento de configs)
     const { data, error } = await supabaseService.rpc("contabil_setup_defaults", {
       p_proprietario_id: proprietarioId,
     });
 
     if (error || (data && !data[0]?.success)) {
+      console.error("RPC contabil_setup_defaults error:", error || data?.[0]?.message);
       throw new Error(error?.message || data?.[0]?.message || "Falha ao executar setup contábil.");
     }
 
