@@ -1,13 +1,9 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { AlertTriangle, CheckCircle, Settings, FileDown, FileUp, BookOpen, History, DollarSign, ArrowRight, Loader2 } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Settings, FileDown, FileUp, BookOpen, History, DollarSign, ArrowRight } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { SetupStepKey } from '@/types/setup';
 import { cn } from '@/lib/utils';
-import { useCallback, useState } from 'react';
-import { useSessao } from '@/hooks/use-sessao';
-import { triggerContabilSetup } from '@/utils/contabil-setup';
-import { showError, showSuccess } from '@/utils/toast';
 
 interface SetupChecklistListProps {
   missingSteps: SetupStepKey[];
@@ -62,7 +58,6 @@ const SEQUENTIAL_STEPS: { key: string; label: string; link: string; icon: React.
 
 export const SetupChecklistList: React.FC<SetupChecklistListProps> = ({
   missingSteps,
-  compact = false,
 }) => {
   const navigate = useNavigate();
   if (missingSteps.length === 0) return null;
@@ -144,25 +139,6 @@ interface SetupBlockerProps {
 }
 
 const SetupBlocker: React.FC<SetupBlockerProps> = ({ missingSteps }) => {
-  const { ownerId, refetch } = useSessao();
-  const [executingSetup, setExecutingSetup] = useState(false);
-
-  const handleRunSetup = useCallback(async () => {
-    if (!ownerId) return;
-    setExecutingSetup(true);
-
-    try {
-      await triggerContabilSetup({ proprietarioId: ownerId });
-      showSuccess('Setup contábil executado com sucesso. Atualizando status...');
-      await refetch();
-    } catch (error: any) {
-      console.error('Erro ao executar setup contábil manual:', error);
-      showError('Não foi possível executar o setup contábil. Tente novamente.');
-    } finally {
-      setExecutingSetup(false);
-    }
-  }, [ownerId, refetch]);
-
   return (
     <Card className="border-destructive/40 shadow-lg">
       <CardHeader>
@@ -176,30 +152,6 @@ const SetupBlocker: React.FC<SetupBlockerProps> = ({ missingSteps }) => {
           Para lançar contas ou acessar o painel, conclua primeiro as etapas abaixo. Após
           finalizar, os módulos de Contas a Pagar/Receber e o Dashboard serão liberados.
         </p>
-
-        <div className="space-y-1">
-          <Button
-            variant="secondary"
-            className="w-full justify-center"
-            onClick={handleRunSetup}
-            disabled={!ownerId || executingSetup}
-          >
-            {executingSetup ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Executando setup contábil...
-              </>
-            ) : (
-              <>
-                <Settings className="mr-2 h-4 w-4" />
-                Executar Setup Contábil agora
-              </>
-            )}
-          </Button>
-          <p className="text-xs text-muted-foreground">
-            Gera automaticamente o plano de contas, históricos e mapeamentos obrigatórios.
-          </p>
-        </div>
 
         <SetupChecklistList missingSteps={missingSteps} />
 

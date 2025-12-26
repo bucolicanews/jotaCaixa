@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React from 'react';
 import { useSessao } from '@/hooks/use-sessao';
 import { useNavigate } from 'react-router-dom';
 import { Loader2, Package, Phone, AlertTriangle, Settings as SettingsIcon, Info } from 'lucide-react';
@@ -7,24 +7,20 @@ import { Card, CardDescription, CardHeader, CardTitle, CardContent } from './ui/
 import { cn } from '@/lib/utils';
 import Header from './Header';
 import TrialBanner from './TrialBanner';
-import TrialButton from './TrialButton'; // Importando o novo componente
+import TrialButton from './TrialButton';
 import { isPast, parseISO } from 'date-fns';
 import { Link } from 'react-router-dom';
 import { Button } from './ui/button';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { SetupChecklistList } from './SetupBlocker';
-import { triggerContabilSetup } from '@/utils/contabil-setup';
-import { showError } from '@/utils/toast';
 
 interface LayoutPrincipalProps {
   children: React.ReactNode;
 }
 
 const LayoutPrincipal: React.FC<LayoutPrincipalProps> = ({ children }) => {
-  const { usuario, carregando, role, perfil, refetch, setupStatus, ownerId } = useSessao();
+  const { usuario, carregando, role, perfil, refetch, setupStatus } = useSessao();
   const navegar = useNavigate();
-  const [autoSetupState, setAutoSetupState] = useState<'idle' | 'running' | 'done' | 'failed'>('idle');
-  const ownerForAutoRef = useRef<string | null>(null);
 
   const isClient = role === 'Cliente';
   const isClientUser =
@@ -47,38 +43,6 @@ const LayoutPrincipal: React.FC<LayoutPrincipalProps> = ({ children }) => {
     (isClient || isClientUser) &&
     Boolean(setupStatus?.isComplete) &&
     !setupStatus?.firstLaunchCompleted;
-
-  useEffect(() => {
-    if (ownerId !== ownerForAutoRef.current) {
-      ownerForAutoRef.current = ownerId;
-      setAutoSetupState('idle');
-    }
-  }, [ownerId]);
-
-  const shouldAutoRunSetup =
-    shouldShowSetupBanner && setupStatus?.missingSteps.includes('plano_contas');
-
-  useEffect(() => {
-    if (carregando || !ownerId || autoSetupState !== 'idle' || !shouldAutoRunSetup) {
-      return;
-    }
-
-    const run = async () => {
-      setAutoSetupState('running');
-      try {
-        await triggerContabilSetup({ proprietarioId: ownerId });
-        await refetch();
-        setAutoSetupState('done');
-      } catch (error: any) {
-        console.error('Erro ao executar setup contábil automático:', error);
-        // CORREÇÃO: Define como 'failed' para parar o loop.
-        // O usuário poderá tentar novamente pelo botão manual no banner.
-        setAutoSetupState('failed'); 
-      }
-    };
-
-    void run();
-  }, [carregando, ownerId, autoSetupState, shouldAutoRunSetup, refetch]); // Removido showError das dependências para evitar re-renders desnecessários
 
   if (carregando) {
     return (
@@ -170,21 +134,6 @@ const LayoutPrincipal: React.FC<LayoutPrincipalProps> = ({ children }) => {
                 Complete as etapas abaixo para liberar o painel e os lançamentos.
               </p>
               <SetupChecklistList missingSteps={setupStatus.missingSteps} compact />
-              
-              {/* Mostra estado de carregamento apenas se estiver rodando */}
-              {autoSetupState === 'running' && (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Preparando automaticamente o plano de contas e os históricos...
-                </div>
-              )}
-              
-              {/* Opcional: Se falhar, pode mostrar algo discreto ou nada, como pedido */}
-              {autoSetupState === 'failed' && (
-                 <div className="text-xs text-muted-foreground mt-1">
-                    Tentativa automática falhou. Use o botão abaixo em Configurações.
-                 </div>
-              )}
 
               <div className="flex flex-wrap gap-2 pt-1">
                 <Button variant="secondary" size="sm" asChild>
@@ -235,11 +184,10 @@ const LayoutPrincipal: React.FC<LayoutPrincipalProps> = ({ children }) => {
       )}
 
       {/* Conteúdo Principal (Rolável) */}
-      <main className={cn("flex-1 p-4 md:p-8 w-full")}> {/* REMOVIDO overflow-x-hidden */}
+      <main className={cn("flex-1 p-4 md:p-8 w-full")}>
         {children}
       </main>
       
-      {/* TODO: Adicionar Footer aqui se necessário */}
     </div>
   );
 };
