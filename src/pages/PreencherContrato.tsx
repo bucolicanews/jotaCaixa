@@ -86,7 +86,7 @@ const PreencherContrato: React.FC = () => {
     if (isAdmin && targetId === ownerIdLogado) {
       clientesDataSource = supabase
         .from('tbl_clientes')
-        .select('id, nome, documento:cnpj') // Adapta para o formato esperado
+        .select('*') // Garante que todos os campos, incluindo endereço, sejam carregados
         .eq('aprovado', true)
         .order('nome');
     } else {
@@ -323,7 +323,7 @@ const PreencherContrato: React.FC = () => {
     let html = modelo?.conteudo_template || '';
     Object.keys(valoresTags).forEach(tag => {
       const regex = new RegExp(tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
-      html = html.replace(regex, valoresTags[tag] || tag);
+      html = html.replace(regex, valoresTags[tag] || '');
     });
     return html;
   }, [modelo, valoresTags]);
@@ -508,7 +508,7 @@ const PreencherContrato: React.FC = () => {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="border p-6 rounded bg-slate-50 min-h-[400px] text-sm overflow-y-auto max-h-[600px] ql-editor" 
+            <div className="border p-6 rounded bg-slate-50 dark:bg-white text-zinc-900 min-h-[400px] text-sm overflow-y-auto max-h-[600px] ql-editor" 
                  dangerouslySetInnerHTML={{ __html: renderConteudo() }} />
           </CardContent>
         </Card>

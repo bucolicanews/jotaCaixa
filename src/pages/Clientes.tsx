@@ -988,12 +988,9 @@ const ClientesPage = () => {
                                         )}
                                         
                                         {/* BOTÃO DE EDIÇÃO */}
-                                        {/* APLICAÇÃO DA NOVA REGRA: Ocultar se shouldHideDemoteOrAccess for true */}
-                                        {!shouldHideDemoteOrAccess && (
-                                            <Button variant="ghost" size="icon" onClick={() => handleEditCR(cliente)}>
-                                                <Edit className="w-4 h-4" />
-                                            </Button>
-                                        )}
+                                        <Button variant="ghost" size="icon" onClick={() => handleEditCR(cliente)}>
+                                            <Edit className="w-4 h-4" />
+                                        </Button>
                                         
                                         {/* BOTÃO DE DELETAR */}
                                         <Button variant="ghost" size="icon" onClick={() => handleDeleteCR(cliente.id)}>

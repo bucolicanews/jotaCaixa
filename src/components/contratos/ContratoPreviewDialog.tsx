@@ -26,22 +26,23 @@ const ContratoPreviewDialog: React.FC<ContratoPreviewDialogProps> = ({ open, onO
     printContent(printHtml, `Prévia do Contrato: ${titulo}`);
   };
   
-  // Conteúdo a ser exibido na tela
+  // Conteúdo a ser exibido na tela com classes de cores resetadas para "modo papel"
   const contentToDisplay = isHtml ? (
     <div 
         dangerouslySetInnerHTML={{ __html: conteudoHtml }} 
-        // CLASSE CRÍTICA: Aplica os estilos do Quill para formatação (h2, centralização, etc.)
-        className="ql-editor" 
+        // Adicionado text-zinc-900 para garantir cor escura independente do tema do sistema
+        className="ql-editor text-zinc-900" 
     />
   ) : (
-    // Usa white-space: pre-wrap para preservar quebras de linha e espaços
-    <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', margin: 0 }}>{conteudoHtml}</pre>
+    // Forçado text-zinc-900 e font-sans para melhor leitura
+    <pre className="text-zinc-900 whitespace-pre-wrap font-sans m-0">
+        {conteudoHtml}
+    </pre>
   );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      {/* Ajustado para sm:max-w-full e max-h-[95vh] */}
-      <DialogContent className="sm:max-w-full md:max-w-5xl max-h-[95vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-full md:max-w-5xl max-h-[95vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center">
             <Eye className="w-5 h-5 mr-2" /> Prévia do Contrato: {titulo}
@@ -51,8 +52,15 @@ const ContratoPreviewDialog: React.FC<ContratoPreviewDialogProps> = ({ open, onO
           </DialogDescription>
         </DialogHeader>
         
-        <div className="border rounded-md p-4 bg-background shadow-inner overflow-y-auto max-h-[60vh]">
-          {contentToDisplay}
+        {/* Ajuste Principal: 
+            1. bg-white dark:bg-white -> Garante fundo branco sempre.
+            2. text-zinc-900 -> Garante texto escuro sempre.
+            3. ring-1 ring-zinc-200 -> Adiciona uma borda leve para destacar o "papel".
+        */}
+        <div className="flex-1 border rounded-md p-6 bg-white dark:bg-white text-zinc-900 shadow-inner overflow-y-auto min-h-[400px]">
+          <div className="mx-auto max-w-[800px]">
+            {contentToDisplay}
+          </div>
         </div>
         
         <div className="flex justify-end space-x-2 pt-4">
