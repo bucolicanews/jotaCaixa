@@ -32,6 +32,7 @@ serve(async (req: Request) => {
 
     console.log(`LOG: Executando contabil_setup_defaults para ${proprietarioId}`);
     
+    // Chamada da RPC que executa o reset, importação e mapeamento
     const { data, error } = await supabaseService.rpc("contabil_setup_defaults", {
       p_proprietario_id: proprietarioId,
     });
